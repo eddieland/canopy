@@ -249,6 +249,14 @@ export const TIPS = {
         'Hot take: comments in a config file are love letters. This page keeps every one.',
         'Did you know? A change here is for this workspace only. I am for every workspace.',
     ],
+    '/settings_/skills': [
+        "It looks like you're reading skills. Mine: photosynthesis. No SKILL.md needed.",
+        'Unhelpful tip: a skill nobody loads still costs every call. Like a hat nobody wears.',
+        'Did you know? A skill with no description never gets loaded. Ask me how I know.',
+        'Dear diary, I searched for a skill called "sprig". Nothing. I remain unteachable.',
+        'Fun fact: Read again starts the runtime. Patience is also a skill.',
+        'Hot take: the best skill is the one in your home. It goes everywhere you go.',
+    ],
     '/search': [
         "It looks like you're searching. I lost a leaf in 2024. Let me know if it turns up.",
         'Unhelpful tip: to find something, search for it. You are welcome.',

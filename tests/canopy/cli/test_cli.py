@@ -60,7 +60,7 @@ def test_help(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
     assert main(argv) == 0
     out = capsys.readouterr().out
     assert out.startswith("Usage: canopy")
-    for command in ("init", "skill", "tick", "status", "dispatch", "decide", "attention", "ticket"):
+    for command in ("init", "skill", "tick", "status"):
         assert f"  {command} " in out
 
 
@@ -195,15 +195,22 @@ def test_completion_leaves_out_the_overseers_commands(capsys: pytest.CaptureFixt
         "plain,publish",
         "plain,show",
     ]
-    assert complete(capsys, "canopy ticket ") == []
 
 
-def test_help_still_lists_the_overseers_commands(capsys: pytest.CaptureFixture[str]) -> None:
+def test_help_leaves_out_the_overseers_commands(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["--help"]) == 0
     listed = {line.split()[0] for line in capsys.readouterr().out.splitlines() if line.startswith("  ")}
-    assert {"attention", "decide", "dispatch", "ticket"} <= listed
-    assert "queried" not in listed
-    assert "mirror" not in listed
+    assert "status" in listed
+    assert not {"attention", "decide", "dispatch", "ticket", "mirror"} & listed
+    assert main(["review", "--help"]) == 0
+    listed = {line.split()[0] for line in capsys.readouterr().out.splitlines() if line.startswith("  ")}
+    assert "show" in listed
+    assert not {"run", "wait", "end", "revise"} & listed
+
+
+def test_an_overseers_command_still_prints_its_own_help(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["decide", "--help"]) == 0
+    assert "Record a decision" in capsys.readouterr().out
 
 
 def test_completion_completes_repository_names_from_the_workspace(

@@ -528,7 +528,7 @@ def _ticks(
             _toggle_pause(ctx, keys(), log)
         statuses[outcome.status] += 1
         # Classified with idle pacing off too: the journal records it for spend, though only pacing counts it.
-        idle = pacing.idle(ctx, outcome)
+        idle = pacing.idle(ctx, outcome, woken_by=woken_by)
         # Measured for the prompt, not acted on (ROADMAP M28): what the tick changed with nothing new to see.
         churn = pacing.churn(ctx, outcome, before)
         idle_count = pacing.count(ctx, outcome, idle_count, idle=idle, on=pace.on)

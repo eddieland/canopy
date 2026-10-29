@@ -46,6 +46,10 @@ const DISK_HIGH = 10 * GIB
 // The share of memory left under which a new agent or build is likely to swap, and under which it is soon refused.
 const MEMORY_HIGH = 0.15
 const MEMORY_CRITICAL = 0.05
+// The change between the last minute's load and the last quarter hour's, as a share of the cores, past which the load
+// is heading somewhere; never under half a process, so a machine of one or two cores does not flap on noise.
+const LOAD_TREND_SHARE = 0.1
+const LOAD_TREND_FLOOR = 0.5
 const UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB'] as const
 
 /**
@@ -139,10 +143,13 @@ export function concerns(host: HostResources): Concern[] {
         })
     }
     if (loadPressure(host.cpu) !== 'ok') {
+        const cores = host.cpu.cores ?? 0
         found.push({
             what: 'load',
             pressure: 'high',
-            text: `load ${loadText(host.cpu.load?.[1] ?? 0)} over five minutes, on ${host.cpu.cores ?? 0} cores`,
+            text:
+                `load at ${percentText((host.cpu.load?.[1] ?? 0) / cores)} of ${cores} cores over five minutes: ` +
+                'work waits for a processor',
         })
     }
     return found.toSorted((a, b) => Number(b.pressure === 'critical') - Number(a.pressure === 'critical'))
@@ -175,4 +182,25 @@ export function hostReadout(host: HostResources): string {
 /** A load average as `uptime` prints it, to two decimals: `1.87`. */
 export function loadText(load: number): string {
     return load.toFixed(2)
+}
+
+/**
+ * A load average as a share of the cores, the way to read it: 1 is every core busy, and past 1 work waits for a
+ * processor. Null without the cores, where the number alone says nothing.
+ */
+export function coreShare(load: number, cores: number | null): number | null {
+    return cores === null || cores <= 0 ? null : load / cores
+}
+
+/**
+ * Which way the load is heading, the last minute's against the last quarter hour's: what the three averages `uptime`
+ * prints are for. Null where the operating system keeps none.
+ */
+export function loadTrend(cpu: HostResources['cpu']): 'rising' | 'steady' | 'falling' | null {
+    const [one, , fifteen] = cpu.load ?? []
+    if (one === undefined || fifteen === undefined) {
+        return null
+    }
+    const step = Math.max(LOAD_TREND_FLOOR, (cpu.cores ?? 0) * LOAD_TREND_SHARE)
+    return one - fifteen >= step ? 'rising' : fifteen - one >= step ? 'falling' : 'steady'
 }

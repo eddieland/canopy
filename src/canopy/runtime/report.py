@@ -260,6 +260,21 @@ class Printed:
     ended_call: bool
     #: The tool call the line ended: its tool, and what it did, on one line each.
     did: tuple[str, str] | None
+    #: The same call as the agent made it, its tool's name and input as printed, for the harness to read a call of a
+    #: tool of canopy's own from (DESIGN §41); None where `did` is.
+    call: Called | None = None
+
+
+@dataclass(frozen=True)
+class Called:
+    """A tool call a running agent's line ended, as the agent made it."""
+
+    #: The tool's name, as the runtime names it: `<server>_<tool>` for an MCP server's.
+    tool: str
+    #: Whether it completed; else it ended in an error, a server's refusal among them.
+    completed: bool
+    #: What the agent called it with, unvalidated: the reader holds it to the tool's own input.
+    input: Mapping[str, object]
 
 
 def session_id(value: object) -> str | None:

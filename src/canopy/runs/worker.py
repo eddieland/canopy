@@ -32,6 +32,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, S
 
 from canopy.core import (
     agent_models,
+    cards,
     commit_hooks,
     contract,
     conversation,
@@ -72,7 +73,7 @@ from canopy.runs import (
     tidy,
 )
 from canopy.runs.checkpoint import SetupError
-from canopy.runtime import agents, project_config, stdout
+from canopy.runtime import agents, project_config, servers, stdout
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
@@ -263,6 +264,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             if not slots:
                 raise SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
             tidy.make_objects(_objects(ctx, run))
+            cards.make_answers(_answers(ctx, run))
             outcome = _doer(kind)(ctx, run, slots, out, log)
         except stopping.Stopped as e:
             outcome = Outcome(RunStatus.CRASHED, None, str(e))
@@ -516,17 +518,22 @@ def _run_agent(
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the object
     # directory; an unsandboxed worker ignores it (DESIGN §8). A planner, which has no shell, reads its worktrees'
     # history through canopy's read-only git tools, over those worktrees alone, each named for its repository (§27).
-    env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
+    # The operator's answer to a question its card asks reaches it in its answers directory, through canopy's plugin
+    # (DESIGN §41).
+    env = {
+        conversation.RUN_ID_ENV: str(run_id),
+        tidy.OBJECTS_ENV: str(_objects(ctx, run)),
+        cards.ANSWERS_ENV: str(_answers(ctx, run)),
+    }
     # A public worker that may publish names its ticket to the store through canopy, not its own word (DESIGN §38).
     publishing = ctx.config.artifacts.publishing()
     if not read_only and publishing is not None and agents.WORKER in publishing.agents:
         env |= artifact_feed.origin_env(ctx.workspace.name, str(run["ticket_key"]), run_id)
+    # Every run here says where its work stands through canopy's `status` tool, which writes nothing (DESIGN §41).
+    served: dict[str, Sequence[str]] = {cards.SERVER: cards.SERVER_COMMAND}
     if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
-        env |= git_tools.run_env(
-            {s.repo: s.path for s in slots},
-            version=ctx.config.runtime.version,
-            cwd=ctx.workspace.root.absolute(),
-        )
+        served[git_tools.SERVER] = git_tools.command({s.repo: s.path for s in slots})
+    env |= servers.env(served, version=ctx.config.runtime.version, cwd=ctx.workspace.root.absolute())
     env |= commit_hooks.env(snapshot, marks, os.environ)
     with run_offers.probing(
         ctx.conn,
@@ -571,9 +578,10 @@ def _run_agent(
 class _Progress:
     """Each line the worker prints, as it prints it: written to the run log, and its events read (DESIGN §8).
 
-    What they say so far is recorded on the run, so a running run shows its session, what it has spent, and its latest
-    tool call. A line comes on `_run`'s own thread, so this may use the journal connection. A journal write that fails
-    is logged, not raised: raising would kill the worker, and the session and spend are recorded again when it ends.
+    What they say so far is recorded on the run, so a running run shows its session, what it has spent, its latest
+    tool call, and its card, with the tool calls since. A line comes on `_run`'s own thread, so this may use the journal
+    connection. A journal write that fails is logged, not raised: raising would kill the worker, and the session and
+    spend are recorded again when it ends.
     """
 
     def __init__(self, ctx: Context, run_id: int, out: TextIO, log: logs.TickAdapter) -> None:
@@ -590,7 +598,11 @@ class _Progress:
         if change is None:
             return
         try:
-            db.set_run_progress(self.ctx.conn, self.run_id, change.session_id, usage=change.usage, did=change.did)
+            # One transaction, so a tool call's progress and its card are recorded together or not at all.
+            with db.transaction(self.ctx.conn):
+                db.set_run_progress(self.ctx.conn, self.run_id, change.session_id, usage=change.usage, did=change.did)
+                if change.called is not None:
+                    cards.record_call(self.ctx.conn, "runs", self.run_id, cards.read_call(change.called))
         except sqlite3.Error as e:
             self.log.warning("worker progress not recorded", extra={"run_id": self.run_id, "error": str(e)})
         if change.started:
@@ -1163,12 +1175,13 @@ def _run_setup(ctx: Context, run: sqlite3.Row, slot: _Slot, out: TextIO, log: lo
 
 
 def _release(ctx: Context, run: sqlite3.Row, slots: Collection[_Slot], log: logs.TickAdapter) -> None:
-    """Remove a joint run's desk, tidy each slot, return the ones tidied, and remove the run's object directory.
+    """Remove the run's answers directory and a joint run's desk, tidy and return each slot, and remove its objects.
 
     A slot that could not be tidied is not returned, and the object directory is kept, so its objects can still be read.
     """
     if dispatch.in_desk(str(run["kind"]), slots):
         _remove_desk(ctx, str(run["ticket_key"]), log)
+    cards.remove_answers(_answers(ctx, run))
     objects = _objects(ctx, run)
     tidied = True
     for slot in slots:
@@ -1183,6 +1196,10 @@ def _release(ctx: Context, run: sqlite3.Row, slots: Collection[_Slot], log: logs
 
 def _objects(ctx: Context, run: sqlite3.Row) -> Path:
     return tidy.objects_dir(dispatch.runs_dir(ctx), int(run["id"]))
+
+
+def _answers(ctx: Context, run: sqlite3.Row) -> Path:
+    return cards.answers_dir(ctx.state_dir, str(run["id"]))
 
 
 def _return_slot(ctx: Context, run: sqlite3.Row, slot: _Slot, log: logs.TickAdapter) -> None:
