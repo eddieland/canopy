@@ -88,7 +88,7 @@ Rules:
   and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no
   section (the 404) takes the accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the spend page's
-  chart and its legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
+  charts and the legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
   beside a swatch. Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on
   `surface` in both themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
@@ -921,6 +921,16 @@ sliver beside four others; and its axis names short call numbers without measuri
   header, kept in `?days=`. By model and By tool sum each model's or tool's rows over every kind under `all`; the
   runs page's kind filter in each one's header keeps one kind's (`?model_kind=`, `?tool_kind=`), and offers only the
   kinds the window has rows of. A window switch keeps both filters.
+- **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
+  bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
+  the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
+  bar's rate over it, since there are six at most and the eye compares neighbours. A week whose runs recorded no cache
+  read is a stub with a dash. A week whose runs used a runtime version or definitions snapshot the week before's did
+  not has a 1px `muted-foreground` rule down the gap before its bar, and a line under the chart names what it used, in
+  `canopy spend`'s words, so a screen reader hears it beside the table of each week's runs, median first call, and
+  rate. The axis names each week's Monday. The kind filter has no `all`, since kinds' prefixes do not sum
+  (`?first_kind=`, the first kind with a week by default), and the chips over the chart pick the kind's runs, a
+  chore's, or a model's (`?first_series=`); a kind switch goes back to all its runs.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.

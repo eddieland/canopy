@@ -131,6 +131,8 @@ export type SpendPullRequest = Schemas['SpendPullRequest']
 export type SpendTool = Schemas['SpendTool']
 /** What one kind's runs in a spend window spent on one model, as their sessions say; a null model for the unnamed. */
 export type SpendModel = Schemas['SpendModel']
+/** One week of a kind's first model calls, or one chore's or one model's of the kind: their size and cache hit rate. */
+export type SpendFirstCallWeek = Schemas['SpendFirstCallWeek']
 /** The local month so far against the operator's monthly budget. */
 export type SpendMonth = Schemas['SpendMonth']
 /** What every session the runtime keeps that started in a spend window cost, canopy's apart from the rest. */
