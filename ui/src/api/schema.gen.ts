@@ -2510,6 +2510,11 @@ export type components = {
             step: string;
         };
         /**
+         * @description Where a step on a running agent's card stands (DESIGN §41).
+         * @enum {string}
+         */
+        CardStepStatus: "not_started" | "working" | "blocked" | "done" | "skipped";
+        /**
          * ChoreDetail
          * @description One chore: what `canopy show chore:NAME` prints.
          */
@@ -7219,6 +7224,17 @@ export type components = {
              */
             now: string;
             /**
+             * Percent Done
+             * @description How much of the work is finished, its steps `done` or `skipped` over all, in whole percent rounded down; None
+             *     with no steps.
+             */
+            percent_done: number | null;
+            /**
+             * Stage
+             * @description The stage of the step the agent works on, its first `working` one; None when that names none, or none works.
+             */
+            stage: string | null;
+            /**
              * Stale
              * @description Whether the run has gone 20 tool calls without an update to it while it runs; false once it ended.
              */
@@ -7229,6 +7245,12 @@ export type components = {
              *     it ended. A page marks it stale from then, or when `stale` says so.
              */
             stale_at: string | null;
+            /**
+             * Steps
+             * @description The work as steps, in order, each with its status; empty when the agent gave none.
+             * @default []
+             */
+            steps: components["schemas"]["RunStep"][];
             /**
              * Stuck
              * @description What it said is in its way and it works around; None when it said nothing.
@@ -7332,6 +7354,35 @@ export type components = {
          * @enum {string}
          */
         RunState: "running" | "blocked" | "done" | "failed" | "stopped";
+        /**
+         * RunStep
+         * @description A step of the work on a running agent's card, as the agent tracks it (DESIGN §41).
+         */
+        RunStep: {
+            /**
+             * Since
+             * @description When a card first gave it its status and stage; None where canopy kept no time for it.
+             */
+            since: string | null;
+            /**
+             * Stage
+             * @description The stage it belongs to, such as `tests`; None when the agent named none.
+             */
+            stage: string | null;
+            /** @description Where it stands. */
+            status: components["schemas"]["CardStepStatus"];
+            /**
+             * Stuck At
+             * @description While the run runs, for a `working` step, when it is shown stuck if nothing changes: a fifth of the run's
+             *     timeout after `since`. None for any other step, and once the run ended. A page marks it stuck from then.
+             */
+            stuck_at: string | null;
+            /**
+             * Title
+             * @description The step, as the plan or the agent's own checklist names it.
+             */
+            title: string;
+        };
         /**
          * RunsUpdated
          * @description The runs changed. The payload is the whole list, as `GET /runs` returns it.

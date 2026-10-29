@@ -595,7 +595,10 @@ class _Progress:
             with db.transaction(self.ctx.conn):
                 db.set_run_progress(self.ctx.conn, self.run_id, change.session_id, usage=change.usage, did=change.did)
                 if change.called is not None:
-                    cards.record_call(self.ctx.conn, "runs", self.run_id, cards.read_call(change.called))
+                    # A step left working for a fifth of the worker's timeout is shown stuck (DESIGN §41).
+                    stuck_after = cards.stuck_after(self.ctx.config.runtime.worker_timeout_minutes)
+                    card = cards.read_call(change.called)
+                    cards.record_call(self.ctx.conn, "runs", self.run_id, card, stuck_after=stuck_after)
         except sqlite3.Error as e:
             self.log.warning("worker progress not recorded", extra={"run_id": self.run_id, "error": str(e)})
         if change.started:

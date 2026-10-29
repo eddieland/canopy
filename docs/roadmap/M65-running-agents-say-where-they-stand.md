@@ -76,7 +76,13 @@ Neither version cuts a tool's input before printing it, only its output; the bou
 and the harness both hold the card to it, and the harness reads only a `completed` call. OpenCode's own `todowrite`
 (both versions: `content`, `status` of `pending`, `in_progress`, `completed`, or `cancelled`, and 1's `priority`)
 would not serve for steps: it has no `blocked`, no stage, no proof of what is done, and no summary or `now`, and
-every worker already has it; so steps go on canopy's card in stage 2, and `todowrite` is left as it is.
+every worker already has it; so steps go on canopy's card in stage 2, and `todowrite` is left as it is. Stage 2 is
+built (2026-10-29): a card may carry up to 20 steps, each a title, a status, and an optional stage, and canopy shows
+percent done (the steps done or skipped over all, rounded down) and the first working step's stage in `canopy status`,
+`show`, `review show`, and the web UI's card. Since each call rewrites the whole card, the run keeps beside it when each
+step, found by its title, took its status and stage, in seconds from the card's time; a step `working` at one stage for
+a fifth of the run's timeout is shown stuck while it runs. Workers following an approved plan are told to take their
+steps from it; planners and reviewers keep their own.
 
 [status]: https://github.com/fullstackhouse/paseo-status
 [progress]: https://github.com/stevecastaneda/paseo-plugins/tree/main/progress

@@ -17,6 +17,7 @@ from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+    from datetime import timedelta
 
     from canopy.infra import logs
     from canopy.runtime.implementation import Version
@@ -40,10 +41,13 @@ class Progress:
         agent: str,
         fields: Mapping[str, object],
         version: Version,
+        card_stuck_after: timedelta | None = None,
     ) -> None:
         """Watch the agent of the row `row_id` in `table`; the log's lines name it `agent`, with `fields`.
 
-        Its lines are read as the runtime `version` runs prints them.
+        Its lines are read as the runtime `version` runs prints them. A review run's watcher is given
+        `card_stuck_after`, how long a step of its reviewer's card may stay `working` before it is shown stuck (§41),
+        and records the card; no other is.
         """
         self.conn = conn
         self.table: db.ProgressTable = table
@@ -53,6 +57,7 @@ class Progress:
         self.agent = agent
         self.fields = fields
         self.watch = Watch(version=version)
+        self.card_stuck_after = card_stuck_after
 
     def __call__(self, line: str) -> None:
         """Write `line` to the log, and record the session at its first event and the spend at each model call's end.
@@ -65,7 +70,8 @@ class Progress:
         if change is None:
             return
         # A review's reviewer keeps a card, with the tool calls since it (§41); no other agent here does.
-        called = change.called if self.table == "review_runs" else None
+        stuck_after = self.card_stuck_after if self.table == "review_runs" else None
+        called = change.called if stuck_after is not None else None
         if not change.started and change.usage is None and called is None:
             return
         try:
@@ -73,8 +79,9 @@ class Progress:
             with db.transaction(self.conn):
                 if change.started or change.usage is not None:
                     db.set_progress(self.conn, self.table, self.row_id, change.session_id, usage=change.usage)
-                if called is not None:
-                    cards.record_call(self.conn, "review_runs", self.row_id, cards.read_call(called))
+                if called is not None and stuck_after is not None:
+                    card = cards.read_call(called)
+                    cards.record_call(self.conn, "review_runs", self.row_id, card, stuck_after=stuck_after)
         except sqlite3.Error as e:
             self.log.warning("agent progress not recorded", extra={**self.fields, "agent": self.agent, "error": str(e)})
         if change.started:

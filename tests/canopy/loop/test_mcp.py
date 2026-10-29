@@ -1195,6 +1195,8 @@ def test_a_workers_or_a_reviews_run_is_served_its_status_tool_alone(overseen: Ca
             tool_call("status", summary="no now"),
             tool_call("status", **overlong),
             tool_call("status", **CARD, extra="no"),
+            tool_call("status", **CARD, steps=[{"title": "push", "status": "working", "stage": "ship"}]),
+            tool_call("status", **CARD, steps=[{"title": "push", "status": "in_progress"}]),
             tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "r"}]),
             status=True,
         )
@@ -1205,6 +1207,8 @@ def test_a_workers_or_a_reviews_run_is_served_its_status_tool_alone(overseen: Ca
         ["summary", "now"],
         False,
     )
+    step = listed["inputSchema"]["properties"]["steps"]["items"]
+    assert step["properties"]["status"]["enum"] == ["not_started", "working", "blocked", "done", "skipped"]
     text, error = served.said(2)
     assert (text.startswith("Shown to the operator."), error) == (True, False)
     # An invalid or overlong card is a tool error naming the field, and the server goes on.
@@ -1212,7 +1216,11 @@ def test_a_workers_or_a_reviews_run_is_served_its_status_tool_alone(overseen: Ca
     assert "now" in served.said(3)[0]
     assert "now" in served.said(4)[0]
     assert "extra" in served.said(5)[0]
-    assert served.responses[6]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
+    # A card may carry steps; one whose step has a status the card does not know is a tool error naming it.
+    assert served.said(6)[1] is False
+    assert served.said(7)[1] is True
+    assert "steps" in served.said(7)[0]
+    assert served.responses[8]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
     # The server writes nothing: the harness records the card from the call the agent prints.
     assert recorded(conn) == before
 

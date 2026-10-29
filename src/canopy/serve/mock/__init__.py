@@ -780,7 +780,9 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             sql.update("runs").set(activity_tool=tool, activity=did, activity_at=at(minutes)).where("id = ?", run_id),
         )
     # What each running run's agent says of where it stands, its card (DESIGN §41): 41's fresh, 43's stale, gone more
-    # tool calls than `cards.STALE_CALLS` without an update.
+    # tool calls than `cards.STALE_CALLS` without an update, its working step stuck, unchanged past a fifth of the
+    # worker's 45-minute timeout. Each step comes with the minute it took its status and stage, and a working step's
+    # minutes until it is shown stuck, kept in seconds from the card's time as `cards.record_call` keeps them.
     said = (
         (
             LIVE_RUN,
@@ -789,7 +791,15 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 now="running the login tests",
                 done=(cards.Done(step="add the SSO callback", proof="tests pass: 12/12"),),
                 next=("wire the login button", "push", "open the PR"),
+                steps=(
+                    cards.Step(title="add the SSO callback", status="done", stage="code"),
+                    cards.Step(title="test the callback", status="done", stage="tests"),
+                    cards.Step(title="wire the login button", status="working", stage="code"),
+                    cards.Step(title="push", status="not_started"),
+                    cards.Step(title="open the PR", status="not_started"),
+                ),
             ),
+            ((14, None), (22, None), (24, 9), (14, None), (14, None)),
             24,
             9,
             3,
@@ -802,14 +812,23 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 done=(cards.Done(step="read the failed job's log", proof="1 test red: test_retry_backoff"),),
                 next=("fix the backoff", "push"),
                 stuck="the CI log is cut short; reading the workflow for the step instead",
+                steps=(
+                    cards.Step(title="read the failed job's log", status="done", stage="CI"),
+                    cards.Step(title="fix the backoff", status="working", stage="code"),
+                    cards.Step(title="push", status="not_started"),
+                ),
             ),
+            ((4, None), (4, 9), (4, None)),
             12,
             4,
             26,
         ),
     )
-    for run_id, card, minutes, by_then, since in said:
-        recorded = sql.update("runs").set(card_json=card.model_dump_json(), card_at=at(minutes))
+    for run_id, card, steps, minutes, by_then, since in said:
+        kept = json.dumps(
+            [{"held": (minutes - t) * 60, "stuck_after": late * 60 if late is not None else None} for t, late in steps],
+        )
+        recorded = sql.update("runs").set(card_json=card.model_dump_json(), card_at=at(minutes), card_steps_json=kept)
         recorded = recorded.set(card_calls=by_then, tool_calls=by_then + since).where("id = ?", run_id)
         sql.execute(conn, recorded)
     # Run 39's peak is the most one model call in its transcript was sent (transcripts.py), as its page's chart shows.
