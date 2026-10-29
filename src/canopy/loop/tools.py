@@ -32,7 +32,6 @@ from pydantic import (
     Field,
     StrictBool,
     StrictInt,
-    ValidationError,
     WithJsonSchema,
     model_validator,
 )
@@ -87,24 +86,6 @@ STARTS_AFTER = "it starts once your run ends, if its guards still allow it"
 
 class Refused(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
     """A guard refused the call, or it came from outside a running tick. Its text is what the command prints."""
-
-
-def explain(error: ValidationError) -> str:
-    """Say what was wrong with a request, as the overseer reads it from a tool's error or a command's usage error.
-
-    It names each field and what was wrong with it, never pydantic's copy of the input; a check echoes a value only for
-    short, bounded fields, never free text, which may be a tracker's or a reviewer's.
-
-    Returns:
-        One line per problem: a rule across fields as its own sentence, a field's as `field: problem`.
-    """
-    lines: list[str] = []
-    for problem in error.errors(include_url=False, include_input=False):
-        where = ".".join(str(part) for part in problem["loc"])
-        cause = (problem.get("ctx") or {}).get("error")
-        what = str(cause) if problem["type"] == "value_error" and cause is not None else problem["msg"]
-        lines.append(f"{where}: {what}" if where else what)
-    return "\n".join(lines)
 
 
 # The bounds of what the overseer passes in, each as a check the click parameter types share.

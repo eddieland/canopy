@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
+import canopy_mcp
 import pytest
 from canopy_artifacts import cli, server
 from canopy_artifacts.store import (
@@ -503,7 +504,7 @@ def test_it_serves_the_eight_tools_and_nothing_else(client: Client) -> None:
     assert hello["capabilities"] == {"tools": {"listChanged": False}}
     assert (
         client.request("initialize", {"protocolVersion": "1999-01-01"})["result"]["protocolVersion"]
-        == (server.PROTOCOL_VERSIONS[0])
+        == (canopy_mcp.PROTOCOL_VERSIONS[0])
     )
     tools = client.request("tools/list")["result"]["tools"]
     assert [t["name"] for t in tools] == EIGHT
@@ -518,14 +519,14 @@ def test_it_serves_the_eight_tools_and_nothing_else(client: Client) -> None:
     assert not any(t["annotations"]["openWorldHint"] or t["annotations"].get("destructiveHint") for t in tools)
     create = next(t for t in tools if t["name"] == "comment_create")["inputSchema"]
     assert create["properties"]["anchor"]["anyOf"][0]["properties"].keys() == {"exact", "prefix", "suffix"}
-    assert client.request("resources/list")["error"]["code"] == server.METHOD_NOT_FOUND
+    assert client.request("resources/list")["error"]["code"] == canopy_mcp.METHOD_NOT_FOUND
     assert client.request("tools/call", {"name": "artifact_delete", "arguments": {}})["error"]["code"] == (
-        server.INVALID_PARAMS
+        canopy_mcp.INVALID_PARAMS
     )
     assert server.answer(b"{not json", client.store) == {
         "jsonrpc": "2.0",
         "id": None,
-        "error": {"code": server.PARSE_ERROR, "message": "not a JSON message"},
+        "error": {"code": canopy_mcp.PARSE_ERROR, "message": "not a JSON message"},
     }
     assert server.answer(b'{"jsonrpc": "2.0", "method": "notifications/initialized"}', client.store) is None
 

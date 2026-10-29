@@ -1,9 +1,7 @@
 """`canopy _mcp`: canopy's verbs as MCP tools, served over stdio to the run that starts it (DESIGN §27).
 
 The agent runtime starts it as a child of the agent's process, and it lives as long as that run. It opens no
-socket, and serves tools and nothing else: JSON-RPC 2.0, one message to a line, and five methods, `initialize`,
-`notifications/initialized`, `ping`, `tools/list`, and `tools/call`. Rejected: the `mcp` SDK, a runtime dependency
-with its own async stack and HTTP transports, for these few methods.
+socket, and serves tools and nothing else, through `canopy_mcp`, the protocol every server canopy ships speaks (D124).
 
 It serves in one of four modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the same
 command would be (`loop.tools`), its arguments validated, the workspace opened afresh, the tick checked, one call at a
@@ -28,16 +26,16 @@ writes nothing to stderr, which the runtime never reads, and logs no argument's 
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import sys
 import traceback
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
+import canopy_mcp
+from pydantic import BaseModel, ValidationError
 
 from canopy.chores import history
 from canopy.core import cards, config, context, conversation, db, git_tools, reports
@@ -46,8 +44,6 @@ from canopy.loop import chore_tools, readback, review_tools, tools
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
-
-    from pydantic.json_schema import JsonSchemaMode
 
     from canopy.core.context import Context
     from canopy.infra import procs
@@ -59,85 +55,12 @@ SERVER = "canopy"
 #: canopy. `-P` keeps the working directory, the workspace root, off the import path, so no file a workspace holds can
 #: stand in for canopy's own modules (TRUST_MODEL T7).
 COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp")
-#: The protocol versions the server speaks, newest first: a client that asks for one of them is answered in it, and
-#: any other in the newest.
-PROTOCOL_VERSIONS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
-#: JSON-RPC's error codes for a line that is not JSON, a message that is not a request, a method the server does not
-#: have, parameters it cannot take, and a failure of its own.
-PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INVALID_PARAMS, INTERNAL_ERROR = -32700, -32600, -32601, -32602, -32603
-
 #: How a call opens the workspace: a context whose journal closes when the block ends.
 type Opener = Callable[[], AbstractContextManager[Context]]
-#: A JSON-RPC response, or None for a notification, which is never answered.
-type Response = dict[str, object] | None
-
-
-@dataclass(frozen=True)
-class Hints:
-    """What a tool does to the world, as MCP's tool annotations tell a client: hints for its prompts, never a guard.
-
-    Every tool works on canopy's own journal or the run's checkouts, never a world outside them, so none is open-world.
-    """
-
-    #: It changes nothing.
-    read_only: bool
-    #: It may overwrite or end what is already recorded, not only add to it. Only a tool that writes says.
-    destructive: bool = False
-    #: A second call with the same arguments changes nothing more. Only a tool that writes says.
-    idempotent: bool = False
-
-    def listed(self) -> dict[str, bool]:
-        """Describe the hints as `tools/list` lists them, under the tool's `annotations`.
-
-        Returns:
-            MCP's hints: a tool that only reads says nothing of what a write would do.
-        """
-        hints = {"readOnlyHint": self.read_only, "openWorldHint": False}
-        if not self.read_only:
-            hints |= {"destructiveHint": self.destructive, "idempotentHint": self.idempotent}
-        return hints
-
-
-#: A tool that reads and changes nothing.
-READS = Hints(read_only=True)
-#: A tool that adds to what is recorded and removes nothing.
-RECORDS = Hints(read_only=False)
-
-
-@dataclass(frozen=True)
-class Tool:
-    """One of canopy's verbs as a tool."""
-
-    #: Its name: the command's, with hyphens for spaces. No name holds an underscore, which the runtime joins its
-    #: server's name and the tool's with, so `canopy_ticket-set` cannot also be another server's tool.
-    name: str
-    #: What it does, for the model.
-    description: str
-    #: Its request, whose schema is the tool's input schema.
-    request: type[BaseModel]
-    #: Validate its arguments, then do it in the context the opener opens: what the command prints, with its result
-    #: when it has one.
-    call: Callable[[Mapping[str, object], Opener], str | tools.Outcome[BaseModel]]
-    #: Its result, whose schema is the tool's output schema; None for a tool that answers with text alone.
-    result: type[BaseModel] | None = None
-    #: What it does to the world, for a client.
-    hints: Hints = RECORDS
-
-    def listed(self) -> dict[str, object]:
-        """Describe the tool as `tools/list` lists it.
-
-        Returns:
-            Its name, description, input schema, annotations, and output schema when it has a result.
-        """
-        listed: dict[str, object] = {
-            "name": self.name,
-            "description": self.description,
-            "inputSchema": schema(self.request),
-            "annotations": self.hints.listed(),
-        }
-        if self.result is not None:
-            listed["outputSchema"] = schema(self.result, "serialization")
-        return listed
+#: What a tool's call answers with: the text the command prints, with its result when it has one.
+type Said = str | tools.Outcome[BaseModel]
+#: One of canopy's verbs, reports, or reads as a tool: called with how to open the workspace.
+type Tool = canopy_mcp.Tool[Opener, Said]
 
 
 def tool[R: BaseModel, O: tools.Result](
@@ -147,7 +70,7 @@ def tool[R: BaseModel, O: tools.Result](
     result: type[O],
     do: Callable[[Context, R], tools.Outcome[O]],
     *,
-    hints: Hints = RECORDS,
+    hints: canopy_mcp.Hints = canopy_mcp.WRITES,
 ) -> Tool:
     """Make verb `do` a tool, taking `request` as its arguments and answering with `result`, with `hints` for a client.
 
@@ -166,7 +89,7 @@ def tool[R: BaseModel, O: tools.Result](
             tools.running_tick(ctx)
             return do(ctx, asked)
 
-    return Tool(name, description, request, call, result, hints)
+    return canopy_mcp.Tool(name, description, request, call, result, hints)
 
 
 #: How a tool that records a run says so: the overseer's run never starts one itself (DESIGN §40).
@@ -229,7 +152,7 @@ TOOLS = (
         tools.TicketSets,
         tools.TicketsUpdated,
         tools.ticket_set,
-        hints=Hints(read_only=False, destructive=True, idempotent=True),
+        hints=canopy_mcp.Hints(read_only=False, destructive=True, idempotent=True),
     ),
     tool(
         "review-run",
@@ -257,7 +180,7 @@ TOOLS = (
         review_tools.ReviewEnd,
         review_tools.ReviewEnded,
         review_tools.review_end,
-        hints=Hints(read_only=False, destructive=True),
+        hints=canopy_mcp.Hints(read_only=False, destructive=True),
     ),
     tool(
         "review-revise",
@@ -306,14 +229,14 @@ def _chore_history(arguments: Mapping[str, object], opened: Opener) -> str:
 
 #: A chore's one tool, which the runtime names `canopy_chore_history` (its server is `history.SERVER`).
 CHORE_TOOLS = (
-    Tool(
+    canopy_mcp.Tool(
         history.TOOL,
         "List this chore's earlier runs, newest first, with what each reported; with run, one run's findings in full; "
         "with before, the page of runs before that id. Use it to see what earlier runs found, so what you report is "
         "what changed since. It reads only this run's own chore, and refuses any other.",
         history.History,
         _chore_history,
-        hints=READS,
+        hints=canopy_mcp.READS,
     ),
 )
 
@@ -344,7 +267,7 @@ def _report[R: BaseModel](name: str, description: str, request: type[R], do: Cal
             except reports.Refused as e:
                 raise tools.Refused(str(e)) from None
 
-    return Tool(name, description, request, call, hints=READS)
+    return canopy_mcp.Tool(name, description, request, call, hints=canopy_mcp.READS)
 
 
 #: canopy's read-only reports (`core.reports`), which the runtime names `canopy_reports_health` and so on. An agent
@@ -445,7 +368,7 @@ def _status(arguments: Mapping[str, object], opened: Opener) -> str:
 
 #: A run's card, which the runtime names `canopy_run_status` (its server is `cards.SERVER`).
 STATUS_TOOLS = (
-    Tool(
+    canopy_mcp.Tool(
         cards.TOOL,
         "Say where your work stands, for the operator, who reads this card instead of your transcript. Each call is "
         "your whole card and replaces the last: a summary, what you do now, what is done with the proof of each, what "
@@ -454,7 +377,7 @@ STATUS_TOOLS = (
         "question on it comes back on a later tool call's result.",
         cards.Card,
         _status,
-        hints=Hints(read_only=False, idempotent=True),
+        hints=canopy_mcp.Hints(read_only=False, idempotent=True),
     ),
 )
 
@@ -635,7 +558,7 @@ def _git_tool[R: git_tools.Request](
             raise tools.Refused(str(r)) from None
         return found if isinstance(found, str) else tools.Outcome(git_tools.text(found), found)
 
-    return Tool(name, description, request, call, result, READS)
+    return canopy_mcp.Tool(name, description, request, call, result, canopy_mcp.READS)
 
 
 def serve(lines: Iterable[bytes], write: Callable[[str], object], opener: Opener, mode: Mode | None = None) -> None:
@@ -644,12 +567,7 @@ def serve(lines: Iterable[bytes], write: Callable[[str], object], opener: Opener
     `opener` opens the workspace for a call: `opened`, outside the tests. `mode` is what it serves, the overseer's verbs
     unless given.
     """
-    for line in lines:
-        if line.strip():
-            response = answer(line, opener, mode)
-            if response is not None:
-                # Escaped to ASCII: a lone surrogate a client sent, echoed in a refusal, could not be written as UTF-8.
-                write(json.dumps(response) + "\n")
+    canopy_mcp.serve(lines, write, _server(opener, mode or OVERSEER))
 
 
 @contextlib.contextmanager
@@ -666,154 +584,59 @@ def opened(runner: procs.Runner, start: Path) -> Iterator[Context]:
         ctx.conn.close()
 
 
-def answer(line: bytes, opener: Opener, mode: Mode | None = None) -> Response:
+def answer(line: bytes, opener: Opener, mode: Mode | None = None) -> canopy_mcp.Response:
     """Answer one message, serving `mode`, the overseer's verbs unless given.
 
     Returns:
         The response to a request, or None for a notification, which is never answered.
     """
-    try:
-        message = _read(line)
-    except _Failed as e:
-        return _error(e.request_id, e.code, str(e))
-    if message is None:
-        return None
-    method = _METHODS.get(message.method)
-    if method is None:
-        return _error(message.id, METHOD_NOT_FOUND, f"no method {message.method!r}: canopy serves tools only")
-    try:
-        result = method(message.params, opener, mode or OVERSEER)
-    except _Failed as e:
-        return _error(message.id, e.code, str(e))
-    except Exception as e:  # noqa: BLE001  (a bug answers this request, and the server goes on serving)
-        logs.for_tick(None).error(
-            "mcp request failed",
-            extra={"method": message.method, "error": type(e).__name__, "frames": traceback.format_tb(e.__traceback__)},
-        )
-        return _error(message.id, INTERNAL_ERROR, f"canopy failed: {type(e).__name__}; its log says where")
-    return {"jsonrpc": "2.0", "id": message.id, "result": result}
+    return canopy_mcp.answer(line, _server(opener, mode or OVERSEER))
 
 
-def schema(model: type[BaseModel], mode: JsonSchemaMode = "validation") -> dict[str, object]:
-    """Return a model's JSON schema as a tool's: every reference inlined, and no titles.
-
-    A request's, in `mode` "validation", is its tool's input schema; a result's, in "serialization", its output schema.
-    Some models' providers take no `$ref`, and a title only repeats its field's name. What a docstring says is for
-    canopy's readers, so only the fields' own descriptions are kept.
+def _server(opener: Opener, mode: Mode) -> canopy_mcp.Server[Opener, Said]:
+    """Serve `mode`'s tools, each call opening the workspace with `opener`.
 
     Returns:
-        The schema, an object that holds no field the model does not.
+        The server, which lists the tools only while the mode serves them.
     """
-    whole = model.model_json_schema(mode=mode)
-    # The model's docstring says what it is to canopy's readers; the tool's description says what it does.
-    whole.pop("description", None)
-    definitions = whole.pop("$defs", {})
-    inlined = _inlined(whole, definitions if isinstance(definitions, dict) else {})
-    return inlined if isinstance(inlined, dict) else {}
+    return canopy_mcp.Server(
+        SERVER,
+        db.CANOPY_VERSION,
+        mode.tools,
+        call=lambda found, arguments: _call(found, arguments, opener),
+        failed=_failed,
+        listing=lambda: mode.refusal(opener) is None,
+    )
 
 
-class _Message(BaseModel):
-    """A JSON-RPC 2.0 request, or a notification without its `id`."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
-
-    jsonrpc: Literal["2.0"]
-    id: StrictInt | StrictStr | None = None
-    method: StrictStr
-    params: Mapping[str, object] = Field(default_factory=dict)
-
-
-class _Params(BaseModel):
-    # A method's parameters keep a field the protocol adds in a later version, such as `_meta`, which this server has
-    # no use for; it is a tool's arguments that refuse an unknown field.
-    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
-
-
-class _Initialize(_Params):
-    """What a client says it speaks."""
-
-    protocol_version: Annotated[StrictStr, Field(alias="protocolVersion")]
-
-
-class _Call(_Params):
-    """Which tool a client calls, with what."""
-
-    name: StrictStr
-    arguments: Mapping[str, object] | None = None
-
-
-class _Failed(Exception):  # noqa: N818  (answered as JSON-RPC's error, not raised past the server)
-    """A message the server cannot answer as asked: `code` is JSON-RPC's for why, and `request_id` the request's."""
-
-    def __init__(self, code: int, message: str, request_id: object = None) -> None:
-        """Say why, with JSON-RPC's code for it, about the request `request_id` names."""
-        super().__init__(message)
-        self.code = code
-        self.request_id = request_id
-
-
-def _read(line: bytes) -> _Message | None:
-    """Read one message.
+def _call(found: Tool, arguments: Mapping[str, object], opener: Opener) -> dict[str, object]:
+    """Call `found`: a refusal or an invalid argument is a tool error with the text the command prints.
 
     Returns:
-        The request, or None for a notification: `notifications/initialized`, or one the server has no use for.
-
-    Raises:
-        _Failed: The line is not JSON, or not one JSON-RPC message.
+        The `tools/call` result.
     """
     try:
-        raw: object = json.loads(line)
-    except ValueError:
-        raise _Failed(PARSE_ERROR, "not a JSON message") from None
-    if not isinstance(raw, dict):
-        raise _Failed(INVALID_REQUEST, "a message is one JSON object; batches are not taken")
-    try:
-        message = _Message.model_validate(raw)
+        said = found.call(arguments, opener)
     except ValidationError as e:
-        raise _Failed(INVALID_REQUEST, tools.explain(e), _id_of(raw)) from None
-    return message if "id" in raw else None
-
-
-def _initialize(params: Mapping[str, object], opener: Opener, mode: Mode) -> dict[str, object]:  # noqa: ARG001
-    asked = _parsed(_Initialize, params)
-    version = asked.protocol_version if asked.protocol_version in PROTOCOL_VERSIONS else PROTOCOL_VERSIONS[0]
-    return {
-        "protocolVersion": version,
-        "capabilities": {"tools": {"listChanged": False}},
-        "serverInfo": {"name": SERVER, "version": db.CANOPY_VERSION},
-    }
-
-
-def _ping(params: Mapping[str, object], opener: Opener, mode: Mode) -> dict[str, object]:  # noqa: ARG001
-    return {}
-
-
-def _list(params: Mapping[str, object], opener: Opener, mode: Mode) -> dict[str, object]:  # noqa: ARG001  (one page)
-    return {"tools": [] if mode.refusal(opener) is not None else [t.listed() for t in mode.tools]}
-
-
-def _call(params: Mapping[str, object], opener: Opener, mode: Mode) -> dict[str, object]:
-    asked = _parsed(_Call, params)
-    found = next((t for t in mode.tools if t.name == asked.name), None)
-    if found is None:
-        raise _Failed(INVALID_PARAMS, f"no tool named {asked.name!r}")
-    try:
-        said = found.call(asked.arguments or {}, opener)
-    except ValidationError as e:
-        return _said(tools.explain(e), error=True)
+        return canopy_mcp.said(canopy_mcp.explain(e), error=True)
     except tools.Refused as e:
-        return _said(str(e), error=True)
+        return canopy_mcp.said(str(e), error=True)
     except (config.ConfigError, db.MigrationError) as e:
-        return _said(f"canopy: {e}", error=True)
-    return _said(said) if isinstance(said, str) else _said(said.text, structured=said.result)
+        return canopy_mcp.said(f"canopy: {e}", error=True)
+    return canopy_mcp.said(said) if isinstance(said, str) else canopy_mcp.said(said.text, structured=said.result)
 
 
-_METHODS: Mapping[str, Callable[[Mapping[str, object], Opener, Mode], dict[str, object]]] = {
-    "initialize": _initialize,
-    "ping": _ping,
-    "tools/list": _list,
-    "tools/call": _call,
-}
+def _failed(method: str, error: Exception) -> str:
+    """Log a failure of canopy's own in `method`, with no argument's text, and say where to look.
+
+    Returns:
+        What the client is told of it.
+    """
+    logs.for_tick(None).error(
+        "mcp request failed",
+        extra={"method": method, "error": type(error).__name__, "frames": traceback.format_tb(error.__traceback__)},
+    )
+    return f"canopy failed: {type(error).__name__}; its log says where"
 
 
 def _overseer_refusal(opener: Opener) -> str | None:
@@ -873,56 +696,3 @@ STATUS = Mode(STATUS_TOOLS, _status_refusal)
 
 def _inside_run() -> str:
     return f"{conversation.RUN_ID_ENV} is set: canopy's tools are the overseer's, and refuse inside a run"
-
-
-def _parsed[P: _Params](params_model: type[P], params: Mapping[str, object]) -> P:
-    try:
-        return params_model.model_validate(params)
-    except ValidationError as e:
-        raise _Failed(INVALID_PARAMS, tools.explain(e)) from None
-
-
-def _said(text: str, *, error: bool = False, structured: BaseModel | None = None) -> dict[str, object]:
-    said: dict[str, object] = {"content": [{"type": "text", "text": text}], "isError": error}
-    if structured is not None:
-        said["structuredContent"] = structured.model_dump(mode="json")
-    return said
-
-
-def _error(request_id: object, code: int, message: str) -> dict[str, object]:
-    return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
-
-
-def _id_of(raw: Mapping[str, object]) -> object:
-    """Find the id of a message that is not a valid request.
-
-    Returns:
-        Its id when it has one JSON-RPC allows, else None.
-    """
-    found = raw.get("id")
-    return found if isinstance(found, int | str) and not isinstance(found, bool) else None
-
-
-def _inlined(node: object, definitions: Mapping[str, object], *, fields: bool = False) -> object:
-    """Inline each `$ref` in `node`, and leave out each schema's `title`.
-
-    `fields` marks a `properties` object, whose keys are field names, kept whatever they are.
-
-    Returns:
-        `node` with each reference replaced by the definition it names.
-    """
-    if isinstance(node, list):
-        return [_inlined(item, definitions) for item in node]
-    if not isinstance(node, dict):
-        return node
-    if fields:
-        return {name: _inlined(value, definitions) for name, value in node.items()}
-    ref = node.get("$ref")
-    if isinstance(ref, str):
-        # A definition's description is its class's docstring, for canopy's readers; a field's own is kept.
-        named = definitions.get(ref.rsplit("/", 1)[-1])
-        defined = {k: v for k, v in named.items() if k != "description"} if isinstance(named, dict) else {}
-        return _inlined({**defined, **{k: v for k, v in node.items() if k != "$ref"}}, definitions)
-    return {
-        key: _inlined(value, definitions, fields=key == "properties") for key, value in node.items() if key != "title"
-    }

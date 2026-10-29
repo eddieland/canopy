@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
 
+import canopy_mcp
 import jsonschema
 import pytest
 
@@ -851,7 +852,7 @@ def test_the_server_answers_in_the_version_asked_or_its_newest_writes_no_stderr_
     assert served.responses[0]["result"]["protocolVersion"] == "2025-06-18"
     assert served.responses[0]["result"]["capabilities"] == {"tools": {"listChanged": False}}
     assert served.responses[1]["result"]["protocolVersion"] == "2024-11-05"
-    assert served.responses[2]["result"]["protocolVersion"] == mcp.PROTOCOL_VERSIONS[0]
+    assert served.responses[2]["result"]["protocolVersion"] == canopy_mcp.PROTOCOL_VERSIONS[0]
     assert served.responses[9]["error"]["code"] == -32600
     assert served.responses[None]["error"]["code"] in (-32700, -32600)
     assert (served.stderr, served.returncode) == ("", 0)

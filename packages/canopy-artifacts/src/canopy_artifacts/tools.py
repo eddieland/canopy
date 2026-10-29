@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
 from typing import Annotated, Literal
 
+import canopy_mcp
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
 
 from canopy_artifacts.store import CONTEXT, LIST_PAGE, MAX_BODY, MAX_FEED, MAX_ORIGIN, Store
@@ -38,46 +38,8 @@ ThreadId = Annotated[
 ]
 
 
-@dataclass(frozen=True)
-class Hints:
-    """What a tool does to the store, as MCP's tool annotations tell a client: hints for its prompts, never a guard."""
-
-    #: It changes nothing.
-    read_only: bool
-    #: A second call with the same arguments changes nothing more. Only a tool that writes says.
-    idempotent: bool = False
-
-    def listed(self) -> dict[str, bool]:
-        """Describe the hints as `tools/list` lists them, under the tool's `annotations`.
-
-        Returns:
-            MCP's hints. No tool removes what the store holds, and none reaches past it.
-        """
-        hints = {"readOnlyHint": self.read_only, "openWorldHint": False}
-        if not self.read_only:
-            hints |= {"destructiveHint": False, "idempotentHint": self.idempotent}
-        return hints
-
-
-#: A tool that reads and changes nothing.
-READS = Hints(read_only=True)
-#: A tool that adds to the store.
-WRITES = Hints(read_only=False)
-
-
-@dataclass(frozen=True)
-class Tool:
-    """One tool: its name, what it does, its request, and the call."""
-
-    name: str
-    #: What it does, for the model.
-    description: str
-    #: Its request, whose schema is the tool's input schema.
-    request: type[BaseModel]
-    #: Validate the arguments, and do the call in the store: what the tool returns, as text.
-    call: Callable[[Mapping[str, object], Store], str]
-    #: What it does to the store, for a client.
-    hints: Hints
+#: One of the store's tools: called in the store, answering with the JSON it returns as text.
+type Tool = canopy_mcp.Tool[Store, str]
 
 
 def tool[R: BaseModel](
@@ -85,7 +47,7 @@ def tool[R: BaseModel](
     description: str,
     request: type[R],
     do: Callable[[Store, R], object],
-    hints: Hints,
+    hints: canopy_mcp.Hints,
 ) -> Tool:
     """Make `do` a tool, taking `request` as its arguments, with `hints` for a client.
 
@@ -99,7 +61,7 @@ def tool[R: BaseModel](
             return "\n".join(json.dumps(item, ensure_ascii=False) for item in done)
         return json.dumps(done, ensure_ascii=False)
 
-    return Tool(name, description, request, call, hints)
+    return canopy_mcp.Tool(name, description, request, call, hints=hints)
 
 
 class _Request(BaseModel):
@@ -206,7 +168,7 @@ TOOLS = (
             origin=r.origin,
             artifact_id=r.artifact_id,
         ),
-        WRITES,
+        canopy_mcp.WRITES,
     ),
     tool(
         "artifact_read",
@@ -215,7 +177,7 @@ TOOLS = (
         "Markdown page's source, whitespace collapsed either way.",
         Read,
         lambda store, r: store.read(r.artifact_id, r.version),
-        READS,
+        canopy_mcp.READS,
     ),
     tool(
         "artifact_list",
@@ -223,7 +185,7 @@ TOOLS = (
         "narrow it by origin. When next_cursor is not null, pass it as cursor for the next page.",
         ListArtifacts,
         lambda store, r: store.artifacts(r.origin, r.cursor),
-        READS,
+        canopy_mcp.READS,
     ),
     tool(
         "thread_list",
@@ -233,7 +195,7 @@ TOOLS = (
         "comment_feed follows what changed across artifacts.",
         ThreadList,
         lambda store, r: store.threads(r.artifact_id, state=r.state, version=r.version),
-        READS,
+        canopy_mcp.READS,
     ),
     tool(
         "comment_feed",
@@ -242,7 +204,7 @@ TOOLS = (
         "incomplete. Use it to follow new comments across artifacts without reading every thread.",
         Feed,
         lambda store, r: store.feed(r.origin, r.since, r.limit),
-        READS,
+        canopy_mcp.READS,
     ),
     tool(
         "comment_reply",
@@ -250,7 +212,7 @@ TOOLS = (
         f"Returns the comment's id and its seq. {_READ_ONLY}",
         Reply,
         lambda store, r: store.reply(r.thread_id, r.body),
-        WRITES,
+        canopy_mcp.WRITES,
     ),
     tool(
         "comment_create",
@@ -264,13 +226,13 @@ TOOLS = (
             None if r.anchor is None else Anchor.of(r.anchor.exact, r.anchor.prefix, r.anchor.suffix),
             r.body,
         ),
-        WRITES,
+        canopy_mcp.WRITES,
     ),
     tool(
         "thread_resolve",
         f"Resolve a thread, or reopen one; a thread already so is left as it is. Returns its state. {_READ_ONLY}",
         Resolve,
         lambda store, r: store.resolve(r.thread_id, resolved=r.resolved),
-        Hints(read_only=False, idempotent=True),
+        canopy_mcp.Hints(read_only=False, idempotent=True),
     ),
 )
