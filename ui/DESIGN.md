@@ -1748,6 +1748,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   the ticket stands now in its state's color (waiting on you, its plan waiting, its run) or its phase muted, and for a
   ticket viewed, how long ago. What was viewed, a ticket's page or its plan's, is this browser's alone: localStorage
   (`src/lib/recent-tickets.ts`), never the journal, and a ticket the journal no longer holds leaves it.
+- **The review dialog** (`ReviewDialog`, `src/components/shell/review-dialog.tsx`) asks for a review from anywhere:
+  `R`, with no modifier, from anywhere but a text field or the plan editor (the rule `/` follows), or a GitHub PR's URL
+  pasted outside a field, which it fills in, opens it; on a PR's page, `R` fills in that PR's. It never opens over
+  another dialog. It is a `Dialog` placed as the jump palette is, titled `Review a PR` in a panel's header, holding the
+  reviews page's form (`ReviewRequestForm`), one component for both so they cannot drift. The focus starts in the URL
+  field, or in the notes once the URL is filled in. A request that goes through closes it and opens the PR's page; a
+  refusal keeps it open, its `Notice` naming the guard. What is written outlives closing it, kept in the tab's
+  `sessionStorage` (`src/lib/review-request-draft.ts`) until a request goes through or the operator signs out.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.
   Signed out by a 401 to an action, the card says under its heading, in `status-failed`, that the action was not sent
   (`unsentQuery`). A reply being written outlives the page that held it: the reply form keeps what is written, with its
