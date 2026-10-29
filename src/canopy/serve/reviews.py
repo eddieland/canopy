@@ -36,7 +36,7 @@ from canopy.serve.schema.review import (
     ReviewSummary,
 )
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
-from canopy.serve.views import lines, models_served, new_tokens, review_state, shown_path, ticket_title
+from canopy.serve.views import card, lines, models_served, new_tokens, review_state, shown_path, ticket_title
 
 if TYPE_CHECKING:
     import sqlite3
@@ -124,6 +124,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
             ended=row.ended_at is not None,
             session_id=row.session_id or None,
         ),
+        card=card(row, running=row.status is ReviewRunStatus.RUNNING),
     )
 
 

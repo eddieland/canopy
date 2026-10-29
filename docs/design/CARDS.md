@@ -35,8 +35,9 @@ a card, so it fails safe, as the clock's do (§33).
 
 ### Where it shows
 
-`canopy status` shows each running run's `now` and how old its card is; `canopy show` of a run, and `canopy review
-show` of a review, the whole card, or the last one once it has ended. A card that has gone 20 tool calls or 10 minutes
+`canopy status` and the web UI's running runs show each running run's `now` and how old its card is; `canopy show` of
+a run, `canopy review show` of a review, and their pages in the web UI, the whole card, or the last one once it has
+ended, as a ticket's page does under the run working it. A card that has gone 20 tool calls or 10 minutes
 without an update is marked stale, as is a run that has kept none that long, rather than going quiet. No notification:
 the sinks hear of what a run ends with, as before (§20).
 
