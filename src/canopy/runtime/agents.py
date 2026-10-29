@@ -168,6 +168,16 @@ class SkillFile:
 
 
 @dataclass(frozen=True)
+class Skills:
+    """Every skill the runtime finds where canopy's agents start, as it read them, or why it could not list them."""
+
+    #: Each skill, sorted by name.
+    files: Sequence[SkillFile] = ()
+    #: Why the runtime could not list them, or None when it did.
+    error: str | None = None
+
+
+@dataclass(frozen=True)
 class Offerings:
     """What the runtime offers canopy's agents, where they start."""
 
@@ -176,8 +186,6 @@ class Offerings:
     disabled_servers: Sequence[str] = ()
     #: Every skill the runtime finds, by name.
     skills: Sequence[str] = ()
-    #: Each of `skills` as the runtime read it, in the same order.
-    skill_files: Sequence[SkillFile] = ()
     agents: Sequence[AgentOffer] = ()
     #: Why the runtime could not list its servers or its skills, or None when it did.
     error: str | None = None

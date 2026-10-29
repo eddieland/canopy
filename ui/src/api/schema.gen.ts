@@ -1491,7 +1491,7 @@ export type paths = {
         };
         /**
          * List the skills
-         * @description Every skill the runtime finds in the workspace root, with its file, its text, and the agents offered it.
+         * @description Every skill the runtime finds in the workspace root, with where its file is and its text.
          */
         get: operations["listSkills"];
         put?: never;
@@ -2344,22 +2344,6 @@ export type components = {
              * @enum {string}
              */
             source: "ticket" | "config" | "default";
-        };
-        /**
-         * AgentUnread
-         * @description One of canopy's agents whose rules the runtime could not say, so the skills' lists leave it out.
-         */
-        AgentUnread: {
-            /**
-             * Agent
-             * @description The agent, by name.
-             */
-            agent: string;
-            /**
-             * Error
-             * @description Why, in canopy's words.
-             */
-            error: string;
         };
         /**
          * Attached
@@ -7592,7 +7576,7 @@ export type components = {
         };
         /**
          * Skill
-         * @description A skill the runtime finds where the loop starts its agents, and which of canopy's agents are offered it.
+         * @description A skill the runtime finds where the loop starts its agents: where its file is, and what it says.
          */
         Skill: {
             /**
@@ -7600,12 +7584,6 @@ export type components = {
              * @description Its instructions, the file after its front matter: untrusted text, rendered as text.
              */
             body: string;
-            /**
-             * Denied
-             * @description canopy's agents whose rules deny it, by name, in the same order.
-             * @default []
-             */
-            denied: string[];
             /**
              * Description
              * @description What its front matter says it is for: what an agent reads to decide whether to load it; None when it says
@@ -7618,12 +7596,6 @@ export type components = {
              */
             name: string;
             /**
-             * Offered
-             * @description canopy's agents offered it, by name, in the order `canopy agents` lists them.
-             * @default []
-             */
-            offered: string[];
-            /**
              * Path
              * @description Its file: under the workspace's root relative to it, under the operator's home from `~/`, and otherwise as the
              *     runtime names it.
@@ -7634,7 +7606,7 @@ export type components = {
         };
         /**
          * SkillList
-         * @description Every skill the runtime finds, as `canopy agents` asks it, with each one's file and the agents offered it.
+         * @description Every skill the runtime finds, as `canopy agents` asks it, with each one's file and text.
          */
         SkillList: {
             /**
@@ -7648,12 +7620,6 @@ export type components = {
              * @default []
              */
             skills: components["schemas"]["Skill"][];
-            /**
-             * Unread
-             * @description The agents whose rules could not be read, which no skill's lists name.
-             * @default []
-             */
-            unread: components["schemas"]["AgentUnread"][];
         };
         /**
          * @description Where a skill's file is (DESIGN §13): `canopy` for the skills canopy ships, in its definitions snapshot; `workspace` for one under the workspace's root; `home` for one under the operator's home; `built-in` for one the runtime carries itself; `other` for any other file.

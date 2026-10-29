@@ -2,8 +2,7 @@
 
 One from each place a skill comes from: the tracker's and the artifact store's, which canopy ships, in its definitions
 snapshot; a release-notes skill in the workspace's root; the operator's own, in their home; and one the runtime carries
-itself. The overseer has no skill tool, so is offered none; only the chore publishes, so only it gets the artifacts
-skill; and the private worker's rules, as the operator's config wrote them, deny it the operator's own.
+itself.
 """
 
 from __future__ import annotations
@@ -11,8 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.runtime import definitions
-from canopy.runtime.agents import CHORE, OVERSEER, PRIVATE_WORKER, AgentOffer, Offerings, SkillFile
+from canopy.runtime.agents import SkillFile, Skills
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -60,11 +58,11 @@ Where a skill of your own goes, what its front matter holds, and how to keep its
 """
 
 
-def offerings(ctx: Context) -> Offerings:
-    """What the mock's runtime offers each of canopy's agents: five skills, from each place one comes from.
+def listed(ctx: Context) -> Skills:
+    """The skills the mock's runtime finds: five, from each place one comes from.
 
     Returns:
-        Its skills, sorted by name, and each agent's share of them.
+        Its skills, sorted by name.
     """
     root, snapshot = ctx.ws.root, ctx.ws.state_dir / _SNAPSHOT
     files = (
@@ -90,23 +88,4 @@ def offerings(ctx: Context) -> Offerings:
         ),
         SkillFile("write-a-skill", "How to write a skill of your own.", "<built-in>", _WRITE_A_SKILL),
     )
-    names = tuple(f.name for f in files)
-    return Offerings(
-        servers=("jira",),
-        skills=names,
-        skill_files=files,
-        agents=tuple(_offer(agent, names) for agent in definitions.agent_names()),
-    )
-
-
-def _offer(agent: str, skills: tuple[str, ...]) -> AgentOffer:
-    if agent == OVERSEER:
-        return AgentOffer(agent, denied_skills=skills)
-    denied = {"canopy-artifacts"} if agent != CHORE else set[str]()
-    if agent == PRIVATE_WORKER:
-        denied.add("terse")
-    return AgentOffer(
-        agent,
-        skills=tuple(s for s in skills if s not in denied),
-        denied_skills=tuple(s for s in skills if s in denied),
-    )
+    return Skills(files)

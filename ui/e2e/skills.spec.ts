@@ -8,9 +8,7 @@ test.beforeEach(async ({ page }) => {
     await signIn(page)
 })
 
-test('settings opens the skills page, which lists each skill with its file and the agents offered it', async ({
-    page,
-}) => {
+test('settings opens the skills page, which lists each skill with where its file is', async ({ page }) => {
     await page.goto('settings')
     await settled(page)
     await page.getByTestId('skills-open').click()
@@ -20,7 +18,7 @@ test('settings opens the skills page, which lists each skill with its file and t
 
     const artifacts = page.getByTestId('skill-canopy-artifacts')
     await expect(artifacts).toContainText('.canopy/definitions-3f9c2a71/skills/canopy-artifacts/SKILL.md')
-    await expect(artifacts).toContainText('offered to chore; denied to overseer, planner, reviewer')
+    await expect(artifacts).toContainText('Load before any artifact tool.')
     await expect(page.getByTestId('skill-terse')).toContainText('no description')
     await expect(page.getByTestId('skill-terse')).toContainText('~/.agents/skills/terse/SKILL.md')
 })

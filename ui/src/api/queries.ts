@@ -526,9 +526,9 @@ export const freshModelsQuery = queryOptions({
 })
 
 /**
- * Every skill the runtime finds, as `canopy agents` asks it, with each one's file and the agents offered it. Not on
- * the stream, since a read starts the runtime once per agent: read when the skills page opens, kept for the rest of the
- * visit, and read again when its Read again button asks.
+ * Every skill the runtime finds for canopy's agents, with each one's file and text. Not on the stream, since a read
+ * starts the runtime: read when the skills page opens, kept for the rest of the visit, and read again when its Read
+ * again button asks.
  */
 export const skillsQuery = queryOptions({
     queryKey: keys.skills,

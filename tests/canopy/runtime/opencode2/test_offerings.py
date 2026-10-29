@@ -199,8 +199,8 @@ def test_each_agent_is_offered_what_its_merged_rules_leave_it() -> None:
     assert all(e == env for _, _, e in serve.ran)
 
 
-def test_each_skill_is_kept_as_the_server_read_it_sorted_by_id() -> None:
-    skills = [
+def test_the_skills_are_listed_as_the_server_read_them_once_canopy_s_agents_load() -> None:
+    files = [
         {"id": "terse", "name": "terse", "path": "/ws/.opencode/skills/terse/SKILL.md", "content": "Be brief.\n"},
         {
             "id": "audit",
@@ -210,12 +210,13 @@ def test_each_skill_is_kept_as_the_server_read_it_sorted_by_id() -> None:
             "content": "x",
         },
     ]
-    found = offered(Serve({"canopy-worker": []}, skills=skills), "canopy-worker")
-    assert found.skills == ("audit", "terse")
-    assert found.skill_files == (
+    serve = Serve({"canopy-worker": []}, skills=files, loading=2)
+    found = offerings.skills(serve, cwd=Path("/ws"), definitions_dir=Path("/defs"), agents=["canopy-worker"])
+    assert found.files == (
         SkillFile("audit", "Check the books.", "/defs/skills/a/SKILL.md", "x"),
         SkillFile("terse", None, "/ws/.opencode/skills/terse/SKILL.md", "Be brief.\n"),
     )
+    assert serve.loading == 0  # asked only once the agents had loaded
 
 
 def test_what_opencode_prints_past_a_pipes_buffer_is_read() -> None:

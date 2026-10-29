@@ -1,8 +1,8 @@
 # Settings
 
 A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your limits and
-trust settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and which
-skills each is offered. It opens
+trust settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and the
+skills the runtime finds. It opens
 from the rail's foot, beside the guide. The theme, the clock, the send key, your review personas, and the fun are kept
 in this browser; everything else canopy reads from its config files, as it always did.
 
@@ -110,11 +110,10 @@ for five minutes, or until the loop reads its config again.
 
 ## Skills
 
-Every skill the runtime finds for canopy's agents, on a page of its own: **Open** on the **Skills** panel. It is
-`canopy agents` with the skills' files opened. Each row names the skill, says where its file is, and gives what its
-front matter says it is for, which is all an agent reads before deciding to load it, so a vague one is a skill nobody
-loads. Under that, which of canopy's agents are offered it, and which have it denied. **Show SKILL.md** opens the
-instructions under the row, as text.
+Every skill the runtime finds for canopy's agents, on a page of its own: **Open** on the **Skills** panel. Each row
+names the skill, says where its file is, and gives what its front matter says it is for, which is all an agent reads
+before deciding to load it, so a vague one is a skill nobody loads. **Show SKILL.md** opens the instructions under
+the row, as text.
 
 Where a file is, on its chip:
 
@@ -125,14 +124,13 @@ Where a file is, on its chip:
 - **other**: anywhere else.
 
 The runtime is asked as a run asks it, in the workspace root, so a skill a repository keeps for itself is missing here;
-its runs, started in its worktrees, still get it. The overseer is offered none: its prompt already holds the tracker's
-skill, and nothing else is worth what it costs. That's the trade on every row: an agent pays for each skill it's
-offered on every model call, loaded or not. A skill one agent never uses is cheaper denied to it, by name, in your
-runtime config.
+its runs, started in its worktrees, still get it. Every skill an agent is offered costs each of its model calls,
+loaded or not, so one an agent never uses is cheaper denied to it, by name, in your runtime config. Which agent gets
+which is `canopy agents`, which asks the runtime once for each agent and takes its time about it.
 
-Each read starts the runtime once for every agent, so it runs when the page opens, not on a timer; **Read again** asks
-afresh after you've added one. The filter narrows the list by name or description. Nothing here changes a skill: add,
-edit, or deny one in the runtime's own files.
+The page asks the runtime for its skills alone, once, when it opens, not on a timer; **Read again** asks afresh after
+you've added one. The filter narrows the list by name or description. Nothing here changes a skill: add, edit, or deny
+one in the runtime's own files.
 
 ## Config
 

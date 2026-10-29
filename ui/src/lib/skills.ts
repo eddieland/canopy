@@ -1,4 +1,4 @@
-// The skills page's words (DESIGN §13): where a skill's file is, and which of canopy's agents are offered it.
+// The skills page's words (DESIGN §13): where a skill's file is, and how many there are.
 
 import type { Skill, SkillList, SkillSource } from '@/api/types'
 
@@ -9,26 +9,6 @@ export const SOURCE_MEANING: Record<SkillSource, string> = {
     home: 'yours, under your home: every session of yours loads it, canopy or not',
     'built-in': 'carried by the runtime itself',
     other: 'a file outside the workspace and your home',
-}
-
-// What every one of canopy's agents' names starts with.
-const PREFIX = 'canopy-'
-
-/** An agent of canopy's as the page names it: without the `canopy-` every one of them starts with. */
-export function agentName(agent: string): string {
-    return agent.startsWith(PREFIX) ? agent.slice(PREFIX.length) : agent
-}
-
-/** Which agents are offered `skill`, in a line: every one, none, or which, then those its rules deny it. */
-export function offeredLine(skill: Skill): string {
-    if (skill.denied.length === 0) {
-        return skill.offered.length === 0 ? 'no agent asked' : 'offered to every agent'
-    }
-    const denied = skill.denied.map(agentName).join(', ')
-    if (skill.offered.length === 0) {
-        return `offered to no agent: denied to ${denied}`
-    }
-    return `offered to ${skill.offered.map(agentName).join(', ')}; denied to ${denied}`
 }
 
 /** The page's description: how many skills the runtime found, and how many of them come from you or the workspace. */

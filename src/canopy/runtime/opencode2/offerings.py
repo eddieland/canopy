@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr, ValidationError
 
 from canopy.infra import procs
-from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer, SkillFile
+from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer, SkillFile, Skills
 from canopy.runtime.opencode2.invocation import CONFIG_DIR_ENV
 
 if TYPE_CHECKING:
@@ -179,9 +179,23 @@ def offerings(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents:
         servers=tuple(loaded.servers),
         disabled_servers=tuple(name for name, server in loaded.servers.items() if server.disabled),
         skills=loaded.skills,
-        skill_files=loaded.skill_files,
         agents=tuple(_offer(loaded, agent) for agent in agents),
     )
+
+
+def skills(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents: Collection[str]) -> Skills:
+    """Ask OpenCode every skill it finds, started in `cwd` with canopy's definitions in `definitions_dir`.
+
+    The server is asked once `agents`, canopy's, have loaded, which says its plugins have loaded the definitions.
+
+    Returns:
+        Each skill as the server read it; only `error` when it could not list them.
+    """
+    try:
+        loaded = _load(runner, _OPENCODE, cwd, {CONFIG_DIR_ENV: str(definitions_dir)}, agents)
+    except _FailedError as e:
+        return Skills(error=str(e))
+    return Skills(loaded.skill_files)
 
 
 def offered(runner: procs.Runner, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str]) -> AgentOffer:

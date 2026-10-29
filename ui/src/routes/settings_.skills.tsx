@@ -14,30 +14,22 @@ import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
-import {
-    agentName,
-    offeredLine,
-    SKILL_QUERY_MAX,
-    skillQueryOf,
-    skillsLine,
-    skillsMatching,
-    SOURCE_MEANING,
-} from '@/lib/skills'
+import { SKILL_QUERY_MAX, skillQueryOf, skillsLine, skillsMatching, SOURCE_MEANING } from '@/lib/skills'
 
 // What the page shows, the same on every visit: the title's help, so the description is left for what was found.
 const HELP =
-    'Every skill the runtime finds where the loop starts its agents, as `canopy agents` asks it: where its file is, ' +
-    "which of canopy's agents are offered it, and what it says. A skill an agent is offered costs each of its model " +
-    'calls, loaded or not. Read when the page opens, and again when you ask.'
+    "Every skill the runtime finds where the loop starts canopy's agents: where its file is, and what it says. A " +
+    'skill an agent is offered costs each of its model calls, loaded or not. Read from the runtime when the page ' +
+    'opens, and again when you ask.'
 
 interface SkillsSearch {
     q?: string | undefined
 }
 
 /**
- * The skills the runtime offers canopy's agents (DESIGN §13), a page of Settings' own: each skill's name, what it says
- * it is for, where its file is, which agents get it, and its text, opened under it. `?q=` keeps the skills whose name
- * or description holds it. It changes nothing: a skill is added or denied in the runtime's own config.
+ * The skills the runtime finds for canopy's agents (DESIGN §13), a page of Settings' own: each skill's name, what it
+ * says it is for, where its file is, and its text, opened under it. `?q=` keeps the skills whose name or description
+ * holds it. It changes nothing: a skill is added or denied in the runtime's own config.
  */
 export const Route = createFileRoute('/settings_/skills')({
     validateSearch: (search: Record<string, unknown>): SkillsSearch => ({ q: skillQueryOf(search['q']) }),
@@ -63,7 +55,7 @@ function SkillsPage() {
                             size="xs"
                             onClick={() => void refetch()}
                             disabled={isFetching}
-                            title="Asks the runtime again, once for each agent"
+                            title="Asks the runtime again, which starts it once"
                             data-testid="skills-refresh"
                         >
                             <RotateCw />
@@ -89,15 +81,6 @@ function SkillsPage() {
                 {data !== undefined && data.error !== null && (
                     <Notice error={data.error} subject="runtime" className="border-b px-3 py-2" />
                 )}
-                {data !== undefined &&
-                    data.unread.map((u) => (
-                        <Notice
-                            key={u.agent}
-                            error={u.error}
-                            subject={agentName(u.agent)}
-                            className="border-b px-3 py-2"
-                        />
-                    ))}
                 {shown === undefined ? (
                     <PanelLoading query={query} rows={4} className="min-h-40" />
                 ) : shown.length === 0 && q !== undefined ? (
@@ -128,7 +111,7 @@ function described(data: SkillList | undefined, pending: boolean): string | null
     return data.error === null ? skillsLine(data) : 'the runtime could not say'
 }
 
-/** One skill: its name and where its file is, what it says it is for, the agents it is offered, and its text. */
+/** One skill: its name and where its file is, what it says it is for, and its text, opened under it. */
 function SkillRow({ skill }: { skill: Skill }) {
     const [open, setOpen] = useState(false)
     return (
@@ -147,12 +130,11 @@ function SkillRow({ skill }: { skill: Skill }) {
                         </span>
                     )}
                 </div>
-                <p className="text-sm">
-                    {skill.description ?? <span className="text-muted-foreground">no description</span>}
-                </p>
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                    <span className="text-xs text-muted-foreground">{offeredLine(skill)}</span>
-                    <Disclosure open={open} what="SKILL.md" className="-mr-2" />
+                <div className="flex items-start justify-between gap-3">
+                    <p className="min-w-0 text-sm">
+                        {skill.description ?? <span className="text-muted-foreground">no description</span>}
+                    </p>
+                    <Disclosure open={open} what="SKILL.md" className="-mr-2 shrink-0" />
                 </div>
                 <CollapsibleContent className="-mx-3 -mb-2.5 border-t bg-surface-raised/40">
                     {skill.body.trim() === '' ? (

@@ -268,13 +268,12 @@ def offered(ctx: Context) -> tuple[Offerings, dict[str, tuple[str, ...]]]:
 
 
 def agents_json(found: Offerings, allows: Mapping[str, Sequence[str]]) -> str:
-    """What `offered` found, as `canopy agents --json` prints it: the skills by name, without their files.
+    """What `offered` found, as `canopy agents --json` prints it.
 
     Returns:
         The JSON text.
     """
-    listed = {k: v for k, v in dataclasses.asdict(found).items() if k != "skill_files"}
-    return report_json({**listed, "allow_bash": {a: list(p) for a, p in allows.items()}})
+    return report_json({**dataclasses.asdict(found), "allow_bash": {a: list(p) for a, p in allows.items()}})
 
 
 def tool_names() -> list[str]:

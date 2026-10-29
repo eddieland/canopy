@@ -187,9 +187,9 @@ export const GHOST_TIPS = {
     '/settings_/skills': [
         'Eyes up, Guardian. Skills. I have one: I float. The Traveler did not ship a SKILL.md for it.',
         'Field report: every skill an agent is offered rides along on every call. Light travels light.',
-        'Grimoire: the overseer is offered none. It already knows everything. Ask it.',
+        'Grimoire: a skill with no description is a skill nobody loads. Write one. Ghosts read.',
         'Scanning... five skills found. None of them is reviving Guardians. I checked twice.',
-        'Dear Traveler, they denied a skill to the private worker. Good. Secrets need fewer tools.',
+        "Dear Traveler, a skill in your home goes everywhere you go. Like me. You're welcome.",
     ],
     '/search': [
         'Eyes up, Guardian. Searching. I lost a shell in 2014. Let me know if it turns up.',

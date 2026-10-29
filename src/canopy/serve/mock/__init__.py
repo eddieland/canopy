@@ -2,7 +2,7 @@
 
 The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, a
 reload, a tick asked for, the attempt and review limits and their grants, a chore's try, the pools' slots, the models
-the runtime lists, and what it offers the agents are stand-ins, since the first six belong to the loop, `runs`,
+the runtime lists, and the skills it finds are stand-ins, since the first six belong to the loop, `runs`,
 `reviews`, and `chores`, and there is no treehouse or runtime to ask (backend.py): the models are those its runs'
 sessions name, and the skills five the `skills` module makes up. A try records its run and starts nothing, so the run
 stays running.
@@ -329,7 +329,7 @@ def seed(directory: Path) -> Backend:
         runner=lambda: drafts.GitHub(db_path(ws)),
         user_file=user_file,
         models=_models_listed,
-        offerings=skills.offerings,
+        skills=skills.listed,
         # Read when the e2e tests' frozen clock says it is (`NOW` in ui/e2e/helpers.ts), so it reads as just now.
         host=lambda _config, _workspace: host.machine(T0 + timedelta(minutes=30)),
         samples=host.samples(T0 + timedelta(minutes=30)),

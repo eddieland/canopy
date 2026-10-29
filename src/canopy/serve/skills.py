@@ -1,10 +1,11 @@
-"""The skills page (DESIGN §13): every skill the runtime finds, where its file is, and which of canopy's agents get it.
+"""The skills page (DESIGN §13): every skill the runtime finds where canopy's agents start, and where its file is.
 
-The runtime is asked as `canopy agents` asks it, in the workspace root with canopy's definitions, so the list is the
-merge the runtime itself makes, the operator's own skills among it, not a reading of the directories it looks in. A
-repository's own skills load in the runs started in its worktrees, and are not asked about here. Each read starts the
-runtime for every agent, so it is made when the page asks, never by the event stream. A skill's text is the
-repository's or the operator's, so the UI renders it as text, like everything from the journal.
+The runtime is asked as `canopy agents` asks it, in the workspace root with canopy's definitions, so the list is what
+the runtime itself finds, the operator's own skills among it, not a reading of the directories it looks in. It is
+asked for the skills alone, not which agent is offered each, which would start it again for every agent. A
+repository's own skills load in the runs started in its worktrees, and are not asked about here. A read starts the
+runtime, so it is made when the page asks, never by the event stream. A skill's text is the repository's or the
+operator's, so the UI renders it as text, like everything from the journal.
 """
 
 from __future__ import annotations
@@ -12,8 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import reports
-from canopy.serve.schema.skill import AgentUnread, Skill, SkillList, SkillSource
+from canopy.serve.schema.skill import Skill, SkillList, SkillSource
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -22,44 +22,21 @@ if TYPE_CHECKING:
 
 
 def listed(backend: Backend, ctx: Context) -> SkillList:
-    """Every skill the runtime finds, by name, each with its file and the agents offered it and denied it.
+    """Every skill the runtime finds, by name, each with where its file is and its text.
 
     Returns:
-        The skills, and the agents whose rules could not be read; only `error` when the runtime could not list them,
-        or canopy's definitions could not be written for it to read.
+        The skills; only `error` when the runtime could not list them, or canopy's definitions could not be written
+        for it to read.
     """
-    try:
-        found = backend.offerings(ctx)
-    except reports.Refused as e:
-        return SkillList(error=str(e))
+    found = backend.skills(ctx)
     if found.error is not None:
         return SkillList(error=found.error)
-    read = [a for a in found.agents if a.error is None]
-    return SkillList(
-        skills=[
-            _skill(
-                f,
-                ctx,
-                offered=[a.agent for a in read if f.name in a.skills],
-                denied=[a.agent for a in read if f.name in a.denied_skills],
-            )
-            for f in found.skill_files
-        ],
-        unread=[AgentUnread(agent=a.agent, error=a.error) for a in found.agents if a.error is not None],
-    )
+    return SkillList(skills=[_skill(f, ctx) for f in found.files])
 
 
-def _skill(found: SkillFile, ctx: Context, *, offered: list[str], denied: list[str]) -> Skill:
+def _skill(found: SkillFile, ctx: Context) -> Skill:
     source, path = _where(found.path, state_dir=ctx.ws.state_dir, root=ctx.ws.root, home=Path.home())
-    return Skill(
-        name=found.name,
-        description=found.description,
-        source=source,
-        path=path,
-        offered=offered,
-        denied=denied,
-        body=found.body,
-    )
+    return Skill(name=found.name, description=found.description, source=source, path=path, body=found.body)
 
 
 # Where a file the runtime names is, and how the page shows it. A link is followed first: a runtime's snapshot of

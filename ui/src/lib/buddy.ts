@@ -252,9 +252,9 @@ export const TIPS = {
     '/settings_/skills': [
         "It looks like you're reading skills. Mine: photosynthesis. No SKILL.md needed.",
         'Unhelpful tip: a skill nobody loads still costs every call. Like a hat nobody wears.',
-        'Did you know? The overseer is offered no skills. It runs on vibes and a state block.',
+        'Did you know? A skill with no description never gets loaded. Ask me how I know.',
         'Dear diary, I searched for a skill called "sprig". Nothing. I remain unteachable.',
-        'Fun fact: Read again asks the runtime once per agent. Patience is also a skill.',
+        'Fun fact: Read again starts the runtime. Patience is also a skill.',
         'Hot take: the best skill is the one in your home. It goes everywhere you go.',
     ],
     '/search': [

@@ -722,8 +722,8 @@ function SkillsPanel() {
             <PanelHeader label="Skills" />
             <div className="flex items-center justify-between gap-4 p-3">
                 <p className="text-sm text-muted-foreground">
-                    Every skill the runtime finds for canopy&apos;s agents: where its file is, which agents are offered
-                    it, and what it says. Read from the runtime when the page opens.
+                    Every skill the runtime finds for canopy&apos;s agents: where its file is, and what it says. Read
+                    from the runtime when the page opens.
                 </p>
                 <Button asChild variant="outline" data-testid="skills-open">
                     <Link to="/settings/skills">

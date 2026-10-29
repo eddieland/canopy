@@ -61,8 +61,6 @@ def test_canopy_agents_says_what_each_agent_is_offered(
     assert main(["agents", "--json"]) == 0
     found = json.loads(capsys.readouterr().out)
     assert (found["servers"], found["skills"], found["error"]) == (["github"], ["tracker-jira"], None)
-    # The skills by name alone: an agent reads this, and their files would cost it their every line.
-    assert "skill_files" not in found
     by_agent = {a["agent"]: a for a in found["agents"]}
     # Every agent canopy ships, asked with canopy's definitions snapshot as OpenCode's config directory.
     assert sorted(by_agent) == definitions.agent_names()

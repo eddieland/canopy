@@ -1,4 +1,4 @@
-"""The API's types for the skills page (DESIGN §13): every skill the runtime finds, and which of canopy's agents get it.
+"""The API's types for the skills page (DESIGN §13): every skill the runtime finds, and where its file is.
 
 Built on `schema.Model`, as every API type is (schema/__init__.py).
 """
@@ -22,7 +22,7 @@ type SkillSource = Annotated[
 
 
 class Skill(Model):
-    """A skill the runtime finds where the loop starts its agents, and which of canopy's agents are offered it."""
+    """A skill the runtime finds where the loop starts its agents: where its file is, and what it says."""
 
     name: str
     """The skill's name, as an agent loads it and the runtime's rules match it."""
@@ -34,29 +34,14 @@ class Skill(Model):
     path: str
     """Its file: under the workspace's root relative to it, under the operator's home from `~/`, and otherwise as the
     runtime names it."""
-    offered: list[str] = []
-    """canopy's agents offered it, by name, in the order `canopy agents` lists them."""
-    denied: list[str] = []
-    """canopy's agents whose rules deny it, by name, in the same order."""
     body: str
     """Its instructions, the file after its front matter: untrusted text, rendered as text."""
 
 
-class AgentUnread(Model):
-    """One of canopy's agents whose rules the runtime could not say, so the skills' lists leave it out."""
-
-    agent: str
-    """The agent, by name."""
-    error: str
-    """Why, in canopy's words."""
-
-
 class SkillList(Model):
-    """Every skill the runtime finds, as `canopy agents` asks it, with each one's file and the agents offered it."""
+    """Every skill the runtime finds, as `canopy agents` asks it, with each one's file and text."""
 
     skills: list[Skill] = []
     """Each skill, by name; none when the runtime could not list them."""
-    unread: list[AgentUnread] = []
-    """The agents whose rules could not be read, which no skill's lists name."""
     error: str | None = None
     """Why the runtime could not list its skills, in canopy's words; None when it did."""

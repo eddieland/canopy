@@ -34,12 +34,12 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr, TypeAdapter
 
 from canopy.infra import procs
-from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer, SkillFile
+from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer, SkillFile, Skills
 from canopy.runtime.opencode import printed
 from canopy.runtime.opencode.invocation import CONFIG_DIR_ENV
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Collection, Sequence
 
 #: How long one of OpenCode's debug commands may take: each starts OpenCode, which reads its config and its plugins.
 TIMEOUT_SECONDS = 120
@@ -123,9 +123,28 @@ def offerings(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents:
         servers=servers,
         disabled_servers=tuple(name for name, server in config.mcp.items() if not server.enabled),
         skills=skills,
-        skill_files=files,
         agents=tuple(_offer(ask, agent, servers=servers, skills=skills) for agent in agents),
     )
+
+
+def skills(
+    runner: procs.Runner,
+    *,
+    cwd: Path,
+    definitions_dir: Path,
+    agents: Collection[str],  # noqa: ARG001  (`debug skill` loads the definitions itself: no agent to wait on)
+) -> Skills:
+    """Ask OpenCode every skill it finds, started in `cwd` with canopy's definitions in `definitions_dir`.
+
+    One `opencode debug skill`, and no agent's rules.
+
+    Returns:
+        Each skill as OpenCode read it; only `error` when it could not list them.
+    """
+    try:
+        return Skills(_Ask(runner, _OPENCODE, cwd, {CONFIG_DIR_ENV: str(definitions_dir)}).skills())
+    except _FailedError as e:
+        return Skills(error=str(e))
 
 
 def offered(runner: procs.Runner, argv: Sequence[str], *, cwd: Path, env: Mapping[str, str]) -> AgentOffer:
@@ -185,15 +204,23 @@ class _Ask:
         self.env = env
 
     def listed(self) -> tuple[_Config, tuple[SkillFile, ...]]:
-        """Return OpenCode's resolved config and every skill it finds, sorted by name, the first of a name kept.
+        """Return OpenCode's resolved config and every skill it finds, as `skills` reads them.
 
         Raises:
             _FailedError: either could not be read.
         """
         config = _read(self.run("debug", "config"), _Config.model_validate_json, "debug config")
+        return config, self.skills()
+
+    def skills(self) -> tuple[SkillFile, ...]:
+        """Return every skill OpenCode finds, sorted by name, the first of a name kept.
+
+        Raises:
+            _FailedError: they could not be read.
+        """
         listed = _read(self.run("debug", SKILL), _SKILLS.validate_json, "debug skill")
         files = {s.name: SkillFile(s.name, s.description, s.location, s.content) for s in reversed(listed)}
-        return config, tuple(files[name] for name in sorted(files))
+        return tuple(files[name] for name in sorted(files))
 
     def run(self, *args: str) -> str:
         """Return what the debug command `args` printed.
