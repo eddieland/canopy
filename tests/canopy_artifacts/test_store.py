@@ -13,8 +13,9 @@ from typing import Any
 from unittest import mock
 
 import canopy_mcp
+import jsonschema
 import pytest
-from canopy_artifacts import cli, server
+from canopy_artifacts import cli, server, tools
 from canopy_artifacts.store import (
     LIST_PAGE,
     MAX_BODY,
@@ -54,8 +55,16 @@ EIGHT = [
 ]
 
 
+#: Each tool's output schema, as it is listed.
+OUTPUT_SCHEMAS = {t.name: canopy_mcp.schema(t.result, "serialization") for t in tools.TOOLS if t.result is not None}
+
+
 class Client:
-    """Calls a store's tools through its MCP server, one JSON-RPC message at a time."""
+    """Calls a store's tools through its MCP server, one JSON-RPC message at a time.
+
+    Every call that succeeds is held to its tool's output schema: its structured content validates against it, as a
+    client checks, and says what its text says.
+    """
 
     def __init__(self, store: Store) -> None:
         self.store = store
@@ -68,11 +77,19 @@ class Client:
         return response
 
     def result(self, name: str, **arguments: object) -> str:
-        """Call a tool, and return its result."""
+        """Call a tool, and return its result's text, once its structured content is shown to say the same."""
         result = self.request("tools/call", {"name": name, "arguments": arguments})["result"]
         assert result["isError"] is False, result
         [content] = result["content"]
-        return str(content["text"])
+        text = str(content["text"])
+        structured = result["structuredContent"]
+        jsonschema.validate(structured, OUTPUT_SCHEMAS[name])
+        if name == "comment_feed":
+            *changes, end = (json.loads(line) for line in text.splitlines())
+            assert structured == {"changes": changes, "through": end["through"]}
+        else:
+            assert structured == json.loads(text)
+        return text
 
     def call(self, name: str, **arguments: object) -> dict[str, Any]:
         """Call a tool that succeeds, and return what it returned."""
@@ -498,6 +515,16 @@ def test_an_origin_is_set_when_an_artifact_is_made_and_kept_by_its_versions(clie
     }
 
 
+def test_a_result_that_strays_from_its_schema_is_the_servers_failure_not_a_refusal(client: Client) -> None:
+    """A store that returns what its tool's result does not hold fails the call, rather than mislead a client."""
+    with mock.patch.object(Store, "resolve", autospec=True, return_value={"state": "gone"}):
+        failed = client.request(
+            "tools/call",
+            {"name": "thread_resolve", "arguments": {"thread_id": "t", "resolved": True}},
+        )
+    assert failed["error"]["code"] == canopy_mcp.INTERNAL_ERROR
+
+
 def test_it_serves_the_eight_tools_and_nothing_else(client: Client) -> None:
     hello = client.request("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}})["result"]
     assert hello["protocolVersion"] == "2024-11-05"
@@ -515,6 +542,13 @@ def test_it_serves_the_eight_tools_and_nothing_else(client: Client) -> None:
     assert '"title": "' not in schemas
     # The model reads a tool's description and its fields' alone, so none is left without one.
     assert all(field.get("description") for t in tools for field in t["inputSchema"]["properties"].values())
+    # Every tool lists its result's schema, which holds no field the result does not, and a refusal carries no result.
+    for t in tools:
+        jsonschema.Draft202012Validator.check_schema(t["outputSchema"])
+        assert t["outputSchema"]["additionalProperties"] is False, t["name"]
+    assert "$ref" not in json.dumps([t["outputSchema"] for t in tools])
+    refused = client.request("tools/call", {"name": "artifact_read", "arguments": {"artifact_id": "a_none"}})["result"]
+    assert (refused["isError"], "structuredContent" in refused) == (True, False)
     reads = {"artifact_read", "artifact_list", "thread_list", "comment_feed"}
     assert {t["name"] for t in tools if t["annotations"]["readOnlyHint"]} == reads
     assert not any(t["annotations"]["openWorldHint"] for t in tools)

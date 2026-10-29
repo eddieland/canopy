@@ -17,7 +17,7 @@ import canopy_mcp
 from pydantic import ValidationError
 
 from canopy_artifacts.store import Code, Refused, Store
-from canopy_artifacts.tools import TOOLS, Tool
+from canopy_artifacts.tools import TOOLS, Answer, Tool
 
 #: The server's name, as `initialize` gives it.
 NAME = "canopy-artifacts"
@@ -60,7 +60,7 @@ def answer(line: bytes, store: Store) -> canopy_mcp.Response:
     return canopy_mcp.answer(line, _server(store))
 
 
-def _server(store: Store) -> canopy_mcp.Server[Store, str]:
+def _server(store: Store) -> canopy_mcp.Server[Store, Answer]:
     return canopy_mcp.Server(
         NAME,
         _version(),
@@ -72,13 +72,13 @@ def _server(store: Store) -> canopy_mcp.Server[Store, str]:
 
 
 def _call(found: Tool, arguments: Mapping[str, object], store: Store) -> dict[str, object]:
-    """Call `found` in `store`: a refusal is a tool error carrying its code.
+    """Call `found` in `store`: its text and its result, or a refusal, a tool error carrying its code.
 
     Returns:
         The `tools/call` result.
     """
     try:
-        return canopy_mcp.said(found.call(arguments, store))
+        answered = found.call(arguments, store)
     except ValidationError as e:
         return _refused(Code.INVALID, canopy_mcp.explain(e))
     except Refused as e:
@@ -86,6 +86,7 @@ def _call(found: Tool, arguments: Mapping[str, object], store: Store) -> dict[st
     except OverflowError:
         # SQLite's integers are 64 bits; a JSON number need not be.
         return _refused(Code.INVALID, "a number is past the most the store holds")
+    return canopy_mcp.said(answered.text, structured=answered.result)
 
 
 def _refused(code: Code, message: str) -> dict[str, object]:
