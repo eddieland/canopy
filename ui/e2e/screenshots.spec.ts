@@ -202,6 +202,16 @@ test('a long review diff folded in dark', async ({ page }) => {
     await expect(panel).toHaveScreenshot('reviews-folded-dark.png')
 })
 
+// Review a PR over a PR's page, opened by R with that PR's URL filled in: the box alone, as the jump palette's.
+test('the review dialog in dark', async ({ page }) => {
+    await openInDark(page, `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
+    await page.keyboard.press('r')
+    const dialog = page.getByTestId('review-dialog')
+    await expect(dialog.getByLabel('Notes for the reviewer (optional)')).toBeFocused()
+    await expect(dialog.getByTestId('review-request-chosen')).toHaveText('in canopy, the default')
+    await expect(dialog).toHaveScreenshot('review-dialog-dark.png')
+})
+
 // The interface is a quarter larger from a 2560px window. The images are of the operator's window, which already
 // uses the width (2xl), so a wider one's would only repeat them larger.
 test('the root size grows with the window', async ({ page }) => {

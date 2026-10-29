@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { Kbd } from '@/components/ui/kbd'
 import { bestScore, getGame, GOAL, hasGame, play, restart, setGame, useGame } from '@/lib/game-2048'
 import type { Direction, Saved } from '@/lib/game-2048'
+import { isTextField } from '@/lib/shortcut'
 import { age, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -27,7 +28,7 @@ export function Game2048() {
     useEffect(() => {
         let typed = ''
         function onKey(event: KeyboardEvent) {
-            if (event.ctrlKey || event.metaKey || event.altKey || isField(event.target)) {
+            if (event.ctrlKey || event.metaKey || event.altKey || isTextField(event.target)) {
                 typed = ''
                 return
             }
@@ -261,13 +262,5 @@ function Scores({ saved }: { saved: Saved }) {
                 </ol>
             )}
         </section>
-    )
-}
-
-// Whether a key press lands in a text field, where 2048 is just a number someone is typing.
-function isField(target: EventTarget | null): boolean {
-    return (
-        target instanceof HTMLElement &&
-        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
     )
 }

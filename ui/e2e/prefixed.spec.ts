@@ -723,6 +723,34 @@ test('a long conversation scrolled away from its end stays put as a message arri
     await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
+test("R opens Review a PR from any page, which requests a review and lands on the PR's page", async ({ page }) => {
+    const pr = 'https://github.com/acme/web/pull/121'
+    await page.goto('runs')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
+    await page.keyboard.press('r')
+    const dialog = page.getByRole('dialog', { name: 'Review a PR' })
+    await expect(dialog.getByLabel('PR URL')).toBeFocused()
+    await page.keyboard.type(pr)
+    await dialog.getByLabel('Notes for the reviewer (optional)').fill('The retry loop is the part that worries me')
+    await dialog.getByLabel('Notes for the reviewer (optional)').press('Enter')
+    await expect(dialog).toBeHidden()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#121')
+    const request = page.getByTestId('review-request')
+    await expect(request.getByTestId('review-request-notes')).toContainText('The retry loop')
+
+    // On the PR's page, R fills in its URL. One of the loop's own PRs is refused, and the dialog stays open.
+    await page.keyboard.press('r')
+    await expect(dialog.getByLabel('PR URL')).toHaveValue(pr)
+    await dialog.getByLabel('PR URL').fill('https://github.com/acme/web/pull/88')
+    await dialog.getByTestId('review-request-submit').click()
+    await expect(dialog.getByRole('alert')).toContainText('refused (loop_pr)')
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+    // Stopped, so a run of this test again starts from no open request.
+    await request.getByTestId('review-request-stop').click()
+    await expect(request).toContainText('Your review request ended')
+})
+
 test("a coworker's PR is requested from the reviews page and stopped from its own, as the CLI does", async ({
     page,
 }) => {
