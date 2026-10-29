@@ -1412,26 +1412,6 @@ class Connect(Section):
         found = self._of("vcs")
         return found or Source(kind="vcs", cmd=GITHUB_READER, post_cmd=GITHUB_POSTER)
 
-    def observes_tickets(self) -> bool:
-        """Whether a `tracker` source reads tickets: without one, a ticket's comments have no journal numbers (§35).
-
-        Returns:
-            True if one does.
-        """
-        return any(s.kind == "tracker" for s in self.named().values())
-
-    def observes_all(self) -> bool:
-        """Whether a `tracker` and a `vcs` source both read, so the overseer reads neither world itself (DESIGN §39).
-
-        A `vcs` source always reads, canopy's own when none is configured (`named`), so both do where a `tracker`
-        source does.
-
-        Returns:
-            True if both do.
-        """
-        kinds = {s.kind for s in self.named().values()}
-        return {"tracker", "vcs"} <= kinds
-
     def tracker(self) -> Source:
         """The `tracker` source, which config requires (`_one_per_kind`); canopy configures none of its own.
 

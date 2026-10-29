@@ -17,7 +17,7 @@ from canopy.core.vocab import Phase, TickStatus
 from canopy.loop import attention, harness, phases
 from tests.canopy.helpers import KEY, decisions, in_tick, mcp_session, operator, tool_call, waits
 from tests.canopy.observation_helpers import PR, check, comment, held, review
-from tests.canopy.scenario_helpers import raises, skips_tick
+from tests.canopy.scenario_helpers import raises
 
 if TYPE_CHECKING:
     import sqlite3
@@ -281,7 +281,7 @@ def test_the_overseer_records_one_once_and_ticks_that_leave_it_out_keep_it(scena
     scenario.tick(*waits(KEY))
     [listed] = scenario.state()["attention"]  # what the second tick's overseer was shown
     assert (listed["reason"], listed["kept"]) == ("multi_repo", True)
-    scenario.tick(skips_tick("mcp_unavailable: github"), code=1)
+    scenario.tick(code=1)  # a duty left undone
     scenario.tick(result="gave up", code=1)
     scenario.tick(*waits(KEY))
     [item] = attention.current(scenario.conn)

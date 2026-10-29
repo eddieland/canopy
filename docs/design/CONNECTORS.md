@@ -65,7 +65,7 @@ In §6 step 3, after the reconciles, the tick runs each source once, the `vcs` s
 a tick whose reconcile failed runs none, and a dry run observes as a live tick does. A source that fails, or reads less
 than it was asked, keeps its previous observations and raises the harness's `connector_failed` (§14), naming what was
 not read, each tick until a run reads everything; the overseer's view of the list leaves it out. The tick goes on: what
-was not read ages until it is stale (below), when the overseer reads it live and no dispatch rests on it (§7). The
+was not read ages until it is stale (below), when the harness waits on it and no dispatch rests on it (§7, §39). The
 loop's polls between ticks run the same sources the same way and raise nothing (§6).
 
 ### What the overseer is shown

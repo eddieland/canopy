@@ -123,9 +123,16 @@ live tick takes the observed path above; the tests' workspaces run the fake conn
 ticket they work open and labeled. The overseer's definition loses the tracker's skill and read tools on every
 path. Chosen conservatively, for the operator to change: `canopy init` writes the table commented out, since only the
 operator knows their site or repository and a guess would send their credentials to someone else's, so a new
-workspace's config does not load, nor `canopy init` clone its repositories, until they fill it in. Left: the
-harness's `wait` on an unobserved subject; every MCP server but canopy's denied; the third bullet; the paths config
-now leaves unreachable removed, the overseer prompt's live reads and tick-wide skips, `canopy queried` and its tool,
-and the loop's branches for a workspace with no `tracker` source; and the design folded into the sections it names.
+workspace's config does not load, nor `canopy init` clone its repositories, until they fill it in. Built
+(2026-10-29): the paths config left unreachable removed. `canopy queried`, its tool, and the duty that owed it are
+gone, the harness recording the `tracker` source's read of the query as before; every decision names its ticket, so
+the tick-wide `skip` and DESIGN §15's case for it are gone, and no tick closes `skipped`; the state block has no
+`query_due`, and the overseer's prompt no live read of the tracker or GitHub, only the observations, an unobserved
+subject its `wait`; and the loop's branches for a workspace with no `tracker` source, the comment cursor kept as the
+tracker's id among them, are gone (`loop/tick.py`, `loop/tools.py`, `loop/observations.py`, `loop/phases.py`). Kept
+for the journal's history: the `queried` decision, which the harness still records and `duties.last_queried` reads
+from an older release's ticks too; `TickStatus.SKIPPED`, which old ticks hold; and the `last_comment_id` column, no
+longer read. Left: the harness's `wait` on an unobserved subject; every MCP server but canopy's denied; the third
+bullet; and the design folded into the sections it names.
 Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes,
 and that entry with it), the fifth bullet's.

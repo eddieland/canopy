@@ -88,7 +88,7 @@ def test_decide_records_several_in_one_call(scenario: Scenario) -> None:
             "merged",
         )
         assert said.out == "recorded wait for PROJ-1\nrecorded done for PROJ-2\n"
-        # Each KEY ACTION pair needs its own --rationale, and a tick-wide skip goes alone.
+        # Each KEY ACTION pair needs its own --rationale, and every decision names its ticket.
         scenario.overseer("decide", "PROJ-3", "wait", "PROJ-4", "wait", "--rationale", "r", code=2)
         scenario.overseer("decide", "PROJ-3", "wait", "--rationale", "r", "--rationale", "s", code=2)
         scenario.overseer(
@@ -108,16 +108,12 @@ def test_decide_records_several_in_one_call(scenario: Scenario) -> None:
     assert {row["key"] for row in scenario.conn.execute("SELECT key FROM tickets")} == {"PROJ-1", "PROJ-2"}
 
 
-def test_only_a_tick_wide_reason_skips_the_tick_and_the_sources_leave_none(scenario: Scenario) -> None:
+def test_every_skip_is_a_tickets_own(scenario: Scenario) -> None:
+    """The overseer reads no tracker nor GitHub, which the sources read (DESIGN §39): no skip is the whole tick's."""
     with scenario.ticking() as tick_id:
-        refused = scenario.overseer("decide", "skip", "--rationale", "wanted to relabel PROJ-1", code=2)
-        assert "a skip about one ticket names its key" in refused.err
-        queue = ["decide", "queue", "skip", "--rationale", "tracker_unsupported: queue is not an issue"]
-        assert "'tracker_unsupported' skips the whole tick, so it names no key" in scenario.overseer(*queue, code=2).err
-        # Config requires a `tracker` source, which reads the tracker for it (DESIGN §39).
-        skipped = scenario.overseer("decide", "skip", "--rationale", "tracker_unsupported: labels", code=1)
-        assert "a `tracker` source reads the tracker, and you read none" in skipped.err
-        scenario.overseer("decide", "PROJ-1", "wait", "--rationale", "mcp_unavailable: github, for its PR")
+        refused = scenario.overseer("decide", "skip", "--rationale", "tracker_unsupported: labels", code=2)
+        assert "expected KEY ACTION for each of 1 --rationale" in refused.err
+        scenario.overseer("decide", "PROJ-1", "skip", "--rationale", "mcp_unavailable: github, for its PR")
     rows = [(d.ticket_key, d.rationale) for d in db.decisions_for_tick(scenario.conn, tick_id)]
     assert rows == [("PROJ-1", "mcp_unavailable: github, for its PR")]
 

@@ -1,4 +1,4 @@
-"""The overseer's journal commands: `decide`, `queried`, `attention`, and `ticket set`, each `canopy <it>`."""
+"""The overseer's journal commands: `decide`, `attention`, and `ticket set`, each `canopy <it>`."""
 
 from __future__ import annotations
 
@@ -21,9 +21,9 @@ from canopy.loop import tools
 
 
 @click.command("decide", cls=OverseerCommand)
-# click has no optional positional before a required one, nor groups of arguments, so `[KEY] ACTION`, once for each
-# --rationale, is parsed by hand: the Nth KEY ACTION pair is the Nth --rationale's.
-@click.argument("words", nargs=-1, required=True, metavar="[KEY] ACTION")
+# click has no groups of arguments, so `KEY ACTION`, once for each --rationale, is parsed by hand: the Nth KEY ACTION
+# pair is the Nth --rationale's.
+@click.argument("words", nargs=-1, required=True, metavar="KEY ACTION")
 @click.option(
     "--rationale",
     "rationales",
@@ -34,47 +34,29 @@ from canopy.loop import tools
 )
 @click.pass_context
 def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationales: tuple[str, ...]) -> int:
-    """Record a decision, or several, all or none (overseer only).
+    """Record a decision about a ticket, or several, all or none (overseer only).
 
-    ACTION is wait, skip, or done. KEY may be omitted only for a tick-wide skip, whose rationale starts
-    `mcp_unavailable:` or `tracker_unsupported:`; a skip with KEY may not give either. Decide several tickets at once
-    as `KEY ACTION --rationale WHY`, repeated.
+    ACTION is wait, skip, or done. Decide several tickets at once as `KEY ACTION --rationale WHY`, repeated.
     """
-    if len(rationales) == 1 and len(words) <= 2:  # noqa: PLR2004
-        pairs = [(None, words[0]) if len(words) == 1 else (words[0], words[1])]
-    elif len(words) == 2 * len(rationales):
-        pairs = list(zip(words[::2], words[1::2], strict=True))
-    else:
+    if len(words) != 2 * len(rationales):
         raise click.UsageError(
-            f"expected [KEY] ACTION, or KEY ACTION for each of {len(rationales)} --rationale; "
-            f"got {len(words)} arguments",
+            f"expected KEY ACTION for each of {len(rationales)} --rationale; got {len(words)} arguments",
             click_ctx,
         )
+    pairs = list(zip(words[::2], words[1::2], strict=True))
     for key, action in pairs:
         if action not in tools.DECIDE_ACTIONS:
             raise click.UsageError(
                 f"invalid action {action!r}: choose from {', '.join(tools.DECIDE_ACTIONS)}",
                 click_ctx,
             )
-        if key is not None and not valid_key(key):
+        if not valid_key(key):
             raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
     decisions = [
         {"key": key, "action": action, "rationale": rationale}
         for (key, action), rationale in zip(pairs, rationales, strict=True)
     ]
     return verb(click_ctx, tools.decide, tools.Decisions, decisions=decisions)
-
-
-@click.command("queried", cls=OverseerCommand)
-@click.argument("keys", nargs=-1, type=TICKET_KEY, metavar="[KEY]...")
-@click.pass_context
-def cmd_queried(click_ctx: click.Context, keys: tuple[str, ...]) -> int:
-    """Record that this tick ran the tracker query, naming each open ticket it returned (overseer only).
-
-    Name none when it returned no open ticket. Every ticket named is owed a decision this tick, unless the state block
-    lists it in `stopped` or `recently_done`. Record a long result in several calls.
-    """
-    return verb(click_ctx, tools.queried, tools.Queried, keys=keys)
 
 
 @click.command("attention", cls=OverseerCommand)

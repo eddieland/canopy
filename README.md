@@ -262,7 +262,8 @@ right model, paste one of the prompts in [docs/INSIGHTS.md](docs/INSIGHTS.md) in
 
 - **canopy cannot find `treehouse`:** check that it is on `PATH` (usually by adding `$(go env GOPATH)/bin`). If it is
   outdated, rerun the pinned install from step 1, or `make treehouse` in a canopy checkout.
-- **The overseer records `skip` with `mcp_unavailable: github`:** configure the GitHub MCP server in your agent runtime.
+- **The attention list shows `connector_failed`:** a source could not read; its detail names which, and
+  `canopy status` its last run.
 - **Anything else:** check `canopy decisions`, `canopy status`, and the log, `.canopy/canopy.log` in the workspace.
 
 ## Related work

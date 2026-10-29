@@ -692,22 +692,16 @@ def overseer_does(
     *commands: list[str],
     tools: Sequence[Called] = (),
     result: str = TICK_DONE,
-    queried: str | None = None,
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
     """Until the block ends, the fake overseer makes the calls `tools` names, runs `commands`, and prints `result`.
 
     `result` by default ends its tick. A ticket they name that the journal does not know yet, the tests' tracker holds
     and reads first (`holds_listed`), so the overseer is listed it.
-
-    `queried`, if given, is what it records when the tracker query is due, with the `canopy_queried` tool when it calls
-    any; see FAKE_AGENT_QUERIED in the fake.
     """
     holds_listed([*commands, *tools])
     settings = {"COMMANDS": json.dumps(commands), "RESULT": result}
     settings["TOOLS"] = json.dumps([[call.name, call.arguments] for call in tools])
-    if queried is not None:
-        settings["QUERIED"] = queried
     with scripted("OVERSEER", settings, behavior):
         yield
 

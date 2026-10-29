@@ -449,13 +449,13 @@ reason and a detail; the tool refuses it a reason the harness raises. Items are 
 their own (D020). `needs_author`, `multi_repo`, and `notice_rerun` it records once, naming what each is about, and the
 harness holds each until what it names ends it (§37). Any other it records every tick its cause holds: the current list
 is the attention decisions of the latest `ok` tick, so such an item disappears the first tick that does not record it,
-and a failed or `skipped` tick leaves the previous list standing; a halted tick's item (§6 step 5) is added to it while
-it is the latest tick's. The harness holds such an item of the overseer's, and a guard's, through a tick that did not
-give the overseer its subject, such as a ticket the harness decided (§37), since the overseer cannot record again what
-it was not shown; the item goes the first tick that gives the overseer its subject and leaves it out, or once its
-ticket is done or stopped. The state block lists the overseer's open items on what it is given (§6 step 4), each it
-keeps with what it names, so it records none of those twice and each other again until it sees the cause gone. An
-item's age runs from the first tick of its unbroken run.
+and a failed tick, or an older release's `skipped` one, leaves the previous list standing; a halted tick's item (§6 step
+5) is added to it while it is the latest tick's. The harness holds such an item of the overseer's, and a guard's,
+through a tick that did not give the overseer its subject, such as a ticket the harness decided (§37), since the
+overseer cannot record again what it was not shown; the item goes the first tick that gives the overseer its subject and
+leaves it out, or once its ticket is done or stopped. The state block lists the overseer's open items on what it is
+given (§6 step 4), each it keeps with what it names, so it records none of those twice and each other again until it
+sees the cause gone. An item's age runs from the first tick of its unbroken run.
 
 **Notification.** An item is identified by its ticket, reason, and repository; rewording its detail does not make it
 new. Each sink (§20), `notify.cmd` among them, keeps its own record of what it was told, and each tick sends it the new
@@ -480,14 +480,12 @@ open item is never notified twice, and an item that returns after going away is 
 - Overseer timeout or bad output: the tick closes `overseer_failed`; nothing is dispatched; the next tick retries.
   Three consecutive ticks not `ok` send a `loop.failing` notification once per streak, and `loop.recovered` at the next
   `ok` (§20); no attention item, since a failing loop cannot add to the latest `ok` tick's list.
-- Overseer left a duty undone (the query when due, a ticket's decision, a due chore's): the tick closes
-  `overseer_failed`, naming each (§6 step 5). What it dispatched stands, and the next tick owes the same duties.
+- Overseer left a duty undone (a ticket's decision, a due chore's): the tick closes `overseer_failed`, naming each
+  (§6 step 5). What it dispatched stands, and the next tick owes the same duties.
 - Tick code raises an unexpected exception: the tick closes `error`, its summary the exception's type and message, so
   the journal keeps the cause when the logs cannot; the traceback goes to `canopy.log`, and the loop goes on.
-- MCP unavailable: the overseer first does what needs nothing from the server that failed (due chores; with GitHub,
-  reviews and a private ticket's `resume`; with the tracker, closed tickets marked done), then records a tick-wide
-  `skip`. The tick closes `skipped`: what it started stands, nothing is decided on partial data, and the attention list
-  stays as it was.
+- A source down: the tick raises `connector_failed` (§30), and what the source left stale is the harness's `wait`
+  (§39); the overseer, which reads no server, has no outage of its own to skip a tick over.
 - Overseer asks for something the guards refuse: the refusal is recorded as a decision with the guard's reason.
 - An unhandled error in a tick `canopy loop` runs: the traceback is logged and the loop goes on; the next tick closes
   the row as `abandoned` (§6).

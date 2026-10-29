@@ -368,7 +368,7 @@ def test_a_tick_leaves_a_running_ticket_to_the_harness_and_the_overseer_only_the
     # The query found it too: the harness decided it, so the overseer owes it nothing (DESIGN §6).
     query_read(scenario.conn, [KEY, "PROJ-2"], at=db.now())
     scenario.conn.commit()
-    assert scenario.tick(*waits("PROJ-2"), queried=[KEY, "PROJ-2"]).tick.status == TickStatus.OK
+    assert scenario.tick(*waits("PROJ-2")).tick.status == TickStatus.OK
     # One that records something about it anyway is refused, and the tick goes on.
     refused = scenario.tick(*waits(KEY, "PROJ-2"), raises(KEY, "needs_author"))
     assert refused.tick.status == TickStatus.OK
