@@ -30,13 +30,11 @@ in order:
    what was acknowledged (§22) and what idle pacing compares against, and records the harness's own attention items
    (§14).
 4. **Render the state block**, the overseer's whole message: one JSON object holding what the overseer needs to decide
-   every ticket not done or stopped, ordered from what changes rarely to what changes every tick so the provider can
+   every ticket left to it (§37), ordered from what changes rarely to what changes every tick so the provider can
    cache it. After its fixed sections come the observations (§30): what the connectors last read of each ticket and
    its units, each fresh, stale, or unobserved. The overseer's prompt is its agent definition's system prompt (§13),
-   not part of the block. The block lists the overseer's own open attention items, without their detail, which may
-   quote a comment: an item stays open only while every tick that gives the overseer its subject records it again
-   (MEASUREMENTS 2026-10-13, §14). Rejected: a harness that keeps an item until the overseer resolves it, which leaves
-   an item standing whenever the overseer forgets one.
+   not part of the block. The block lists the overseer's own open attention items with what each names, not their
+   detail, which may quote a comment, so none is recorded twice (§37).
 5. **Check the disk and the overseer's tools, then run the overseer.** If the state directory's or the workspace's
    filesystem has less than `loop.min_free_disk_mib` free, the tick records `attention:disk_low` and closes
    `disk_low`: the overseer and the runs it would start are what fill a disk, and a full one can kill the loop
@@ -44,16 +42,16 @@ in order:
    as the runtime would start it, does not answer `initialize`, the tick records `attention:canopy_unavailable` and
    closes `canopy_unavailable` without running an overseer that could record nothing (MEASUREMENTS 2026-10-12). If the
    runtime does not list the overseer's chosen model, or its list cannot be read (§13), the tick records the item and
-   closes `model_missing` or `model_list_failed` the same way, never running it on another model. A tick
-   whose block leaves the overseer nothing to judge runs none (§39): it skips those checks, owes no duty, makes the
-   harness's dispatches, and closes `ok`.
+   closes `model_missing` or `model_list_failed` the same way, never running it on another model. A tick, the
+   operator's too, whose block leaves the overseer nothing, no ticket, due chore with a `when` (§37), or review to start
+   or wait on (§21), runs none: it checks the disk, since the harness's dispatches fill one too, skips the other two
+   checks, owes no duty, makes the harness's dispatches, and closes `ok` with the attention list as it stands (§37).
 
    Then run `overseer_cmd` in the workspace root (§18), with `CANOPY_TICK_ID` set and its tools named in its
    environment alone (§27); they refuse unless it names a running tick (D020). Its output goes to a log only the
    operator can read, never to the journal. It succeeded if it exited 0 and a line of its final message (§13) is
    exactly `CANOPY_TICK_DONE`, which catches a run that exits 0 short of the last step; otherwise the tick closes
-   `overseer_failed`. Every decision is about a ticket: the overseer reads no server, so it has no outage to skip a
-   tick over (§39).
+   `overseer_failed`. Every decision is about a ticket: with no server to read (§13), it has no outage to skip over.
 
    Once its run ends, whatever it ended as, the tick starts every run it asked for, each recorded at the ask and none
    in its process tree, with the harness's own, in §7's order, each under its guards again (§8, §40). One the tick
@@ -86,7 +84,7 @@ Every kind of detached run shares this lifecycle and crash rule; a new kind join
 3. Run a tick exactly as `canopy tick` does. An error the tick does not handle is logged, and the loop goes on.
 4. Print what the tick did and what the overseer cost (§13).
 5. Wait the configured interval, lengthened after idle ticks and ended at a gate (Idle pacing, below). An operator
-   message (§22), a run ending, or a poll that sees something new (§39) ends the wait early, but never sooner than
+   message (§22), a run ending, or a poll that sees something new (below) ends the wait early, but never sooner than
    `loop.min_gap_minutes` after the tick ended, which bounds how often the overseer runs. The operator can end the
    wait by hand. During the wait the loop polls the connectors (Ticks and polls, below).
 6. Repeat from 3 until the operator stops the loop or a set number of ticks has run.
@@ -100,49 +98,53 @@ Stopping the loop never stops a run, which is detached (§8); `canopy stop` does
 config files (§12) for the next tick, and a config that does not load leaves the old one in place. Rejected: rereading
 before every tick (a half-saved edit would apply itself). Prompt files are read every tick.
 
-The daemon runs the same loop in its own session, so it outlives the terminal (D042). Nothing is installed with the OS
-and nothing restarts it. Rejected: launchd or systemd units (an install step the operator did not want).
-Stopping it refuses while runs are running, since a canopy that changes the journal does not start under them; told
-to wait, it ticks no more and stops once they end.
+The daemon runs the same loop in its own session, so it outlives the terminal; nothing installs it with the OS or
+restarts it (D042). Stopping it refuses while runs are running, since a canopy that changes the journal does not start
+under them; told to wait, it ticks no more and stops once they end.
 
 ### Ticks and polls
 
-A tick is the overseer's turn and costs a model run; a poll only runs the connectors (§30), at no model's cost. So the
-loop polls apart from how it paces ticks: during each wait it runs every source every `connect.every_minutes` after the
-last read, a tick's or a poll's, whatever `loop.interval_minutes` and `loop.min_gap_minutes` are. An operator who ticks
-rarely still has observations as fresh as they ask for (operator, 2026-10-19). A poll takes the tick lock, and is
-skipped, not waited for, while a tick holds it; none runs while the loop is paused. It records its runs with no tick and
-checks the drafts its `vcs` run read (§29). It raises no attention item, since the list is a tick's and the next tick
-runs every source again before recording its items. It ends the wait when a tick would now record or list what the
-latest tick did not, and once when a source fails, and the tick records the poll as what woke it (§39). A reply a
-`slack` source records is the operator's message, not an observation, and ends the wait as any does (§20). A hand-run
-`canopy tick` runs the sources as any tick does, and nothing polls without the loop.
+A tick is the overseer's turn and costs a model run; a poll only runs the connectors (§30), at no model's cost. So
+during each wait the loop runs every source every `connect.every_minutes` after the last read, a tick's or a poll's,
+whatever `loop.interval_minutes` and `loop.min_gap_minutes` are. A poll takes the tick lock, and is skipped, not waited
+for, while a tick holds it; none runs while the loop is paused. It records its runs with no tick and checks the drafts
+its `vcs` run read (§29). It raises no attention item, since the list is a tick's and the next tick runs every source
+again before recording its items.
+
+A poll that read every source whole ends the wait when a tick would now record or list what the latest tick, as it
+ended, did not: a decision, or a ticket, a row on one, an item past a cursor (§7), a due chore, or a PR the review query
+found (§21) listed to the overseer. That is compared by what is decided and listed, never by wording, so reading again
+what that tick saw, or an edit to an item it saw, wakes nothing. A poll that reads less than it was asked ends the wait
+once, so the tick runs the sources again and raises `connector_failed` if they still fail (§30); the polls after it wake
+nothing, since what they would compare may rest on what was not read, until one reads every source whole. The tick
+records the poll as what woke it. Rejected: a tick on every poll, which writes a tick's rows to learn what one
+comparison answers. A reply a `slack` source records is the operator's message, not an observation, and ends the wait as
+any does (§20). A hand-run `canopy tick` runs the sources as any tick does, and nothing polls without the loop.
 
 ### Idle pacing
 
 A tick that finds nothing new costs a full overseer run and buys nothing. So the loop waits longer after each idle tick
-in a row, and wakes early on the events it can see itself. It does not poll GitHub or the tracker from Python (D003),
-run a cheaper pre-check agent, or take webhooks (TRUST_MODEL T8); the connectors' polls (above) read the world through
-their own programs, and wake it only for what a tick would newly record or list (§39).
+in a row, and wakes early on what the polls see. It does not poll GitHub or the tracker from Python (D003), run a
+cheaper pre-check agent or a probe that fingerprints the world, or take webhooks (TRUST_MODEL T8).
 
 A tick is **idle** when it closed `ok`, dispatched nothing (a dry run paces as a live one would), and nothing reached
-the journal after the previous tick read it (step 3): no run started or ended, no poll ended the wait (§39), and the
+the journal after the previous tick read it (step 3): no run started or ended, no poll ended the wait, and the
 operator did nothing. Rejected: idle as a tick that changed nothing, since records that repeat on unchanging state kept
 any tick from counting (MEASUREMENTS 2026-10-14).
 
-After each idle tick in a row the wait doubles, up to `loop.idle_max_minutes` and never below the base wait; a tick that
-ran no overseer (§39) leaves the count as it was. Whatever pacing chose, the wait ends at the earliest harness gate
-ahead: the CI cooldown's end (§8), a chore coming due (§19), a PR head settling (§21), or a notice lapsing (§8); a gate
-already open sets no deadline, so it cannot make the loop spin. A run ending ends the wait, so a long wait never sits on
-canopy's own work. With sources configured, the world, such as a review or CI going red, is seen within a poll (§39);
-without one, up to `loop.idle_max_minutes` late: that is the trade, and the operator's knob. Each tick records whether
-it was idle and what ended the wait before it, for spend (§11).
+After each idle tick in a row that ran the overseer the wait doubles, up to `loop.idle_max_minutes` and never below the
+base wait; one that ran none cost nothing and leaves the count as it was. The timer is the overseer's second look at
+what it was left and waited on, since the polls see the rest; its runs on a quiet queue then come cold (§40). Whatever
+pacing chose, the wait ends at the earliest harness gate ahead: the CI cooldown's end (§8), a chore coming due (§19), a
+PR head settling (§21), or a notice lapsing (§8); a gate already open sets no deadline, so it cannot make the loop
+spin. A run ending ends the wait, so a long wait never sits on canopy's own work, and the world, such as CI going red,
+is seen within a poll. Each tick records whether it was idle and what ended the wait before it, for spend (§11).
 
 ## 7. Ticket phases and next actions
 
-The overseer derives phases each tick from the observations (§30) alone: a subject they leave stale is the harness's
-`wait` (§39). They are recorded for the status view, never read back as truth. The PR phases, `pushed_no_pr`
-to `merged`, are a unit's (§18).
+The overseer derives phases each tick from the observations (§30) alone: a subject they leave stale, or that no source
+reads, is the harness's `wait` (§37). They are recorded for the status view, never read back as truth. The PR phases,
+`pushed_no_pr` to `merged`, are a unit's (§18).
 
 A ticket's title, its display name in canopy, is one short line the overseer sets. It is model-written, so it stays out
 of `attention.md` and the `text` format, and the Slack sink escapes it (§20).
@@ -237,7 +239,8 @@ a late submission backdates.
 The configured query runs every tick it is due, before any ticket is read: the block holds only tickets the loop has
 seen, so the query is the only way a newly labeled ticket becomes a candidate. The `tracker` source reads it, and when
 the block shows that read `fresh` (§30), the harness records its result before the overseer runs, touching each open
-ticket it returned into the journal (§11); a query no source read fresh does not run that tick and stays due (§39).
+ticket it returned into the journal (§11); a query no source read fresh does not run that tick and stays due, and a
+ticket it would have found waits for the read that finds it.
 `tracker.query_every_minutes` spaces it out, delaying only how soon a new ticket is found; a ticket the operator starts
 is in the block already.
 

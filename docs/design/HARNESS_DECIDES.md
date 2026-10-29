@@ -94,10 +94,17 @@ none is recorded twice; the overseer drops one only by moving a cursor past what
 
 The state block lists only the tickets left to the overseer, each with the rows that hold: `ready` (a repository, slug,
 title, and context to choose), `blocked` with a blocker to stack on, `changes_requested` and `review_findings` (to
-classify), `human_replied` (what the reply asks), a row not enabled, a plan's rows, a check held for a notice, a stale
-or unobserved subject (§30), and a ticket whose observations fit no row; and each due chore with a `when`. Of the rest
-it names only the harness's dispatches to come. Anything the overseer records about another ticket, a decision,
-dispatch, attention item, or change, is refused `decided`, and its duties (§6) are owed only for what it was listed.
+classify), `human_replied` (what the reply asks), a row not enabled, a plan's rows, a check held for a notice, and a
+ticket whose observations fit no row; and each due chore with a `when`. Of the rest it names only the harness's
+dispatches to come. Anything the overseer records about another ticket, a decision, dispatch, attention item, or
+change, is refused `decided`, and its duties (§6) are owed only for what it was listed.
+
+A candidate resting on a subject a source left stale, or that no source reads (§30), is the harness's `wait`, naming
+what is old, since the overseer reads the journal alone and could only guess. A stale one's source has raised
+`connector_failed`, and the ticket moves again once a read is whole. An unobserved one is a unit whose PR URL names no
+PR: no read will end that wait, so the harness raises `unobserved_pr` about the unit (§14), naming its URL, until the
+unit names a PR or the operator forgets the ticket's work. A dispatch resting on a stale subject is still refused
+`stale` (§7).
 
 A dispatch moves each cursor of its reasons, once the worker starts, to the newest item of that kind the block showed,
 short of the first it may not cover (§7); the overseer passes a cursor only to stop shorter. The harness moves the
