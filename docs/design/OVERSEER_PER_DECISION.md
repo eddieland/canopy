@@ -3,7 +3,7 @@
 Part of the canopy design, normative like all of it: the overseer run once for each subject left to its judgment, and
 the runs it asks for, which the tick starts. Sections are numbered across the whole design; the [README](README.md) has
 the map. Previous: [A tick without the overseer](WITHOUT_THE_OVERSEER.md). Next: [Where a running agent
-stands](CARDS.md).
+stands](PROGRESS.md).
 
 ## 40. The overseer per decision
 
