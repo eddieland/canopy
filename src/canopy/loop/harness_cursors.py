@@ -126,7 +126,7 @@ def record(conn: sqlite3.Connection, tick_id: int, found: Iterable[Move]) -> lis
     made: list[Move] = []
     with db.transaction(conn):
         for move in found:
-            if sql.execute(conn, _moved(move)).rowcount:
+            if _moved(move).run(conn).rowcount:
                 db.record_decision(
                     conn,
                     tick_id,
@@ -293,7 +293,7 @@ def _now_at(
             raise ValueError(f"no cursor {name!r}")
 
 
-def _moved(move: Move) -> sql.Update:
+def _moved(move: Move) -> records.Update[records.Ticket] | records.Update[records.TicketUnit]:
     """The update that moves `move`'s cursor.
 
     Returns:
@@ -302,13 +302,13 @@ def _moved(move: Move) -> sql.Update:
     if move.repo is None:
         column = sql.name(db.TICKET_CURSORS[move.name])
         return (
-            sql.update("tickets")
+            records.update(records.Ticket)
             .set_to("{} = ?", column, move.after)
             .where("key = ? AND ({} IS NULL OR {} < ?)", move.key, column, column, move.after)
         )
     column = sql.name(db.UNIT_CURSORS[move.name])
     return (
-        sql.update("ticket_units")
+        records.update(records.TicketUnit)
         .set_to("{} = ?", column, move.after)
         .where(
             "ticket_key = ? AND repo = ? AND ({} IS NULL OR {} < ?)",

@@ -56,8 +56,8 @@ def record(
     """
     status = GcPassStatus.OK if error is None else GcPassStatus.FAILED
     counted = {kind: {r.unit: r.count, "bytes": r.bytes} for kind, r in removed.items()}
-    statement = sql.insert(
-        "gc_passes",
+    statement = records.insert(
+        records.GcPass,
         tick_id=tick_id,
         started_at=db.format_time(started_at),
         ended_at=db.now(),
@@ -70,7 +70,7 @@ def record(
         failures=failures,
         error=error,
     ).returning("id")
-    return int(sql.execute(conn, statement).fetchone()[0])
+    return int(statement.run(conn).fetchone()[0])
 
 
 def latest(conn: sqlite3.Connection) -> records.GcPass | None:

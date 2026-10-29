@@ -108,8 +108,14 @@ def record(conn: sqlite3.Connection, task_id: int, run_id: int, keys: Iterable[s
     """
     done: list[str] = []
     for key in keys:
-        insert = sql.insert("task_tickets", task_id=task_id, task_run_id=run_id, key=key, at=db.now()).or_ignore()
-        if sql.execute(conn, insert).rowcount == 1:
+        insert = records.insert(
+            records.TaskTicket,
+            task_id=task_id,
+            task_run_id=run_id,
+            key=key,
+            at=db.now(),
+        ).or_ignore()
+        if insert.run(conn).rowcount == 1:
             done.append(key)
     return done
 

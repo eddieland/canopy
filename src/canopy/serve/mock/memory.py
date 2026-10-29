@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import sql
+from canopy.core import records
 
 if TYPE_CHECKING:
     import sqlite3
@@ -21,9 +21,8 @@ if TYPE_CHECKING:
 
 def seed(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
     """Insert what each run recorded and read of memory, the notes and proposals, and the lessons."""
-    sql.execute_many(
+    records.insert_rows(records.RunMemory, ("run_id", "ticket_notes", "proposals", "refused")).many(
         conn,
-        sql.insert_rows("run_memory", ("run_id", "ticket_notes", "proposals", "refused")),
         [
             (37, "record", "record", "[]"),
             (39, "use", "record", "[]"),
@@ -155,56 +154,48 @@ def seed(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
             None,
         ),
     )
-    sql.execute_many(
-        conn,
-        sql.insert_rows(
-            "memories",
-            (
-                "id",
-                "scope",
-                "ticket_key",
-                "repo",
-                "key",
-                "body",
-                "status",
-                "why",
-                "run_id",
-                "head",
-                "created_at",
-                "last_used_at",
-                "use_count",
-                "promoted_from",
-                "author",
-                "tick_id",
-            ),
+    records.insert_rows(
+        records.Memory,
+        (
+            "id",
+            "scope",
+            "ticket_key",
+            "repo",
+            "key",
+            "body",
+            "status",
+            "why",
+            "run_id",
+            "head",
+            "created_at",
+            "last_used_at",
+            "use_count",
+            "promoted_from",
+            "author",
+            "tick_id",
         ),
-        [(*n, "worker", 1) for n in notes],
-    )
+    ).many(conn, [(*n, "worker", 1) for n in notes])
     # Note 2 is the second version of `flaky-checkout`, as `_run` links a note to the one under its key it replaced.
-    sql.execute(conn, sql.update("memories").set(supersedes=1).where("id = 2"))
-    sql.execute(
+    records.update(records.Memory).set(supersedes=1).where("id = 2").run(conn)
+    records.insert(
+        records.Memory,
+        id=8,
+        scope="lesson",
+        repo="web",
+        key="billing-client",
+        body="Billing goes through src/billing/client.ts alone; the v1 endpoints are gone.",
+        status="active",
+        author="operator",
+        promoted_from=7,
+        created_at=at(-100),
+        approved_at=at(-100),
+        review_at=at(90 * 24 * 60),
+    ).run(conn)
+    records.insert_rows(
+        records.Memory,
+        ("id", "scope", "repo", "key", "body", "status", "author", "created_at", "approved_at", "pinned_at"),
+    ).many(
         conn,
-        sql.insert(
-            "memories",
-            id=8,
-            scope="lesson",
-            repo="web",
-            key="billing-client",
-            body="Billing goes through src/billing/client.ts alone; the v1 endpoints are gone.",
-            status="active",
-            author="operator",
-            promoted_from=7,
-            created_at=at(-100),
-            approved_at=at(-100),
-            review_at=at(90 * 24 * 60),
-        ),
-    )
-    sql.execute_many(
-        conn,
-        sql.insert_rows(
-            "memories",
-            ("id", "scope", "repo", "key", "body", "status", "author", "created_at", "approved_at", "pinned_at"),
-        ),
         [
             (
                 9,
@@ -232,4 +223,4 @@ def seed(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
             ),
         ],
     )
-    sql.execute(conn, sql.insert("memory_reads", run_id=40, memory_id=1, cited="used"))
+    records.insert(records.MemoryRead, run_id=40, memory_id=1, cited="used").run(conn)

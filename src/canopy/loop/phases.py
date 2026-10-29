@@ -153,7 +153,7 @@ def record(conn: sqlite3.Connection, tick_id: int, derived: Iterable[Derived]) -
     ]
     columns = ("tick_id", "ticket_key", "repo", "candidate", "closed", "phases", "stale")
     with db.transaction(conn):
-        sql.execute_many(conn, sql.insert_rows("derivations", columns), rows)
+        records.insert_rows(records.Derivation, columns).many(conn, rows)
 
 
 def recorded(conn: sqlite3.Connection, tick_id: int) -> list[Derived]:
@@ -192,11 +192,11 @@ def record_overseer(conn: sqlite3.Connection, tick_id: int) -> None:
         .from_("ticket_units")
         .where("ticket_key = derivations.ticket_key AND repo = derivations.repo")
     )
-    sql.execute(
-        conn,
-        sql.update("derivations")
+    (
+        records.update(records.Derivation)
         .set_to("overseer_phase = CASE WHEN repo IS NULL THEN ({}) ELSE ({}) END", ticket, unit)
-        .where("tick_id = ?", tick_id),
+        .where("tick_id = ?", tick_id)
+        .run(conn)
     )
 
 

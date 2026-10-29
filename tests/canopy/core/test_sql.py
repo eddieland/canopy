@@ -1,3 +1,5 @@
+# These tests are of the builders a write through a row type is made of.
+# ruff: noqa: TID251
 import sqlite3
 from pathlib import Path
 
