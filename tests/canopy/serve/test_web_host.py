@@ -16,7 +16,8 @@ GIB = 1024**3
 def fake_proc(root: Path) -> Path:
     """A `/proc` with what the reader reads of it: memory, boot time, and this process's status, start, and files."""
     (root / "self" / "fd").mkdir(parents=True)
-    for fd in ("0", "1", "2"):
+    # Three the process holds, and the one listing the directory opens, which the kernel lists too.
+    for fd in ("0", "1", "2", "3"):
         (root / "self" / "fd" / fd).touch()
     (root / "meminfo").write_text(
         "MemTotal:       16384000 kB\nMemFree:  100 kB\nMemAvailable:    4096000 kB\n"
