@@ -9,9 +9,14 @@
 // The agent runtime loads it from canopy's snapshot of its definitions, inside every agent process, sandboxed or not
 // (TRUST_MODEL T4). So it is plain JavaScript with no imports, which loads with no network, and each job does as
 // little as it can: it reads only what it is handed for that job (the clock, CANOPY_DEADLINE and the time; the split,
-// the system prompt), changes only what its hook is handed, refuses no call, and grants no tool. Each job's hooks run
+// the system prompt; the nudge, CANOPY_RUN_ID and each call's tool and session), changes only what its hook is handed,
+// refuses no call, and grants no tool. Each job's hooks run
 // in its own try, in the order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the
 // jobs after it from theirs.
+//
+// Its third is the nudge (DESIGN §41): in a worker's, planner's, or reviewer's run, after a number of tool calls with
+// no call of canopy's `status` tool, one line on the next tool call's result asks the agent to bring its card up to
+// date.
 //
 // Under OpenCode 2 it has one job more, its own: a session's first prompt waits until the tools of its MCP servers are
 // registered, which 2 does only after the server connects, so that the first model call is sent them (`mcpTools`).
@@ -48,6 +53,12 @@ const SHARE = 5;
 const MOST_SECONDS = 600;
 /** What every line of canopy's starts with, as the prompts name it. */
 const MARK = "[canopy]";
+/** A run that keeps a card, as CANOPY_RUN_ID names it: a worker's or a planner's id, or a review's, `review-7`. */
+const CARD_RUN = /^(?:review-)?[0-9]{1,18}$/;
+/** canopy's tool that updates the card, as the runtime names it. */
+const STATUS_TOOL = "canopy_run_status";
+/** How many tool calls a session makes with no `status` call before the nudge asks for one. */
+const STALE_CALLS = 20;
 /** The longest a session's first prompt waits on MCP servers still connecting, in milliseconds. */
 const MCP_WAIT_MS = 30_000;
 /** The longest it waits, once none is connecting, for a connected server's tools to be registered. */
@@ -70,7 +81,7 @@ const ENVIRONMENT = new RegExp(
  *
  * @type {Array<() => Hooks>}
  */
-const JOBS = [clock, split];
+const JOBS = [clock, split, nudge];
 
 /**
  * The plugin, as each major version of OpenCode reads it: its id, and its entry point for each.
@@ -107,6 +118,7 @@ function hooksOfJobs() {
  * 2 hands `execute.after` every call, failed ones too, with the result as the tool returned it; it truncates the
  * result after the hook, keeping its head, whatever the tool. So the jobs get each successful call's result as 1 hands
  * them an MCP tool's, its content as a list (`contentOf`), and the hook puts that list back only when a job changed it.
+ * A failed call reaches them with no result, so the nudge counts it and no job writes to it.
  *
  * @param {Context2} ctx
  * @returns {Promise<void>}
@@ -119,12 +131,14 @@ async function setup(ctx) {
     }
     await ctx.tool.hook("execute.after", async (event) => {
         try {
+            const input = { tool: event.tool, sessionID: event.sessionID, callID: event.id, args: event.input };
             if (event.status !== "completed") {
+                // A failed call has no result a job may write to, but the nudge counts it.
+                await after(input, /** @type {any} */ (null));
                 return;
             }
             const content = contentOf(event.result);
             const before = content.length;
-            const input = { tool: event.tool, sessionID: event.sessionID, callID: event.id, args: event.input };
             await after(input, /** @type {any} */ ({ content }));
             if (content.length !== before) {
                 event.result = { ...event.result, content };
@@ -369,4 +383,60 @@ function split() {
             system.splice(0, 1, text.slice(0, at), text.slice(at + 1));
         },
     };
+}
+
+/**
+ * The nudge's hooks: the one that asks for a card once a session has gone `STALE_CALLS` tool calls without one.
+ *
+ * A worker, a planner, or a reviewer keeps a card of where its work stands for the operator (DESIGN §41), through
+ * canopy's `status` tool; one that forgets leaves the operator a card that says less each call. The nudge counts each
+ * session's tool calls since its last successful `status` call, or since it started, and at `STALE_CALLS` adds one line
+ * to that call's result asking for an update, the way the clock adds its line, so the agent hears it between calls and
+ * never mid-thought. It asks once per lapse: not again until the agent has called `status`. It keeps the count and
+ * whether it asked, per session, and nothing else; in any other run, as CANOPY_RUN_ID names it, it has no hook.
+ *
+ * @returns {Hooks} The nudge's hooks.
+ */
+function nudge() {
+    const run = process.env.CANOPY_RUN_ID;
+    if (typeof run !== "string" || !CARD_RUN.test(run)) {
+        return {};
+    }
+    /** @type {Map<string | undefined, number>} */
+    const since = new Map();
+    /** @type {Set<string | undefined>} */
+    const asked = new Set();
+    return {
+        /**
+         * @param {AfterInput | undefined} input
+         * @param {BuiltinResult | McpResult | null | undefined} output
+         */
+        "tool.execute.after": async (input, output) => {
+            const session = input?.sessionID;
+            // A `status` call the server refused, which has no result, leaves the card as old as it was.
+            if (input?.tool === STATUS_TOOL && output !== null && output !== undefined) {
+                since.delete(session);
+                asked.delete(session);
+                return;
+            }
+            const calls = (since.get(session) ?? 0) + 1;
+            since.set(session, calls);
+            if (calls >= STALE_CALLS && !asked.has(session) && tell(output, stale(calls))) {
+                asked.add(session);
+            }
+        },
+    };
+}
+
+/**
+ * The nudge's line, after `calls` tool calls with no `status` call.
+ *
+ * @param {number} calls
+ * @returns {string}
+ */
+function stale(calls) {
+    return (
+        `${MARK} ${calls} tool calls since your last card: call ${STATUS_TOOL} with where your work stands now, then` +
+        " go on."
+    );
 }

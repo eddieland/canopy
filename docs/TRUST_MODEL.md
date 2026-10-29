@@ -546,13 +546,14 @@ Controls now:
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
 - canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose jobs are the
-  clock, the split, and, under OpenCode 2, holding a session's first prompt until its MCP tools are registered
-  (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is written, the
-  operator's included, so no run changes it through its permissions or its sandbox, and the runtime installs nothing
-  into it. The plugin reads one variable, `CANOPY_DEADLINE`, the clock, the system prompt the runtime hands it, which
-  it cuts in two without changing its text, and under OpenCode 2 the runtime's MCP servers' states and its tools'
-  names; it writes no file, refuses no call, grants no tool, and catches its own errors. A repository's own plugins
-  already load in the same process (T7).
+  clock, the split, the nudge for a stale card (DESIGN §41), and, under OpenCode 2, holding a session's first prompt
+  until its MCP tools are registered (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission
+  away once it is written, the operator's included, so no run changes it through its permissions or its sandbox, and
+  the runtime installs nothing into it. The plugin reads two variables, `CANOPY_DEADLINE` and `CANOPY_RUN_ID`, the
+  clock, the system prompt the runtime hands it, which it cuts in two without changing its text, each tool call's tool
+  and session, which the nudge counts in its session, and under OpenCode 2 the runtime's MCP servers' states and its
+  tools' names; it writes no file, refuses no call, grants no tool, and catches its own errors. A repository's own
+  plugins already load in the same process (T7).
 - `runtime.setup_cmd` (DESIGN §9) runs on the host in each slot of a worker run, after the run's branch is checked out
   and before the worker starts. It runs that branch's code, which a worker wrote (install scripts, generators), outside
   the agent runtime's permissions. It is private (T7), and the code is what the worker's own shell runs a moment
