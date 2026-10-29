@@ -4,6 +4,7 @@
 /**
  * Every section, by its path, in the nav's order: by how often the operator opens it, so what they work in is at the
  * top and what they check now and then is lower down. Settings is last and out of the nav: the rail's foot opens it.
+ * The header's aurora (`index.css`) runs through the nav's colors in this order: a change here changes it too.
  */
 export const SECTIONS = [
     '/attention',

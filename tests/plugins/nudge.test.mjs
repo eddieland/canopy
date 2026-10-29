@@ -1,4 +1,4 @@
-// The nudge, the plugin's job that asks a worker, planner, or reviewer for its card once it has gone a while without
+// The nudge, the plugin's job that asks a worker, planner, or reviewer for an update once it has gone a while without
 // one (DESIGN §41), under Node's own test runner: `make test-plugin`.
 // It is driven as the agent runtime drives it: loaded with the run's environment, then its hook called after each tool
 // call with the call's input and its result, which the hook changes in place.
@@ -14,7 +14,8 @@ const { default: canopy } = await import(pathToFileURL(plugin).href);
 
 const STATUS = "canopy_run_status";
 const ASKED =
-    "[canopy] 20 tool calls since your last card: call canopy_run_status with where your work stands now, then go on.";
+    "[canopy] 20 tool calls since your last update: call canopy_run_status with where your work stands now," +
+    " then go on.";
 
 beforeEach(() => {
     delete process.env.CANOPY_DEADLINE;
@@ -47,7 +48,7 @@ async function calls(hooks, count, session = "ses_1") {
     }
 }
 
-test("the 20th call with no card asks for one, after a built-in's output and first in an MCP tool's", async () => {
+test("the 20th call with no update asks for one, after a built-in's output and first in an MCP tool's", async () => {
     const hooks = await canopy.server({});
     await calls(hooks, 19);
     assert.equal((await after(hooks, builtin("line\n"))).output, `line\n${ASKED}`);
@@ -88,7 +89,7 @@ test("a result that cannot take the line is asked again on the next call", async
     assert.equal(said, `ok\n${ASKED.replace("20 tool calls", "21 tool calls")}`);
 });
 
-test("a run that keeps no card, or names none, gets no nudge", async () => {
+test("a run that keeps no progress, or names none, gets no nudge", async () => {
     for (const run of [undefined, "chore-2", "task-1", "try:build-health", "7x", "review-"]) {
         if (run === undefined) {
             delete process.env.CANOPY_RUN_ID;

@@ -1,11 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Server } from 'lucide-react'
-import type { ReactNode } from 'react'
 
 import { hostQuery } from '@/api/queries'
 import type { HostResources } from '@/api/types'
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import {
     bytesText,
     concerns,
@@ -23,6 +21,8 @@ import {
 import { age, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
+import { CardRow, CardRows, ReadoutCard, ReadoutHover } from './readout-card'
+
 /**
  * The machine the loop runs on, in the header's readouts: a server's icon and `host ok` muted, or its worst pressure
  * in two words, `disk low` in `status-failed` past what canopy works with and `status-blocked` short of it; under
@@ -39,29 +39,24 @@ export function HostReadout() {
     const pressure = hostPressure(host)
     const readout = hostReadout(host)
     return (
-        <HoverCard>
-            <HoverCardTrigger asChild>
-                <Link
-                    to="/system"
-                    className={cn(
-                        'readout inline-flex items-center gap-1.5 text-xs whitespace-nowrap underline-offset-4',
-                        'hover:underline',
-                        PRESSURE_TEXT[pressure],
-                    )}
-                    aria-label={`${readout}: system resources of ${host.hostname}`}
-                    data-testid="host-readout"
-                    data-pressure={pressure}
-                >
-                    <Server aria-hidden className="size-3.5 shrink-0" />
-                    {/* Under `lg` the header has no room for the words, so the icon stands alone, in the pressure's
-                    color, as the rail's strip shows a count on its icon; the words are its name and the card's. */}
-                    <span className="hidden lg:inline">{readout}</span>
-                </Link>
-            </HoverCardTrigger>
-            <HoverCardContent data-testid="host-card">
-                <HostCard host={host} />
-            </HoverCardContent>
-        </HoverCard>
+        <ReadoutHover card={<HostCard host={host} />} testId="host-card">
+            <Link
+                to="/system"
+                className={cn(
+                    'readout inline-flex items-center gap-1.5 text-xs whitespace-nowrap underline-offset-4',
+                    'hover:underline',
+                    PRESSURE_TEXT[pressure],
+                )}
+                aria-label={`${readout}: system resources of ${host.hostname}`}
+                data-testid="host-readout"
+                data-pressure={pressure}
+            >
+                <Server aria-hidden className="size-3.5 shrink-0" />
+                {/* Under `lg` the header has no room for the words, so the icon stands alone, in the pressure's
+                color, as the rail's strip shows a count on its icon; the words are its name and the card's. */}
+                <span className="hidden lg:inline">{readout}</span>
+            </Link>
+        </ReadoutHover>
     )
 }
 
@@ -72,13 +67,7 @@ function HostCard({ host }: { host: HostResources }) {
     const { cpu, memory, process } = host
     const used = memory.total === null || memory.available === null ? 0 : usedShare(memory.total, memory.available)
     return (
-        <div className="flex flex-col gap-2.5 text-xs">
-            <div className="flex min-w-0 items-baseline justify-between gap-3">
-                <span className="truncate font-medium">{host.hostname}</span>
-                <span className="readout shrink-0 text-muted-foreground">
-                    {host.system} {host.machine}
-                </span>
-            </div>
+        <ReadoutCard title={host.hostname} aside={`${host.system} ${host.machine}`}>
             {found.length > 0 && (
                 <ul className="flex flex-col gap-1">
                     {found.map((c) => (
@@ -88,7 +77,7 @@ function HostCard({ host }: { host: HostResources }) {
                     ))}
                 </ul>
             )}
-            <dl className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-1">
+            <CardRows>
                 <CardRow label="Load">
                     <LoadSummary cpu={cpu} />
                 </CardRow>
@@ -122,9 +111,8 @@ function HostCard({ host }: { host: HostResources }) {
                         </>
                     )}
                 </CardRow>
-            </dl>
-            <span className="text-muted-foreground">Open it for the rest.</span>
-        </div>
+            </CardRows>
+        </ReadoutCard>
     )
 }
 
@@ -144,16 +132,6 @@ function LoadSummary({ cpu }: { cpu: HostResources['cpu'] }) {
             <span className="readout">{share === null ? loadText(five) : percentText(share)}</span>
             {share === null ? ' over 5 minutes' : ` of ${cpu.cores} cores over 5 minutes`}
             {trend === null ? null : `, ${trend}`}
-        </>
-    )
-}
-
-/** One row of the card: a label, and its value. */
-function CardRow({ label, children }: { label: string; children: ReactNode }) {
-    return (
-        <>
-            <dt className="panel-label">{label}</dt>
-            <dd className="min-w-0 text-muted-foreground">{children}</dd>
         </>
     )
 }

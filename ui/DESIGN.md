@@ -200,10 +200,11 @@ Rules:
 - Between the header's name and its readouts, the ticker crawls joke headlines (Fun, below).
 - The header carries, after its name, the stream's state (and `mock`), then at its end the loop's pause
   (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
-  `status-failed` when it failed or was abandoned, its summary on hover, linking to its page; before the first, `no
+  `status-failed` when it failed or was abandoned, one link to its page, with a hover card of its summary, when it
+  started and how long it took, its decisions, its overseer's cost, and what woke the loop; before the first, `no
   tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), the budget's readout while a
   budget is set, the host's readout last among the readouts, and the theme toggle, in three groups with a hairline
-  rule between each: the actions, the readouts, the theme.
+  rule between each: the actions, the readouts, the theme. Every readout that opens a page has a hover card of it.
 - The stream's readout sits beside the name (`StreamReadout`), not with the readouts at the end, so a drop moves
   nothing: its word hugs its text, and only the ticker's window gives way when it changes. Held to one width at the end,
   it left a hole before `live` whenever the loop was up. The word sits in a pill with a dot, as `mock` does in a pill
@@ -246,7 +247,8 @@ Rules:
 - **The budget's readout** (`BudgetReadout`) is the local month's spend against the monthly budget, while one is set:
   a wallet's icon and the percent spent, `39%`, muted while on budget, in `status-blocked` once the month's pace heads
   over, and in `status-failed` once it is over, the spend page's word for it and its line (`Headed over: $15.76 of $40
-  (39%), on pace for $63.04.`) on hover and as its accessible name. Short of `2xl` the icon stands alone in its color:
+  (39%), on pace for $63.04.`) as its accessible name, and a hover card of the month: what it spent, its pace, how
+  much of it has gone by, and what the spend is made of. Short of `2xl` the icon stands alone in its color:
   the ticker needs the room, or a tick's readout widening as the tick starts steps it out. It opens the spend page.
   It comes with the spend on the stream, which sends it again when a cost or the budget changes.
 - **The host's readout** (`HostReadout`) is the machine the loop runs on, which serves the page: a server's icon and
@@ -273,7 +275,8 @@ Rules:
   note, and it leaves once a run fits.
 - **Agent memory** (docs/design §28) shows only while a tier is on, and always says each tier's mode in words, never by
   color alone, so recorded memory is never taken for memory in use. The header's readout, after the latest tick, is
-  `memory: recording` or `memory: in use` in muted readout type, each tier's mode on hover and to a screen reader,
+  `memory: recording` or `memory: in use` in muted readout type, each tier's mode to a screen reader and, with what
+  reads it and the proposals waiting, in a hover card,
   opening the memory page, which is in no section and so reached from there. A tier's **band** heads its panel there and
   on a ticket's page: a chip naming the tier and its mode (the running tone at `use`, plain while recording) and the
   server's sentence on what reads it. A ticket's page reads its notes far less than it decides, so its Memory panel,
@@ -485,8 +488,8 @@ Rules:
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
-- **The aurora**: a 2px hairline along the header's foot, over its border, fading from Attention's rose through Pull
-  requests' violet to Tickets' sky. It is static.
+- **The aurora**: a 2px hairline along the header's foot, over its border, fading through the nav's colors in the
+  nav's order, Attention's rose first and Memory's last. It is static.
 
 ## Fun
 
@@ -758,10 +761,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   in a tip (the `canopy grant` command under its button). A `title` that explains rather than informs, a button's
   hint or what a column counts, stays a `title`.
 - **A link's page at a glance is a hover card** (`HoverCard` in `src/components/ui/hover-card.tsx`): more than a tip
-  holds, a few rows of what the page it opens shows, as the host's readout shows the machine. It opens on hover after
-  half a second, as a tip does, and on the keyboard's focus, and stays while the pointer moves onto it; a tap follows
-  the link. Like a tip it is on `surface` with a hairline, no shadow and no motion, its rows `text-xs` under
-  `panel-label`s. Nothing in it is found only there: it is a preview of the page, never a place to act.
+  holds, a few rows of what the page it opens shows, as each header readout shows its page (`ReadoutCard`). It opens
+  on hover after half a second, as a tip does, and on the keyboard's focus, and stays while the pointer moves onto
+  it; a tap follows the link. Like a tip it is on `surface` with a hairline, no shadow and no motion, its rows
+  `text-xs` under `panel-label`s. Nothing in it is found only there: it is a preview of the page, never a place to act.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): every list
   in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
   PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The

@@ -148,7 +148,7 @@ permission:
   # canopy's own tools, the overseer's, the reviewer's and planner's git tools, a chore's history, and the reports, are
   # not this agent's (DESIGN §19, §27): denied by pattern, after every rule above, so none reopens one.
   "canopy_*": deny
-  # But canopy's `status` tool, the run's card for the operator, which writes nothing (DESIGN §41): by exact name, last.
+  # But canopy's `status` tool, the run's progress, which writes nothing (DESIGN §41): by exact name, last.
   "canopy_run_status": allow
 ---
 

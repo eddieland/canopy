@@ -498,7 +498,7 @@ function nothing(costs: Costs): Costs {
     return Object.fromEntries(Object.keys(costs).map((key) => [key, null]))
 }
 
-test("the header's budget says the month is headed over, in words on hover, and opens the spend page", async ({
+test("the header's budget says the month is headed over, the numbers on hover, and opens the spend page", async ({
     page,
 }) => {
     // Wide enough for the percent beside the icon; narrower, the icon stands alone.
@@ -509,7 +509,11 @@ test("the header's budget says the month is headed over, in words on hover, and 
     const readout = page.getByTestId('budget-readout')
     await expect(readout).toHaveText('39%')
     await expect(readout).toHaveAttribute('data-state', 'headed')
-    await expect(readout).toHaveAttribute('title', /^Headed over: \$15\.76 of \$40 \(39%\), on pace for \$/u)
+    await expect(readout).toHaveAccessibleName(/^Headed over: \$15\.76 of \$40 \(39%\), on pace for \$/u)
+    await readout.hover()
+    const card = page.getByTestId('budget-card')
+    await expect(card).toContainText('Headed over')
+    await expect(card).toContainText('39%, $15.76 of $40')
     await readout.click()
     await expect(page).toHaveURL(/\/reports\/spend$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Spend')

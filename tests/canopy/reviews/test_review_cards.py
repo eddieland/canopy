@@ -24,7 +24,7 @@ def test_a_reviewer_shows_its_card_while_it_runs_and_keeps_it(
 ) -> None:
     with_events(reviewing, "canopy-reviewer")
     reviewer = reviewer_reports(CLEAN, tools=[calls(cards.tool_name(), **CARD)])
-    held = scenario.starts_review(reviews(head(git_pool)), reviewer=reviewer)
+    held = scenario.starts_review(reviews(head(git_pool)), reviewer=reviewer).has_called(1)
     standing = cards.of(held.row)
     assert (standing.card, standing.calls_since) == (cards.Card.model_validate(CARD), 0)
     assert held.row.tool_calls == 1
@@ -48,7 +48,7 @@ def test_the_operator_answers_a_running_reviewers_question_and_a_reply_once_it_e
     with_events(reviewing, "canopy-reviewer")
     question = {"ask": "Review the generated client too?", "options": ["yes", "no, skip it"], "recommend": "B"}
     reviewer = reviewer_reports(CLEAN, tools=[calls(cards.tool_name(), **CARD, question=question)])
-    held = scenario.starts_review(reviews(head(git_pool)), reviewer=reviewer)
+    held = scenario.starts_review(reviews(head(git_pool)), reviewer=reviewer).has_called(1)
     ref = f"review:{held.id}"
     status = scenario.operator("status").out
     assert re.search(rf"\n    asks you, \d+[sm]: Review the generated .+  canopy reply {ref} A-B", status), status

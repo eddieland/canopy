@@ -2,19 +2,22 @@
 
 A tool's arguments are validated against its request, whose JSON schema is its input schema; the store then does the
 call, held to its scope. What a tool returns is JSON: one object, or for `comment_feed` one change to a line, its
-`end` line last, as a connector prints (DESIGN §30). A refusal is the store's `Refused`, which the server answers as a
-tool error carrying its code.
+`end` line last, as a connector prints (DESIGN §30). The same values are its result (`results`), the tool's structured
+content, whose schema is its output schema. A refusal is the store's `Refused`, which the server answers as a tool error
+carrying its code.
 """
 
 from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Annotated, Literal
 
 import canopy_mcp
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError
 
+from canopy_artifacts import results
 from canopy_artifacts.store import CONTEXT, LIST_PAGE, MAX_BODY, MAX_FEED, MAX_ORIGIN, Store
 from canopy_artifacts.text import Anchor, ContentType
 
@@ -38,8 +41,22 @@ ThreadId = Annotated[
 ]
 
 
-#: One of the store's tools: called in the store, answering with the JSON it returns as text.
-type Tool = canopy_mcp.Tool[Store, str]
+@dataclass(frozen=True)
+class Answer:
+    """What a tool answers with."""
+
+    #: What the store returned, as JSON: the tool's text, as the contract gives it.
+    text: str
+    #: The same, as its result: the tool's structured content.
+    result: results.Result
+
+
+class ResultError(Exception):
+    """What the store returned is not the result its tool lists: a bug of the store's, not the caller's."""
+
+
+#: One of the store's tools: called in the store, answering with its text and its result.
+type Tool = canopy_mcp.Tool[Store, Answer]
 
 
 def tool[R: BaseModel](
@@ -48,20 +65,31 @@ def tool[R: BaseModel](
     request: type[R],
     do: Callable[[Store, R], object],
     hints: canopy_mcp.Hints,
+    *,
+    result: type[results.Result],
 ) -> Tool:
-    """Make `do` a tool, taking `request` as its arguments, with `hints` for a client.
+    """Make `do` a tool, taking `request` as its arguments and answering with `result`, with `hints` for a client.
 
     Returns:
-        The tool, which returns what `do` does as JSON: a list as one item to a line, anything else as one object.
+        The tool, whose text is what `do` returns as JSON: a list, the feed's, as one item to a line, anything else as
+        one object. Its result is the same, the feed's as one object.
+
+    Raises:
+        ResultError: What `do` returned is not `result`.
     """
 
-    def call(arguments: Mapping[str, object], store: Store) -> str:
+    def call(arguments: Mapping[str, object], store: Store) -> Answer:
         done = do(store, request.model_validate(arguments))
         if isinstance(done, list):
-            return "\n".join(json.dumps(item, ensure_ascii=False) for item in done)
-        return json.dumps(done, ensure_ascii=False)
+            text, shaped = "\n".join(json.dumps(item, ensure_ascii=False) for item in done), results.feed_page(done)
+        else:
+            text, shaped = json.dumps(done, ensure_ascii=False), done
+        try:
+            return Answer(text, result.model_validate(shaped))
+        except ValidationError as e:
+            raise ResultError(f"{name} returned what its result does not hold") from e
 
-    return canopy_mcp.Tool(name, description, request, call, hints=hints)
+    return canopy_mcp.Tool(name, description, request, call, result, hints)
 
 
 class _Request(BaseModel):
@@ -171,6 +199,7 @@ TOOLS = (
             artifact_id=r.artifact_id,
         ),
         canopy_mcp.WRITES,
+        result=results.Published,
     ),
     tool(
         "artifact_read",
@@ -180,6 +209,7 @@ TOOLS = (
         Read,
         lambda store, r: store.read(r.artifact_id, r.version),
         canopy_mcp.READS,
+        result=results.Read,
     ),
     tool(
         "artifact_list",
@@ -189,6 +219,7 @@ TOOLS = (
         ListArtifacts,
         lambda store, r: store.artifacts(r.origin, r.cursor),
         canopy_mcp.READS,
+        result=results.ArtifactPage,
     ),
     tool(
         "thread_list",
@@ -199,6 +230,7 @@ TOOLS = (
         ThreadList,
         lambda store, r: store.threads(r.artifact_id, state=r.state, version=r.version),
         canopy_mcp.READS,
+        result=results.Threads,
     ),
     tool(
         "comment_feed",
@@ -209,6 +241,7 @@ TOOLS = (
         Feed,
         lambda store, r: store.feed(r.origin, r.since, r.limit),
         canopy_mcp.READS,
+        result=results.FeedPage,
     ),
     tool(
         "comment_reply",
@@ -218,6 +251,7 @@ TOOLS = (
         Reply,
         lambda store, r: store.reply(r.thread_id, r.body),
         canopy_mcp.WRITES,
+        result=results.Replied,
     ),
     tool(
         "comment_create",
@@ -233,6 +267,7 @@ TOOLS = (
             r.body,
         ),
         canopy_mcp.WRITES,
+        result=results.Created,
     ),
     tool(
         "thread_resolve",
@@ -241,5 +276,6 @@ TOOLS = (
         Resolve,
         lambda store, r: store.resolve(r.thread_id, resolved=r.resolved),
         canopy_mcp.Hints(read_only=False, idempotent=True),
+        result=results.Resolved,
     ),
 )

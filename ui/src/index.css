@@ -402,6 +402,24 @@
 }
 
 /*
+ * The aurora along the header's foot: the nav's section colors, in the nav's order (`SECTIONS` in `lib/sections.ts`),
+ * so the header reads as the rail turned on its side. Settings, out of the nav, is out of it too.
+ */
+@utility aurora {
+    background-image: linear-gradient(
+        90deg,
+        var(--section-attention),
+        var(--section-tickets),
+        var(--section-tasks),
+        var(--section-pull-requests),
+        var(--section-runs),
+        var(--section-chores),
+        var(--section-reports),
+        var(--section-memory)
+    );
+}
+
+/*
  * The header's name, in the aurora's colors: from the logo's accent through the header's foot to its end. The
  * gradient runs twice the name's width and back, so a period of `flow` ends where it began. Printed, where a
  * background may not be, it is plain text.

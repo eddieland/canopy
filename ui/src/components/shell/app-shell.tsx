@@ -123,14 +123,11 @@ export function AppShell() {
                         data-testid="app-header"
                         className="relative z-10 flex items-center justify-between gap-4 border-b bg-surface/85 px-4"
                     >
-                        {/* The aurora: a hairline through the sections' colors along the header's foot, over its
-                        border. */}
+                        {/* The aurora: a hairline through the nav's colors, in its order, along the header's foot,
+                        over its border. */}
                         <span
                             aria-hidden
-                            className={cn(
-                                'pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90',
-                                'bg-linear-to-r from-section-attention via-section-pull-requests to-section-tickets',
-                            )}
+                            className="aurora pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90"
                         />
                         <div className="flex items-center gap-2.5">
                             <LiveMark stream={stream.status} />
