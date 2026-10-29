@@ -74,14 +74,14 @@ def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False) -> ModelL
     return ModelList(frozenset(line for line in lines if MODEL_RE.fullmatch(line)))
 
 
-def _verbose(text: str) -> dict[str, frozenset[str]]:
-    """Return each model `opencode models --verbose` printed in `text`, with the variants its JSON lists.
+def _verbose(text: str) -> dict[str, tuple[str, ...]]:
+    """Return each model `opencode models --verbose` printed in `text`, with the variants its JSON lists, in its order.
 
     A model whose line is not followed by JSON canopy can read lists none. The JSON is skipped whole, so no line of it
     is read as a model's.
     """
     decoder = json.JSONDecoder()
-    found: dict[str, frozenset[str]] = {}
+    found: dict[str, tuple[str, ...]] = {}
     pos = 0
     while pos < len(text):
         end = text.find("\n", pos)
@@ -90,7 +90,7 @@ def _verbose(text: str) -> dict[str, frozenset[str]]:
         pos = end + 1
         if not MODEL_RE.fullmatch(line):
             continue
-        found[line] = frozenset()
+        found[line] = ()
         start = _SPACE_RE.match(text, pos)
         start_at = start.end() if start is not None else pos
         if not text.startswith("{", start_at):
@@ -101,5 +101,5 @@ def _verbose(text: str) -> dict[str, frozenset[str]]:
         # Not JSON, or not a model's: pydantic's error is a ValueError too.
         except ValueError:
             continue
-        found[line] = frozenset(model.variants or ())
+        found[line] = tuple(model.variants or ())
     return found
