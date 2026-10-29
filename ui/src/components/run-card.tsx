@@ -54,7 +54,15 @@ export function RunCardView({ card, running, answers }: { card: RunCard; running
                     <LinkedText text={card.stuck} />
                 </CardLine>
             )}
-            {card.question !== null && <CardQuestion question={card.question} running={running} answers={answers} />}
+            {card.question !== null && (
+                // Keyed by when it was asked, so what an answer said goes with the question it answered.
+                <CardQuestion
+                    key={card.question.asked_at}
+                    question={card.question}
+                    running={running}
+                    answers={answers}
+                />
+            )}
             {card.steps.length > 0 && <CardSteps card={card} />}
         </div>
     )

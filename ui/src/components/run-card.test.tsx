@@ -195,6 +195,22 @@ describe('RunCardView question', () => {
         expect(screen.queryAllByRole('button')).toEqual([])
     })
 
+    it('drops what an answer said once the card asks another question', async () => {
+        const { rerender } = renderQuestion(QUESTION)
+        fireEvent.click(screen.getByRole('button', { name: 'Answer B: hide the form behind a link' }))
+        expect(await screen.findByText(/^Answered B/u)).toBeDefined()
+        rerender(
+            <QueryClientProvider client={new QueryClient()}>
+                <RunCardView
+                    card={{ ...CARD, question: { ...QUESTION, asked_at: '2026-10-08T12:29:00Z' } }}
+                    running
+                    answers={{ kind: 'run', id: 41 }}
+                />
+            </QueryClientProvider>,
+        )
+        expect(screen.queryByText(/^Answered B/u)).toBeNull()
+    })
+
     it('names the guard that refused an answer', async () => {
         replies = [
             Response.json(
