@@ -13,7 +13,7 @@ import { PersonaField } from '@/components/persona-field'
 import { FoldPanel } from '@/components/fold-panel'
 import { MemoryKinds } from '@/components/memory'
 import { ModelsField } from '@/components/models-field'
-import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } from '@/components/panel'
 import { PromptPanel } from '@/components/prompt-panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
@@ -186,12 +186,21 @@ function RunPanel({
  * was served, which is not an empty digest.
  */
 function RunMemoryPanel({ id }: { id: number }) {
-    const { data } = useQuery(runMemoryQuery(id))
+    const query = useQuery(runMemoryQuery(id))
+    const { data } = query
     // Each tier's mode now, so a memory in force under a tier that only records reads `recorded` in its rows.
     const tiers = useQuery(loopQuery).data?.memory
     const modes = tiers ? { ticket_notes: tiers.ticket_notes.mode, lessons: tiers.lessons.mode } : undefined
-    const rendered = data?.rendered ?? null
-    if (data === undefined || rendered === null) {
+    if (data === undefined) {
+        // Its folded height while the read is pending, so the page does not grow under the reader when it lands.
+        return query.isPending ? (
+            <Panel>
+                <PanelSkeleton rows={1} className="h-9 justify-center py-0" />
+            </Panel>
+        ) : null
+    }
+    const { rendered } = data
+    if (rendered === null) {
         return null
     }
     const served = rendered.ticket_notes === 'use' || rendered.lessons === 'use'

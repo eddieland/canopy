@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 #: A PR's reviews: its review runs but the revisions of their drafts (DESIGN §34), which review nothing, report no
 #: verdict, and count toward their draft's limit rather than the PR's.
-_REVIEWS = sql.select("*").from_("review_runs").where("revises IS NULL")
+_REVIEWS = records.select(records.ReviewRun).where("revises IS NULL")
 
 
 def insert_review_run(
@@ -126,10 +126,10 @@ def held(conn: sqlite3.Connection, run_id: int, *, released: bool = False) -> di
     Returns:
         Each finding still held, with its hold; one the operator released only with `released`.
     """
-    query = sql.select("*").from_("review_holds").where("review_run_id = ?", run_id)
+    query = records.select(records.ReviewHold).where("review_run_id = ?", run_id)
     if not released:
         query = query.where("released_at IS NULL")
-    return {h.finding: h for h in records.fetch_all(conn, records.ReviewHold, query)}
+    return {h.finding: h for h in query.all(conn)}
 
 
 def withheld(conn: sqlite3.Connection, run_id: int) -> frozenset[int]:
@@ -205,29 +205,29 @@ def set_review_slot(
 
 def get_review_run(conn: sqlite3.Connection, run_id: int) -> records.ReviewRun | None:
     """Return the review run with `run_id`, or None."""
-    return records.fetch_one(conn, records.ReviewRun, sql.select("*").from_("review_runs").where("id = ?", run_id))
+    return records.select(records.ReviewRun).where("id = ?", run_id).one(conn)
 
 
 def review_runs_of(conn: sqlite3.Connection, pr_url: str) -> list[records.ReviewRun]:
     """Return a PR's review runs, newest first, revisions left out."""
-    return records.fetch_all(conn, records.ReviewRun, _REVIEWS.where("pr_url = ?", pr_url).order_by("id DESC"))
+    return _REVIEWS.where("pr_url = ?", pr_url).order_by("id DESC").all(conn)
 
 
 def recent_review_runs(conn: sqlite3.Connection, limit: int) -> list[records.ReviewRun]:
     """Return the latest `limit` review runs, newest first, revisions left out."""
-    return records.fetch_all(conn, records.ReviewRun, _REVIEWS.order_by("id DESC").limit(limit))
+    return _REVIEWS.order_by("id DESC").limit(limit).all(conn)
 
 
 def review_runs_since(conn: sqlite3.Connection, since: str, *, revisions: bool = False) -> list[records.ReviewRun]:
     """Return the review runs started at or after `since`, newest first, with `revisions` the revisions too."""
-    every = sql.select("*").from_("review_runs") if revisions else _REVIEWS
-    return records.fetch_all(conn, records.ReviewRun, every.where("started_at >= ?", since).order_by("id DESC"))
+    every = records.select(records.ReviewRun) if revisions else _REVIEWS
+    return every.where("started_at >= ?", since).order_by("id DESC").all(conn)
 
 
 def revision_runs_of(conn: sqlite3.Connection, draft_id: int) -> list[records.ReviewRun]:
     """Return the revisions of review draft `draft_id` (DESIGN §34), newest first."""
-    query = sql.select("*").from_("review_runs").where("revises = ?", draft_id).order_by("id DESC")
-    return records.fetch_all(conn, records.ReviewRun, query)
+    query = records.select(records.ReviewRun).where("revises = ?", draft_id).order_by("id DESC")
+    return query.all(conn)
 
 
 def is_unit_pr(conn: sqlite3.Connection, key: str, pr_url: str, *, repo: str | None = None) -> bool:
@@ -243,7 +243,7 @@ def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict
     found: dict[str, list[records.ReviewRun]] = {}
     # SQLite takes an empty list, `IN ()`, as matching nothing.
     query = _REVIEWS.where_in("pr_url", pr_urls).order_by("id DESC")
-    for run in records.fetch_all(conn, records.ReviewRun, query):
+    for run in query.all(conn):
         found.setdefault(run.pr_url, []).append(run)
     return found
 
@@ -266,8 +266,8 @@ def see_review_head(conn: sqlite3.Connection, pr_url: str, sha: str, at: str) ->
 
 def review_head_seen_at(conn: sqlite3.Connection, pr_url: str, sha: str) -> str | None:
     """Return since when `sha` has been the PR's head canopy last saw, or None if that head is another commit."""
-    query = sql.select("*").from_("review_heads").where("pr_url = ? AND sha = ?", pr_url, sha)
-    head = records.fetch_one(conn, records.ReviewHead, query)
+    query = records.select(records.ReviewHead).where("pr_url = ? AND sha = ?", pr_url, sha)
+    head = query.one(conn)
     return None if head is None else head.seen_at
 
 
@@ -279,10 +279,9 @@ def review_heads_seen_after(conn: sqlite3.Connection, since: str) -> list[record
         .where("r.pr_url = h.pr_url AND r.sha = h.sha AND r.revises IS NULL AND r.status = ?", ReviewRunStatus.DONE)
     )
     query = (
-        sql.select("h.*")
-        .from_("review_heads h")
+        records.select(records.ReviewHead, "h")
         .where("h.seen_at > ?", since)
         .where("NOT EXISTS ({})", reviewed)
         .order_by("h.seen_at DESC, h.pr_url")
     )
-    return records.fetch_all(conn, records.ReviewHead, query)
+    return query.all(conn)

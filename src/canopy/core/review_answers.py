@@ -140,9 +140,9 @@ def latest(conn: sqlite3.Connection, review_run_id: int) -> dict[int, records.Re
     Returns:
         Each answered finding's answer, by its number; empty when no run answered any.
     """
-    query = sql.select("*").from_("review_answers").where("review_run_id = ?", review_run_id).order_by("run_id")
+    query = records.select(records.ReviewAnswer).where("review_run_id = ?", review_run_id).order_by("run_id")
     # Read oldest first, so each finding keeps its newest answer.
-    return {a.finding: a for a in records.fetch_all(conn, records.ReviewAnswer, query)}
+    return {a.finding: a for a in query.all(conn)}
 
 
 def previous(

@@ -184,12 +184,10 @@ def for_run(conn: sqlite3.Connection, config: Config, agent: Agent, ticket: str 
 
 def override(conn: sqlite3.Connection, ticket: str, agent: Agent) -> str | None:
     """Return the persona the operator chose for `ticket`'s `agent`, or None when they chose none."""
-    found = records.fetch_one(
-        conn,
-        records.TicketOverride,
-        sql.select("*")
-        .from_("ticket_overrides")
-        .where("ticket_key = ? AND agent = ? AND kind = ?", ticket, agent, OverrideKind.PERSONA),
+    found = (
+        records.select(records.TicketOverride)
+        .where("ticket_key = ? AND agent = ? AND kind = ?", ticket, agent, OverrideKind.PERSONA)
+        .one(conn)
     )
     return found.value if found is not None else None
 
@@ -208,11 +206,7 @@ def reviewers_of(conn: sqlite3.Connection, config: Config, ticket: str) -> list[
 
 def next_run(conn: sqlite3.Connection, ticket: str, agent: Agent) -> str | None:
     """Return the persona chosen for the next run alone of `ticket`'s `agent`, or None when none is."""
-    found = records.fetch_one(
-        conn,
-        records.NextRunPersona,
-        sql.select("*").from_("next_run_personas").where("ticket_key = ? AND agent = ?", ticket, agent),
-    )
+    found = records.select(records.NextRunPersona).where("ticket_key = ? AND agent = ?", ticket, agent).one(conn)
     return found.persona if found is not None else None
 
 

@@ -106,6 +106,65 @@ def test_a_query_builds_its_rows_as_the_row_type(conn: sqlite3.Connection) -> No
     assert (second.ticket_key, second.chore) == (None, "deps")
 
 
+def test_a_select_reads_its_tables_rows_as_the_row_type(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    for key in ("PROJ-1", "PROJ-2", "PROJ-3"):
+        db.record_decision(conn, tick, key, "wait", "checks running")
+    query = records.select(records.Decision).where("ticket_key != ?", "PROJ-2").order_by("id DESC")
+    assert [d.ticket_key for d in query.all(conn)] == ["PROJ-3", "PROJ-1"]
+    assert present(query.limit(1, offset=1).one(conn)).ticket_key == "PROJ-1"
+    assert query.where("ticket_key = ?", "PROJ-9").one(conn) is None
+
+
+def test_a_select_names_its_own_columns_so_a_joined_tables_cannot_shadow_them(conn: sqlite3.Connection) -> None:
+    # A decision and its tick both have an `id` and a status-like column; the select reads the decision's alone.
+    real = db.start_tick(conn, dry_run=False)
+    dry = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, real, "PROJ-1", "wait", "checks running")
+    db.record_decision(conn, dry, "PROJ-2", "wait", "checks running")
+    query = records.select(records.Decision, "d").join("ticks t ON t.id = d.tick_id").where("t.dry_run = ?", 1)
+    assert query.statement.fragment().text.startswith("SELECT d.id, d.tick_id, d.ticket_key, ")
+    [decision] = query.all(conn)
+    assert (decision.ticket_key, decision.tick_id) == ("PROJ-2", dry)
+
+
+def test_a_select_goes_in_a_slot_as_any_piece_of_sql(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")
+    db.record_decision(conn, tick, "PROJ-2", "skip", "no tracker")
+    waits = records.select(records.Decision).where("action = ?", "wait")
+    counted = sql.execute(conn, sql.select("count(*)").from_("({}) AS w", waits.statement)).fetchone()
+    assert counted[0] == 1
+
+
+@dataclass(frozen=True)
+class DecisionTick(records.View):
+    ticket_key: str | None
+    status: TickStatus
+    dry_run: bool
+
+
+def test_a_view_reads_a_joins_columns_converted_as_a_rows_are(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")
+    query = sql.select("d.ticket_key, t.status, t.dry_run").from_("decisions d").join("ticks t ON t.id = d.tick_id")
+    [read] = records.fetch_all(conn, DecisionTick, query)
+    assert read == DecisionTick("PROJ-1", TickStatus.RUNNING, dry_run=True)
+    assert isinstance(read.status, TickStatus)
+
+
+def test_a_views_refusal_names_the_view(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")
+    query = (
+        sql.select("d.ticket_key, 'gone' AS status, t.dry_run").from_("decisions d").join("ticks t ON t.id = d.tick_id")
+    )
+    with pytest.raises(records.RowError, match=r"^DecisionTick\.status holds 'gone', which is not a TickStatus$"):
+        records.fetch_one(conn, DecisionTick, query)
+    with pytest.raises(records.RowError, match=r"^query does not fit DecisionTick: missing dry_run$"):
+        records.fetch_one(conn, DecisionTick, sql.select("ticket_key, 'ok' AS status").from_("decisions"))
+
+
 def test_columns_are_matched_by_name_not_position(conn: sqlite3.Connection) -> None:
     tick = db.start_tick(conn, dry_run=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")
@@ -157,7 +216,7 @@ def test_a_value_of_another_type_is_refused(conn: sqlite3.Connection, action: st
 
 @dataclass(frozen=True)
 class Flagged(records.Row):
-    TABLE: ClassVar[str] = "flagged"
+    TABLE: ClassVar[typing.LiteralString] = "flagged"
 
     id: int
     done: bool

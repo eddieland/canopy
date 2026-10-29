@@ -34,25 +34,19 @@ def threads(ctx: Context, url: str) -> PullRequestThreads | None:
         plan of the PR's ticket, each of its items naming the thread it is.
     """
     conn = ctx.conn
-    observed = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", url))
-    found = records.fetch_all(
-        conn,
-        records.Draft,
-        sql.select("*").from_("drafts").where("pr_url = ?", url).order_by("run_id, number"),
-    )
+    observed = records.select(records.ObservedPr).where("url = ?", url).one(conn)
+    found = records.select(records.Draft).where("pr_url = ?", url).order_by("run_id, number").all(conn)
     if observed is None and not found:
         return None
     views = {d.id: draft(conn, d) for d in found}
     kept = _kept_diff(conn, url)
     diff = review_diff.read(kept[1]) if kept is not None else None
-    comments = records.fetch_all(
-        conn,
-        records.ObservedReview,
-        sql.select("*")
-        .from_("observed_reviews")
+    comments = (
+        records.select(records.ObservedReview)
         .where("pr_url = ?", url)
         .where("item = ?", ReviewItem.COMMENT)
-        .order_by("created_at, id"),
+        .order_by("created_at, id")
+        .all(conn)
     )
     sent = set(drafts.sent_by_pr(conn).get(url, {}).get("comments", []))
     by_thread: dict[str, list[records.ObservedReview]] = {}

@@ -23,31 +23,33 @@ the plan, so the operator follows the plan they approved being done; a planner's
 The server validates a call and writes nothing; it lists its tool only where `CANOPY_RUN_ID` names a worker's,
 planner's, or review's run. The harness records the card from the call in the events it already reads as the agent
 prints them (§8), held to the same input, so nothing the agent writes reaches the journal but what canopy observes it
-print, as with its spend: a call the server refused, or one that does not validate, records nothing. A run without
-the runtime's events keeps no card. The run counts the tool calls its agent ends, so a card is as old as the time and
-the calls since it, and the run keeps its last card once it ends. Beside the card it keeps when each step, found by its
-title, took its status and stage, since the agent rewrites the whole card each call.
+print, as with its spend: a call the server refused, or one that does not validate, records nothing. A run without the
+runtime's events keeps no card, nor does a one-off task's run (§36), which is never given the server. The run counts the
+tool calls its agent ends, so a card is as old as the time and the calls since it, and the run keeps its last card once
+it ends. Beside the card it keeps when each step, found by its title, took its status and stage, since the agent
+rewrites the whole card each call.
 
 ### Staleness
 
-canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a worker's, planner's, or review's run,
-it counts each session's tool calls since its last `status` call, and after 20 adds one `[canopy]` line to that call's
-result asking for an update, once per lapse, so the agent is asked between calls and never mid-thought. It keeps the
-count and whether it asked, and nothing else, as the clock keeps whether it has warned. A forged line can only ask for
-a card, so it fails safe, as the clock's do (§33).
-
-### Where it shows
-
-`canopy status` and the web UI's running runs show each running run's `now` and how old its card is; `canopy show` of
-a run, `canopy review show` of a review, and their pages in the web UI, the whole card, or the last one once it has
-ended, as a ticket's page does under the run working it. A card that has gone 20 tool calls or 10 minutes
-without an update is marked stale, as is a run that has kept none that long, rather than going quiet. A card with
-steps shows percent done, its steps done or skipped over all of them, and the stage of the step it works on; a step
-left `working` at the same stage for a fifth of the run's timeout is shown stuck while the run runs. No notification:
-the sinks hear of what a run ends with, as before (§20).
+canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a worker's, planner's, or review's run, it
+counts each session's tool calls since its last `status` call, and after a number of them adds one `[canopy]` line to
+that call's result asking for an update, once per lapse, so the agent is asked between calls and never mid-thought. It
+keeps the count and whether it asked, and nothing else, as the clock keeps whether it has warned. A forged line can only
+ask for a card, so it fails safe, as the clock's do (§33).
 
 The card is shown to the operator and never put in another agent's prompt, so neither the overseer's cache (§6) nor
 its trust in worker text changes (TRUST_MODEL T1). Nothing on a card extends a run or holds a slot (T3).
+
+### Where it shows
+
+`canopy status` and the web UI's running runs show each running run's `now` and how old its card is; `canopy show` of a
+run, `canopy review show` of a review, and their pages in the web UI, the whole card, or the last one once it has ended,
+as a ticket's page does under the run working it. A card that has gone too many tool calls or minutes without an update
+is marked stale rather than going quiet, and `canopy status` names a running run that has kept none that long. A card
+with steps shows percent done, its steps done or skipped over all of them, and the stage of the step it works on; a
+step left `working` at the same stage for a fifth of the run's timeout is shown stuck while the run runs. No
+notification: the sinks hear of what a run ends with, as before (§20). canopy's report of a run that a chore's agent may
+read (§27) leaves the card out, so no card reaches an agent.
 
 ### Rejected
 

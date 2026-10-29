@@ -64,9 +64,9 @@ one outside the three drops alone, never the plan. Nothing decides on it.
 Plans add the phase `plan_proposed` to §7: the newest plan waits on the operator, asked through attention `plan_review`
 (§14), holding no run or slot, until a reply makes the next action a new `plan`. A `ready` ticket that needs a plan and
 has none waiting or approved dispatches `plan`; one whose planner is blocked with no reply since is `needs_human`, and
-the harness raises `awaiting_reply` rather than re-plan until attempts run out. The state block gives the plan's status,
-attempts, and facts the harness computes so the overseer compares no times (`changes_asked`, `blocked`), never
-its text.
+the harness raises `awaiting_reply` rather than re-plan until attempts run out. The state block gives a ticket with no
+branch yet the plan's status, attempts, and facts the harness computes so the overseer compares no times
+(`changes_asked`, `blocked`), never its text.
 
 ### Workers follow the plan
 

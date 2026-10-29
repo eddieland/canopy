@@ -28,7 +28,7 @@ def test_a_reviewer_shows_its_card_while_it_runs_and_keeps_it(
     assert (standing.card, standing.calls_since) == (cards.Card.model_validate(CARD), 0)
     assert held.row.tool_calls == 1
     status = scenario.operator("status").out
-    assert re.search(r"\n  review  \S+  .*\n    now: reading retry\.py  card \d+s, 0 calls old\n", status), status
+    assert re.search(r"\n  review  \S+  .*\n    now: reading retry\.py  card \d+[sm], 0 calls old\n", status), status
     shown = scenario.operator("review", "show", str(held.id)).out
     assert "\n    now: reading retry.py\n    done: read the diff (3 files, 40 lines)\n" in shown
     done = held.finishes()

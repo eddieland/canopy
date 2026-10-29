@@ -1,14 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { Wallet } from 'lucide-react'
 
-import { loopQuery, metaQuery, tickQuery } from '@/api/queries'
-import type { MemoryState, Tick } from '@/api/types'
+import { loopQuery, metaQuery, spendQuery, tickQuery } from '@/api/queries'
+import type { MemoryState, SpendMonth, Tick } from '@/api/types'
 import { Age } from '@/components/age'
 import { Word } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLoopDown } from '@/hooks/use-loop-down'
 import { useTickAsked } from '@/hooks/use-tick-asked'
+import { BUDGET_WORD, budgetPercent, budgetState, budgetText } from '@/lib/spend'
+import type { BudgetState } from '@/lib/spend'
 import { TICK_TONE } from '@/lib/ticks'
 import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
@@ -36,15 +39,23 @@ const PILL_TONE = {
     down: 'border-status-blocked/40 bg-status-blocked/10 text-status-blocked',
 } as const
 
+// The budget's readout, muted while on budget, as `host ok` is, and in a state's color once it wants a look.
+const BUDGET_TONE: Record<BudgetState, string> = {
+    under: 'text-muted-foreground',
+    headed: 'text-status-blocked',
+    over: 'text-status-failed',
+}
+
 /**
  * The header's readouts: the latest tick, or `no tick yet` before the first, `tick starting` from Tick now until the
- * tick it asked for starts, agent memory while a tier is on, and the machine the loop runs on (`HostReadout`). The
- * counters are the attention page's.
+ * tick it asked for starts, agent memory while a tier is on, the month against its budget while one is set, and the
+ * machine the loop runs on (`HostReadout`). The counters are the attention page's.
  */
 export function LiveReadouts() {
     const last = useQuery(tickQuery)
     const starting = useTickAsked()
     const memory = useQuery(loopQuery).data?.memory ?? null
+    const budget = useQuery(spendQuery).data?.budget ?? null
     return (
         // Inset as far as a ghost button's label, so the rules either side sit midway between their neighbors.
         <div className="flex items-center gap-4 px-2.5" data-testid="live-readouts">
@@ -66,6 +77,7 @@ export function LiveReadouts() {
                 <LastTick tick={last.data.tick} />
             )}
             {memory !== null && <MemoryReadout memory={memory} />}
+            {budget !== null && <BudgetReadout month={budget} />}
             <HostReadout />
         </div>
     )
@@ -154,6 +166,35 @@ function MemoryReadout({ memory }: { memory: MemoryState }) {
             data-testid="memory-readout"
         >
             {memory.readout}
+        </Link>
+    )
+}
+
+/**
+ * A wallet's icon and `39%`: the local month's spend against the budget set, muted while on budget, in
+ * `status-blocked` once its pace heads over, and in `status-failed` once it is over, said in words on hover and to a
+ * screen reader. Under `2xl`, the icon alone, in that color, as the host's readout is under `lg`. It opens the
+ * spend page.
+ */
+function BudgetReadout({ month }: { month: SpendMonth }) {
+    const state = budgetState(month)
+    const said = `${BUDGET_WORD[state]}: ${budgetText(month)}`
+    return (
+        <Link
+            to="/reports/spend"
+            className={cn(
+                'readout inline-flex items-center gap-1.5 text-xs whitespace-nowrap underline-offset-4',
+                'hover:underline',
+                BUDGET_TONE[state],
+            )}
+            title={said}
+            aria-label={said}
+            data-testid="budget-readout"
+            data-state={state}
+        >
+            <Wallet aria-hidden className="size-3.5 shrink-0" />
+            {/* Short of `2xl` the ticker needs the room, or a tick's readout widening as it starts steps it out. */}
+            <span className="hidden 2xl:inline">{budgetPercent(month)}%</span>
         </Link>
     )
 }
