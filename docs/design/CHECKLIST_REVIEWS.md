@@ -31,10 +31,11 @@ with its docs, and the operator's file is what runs.
 
 A commit owes a checklist review wherever it owes an adversarial one: the loop's own PRs under `review.agent_prs`,
 `review.query`'s, and requests. The same `canopy review run` starts each still owed, side by side, as it starts a
-review in each persona (§31), and the commit is reviewed once each has a `done` review; the state block names what a
-commit is still owed. Every guard of a review holds (§21): review capacity, `max_workers`, the daily limit, the settle
-time, a dry run, and a commit already `done`. It does not count against the per-PR limit, which bounds the rounds
-between a worker and the adversarial reviewer, and it starts only on a commit that limit allows. One that ends
+review in each persona (§31), and the commit is reviewed once each has ended and the adversarial one is `done`; the
+state block names what a commit is still owed. Every guard of a review holds (§21): review capacity, `max_workers`,
+the daily limit, the settle time, a dry run, and a commit already `done`. It does not count against the per-PR
+limit, which bounds the rounds between a worker and the adversarial reviewer, and it starts only on a commit that
+limit allows. One that ends
 `failed` or `unknown` is not started again on that commit: the commit owes nothing more of it and is reviewed on the
 adversarial review alone, with `review_failed` raised as for any review, so a list a model cannot answer costs one run
 per commit, not one per tick (T3). Its definition allows canopy's git tools and the card (§41) and nothing else: no
