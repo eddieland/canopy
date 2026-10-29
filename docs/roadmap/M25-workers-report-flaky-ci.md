@@ -16,4 +16,6 @@ stays a person's. DESIGN §23 says why the triage run was dropped.
 
 Accept: the tests above pass. Live: SCENARIOS S63.
 
-Status: in progress. Built 2026-10-22: the tests above pass; the live check waits on the operator (SCENARIOS S63).
+Status: in progress. Built 2026-10-22: the tests above pass. Live on the operator's workspace from 2026-10-22: 23
+`resume` runs over 15 tickets ended `done` with `flaky`, and 11 tickets got `flaky_rerun` in place of another `resume`.
+Left of SCENARIOS S63: that a rerun's green check ends the item, and why 4 of the 15 tickets got no `flaky_rerun`.
