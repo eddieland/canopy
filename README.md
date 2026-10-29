@@ -74,7 +74,7 @@ workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART
    uv tool install git+https://github.com/eddieland/canopy
    ```
 
-   Not `uv tool install canopy`: that name on PyPI is another project To upgrade, run the same command with
+   Not `uv tool install canopy`: that name on PyPI is another project. To upgrade, run the same command with
    `--reinstall`.
 
 3. **Connect your MCP servers.** In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP
