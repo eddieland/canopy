@@ -33,7 +33,7 @@ def insert_chore_run(conn: sqlite3.Connection, *, tick_id: int | None, chore: st
 
 def get_chore_run(conn: sqlite3.Connection, run_id: int) -> records.ChoreRun | None:
     """Return the chore run with `run_id`, or None."""
-    return records.fetch_one(conn, records.ChoreRun, sql.select("*").from_("chore_runs").where("id = ?", run_id))
+    return records.select(records.ChoreRun).where("id = ?", run_id).one(conn)
 
 
 def chore_runs(
@@ -44,14 +44,12 @@ def chore_runs(
     before: int | None = None,
 ) -> list[records.ChoreRun]:
     """Return `chore`'s runs, newest first: at most `limit`, and only those before run id `before` if it is given."""
-    return records.fetch_all(
-        conn,
-        records.ChoreRun,
-        sql.select("*")
-        .from_("chore_runs")
+    return (
+        records.select(records.ChoreRun)
         .where("chore = ? AND id < ?", chore, before if before is not None else 2**63 - 1)
         .order_by("id DESC")
-        .limit(limit),
+        .limit(limit)
+        .all(conn)
     )
 
 

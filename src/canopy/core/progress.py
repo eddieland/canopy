@@ -75,11 +75,13 @@ class Progress:
         if not change.started and change.usage is None and called is None:
             return
         try:
-            if change.started or change.usage is not None:
-                db.set_progress(self.conn, self.table, self.row_id, change.session_id, usage=change.usage)
-            if called is not None and stuck_after is not None:
-                card = cards.read_call(called)
-                cards.record_call(self.conn, "review_runs", self.row_id, card, stuck_after=stuck_after)
+            # One transaction, so a tool call's progress and its card are recorded together or not at all.
+            with db.transaction(self.conn):
+                if change.started or change.usage is not None:
+                    db.set_progress(self.conn, self.table, self.row_id, change.session_id, usage=change.usage)
+                if called is not None and stuck_after is not None:
+                    card = cards.read_call(called)
+                    cards.record_call(self.conn, "review_runs", self.row_id, card, stuck_after=stuck_after)
         except sqlite3.Error as e:
             self.log.warning("agent progress not recorded", extra={**self.fields, "agent": self.agent, "error": str(e)})
         if change.started:

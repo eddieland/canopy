@@ -124,20 +124,20 @@ def of_run(conn: sqlite3.Connection, table: RunTable, run_id: int) -> Offered | 
     Returns:
         The ask and what it found; None for a run canopy never asked about.
     """
-    asked = records.fetch_one(conn, records.RunOffer, sql.select("*").from_("run_offers").where(_RUN, table, run_id))
+    asked = records.select(records.RunOffer).where(_RUN, table, run_id).one(conn)
     if asked is None:
         return None
-    servers = sql.select("*").from_("run_offered_servers").where(_RUN, table, run_id).order_by("server")
-    rules = sql.select("*").from_("run_offered_server_rules").where(_RUN, table, run_id).order_by("server, position")
-    skills = sql.select("*").from_("run_offered_skills").where(_RUN, table, run_id).order_by("skill")
-    tools = sql.select("*").from_("run_offered_tools").where(_RUN, table, run_id).order_by("tool")
+    servers = records.select(records.RunOfferedServer).where(_RUN, table, run_id).order_by("server")
+    rules = records.select(records.RunOfferedServerRule).where(_RUN, table, run_id).order_by("server, position")
+    skills = records.select(records.RunOfferedSkill).where(_RUN, table, run_id).order_by("skill")
+    tools = records.select(records.RunOfferedTool).where(_RUN, table, run_id).order_by("tool")
     server_rules: dict[str, list[str]] = {}
-    for rule in records.fetch_all(conn, records.RunOfferedServerRule, rules):
+    for rule in rules.all(conn):
         server_rules.setdefault(rule.server, []).append(rule.rule)
     return Offered(
         asked,
-        records.fetch_all(conn, records.RunOfferedServer, servers),
+        servers.all(conn),
         server_rules,
-        records.fetch_all(conn, records.RunOfferedSkill, skills),
-        records.fetch_all(conn, records.RunOfferedTool, tools),
+        skills.all(conn),
+        tools.all(conn),
     )

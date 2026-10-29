@@ -18,6 +18,7 @@ import json
 import re
 import sqlite3
 import sys
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated, Literal
@@ -25,6 +26,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, TypeAdapter, ValidationError
 
 from canopy.core import db, items, records, sql
+from canopy.core.vocab import ReviewRunStatus, RunStatus
 from canopy.infra import text
 from canopy.runtime import servers
 
@@ -44,6 +46,11 @@ SERVER_COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp", "--status")
 RUN_ID_RE = re.compile(r"(?:review-)?[0-9]{1,18}")
 #: The run tables whose runs keep a card: a worker's and a planner's, and a review's.
 type CardTable = Literal["runs", "review_runs"]
+#: Each card table's status of a run still running.
+_RUNNING: Mapping[CardTable, RunStatus | ReviewRunStatus] = {
+    "runs": RunStatus.RUNNING,
+    "review_runs": ReviewRunStatus.RUNNING,
+}
 
 #: How long the summary and what is in the way may be, every other line, and a step's stage, in characters.
 MAX_SUMMARY = 400
@@ -201,7 +208,7 @@ def record_call(
     stage keeps its times, and any other starts now, a `working` one to be shown stuck `stuck_after` later, a fifth of
     the run's timeout (`stuck_after()`). Nothing changes for a run not running.
     """
-    running = sql.update(table).where("id = ? AND status = 'running'", run_id)
+    running = sql.update(table).where("id = ? AND status = ?", run_id, _RUNNING[table])
     counted = running.set_to("tool_calls = tool_calls + 1")
     with db.transaction(conn):
         if card is not None:

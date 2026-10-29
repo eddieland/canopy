@@ -136,6 +136,8 @@ def test_the_spend_breakdown_carries_the_month_against_its_budget_whatever_the_w
     assert found["spent_usd"] == pytest.approx(c.get("/api/spend").json()["day"]["cost_usd"])
     assert found["projected_usd"] == pytest.approx(found["spent_usd"] / found["elapsed"])
     assert c.get("/api/spend/breakdown", params={"days": 30}).json()["month"] == found
+    # The header's read carries the same month.
+    assert c.get("/api/spend").json()["budget"] == found
 
 
 def test_the_spend_counters_add_the_sessions_outside_canopy_and_say_when_they_were_read(backend: Backend) -> None:

@@ -86,6 +86,21 @@ def test_a_card_the_journal_holds_that_no_longer_reads_as_one_is_none(conn: sqli
     assert cards.of(present(db.get_run(conn, running))) == cards.Standing(None, None, 1)
 
 
+def test_a_card_gone_too_many_tool_calls_without_an_update_is_stale(conn: sqlite3.Connection, running: int) -> None:
+    cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD), stuck_after=STUCK)
+    for _ in range(cards.STALE_CALLS - 1):
+        cards.record_call(conn, "runs", running, None, stuck_after=STUCK)
+    run = present(db.get_run(conn, running))
+    started = str(run["started_at"])
+    assert not cards.is_stale(cards.of(run), started)
+    cards.record_call(conn, "runs", running, None, stuck_after=STUCK)
+    standing = cards.of(present(db.get_run(conn, running)))
+    assert cards.is_stale(standing, started)
+    doing = cards.doing(standing, started)
+    assert doing is not None
+    assert doing.endswith(f", {cards.STALE_CALLS} calls old  stale")
+
+
 def steps(*said: tuple[str, ...]) -> dict[str, object]:
     """A card whose steps are `said`, each a title and a status, and a stage when it names one."""
     return {**CARD, "steps": [dict(zip(("title", "status", "stage"), step, strict=False)) for step in said]}

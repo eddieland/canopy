@@ -293,7 +293,12 @@ def _print_workers(ctx: Context) -> None:
 
 
 def _print_card(run: sqlite3.Row) -> None:
-    """What a running run's card says it does now, and how old the card is (DESIGN §41); nothing before it is stale."""
+    """What a running run's card says it does now, and how old the card is (DESIGN §41); nothing before it is stale.
+
+    A card is the operator's alone: nothing inside one of canopy's ticks or runs.
+    """
+    if not conversation.is_operator():
+        return
     doing = cards.doing(cards.of(run), str(run["started_at"]))
     if doing is not None:
         click.echo(f"    {doing}")

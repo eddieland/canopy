@@ -374,7 +374,7 @@ class Reader:
         tracker = runs.get(SourceKind.TRACKER)
         queried = [] if tracker is None else _result(tracker.query_result)
         keys: list[str] = sorted(set(listed) | (set(queried) - stopped - done))
-        journal = {t.key: t for t in records.fetch_all(conn, records.Ticket, sql.select("*").from_("tickets"))}
+        journal = {t.key: t for t in records.select(records.Ticket).all(conn)}
         comments: dict[str, list[records.ObservedComment]] = {}
         # In the order they were first observed, as their numbers say (DESIGN §35).
         query = (
@@ -386,30 +386,23 @@ class Reader:
         for c in records.fetch_all(conn, records.ObservedComment, query):
             comments.setdefault(c.ticket, []).append(c)
         checks: dict[str, list[records.ObservedCheck]] = {}
-        for c in records.fetch_all(
-            conn,
-            records.ObservedCheck,
-            sql.select("*").from_("observed_checks").order_by("name"),
-        ):
+        for c in records.select(records.ObservedCheck).order_by("name").all(conn):
             checks.setdefault(c.pr_url, []).append(c)
         reviews: dict[str, list[records.ObservedReview]] = {}
         query = sql.select("*").from_("observed_reviews").order_by("pr_url, created_at, id")
         for r in records.fetch_all(conn, records.ObservedReview, query):
             reviews.setdefault(r.pr_url, []).append(r)
         branches: dict[str, list[records.ObservedBranch]] = {}
-        for b in records.fetch_all(conn, records.ObservedBranch, sql.select("*").from_("observed_branches")):
+        for b in records.select(records.ObservedBranch).all(conn):
             branches.setdefault(b.repository, []).append(b)
         return cls(
             ctx=ctx,
             cutoff=cutoff,
             keys=keys,
             journal=journal,
-            observed={
-                t.key: t
-                for t in records.fetch_all(conn, records.ObservedTicket, sql.select("*").from_("observed_tickets"))
-            },
+            observed={t.key: t for t in records.select(records.ObservedTicket).all(conn)},
             comments=comments,
-            prs={p.url: p for p in records.fetch_all(conn, records.ObservedPr, sql.select("*").from_("observed_prs"))},
+            prs={p.url: p for p in records.select(records.ObservedPr).all(conn)},
             checks=checks,
             reviews=reviews,
             branches=branches,
@@ -699,14 +692,12 @@ def _query_run(
     kind: SourceKind,
     column: Literal["query_result", "review_query_result"],
 ) -> records.ConnectorRun | None:
-    return records.fetch_one(
-        conn,
-        records.ConnectorRun,
-        sql.select("*")
-        .from_("connector_runs")
+    return (
+        records.select(records.ConnectorRun)
         .where("kind = ? AND {} IS NOT NULL", kind, sql.name(column))
         .order_by("id DESC")
-        .limit(1),
+        .limit(1)
+        .one(conn)
     )
 
 

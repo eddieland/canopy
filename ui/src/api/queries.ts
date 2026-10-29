@@ -48,6 +48,7 @@ export const keys = {
     tickDetail: (id: number) => ['ticks', id] as const,
     worktrees: ['worktrees'] as const,
     host: ['host'] as const,
+    hostSamples: ['host-samples'] as const,
     spend: ['spend'] as const,
     // Under the spend's key, so the stream's `spend.updated` marks every window's breakdown stale.
     spendBreakdown: (range: SpendBreakdownRange) =>
@@ -445,6 +446,18 @@ export const HOST_REFRESH_MS = 10_000
 export const hostQuery = queryOptions({
     queryKey: keys.host,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/host', { signal })),
+    refetchInterval: HOST_REFRESH_MS,
+    refetchIntervalInBackground: false,
+})
+
+/**
+ * The machine's readings over the last hour, for the system resources page's graphs: kept by the server in memory,
+ * read every 10 seconds whether a page is open or not. Read as the host's resources are, every 10 seconds while the
+ * page shows them and its tab is visible, so each read finds a new one.
+ */
+export const hostSamplesQuery = queryOptions({
+    queryKey: keys.hostSamples,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/host/samples', { signal })),
     refetchInterval: HOST_REFRESH_MS,
     refetchIntervalInBackground: false,
 })

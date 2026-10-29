@@ -217,10 +217,10 @@ def current(conn: sqlite3.Connection, key: str) -> records.FeedbackPlan | None:
     Returns:
         The plan's row, or None when the ticket has none.
     """
-    return records.fetch_one(
-        conn,
-        records.FeedbackPlan,
-        sql.select("*").from_("feedback_plans").where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
+    return (
+        records.select(records.FeedbackPlan)
+        .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED)
+        .one(conn)
     )
 
 
@@ -230,11 +230,7 @@ def get(conn: sqlite3.Connection, plan_id: int) -> records.FeedbackPlan | None:
     Returns:
         The plan's row, or None when there is none.
     """
-    return records.fetch_one(
-        conn,
-        records.FeedbackPlan,
-        sql.select("*").from_("feedback_plans").where("id = ?", plan_id),
-    )
+    return records.select(records.FeedbackPlan).where("id = ?", plan_id).one(conn)
 
 
 def of_run(conn: sqlite3.Connection, run_id: int) -> records.FeedbackPlan | None:
@@ -243,11 +239,7 @@ def of_run(conn: sqlite3.Connection, run_id: int) -> records.FeedbackPlan | None
     Returns:
         The plan's row, or None when the run wrote none: a run of another kind, or a plan run that failed.
     """
-    return records.fetch_one(
-        conn,
-        records.FeedbackPlan,
-        sql.select("*").from_("feedback_plans").where("run_id = ?", run_id),
-    )
+    return records.select(records.FeedbackPlan).where("run_id = ?", run_id).one(conn)
 
 
 def history(conn: sqlite3.Connection, key: str) -> list[records.FeedbackPlan]:
@@ -256,11 +248,7 @@ def history(conn: sqlite3.Connection, key: str) -> list[records.FeedbackPlan]:
     Returns:
         The plans' rows, oldest first.
     """
-    return records.fetch_all(
-        conn,
-        records.FeedbackPlan,
-        sql.select("*").from_("feedback_plans").where("ticket_key = ?", key).order_by("id"),
-    )
+    return records.select(records.FeedbackPlan).where("ticket_key = ?", key).order_by("id").all(conn)
 
 
 def items(conn: sqlite3.Connection, plan_id: int) -> list[records.FeedbackPlanItem]:
@@ -269,11 +257,7 @@ def items(conn: sqlite3.Connection, plan_id: int) -> list[records.FeedbackPlanIt
     Returns:
         The items' rows, by number.
     """
-    return records.fetch_all(
-        conn,
-        records.FeedbackPlanItem,
-        sql.select("*").from_("feedback_plan_items").where("plan_id = ?", plan_id).order_by("number"),
-    )
+    return records.select(records.FeedbackPlanItem).where("plan_id = ?", plan_id).order_by("number").all(conn)
 
 
 def authors(conn: sqlite3.Connection, plan_id: int) -> dict[feedback_items.Key, str | None]:
@@ -282,11 +266,7 @@ def authors(conn: sqlite3.Connection, plan_id: int) -> dict[feedback_items.Key, 
     Returns:
         Each author, None where the source named none, by PR, kind, and observed id.
     """
-    rows = records.fetch_all(
-        conn,
-        records.FeedbackPlanSeen,
-        sql.select("*").from_("feedback_plan_seen").where("plan_id = ? AND answers IS NULL", plan_id),
-    )
+    rows = records.select(records.FeedbackPlanSeen).where("plan_id = ? AND answers IS NULL", plan_id).all(conn)
     return {(r.pr_url, PlanItem(r.item), r.item_id): r.author for r in rows}
 
 
@@ -547,10 +527,8 @@ def note_moves(conn: sqlite3.Connection, config: Config, ws: Workspace) -> None:
     """
     if config.policy.feedback_plan != "approve":
         return
-    waiting = records.fetch_all(
-        conn,
-        records.FeedbackPlan,
-        sql.select("*").from_("feedback_plans").where("status = ? AND spent_run_id IS NULL", PlanStatus.PROPOSED),
+    waiting = (
+        records.select(records.FeedbackPlan).where("status = ? AND spent_run_id IS NULL", PlanStatus.PROPOSED).all(conn)
     )
     now = db.now()
     with db.transaction(conn):
@@ -885,22 +863,16 @@ def state_section(
     """
     key = ticket.key
     on = config.policy.feedback_plan == "approve"
-    run = records.fetch_one(
-        conn,
-        records.Run,
-        sql.select("*")
-        .from_("runs")
+    run = (
+        records.select(records.Run)
         .where("ticket_key = ? AND kind = ? AND id > ?", key, RunKind.FEEDBACK_PLAN, ticket.forgotten_run_id or 0)
         .order_by("id DESC")
-        .limit(1),
+        .limit(1)
+        .one(conn)
     )
     if not on and run is None:
         return None
-    newest = records.fetch_one(
-        conn,
-        records.FeedbackPlan,
-        sql.select("*").from_("feedback_plans").where("ticket_key = ?", key).order_by("id DESC").limit(1),
-    )
+    newest = records.select(records.FeedbackPlan).where("ticket_key = ?", key).order_by("id DESC").limit(1).one(conn)
     replied = _replied(conn, ticket)
     blocked = (
         run is not None

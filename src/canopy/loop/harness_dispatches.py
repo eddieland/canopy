@@ -26,7 +26,7 @@ from enum import IntEnum
 from typing import TYPE_CHECKING, TypedDict, assert_never
 
 from canopy.chores import start as chore_start
-from canopy.core import chore_view, conversation, db, records, sql
+from canopy.core import chore_view, conversation, db, records
 from canopy.core.vocab import Decider, Phase, ResumeReason, RunKind
 from canopy.loop import attention, phases
 from canopy.runs import dispatch, feedback_plans
@@ -379,11 +379,7 @@ def _label(ctx: Context, key: str) -> str | None:
     Returns:
         The first of `tracker.labels` it carries, or None.
     """
-    seen = records.fetch_one(
-        ctx.conn,
-        records.ObservedTicket,
-        sql.select("*").from_("observed_tickets").where("key = ?", key),
-    )
+    seen = records.select(records.ObservedTicket).where("key = ?", key).one(ctx.conn)
     if seen is None:
         return None
     names = {label["name"] for label in phases.labels_of(seen)}

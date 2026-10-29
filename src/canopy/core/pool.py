@@ -561,18 +561,15 @@ class CanopyPool:
                 sql.execute(self.conn, sql.delete("slots").where_in("path", gone))
 
     def _rows(self) -> list[records.PoolSlot]:
-        return records.fetch_all(
-            self.conn,
-            records.PoolSlot,
-            sql.select("*").from_("slots").where("repo = ?", self.repo).order_by("CAST(name AS INTEGER), name"),
+        return (
+            records.select(records.PoolSlot)
+            .where("repo = ?", self.repo)
+            .order_by("CAST(name AS INTEGER), name")
+            .all(self.conn)
         )
 
     def _row(self, path: Path) -> records.PoolSlot | None:
-        return records.fetch_one(
-            self.conn,
-            records.PoolSlot,
-            sql.select("*").from_("slots").where("path = ?", str(path)),
-        )
+        return records.select(records.PoolSlot).where("path = ?", str(path)).one(self.conn)
 
     def _seeded(self, path: Path) -> list[str]:
         row = self._row(path)

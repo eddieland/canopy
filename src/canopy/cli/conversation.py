@@ -923,7 +923,8 @@ def _echo_message(m: records.Message) -> None:
 
 def _show_run(ctx: Context, run_id: int) -> None:
     try:
-        click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id)))
+        # A card is the operator's alone (DESIGN §41): not printed inside one of canopy's ticks or runs.
+        click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id), card=conversation.is_operator()))
     except reports.Refused as e:
         raise CliError(str(e)) from None
 

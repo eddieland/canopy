@@ -262,7 +262,7 @@ def test_a_review_query_not_read_fresh_keeps_no_pr_of_no_ticket_where_the_overse
     connector_state.write_text(json.dumps({"github": {"end": {"repositories": ["repo"]}}}))
     scenario.tick(queried=None if tracker else [])
     assert scenario.state()["observations"]["review_query"]["observed"] == "stale"
-    assert [pr["url"] for pr in scenario.state()["reviews"]["prs"]] == ([] if tracker else [PR])
+    assert [pr["url"] for pr in scenario.state()["reviews"].get("prs", [])] == ([] if tracker else [PR])
 
 
 def derive_conflicted(conn: sqlite3.Connection, tick_id: int, key: str) -> None:

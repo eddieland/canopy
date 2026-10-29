@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, Group, open_context
-from canopy.core import conversation, records, replies, sql
+from canopy.core import conversation, records, replies
 from canopy.core.memory_text import visible
 from canopy.core.vocab import DraftKind, DraftStatus, Reaction, ReviewItem
 from canopy.infra import logs
@@ -66,10 +66,10 @@ def cmd_list(click_ctx: click.Context, subject: str | None) -> int:
     Each comes with its thread as last read, its text, and its hash.
     """
     ctx = open_context(click_ctx)
-    query = sql.select("*").from_("drafts").where_in("status", _OPEN).order_by("run_id, number")
+    query = records.select(records.Draft).where_in("status", _OPEN).order_by("run_id, number")
     if subject is not None:
         query = query.where("ticket_key = ? OR pr_url = ?", subject, subject)
-    found = records.fetch_all(ctx.conn, records.Draft, query)
+    found = query.all(ctx.conn)
     click.echo(f"Review replies: {ctx.config.trust.review_replies}.")
     if not found:
         click.echo(f"\nNo drafts wait on you{f' for {subject}' if subject else ''}.")
@@ -281,15 +281,13 @@ def _print(conn: sqlite3.Connection, draft: records.Draft) -> None:
     if note:
         click.echo(f"  {note}")
     if draft.kind is DraftKind.THREAD and draft.thread_id is not None:
-        for c in records.fetch_all(
-            conn,
-            records.ObservedReview,
-            sql.select("*")
-            .from_("observed_reviews")
+        for c in (
+            records.select(records.ObservedReview)
             .where("pr_url = ?", draft.pr_url)
             .where("item = ?", ReviewItem.COMMENT)
             .where("thread_id = ?", draft.thread_id)
-            .order_by("created_at, id"),
+            .order_by("created_at, id")
+            .all(conn)
         ):
             click.echo(f"  > {c.author} at {c.created_at}: {visible(' '.join(c.body.split()))}")
     if draft.reacted is not None and draft.status is not DraftStatus.SENT:

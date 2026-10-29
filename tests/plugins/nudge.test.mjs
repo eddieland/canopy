@@ -141,3 +141,31 @@ test("under OpenCode 2, the line goes first in the result's content", async () =
         { type: "text", text: "ok" },
     ]);
 });
+
+test("under OpenCode 2, a failed call counts toward the nudge, and a refused status call resets nothing", async () => {
+    /** @type {Record<string, (event: object) => Promise<void>>} */
+    const tool = {};
+    const registered = async () => ({ dispose: async () => {} });
+    await canopy.setup({
+        tool: {
+            hook: async (name, callback) => {
+                tool[name] = callback;
+                return { dispose: async () => {} };
+            },
+            list: async () => [],
+        },
+        session: { hook: registered },
+        mcp: { list: async () => ({ data: [] }) },
+    });
+    const call = { sessionID: "ses_1", agent: "a", messageID: "m", id: "call_1", input: {} };
+    for (let n = 0; n < 18; n++) {
+        await tool["execute.after"]({ ...call, tool: "read", status: "error", error: { message: "no" } });
+    }
+    await tool["execute.after"]({ ...call, tool: STATUS, status: "error", error: { message: "refused" } });
+    const asked = { ...call, tool: "read", status: "completed", result: { output: "ok" } };
+    await tool["execute.after"](asked);
+    assert.deepEqual(asked.result.content, [
+        { type: "text", text: ASKED },
+        { type: "text", text: "ok" },
+    ]);
+});

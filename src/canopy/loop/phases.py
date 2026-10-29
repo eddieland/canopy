@@ -160,13 +160,11 @@ def recorded(conn: sqlite3.Connection, tick_id: int) -> list[Derived]:
     Returns:
         Each ticket's own row, then its units', by key.
     """
-    rows = records.fetch_all(
-        conn,
-        records.Derivation,
-        sql.select("*")
-        .from_("derivations")
+    rows = (
+        records.select(records.Derivation)
         .where("tick_id = ?", tick_id)
-        .order_by("ticket_key, repo IS NOT NULL, repo"),
+        .order_by("ticket_key, repo IS NOT NULL, repo")
+        .all(conn)
     )
     return [
         Derived(
@@ -225,13 +223,11 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     Returns:
         One comparison per ticket the tick derived, by key.
     """
-    rows = records.fetch_all(
-        conn,
-        records.Derivation,
-        sql.select("*")
-        .from_("derivations")
+    rows = (
+        records.select(records.Derivation)
         .where("tick_id = ?", tick_id)
-        .order_by("ticket_key, repo IS NOT NULL, repo"),
+        .order_by("ticket_key, repo IS NOT NULL, repo")
+        .all(conn)
     )
     by_ticket: dict[str, list[records.Derivation]] = {}
     for row in rows:
@@ -289,17 +285,15 @@ def fresh_repos(
         Their names.
     """
     fresh = {repo for repo, found in branches.items() if any(db.parse_time(b.observed_at) >= cutoff for b in found)}
-    runs = records.fetch_all(
-        conn,
-        records.ConnectorRun,
-        sql.select("*")
-        .from_("connector_runs")
+    runs = (
+        records.select(records.ConnectorRun)
         .where(
             "kind = ? AND status = ? AND ended_at >= ?",
             SourceKind.VCS,
             ConnectorRunStatus.OK,
             db.format_time(cutoff),
-        ),
+        )
+        .all(conn)
     )
     for run in runs:
         asked = json.loads(run.request)
@@ -459,14 +453,14 @@ class _World:
         for c in records.fetch_all(conn, records.ObservedComment, query):
             comments.setdefault(c.ticket, []).append(c)
         checks: dict[str, list[records.ObservedCheck]] = {}
-        for c in records.fetch_all(conn, records.ObservedCheck, sql.select("*").from_("observed_checks")):
+        for c in records.select(records.ObservedCheck).all(conn):
             checks.setdefault(c.pr_url, []).append(c)
         reviews: dict[str, list[records.ObservedReview]] = {}
         query = sql.select("*").from_("observed_reviews").order_by("pr_url, created_at, id")
         for r in records.fetch_all(conn, records.ObservedReview, query):
             reviews.setdefault(r.pr_url, []).append(r)
         branches: dict[str, list[records.ObservedBranch]] = {}
-        for b in records.fetch_all(conn, records.ObservedBranch, sql.select("*").from_("observed_branches")):
+        for b in records.select(records.ObservedBranch).all(conn):
             branches.setdefault(b.repository, []).append(b)
         running = {str(r["ticket_key"]) for r in db.running_runs(conn, "runs")}
         return cls(
@@ -475,12 +469,9 @@ class _World:
             cutoff=cutoff,
             keys=keys,
             tickets=tickets,
-            observed={
-                t.key: t
-                for t in records.fetch_all(conn, records.ObservedTicket, sql.select("*").from_("observed_tickets"))
-            },
+            observed={t.key: t for t in records.select(records.ObservedTicket).all(conn)},
             comments=comments,
-            prs={p.url: p for p in records.fetch_all(conn, records.ObservedPr, sql.select("*").from_("observed_prs"))},
+            prs={p.url: p for p in records.select(records.ObservedPr).all(conn)},
             checks=checks,
             reviews=reviews,
             branches=branches,

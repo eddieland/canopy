@@ -381,11 +381,7 @@ def last_query_at(conn: sqlite3.Connection) -> str | None:
 
 def previous_tick(conn: sqlite3.Connection, tick_id: int) -> records.Tick | None:
     """Return the tick before `tick_id`, whatever its status, or None if it is the first."""
-    return records.fetch_one(
-        conn,
-        records.Tick,
-        sql.select("*").from_("ticks").where("id < ?", tick_id).order_by("id DESC").limit(1),
-    )
+    return records.select(records.Tick).where("id < ?", tick_id).order_by("id DESC").limit(1).one(conn)
 
 
 def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
@@ -482,7 +478,7 @@ def abandon_unfinished_ticks(conn: sqlite3.Connection) -> list[int]:
 
 def get_tick(conn: sqlite3.Connection, tick_id: int) -> records.Tick | None:
     """Return the tick row with `tick_id`, or None."""
-    return records.fetch_one(conn, records.Tick, sql.select("*").from_("ticks").where("id = ?", tick_id))
+    return records.select(records.Tick).where("id = ?", tick_id).one(conn)
 
 
 def tick_neighbours(conn: sqlite3.Connection, tick_id: int) -> tuple[int | None, int | None]:
@@ -498,7 +494,7 @@ def tick_neighbours(conn: sqlite3.Connection, tick_id: int) -> tuple[int | None,
 
 def last_tick(conn: sqlite3.Connection) -> records.Tick | None:
     """Return the most recent tick row, or None."""
-    return records.fetch_one(conn, records.Tick, sql.select("*").from_("ticks").order_by("id DESC").limit(1))
+    return records.select(records.Tick).order_by("id DESC").limit(1).one(conn)
 
 
 # Tickets
@@ -627,30 +623,26 @@ def ticket_titles(conn: sqlite3.Connection, keys: Collection[str]) -> dict[str, 
 
 def units(conn: sqlite3.Connection, key: str) -> list[records.TicketUnit]:
     """Return `key`'s units, by repository."""
-    return records.fetch_all(
-        conn,
-        records.TicketUnit,
-        sql.select("*").from_("ticket_units").where("ticket_key = ?", key).order_by("repo"),
-    )
+    return records.select(records.TicketUnit).where("ticket_key = ?", key).order_by("repo").all(conn)
 
 
 def all_units(conn: sqlite3.Connection) -> dict[str, list[records.TicketUnit]]:
     """Return every ticket's units, by ticket key, each list by repository."""
     found: dict[str, list[records.TicketUnit]] = {}
-    query = sql.select("*").from_("ticket_units").order_by("ticket_key, repo")
-    for row in records.fetch_all(conn, records.TicketUnit, query):
+    query = records.select(records.TicketUnit).order_by("ticket_key, repo")
+    for row in query.all(conn):
         found.setdefault(row.ticket_key, []).append(row)
     return found
 
 
 def get_ticket(conn: sqlite3.Connection, key: str) -> records.Ticket | None:
     """Return the ticket row for `key`, or None."""
-    return records.fetch_one(conn, records.Ticket, sql.select("*").from_("tickets").where("key = ?", key))
+    return records.select(records.Ticket).where("key = ?", key).one(conn)
 
 
 def open_tickets(conn: sqlite3.Connection) -> list[records.Ticket]:
     """Return the tickets not marked done, by key."""
-    return records.fetch_all(conn, records.Ticket, sql.select("*").from_("tickets").where("done = 0").order_by("key"))
+    return records.select(records.Ticket).where("done = 0").order_by("key").all(conn)
 
 
 def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
@@ -918,7 +910,7 @@ def run_reasons(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int, t
     """Return why each `resume` in `run_ids` ran, in the vocabulary's order (DESIGN §8). A run with none is missing."""
     if not run_ids:
         return {}
-    rows = records.fetch_all(conn, records.RunReason, sql.select("*").from_("run_reasons").where_in("run_id", run_ids))
+    rows = records.select(records.RunReason).where_in("run_id", run_ids).all(conn)
     found: dict[int, set[ResumeReason]] = {}
     for row in rows:
         found.setdefault(row.run_id, set()).add(row.reason)
@@ -934,11 +926,7 @@ def reasons_in(row: sqlite3.Row) -> tuple[ResumeReason, ...]:
 
 def run_slots(conn: sqlite3.Connection, run_id: int) -> list[records.RunSlot]:
     """Return the slots run `run_id` leased, by repository."""
-    return records.fetch_all(
-        conn,
-        records.RunSlot,
-        sql.select("*").from_("run_slots").where("run_id = ?", run_id).order_by("repo"),
-    )
+    return records.select(records.RunSlot).where("run_id = ?", run_id).order_by("repo").all(conn)
 
 
 def all_run_slots(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int, list[records.RunSlot]]:
@@ -946,8 +934,8 @@ def all_run_slots(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int,
     found: dict[int, list[records.RunSlot]] = {i: [] for i in run_ids}
     if not run_ids:
         return found
-    query = sql.select("*").from_("run_slots").where_in("run_id", run_ids).order_by("run_id, repo")
-    for row in records.fetch_all(conn, records.RunSlot, query):
+    query = records.select(records.RunSlot).where_in("run_id", run_ids).order_by("run_id, repo")
+    for row in query.all(conn):
         found[row.run_id].append(row)
     return found
 
@@ -1029,13 +1017,11 @@ def run_tools(conn: sqlite3.Connection, table: RunTable | Literal["ticks"], run_
     Returns:
         A row per tool it called, the most characters returned first; empty for a run that printed no tool call.
     """
-    return records.fetch_all(
-        conn,
-        records.RunTool,
-        sql.select("*")
-        .from_("run_tools")
+    return (
+        records.select(records.RunTool)
         .where("run_table = ? AND run_id = ?", table, run_id)
-        .order_by("result_chars DESC, tool"),
+        .order_by("result_chars DESC, tool")
+        .all(conn)
     )
 
 
@@ -1224,12 +1210,11 @@ def latest_runs(conn: sqlite3.Connection) -> dict[str, records.Run]:
     """Return each ticket's most recent run, by ticket key: none for a ticket forgotten since its latest run."""
     newest = sql.select("max(id)").from_("runs").where("ticket_key = r.ticket_key")
     query = (
-        sql.select("r.*")
-        .from_("runs r")
+        records.select(records.Run, "r")
         .left_join("tickets t ON t.key = r.ticket_key")
         .where("r.id = ({}) AND r.id > coalesce(t.forgotten_run_id, 0)", newest)
     )
-    return {r.ticket_key: r for r in records.fetch_all(conn, records.Run, query)}
+    return {r.ticket_key: r for r in query.all(conn)}
 
 
 def record_decision(
@@ -1286,11 +1271,7 @@ def record_persona_text(conn: sqlite3.Connection, digest: str | None, text: str 
 
 def persona_text(conn: sqlite3.Connection, digest: str) -> str | None:
     """Return the text of the persona whose digest is `digest`, as a run was given it, or None if none was kept."""
-    found = records.fetch_one(
-        conn,
-        records.PersonaText,
-        sql.select("*").from_("persona_texts").where("digest = ?", digest),
-    )
+    found = records.select(records.PersonaText).where("digest = ?", digest).one(conn)
     return found.text if found is not None else None
 
 
@@ -1302,11 +1283,7 @@ def has_runs(conn: sqlite3.Connection, key: str) -> bool:
 
 def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[records.Decision]:
     """Return a tick's decisions in the order they were recorded."""
-    return records.fetch_all(
-        conn,
-        records.Decision,
-        sql.select("*").from_("decisions").where("tick_id = ?", tick_id).order_by("id"),
-    )
+    return records.select(records.Decision).where("tick_id = ?", tick_id).order_by("id").all(conn)
 
 
 def last_tick_decisions(conn: sqlite3.Connection, action: str) -> list[records.Decision]:
@@ -1323,29 +1300,19 @@ def last_tick_decisions(conn: sqlite3.Connection, action: str) -> list[records.D
         .order_by("k.id DESC")
         .limit(1)
     )
-    return records.fetch_all(
-        conn,
-        records.Decision,
-        sql.select("*").from_("decisions").where("tick_id = ({}) AND action = ?", newest, action).order_by("id"),
+    return (
+        records.select(records.Decision).where("tick_id = ({}) AND action = ?", newest, action).order_by("id").all(conn)
     )
 
 
 def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[records.Decision]:
     """Return the latest `limit` decisions about ticket `key`, its units' included, across ticks, newest first."""
-    return records.fetch_all(
-        conn,
-        records.Decision,
-        sql.select("*").from_("decisions").where("ticket_key = ?", key).order_by("id DESC").limit(limit),
-    )
+    return records.select(records.Decision).where("ticket_key = ?", key).order_by("id DESC").limit(limit).all(conn)
 
 
 def decisions_about_pr(conn: sqlite3.Connection, url: str, limit: int) -> list[records.Decision]:
     """Return the latest `limit` decisions that name the PR at `url`, across ticks, newest first."""
-    return records.fetch_all(
-        conn,
-        records.Decision,
-        sql.select("*").from_("decisions").where("pr = ?", url).order_by("id DESC").limit(limit),
-    )
+    return records.select(records.Decision).where("pr = ?", url).order_by("id DESC").limit(limit).all(conn)
 
 
 def last_decision_of(conn: sqlite3.Connection, key: str) -> str | None:
@@ -1368,8 +1335,8 @@ def last_decision_of(conn: sqlite3.Connection, key: str) -> str | None:
 
 def recent_ticks(conn: sqlite3.Connection, limit: int) -> list[tuple[records.Tick, int]]:
     """Return the latest `limit` ticks, newest first, each with how many decisions it recorded."""
-    query = sql.select("*").from_("ticks").order_by("id DESC").limit(limit)
-    return with_decision_counts(conn, records.fetch_all(conn, records.Tick, query))
+    query = records.select(records.Tick).order_by("id DESC").limit(limit)
+    return with_decision_counts(conn, query.all(conn))
 
 
 def with_decision_counts(conn: sqlite3.Connection, ticks: Iterable[records.Tick]) -> list[tuple[records.Tick, int]]:
@@ -1465,18 +1432,16 @@ def comment_message(
     comment_id: str,
 ) -> records.Message | None:
     """Return the message a tracker comment was recorded as, or None if it was not (DESIGN §22, §35)."""
-    return records.fetch_one(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
-        .where("subject_kind = ? AND subject_id = ? AND comment_id = ?", subject_kind, subject_id, comment_id),
+    return (
+        records.select(records.Message)
+        .where("subject_kind = ? AND subject_id = ? AND comment_id = ?", subject_kind, subject_id, comment_id)
+        .one(conn)
     )
 
 
 def get_message(conn: sqlite3.Connection, message_id: int) -> records.Message | None:
     """Return the message with `message_id`, or None."""
-    return records.fetch_one(conn, records.Message, sql.select("*").from_("messages").where("id = ?", message_id))
+    return records.select(records.Message).where("id = ?", message_id).one(conn)
 
 
 def messages_of(
@@ -1489,22 +1454,17 @@ def messages_of(
 ) -> list[records.Message]:
     """Return a subject's latest `limit` messages newer than message id `after`, oldest first."""
     query = (
-        sql.select("*")
-        .from_("messages")
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND id > ?", subject_kind, subject_id, after)
         .order_by("id DESC")
         .limit(limit)
     )
-    return records.fetch_all(conn, records.Message, query)[::-1]
+    return query.all(conn)[::-1]
 
 
 def run_messages(conn: sqlite3.Connection, run_id: int) -> list[records.Message]:
     """Return the messages a run reported, in order."""
-    return records.fetch_all(
-        conn,
-        records.Message,
-        sql.select("*").from_("messages").where("run_id = ?", run_id).order_by("id"),
-    )
+    return records.select(records.Message).where("run_id = ?", run_id).order_by("id").all(conn)
 
 
 def latest_message_id(conn: sqlite3.Connection, *, source: str | None = None, subject_kind: str | None = None) -> int:
@@ -1519,16 +1479,14 @@ def latest_message_id(conn: sqlite3.Connection, *, source: str | None = None, su
 
 def get_start(conn: sqlite3.Connection, subject_kind: str, subject_id: str) -> records.Start | None:
     """Return a subject's start record, or None if the operator never started it."""
-    return records.fetch_one(
-        conn,
-        records.Start,
-        sql.select("*").from_("starts").where("subject_kind = ? AND subject_id = ?", subject_kind, subject_id),
+    return (
+        records.select(records.Start).where("subject_kind = ? AND subject_id = ?", subject_kind, subject_id).one(conn)
     )
 
 
 def starts(conn: sqlite3.Connection) -> list[records.Start]:
     """Return every start record, by subject."""
-    return records.fetch_all(conn, records.Start, sql.select("*").from_("starts").order_by("subject_kind, subject_id"))
+    return records.select(records.Start).order_by("subject_kind, subject_id").all(conn)
 
 
 def set_start(
@@ -1569,10 +1527,12 @@ def set_start(
 
 def running_run_of(conn: sqlite3.Connection, key: str) -> records.Run | None:
     """Return the run working `key` now, if one is."""
-    return records.fetch_one(
-        conn,
-        records.Run,
-        sql.select("*").from_("runs").where("ticket_key = ? AND status = 'running'", key).order_by("id DESC").limit(1),
+    return (
+        records.select(records.Run)
+        .where("ticket_key = ? AND status = 'running'", key)
+        .order_by("id DESC")
+        .limit(1)
+        .one(conn)
     )
 
 
@@ -1796,11 +1756,7 @@ def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: s
 
 def forgets_of(conn: sqlite3.Connection, key: str) -> list[records.Forget]:
     """Return each time the operator forgot ticket `key`'s work, oldest first; the last is the one its row holds."""
-    return records.fetch_all(
-        conn,
-        records.Forget,
-        sql.select("*").from_("forgets").where("ticket_key = ?", key).order_by("id"),
-    )
+    return records.select(records.Forget).where("ticket_key = ?", key).order_by("id").all(conn)
 
 
 def worked_since_forget(conn: sqlite3.Connection, ticket: records.Ticket) -> bool:

@@ -40,19 +40,13 @@ def threads(conn: sqlite3.Connection, key: str) -> list[Thread]:
     Returns:
         The threads, in the order they were written.
     """
-    found = records.fetch_all(
-        conn,
-        records.PlanThread,
-        sql.select("*").from_("plan_threads").where("ticket_key = ?", key).order_by("id"),
-    )
-    replies = records.fetch_all(
-        conn,
-        records.PlanReply,
-        sql.select("r.*")
-        .from_("plan_replies r")
+    found = records.select(records.PlanThread).where("ticket_key = ?", key).order_by("id").all(conn)
+    replies = (
+        records.select(records.PlanReply, "r")
         .join("plan_threads t ON t.id = r.thread_id")
         .where("t.ticket_key = ?", key)
-        .order_by("r.id"),
+        .order_by("r.id")
+        .all(conn)
     )
     return [Thread(t, [r for r in replies if r.thread_id == t.id]) for t in found]
 
@@ -190,11 +184,7 @@ def _thread(conn: sqlite3.Connection, key: str, thread_id: int) -> records.PlanT
     Raises:
         Refused: (`unknown`) the ticket has no such thread.
     """
-    found = records.fetch_one(
-        conn,
-        records.PlanThread,
-        sql.select("*").from_("plan_threads").where("id = ? AND ticket_key = ?", thread_id, key),
-    )
+    found = records.select(records.PlanThread).where("id = ? AND ticket_key = ?", thread_id, key).one(conn)
     if found is None:
         raise Refused("unknown", f"{key} has no plan comment {thread_id}")
     return found

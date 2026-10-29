@@ -118,6 +118,7 @@ function hooksOfJobs() {
  * 2 hands `execute.after` every call, failed ones too, with the result as the tool returned it; it truncates the
  * result after the hook, keeping its head, whatever the tool. So the jobs get each successful call's result as 1 hands
  * them an MCP tool's, its content as a list (`contentOf`), and the hook puts that list back only when a job changed it.
+ * A failed call reaches them with no result, so the nudge counts it and no job writes to it.
  *
  * @param {Context2} ctx
  * @returns {Promise<void>}
@@ -130,12 +131,14 @@ async function setup(ctx) {
     }
     await ctx.tool.hook("execute.after", async (event) => {
         try {
+            const input = { tool: event.tool, sessionID: event.sessionID, callID: event.id, args: event.input };
             if (event.status !== "completed") {
+                // A failed call has no result a job may write to, but the nudge counts it.
+                await after(input, /** @type {any} */ (null));
                 return;
             }
             const content = contentOf(event.result);
             const before = content.length;
-            const input = { tool: event.tool, sessionID: event.sessionID, callID: event.id, args: event.input };
             await after(input, /** @type {any} */ ({ content }));
             if (content.length !== before) {
                 event.result = { ...event.result, content };
@@ -410,7 +413,8 @@ function nudge() {
          */
         "tool.execute.after": async (input, output) => {
             const session = input?.sessionID;
-            if (input?.tool === STATUS_TOOL) {
+            // A `status` call the server refused, which has no result, leaves the card as old as it was.
+            if (input?.tool === STATUS_TOOL && output !== null && output !== undefined) {
                 since.delete(session);
                 asked.delete(session);
                 return;

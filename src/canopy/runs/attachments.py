@@ -187,18 +187,17 @@ def of(conn: sqlite3.Connection, ref: Ref) -> list[records.Attachment]:
         The attachments, in the order they were attached.
     """
     query = (
-        sql.select("*")
-        .from_("attachments")
+        records.select(records.Attachment)
         .where("subject_kind = ? AND subject_id = ? AND removed_at IS NULL", ref.kind, ref.id)
         .order_by("id")
     )
-    return records.fetch_all(conn, records.Attachment, query)
+    return query.all(conn)
 
 
 def get(conn: sqlite3.Connection, attachment_id: int) -> records.Attachment | None:
     """Return attachment `attachment_id`, removed or not, or None if there is none."""
-    query = sql.select("*").from_("attachments").where("id = ?", attachment_id)
-    return records.fetch_one(conn, records.Attachment, query)
+    query = records.select(records.Attachment).where("id = ?", attachment_id)
+    return query.one(conn)
 
 
 def path(state_dir: Path, attachment: records.Attachment) -> Path:

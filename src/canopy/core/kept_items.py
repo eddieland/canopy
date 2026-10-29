@@ -173,13 +173,11 @@ def _answers(conn: sqlite3.Connection, keys: Collection[str]) -> dict[str, list[
     Returns:
         Each message's time, by ticket.
     """
-    messages = records.fetch_all(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    messages = (
+        records.select(records.Message)
         .where("subject_kind = ? AND source = 'operator'", conversation.TICKET)
-        .where_in("subject_id", keys),
+        .where_in("subject_id", keys)
+        .all(conn)
     )
     found: dict[str, list[str]] = {}
     for m in messages:
