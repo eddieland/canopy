@@ -334,6 +334,15 @@ hosted platform for the operator's organization that is its own program, not par
 alone, a local store canopy ships that serves the same tools. canopy reaches Louvre through the agent runtime's MCP
 and a connector, with the operator's own token, and pulls comments rather than listening for them, so H1 holds.
 
+### R27. Rules no linter checks, held by a second review
+
+Gap (M66, §42). Written down 2026-10-29. The team has rules its architect keeps asking for that `AGENTS.md` states and
+no linter checks, and reviewers, canopy's adversarial one included, hold them only sometimes: a rule among many is
+weighed against the whole change, and the reviewer is asked for defects, not style. Asked one plain question of one
+diff, an agent answers it reliably. The operator wants a second review, lighter than the adversarial one, that asks
+their own list of such questions of each change and reports where it fails, so the nits are fixed before a person
+reads the PR, with a record per rule of what it found and what was dismissed, so the list earns its items.
+
 ## Nice to have
 
 - **N1. Local web UI on localhost.** Built in M20, live acceptance pending. Allowed under TRUST_MODEL T8 (C2, D055),

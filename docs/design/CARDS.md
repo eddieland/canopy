@@ -2,7 +2,8 @@
 
 Part of the canopy design, normative like all of it: the card a running worker, planner, or reviewer keeps of where
 its work stands, for the operator. Sections are numbered across the whole design; the [README](README.md) has the
-map. Previous: [The overseer per decision](OVERSEER_PER_DECISION.md).
+map. Previous: [The overseer per decision](OVERSEER_PER_DECISION.md). Next:
+[Checklist reviews](CHECKLIST_REVIEWS.md).
 
 ## 41. Where a running agent stands
 
