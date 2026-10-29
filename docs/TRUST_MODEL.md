@@ -437,9 +437,10 @@ Controls:
   reads the replies in its threads, reads the same file and sends the token only to Slack's API. Both talk to Slack
   through `canopy-http` (D130), following no redirect. The GitHub reader and poster,
   `canopy-connect-github` and `canopy-post-github` (DESIGN §29), read the token `gh` holds for the host a PR's or an
-  issue's URL, or a repository's clone URL in the map, names, when they run, only once `gh` names that host as one it
-  is logged in to, and send it only to that host's API, following no redirect, through `canopy-http` (D130), whose
-  client is bound to one origin; canopy never reads it.
+  issue's URL, a repository's clone URL in the map, or the repository a `tracker` source's `--repo` names in the
+  private config, names, when they run, only once `gh` names that host as one it is logged in to, and send it only to
+  that host's API, following no redirect, through `canopy-http` (D130), whose client is bound to one origin; canopy
+  never reads it.
   `canopy-connect-jira` (DESIGN §30) reads an email and API token from an operator-only file of its own, held to the
   Slack sink's checks, never from canopy's config, argv, journal, or logs, and sends them only to the Jira site the
   operator names, over https, following no redirect, through `canopy-http` (D130). Lint bans network modules in the
