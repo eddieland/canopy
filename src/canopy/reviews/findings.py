@@ -145,10 +145,11 @@ def listed(conn: sqlite3.Connection, since: str) -> list[str]:
     return found
 
 
-def described(conn: sqlite3.Connection, run_id: int, *, card: bool = False) -> str:
+def described(conn: sqlite3.Connection, run_id: int, *, timeout_minutes: int, card: bool = False) -> str:
     """Return review run `run_id` in full, for the operator: the review canopy keeps instead of posting it (D114).
 
-    With `card`, its reviewer's card too, which is the operator's alone (DESIGN §41).
+    With `card`, its reviewer's card too, which is the operator's alone (DESIGN §41), a step on it marked stuck past
+    the last fifth of `timeout_minutes`, a review's time limit.
 
     Raises:
         Unusable: there is no such run.
@@ -168,7 +169,8 @@ def described(conn: sqlite3.Connection, run_id: int, *, card: bool = False) -> s
     # Its reviewer's card, while it runs and its last once it ends (DESIGN §41).
     standing = cards.of(run)
     if card and (standing.card is not None or run.status is ReviewRunStatus.RUNNING):
-        lines += cards.lines(standing, started_at=run.started_at, running=run.status is ReviewRunStatus.RUNNING)
+        running = run.status is ReviewRunStatus.RUNNING
+        lines += cards.lines(standing, started_at=run.started_at, running=running, timeout_minutes=timeout_minutes)
     if stored is not None:
         lines.append(f"verdict {stored.verdict}, impact {stored.impact}" if stored.verdict else "no verdict")
         if stored.summary:

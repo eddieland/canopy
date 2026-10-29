@@ -56,6 +56,7 @@ from canopy.serve.schema import (
     Run,
     RunActivity,
     RunCard,
+    RunCardStep,
     RunsSince,
     RunState,
     ServedModel,
@@ -198,7 +199,8 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
     held = db.all_run_slots(ctx.conn, [run_id] if row["status"] == "running" else []).get(run_id, [])
     served = models_served(ctx.conn, "runs", run_id, ended=row["ended_at"] is not None, session_id=row["session_id"])
     wrote = feedback_plan_views.written(ctx, run_id) if row["kind"] == RunKind.FEEDBACK_PLAN else None
-    return run(row, root, [shown_path(str(s.slot_path), root) for s in held], served, wrote)
+    limit = ctx.config.runtime.worker_timeout_minutes
+    return run(row, root, [shown_path(str(s.slot_path), root) for s in held], served, wrote, timeout_minutes=limit)
 
 
 def models_served(
@@ -276,9 +278,16 @@ def runs(ctx: Context) -> list[Run]:
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     root = ctx.workspace.root
     running_models = ModelsServed(status="running")
+    limit = ctx.config.runtime.worker_timeout_minutes
     return [
         *(
-            run(r, root, [shown_path(str(s.slot_path), root) for s in slots[int(r["id"])]], running_models)
+            run(
+                r,
+                root,
+                [shown_path(str(s.slot_path), root) for s in slots[int(r["id"])]],
+                running_models,
+                timeout_minutes=limit,
+            )
             for r in running
         ),
         *(run(r, root, models=m) for r, m in zip(recent, runs_served(ctx.conn, recent), strict=True)),
@@ -340,11 +349,14 @@ def run(
     worktrees: list[str] | None = None,
     models: ModelsServed | None = None,
     feedback_plan: FeedbackPlanWritten | None = None,
+    *,
+    timeout_minutes: int | None = None,
 ) -> Run:
     """One run's row, with the worktrees it holds if it is running, its paths from the workspace `root`.
 
     On the run's own page it carries `models`, the models that served it, and for a `feedback-plan` run
-    `feedback_plan`, the plan it wrote.
+    `feedback_plan`, the plan it wrote. `timeout_minutes`, a worker's time limit, says when a step on its card is
+    stuck; with None, none is.
 
     Returns:
         The run as the API sends it. A status it does not know reads as `failed`.
@@ -373,7 +385,7 @@ def run(
         worktrees=worktrees or [],
         log_path=shown_path(str(row["log_path"]), root),
         activity=_activity(row) if status == "running" else None,
-        card=card(row, running=status == "running"),
+        card=card(row, running=status == "running", timeout_minutes=timeout_minutes),
         persona=str(row["persona"]) if row["persona"] is not None else None,
         persona_digest=str(row["persona_digest"]) if row["persona_digest"] is not None else None,
         model=str(row["model"]) if row["model"] is not None else None,
@@ -382,11 +394,14 @@ def run(
     )
 
 
-def card(row: sqlite3.Row | records.Row, *, running: bool) -> RunCard | None:
+def card(row: sqlite3.Row | records.Row, *, running: bool, timeout_minutes: int | None) -> RunCard | None:
     """A run's or a review run's card as the API sends it (DESIGN §41), or None when it kept none.
 
+    `timeout_minutes`, the run's time limit, says when a working step is stuck; with None, none is.
+
     Returns:
-        The card, with how old it is, and while the run runs whether and when it goes stale: a page judges the time.
+        The card, with how old it is, and while the run runs whether and when it goes stale, and when each working
+        step is stuck: a page judges the time.
     """
     standing = cards.of(row)
     found = standing.card
@@ -402,6 +417,19 @@ def card(row: sqlite3.Row | records.Row, *, running: bool) -> RunCard | None:
         calls_since=standing.calls_since,
         stale=running and standing.calls_since >= cards.STALE_CALLS,
         stale_at=standing.at + timedelta(minutes=cards.STALE_MINUTES) if running else None,
+        steps=[
+            RunCardStep(
+                title=s.title,
+                status=s.status,
+                stage=s.stage,
+                stuck_at=cards.stuck_at(standing, s.title, timeout_minutes)
+                if running and timeout_minutes is not None
+                else None,
+            )
+            for s in found.steps
+        ],
+        percent=cards.percent(found),
+        stage=cards.working_stage(found),
     )
 
 
@@ -608,7 +636,10 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         units=units,
         limits=[limit(found) for found in backend.limits(ctx, key)]
         + [limit(found, repo=repo) for repo, found in reviews],
-        runs=[run(r, ctx.workspace.root, models=m) for r, m in zip(ran, runs_served(ctx.conn, ran), strict=True)],
+        runs=[
+            run(r, ctx.workspace.root, models=m, timeout_minutes=ctx.config.runtime.worker_timeout_minutes)
+            for r, m in zip(ran, runs_served(ctx.conn, ran), strict=True)
+        ],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
         forgets=[forget(f) for f in db.forgets_of(ctx.conn, key)],
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],

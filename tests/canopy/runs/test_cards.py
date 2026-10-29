@@ -107,6 +107,33 @@ def test_show_prints_the_whole_card_while_it_runs_and_the_last_once_it_ends(
     assert shown[shown.index(head) + 1 :][: len(whole)] == whole
 
 
+def test_a_card_with_steps_shows_how_much_is_done_and_the_stage_under_way(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    with_events(scenario.env, "canopy-worker")
+    planned = {
+        **FIRST,
+        "steps": [
+            {"title": "Add the endpoint", "status": "done", "stage": "api"},
+            {"title": "Call it from the page", "status": "working", "stage": "web"},
+            {"title": "Push", "status": "not_started"},
+        ],
+    }
+    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **planned)]))
+    assert re.search(
+        r"\n    now: reading the code  33% done, stage web  card \d+[sm], 0 calls old\n",
+        scenario.operator("status").out,
+    )
+    shown = scenario.operator("show", f"run:{working.id}").out
+    assert (
+        "\n    steps:  33% done, stage web\n      [x] Add the endpoint (api)\n      [>] Call it from the page (web)\n"
+        in shown
+    )
+    assert "      [ ] Push\n" in shown
+    working.finishes()
+
+
 def test_the_report_a_chores_agent_reads_of_a_run_leaves_its_card_out(scenario: Scenario, git_pool: GitPool) -> None:
     """A card is the operator's alone (DESIGN §41): no agent reads another's."""
     with_events(scenario.env, "canopy-worker")

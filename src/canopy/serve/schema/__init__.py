@@ -212,6 +212,20 @@ class CardStep(Model):
     """What shows it: `tests pass: 42/42`, `pushed abc123`, `not pushed`."""
 
 
+class RunCardStep(Model):
+    """One step of a long job on a running agent's card (DESIGN §41)."""
+
+    title: str
+    """The step, as the agent names it: its plan's, for a worker whose ticket has one."""
+    status: Literal["not_started", "working", "blocked", "done", "skipped"]
+    """Where it stands, as the agent says."""
+    stage: str | None = None
+    """The stage it belongs to; None when the agent named none."""
+    stuck_at: datetime | None = None
+    """While the run runs and the step is working, when it has worked longer than the run's last fifth, from which a
+    page shows it stuck; None otherwise."""
+
+
 class RunCard(Model):
     """Where a worker's, planner's, or reviewer's work stands, in its own words: its latest card (DESIGN §41).
 
@@ -237,6 +251,12 @@ class RunCard(Model):
     stale_at: datetime | None = None
     """While the run runs, when the card goes stale for want of an update by time, 10 minutes after `at`; None once
     it ended. A page marks it stale from then, or when `stale` says so."""
+    steps: list[RunCardStep] = []
+    """For a long job, every step in order; empty when the agent named none."""
+    percent: int | None = None
+    """How much of its steps is done, of those not skipped, rounded down; None with no steps to count."""
+    stage: str | None = None
+    """The stage of its first working step; None when none names one."""
 
 
 class Run(Model):

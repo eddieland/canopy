@@ -7219,6 +7219,16 @@ export type components = {
              */
             now: string;
             /**
+             * Percent
+             * @description How much of its steps is done, of those not skipped, rounded down; None with no steps to count.
+             */
+            percent: number | null;
+            /**
+             * Stage
+             * @description The stage of its first working step; None when none names one.
+             */
+            stage: string | null;
+            /**
              * Stale
              * @description Whether the run has gone 20 tool calls without an update to it while it runs; false once it ended.
              */
@@ -7230,6 +7240,12 @@ export type components = {
              */
             stale_at: string | null;
             /**
+             * Steps
+             * @description For a long job, every step in order; empty when the agent named none.
+             * @default []
+             */
+            steps: components["schemas"]["RunCardStep"][];
+            /**
              * Stuck
              * @description What it said is in its way and it works around; None when it said nothing.
              */
@@ -7239,6 +7255,34 @@ export type components = {
              * @description Where the work stands, in a sentence or two.
              */
             summary: string;
+        };
+        /**
+         * RunCardStep
+         * @description One step of a long job on a running agent's card (DESIGN §41).
+         */
+        RunCardStep: {
+            /**
+             * Stage
+             * @description The stage it belongs to; None when the agent named none.
+             */
+            stage: string | null;
+            /**
+             * Status
+             * @description Where it stands, as the agent says.
+             * @enum {string}
+             */
+            status: "not_started" | "working" | "blocked" | "done" | "skipped";
+            /**
+             * Stuck At
+             * @description While the run runs and the step is working, when it has worked longer than the run's last fifth, from which a
+             *     page shows it stuck; None otherwise.
+             */
+            stuck_at: string | null;
+            /**
+             * Title
+             * @description The step, as the agent names it: its plan's, for a worker whose ticket has one.
+             */
+            title: string;
         };
         /**
          * RunMemory

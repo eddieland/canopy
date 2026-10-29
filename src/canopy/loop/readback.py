@@ -144,7 +144,14 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
     running = run["status"] == RunStatus.RUNNING
     standing = cards.of(run)
     if card and (standing.card is not None or running):
-        lines.extend(cards.lines(standing, started_at=str(run["started_at"]), running=running))
+        lines.extend(
+            cards.lines(
+                standing,
+                started_at=str(run["started_at"]),
+                running=running,
+                timeout_minutes=ctx.config.runtime.worker_timeout_minutes,
+            ),
+        )
     messages = db.run_messages(ctx.conn, run_id)
     if messages:
         lines.append("\nMessages:")
