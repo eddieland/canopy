@@ -40,7 +40,7 @@ from canopy.core import (
     review_revisions,
     review_runs,
 )
-from canopy.core.vocab import DismissalReason, PlanItem, PlanStatus, RunKind
+from canopy.core.vocab import DismissalReason, PlanItem, PlanStatus, ReviewRunStatus, RunKind
 from canopy.infra import logs
 from canopy.infra.text import one_line
 from canopy.loop import attention, readback
@@ -345,7 +345,7 @@ def _stop_review(click_ctx: click.Context, subject: Ref) -> int:
 @click.argument("text", required=False)
 @click.pass_context
 def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
-    """Answer a ticket or a task, note to a chore, or ask for a revision of a review's draft, with TEXT or stdin.
+    """Answer a ticket, a task, or a running agent, note to a chore, or revise a review's draft, with TEXT or stdin.
 
     On a ticket the next tick reads it and a waiting loop wakes. On a public ticket it is your word to the loop, read as
     an authorized reply is, and how you say what to do about an untrusted reviewer's comments (`untrusted_review`). It
@@ -354,11 +354,17 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     On `chore:NAME` it is a note the chore's next runs read, such as a finding to leave out until a date; the loop does
     not wake for it. On `review:ID` it says what to change in that review's draft: the next tick revises it with an
     agent, which reads the PR and the draft and makes a new version, posting nothing, unless you change the draft first.
+
+    On a running run, `run:ID` for a worker or a planner and `review:ID` for a review, TEXT is the letter of one of the
+    options its card's question offers: the agent hears it on its next tool call, and has worked around the question
+    until then. A later letter replaces it.
     """
     _operator("reply")
     subject = _ref(ref, "reply")
     body = text if text is not None else sys.stdin.read()
     ctx = open_context(click_ctx)
+    if subject.kind == conversation.RUN or (subject.kind == conversation.REVIEW and _running_review(ctx, subject)):
+        return _answer(ctx, subject, body)
     if subject.kind == conversation.REVIEW:
         return _note_review(ctx, subject, body)
     try:
@@ -374,6 +380,28 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
         click.echo(f"Message {replied.message_id} on {subject} already says this{answered}; nothing new recorded.")
     if subject.kind == conversation.TASK:
         tasks_cli.replied(ctx, int(subject.id))
+    return 0
+
+
+def _running_review(ctx: Context, subject: Ref) -> bool:
+    run = review_runs.get_review_run(ctx.conn, int(subject.id))
+    return run is not None and run.status is ReviewRunStatus.RUNNING
+
+
+def _answer(ctx: Context, subject: Ref, body: str) -> int:
+    try:
+        answered = conversation.answer(ctx.conn, subject, body)
+    except conversation.Refused as r:
+        raise CliError(f"reply refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info(
+        "question answered",
+        extra={"subject": str(subject), "answer": answered.letter, "already": answered.already, "channel": CLI},
+    )
+    said = f"{subject}'s question: {one_line(answered.question.ask)}"
+    if answered.already:
+        click.echo(f"{said}\nIt was already answered {answered.letter}: {answered.option}. Nothing new recorded.")
+    else:
+        click.echo(f"{said}\nAnswered {answered.letter}: {answered.option}.")
     return 0
 
 

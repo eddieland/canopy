@@ -142,3 +142,41 @@ def test_the_report_a_chores_agent_reads_of_a_run_leaves_its_card_out(scenario: 
     assert "pushing" not in reported
     assert "    now: pushing\n" in scenario.operator("show", f"run:{working.id}").out
     working.finishes()
+
+
+ASKING: Mapping[str, object] = {
+    **FIRST,
+    "question": {
+        "ask": "Keep the old endpoint for the mobile app, or remove it?",
+        "options": ["keep it, deprecated", "remove it now", "ask the mobile team"],
+        "recommend": "A",
+    },
+}
+
+
+def test_the_operator_answers_a_running_workers_question_by_letter(scenario: Scenario, git_pool: GitPool) -> None:
+    with_events(scenario.env, "canopy-worker")
+    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **ASKING)]))
+    ref = f"run:{working.id}"
+    status = scenario.operator("status").out
+    assert re.search(rf"\n    asks you, \d+[sm]: Keep the old .+  canopy reply {ref} A-C \(recommends A\)\n", status)
+    assert f"      waiting on you: canopy reply {ref} LETTER\n" in scenario.operator("show", ref).out
+
+    assert "(bad_answer)" in scenario.operator("reply", ref, "D", code=1).err  # no option D
+    answered = scenario.operator("reply", ref, " b ")
+    assert answered.out.endswith("Answered B: remove it now.\n")
+    assert "Nothing new recorded" in scenario.operator("reply", ref, "B").out
+    assert cards.of(working.row).answer == "B"
+    assert "asks you" not in scenario.operator("status").out
+    assert "      answered B, " in scenario.operator("show", ref).out
+
+    ran = working.finishes()
+    assert "(ended)" in scenario.operator("reply", f"run:{ran.id}", "A", code=1).err
+    assert cards.of(ran.row).answer == "B"
+
+
+def test_a_run_whose_card_asks_nothing_refuses_an_answer(scenario: Scenario, git_pool: GitPool) -> None:
+    with_events(scenario.env, "canopy-worker")
+    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **FIRST)]))
+    assert "(no_question)" in scenario.operator("reply", f"run:{working.id}", "A", code=1).err
+    working.finishes()

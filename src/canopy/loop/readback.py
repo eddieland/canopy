@@ -150,6 +150,7 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
                 started_at=str(run["started_at"]),
                 running=running,
                 timeout_minutes=ctx.config.runtime.worker_timeout_minutes,
+                ref=f"run:{run_id}",
             ),
         )
     messages = db.run_messages(ctx.conn, run_id)

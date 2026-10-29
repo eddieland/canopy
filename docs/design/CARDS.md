@@ -34,6 +34,15 @@ working step's stage. A worker whose ticket has an approved plan (§25) is told 
 operator follows the plan they approved being done; a planner's and a reviewer's are their own. The harness keeps when
 each step was first seen working, on the card before, and one working longer than the run's last fifth is shown stuck.
 
+### Questions while working
+
+A card may ask the operator a question the agent can work around meanwhile, as the Progress plugin's "Work around"
+mode does: the question, two to five options lettered from A, and the one it recommends and works toward. One it
+cannot work around stays a `blocked` final line (§8). A question is as old as the first card that asked it, and the
+cards after it that ask the same keep it and its answer; another question starts over. The operator answers with one
+of its letters, `canopy reply run:ID` or `review:ID`, only while the run runs, and a later letter replaces it. An answer
+is a letter, not words: the agent's own options are all an answer can choose among.
+
 ### Staleness
 
 canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a worker's, planner's, or review's run, it
@@ -47,15 +56,18 @@ its trust in worker text changes (TRUST_MODEL T1). Nothing on a card extends a r
 
 ### Where it shows
 
-`canopy status` and the web UI's running runs show each running run's `now` and how old its card is; `canopy show` of a
-run, `canopy review show` of a review, and their pages in the web UI, the whole card, or the last one once it has ended,
-as a ticket's page does under the run working it. A card that has gone too many tool calls or minutes without an update
-is marked stale rather than going quiet, and `canopy status` names a running run that has kept none that long. No
-notification: the sinks hear of what a run ends with, as before (§20). canopy's report of a run that a chore's agent may
-read (§27) leaves the card out, so no card reaches an agent.
+`canopy status` and the web UI's running runs show each running run's `now` and how old its card is, and the
+former a question waiting on the operator; `canopy show` of a run, `canopy review show` of a review, and their pages in
+the web UI, the whole card, or the last one once it has ended, as a ticket's page does under the run working it. A card
+that has gone too many tool calls or minutes without an update is marked stale rather than going quiet, and `canopy
+status` names a running run that has kept none that long. No notification: the sinks hear of what a run ends with, as
+before (§20). canopy's report of a run that a chore's agent may read (§27) leaves the card out, so no card reaches an
+agent.
 
 ### Rejected
 
 - A model summarising the transcript every few minutes: a run per summary, and it can misread what the agent knows.
 - A file in the worktree the agent writes: it can be committed, and a sandboxed run's writes outside it are refused.
 - The final line alone, as before: it says nothing while the run goes.
+- An answer in the operator's own words: the first operator text to reach a running agent, and one a line made to look
+  like canopy's could forge to say anything; a letter can only choose one of the agent's own options.
