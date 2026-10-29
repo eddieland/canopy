@@ -41,7 +41,12 @@ TOOLS: tuple[Echo, ...] = (
 )
 
 
-def server(*, listing: bool = True, failures: list[str] | None = None) -> canopy_mcp.Server[None, str]:
+def server(
+    *,
+    listing: bool = True,
+    failures: list[str] | None = None,
+    instructions: str | None = None,
+) -> canopy_mcp.Server[None, str]:
     """A server of `TOOLS`, which lists them only with `listing`, and adds each failure's method to `failures`."""
 
     def failed(method: str, error: Exception) -> str:
@@ -56,6 +61,7 @@ def server(*, listing: bool = True, failures: list[str] | None = None) -> canopy
         call=lambda found, arguments: canopy_mcp.said(found.call(arguments, None)),
         failed=failed,
         listing=lambda: listing,
+        instructions=instructions,
     )
 
 
@@ -77,6 +83,13 @@ def test_it_answers_in_the_version_asked_for_or_its_newest() -> None:
                 "serverInfo": {"name": "test", "version": "1.0"},
             },
         }
+
+
+def test_a_server_with_instructions_gives_them_at_initialize() -> None:
+    """A client puts a server's instructions before the model; one without says nothing of them."""
+    hello = ask("initialize", {"protocolVersion": "2025-11-25"}, to=server(instructions="Use echo."))
+    assert isinstance(hello, dict)
+    assert hello["result"]["instructions"] == "Use echo."
 
 
 def test_each_tool_is_listed_with_its_schema_and_annotations_only_while_the_server_lists() -> None:
