@@ -293,10 +293,10 @@ def _print_workers(ctx: Context) -> None:
 
 
 def _print_card(run: sqlite3.Row, ref: str) -> None:
-    """What a running run's card says it does now, and how old the card is (DESIGN §41), and a question it asks you.
+    """What a running run's progress says it does now, and when it last updated it (DESIGN §41), and what it asks you.
 
-    A card is the operator's alone: nothing inside one of canopy's ticks or runs. Nothing before it is stale, unless it
-    asks a question still waiting on you, which `ref`, the run's reference, answers.
+    A run's progress is the operator's alone: nothing inside one of canopy's ticks or runs. Nothing before its update is
+    stale, unless it asks a question still waiting on you, which `ref`, the run's reference, answers.
     """
     if not conversation.is_operator():
         return

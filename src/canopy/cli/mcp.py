@@ -26,7 +26,7 @@ from canopy.runtime import servers
 @click.option(
     "--status",
     is_flag=True,
-    help="Serve a worker's, planner's, or reviewer's run its card's one tool alone, which writes nothing.",
+    help="Serve a worker's, planner's, or reviewer's run the one tool it posts progress with, which writes nothing.",
 )
 @click.option(
     "--git",
@@ -51,8 +51,8 @@ def cmd_mcp(
     `config show`, and `agents` print with `--json`, and `canopy decisions` and `show` of a run or a chore print, and
     nothing else.
     With --git, serve a review's or a plan's run read-only git in the checkouts it names, and nothing else.
-    With --status, serve a worker's, planner's, or reviewer's run the `status` tool, which validates its card and writes
-    nothing: canopy records the card from the call in the events the agent prints (DESIGN §41).
+    With --status, serve a worker's, planner's, or reviewer's run the `status` tool, which validates an update and
+    writes nothing: canopy records the update from the call in the events the agent prints (DESIGN §41).
 
     A run a tool asks for is recorded, and the tick starts it once the overseer's run has ended (DESIGN §40), so no run
     is the server's descendant.

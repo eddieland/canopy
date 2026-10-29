@@ -15,9 +15,9 @@ export type Run = Schemas['Run']
 export type RunsSince = Schemas['RunsSince']
 /** A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8). */
 export type RunActivity = Schemas['RunActivity']
-/** Where a running agent's work stands, in its own words: its latest card (DESIGN §41). */
+/** Where a running agent's work stands, in its own words: its progress (DESIGN §41). */
 export type RunCard = Schemas['RunCard']
-/** A decision a running agent asks the operator for on its card, with the answer they gave (DESIGN §41). */
+/** A decision a running agent asks the operator for in its progress, with the answer they gave (DESIGN §41). */
 export type RunCardQuestion = Schemas['RunCardQuestion']
 /** The operator's answer to a running run's question, as recorded: what `canopy reply run:ID LETTER` says. */
 export type Answered = Schemas['Answered']
