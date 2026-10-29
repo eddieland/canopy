@@ -66,7 +66,21 @@ Accept: Stage 0 recorded. Live: a worker on a toy ticket with a plan shows a car
 minutes, its steps the plan's, and its last card on the ended run; a reviewer's card shows on its review while it
 runs; over a week of real use, `MEASUREMENTS.md` records how often a running card was stale, by role.
 
-Status: not started.
+Status: in progress. Stage 0 read 2026-10-29, from the builds npm ships (`opencode-linux-x64` 1.19.3 and
+`@opencode/cli-linux-x64` 2.1.4), and leaves stage 1's shape as it is. `opencode run --format json` prints a tool
+call's `tool_use` event, its whole input in `part.state.input`, as the call ends (`completed` or `error`), from the
+session's live event stream, not at the session's end: 1 when the part's state turns `completed` or `error`, 2 on
+`session.tool.success` or `session.tool.failed`; an MCP tool's part is a built-in's, named `<server>_<tool>`. So a
+`status` call reaches `_Progress` the moment its server answers, which for a server that writes nothing is at once.
+Neither version cuts a tool's input before printing it, only its output; the bound is the tool's own, so the server
+and the harness both hold the card to it, and the harness reads only a `completed` call. OpenCode's own `todowrite`
+(both versions: `content`, `status` of `pending`, `in_progress`, `completed`, or `cancelled`, and 1's `priority`)
+would not serve for steps: it has no `blocked`, no stage, no proof of what is done, and no summary or `now`, and
+every worker already has it; so steps go on canopy's card in stage 2, and `todowrite` is left as it is.
+Stages 1 and 2 built 2026-10-29 and checked against the fakes: the card is DESIGN §41, the `status` tool served by
+`canopy _mcp --status`, the nudge a job of canopy's plugin, and the card shown in `canopy status`, `canopy show`, and
+the web UI; steps, their share done, their stage, and a stuck step on top. The live checks above and the week of
+`MEASUREMENTS.md` wait on the operator; stage 3 waits for its own go-ahead.
 
 [status]: https://github.com/fullstackhouse/paseo-status
 [progress]: https://github.com/stevecastaneda/paseo-plugins/tree/main/progress

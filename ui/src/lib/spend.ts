@@ -331,6 +331,13 @@ function addCost(a: number | null | undefined, b: number | null | undefined): nu
  */
 export type BudgetState = 'under' | 'headed' | 'over'
 
+/** Where the month stands against its budget, in words: the spend page's panel and the header's readout say it. */
+export const BUDGET_WORD: Record<BudgetState, string> = {
+    under: 'On budget',
+    headed: 'Headed over',
+    over: 'Over budget',
+}
+
 /** Where the month stands against its budget. */
 export function budgetState(month: SpendMonth): BudgetState {
     if (budgetPercent(month) >= 100) {

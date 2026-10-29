@@ -10,7 +10,7 @@ from pathlib import Path
 import click
 
 from canopy.chores import execute, history, install, trial
-from canopy.cli.common import CliError, Group, OverseerCommand, leave_the_tick, open_context
+from canopy.cli.common import CliError, leave_the_tick, open_context
 from canopy.cli.params import CHORE, EXAMPLE_CHORE, TextType, validated, verb
 from canopy.core import conversation, workspace
 from canopy.core.config import ConfigError
@@ -18,12 +18,12 @@ from canopy.infra import logs, procs
 from canopy.loop import chore_tools
 
 
-@click.group("chore", cls=Group)
+@click.group("chore")
 def chore_group() -> None:
     """Run or wait on the operator's chores (the overseer), or run one now by hand (the operator)."""
 
 
-@chore_group.command("run", cls=OverseerCommand)
+@chore_group.command("run", hidden=True)
 @click.argument("name", type=CHORE)
 @click.option(
     "--context",
@@ -36,7 +36,7 @@ def cmd_chore_run(click_ctx: click.Context, name: str, context: str | None) -> i
     return verb(click_ctx, chore_tools.chore_run, chore_tools.ChoreRun, name=name, context=context)
 
 
-@chore_group.command("wait", cls=OverseerCommand)
+@chore_group.command("wait", hidden=True)
 @click.argument("name", type=CHORE)
 @click.option("--rationale", required=True, type=TextType(), help="Why it should not run now, in your own words.")
 @click.pass_context

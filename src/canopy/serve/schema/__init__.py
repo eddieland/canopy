@@ -203,6 +203,62 @@ class FeedbackPlanWritten(Model):
     did, or superseded by a later plan or a request for one."""
 
 
+class CardStep(Model):
+    """A finished step on a running agent's card, with what shows it is done."""
+
+    step: str
+    """What was done."""
+    proof: str
+    """What shows it: `tests pass: 42/42`, `pushed abc123`, `not pushed`."""
+
+
+class RunCardStep(Model):
+    """One step of a long job on a running agent's card (DESIGN §41)."""
+
+    title: str
+    """The step, as the agent names it: its plan's, for a worker whose ticket has one."""
+    status: Literal["not_started", "working", "blocked", "done", "skipped"]
+    """Where it stands, as the agent says."""
+    stage: str | None = None
+    """The stage it belongs to; None when the agent named none."""
+    stuck_at: datetime | None = None
+    """While the run runs and the step is working, when it has worked longer than the run's last fifth, from which a
+    page shows it stuck; None otherwise."""
+
+
+class RunCard(Model):
+    """Where a worker's, planner's, or reviewer's work stands, in its own words: its latest card (DESIGN §41).
+
+    Each field is the agent's text, on one line: untrusted, rendered as text.
+    """
+
+    summary: str
+    """Where the work stands, in a sentence or two."""
+    now: str
+    """What the agent was doing when it wrote the card."""
+    done: list[CardStep] = []
+    """The steps it finished, in order, each with its proof."""
+    next: list[str] = []
+    """What it said was left, in order."""
+    stuck: str | None = None
+    """What it said is in its way and it works around; None when it said nothing."""
+    at: datetime
+    """When canopy recorded it."""
+    calls_since: int
+    """The tool calls the agent ended since: before the run ended, once it has."""
+    stale: bool
+    """Whether the run has gone 20 tool calls without an update to it while it runs; false once it ended."""
+    stale_at: datetime | None = None
+    """While the run runs, when the card goes stale for want of an update by time, 10 minutes after `at`; None once
+    it ended. A page marks it stale from then, or when `stale` says so."""
+    steps: list[RunCardStep] = []
+    """For a long job, every step in order; empty when the agent named none."""
+    percent: int | None = None
+    """How much of its steps is done, of those not skipped, rounded down; None with no steps to count."""
+    stage: str | None = None
+    """The stage of its first working step; None when none names one."""
+
+
 class Run(Model):
     """One worker or split run (`run:ID`)."""
 
@@ -251,6 +307,8 @@ class Run(Model):
     activity: RunActivity | None = None
     """While it runs, its worker's latest tool call; None before the first, for a template that prints no events, and
     once it ends."""
+    card: RunCard | None = None
+    """Its agent's card (DESIGN §41), while it runs and its last once it ends; None when it kept none."""
     persona: str | None = None
     """The persona it ran in (DESIGN §31); None for a kind no persona reaches, or a run from before canopy recorded
     it."""
@@ -724,12 +782,16 @@ class ConfigKey(Model):
     file, where it shadows the user file's for this workspace), the workspace file (a shared `policy.*` key), or
     none."""
     kind: Literal["limit", "stricter", "free"]
-    """`limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries). `free`:
-    set whole to anything the config loader takes (`spend.budget_alerts`, beside the 100% alert always sent)."""
+    """`limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries, a count
+    only goes down, a choice only moves later in `choices`). `free`: set whole to anything the config loader takes
+    (`spend.budget_alerts`, beside the 100% alert always sent)."""
     bound: int | None
-    """A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes. The file can set any."""
+    """A limit's loosest value from the page: a count's ceiling, or a pace's floor. The file can set any."""
     looser: Literal["higher", "lower"] | None
     """Which way loosens a limit: a count's higher, a pace's lower. None for a `stricter` key."""
+    choices: list[str]
+    """A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
+    key."""
 
 
 class ConfigSettings(Model):

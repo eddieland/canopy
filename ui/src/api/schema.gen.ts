@@ -317,6 +317,30 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/host/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the host's readings over the last hour
+         * @description The readings of the machine the server has kept since it started, the last hour's at most, oldest first.
+         *
+         *     Each is the load over a minute, the memory in use, the loop's own, and each disk's free space, read every
+         *     `every_seconds` whether or not a page is open. They are kept in memory alone, so a server that restarts starts
+         *     again with none.
+         */
+        get: operations["getHostSamples"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/loop": {
         parameters: {
             query?: never;
@@ -2470,6 +2494,22 @@ export type components = {
             workers: number;
         };
         /**
+         * CardStep
+         * @description A finished step on a running agent's card, with what shows it is done.
+         */
+        CardStep: {
+            /**
+             * Proof
+             * @description What shows it: `tests pass: 42/42`, `pushed abc123`, `not pushed`.
+             */
+            proof: string;
+            /**
+             * Step
+             * @description What was done.
+             */
+            step: string;
+        };
+        /**
          * ChoreDetail
          * @description One chore: what `canopy show chore:NAME` prints.
          */
@@ -2904,13 +2944,20 @@ export type components = {
         ConfigKey: {
             /**
              * Bound
-             * @description A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes. The file can set any.
+             * @description A limit's loosest value from the page: a count's ceiling, or a pace's floor. The file can set any.
              */
             bound: number | null;
             /**
+             * Choices
+             * @description A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
+             *     key.
+             */
+            choices: string[];
+            /**
              * Kind
-             * @description `limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries). `free`:
-             *     set whole to anything the config loader takes (`spend.budget_alerts`, beside the 100% alert always sent).
+             * @description `limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries, a count
+             *     only goes down, a choice only moves later in `choices`). `free`: set whole to anything the config loader takes
+             *     (`spend.budget_alerts`, beside the 100% alert always sent).
              * @enum {string}
              */
             kind: "limit" | "stricter" | "free";
@@ -3348,6 +3395,22 @@ export type components = {
              * @description Its size.
              */
             total: number;
+        };
+        /**
+         * DiskSample
+         * @description One disk's free space at a reading.
+         */
+        DiskSample: {
+            /**
+             * Free
+             * @description What a process that is not root could still write, in bytes.
+             */
+            free: number;
+            /**
+             * Path
+             * @description The disk's directory, as `Disk.path` names it, so the page finds the disk the sample is of.
+             */
+            path: string;
         };
         /**
          * @description What canopy keeps on a disk: `workspace` its repositories and worktrees, `journal` the journal and the runs' logs, `temp` the temporary directory its agents and their builds write to.
@@ -3972,6 +4035,27 @@ export type components = {
             repo?: string | null;
         };
         /**
+         * HostHistory
+         * @description The readings of the machine the server keeps in memory, from when it started: the last hour's at most.
+         */
+        HostHistory: {
+            /**
+             * Every Seconds
+             * @description The seconds from one reading to the next.
+             */
+            every_seconds: number;
+            /**
+             * Kept
+             * @description How many readings it keeps at most; past that the oldest is dropped.
+             */
+            kept: number;
+            /**
+             * Samples
+             * @description The readings, oldest first. A gap longer than `every_seconds` is a time the server was not reading.
+             */
+            samples: components["schemas"]["HostSample"][];
+        };
+        /**
          * HostResources
          * @description The machine the loop runs on, as read when it was asked.
          */
@@ -4018,6 +4102,38 @@ export type components = {
              * @description Its operating system and release, as `uname` names them, such as `Linux 6.8.0`.
              */
             system: string;
+        };
+        /**
+         * HostSample
+         * @description What the system resources page's graphs draw of one reading of the machine.
+         */
+        HostSample: {
+            /**
+             * At
+             * Format: date-time
+             * @description When it was read.
+             */
+            at: string;
+            /**
+             * Disks
+             * @description Each disk read, in the order `HostResources.disks` has them.
+             */
+            disks: components["schemas"]["DiskSample"][];
+            /**
+             * Load
+             * @description The load average over the last minute; None where the operating system keeps none.
+             */
+            load: number | null;
+            /**
+             * Memory Used
+             * @description The memory not available to a new process, in bytes; None where only Linux's `/proc/meminfo` says.
+             */
+            memory_used: number | null;
+            /**
+             * Rss
+             * @description The memory the loop's process held, in bytes; None where only Linux's `/proc` says.
+             */
+            rss: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -6042,6 +6158,8 @@ export type components = {
              * @description The branch the PR merges into.
              */
             base_branch: string | null;
+            /** @description Its reviewer's card (DESIGN §41), while it runs and its last once it ends; None when it kept none. */
+            card: components["schemas"]["RunCard"] | null;
             /**
              * @description None when there is no diff: a review from before diffs were kept, one whose base could not be read, or one
              *     retention removed.
@@ -6919,6 +7037,8 @@ export type components = {
              * @description The branch it works on.
              */
             branch: string | null;
+            /** @description Its agent's card (DESIGN §41), while it runs and its last once it ends; None when it kept none. */
+            card: components["schemas"]["RunCard"] | null;
             /**
              * Cost Usd
              * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
@@ -7069,6 +7189,107 @@ export type components = {
              * @description The tool's name, as the runtime names it: `bash`, `read`, an MCP server's tool.
              */
             tool: string;
+        };
+        /**
+         * RunCard
+         * @description Where a worker's, planner's, or reviewer's work stands, in its own words: its latest card (DESIGN §41).
+         *
+         *     Each field is the agent's text, on one line: untrusted, rendered as text.
+         */
+        RunCard: {
+            /**
+             * At
+             * Format: date-time
+             * @description When canopy recorded it.
+             */
+            at: string;
+            /**
+             * Calls Since
+             * @description The tool calls the agent ended since: before the run ended, once it has.
+             */
+            calls_since: number;
+            /**
+             * Done
+             * @description The steps it finished, in order, each with its proof.
+             * @default []
+             */
+            done: components["schemas"]["CardStep"][];
+            /**
+             * Next
+             * @description What it said was left, in order.
+             * @default []
+             */
+            next: string[];
+            /**
+             * Now
+             * @description What the agent was doing when it wrote the card.
+             */
+            now: string;
+            /**
+             * Percent
+             * @description How much of its steps is done, of those not skipped, rounded down; None with no steps to count.
+             */
+            percent: number | null;
+            /**
+             * Stage
+             * @description The stage of its first working step; None when none names one.
+             */
+            stage: string | null;
+            /**
+             * Stale
+             * @description Whether the run has gone 20 tool calls without an update to it while it runs; false once it ended.
+             */
+            stale: boolean;
+            /**
+             * Stale At
+             * @description While the run runs, when the card goes stale for want of an update by time, 10 minutes after `at`; None once
+             *     it ended. A page marks it stale from then, or when `stale` says so.
+             */
+            stale_at: string | null;
+            /**
+             * Steps
+             * @description For a long job, every step in order; empty when the agent named none.
+             * @default []
+             */
+            steps: components["schemas"]["RunCardStep"][];
+            /**
+             * Stuck
+             * @description What it said is in its way and it works around; None when it said nothing.
+             */
+            stuck: string | null;
+            /**
+             * Summary
+             * @description Where the work stands, in a sentence or two.
+             */
+            summary: string;
+        };
+        /**
+         * RunCardStep
+         * @description One step of a long job on a running agent's card (DESIGN §41).
+         */
+        RunCardStep: {
+            /**
+             * Stage
+             * @description The stage it belongs to; None when the agent named none.
+             */
+            stage: string | null;
+            /**
+             * Status
+             * @description Where it stands, as the agent says.
+             * @enum {string}
+             */
+            status: "not_started" | "working" | "blocked" | "done" | "skipped";
+            /**
+             * Stuck At
+             * @description While the run runs and the step is working, when it has worked longer than the run's last fifth, from which a
+             *     page shows it stuck; None otherwise.
+             */
+            stuck_at: string | null;
+            /**
+             * Title
+             * @description The step, as the agent names it: its plan's, for a worker whose ticket has one.
+             */
+            title: string;
         };
         /**
          * RunMemory
@@ -7338,6 +7559,11 @@ export type components = {
          * @description What the last day, 30 days, and all time cost, read together, so a month never shows less than its day.
          */
         Spend: {
+            /**
+             * @description The local calendar month so far against the operator's monthly budget, as the header shows it; None when no
+             *     budget is set.
+             */
+            budget: components["schemas"]["SpendMonth"] | null;
             /** @description The last 24 hours. */
             day: components["schemas"]["SpendWindow"];
             /** @description The last 30 days. */
@@ -10589,6 +10815,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HostResources"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getHostSamples: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostHistory"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

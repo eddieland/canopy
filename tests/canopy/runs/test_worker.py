@@ -19,7 +19,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db, definitions, run_models, workspace
+from canopy.core import cards, config, db, definitions, run_models, workspace
 from canopy.core.vocab import RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
@@ -29,6 +29,7 @@ from tests.canopy.helpers import (
     agent_runs,
     commit_and_push,
     has_deadline,
+    inline_servers,
     pool,
     present,
     private_worker_does,
@@ -70,7 +71,10 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     objects = scenario.env.state_dir / "runs" / f"{run.id}.objects"
     # CANOPY_DEADLINE: the moment its timeout fires, for the clock in the snapshot (DESIGN §33).
     assert has_deadline(w, 45, before=before, after=after)
+    # canopy's `status` server, the one server of canopy's a worker is given (DESIGN §41).
+    assert inline_servers(w) == {cards.SERVER: [*cards.SERVER_COMMAND]}
     assert w["env"] == {
+        **{name: w["env"][name] for name in servers.VARIABLES},
         "CANOPY_RUN_ID": str(run.id),
         "CANOPY_GIT_OBJECTS": str(objects),
         "CANOPY_DEADLINE": w["env"]["CANOPY_DEADLINE"],
@@ -101,7 +105,7 @@ def test_a_worker_inherits_no_server_its_process_was_given(scenario: Scenario) -
     with mock.patch.dict(os.environ, given):
         scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)
-    assert not set(given) & set(w["env"])
+    assert inline_servers(w).keys() == {cards.SERVER}
 
 
 @pytest.mark.usefixtures("git_pool")

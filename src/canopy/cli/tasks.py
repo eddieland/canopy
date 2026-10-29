@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli import attachments as attachments_cli
-from canopy.cli.common import CliError, Group, open_context
+from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.core import conversation, plans
 from canopy.core.items import age
@@ -34,7 +34,7 @@ LIST_TEXT = 80
 SHORT_SHA = 12
 
 
-@click.group("task", cls=Group)
+@click.group("task")
 def task_group() -> None:
     """Hand canopy one-off work in your own words, about no ticket, and list what you handed it (DESIGN §36)."""
 

@@ -15,6 +15,8 @@ export type Run = Schemas['Run']
 export type RunsSince = Schemas['RunsSince']
 /** A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8). */
 export type RunActivity = Schemas['RunActivity']
+/** Where a running agent's work stands, in its own words: its latest card (DESIGN §41). */
+export type RunCard = Schemas['RunCard']
 /** Which models served an agent run, read from its session after it ended (DESIGN §13), or why none are shown. */
 export type ModelsServed = Schemas['ModelsServed']
 /** One model that wrote an agent run's replies, with how many and what they cost. */
@@ -105,6 +107,10 @@ export type HostResources = Schemas['HostResources']
 export type Disk = Schemas['Disk']
 /** What canopy keeps on a disk. */
 export type DiskUse = Schemas['DiskUse']
+/** The readings of the machine the server keeps in memory, the last hour's at most, oldest first. */
+export type HostHistory = Schemas['HostHistory']
+/** What the system resources page's graphs draw of one reading of the machine. */
+export type HostSample = Schemas['HostSample']
 /** What the last day and the last 30 days cost, read together, so a month never shows less than its day. */
 export type Spend = Schemas['Spend']
 /** What the agent runtime reported spending in the last `hours` hours (DESIGN §13). */
