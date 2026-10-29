@@ -95,6 +95,8 @@ permission:
   "canopy_git_blame": allow
   "canopy_git_grep": allow
   "canopy_git_files": allow
+  # canopy's `status` tool, the run's card for the operator, which writes nothing (DESIGN §41), by exact name too.
+  "canopy_run_status": allow
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy reviewer" or "# canopy reviser" prompt,
