@@ -1929,7 +1929,7 @@ def delete[R: Row](row_type: type[R]) -> Delete[R]:
     return Delete(row_type, sql.delete(row_type.TABLE))  # noqa: TID251
 
 
-def of_table(table: str) -> type[Row]:
+def of_table(table: LiteralString) -> type[Row]:
     """The row type of the journal table named `table`, for a write to a table chosen at run time from a `Literal`.
 
     Returns:
