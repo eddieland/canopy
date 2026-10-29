@@ -52,8 +52,9 @@ nothing; `canopy memory purge --all` clears out what a trial wrote. A run keeps 
 whatever your config says by the time it ends.
 
 While either tier is on, the header shows `memory: recording`, or `memory: in use` once a tier is in use; hover over it
-for each tier's mode, and click it for the memory page. With both off, the header shows nothing, and the memory page
-says memory is off and keeps only purge at its foot, for clearing out what a trial wrote.
+for each tier's mode, what reads it, and how many proposals wait on you, and click it for the memory page. With both
+off, the header shows nothing, and the memory page says memory is off and keeps only purge at its foot, for clearing
+out what a trial wrote.
 
 ## The memory page
 
