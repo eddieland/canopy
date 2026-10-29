@@ -37,7 +37,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr, ValidationError
 
 from canopy.infra import procs
-from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer
+from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer, SkillFile
 from canopy.runtime.opencode2.invocation import CONFIG_DIR_ENV
 
 if TYPE_CHECKING:
@@ -106,7 +106,11 @@ class _Agents(BaseModel):
 class _Skill(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
+    # What its rules match; its `name` is what its file calls it, which the id is made from.
     id: StrictStr
+    description: StrictStr | None = None
+    path: StrictStr = ""
+    content: StrictStr = ""
 
 
 class _Skills(BaseModel):
@@ -146,8 +150,14 @@ class _Loaded:
     """What the server has loaded: canopy's agents' rules, the skills, and the MCP servers, in config's order."""
 
     agents: Mapping[str, Sequence[_Rule]]
-    skills: Sequence[str]
+    #: Each skill as the server read it, sorted by id.
+    skill_files: Sequence[SkillFile]
     servers: Mapping[str, _McpServer]
+
+    @property
+    def skills(self) -> tuple[str, ...]:
+        """The skills' ids, sorted."""
+        return tuple(f.name for f in self.skill_files)
 
 
 class _FailedError(Exception):
@@ -169,6 +179,7 @@ def offerings(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents:
         servers=tuple(loaded.servers),
         disabled_servers=tuple(name for name, server in loaded.servers.items() if server.disabled),
         skills=loaded.skills,
+        skill_files=loaded.skill_files,
         agents=tuple(_offer(loaded, agent) for agent in agents),
     )
 
@@ -192,7 +203,7 @@ def offered(runner: procs.Runner, argv: Sequence[str], *, cwd: Path, env: Mappin
     except _FailedError as e:
         return AgentOffer(agent, error=str(e))
     on = {name: server for name, server in loaded.servers.items() if not server.disabled}
-    return _offer(_Loaded(agents=loaded.agents, skills=loaded.skills, servers=on), agent)
+    return _offer(_Loaded(agents=loaded.agents, skill_files=loaded.skill_files, servers=on), agent)
 
 
 def matches(text: str, pattern: str) -> bool:
@@ -321,7 +332,8 @@ def _loaded(client: _Client, wanted: Collection[str]) -> _Loaded:
     the agents asked about, at most `LOADED_SECONDS`; one still missing then is one whose definition did not load.
 
     Returns:
-        Each agent's rules by its name, the skills' ids, sorted, and the MCP servers in config's order.
+        Each agent's rules by its name, the skills sorted by id, the first of an id kept, and the MCP servers in
+        config's order.
 
     Raises:
         _FailedError: An answer could not be read, or no agent had loaded within `LOADED_SECONDS`.
@@ -343,9 +355,10 @@ def _loaded(client: _Client, wanted: Collection[str]) -> _Loaded:
         mcp = entry.info.mcp if entry.info is not None else None
         # A later definition of a server replaces an earlier one whole.
         servers.update(mcp.servers if mcp is not None else {})
+    files = {s.id: SkillFile(s.id, s.description, s.path, s.content) for s in reversed(skills)}
     return _Loaded(
         agents={agent.id: agent.permissions for agent in agents},
-        skills=tuple(sorted({s.id for s in skills})),
+        skill_files=tuple(files[name] for name in sorted(files)),
         servers=servers,
     )
 

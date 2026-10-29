@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.infra import procs
-from canopy.runtime.agents import AgentOffer, ServerOffer
+from canopy.runtime.agents import AgentOffer, ServerOffer, SkillFile
 from canopy.runtime.opencode import offerings
 from canopy.runtime.opencode.offerings import matches
 
@@ -148,6 +148,24 @@ def test_a_deny_of_some_patterns_only_keeps_the_tool_offered() -> None:
     [worker] = offered(debug, "canopy-worker").agents
     assert worker.servers[0] == ServerOffer("github", "all")
     assert worker.denied_skills == ()
+
+
+def test_each_skill_is_kept_as_opencode_read_it_sorted_by_name() -> None:
+    skills = [
+        *SKILLS,
+        {"name": "terse", "location": "/home/me/.config/opencode/skills/terse/SKILL.md", "content": "Be brief.\n"},
+    ]
+    found = offered(Debug({}, skills=skills))
+    assert found.skills == ("customize-opencode", "terse", "tracker-github", "tracker-jira")
+    assert [f.name for f in found.skill_files] == list(found.skills)
+    assert found.skill_files[0] == SkillFile("customize-opencode", "d", "<built-in>", "x")
+    # A skill whose front matter has no description says so, rather than one made up.
+    assert found.skill_files[1] == SkillFile(
+        "terse",
+        None,
+        "/home/me/.config/opencode/skills/terse/SKILL.md",
+        "Be brief.\n",
+    )
 
 
 @pytest.mark.parametrize(

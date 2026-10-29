@@ -154,6 +154,20 @@ class AgentOffer:
 
 
 @dataclass(frozen=True)
+class SkillFile:
+    """A skill the runtime finds, as it read it: the file it is in, what it says it is for, and its instructions."""
+
+    name: str
+    #: What its front matter says it is for; None when it says nothing.
+    description: str | None
+    #: The file it was read from, as the runtime names it: an absolute path, or the runtime's own mark for a skill built
+    #: into it, such as OpenCode 1's `<built-in>`.
+    path: str
+    #: Its instructions: the file's text after its front matter.
+    body: str
+
+
+@dataclass(frozen=True)
 class Offerings:
     """What the runtime offers canopy's agents, where they start."""
 
@@ -162,6 +176,8 @@ class Offerings:
     disabled_servers: Sequence[str] = ()
     #: Every skill the runtime finds, by name.
     skills: Sequence[str] = ()
+    #: Each of `skills` as the runtime read it, in the same order.
+    skill_files: Sequence[SkillFile] = ()
     agents: Sequence[AgentOffer] = ()
     #: Why the runtime could not list its servers or its skills, or None when it did.
     error: str | None = None

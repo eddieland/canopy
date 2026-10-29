@@ -81,6 +81,12 @@ export type ChoreModel = Schemas['ChoreModel']
 export type PersonaChoice = Schemas['PersonaChoice']
 /** Every persona a run could get, and the one a review request that chooses none is reviewed in (DESIGN §31). */
 export type PersonaList = Schemas['PersonaList']
+/** Every skill the runtime finds, with each one's file and the agents of canopy's offered it (DESIGN §13). */
+export type SkillList = Schemas['SkillList']
+/** A skill the runtime finds: its file, where that is, its text, and which of canopy's agents are offered it. */
+export type Skill = Schemas['Skill']
+/** Where a skill's file is: canopy's own, the workspace's, the operator's home, the runtime's, or elsewhere. */
+export type SkillSource = Schemas['SkillSource']
 /** What trying a chore started: its recorded run, going on in the background (DESIGN §19). */
 export type ChoreTried = Schemas['ChoreTried']
 /** The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended. */

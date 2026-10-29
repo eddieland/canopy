@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import BaseModel, ConfigDict, StrictBool, StrictStr, TypeAdapter
 
 from canopy.infra import procs
-from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer
+from canopy.runtime.agents import AgentOffer, Offerings, Reach, ServerOffer, SkillFile
 from canopy.runtime.opencode import printed
 from canopy.runtime.opencode.invocation import CONFIG_DIR_ENV
 
@@ -92,6 +92,10 @@ class _Skill(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     name: StrictStr
+    description: StrictStr | None = None
+    # The file it was read from, or `<built-in>`.
+    location: StrictStr = ""
+    content: StrictStr = ""
 
 
 _SKILLS = TypeAdapter(tuple[_Skill, ...])
@@ -110,14 +114,16 @@ def offerings(runner: procs.Runner, *, cwd: Path, definitions_dir: Path, agents:
     """
     ask = _Ask(runner, _OPENCODE, cwd, {CONFIG_DIR_ENV: str(definitions_dir)})
     try:
-        config, skills = ask.listed()
+        config, files = ask.listed()
     except _FailedError as e:
         return Offerings(error=str(e))
     servers = tuple(config.mcp)
+    skills = tuple(f.name for f in files)
     return Offerings(
         servers=servers,
         disabled_servers=tuple(name for name, server in config.mcp.items() if not server.enabled),
         skills=skills,
+        skill_files=files,
         agents=tuple(_offer(ask, agent, servers=servers, skills=skills) for agent in agents),
     )
 
@@ -138,11 +144,11 @@ def offered(runner: procs.Runner, argv: Sequence[str], *, cwd: Path, env: Mappin
         return AgentOffer("", error="its command names no agent")
     ask = _Ask(runner, words[: start + 1], cwd, env)
     try:
-        config, skills = ask.listed()
+        config, files = ask.listed()
     except _FailedError as e:
         return AgentOffer(agent, error=str(e))
     servers = tuple(name for name, server in config.mcp.items() if server.enabled)
-    return _offer(ask, agent, servers=servers, skills=skills)
+    return _offer(ask, agent, servers=servers, skills=tuple(f.name for f in files))
 
 
 def matches(text: str, pattern: str) -> bool:
@@ -178,15 +184,16 @@ class _Ask:
         self.cwd = cwd
         self.env = env
 
-    def listed(self) -> tuple[_Config, tuple[str, ...]]:
-        """Return OpenCode's resolved config and every skill it finds, by name, sorted.
+    def listed(self) -> tuple[_Config, tuple[SkillFile, ...]]:
+        """Return OpenCode's resolved config and every skill it finds, sorted by name, the first of a name kept.
 
         Raises:
             _FailedError: either could not be read.
         """
         config = _read(self.run("debug", "config"), _Config.model_validate_json, "debug config")
         listed = _read(self.run("debug", SKILL), _SKILLS.validate_json, "debug skill")
-        return config, tuple(sorted({s.name for s in listed}))
+        files = {s.name: SkillFile(s.name, s.description, s.location, s.content) for s in reversed(listed)}
+        return config, tuple(files[name] for name in sorted(files))
 
     def run(self, *args: str) -> str:
         """Return what the debug command `args` printed.
