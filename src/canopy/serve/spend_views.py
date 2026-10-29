@@ -41,21 +41,24 @@ if TYPE_CHECKING:
 
 
 def spend(backend: Backend, ctx: Context) -> Spend:
-    """What the last day and the last 30 days cost, by the backend's clock, and what everything ever cost.
+    """What the last day and the last 30 days cost, by the backend's clock, what everything ever cost, and the month.
 
     Returns:
-        The cost the journal recorded in each window, with the window's start, and its total.
+        The cost the journal recorded in each window, with the window's start, its total, and the calendar month
+        against its budget when one is set.
     """
     now = backend.clock()
     # One snapshot, so a month never shows less than its day.
     with db.read_snapshot(ctx.conn):
         read = runtime_sessions.last_read(ctx.conn)
+        budget = spending.budget_month(ctx.conn, now, ctx.config.spend, state_dir=ctx.state_dir)
         return Spend(
             day=_spent(ctx, now, SPEND_DAY_HOURS),
             month=_spent(ctx, now, SPEND_MONTH_HOURS),
             # Every recorded time sorts after the empty string.
             total_usd=spending.spent_since(ctx.conn, "", state_dir=ctx.state_dir),
             sessions_read_at=db.parse_time(read.read_at) if read is not None else None,
+            budget=_spend_month(budget) if budget is not None else None,
         )
 
 
