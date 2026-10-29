@@ -119,17 +119,25 @@ secret, and a replier added through a stolen session would go on steering worker
 | Key | From the page |
 |---|---|
 | `capacity.max_workers`, `capacity.slots_per_repo`, each `capacity.repo_slots` entry | at most 32; an unmanaged pool's first count is bounded too |
-| `capacity.max_chores`, `capacity.max_reviews` | at most 16 |
+| `capacity.max_chores`, `capacity.max_reviews`, `capacity.max_tasks` | at most 16 |
 | `capacity.max_reviews_per_day` | at most 500 |
-| `policy.max_implement_attempts`, `policy.max_resume_attempts` | at most 10 |
+| `loop.min_free_disk_mib` | at least 512 |
+| `policy.max_implement_attempts`, `policy.max_resume_attempts`, `policy.max_plan_attempts`, `policy.max_revisions_per_draft` | at most 10 |
+| `policy.max_feedback_plan_attempts`, `policy.max_follow_ups` | at most 20 |
 | `policy.max_reviews_per_pr` | at most 25 |
 | `policy.ci_cooldown_minutes` | at least 5 |
-| `loop.interval_minutes`, `loop.idle_max_minutes` | at least 2 |
+| `policy.feedback_quiet_minutes`, `loop.interval_minutes`, `loop.idle_max_minutes` | at least 2 |
+| `loop.min_gap_minutes` | at least 1 |
+| `runtime.worker_timeout_minutes`, `runtime.review_timeout_minutes`, `runtime.overseer_timeout_minutes` | at most 240, 120, 60 |
 | `spend.monthly_budget_usd` | at most 10000; raising it keeps a sink from hearing the month reached it |
 | `spend.budget_alerts` | any list the loader takes; the 100% alert is sent whatever it holds |
 | `policy.stacking` | to `"never"` only |
+| `policy.plan`, `policy.feedback_plan` | to `"approve"` only |
+| `policy.planner_may_approve` | toward `"off"` only: `lenient`, `normal`, `strict`, `off` |
 | `trust.authorized_repliers`, `trust.trusted_reviewers` | entries removed, never added |
+| `trust.review_replies` | to `"approve"` only |
 | `trust.rebase` | to `false` only |
+| `trust.max_flaky_kicks` | lowered only |
 | `trust.commit_trailer` | to `true` only |
 
 The bounds sit well above what one machine runs today, so the page serves the operator's real changes; what they stop
