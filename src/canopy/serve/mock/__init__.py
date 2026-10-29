@@ -339,6 +339,7 @@ def seed(directory: Path) -> Backend:
         # Read when the e2e tests' frozen clock says it is (`NOW` in ui/e2e/helpers.ts), so it reads as just now.
         host=lambda _config, _workspace: host.machine(T0 + timedelta(minutes=30)),
         samples=host.samples(T0 + timedelta(minutes=30)),
+        processes=lambda: host.processes(T0 + timedelta(minutes=30)),
         sampling=False,
     )
     with backend.open() as ctx:

@@ -21,7 +21,7 @@ table's third column says, and §6, §11, §12, §18, and §22 describe canopy a
 | Any of those with no journal row | a review run that never started | after an hour | unchanged |
 | `canopy.log` | every log line of every canopy process | rotated past `log_max_mib` | unchanged |
 | Attention items the harness raised | each open item, every tick | outside the window (below) | unchanged |
-| Connector runs and derivations (§30) | each tick, and each of M39's polls | outside the window (below) | unchanged |
+| Connector runs and derivations (§30) | each tick, and each of the loop's polls (§6) | outside the window (below) | unchanged |
 | Check runs a `vcs` source keeps (§7) | each completed check run of a PR | once off its PR's head (below) | unchanged |
 | Free pages and the WAL in the journal | deletes, and checkpoints held back by readers | checkpointed each pass; `canopy gc --vacuum` | unchanged |
 | Loose objects and packs in a primary clone | every worker's fetches and commits | never (`gc.auto=0`) | `canopy gc --git` (below) |

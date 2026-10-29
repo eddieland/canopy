@@ -432,7 +432,7 @@ class ReviewDetail(Model):
     models: ModelsServed
     """Which models served it."""
     card: RunCard | None = None
-    """Its reviewer's card (DESIGN §41), while it runs and its last once it ends; None when it kept none."""
+    """Its reviewer's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none."""
 
 
 class ReviewRequest(Model):

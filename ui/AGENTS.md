@@ -83,7 +83,8 @@ dozen. When every screenshot differs, check the browser before the change.
   Read again button refetches them, and they refetch every 10 seconds while a page shows them in a visible tab. The
   host's resources (`hostQuery`), which the header's readout shows on every page, are the other: none of them is in
   the journal, and a read is a few small files, so they refetch every 10 seconds while the tab is visible, as the
-  system page's graphs' readings (`hostSamplesQuery`), which the server keeps in memory, do while it is open.
+  system page's graphs' readings (`hostSamplesQuery`), which the server keeps in memory, and its processes
+  (`hostProcessesQuery`) do while it is open.
 - **Writes are mutations in `src/api/mutations.ts`.** Each calls the same server function as the CLI's verb, or, for
   what no command would do, a core function of its own with its guards, which TRUST_MODEL T8 names (D127); the
   client adds the session's token (`writeToken` in `src/api/client.ts`). A refusal is an `ApiError` with its `guard`;

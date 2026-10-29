@@ -19,7 +19,7 @@ the tools' functions, until nothing needs them (ROADMAP M48).
 - Each verb is its own tool name, so spend by tool (§11) splits the overseer's calls by verb.
 
 Workers are out of scope: what they report is read from their final line after they exit (§8). A worker's, planner's,
-or reviewer's one tool of canopy's own, `status` (§41), writes nothing: the harness records its card from the call in
+or reviewer's one tool of canopy's own, `status` (§41), writes nothing: the harness records its update from the call in
 the events the agent prints, so nothing a worker writes reaches the journal but what canopy observes it print.
 
 ### The server

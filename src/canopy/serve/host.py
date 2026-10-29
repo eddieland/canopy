@@ -159,7 +159,7 @@ def read_at(
     """
     uname = platform.uname()
     meminfo = _fields(proc / "meminfo")
-    booted = _booted(proc)
+    booted = booted_at(proc)
     return HostResources(
         hostname=uname.node,
         system=f"{uname.system} {uname.release}".strip(),
@@ -209,6 +209,23 @@ def disks(places: Iterable[tuple[DiskUse, Path]], floor: int | None = None) -> l
     return list(found.values())
 
 
+def booted_at(proc: Path) -> datetime | None:
+    """When the machine started, as `/proc/stat`'s `btime` says: the seconds since the epoch it started at.
+
+    Returns:
+        That moment; None where `proc` has no such file, as off Linux.
+    """
+    try:
+        lines = (proc / "stat").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        name, _, value = line.partition(" ")
+        if name == "btime" and value.strip().isdigit():
+            return datetime.fromtimestamp(int(value), UTC)
+    return None
+
+
 def _fields(path: Path) -> dict[str, str]:
     # `Name:   value unit` lines, as /proc/meminfo and /proc/self/status write them; none where the file is not.
     try:
@@ -238,19 +255,6 @@ def _load() -> list[float] | None:
         return [round(n, 2) for n in os.getloadavg()]
     except OSError:
         return None
-
-
-def _booted(proc: Path) -> datetime | None:
-    # /proc/stat's `btime`: the seconds since the epoch at which the machine started.
-    try:
-        lines = (proc / "stat").read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return None
-    for line in lines:
-        name, _, value = line.partition(" ")
-        if name == "btime" and value.strip().isdigit():
-            return datetime.fromtimestamp(int(value), UTC)
-    return None
 
 
 def _process(proc: Path, booted: datetime | None) -> LoopProcess:
