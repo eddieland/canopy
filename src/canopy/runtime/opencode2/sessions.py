@@ -45,14 +45,14 @@ VARIANT_MARK = "#"
 
 
 def updated_after(cursor: SessionCursor | None, *, limit: int = MAX_SESSIONS) -> SessionPage:
-    """Read OpenCode 2's sessions updated after `cursor` from its database.
+    """Read OpenCode 2's sessions updated after `cursor` from its databases, the operator's and each sandbox role's.
 
     Returns:
         At most `limit` sessions, the least recently updated first; `missing` when OpenCode has no database yet;
-        `failed`, with why, when it could not be read.
+        `failed`, with why, when the operator's could not be read.
     """
     return opencode1.read(
-        opencode1.database(),
+        opencode1.databases(),
         SESSIONS_SQL,
         MODELS_SQL,
         cursor,
