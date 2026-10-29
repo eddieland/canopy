@@ -58,3 +58,28 @@ test("the graphs draw the server's last hour of readings, and say the one under 
     await plot.hover({ position: { x: (box?.width ?? 0) / 2, y: 10 } })
     await expect(load.getByTestId('trend-value')).toHaveText(/ at \d{2}:\d{2}$/u)
 })
+
+test('the processes show what keeps the machine busy as a tree, every one on asking, and fold under a parent', async ({
+    page,
+}) => {
+    await page.goto('system')
+    await settled(page)
+    const panel = page.getByTestId('host-processes')
+    await expect(panel).toContainText('2.2 of 12 cores busy over 10 s')
+    const rows = panel.getByTestId('process-row')
+    // The mock's twenty, but the four idle services: the build's compilers, the agents, and the parents above them.
+    await expect(rows).toHaveCount(16)
+    await expect(panel.getByTestId('process-hidden')).toHaveText('4 processes using under 1% of a core left out.')
+    await expect(rows.filter({ hasText: 'rustc' }).first()).toContainText('running')
+    await expect(rows.filter({ hasText: 'rg --line-number' })).toContainText('waiting on a disk')
+    await expect(rows.filter({ has: page.getByTestId('process-loop') })).toContainText('48213')
+
+    await panel.getByRole('button', { name: 'All' }).click()
+    await expect(rows).toHaveCount(20)
+    await expect(panel.getByTestId('process-hidden')).toHaveCount(0)
+
+    await panel.getByRole('button', { name: 'Fold canopy 48213' }).click()
+    await expect(rows).toHaveCount(11)
+    await expect(rows.filter({ has: page.getByTestId('process-loop') })).toContainText('+9 under it')
+    await expect(panel.getByRole('button', { name: 'Unfold canopy 48213' })).toHaveAttribute('aria-expanded', 'false')
+})

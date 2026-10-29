@@ -37,6 +37,7 @@ from canopy.runtime import offerings
 from canopy.runtime.agents import Skills
 from canopy.serve import host
 from canopy.serve.host import Samples
+from canopy.serve.processes import ProcessWatch
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
     from canopy.core.items import Item
     from canopy.core.workspace import Workspace
     from canopy.runtime.report import ModelList
-    from canopy.serve.schema.host import HostResources
+    from canopy.serve.schema.host import HostProcesses, HostResources
 
 #: Seconds the server serves a model list the runtime gave before it asks the runtime again: long enough that opening
 #: the ticket page's menus one after another starts it once, short enough to see a provider set up meanwhile.
@@ -181,6 +182,9 @@ class Backend:
     #: Whether the server reads the machine into `samples` while it runs (`host.sampling`). The mock's does not: its
     #: readings are seeded, as fixed as its machine.
     sampling: bool = True
+    #: The machine's processes, for the system resources page, each measured against the read before (processes.py).
+    #: The mock's are a fixed list, as its machine is.
+    processes: Callable[[], HostProcesses] = field(default_factory=lambda: ProcessWatch().read)
     #: Seconds on a clock that only moves forward, for how long a model list read from the runtime is served.
     monotonic: Callable[[], float] = field(default=time.monotonic)
     # Held while `config` and `workspace` are read or replaced, so a request never gets one of each.

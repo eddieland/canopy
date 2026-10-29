@@ -167,6 +167,18 @@ memory only. A restart starts the graphs over, and a gap in a line is a stretch 
 line to read any moment of it; the number over the graph turns into that moment's. It's the quickest way to answer
 "was it the build at 14:05?" without a monitoring stack you'd have to babysit too.
 
+Under the graphs, the processes, as a tree: each under the process that started it, the busiest first, so a compiler
+three levels under a run's agent shows up under that agent rather than as a stray `rustc`. Each row has the process's
+name, its pid, its command line, the account it runs as, the processors it kept busy, and the memory it holds. CPU reads
+as `top` does, a share of one core: 100% is one core the whole time, so a parallel build can show 800%. It's measured
+since the server's last read of the processes, ten seconds while the page is open; opening the page takes a second,
+since there's nothing to measure against yet. A process the load counts but isn't computing says so: `running` is on a
+core or waiting for one, and `waiting on a disk` is stuck on I/O, which raises the load while the processors sit idle.
+At first only the busy ones show, using 1% of a core or more, with every parent above them and the loop's own process;
+**All** shows every one. Fold a parent and its row adds up everything under it, the quick way to see what one run is
+costing you. The kernel's own threads are left out, and so is everything off Linux, where the standard library has no
+way to ask.
+
 Under them, each disk canopy writes to: the workspace's, where agents check out and build; the journal's, with the
 runs' logs; and the temporary directory, which builds fill when nobody's looking. Two on one filesystem share a row,
 so their free space isn't counted twice. The workspace's and the journal's carry the floor `loop.min_free_disk_mib`
