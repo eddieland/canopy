@@ -170,7 +170,13 @@ def described(conn: sqlite3.Connection, run_id: int, *, timeout_minutes: int, ca
     standing = cards.of(run)
     if card and (standing.card is not None or run.status is ReviewRunStatus.RUNNING):
         running = run.status is ReviewRunStatus.RUNNING
-        lines += cards.lines(standing, started_at=run.started_at, running=running, timeout_minutes=timeout_minutes)
+        lines += cards.lines(
+            standing,
+            started_at=run.started_at,
+            running=running,
+            timeout_minutes=timeout_minutes,
+            ref=f"review:{run_id}",
+        )
     if stored is not None:
         lines.append(f"verdict {stored.verdict}, impact {stored.impact}" if stored.verdict else "no verdict")
         if stored.summary:

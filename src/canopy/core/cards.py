@@ -1,15 +1,18 @@
 """A running agent's card: where its work stands, in its own words, while it runs (DESIGN §41).
 
 A worker, a planner, or a reviewer says where its work stands by calling canopy's `status` tool, each call its whole
-card: a summary, what it does now, what is done with the proof of each, what is next, what is in its way, and, for a
-long job, its steps, each with a status and a stage, from which canopy says how much is done. The
+card: a summary, what it does now, what is done with the proof of each, what is next, what is in its way, for a long
+job its steps, each with a status and a stage, from which canopy says how much is done, and a question it works around
+while the operator decides, with lettered options and the one it recommends. The
 harness reads the call from the events the agent prints, as it reads the agent's spend, holds it to the tool's own
 input, and records it on the run, with how many tool calls the agent had made by then; a call that does not validate,
 or that ended in an error, records nothing. So nothing the agent writes reaches the journal but what canopy observes it
 print (TRUST_MODEL T1). The card is shown to the operator, and given to no agent.
 
 The run keeps its last card once it ends. A card is as old as the time and the tool calls since it was recorded. A step
-is as old as the first card on which it was working: one working longer than the run's last fifth is shown stuck.
+is as old as the first card on which it was working: one working longer than the run's last fifth is shown stuck. A
+question is as old as the first card that asked it, and keeps the operator's answer, one of its letters, while the
+cards after it ask it still.
 """
 
 from __future__ import annotations
@@ -23,7 +26,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError, model_validator
 
 from canopy.core import db, items, records, sql
 from canopy.core.vocab import ReviewRunStatus, RunStatus
@@ -64,6 +67,9 @@ STUCK_SHARE = 5
 #: canopy's plugin asks the agent for one at the same count of calls (`.agents/plugins/canopy.js`, DESIGN §41).
 STALE_CALLS = 20
 STALE_MINUTES = 10
+#: The letters a question's options go by, in order, and so how many it may have.
+type Letter = Literal["A", "B", "C", "D", "E"]
+LETTERS: tuple[Letter, ...] = ("A", "B", "C", "D", "E")
 
 
 def _line(value: str) -> str:
@@ -107,6 +113,37 @@ class Step(BaseModel):
     )
 
 
+class Question(BaseModel):
+    """A decision the agent asks the operator for, with lettered options, which it works around while it waits."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    ask: Annotated[StrictStr, Field(max_length=MAX_SUMMARY), AfterValidator(_line)] = Field(
+        description="What you need the operator to decide, in a sentence or two.",
+    )
+    options: tuple[Line, ...] = Field(
+        min_length=2,
+        max_length=len(LETTERS),
+        description="The choices, in order: the first is A, the next B, and so on.",
+    )
+    recommend: Letter = Field(description="The letter of the option you recommend, and work toward meanwhile.")
+
+    @model_validator(mode="after")
+    def _recommends_an_option(self) -> Question:
+        if LETTERS.index(self.recommend) >= len(self.options):
+            raise ValueError(f"recommend names no option: there are {len(self.options)}")
+        return self
+
+    def option(self, letter: Letter) -> str | None:
+        """The option `letter` names.
+
+        Returns:
+            The option, or None when the question has fewer.
+        """
+        at = LETTERS.index(letter)
+        return self.options[at] if at < len(self.options) else None
+
+
 class Card(BaseModel):
     """The input of a `status` call, the agent's whole card: each call replaces the one before."""
 
@@ -131,6 +168,11 @@ class Card(BaseModel):
         max_length=MAX_PLAN_STEPS,
         description="For a long job, every step in order, each with its status: the approved plan's when there is one.",
     )
+    question: Question | None = Field(
+        default=None,
+        description="A decision you need from the operator and can work around meanwhile; keep it on each card until "
+        "you have the answer or no longer need it, else omit it.",
+    )
 
 
 @dataclass(frozen=True)
@@ -145,6 +187,25 @@ class Standing:
     calls_since: int
     #: When each of the card's working steps was first seen working, by title.
     working_since: Mapping[str, datetime] = field(default_factory=dict)
+    #: When the card's question was first asked; None with no question.
+    asked_at: datetime | None = None
+    #: The operator's answer to it, and when they gave it; None while it waits on them.
+    answer: Letter | None = None
+    answered_at: datetime | None = None
+
+
+@dataclass(frozen=True)
+class Answered:
+    """The operator's answer to a running run's question, as recorded."""
+
+    #: The question it answers, and when it was first asked.
+    question: Question
+    asked_at: datetime
+    #: The letter, and the option it names.
+    letter: Letter
+    option: str
+    #: Whether the question already had this answer, so nothing new was recorded.
+    already: bool
 
 
 def tool_name() -> str:
@@ -174,17 +235,40 @@ def record_call(conn: sqlite3.Connection, table: CardTable, run_id: int, card: C
     """Count one tool call the running run `run_id` of `table` ended, and record `card` as its card if given.
 
     Each of the card's working steps keeps the time it was first seen working on an earlier card, if it was working
-    on the last; one newly working starts now. Nothing changes for a run not running.
+    on the last; one newly working starts now. A question the last card asked too keeps when it was asked and its
+    answer; any other starts now, with none. Nothing changes for a run not running.
     """
     running = sql.update(table).where("id = ? AND status = ?", run_id, _RUNNING[table])
     counted = running.set_to("tool_calls = tool_calls + 1")
     with db.transaction(conn):
         if card is not None:
             at = db.now()
+            row = sql.execute(
+                conn,
+                sql.select("card_json, card_asked_at, card_working_since").from_(table).where("id = ?", run_id),
+            ).fetchone()
             # Every assignment reads the row as it was, so the card's count is the calls made with this one.
             counted = counted.set(card_json=card.model_dump_json(), card_at=at).set_to("card_calls = tool_calls + 1")
-            counted = counted.set(card_working_since=_working_since(conn, table, run_id, card, at))
+            counted = counted.set(card_working_since=_working_since(row, card, at))
+            if not _asks_still(row, card):
+                asked = at if card.question is not None else None
+                counted = counted.set(card_asked_at=asked, card_answer=None, card_answered_at=None)
         sql.execute(conn, counted)
+
+
+def record_answer(conn: sqlite3.Connection, table: CardTable, run_id: int, letter: Letter, asked_at: datetime) -> bool:
+    """Record `letter` as the operator's answer to the question the running run `run_id` of `table` asked at `asked_at`.
+
+    Returns:
+        Whether it was recorded: False once the run has ended, or its card asks no question asked then.
+    """
+    answered = (
+        sql.update(table)
+        .where("id = ? AND status = ? AND card_asked_at = ?", run_id, _RUNNING[table], db.format_time(asked_at))
+        .set(card_answer=letter, card_answered_at=db.now())
+    )
+    with db.transaction(conn):
+        return sql.execute(conn, answered).rowcount == 1
 
 
 def of(row: sqlite3.Row | records.Row) -> Standing:
@@ -203,7 +287,14 @@ def of(row: sqlite3.Row | records.Row) -> Standing:
         return Standing(None, None, calls)
     at = db.parse_time(str(values["card_at"]))
     since = _since(values["card_working_since"])
-    return Standing(card, at, max(calls - int(values["card_calls"] or 0), 0), since)
+    calls_since = max(calls - int(values["card_calls"] or 0), 0)
+    question = card.question
+    asked = _time(values["card_asked_at"]) if question is not None else None
+    if question is None or asked is None:
+        return Standing(card, at, calls_since, since)
+    answer = _letter(values["card_answer"], question)
+    answered = _time(values["card_answered_at"]) if answer is not None else None
+    return Standing(card, at, calls_since, since, asked, answer if answered is not None else None, answered)
 
 
 def percent(card: Card) -> int | None:
@@ -268,17 +359,37 @@ def doing(standing: Standing, started_at: str, now: datetime | None = None) -> s
     return f"{doing}  card {age}, {_calls(standing.calls_since)} old{mark}"
 
 
+def asking(standing: Standing, ref: str, now: datetime | None = None) -> str | None:
+    """A running run's question on one line, for `canopy status`, while it waits on the operator's answer.
+
+    Returns:
+        `asks you, 3m: <question>  canopy reply run:41 A-C (recommends B)`; None with no question, or one answered.
+    """
+    question = standing.card.question if standing.card is not None else None
+    if question is None or standing.asked_at is None or standing.answer is not None:
+        return None
+    age = items.age(db.format_time(standing.asked_at), now)
+    letters = f"{LETTERS[0]}-{LETTERS[len(question.options) - 1]}"
+    return (
+        f"asks you, {age}: {text.one_line(question.ask)}  canopy reply {ref} {letters} "
+        f"(recommends {question.recommend})"
+    )
+
+
 def lines(
     standing: Standing,
     *,
     started_at: str,
     running: bool,
     timeout_minutes: int,
+    ref: str,
     now: datetime | None = None,
 ) -> list[str]:
-    """A run's whole card, for `canopy show`: how old it is, then each field on a line of its own, then its steps.
+    """A run's whole card, for `canopy show`: how old it is, each field on a line of its own, its question, its steps.
 
-    A step of a running run is marked stuck once it has worked longer than the last fifth of `timeout_minutes`.
+    A step of a running run is marked stuck once it has worked longer than the last fifth of `timeout_minutes`. A
+    question names its options by letter, the one the agent recommends, and the operator's answer, or how to give one
+    while the run runs, by `ref`, the run's reference.
 
     Returns:
         The lines, indented; one saying there is none for a run with no card.
@@ -296,6 +407,8 @@ def lines(
     found.extend(f"    next: {step}" for step in card.next)
     if card.stuck is not None:
         found.append(f"    stuck: {card.stuck}")
+    if card.question is not None:
+        found.extend(_question(standing, card.question, running=running, ref=ref, now=now))
     if card.steps:
         found.append(f"    steps:{_progress(card)}")
     moment = now or datetime.now(UTC)
@@ -317,6 +430,26 @@ _MARKS: Mapping[StepStatus, str] = {
 }
 
 
+def _question(standing: Standing, question: Question, *, running: bool, ref: str, now: datetime | None) -> list[str]:
+    """A card's question, for `canopy show`: how old it is, the question, each option by letter, and its answer.
+
+    Returns:
+        The lines, indented under the card's.
+    """
+    asked = f", {items.age(db.format_time(standing.asked_at), now)} old" if standing.asked_at is not None else ""
+    found = [f"    question{asked}: {question.ask}"]
+    for letter, option in zip(LETTERS, question.options, strict=False):
+        recommended = "  (recommended)" if letter == question.recommend else ""
+        found.append(f"      {letter}  {option}{recommended}")
+    if standing.answer is not None and standing.answered_at is not None:
+        found.append(f"      answered {standing.answer}, {db.format_time(standing.answered_at)}")
+    elif running:
+        found.append(f"      waiting on you: canopy reply {ref} LETTER")
+    else:
+        found.append("      never answered")
+    return found
+
+
 def _progress(card: Card) -> str:
     """How much of a card's steps is done, and the working one's stage, to follow a line; empty with no steps.
 
@@ -330,16 +463,50 @@ def _progress(card: Card) -> str:
     return f"  {done}% done" + (f", stage {text.one_line(stage)}" if stage is not None else "")
 
 
-def _working_since(conn: sqlite3.Connection, table: CardTable, run_id: int, card: Card, at: str) -> str | None:
+def _working_since(row: sqlite3.Row | None, card: Card, at: str) -> str | None:
     """Each working step of `card`, by title, with when it was first seen working: on the run's last card, else `at`.
 
     Returns:
         The times as JSON, or None when no step is working.
     """
-    row = sql.execute(conn, sql.select("card_working_since").from_(table).where("id = ?", run_id)).fetchone()
-    before = {title: db.format_time(when) for title, when in _since(row[0] if row is not None else None).items()}
+    before = {title: db.format_time(when) for title, when in _since(row[2] if row is not None else None).items()}
     working = {s.title: before.get(s.title, at) for s in card.steps if s.status == "working"}
     return json.dumps(working) if working else None
+
+
+def _asks_still(row: sqlite3.Row | None, card: Card) -> bool:
+    """Whether `card` asks the very question the run's last card asked, as recorded with when it was asked.
+
+    Returns:
+        True when both ask the same question; False when either asks none, or they differ.
+    """
+    if row is None or card.question is None or row[0] is None or row[1] is None:
+        return False
+    last = _parsed(str(row[0]))
+    return last is not None and last.question == card.question
+
+
+def _time(raw: object) -> datetime | None:
+    """A time a row holds, or None where it holds none, or none that reads as one.
+
+    Returns:
+        The time.
+    """
+    if not isinstance(raw, str):
+        return None
+    try:
+        return db.parse_time(raw)
+    except ValueError:
+        return None
+
+
+def _letter(raw: object, question: Question) -> Letter | None:
+    """An answer a row holds, as one of `question`'s letters.
+
+    Returns:
+        The letter, or None where the row holds none, or one that names none of the question's options.
+    """
+    return next((letter for letter in LETTERS if raw == letter and question.option(letter) is not None), None)
 
 
 def _since(raw: object) -> dict[str, datetime]:
