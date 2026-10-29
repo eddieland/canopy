@@ -73,7 +73,7 @@ Built. Aggressive release (§9, D005): waiting holds no slot and no capacity.
 
 ### R4. Feedback routing: CI failures and review comments go back to the agent that owns the PR
 
-Built in code (M3, M56), live acceptance pending. A `resume` continues the ticket's branch and PR for whatever comes
+Built (M3, M56). A `resume` continues the ticket's branch and PR for whatever comes
 back to it, failed checks and review comments in one run, with cursors so each failure and comment is handled once (§7,
 §8), and one attempt limit and a CI cooldown in code (D030).
 
