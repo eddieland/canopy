@@ -145,9 +145,10 @@ A closed set, written by the harness from the journal, in groups: `attention` (a
 worker started or ended, a plan proposed or approved by its planner, §25, follow-ups filed, §18, a check left as
 flaky, §23), `chores` (§19),
 `reviews` (§21), `tasks` (a task's run ended, §36), `replies` (a reply read from Slack recorded or refused, below),
-and `loop` (ticks failing and recovering, a sink failing, the month's spend reaching its budget or one of its alerts). Each
-carries only bounded fields, its text on one line. No plan event carries the plan's text. `run.ended` carries a
-`blocked` run's question, since the needs-human label is not an attention item.
+and `loop` (ticks failing and recovering, a sink failing, the month's spend reaching its budget or one of its alerts,
+and each forced push canopy makes to kick a flaky check, §23). Each carries only bounded fields, its text on one
+line. No plan event carries the plan's text. `run.ended` carries a `blocked` run's question, since the needs-human
+label is not an attention item.
 
 Attention is a diff of state per sink (§14): each sink hears of each open item once, and a sink that was down gets the
 net change. The other kinds are point events in an outbox, written in the same transaction as the fact they report,
@@ -164,8 +165,8 @@ sink starts with no backlog. Sinks run under the tick lock, so a hung sink delay
 
 A sink with `batch_minutes` sends at most one message per window, so a busy loop is not a message every few minutes.
 A sink quiet through the window sends at once. Urgent goes at once, with everything held: a new attention item, a
-`blocked` run's question, a proposed plan, and the loop or a sink failing. Holding does not wake the loop, and a failed
-delivery starts no window.
+`blocked` run's question, a proposed plan, a kick's forced push, and the loop or a sink failing. Holding does not wake
+the loop, and a failed delivery starts no window.
 
 ### Digest
 

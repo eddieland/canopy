@@ -77,6 +77,13 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, P
         )
     if kind == "ci.flaky":
         return _flaky_line(f)
+    if kind == "ci.kicked":
+        pr = f" {f.get('pr')}" if f.get("pr") else ""
+        return _line(
+            f"! {f.get('ticket')} run {f.get('run')}: canopy force-pushed {f.get('branch')} in {f.get('repo')} "
+            f"to rerun a check left as flaky (kick {f.get('kick')} of {f.get('limit')}): "
+            f"{str(f.get('from_head'))[:12]} -> {str(f.get('to_head'))[:12]}{pr}",
+        )
     if kind == "task.ended":
         text = f"< task:{f.get('task')} run {f.get('run')} ended {f.get('status')}"
         extras = [str(x) for x in (f.get("pr"), f.get("summary")) if x]
@@ -162,7 +169,7 @@ def event_page(ui: str | None, kind: str, fields: Mapping[str, object]) -> str |
     """
     f = fields
     match kind:
-        case "run.started" | "run.ended" | "follow_ups.filed" | "ci.flaky" if f.get("run"):
+        case "run.started" | "run.ended" | "follow_ups.filed" | "ci.flaky" | "ci.kicked" if f.get("run"):
             return page(ui, "runs", f["run"])
         case "plan.proposed" | "plan.approved" if f.get("ticket"):
             # A feedback plan has no page of its own yet: its ticket's page is where its PRs are.
