@@ -1,25 +1,31 @@
 # canopy-github
 
-canopy's GitHub programs (DESIGN §29, §30): `canopy-connect-github` reads PRs and branches into canopy, and
-`canopy-post-github` posts the replies and reviews the operator approved, word for word. canopy runs them as commands
+canopy's GitHub programs (DESIGN §29, §30): `canopy-connect-github` reads PRs and branches into canopy, or a
+repository's issues as its tracker, and `canopy-post-github` posts the replies and reviews the operator approved, word
+for word. canopy runs them as commands
 and never imports them, so the harness holds no token and opens no connection (TRUST_MODEL T2, D003).
 
 They are installed beside canopy: `uv tool install` puts both on `PATH`. Each reads the token `gh` holds for the host
-the PR's URL or the repository's clone URL names, when it runs, and talks to that host's GraphQL API, so GitHub
+the PR's URL, the repository's clone URL, or `--repo` names, when it runs, and talks to that host's GraphQL API, so GitHub
 Enterprise works as github.com does. Run `gh auth login` for each host. They take no token from argv or canopy's
 config, only the one `gh` answers for that host, once `gh auth status` names it; `gh` itself answers `GH_TOKEN` or
 `GH_ENTERPRISE_TOKEN` when one is set in the environment canopy runs them in.
 
 ## Config
 
-Unset, canopy uses both for its `vcs` source. Naming them, in `~/.config/canopy/config.toml`, looks like this; a
-`tracker` source with `post_cmd` lets canopy post a ticket's drafts to GitHub Issues too
-([examples/config.toml](../../examples/config.toml)):
+Unset, canopy uses both for its `vcs` source. Naming them, in `~/.config/canopy/config.toml`, looks like this; with
+GitHub Issues as the tracker, a `tracker` source given the repository reads its issues, and its `post_cmd` lets canopy
+post a ticket's drafts to them too ([examples/config.toml](../../examples/config.toml)):
 
 ```toml
 [connect.sources.github]
 kind = "vcs"
 cmd = "canopy-connect-github"
+post_cmd = "canopy-post-github"
+
+[connect.sources.issues]
+kind = "tracker"
+cmd = "canopy-connect-github --repo acme/api"
 post_cmd = "canopy-post-github"
 ```
 
@@ -41,6 +47,26 @@ be read whole prints only its error on stderr, so a cut-off read never looks lik
 
 Exit codes: 0 everything was read; 1 something was not, as the `end` line says; 2 stdin or the command line is not
 usable, and nothing was read.
+
+## `canopy-connect-github --repo OWNER/NAME`
+
+The `tracker` source for that repository's GitHub Issues (`HOST/OWNER/NAME` for GitHub Enterprise): a ticket's key is
+`GH-` and its issue's number, so issue 12 is `GH-12`, as the `tracker-github` skill has it. It reads, and writes nothing
+to GitHub. On stdin, what canopy asks any tracker source, each key optional; the query is GitHub's search syntax:
+
+```json
+{"query": "repo:acme/api is:issue is:open label:agent", "tickets": [{"key": "GH-12", "comments_since": "2026-10-18T10:00:00Z"}]}
+```
+
+On stdout, as `canopy-connect-jira` prints Jira's: for each ticket asked, a `ticket` line, each label with when its
+timeline last added it, and a `comment` line per comment since `comments_since`; a `ticket` line for each open issue
+the query returns, PRs passed over, and for each blocker one of them names; last, an `end` line naming what was read
+whole. A blocker is an issue GitHub's issue dependencies say blocks it, or one a line of its body names,
+`Blocked by #N`. A key names an issue of this repository alone, so a query that returns another repository's issue is
+not read, and a ticket an open issue of another repository blocks is not read whole: it stays stale, and canopy
+dispatches nothing on it. A comment's author is its login, a bot's ending `[bot]`.
+
+The same exit codes, 2 also when `--repo` is not a repository's name or `gh` holds no token for its host.
 
 ## `canopy-post-github`
 

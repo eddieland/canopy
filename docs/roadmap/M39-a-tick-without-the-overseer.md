@@ -117,9 +117,14 @@ bullet. The count was already the overseer's alone; what was left was a tick a p
 and lengthened the wait after it. It is idle no more (`pacing.idle`): a poll wakes the loop only for what is new, so
 the wait lengthens after the overseer's second looks at what it was left and waited on, which the timer brings, and
 not after its first look at what a poll found. Chosen conservatively, for the operator to change: a failed poll's
-wake, and the whole read after one, count as any poll's; the operator's tick-now counts as before.
-Left: config requiring a `tracker`
-source, with the tests' workspaces given the fake one; the harness's `wait` on an unobserved subject; every MCP server
-but canopy's denied; and the design folded into the sections it names. Still open for the operator:
+wake, and the whole read after one, count as any poll's; the operator's tick-now counts as before. Built
+(2026-10-29): §30's `tracker` connector for GitHub Issues, `canopy-connect-github --repo OWNER/NAME`
+(`canopy_github/issues.py`), so a workspace on GitHub Issues has a source to require: `GH-N` is issue N, read as
+`canopy-connect-jira` reads Jira's. Chosen conservatively, for the operator to change: a blocker is an issue dependency
+or a `Blocked by #N` line of the body, either; a ticket an open issue of another repository blocks, which no key names,
+is not read whole, so it stays stale; and a query that returns another repository's issue is not read. Left: config
+requiring a `tracker` source, with the tests' workspaces given the fake one; the harness's `wait` on an unobserved
+subject; every MCP server but canopy's denied; and the design folded into the sections it names. Still open for the
+operator:
 whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes, and that entry with it),
 the fifth bullet's.
