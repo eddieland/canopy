@@ -46,6 +46,15 @@ def test_a_card_is_plain_lines_held_to_its_bounds() -> None:
             cards.Card.model_validate(wrong)
 
 
+def test_a_lone_line_for_next_is_a_list_of_one() -> None:
+    assert cards.Card.model_validate({**CARD, "next": " open\tthe PR "}).next == ("open the PR",)
+    assert cards.read_call(status({**CARD, "next": "open the PR"})) == cards.Card.model_validate(
+        {**CARD, "next": ["open the PR"]},
+    )
+    with pytest.raises(ValidationError):
+        cards.Card.model_validate({**CARD, "next": " \n "})
+
+
 def test_only_a_completed_status_call_that_validates_is_a_card() -> None:
     assert cards.tool_name() == "canopy_run_status"
     assert cards.read_call(status(CARD)) == cards.Card.model_validate(CARD)

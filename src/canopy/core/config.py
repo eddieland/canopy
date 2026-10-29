@@ -604,6 +604,10 @@ class Policy(Section):
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 6
     # How long a `resume` whose only reason is `ci` waits after the unit's last run that worked on CI ended.
     ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
+    #: How long a trusted reviewer's new feedback waits on a PR's pending checks, from when a source first observed it,
+    #: before the unit is no longer `ci_running` and the feedback is addressed with them still pending (DESIGN §7). A
+    #: queue of builds otherwise holds it as long as the queue lasts; at 0 feedback never waits on them.
+    feedback_ci_wait_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
     #: The most follow-up tickets one run's result has recorded, the first in its order (DESIGN §18). At 0 workers are
     #: told to file none, and none is recorded.
     max_follow_ups: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 5

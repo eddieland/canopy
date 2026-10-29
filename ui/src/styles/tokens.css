@@ -232,10 +232,12 @@
     --context-carried: oklch(0.6 0.015 80);
 }
 
-/* Solarized's light base tones: base2 the canvas, base3 a surface, base02 the text, base01 muted. The two bases are a
- * little lighter than Solarized's own, and base01 darker, so the status and section hues still read at 4.5:1 on
- * them. */
+/* Solarized's light base tones: base2 the canvas, base3 a surface, base02 the text, base01 muted, and its blue the
+ * accent. The two bases are a little lighter than Solarized's own, and base01 and the blue darker, so the status and
+ * section hues still read at 4.5:1 on them, and white on the blue. */
 :root[data-light-palette='solarized']:not(.dark) {
+    --accent: oklch(0.52 0.13 245);
+    --ring: oklch(0.52 0.13 245 / 0.55);
     --background: oklch(0.948 0.026 92);
     --surface: oklch(0.988 0.02 90);
     --surface-raised: oklch(0.962 0.026 91);
@@ -248,8 +250,11 @@
     --context-carried: oklch(0.6 0.02 205);
 }
 
-/* Nord's Snow Storm: nord6 the canvas, nord5 raised, nord4 the hairlines, nord0 the text, nord3 muted. */
+/* Nord's Snow Storm: nord6 the canvas, nord5 raised, nord4 the hairlines, nord0 the text, nord3 muted, and Frost's
+ * nord10 the accent, a shade darker so white reads on it. */
 :root[data-light-palette='nord']:not(.dark) {
+    --accent: oklch(0.52 0.09 254);
+    --ring: oklch(0.52 0.09 254 / 0.55);
     --background: oklch(0.951 0.007 261);
     --surface: oklch(0.99 0.003 261);
     --surface-raised: oklch(0.962 0.008 262);
@@ -340,9 +345,12 @@
     --context-carried: oklch(0.55 0 0);
 }
 
-/* Solarized's dark base tones: base03 the canvas, base02 raised, base1 the text and base0 muted. The bases are a step
- * darker than Solarized's own, and the text brighter, so the status and section hues still read at 4.5:1 on them. */
+/* Solarized's dark base tones: base03 the canvas, base02 raised, base1 the text, base0 muted, and its blue the accent.
+ * The bases are a step darker than Solarized's own, and the text and the blue brighter, so the status and section hues
+ * still read at 4.5:1 on them. */
 .dark[data-dark-palette='solarized'] {
+    --accent: oklch(0.65 0.135 245);
+    --ring: oklch(0.65 0.135 245 / 0.5);
     --background: oklch(0.187 0.049 220);
     --surface: oklch(0.208 0.05 220);
     --surface-raised: oklch(0.229 0.052 220);
@@ -402,10 +410,13 @@
     --context-carried: oklch(0.6 0.025 340);
 }
 
-/* Monokai: its olive-grey background the canvas, the line highlight the hairlines, its off-white the text, and the
- * comment color muted. The bases are a step darker than Monokai's own, and the comment color brighter, so the status
- * and section hues still read at 4.5:1. */
+/* Monokai: its olive-grey background the canvas, the line highlight the hairlines, its off-white the text, the
+ * comment color muted, and its pink the accent. The bases are a step darker than Monokai's own, and the comment color
+ * brighter, so the status and section hues still read at 4.5:1; the pink is a touch softer, so the canvas reads on
+ * it, and turned toward magenta, so a link beside a failed run is not taken for it. */
 .dark[data-dark-palette='monokai'] {
+    --accent: oklch(0.67 0.22 352);
+    --ring: oklch(0.67 0.22 352 / 0.5);
     --background: oklch(0.18 0.009 115);
     --surface: oklch(0.212 0.01 115);
     --surface-raised: oklch(0.255 0.012 110);
