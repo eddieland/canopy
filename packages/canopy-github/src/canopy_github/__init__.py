@@ -374,6 +374,9 @@ def login(author: object) -> str | None:
     `trust.trusted_reviewers`, the agents, and GitHub's own pages name a bot as `name[bot]`, and match logins in full,
     so a bare `name` from GraphQL would match no entry.
 
+    Args:
+        author: A GraphQL `Actor` as a reply holds it, `{"__typename": ..., "login": ...}`; null for no author.
+
     Returns:
         The login; None for content with no author, as a deleted account's has.
     """

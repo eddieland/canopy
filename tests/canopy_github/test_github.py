@@ -584,7 +584,11 @@ def test_a_bots_login_ends_bot_as_githubs_rest_api_names_it(github: tuple[Fake, 
     pull = fake.pulls["acme", "api", 7]
     pull.author, pull.bot = "renovate", True
     pull.reviews.append(Review(node="PRR_102", id=102, author="coderabbitai", state="COMMENTED", body="x", bot=True))
-    pull.threads[0].comments.append(Comment(id=504, body="Nit.", author="coderabbitai[bot]", bot=True))
+    pull.threads[0].comments += [
+        Comment(id=504, body="Nit.", author="coderabbitai", bot=True),
+        # A login that already ends `[bot]` keeps one.
+        Comment(id=505, body="Nit.", author="coderabbitai[bot]", bot=True),
+    ]
     _, lines, _ = read(url, {"prs": [PR]})
     authors = {line.get("id"): line["author"] for line in lines if line["kind"] in {"pr", "review"}}
     assert authors == {
@@ -595,6 +599,7 @@ def test_a_bots_login_ends_bot_as_githubs_rest_api_names_it(github: tuple[Fake, 
         502: "alice",
         503: "me",
         504: "coderabbitai[bot]",
+        505: "coderabbitai[bot]",
     }
 
 
