@@ -1,9 +1,9 @@
 # M37. The overseer reads the journal
 
-DESIGN §35. Needs M36's measurement, with the disagreements that were the derivation's fixed, and M48's second stage,
-passed its check. This is M30's cut, taken from the journal rather than a probe, and it is where the trust model gains
-its first code checks on what the overseer claims. The overseer acts through canopy's tools (§27), so every claim below
-is a field of `canopy_dispatch` or `canopy_ticket-set`, not a flag.
+DESIGN §35. Needs M36's measurement (SCENARIOS S68), with the disagreements that were the derivation's fixed, and
+M48's second stage, passed its check. This is M30's cut, taken from the journal rather than a probe, and it is where
+the trust model gains its first code checks on what the overseer claims. The overseer acts through canopy's tools
+(§27), so every claim below is a field of `canopy_dispatch` or `canopy_ticket-set`, not a flag.
 
 - The state block carries the observations, after the fixed sections (M34's order): every listed ticket and every
   ticket the query returned, marked a candidate or not in code from its observed labels and state, a non-candidate by
