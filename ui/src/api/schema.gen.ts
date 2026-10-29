@@ -317,6 +317,30 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/host/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the host's readings over the last hour
+         * @description The readings of the machine the server has kept since it started, the last hour's at most, oldest first.
+         *
+         *     Each is the load over a minute, the memory in use, the loop's own, and each disk's free space, read every
+         *     `every_seconds` whether or not a page is open. They are kept in memory alone, so a server that restarts starts
+         *     again with none.
+         */
+        get: operations["getHostSamples"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/loop": {
         parameters: {
             query?: never;
@@ -3349,6 +3373,22 @@ export type components = {
             total: number;
         };
         /**
+         * DiskSample
+         * @description One disk's free space at a reading.
+         */
+        DiskSample: {
+            /**
+             * Free
+             * @description What a process that is not root could still write, in bytes.
+             */
+            free: number;
+            /**
+             * Path
+             * @description The disk's directory, as `Disk.path` names it, so the page finds the disk the sample is of.
+             */
+            path: string;
+        };
+        /**
          * @description What canopy keeps on a disk: `workspace` its repositories and worktrees, `journal` the journal and the runs' logs, `temp` the temporary directory its agents and their builds write to.
          * @enum {string}
          */
@@ -3971,6 +4011,27 @@ export type components = {
             repo?: string | null;
         };
         /**
+         * HostHistory
+         * @description The readings of the machine the server keeps in memory, from when it started: the last hour's at most.
+         */
+        HostHistory: {
+            /**
+             * Every Seconds
+             * @description The seconds from one reading to the next.
+             */
+            every_seconds: number;
+            /**
+             * Kept
+             * @description How many readings it keeps at most; past that the oldest is dropped.
+             */
+            kept: number;
+            /**
+             * Samples
+             * @description The readings, oldest first. A gap longer than `every_seconds` is a time the server was not reading.
+             */
+            samples: components["schemas"]["HostSample"][];
+        };
+        /**
          * HostResources
          * @description The machine the loop runs on, as read when it was asked.
          */
@@ -4017,6 +4078,38 @@ export type components = {
              * @description Its operating system and release, as `uname` names them, such as `Linux 6.8.0`.
              */
             system: string;
+        };
+        /**
+         * HostSample
+         * @description What the system resources page's graphs draw of one reading of the machine.
+         */
+        HostSample: {
+            /**
+             * At
+             * Format: date-time
+             * @description When it was read.
+             */
+            at: string;
+            /**
+             * Disks
+             * @description Each disk read, in the order `HostResources.disks` has them.
+             */
+            disks: components["schemas"]["DiskSample"][];
+            /**
+             * Load
+             * @description The load average over the last minute; None where the operating system keeps none.
+             */
+            load: number | null;
+            /**
+             * Memory Used
+             * @description The memory not available to a new process, in bytes; None where only Linux's `/proc/meminfo` says.
+             */
+            memory_used: number | null;
+            /**
+             * Rss
+             * @description The memory the loop's process held, in bytes; None where only Linux's `/proc` says.
+             */
+            rss: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -10588,6 +10681,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HostResources"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getHostSamples: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostHistory"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

@@ -315,7 +315,9 @@ def seed(directory: Path) -> Backend:
         user_file=user_file,
         models=_models_listed,
         # Read when the e2e tests' frozen clock says it is (`NOW` in ui/e2e/helpers.ts), so it reads as just now.
-        host=lambda _ctx: host.machine(T0 + timedelta(minutes=30)),
+        host=lambda _config, _workspace: host.machine(T0 + timedelta(minutes=30)),
+        samples=host.samples(T0 + timedelta(minutes=30)),
+        sampling=False,
     )
     with backend.open() as ctx:
         db.migrate(ctx.conn, resources.migrations_dir())

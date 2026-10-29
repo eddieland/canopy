@@ -8,10 +8,16 @@ available, the swap, when the machine and the process started, and what the proc
 A disk is each filesystem canopy writes to: the workspace's, with its repositories and worktrees, where agents check
 out and build; the journal's, with the runs' logs; and the temporary directory, which builds fill. Two on one
 filesystem are one disk, so its free space is not counted twice.
+
+The page's graphs are the last hour of readings, which the server takes itself every SAMPLE_SECONDS from when it
+starts (`sampling`), page open or not, and keeps in memory alone (`Samples`): they are the machine's, not the
+journal's, and a restart that loses them loses an hour of numbers the next hour replaces.
 """
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import platform
 import resource
@@ -19,16 +25,28 @@ import shutil
 import sys
 import tempfile
 import threading
+from collections import deque
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.serve.schema.host import Cpu, Disk, DiskUse, HostResources, LoopProcess, Memory
+from canopy.serve.schema.host import (
+    Cpu,
+    Disk,
+    DiskSample,
+    DiskUse,
+    HostHistory,
+    HostResources,
+    HostSample,
+    LoopProcess,
+    Memory,
+)
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
 
-    from canopy.core.context import Context
+    from canopy.core.config import Config
+    from canopy.core.workspace import Workspace
 
 #: Where Linux keeps what the kernel knows of the machine and each process.
 PROC = Path("/proc")
@@ -36,21 +54,88 @@ PROC = Path("/proc")
 _KIB = 1024
 #: The uses on a disk the tick's free-space check reads (DESIGN §6).
 _CHECKED: frozenset[DiskUse] = frozenset({"workspace", "journal"})
+#: Seconds from one reading the server keeps to the next: the page's own pace, so each read it makes finds a new one.
+SAMPLE_SECONDS = 10
+#: How many readings the server keeps: an hour's.
+KEPT = 3600 // SAMPLE_SECONDS
+
+_log = logging.getLogger(__name__)
 
 
-def read(ctx: Context) -> HostResources:
-    """The machine `ctx`'s loop runs on, read now.
+def read(config: Config, workspace: Workspace) -> HostResources:
+    """The machine the loop on `config` and `workspace` runs on, read now.
 
     Returns:
         Its figures, with the disks under the workspace, the journal, and the temporary directory.
     """
     places: list[tuple[DiskUse, Path]] = [
-        ("workspace", ctx.workspace.root),
-        ("journal", ctx.state_dir),
+        ("workspace", workspace.root),
+        ("journal", workspace.state_dir),
         ("temp", Path(tempfile.gettempdir())),
     ]
-    floor = ctx.config.loop.min_free_disk_mib * _KIB * _KIB
+    floor = config.loop.min_free_disk_mib * _KIB * _KIB
     return read_at(places, proc=PROC, now=datetime.now(UTC), floor=floor or None)
+
+
+class Samples:
+    """The last `kept` readings of the machine, oldest first, in memory: what the page's graphs draw.
+
+    Added to by the sampler's thread and read by the requests', so each holds the lock.
+    """
+
+    def __init__(self, kept: int = KEPT, every: int = SAMPLE_SECONDS, seeded: Iterable[HostSample] = ()) -> None:
+        """Keep the last `kept` readings, taken `every` seconds apart, starting from `seeded`, as the mock's does."""
+        self.every = every
+        self._kept: deque[HostSample] = deque(seeded, maxlen=kept)
+        self._lock = threading.Lock()
+
+    def add(self, found: HostResources) -> None:
+        """Keep what the graphs draw of `found`, dropping the oldest reading once `kept` are kept."""
+        taken = sample(found)
+        with self._lock:
+            self._kept.append(taken)
+
+    def history(self) -> HostHistory:
+        """The readings kept, oldest first.
+
+        Returns:
+            Them, with how far apart they are taken and how many are kept at most.
+        """
+        with self._lock:
+            kept = list(self._kept)
+            most = self._kept.maxlen or 0
+        return HostHistory(every_seconds=self.every, kept=most, samples=kept)
+
+
+def sample(found: HostResources) -> HostSample:
+    """What the page's graphs draw of a reading: the load over a minute, the memory in use, the loop's, each disk free.
+
+    Returns:
+        The sample, read when `found` was.
+    """
+    memory = found.memory
+    used = None if memory.total is None or memory.available is None else memory.total - memory.available
+    return HostSample(
+        at=found.read_at,
+        load=found.cpu.load[0] if found.cpu.load else None,
+        memory_used=used,
+        rss=found.process.rss,
+        disks=[DiskSample(path=d.path, free=d.free) for d in found.disks],
+    )
+
+
+async def sampling(read_now: Callable[[], HostResources], samples: Samples) -> None:
+    """Read the machine every `samples.every` seconds into `samples`, until cancelled, starting now.
+
+    Each read is on a thread, as the routes keep their work off the event loop. One that fails is logged and skipped:
+    the graph shows a gap there rather than the server stopping its readings.
+    """
+    while True:
+        try:
+            samples.add(await asyncio.to_thread(read_now))
+        except OSError:
+            _log.warning("could not read the host's resources", exc_info=True)
+        await asyncio.sleep(samples.every)
 
 
 def read_at(
