@@ -16,7 +16,7 @@ from canopy.core import config, workspace
 from canopy.infra import lock
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools
-from tests.canopy.helpers import LABEL, InlineRunner, decisions, in_tick, tick_starts
+from tests.canopy.helpers import LABEL, InlineRunner, decisions, in_tick, tick_starts, tracker_holds
 from tests.conftest import CanopyEnv, git, user_toml
 
 GIT_AUTHORS = ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL")
@@ -104,6 +104,7 @@ def test_a_full_pool_refuses_a_dispatch_without_asking_treehouse_for_another_slo
     declare(canopy_env, "slots_per_repo = 1")
     set_slots(treehouse_state, ws, "api", "leased")
     conn = ws.journal()
+    tracker_holds(conn)
     with in_tick(conn) as tick_id:
         runner = InlineRunner()
         # The slot is leased as the tick starts the run, after the overseer (DESIGN §40): refused then.
@@ -126,6 +127,7 @@ def test_a_slot_treehouse_makes_past_the_declared_size_is_destroyed(
     stale = str(ws.root / ".treehouse" / "api-fake" / "1" / "api")
     set_slots(treehouse_state, ws, "api", "available", skip_reuse=[stale])
     conn = ws.journal()
+    tracker_holds(conn)
     with in_tick(conn) as tick_id:
         assert main(dispatch("api"), runner=InlineRunner()) == 0
         tick_starts(InlineRunner())
@@ -147,6 +149,7 @@ def test_a_pool_declared_smaller_than_it_is_counts_its_busy_slots(
     set_slots(treehouse_state, ws, "api", "available")
     set_slots(treehouse_state, ws, "web", "leased", "available")
     conn = ws.journal()
+    tracker_holds(conn)
     with in_tick(conn) as tick_id:
         assert main(dispatch("api"), runner=InlineRunner()) == 0
         tick_starts(InlineRunner())
@@ -168,6 +171,7 @@ def test_a_pool_below_its_size_grows_and_one_at_it_reuses_a_slot(
     set_slots(treehouse_state, ws, "api", "leased")
     seed = set_slots(treehouse_state, ws, "web", "available")
     conn = ws.journal()
+    tracker_holds(conn)
     with in_tick(conn):
         assert main(dispatch("api", "web"), runner=InlineRunner()) == 0
         tick_starts(InlineRunner())

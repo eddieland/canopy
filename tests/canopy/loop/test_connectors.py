@@ -199,22 +199,14 @@ def test_a_pr_with_an_open_review_request_is_read_so_its_review_knows_its_base(
     assert asked(watched)[-1]["request"]["prs"] == [PR]
 
 
-@pytest.mark.parametrize("tracker", [True, False])
-def test_where_a_tracker_source_runs_each_pr_the_review_query_found_is_read(
-    scenario: Scenario,
-    watched: Path,
-    *,
-    tracker: bool,
-) -> None:
-    """The overseer reads no GitHub there (DESIGN §39), so it reviews a match from the read; elsewhere it reads one."""
-    if not tracker:
-        scenario.configures("private", connect={"sources": {"jira": None}})
+def test_each_pr_the_review_query_found_is_read(scenario: Scenario, watched: Path) -> None:
+    """The overseer reads no GitHub (DESIGN §39), so it reviews a match from the read."""
     found = "https://github.com/acme/api/pull/9"
     plays(watched, github={"end": {"prs": [PR], "repositories": ["repo"], "review_query": [found]}})
     scenario.tick(*waits(*KEYS))
     plays(watched)
     scenario.tick(*waits(*KEYS))
-    assert asked(watched)[-1]["request"]["prs"] == ([PR, found] if tracker else [PR])
+    assert asked(watched)[-1]["request"]["prs"] == [PR, found]
 
 
 def test_a_line_out_of_bounds_is_refused_its_subject_kept_and_the_rest_recorded(
@@ -319,7 +311,7 @@ def test_the_default_vcs_source_is_canopys_own_reader_and_reads_each_watched_pr(
     db.set_unit(scenario.conn, "PROJ-1", str(scenario.env.root), "repo", pr_url=PR)
     github_state.write_text(json.dumps({"prs": {PR: {"checks": [{"name": "build", "status": "in_progress"}]}}}))
     scenario.tick(*waits("PROJ-1"))
-    [run] = runs(scenario)
+    [run] = [r for r in runs(scenario) if r.kind is SourceKind.VCS]
     assert (run.source, run.status) == ("github", "ok")
     [check] = records.fetch_all(scenario.conn, records.ObservedCheck, sql.frag("SELECT * FROM observed_checks"))
     assert (check.pr_url, check.status, check.head_sha) == (PR, CheckStatus.IN_PROGRESS, "abc1234")
@@ -337,7 +329,7 @@ def test_canopys_own_reader_is_asked_the_whole_request_each_tick_with_or_without
     [asked] = reads(github_state)
     assert (asked["prs"], [r["name"] for r in asked["repositories"]]) == ([], ["repo"])
     assert (asked["branch_prefix"], asked["review_query"]) == ("agent/", "is:pr review-requested:@me")
-    [run] = runs(scenario)
+    [run] = [r for r in runs(scenario) if r.kind is SourceKind.VCS]
     assert (run.source, run.status) == ("github", "ok")
     [branch] = records.fetch_all(scenario.conn, records.ObservedBranch, sql.frag("SELECT * FROM observed_branches"))
     assert (branch.repository, branch.name) == ("repo", "agent/PROJ-1")
@@ -345,7 +337,7 @@ def test_canopys_own_reader_is_asked_the_whole_request_each_tick_with_or_without
     db.set_unit(scenario.conn, "PROJ-1", str(scenario.env.root), "repo", pr_url=PR)
     scenario.tick(*waits("PROJ-1"))
     assert reads(github_state)[-1]["prs"] == [PR]
-    assert [r.status for r in runs(scenario)] == ["ok", "ok"]
+    assert [r.status for r in runs(scenario) if r.kind is SourceKind.VCS] == ["ok", "ok"]
     # No source failed. The PR it read is open with no checks and no approval, so it waits on a reviewer (DESIGN §14).
     assert scenario.attention() == [("PROJ-1", "needs_reviewer")]
 

@@ -12,10 +12,21 @@ from pathlib import Path
 import pytest
 
 from canopy.core import contract, db
-from canopy.core.vocab import Decider, ResumeReason, RunKind
-from tests.canopy.helpers import KEY, WORKER_DONE, canopy, in_tick, present, unit_of, waits, worker_does
+from canopy.core.vocab import Decider, NumberedItem, ResumeReason, RunKind
+from tests.canopy.helpers import (
+    KEY,
+    WORKER_DONE,
+    canopy,
+    in_tick,
+    present,
+    tracker_holds,
+    unit_of,
+    waits,
+    worker_does,
+)
+from tests.canopy.observation_helpers import number_of
 from tests.canopy.scenario_helpers import Scenario, asks, dispatches, fails, pushes
-from tests.conftest import CanopyEnv, GitPool, git
+from tests.conftest import TRACKER_SOURCE, CanopyEnv, GitPool, git
 
 LABEL = ("--label", "agent-ready-tester")
 RESUME = (*LABEL, "--kind", "resume")
@@ -110,13 +121,27 @@ def test_a_red_check_and_a_review_comment_in_one_tick_make_one_run(scenario: Sce
     assert "- `review`: review comments" in run.prompt
 
 
-def test_resume_prompt_points_at_the_reply_and_names_the_repliers(scenario: Scenario, git_pool: GitPool) -> None:
+def test_resume_prompt_points_at_the_reply_and_names_the_repliers(
+    scenario: Scenario,
+    git_pool: GitPool,
+    connector_state: Path,
+) -> None:
     scenario.configures(trust={"authorized_repliers": ["alice", "5b10ac"]})
     first = scenario.run(worker=asks("which API?"))
     assert first.status == "blocked"
 
+    # Alice answers on the ticket, and the tracker source reads her comment before the resume rests on it.
+    answer = {"kind": "comment", "ticket": KEY, "id": "10234", "author": "alice", "time": "2026-10-18T10:00:00Z"}
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"lines": [answer]}}))
+    tracker_holds(scenario.conn)
+    replied = str(number_of(scenario.conn, NumberedItem.COMMENT, "10234"))
     context = "Authorized reply: ticket comment 10234 by account alice"
-    resume = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REPLY], context=context)
+    resume = dispatches(
+        kind=RunKind.RESUME,
+        reasons=[ResumeReason.REPLY],
+        context=context,
+        cursors={"comment": replied},
+    )
     resumed = scenario.run(resume, worker=pushes())
     assert (resumed.kind, resumed.status, resumed.branch) == ("resume", "done", "agent/PROJ-1-work")
     # Nothing was pushed before, so the resume started from main.
@@ -207,7 +232,7 @@ def test_needs_plan_is_refused_naming_plan(scenario: Scenario, mode: str) -> Non
             ),
         ),
         (
-            ("--reason", "ci", "--cursor", "comment=c1"),
+            ("--reason", "ci", "--cursor", "comment=1"),
             "cursor comment (--cursor comment) is handled by a resume for reply: add reply to reasons (--reason reply)",
         ),
         (
@@ -226,10 +251,15 @@ def test_needs_plan_is_refused_naming_plan(scenario: Scenario, mode: str) -> Non
 def test_a_resume_names_why_it_runs_and_each_cursor_needs_its_reason(
     scenario: Scenario,
     treehouse_state: Path,
+    connector_state: Path,
     args: tuple[str, ...],
     reason: str,
 ) -> None:
     with_branch(scenario.conn)
+    # A comment the tracker source observed, the first item numbered: a cursor may name it (DESIGN §35).
+    said = {"kind": "comment", "ticket": KEY, "id": "c1", "author": "bob", "time": "2026-10-18T10:00:00Z"}
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"lines": [said]}}))
+    tracker_holds(scenario.conn)
     assert scenario.refuses(resumes() + list(args)) == [("refused:bad_reason", reason)]
     assert not treehouse_state.exists()  # refused before leasing
 
@@ -328,17 +358,30 @@ def test_a_fix_ci_prompt_override_refuses_every_resume_and_says_so(
     assert scenario.run(resumes(REVIEW), worker=pushes()).status == "done"
 
 
-def test_cursors_advance_only_when_the_worker_starts(scenario: Scenario, git_pool: GitPool) -> None:
+def test_cursors_advance_only_when_the_worker_starts(
+    scenario: Scenario,
+    git_pool: GitPool,
+    connector_state: Path,
+) -> None:
     conn = scenario.conn
     scenario.configures(capacity={"max_workers": 1})
-    scenario.starts(dispatches(cursors={"comment": "c1"}))
-    cursors = {"comment": "c2", "review": "4127"}
+    said = [
+        {"kind": "comment", "ticket": key, "id": ident, "author": "bob", "time": "2026-10-18T10:00:00Z"}
+        for key, ident in (("PROJ-1", "c1"), ("PROJ-2", "c2"))
+    ]
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"lines": said}}))
+    tracker_holds(conn, "PROJ-1", "PROJ-2")
+    c1, c2 = (
+        number_of(conn, NumberedItem.COMMENT, ident, subject=key) for key, ident in (("PROJ-1", "c1"), ("PROJ-2", "c2"))
+    )
+    scenario.starts(dispatches(cursors={"comment": str(c1)}))
+    cursors = {"comment": str(c2), "review": "4127"}
     assert scenario.refuses(dispatches("PROJ-2", cursors=cursors)) == [
         ("refused:capacity", "1 of 1 workers are running"),
     ]
     rows = {r["key"]: r for r in conn.execute("SELECT * FROM tickets")}
-    assert rows["PROJ-1"]["last_comment_id"] == "c1"
-    assert rows["PROJ-2"]["last_comment_id"] is None
+    assert rows["PROJ-1"]["comment_cursor"] == c1
+    assert rows["PROJ-2"]["comment_cursor"] is None
     assert db.units(conn, "PROJ-2") == []  # nor its review cursor, nor a unit at all
 
 

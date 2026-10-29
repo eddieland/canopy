@@ -28,6 +28,7 @@ from canopy.infra.procs import SubprocessRunner
 from canopy.runs import dispatch
 from canopy.runtime.definitions import BASH_ALLOW_RE
 from canopy.setup import init
+from tests.conftest import TRACKER_TOML
 
 # Characters that mean something to a shell, a path, a glob, or a git ref.
 UNSAFE = set(" \t\n\r\x0b\x0c/\\;$`&|<>()'\"*?#~!{}[]=:^@,.%+")
@@ -174,7 +175,7 @@ def test_workspace_policy_never_loosens_the_defaults(tmp_path: Path, attempts: i
         f"max_implement_attempts = {attempts}\n",
     )
     user = tmp_path / "config.toml"
-    user.write_text('[tracker]\nlabels = ["mine"]\n')
+    user.write_text('[tracker]\nlabels = ["mine"]\n\n' + TRACKER_TOML)
     policy = config.load(tmp_path, user).policy
     assert policy.max_resume_attempts == min(attempts, 6)
     assert policy.max_implement_attempts == min(attempts, 2)
@@ -231,7 +232,7 @@ def test_workspace_file_cannot_set_private_keys(tmp_path: Path, name: str) -> No
         extra = f'{key} = "x"\n' if section == "tracker" else f'[{section}]\n{key} = "x"\n'
     (tmp_path / config.WORKSPACE_FILE_NAME).write_text(f'[tracker]\nprovider = "jira"\nquery = "q"\n{extra}')
     user = tmp_path / "config.toml"
-    user.write_text('[tracker]\nlabels = ["mine"]\n')
+    user.write_text('[tracker]\nlabels = ["mine"]\n\n' + TRACKER_TOML)
     with pytest.raises(config.ConfigError, match="is private"):
         config.load(tmp_path, user)
 

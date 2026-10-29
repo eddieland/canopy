@@ -177,16 +177,6 @@ def test_a_ticket_marked_done_is_not_waited_on_though_the_query_finds_it_stale(
     assert decided(canopy_env) == []
 
 
-def test_a_ticket_no_source_observes_is_left_to_the_overseer_to_read(
-    canopy_env: CanopyEnv,
-    conn: sqlite3.Connection,
-) -> None:
-    """With no `tracker` source the overseer still reads the tracker itself, so the harness does not wait it."""
-    held(canopy_env, conn, KEY)
-    conn.commit()
-    assert decided(canopy_env) == []
-
-
 @pytest.mark.parametrize(
     ("stale", "why"),
     [
@@ -219,20 +209,6 @@ def test_a_closed_ticket_whose_pr_is_stale_is_left_to_the_overseer_to_mark_done(
     db.set_unit(observed, KEY, str(canopy_env.root), "repo", pr_url=PR)
     observed.execute("UPDATE observed_tickets SET state = 'closed'")
     observed.commit()
-    assert decided(canopy_env) == []
-
-
-def test_without_a_tracker_source_a_stale_pr_is_left_to_the_overseer_to_read(
-    canopy_env: CanopyEnv,
-    conn: sqlite3.Connection,
-) -> None:
-    """The overseer still reads GitHub there, as it reads the tracker, so the harness does not wait it."""
-    assert operator("start", KEY) == 0
-    db.set_unit(conn, KEY, str(canopy_env.root), "repo", pr_url=PR)
-    observe_pr(conn, at=OLD)
-    conn.commit()
-    [own, unit] = phases.derive(context(canopy_env), NOW)
-    assert (own.stale, unit.stale, unit.stale_vcs) == (None, f"{PR} last observed {OLD}", False)
     assert decided(canopy_env) == []
 
 

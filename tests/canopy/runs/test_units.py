@@ -28,6 +28,7 @@ from tests.canopy.helpers import (
     last_tick,
     pool_statuses,
     present,
+    tracker_holds,
     waits,
     worker_does,
 )
@@ -210,6 +211,7 @@ def test_a_dispatch_reads_the_ticket_branch_under_the_dispatch_lock(ws: Ws, tree
     """A first implement that waited for the lock sees the branch another one named meanwhile, and may not rename it."""
     seed_pools(ws, treehouse_state)
     conn = ws.journal()
+    tracker_holds(conn)
     with in_tick(conn) as tick_id:
         codes: list[int] = []
 
@@ -241,13 +243,13 @@ def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
     # The overseer records web's phase and cursor, and the ticket's own; the next tick's state block shows them.
     ws_scenario.tick(
         sets_phase("PROJ-1", Phase.CI_RED, repo="web", cursor="ci=9"),
-        sets_phase("PROJ-1", Phase.RUNNING, cursor="comment=c-1"),
+        sets_phase("PROJ-1", Phase.RUNNING),
         *waits("PROJ-1"),
     )
     ws_scenario.tick(*waits("PROJ-1"), dry_run=True)
 
     [ticket] = ws_scenario.state()["tickets"]
-    assert (ticket["phase"], ticket["cursors"]) == ("running", {"comment": "c-1"})
+    assert (ticket["phase"], ticket.get("cursors")) == ("running", None)
     no_limit = {"implement": 1, "resume": 0}
     # What is null or empty, such as api's phase and cursors and either's cooldown, is left out, and the branch is
     # said once, on the units.

@@ -18,7 +18,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import conversation, db
 from canopy.core.vocab import Decider, Phase, ResumeReason, RunKind, TickStatus
 from canopy.infra import procs
 from canopy.loop import attention, harness_dispatches, mcp, phases
@@ -35,8 +35,10 @@ from tests.canopy.helpers import (
     json_block,
     last_tick,
     mcp_session,
+    operator,
     overseer_does,
     tool_call,
+    tracker_holds,
     waits,
 )
 from tests.canopy.observation_helpers import observe_ticket
@@ -159,7 +161,8 @@ def test_a_tick_halted_before_the_overseer_starts_none(canopy_env: CanopyEnv) ->
         main(["tick"], runner=InlineRunner())
     tick = last_tick(conn)
     assert tick.status == TickStatus.DISK_LOW
-    assert [d.action for d in db.decisions_for_tick(conn, tick.id)] == ["attention:disk_low"]
+    # The `tracker` source's query, which the harness records before the check, and the item the check raises.
+    assert [d.action for d in db.decisions_for_tick(conn, tick.id)] == ["queried", "attention:disk_low"]
     assert started(conn) == []
 
 
@@ -209,8 +212,8 @@ def pushed(scenario: Scenario, git_pool: GitPool) -> Scenario:
     """KEY and PROJ-2 implemented and pushed, and each observed with the queue label. Returns the scenario."""
     scenario.configures(capacity={"max_workers": 3})
     for key in (KEY, "PROJ-2"):
+        # The tests' tracker source reads each as its dispatch rests on it, open with the queue label.
         scenario.run(dispatches(key), worker=pushes())
-        observe_ticket(scenario.conn, key, at=db.now())
     scenario.seen("PROJ-3")
     scenario.conn.commit()
     return scenario
@@ -283,18 +286,32 @@ def test_a_ready_dispatch_into_the_harnesss_workers_is_refused_reserved_and_a_re
 ) -> None:
     # One worker, which the harness's conflict holds: new work may not take it, and a human waiting goes ahead.
     canopy_env.configure(canopy_env.user_file, {"capacity": {"max_workers": 1}})
+    tracker_holds(conn, "PROJ-2", "PROJ-3")
     observe_ticket(conn, KEY, at=db.now())
     db.set_unit(conn, "PROJ-3", str(canopy_env.root), "repo")
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-3-work' WHERE key = 'PROJ-3'")
     conn.execute("UPDATE ticket_units SET branch = 'agent/PROJ-3-work' WHERE ticket_key = 'PROJ-3'")
     conn.commit()
+    # The operator's answer, which authorizes the resume for reply.
+    assert operator("reply", "PROJ-3", "Go ahead.") == 0
+    [answer] = conversation.operator_messages_after(conn, "PROJ-3", 0)
     ready = (
         ["dispatch", "PROJ-2", "--repo", "repo", "--kind", "implement", "--label", LABEL],
         {"key": "PROJ-2", "kind": "implement", "repos": ["repo"], "label": LABEL},
     )
     reply = (
-        ["dispatch", "PROJ-3", "--repo", "repo", "--kind", "resume", "--label", LABEL, "--reason", "reply"],
-        {"key": "PROJ-3", "kind": "resume", "repos": ["repo"], "label": LABEL, "reasons": ["reply"]},
+        [
+            *("dispatch", "PROJ-3", "--repo", "repo", "--kind", "resume", "--label", LABEL, "--reason", "reply"),
+            *("--cursor", f"message={answer.id}"),
+        ],
+        {
+            "key": "PROJ-3",
+            "kind": "resume",
+            "repos": ["repo"],
+            "label": LABEL,
+            "reasons": ["reply"],
+            "cursors": {"message": str(answer.id)},
+        },
     )
     with enabled(), in_tick(conn, dry_run=True) as tick_id:
         phases.record(conn, tick_id, unit_at(KEY, Phase.CONFLICTED))

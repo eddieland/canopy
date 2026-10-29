@@ -9,8 +9,10 @@ canopy](OPERATING.md). Next: [Chores, notifications, and reviews](CHORES_NOTIFIC
 
 ## 17. Trackers
 
-canopy works with any issue tracker the agent runtime can reach through an MCP server. There is no adapter interface and
-no tracker code in the harness. Tracker differences are handled in three places, in order of preference:
+canopy works with any issue tracker the agent runtime can reach through an MCP server and a `tracker` source can read,
+which config requires (§30): canopy ships one for Jira and one for GitHub Issues, and the contract is a page of Python
+for another. There is no adapter interface and no tracker code in the harness. Tracker differences are handled in
+three places, in order of preference:
 
 1. **The contract below.** Agents map it onto the tools a tracker's MCP server exposes without being told how. This is
    the default for any tracker.
@@ -23,7 +25,7 @@ no tracker code in the harness. Tracker differences are handled in three places,
 3. **A provider skill**, `.agents/skills/tracker-<provider>/SKILL.md`, for what an agent would otherwise get wrong:
    identity fields, how "closed" is expressed, where blockers live, and text that silently triggers a tracker action.
    Skills ship for `jira` and `github`. Add one when the decisions show the loop misreading a tracker, not in advance.
-   The overseer gets the skill for `tracker.provider` in its prompt (§13); workers load it as a skill.
+   Workers load the skill for `tracker.provider`; the overseer reads no tracker (§39), so it gets none.
 
 ### Contract
 

@@ -21,6 +21,7 @@ from canopy.notify import journal as notify_journal
 from canopy.notify import message
 from canopy.runtime.report import SessionPage, SessionSpend
 from tests.canopy.helpers import (
+    KEY,
     InlineRunner,
     canopy,
     chore_reports,
@@ -216,11 +217,11 @@ def test_loop_failing_and_recovered_are_sent_once_each(scenario: Scenario, sink_
     out = tmp_path / "phone.txt"
     add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
     for _ in range(5):
-        scenario.tick(result=GAVE_UP, code=1)
+        scenario.tick(*waits(KEY), result=GAVE_UP, code=1)
     [failing] = messages(out)
     assert failing.startswith("canopy: 1 event\n! loop failing: 3 ticks in a row ended other than ok; latest tick 3 ")
-    scenario.tick()
-    scenario.tick()
+    scenario.tick(*waits(KEY))
+    scenario.tick(*waits(KEY))
     listing = f"Full list: {scenario.env.state_dir / 'attention.md'}\n"
     assert messages(out)[1] == f"canopy: 1 event\n! loop recovered after 5 failed ticks\n{listing}"
     assert len(messages(out)) == 2
@@ -231,7 +232,7 @@ def test_a_long_failing_streak_is_one_streak(scenario: Scenario, sink_script: Pa
     out = tmp_path / "phone.txt"
     add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
     for _ in range(3):
-        scenario.tick(result=GAVE_UP, code=1)
+        scenario.tick(*waits(KEY), result=GAVE_UP, code=1)
     assert len(messages(out)) == 1
     conn = scenario.conn
     # The events alone age past pruning, not the ticks of the streak. An event's time is its `at`.
@@ -240,10 +241,10 @@ def test_a_long_failing_streak_is_one_streak(scenario: Scenario, sink_script: Pa
         "INSERT INTO ticks (started_at, ended_at, status) VALUES (?, ?, 'overseer_failed')",
         [(db.now(), db.now())] * 1100,
     )
-    scenario.tick(result=GAVE_UP, code=1)
-    scenario.tick(result=GAVE_UP, code=1)
+    scenario.tick(*waits(KEY), result=GAVE_UP, code=1)
+    scenario.tick(*waits(KEY), result=GAVE_UP, code=1)
     assert len(messages(out)) == 1
-    scenario.tick()
+    scenario.tick(*waits(KEY))
     assert "! loop recovered after 1105 failed ticks\n" in messages(out)[1]
 
 
@@ -396,17 +397,17 @@ def test_a_digest_arrives_on_its_interval_even_when_quiet(
 ) -> None:
     out = tmp_path / "digest.txt"
     add_sink(scenario, sink_script, "daily", out, format="text", events=[], digest_every_minutes=60)
-    scenario.tick()
+    scenario.tick(*waits(KEY))
     [first] = messages(out)
     assert first.startswith("canopy digest\nDigest since ")
     assert (
         ": 1 ticks (ok 1)\n  nothing ran\n  spent: none reported\n  nothing needs you\n  workers running: 0\n" in first
     )
-    scenario.tick()
+    scenario.tick(*waits(KEY))
     assert len(messages(out)) == 1  # not due again yet
     scenario.time_passes(minutes=61)
     [earlier] = scenario.conn.execute("SELECT last_digest_at FROM notify_sinks").fetchone()
-    scenario.tick()
+    scenario.tick(*waits(KEY))
     second = messages(out)[1]
     assert f"Digest since {earlier}: 2 ticks (ok 2)" in second
 
@@ -556,7 +557,7 @@ def test_a_digest_names_the_sessions_outside_canopy_last(
     mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
     runtime_sessions.record(scenario.conn, SessionPage("found", (mine,), cursor=(ms, "ses_mine")))
     chore_cost(scenario.conn, 0.5)
-    scenario.tick()
+    scenario.tick(*waits(KEY))
 
     [message] = json_messages(out)
     spent = message["digest"]["spend"]

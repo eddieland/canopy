@@ -8,6 +8,7 @@ import pytest
 from canopy.core import db
 from canopy.core.vocab import Phase, ResumeReason, RunKind
 from tests.canopy.helpers import (
+    KEY,
     LABEL,
     agent_runs,
     decisions,
@@ -230,7 +231,7 @@ def test_two_linked_tickets_are_worked_in_order(scenario: Scenario, git_pool: Gi
 
 def test_the_state_block_carries_the_stacking_policy(scenario: Scenario) -> None:
     def stacking() -> str:
-        scenario.tick()
+        scenario.tick(*waits(KEY))
         return scenario.state()["policy"]["stacking"]
 
     assert stacking() == "auto"

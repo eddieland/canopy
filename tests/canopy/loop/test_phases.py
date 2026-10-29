@@ -376,11 +376,6 @@ def test_a_ticket_that_depends_on_a_stale_or_missing_observation_is_stale(
     assert derived(canopy_env) == [phases.Derived(KEY, None, stale=stale, stale_tracker=not vcs, stale_vcs=vcs)]
 
 
-def test_without_a_tracker_source_a_public_ticket_is_stale(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    seen(conn, canopy_env)
-    assert derived(canopy_env) == [phases.Derived(KEY, None, stale="no tracker source observes tickets")]
-
-
 def test_a_unit_whose_pr_is_stale_is_stale(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
     unit(canopy_env, observed)
     observe_pr(observed, at=OLD)

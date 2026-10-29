@@ -117,8 +117,15 @@ connector for GitHub Issues, `canopy-connect-github --repo OWNER/NAME` (`canopy_
 GitHub Issues has a source to require: `GH-N` is issue N, read as `canopy-connect-jira` reads Jira's. Chosen
 conservatively, for the operator to change: a blocker is an issue dependency or a `Blocked by #N` line of the body,
 either; a ticket an open issue of another repository blocks, which no key names, is not read whole, so it stays stale;
-and a query that returns another repository's issue is not read. Left: config requiring a `tracker` source, with the
-tests' workspaces given the fake one; the harness's `wait` on an unobserved subject; every MCP server
-but canopy's denied; the third bullet; and the design folded into the sections it names. Still open for the operator:
-whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes, and that entry with it),
-the fifth bullet's.
+and a query that returns another repository's issue is not read. Built (2026-10-29): config requiring a `tracker`
+source, one with a `cmd` that reads, a workspace without one refused with what to add (`core/config.py`), so every
+live tick takes the observed path above; the tests' workspaces run the fake connector as theirs, holding every
+ticket they work open and labeled. The overseer's definition loses the tracker's skill and read tools on every
+path. Chosen conservatively, for the operator to change: `canopy init` writes the table commented out, since only the
+operator knows their site or repository and a guess would send their credentials to someone else's, so a new
+workspace's config does not load, nor `canopy init` clone its repositories, until they fill it in. Left: the
+harness's `wait` on an unobserved subject; every MCP server but canopy's denied; the third bullet; the paths config
+now leaves unreachable removed, the overseer prompt's live reads and tick-wide skips, `canopy queried` and its tool,
+and the loop's branches for a workspace with no `tracker` source; and the design folded into the sections it names.
+Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes,
+and that entry with it), the fifth bullet's.

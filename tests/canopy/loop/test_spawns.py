@@ -30,7 +30,9 @@ from tests.canopy.helpers import (
     chore_reports,
     in_tick,
     present,
+    tracker_holds,
     wait_for_run,
+    waits,
 )
 from tests.canopy.review_helpers import CLEAN, head, reviewer_reports
 from tests.canopy.scenario_helpers import chores_ended, dispatches, due_chore, pushes, reviews
@@ -164,6 +166,7 @@ def test_a_run_a_dead_tick_recorded_is_closed_unstarted_by_the_next_and_counts_t
 ) -> None:
     scenario.configures("workspace", policy={"max_implement_attempts": 1})
     # The tick's process dies after the ask: its row stays running, its run recorded.
+    tracker_holds(scenario.conn)
     with in_tick(scenario.conn) as dead:
         assert main(dispatches()[1:], runner=InlineRunner()) == 0
     assert [r.status for r in recorded_of(scenario.conn, dead)] == [RecordedStatus.RECORDED]
@@ -181,7 +184,8 @@ def test_a_run_a_dead_tick_recorded_is_closed_unstarted_by_the_next_and_counts_t
 
 def test_a_run_its_tick_did_not_start_is_closed_unstarted_as_the_tick_closes(scenario: Scenario) -> None:
     with mock.patch.object(spawns, "make", autospec=True, side_effect=RuntimeError("no spawns today")):
-        ticked = scenario.tick(dispatches())
+        # A dispatch's decision is recorded as it starts: the wait is what this tick owes its ticket (DESIGN §40).
+        ticked = scenario.tick(*waits(KEY), dispatches())
     # What raised is logged, never the tick's outcome; the next tick decides the ticket again.
     assert ticked.tick.status == TickStatus.OK
     [recorded] = recorded_of(scenario.conn, ticked.tick.id)

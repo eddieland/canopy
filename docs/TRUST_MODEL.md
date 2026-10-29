@@ -103,7 +103,7 @@ Controls:
   observed and shown (`unobserved`). A `resume`'s cursors the overseer leaves out default in code to the newest items
   shown that these checks let it cover (DESIGN §37). A dispatch resting on a public ticket or a PR observed past that
   age is refused `stale`. A private ticket and a subject no source covers keep their claims, checked by the worker as
-  before. Where a `tracker` source runs, beside the `vcs` source, which always does, the overseer reads neither world
+  before. Config requires a `tracker` source, and the `vcs` source always runs, so the overseer reads neither world
   live (DESIGN §39): a candidate whose ticket, PR, branches, or open blocker's PR a source left stale is the harness's
   `wait`, the PRs its reviews ask about are shown as the `vcs` source read them, and its definition denies GitHub's
   reads and, wherever config or the provider names it, the tracker's server, so it skips no tick over an outage.
@@ -918,16 +918,13 @@ Residual: the repository still chooses the tracker provider, the query, `needs_h
 and `tracker.ticket_url`. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled tickets,
 agent branches under an unexpected prefix, which branch protection (§7) still governs, or the web UI's ticket links
 leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
-nothing. The query can still widen what the overseer reads: without a `tracker` source, it reads every ticket a query
-returns, text and comments, before it checks for a label, so a widened query puts tickets nobody labeled, any the
-operator's tracker account can see, in front of the model, where their text can try to steer it (T1). It cannot make one
-a candidate. With a `tracker` source, a ticket observed fresh that is not a candidate reaches the overseer by key and
-why alone, and its prompt says not to read it (DESIGN §30); a stale one is the harness's `wait` and never reaches it,
-and its definition denies GitHub's issue reads and, wherever config or the provider names it, the tracker's server
-whole, and carries no skill for it, so its prompt reads no ticket live (DESIGN §39). Settled
-(2026-10-15, the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator
-who shares the workspace with people they do not trust overrides it in the private file. Requiring a `tracker` source
-would close what is left (DESIGN §35). The provider also picks the default tracker server and tools a private ticket's
+nothing. The query cannot widen what the overseer reads: config requires a `tracker` source, which reads the query,
+and a ticket observed fresh that is not a candidate reaches the overseer by key and why alone, and its prompt says not
+to read it (DESIGN §30); a stale one is the harness's `wait` and never reaches it, and its definition denies GitHub's
+issue reads and, wherever config or the provider names it, the tracker's server whole, and carries no skill for it, so
+it reads no ticket live (DESIGN §39). Settled (2026-10-15, the operator's choice): the query stays in the workspace
+file, beside the map it is about, and an operator who shares the workspace with people they do not trust overrides it
+in the private file. The provider also picks the default tracker server and tools a private ticket's
 worker gets (T6): a repository that names another provider leaves the real tracker's server
 undenied in that definition. An operator who works private tickets in a repository they do not control sets
 `tracker.mcp_server` and `tracker.read_tools`, which are private, to pin them. Through the runtime's own config it can

@@ -31,6 +31,7 @@ from tests.canopy.helpers import (
     planner_does,
     pool,
     present,
+    tracker_holds,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool
@@ -256,6 +257,7 @@ def test_plan_attempts_are_the_tickets_and_limited(scenario: Scenario, git_pool:
 
 
 def test_a_dry_run_plans_nothing(canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection) -> None:
+    tracker_holds(conn)
     with in_tick(conn, dry_run=True) as tick_id:
         runner = InlineRunner()
         assert main(PLAN[1:], runner=runner) == 0

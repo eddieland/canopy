@@ -27,6 +27,7 @@ from tests.canopy.helpers import (
     pool,
     present,
     tick_starts,
+    tracker_holds,
     wait_for_run,
     waits,
     worker_does,
@@ -93,8 +94,9 @@ def test_a_run_whose_process_died_is_crashed_its_worker_killed_and_its_slot_retu
     dies.dies()
     assert procs.alive(left_behind)  # the worker leads its own group, so it outlives the run's process
 
-    ticked = scenario.tick(*waits("PROJ-1", "PROJ-2"))
-    assert ticked.actions == ["attention:crashed", "queried", "wait", "wait"]
+    # The harness waits on PROJ-2 for the worker still running it (DESIGN §37); the overseer, on PROJ-1.
+    ticked = scenario.tick(*waits("PROJ-1"))
+    assert ticked.actions == ["attention:crashed", "wait", "queried", "wait"]
     crashed = dies.row
     assert crashed["status"] == "crashed"
     assert json.loads(crashed["result_json"]) == {"harness": "the worker process is gone"}
@@ -281,6 +283,7 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
 ) -> None:
     """M2 acceptance, against the fakes: label to pushed branch, slot returned, a correct `runs` row."""
     dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
+    tracker_holds(conn)
     with (
         overseer_does(canopy(*dispatch, "--slug", "add-login")),
         worker_does(*commit_and_push("agent/PROJ-1-add-login")),
@@ -316,6 +319,7 @@ def test_killed_worker_is_detected_on_the_next_tick(
     conn: sqlite3.Connection,
 ) -> None:
     """M2 acceptance, against the fakes: a killed worker is found by the next tick and its slot returned."""
+    tracker_holds(conn)
     with (
         worker_does(sleep=60),
         in_tick(conn, ends_ok=True),

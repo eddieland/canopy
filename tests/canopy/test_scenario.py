@@ -67,7 +67,7 @@ def test_the_step_that_failed_is_in_the_story(scenario: Scenario) -> None:
             "     Error: grant refused (bad_kind): a resume now fixes CI, and fix-ci runs count as resume runs: grant "
             "resume instead"
         ),
-        "2. tick 1, exits 0: ok: 1 decisions: queried=1",
+        "2. tick 1, exits 0: ok: no overseer, nothing left to judge; 1 decisions: queried=1",
         "     - queried: the query returned no open ticket",
         "The attention list now: nothing.",
     ]
@@ -162,7 +162,9 @@ def test_what_a_command_that_raises_printed_is_left_in_the_tests_own_output(
 
 def test_the_config_a_test_sets_is_a_move_and_lands_in_its_own_table(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.configures(policy={"max_resume_attempts": 1})
-    scenario.configures(policy={"max_implement_attempts": 3}, tracker={"labels": ["mine"]})
+    # The tests' tracker labels the tickets it holds with the queue label it is given.
+    mine = {"sources": {"jira": {"cmd": "connector jira --labeled mine"}}}
+    scenario.configures(policy={"max_implement_attempts": 3}, tracker={"labels": ["mine"]}, connect=mine)
     scenario.configures("workspace", tracker={"needs_human_label": "blocked-on-team"})
     scenario.configures("private", notify={"sinks": {"log": {"cmd": "true", "events": ["runs"]}}})
     # Each key in its own table, though the user file ended on `[paths]`; a key set again takes the place of the old.
@@ -174,7 +176,10 @@ def test_the_config_a_test_sets_is_a_move_and_lands_in_its_own_table(scenario: S
     assert tracker == {"provider": "jira", "query": "project = PROJ", "needs_human_label": "blocked-on-team"}
     assert scenario.told().splitlines()[:4] == [
         "1. the user file sets policy.max_resume_attempts = 1",
-        '2. the user file sets policy.max_implement_attempts = 3, tracker.labels = ["mine"]',
+        (
+            '2. the user file sets policy.max_implement_attempts = 3, tracker.labels = ["mine"], '
+            'connect.sources.jira.cmd = "connector jira --labeled mine"'
+        ),
         '3. the workspace file sets tracker.needs_human_label = "blocked-on-team"',
         '4. the private file sets notify.sinks.log.cmd = "true", notify.sinks.log.events = ["runs"]',
     ]

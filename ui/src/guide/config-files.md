@@ -14,7 +14,8 @@ canopy reads three files, each overriding the one before it, key by key:
 2. `~/.config/canopy/config.toml` (under `$XDG_CONFIG_HOME`, if you set it): yours, for every workspace. What holds
    everywhere goes here, such as the runtime templates and your notification sinks, [Slack](slack) among them.
 3. `.canopy/config.toml`, under the workspace's root: yours, for this workspace alone. `canopy init` writes your
-   queue label and your trust lists here.
+   queue label and your trust lists here, and the table of your tracker source for you to fill in: the program that
+   reads your tickets into the journal. canopy won't run without one.
 
 Some keys are yours alone, such as your queue label and who may resume your work: canopy refuses to run if the
 workspace file sets one, and the error names the key and where it belongs. Anyone who can commit to a shared file

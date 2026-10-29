@@ -88,6 +88,12 @@ _USER_TOML = """\
 [tracker]
 labels = ["agent-ready-mock"]
 
+# The tracker source config requires (DESIGN §30). The mock runs no tick, so it reads nothing, and `.example` names no
+# host anyway.
+[connect.sources.jira]
+kind = "tracker"
+cmd = "canopy-connect-jira --site jira.example"
+
 [capacity]
 slots_per_repo = 2
 # Runs 41 and 43, and task 6's run, which counts against max_workers too: the limit is full, never past it.

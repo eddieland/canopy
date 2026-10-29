@@ -65,7 +65,8 @@ def test_a_tick_with_a_ticket_left_runs_the_overseer(quiet: Scenario) -> None:
     quiet.seen("PROJ-2")
     ticked = quiet.tick(*waits("PROJ-2"))
     assert (ticked.tick.status, ticked.tick.overseer_ran) == (TickStatus.OK, True)
-    assert overseer_runs(quiet.agent_log) == 2
+    # The first tick's query, the `tracker` source's to read, left it nothing (DESIGN §39).
+    assert overseer_runs(quiet.agent_log) == 1
 
 
 def test_a_tick_with_a_due_chore_with_a_when_runs_the_overseer(quiet: Scenario) -> None:
@@ -79,7 +80,7 @@ def test_a_dry_run_with_nothing_left_runs_no_overseer_and_starts_nothing(quiet: 
     ticked = quiet.tick(dry_run=True)
     assert (ticked.tick.status, ticked.tick.overseer_ran) == (TickStatus.OK, False)
     assert present(ticked.tick.summary).startswith(f"dry run; {tick.NO_OVERSEER}")
-    assert overseer_runs(quiet.agent_log) == 1
+    assert overseer_runs(quiet.agent_log) == 0
     assert quiet.conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
 
 
