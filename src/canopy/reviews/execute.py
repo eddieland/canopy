@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, TextIO
 
 from canopy.core import (
     agent_models,
+    cards,
     conversation,
     db,
     definitions,
@@ -50,7 +51,7 @@ from canopy.core.config import render_command
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import impact, late, start
-from canopy.runtime import project_config, stdout
+from canopy.runtime import project_config, servers, stdout
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -296,11 +297,12 @@ def reviewer(
     command = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, title)
     argv = sandboxing.wrap(ctx.config.runtime, [repo], "review", command.argv, snapshot)
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). The reviewer reads its checkout's history
-    # through canopy's read-only git tools, over that checkout alone, named as its link is (DESIGN §27).
+    # through canopy's read-only git tools, over that checkout alone, named as its link is (DESIGN §27), and keeps its
+    # status card through canopy's `status` tool (`cards`).
     env = {
         conversation.RUN_ID_ENV: run,
-        **git_tools.run_env(
-            {start.CHECKOUT_LINK: slot},
+        **servers.env(
+            {**git_tools.served({start.CHECKOUT_LINK: slot}), **cards.served()},
             version=ctx.config.runtime.version,
             cwd=ctx.ws.root.absolute(),
         ),
@@ -351,7 +353,15 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")
     title = f"{'revise' if run.revises is not None else 'review'} {run.pr_url}"
     run_id = run.id
-    process = reviewer(ctx, prompt, slot, models=_models(ctx, run), title=title, repo=run.repo, run=f"review-{run_id}")
+    process = reviewer(
+        ctx,
+        prompt,
+        slot,
+        models=_models(ctx, run),
+        title=title,
+        repo=run.repo,
+        run=f"{conversation.REVIEW_RUN_PREFIX}{run_id}",
+    )
     argv, env, snapshot = process.argv, process.env, process.snapshot
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(

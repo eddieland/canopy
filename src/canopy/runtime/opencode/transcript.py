@@ -23,7 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, StrictFloat, Stric
 from canopy.runtime import entries
 from canopy.runtime.entries import MAX_INPUT, MAX_TEXT, Entry, Error, Step, Text, Tokens, ToolCall
 from canopy.runtime.opencode import events
-from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Count
+from canopy.runtime.report import MAX_COST_USD, MESSAGE_ID_RE, Called, Count
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping
@@ -122,6 +122,22 @@ def did(event: Mapping[str, object]) -> tuple[str, str] | None:
         return None
     command = tool.state.input.get("command")
     return entries.line(tool.tool), entries.line(command if isinstance(command, str) else tool.state.title or "")
+
+
+def called(event: Mapping[str, object]) -> Called | None:
+    """A `tool_use` event's call, with its whole input, when it completed (DESIGN §8): what canopy reads its tools from.
+
+    Returns:
+        The tool, as the runtime names it, and its input, or None when `event` is not a `tool_use` event that validates,
+        or its call ended in an error.
+    """
+    if event["type"] != events.TOOL_USE:
+        return None
+    try:
+        tool = _Tool.model_validate(event.get("part"))
+    except ValidationError:
+        return None
+    return Called(tool.tool, tool.state.input) if tool.state.status == "completed" else None
 
 
 def _entry(event: Mapping[str, object]) -> Entry | None:

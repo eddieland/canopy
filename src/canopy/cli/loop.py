@@ -13,6 +13,7 @@ from rich.console import Console
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.core import (
+    cards,
     chore_result,
     chore_view,
     connector_runs,
@@ -266,6 +267,8 @@ def _print_review_requests(ctx: Context) -> None:
 def _print_workers(ctx: Context) -> None:
     running = db.running_runs(ctx.conn, "runs")
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
+    # What each agent last said it is doing, on its status card (DESIGN §8): the agent's text, for the operator alone.
+    said = cards.of_runs(ctx.conn, "runs", [int(r["id"]) for r in running])
     busy = db.busy_workers(ctx.conn)
     click.echo(f"\nRunning workers ({busy}/{ctx.config.capacity.max_workers}):")
     for r in running:
@@ -278,10 +281,16 @@ def _print_workers(ctx: Context) -> None:
         # What its worker reported so far (DESIGN §8): nothing until its first event, or ever without `--format json`.
         if r["session_id"]:
             click.echo(f"    session {r['session_id']}{spent(r)}{_doing(r)}")
+        if int(r["id"]) in said:
+            click.echo(f"    {cards.now_line(said[int(r['id'])])}")
     # A review holds a slot and counts toward max_workers (DESIGN §21).
-    for r in db.running_runs(ctx.conn, "review_runs"):
+    reviewing = db.running_runs(ctx.conn, "review_runs")
+    reviewers_said = cards.of_runs(ctx.conn, "review_runs", [int(r["id"]) for r in reviewing])
+    for r in reviewing:
         where = f"  {r['slot_path']}" if r["slot_path"] else ""
         click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}{where}{persona_of(r)}")
+        if int(r["id"]) in reviewers_said:
+            click.echo(f"    {cards.now_line(reviewers_said[int(r['id'])])}")
     # So does a task's run (DESIGN §36).
     for t in tasks.running(ctx.conn):
         click.echo(f"  task:{t.task_id}  run {t.id}  {attention.age(t.started_at)}  {t.slot_path}")

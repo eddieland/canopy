@@ -72,9 +72,9 @@ permission:
   # The artifact store's MCP server, `artifacts.mcp_server`, is for the agents `artifacts.publish_roles` names
   # (DESIGN §38): canopy renders it denied whole at the marked line.
   # canopy: artifact tools
-  # canopy's own tools, the overseer's, the reviewer's and planner's git tools, and the reports, whose server a chore's
-  # run is also given, are not this agent's (DESIGN §27): denied by pattern, before the one exception below. An agent
-  # of the operator's allows each report it reads by name.
+  # canopy's own tools, the overseer's, the reviewer's and planner's git tools, a running agent's status card, and the
+  # reports, whose server a chore's run is also given, are not this agent's (DESIGN §27): denied by pattern, before the
+  # one exception below. An agent of the operator's allows each report it reads by name.
   "canopy_*": deny
   # Its one tool of canopy's, which reads its own chore's earlier runs back (DESIGN §19, History) and refuses any other
   # chore's, allowed by exact name: last, so no pattern above closes it, `canopy_*` among them.

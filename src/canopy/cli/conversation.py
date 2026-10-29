@@ -26,6 +26,7 @@ from canopy.cli import tasks as tasks_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.core import (
+    cards,
     chore_view,
     conversation,
     db,
@@ -926,6 +927,11 @@ def _show_run(ctx: Context, run_id: int) -> None:
         click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id)))
     except reports.Refused as e:
         raise CliError(str(e)) from None
+    # The agent's own text, for the operator alone: the reports' `show-run`, which a chore's agent reads, leaves it out
+    # (TRUST_MODEL T1).
+    card = cards.of_run(ctx.conn, "runs", run_id)
+    if card is not None:
+        click.echo("\n" + "\n".join(cards.shown(card)))
 
 
 def _show_chore(ctx: Context, name: str) -> None:

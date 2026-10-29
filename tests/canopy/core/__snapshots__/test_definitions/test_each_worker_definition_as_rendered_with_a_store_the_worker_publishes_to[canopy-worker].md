@@ -139,8 +139,11 @@ permission:
   "louvre_comment_create": allow
   "louvre_thread_resolve": allow
   # canopy's own tools, the overseer's, the reviewer's and planner's git tools, a chore's history, and the reports, are
-  # not this agent's (DESIGN §19, §27): last, so no rule above reopens one.
+  # not this agent's (DESIGN §19, §27): after every rule above, so none reopens one.
   "canopy_*": deny
+  # canopy's `status` tool, the run's status card, which the operator reads and no agent does (DESIGN §8, §27), allowed
+  # by exact name: last, so no pattern above closes it, `canopy_*` among them.
+  "canopy_run_status": allow
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy worker" prompt, print

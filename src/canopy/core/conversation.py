@@ -57,6 +57,8 @@ MAX_KEY = 100
 # T1).
 TICK_ID_ENV = "CANOPY_TICK_ID"
 RUN_ID_ENV = "CANOPY_RUN_ID"
+#: What CANOPY_RUN_ID holds before a review run's id; a worker's or a planner's run is named by its id alone.
+REVIEW_RUN_PREFIX = "review-"
 MAX_OPERATOR = 4000
 MAX_PR_URL = 300
 # The channel of a start record the loop wrote: with `tracker.private` set, a labeled ticket's first dispatch starts

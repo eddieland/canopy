@@ -901,6 +901,29 @@ class RunModel(Row):
 
 
 @dataclass(frozen=True)
+class RunCard(Row):
+    """A running agent's status card, as its last `status` call left it (DESIGN §8, §27): the run, by table and id."""
+
+    TABLE: ClassVar[str] = "run_cards"
+
+    run_table: str
+    run_id: int
+    #: One or two sentences for someone who skipped the transcript.
+    summary: str
+    #: What the agent was doing as it called.
+    now: str
+    #: Its finished steps, a JSON array of `{"what", "proof"}`.
+    done: str
+    #: What is left, in order, a JSON array of strings.
+    next: str
+    #: What is in its way that it works around; None when it named nothing.
+    stuck: str | None
+    updated_at: str
+    #: The tool calls the run made after this card.
+    calls_since: int
+
+
+@dataclass(frozen=True)
 class RuntimeSession(Row):
     """A session the agent runtime keeps, canopy's or not, as the runtime last recorded it (DESIGN §13)."""
 

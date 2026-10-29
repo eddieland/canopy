@@ -16,7 +16,7 @@ import pytest
 from canopy.chores import history
 from canopy.cli import mcp as mcp_cli
 from canopy.cli.main import main
-from canopy.core import chore_runs, db, git_tools, recorded_runs, reports
+from canopy.core import cards, chore_runs, db, git_tools, recorded_runs, reports
 from canopy.core.vocab import ChoreRunStatus, RunKind, TickStatus
 from canopy.infra import procs
 from canopy.loop import mcp, tools
@@ -1170,6 +1170,70 @@ def test_the_git_server_takes_absolute_checkouts_and_serves_nothing_else() -> No
     assert {"S", "GIT_DIR"} <= runner.unset
 
 
+#: A status card as a running agent gives one (DESIGN §8).
+CARD: Mapping[str, object] = {
+    "summary": "Adding the endpoint.",
+    "now": "running the tests",
+    "done": [{"what": "wrote the handler", "proof": "tests pass: 3/3"}],
+    "next": ["open the PR"],
+}
+
+
+@pytest.mark.parametrize("run", ["7", "review-1"])
+def test_a_running_agent_is_served_its_status_card_alone(run: str) -> None:
+    """A worker's or a planner's run, and a review's, list `status` and nothing else; a card is checked, not written."""
+    decide = tool_call("decide", decisions=[{"key": "PROJ-1", "action": "wait", "rationale": "r"}])
+    with in_run(run):
+        served = mcp_session(LIST_TOOLS, tool_call("status", **CARD), decide, tool_call("status", **CARD), status=True)
+    assert served.listed() == ["status"]
+    told = "The operator sees this card now. Call status again whenever where your work stands changes."
+    assert served.said(2) == served.said(4) == (told, False)
+    assert served.responses[3]["error"] == {"code": -32602, "message": "no tool named 'decide'"}
+    schema = served.responses[1]["result"]["tools"][0]["inputSchema"]
+    assert (schema["required"], schema["additionalProperties"]) == (["summary", "now"], False)
+    assert schema["properties"]["summary"]["maxLength"] == cards.MAX_SUMMARY
+
+
+@pytest.mark.parametrize("run", [None, "chore-2", "chore-try:build-health", "task-3", "review-x", "0"])
+def test_the_status_tool_is_served_to_no_other_run(run: str | None) -> None:
+    """Not to the overseer, a chore, or a task: CANOPY_RUN_ID names no worker's, planner's, or review's run."""
+    with in_run(run) if run is not None else contextlib.nullcontext():
+        served = mcp_session(LIST_TOOLS, tool_call("status", **CARD), status=True)
+    assert served.listed() == []
+    assert served.said(2) == (cards.NOT_SERVED, True)
+
+
+def test_an_invalid_or_overlong_card_is_a_tool_error_and_the_server_goes_on() -> None:
+    with in_run("7"):
+        served = mcp_session(
+            tool_call("status", **{**CARD, "summary": "x" * (cards.MAX_SUMMARY + 1)}),
+            tool_call("status", **{**CARD, "now": "running\x1b[2Jthe tests"}),
+            tool_call("status", **{**CARD, "now": " \n "}),
+            tool_call("status", **{**CARD, "next": ["step"] * (cards.MAX_ITEMS + 1)}),
+            tool_call("status", **{**CARD, "done": [{"what": "wrote it"}]}),
+            tool_call("status", summary="Adding the endpoint."),
+            tool_call("status", **CARD, steps=[]),
+            tool_call("status", **CARD),
+            status=True,
+        )
+    assert [served.said(n).error for n in range(1, 9)] == [True] * 7 + [False]
+    assert served.said(1).text == f"summary: String should have at most {cards.MAX_SUMMARY} characters"
+    assert served.said(2).text == "now: must be plain text, with no control or hidden character"
+    assert served.said(3).text == "now: must not be empty"
+    assert served.said(5).text == "done.0.proof: Field required"
+    assert served.said(6).text == "now: Field required"
+    assert served.said(7).text == "steps: Extra inputs are not permitted"
+
+
+def test_the_status_server_serves_nothing_else() -> None:
+    assert main(["_mcp", "--status", "--chore"]) == 2
+    assert main(["_mcp", "--status", "--git", "checkout=/repo"]) == 2
+    with mock.patch.object(mcp, "run_stdio", autospec=True, return_value=0) as served:
+        assert main(["_mcp", "--status"]) == 0
+    [(_, kwargs)] = served.call_args_list
+    assert kwargs == {"status": True}
+
+
 def test_a_chore_run_a_tool_asks_for_is_recorded_and_the_server_starts_nothing(overseen: CanopyEnv) -> None:
     # The tick starts it once the overseer's run ends, so no run is the server's descendant (DESIGN §40).
     conn = overseen.journal()
@@ -1223,7 +1287,8 @@ def test_a_worker_starts_without_the_overseers_server(scenario: Scenario, door: 
     assert [run.status for run in ticked.runs] == ["done"]
     overseer, worker = agent_runs(scenario.agent_log)
     assert overseer["env"].keys() >= servers.VARIABLES
-    assert servers.VARIABLES.isdisjoint(worker["env"])
+    # The worker's inline config names its own server alone, that of its status card (DESIGN §8).
+    assert set(json.loads(worker["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]) == {cards.SERVER}
     assert "CANOPY_TICK_ID" not in worker["env"]
 
 

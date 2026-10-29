@@ -5,7 +5,7 @@ socket, and serves tools and nothing else: JSON-RPC 2.0, one message to a line, 
 `notifications/initialized`, `ping`, `tools/list`, and `tools/call`. Rejected: the `mcp` SDK, a runtime dependency
 with its own async stack and HTTP transports, for these few methods.
 
-It serves in one of four modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the same
+It serves in one of five modes, each its own tools. The overseer's (`OVERSEER`) are its verbs: a call is what the same
 command would be (`loop.tools`), its arguments validated, the workspace opened afresh, the tick checked, one call at a
 time. With CANOPY_RUN_ID set, or outside a running tick, it lists no tool and refuses every call. A chore's (`CHORE`,
 `canopy _mcp --chore`) is one tool, its own chore's history (`chores.history`, DESIGN §19), which `canopy chore history`
@@ -14,7 +14,10 @@ listings, the config's settings, and what each agent is offered, which those com
 (`core.reports`), and the read-back of a tick's decisions, a run, and a chore (`loop.readback`). Each lists and serves
 its tools only where CANOPY_RUN_ID names a chore's run, and serves nothing of the overseer's. The reviewer's and the
 planner's (`git_mode`, `canopy _mcp --git NAME=PATH ...`) are read-only git in the checkouts its command line names, the
-run's own (`core.git_tools`); it opens no workspace, and serves nothing else.
+run's own (`core.git_tools`); it opens no workspace, and serves nothing else. A running agent's (`STATUS`, `canopy _mcp
+--status`) is one tool, `status`, its status card (`core.cards`), listed and served only where CANOPY_RUN_ID names a
+worker's, a planner's, or a review's run: it validates the card and writes nothing, since canopy records the card from
+the call the run prints, and it opens no workspace.
 
 An overseer's tool lists its result's schema as its output schema, and answers with the text the command prints and
 the result as structured content; git's `log` does too, its text the result as JSON. A refusal or an invalid argument
@@ -37,7 +40,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, StrictStr, ValidationError
 
 from canopy.chores import history
-from canopy.core import config, context, conversation, db, git_tools, reports
+from canopy.core import cards, config, context, conversation, db, git_tools, reports
 from canopy.infra import logs
 from canopy.loop import chore_tools, readback, review_tools, tools
 
@@ -357,6 +360,38 @@ REPORT_TOOLS = (
 )
 
 
+def _status(
+    arguments: Mapping[str, object],
+    opened: Opener,
+) -> str:
+    """Check a running agent's card: canopy records it from the call the run prints, so this writes nothing.
+
+    Returns:
+        What the agent is told: that the operator sees the card.
+
+    Raises:
+        tools.Refused: CANOPY_RUN_ID names no worker's, planner's, or review's run.
+    """
+    refused = _status_refusal(opened)
+    if refused is not None:
+        raise tools.Refused(refused)
+    cards.Card.model_validate(arguments)
+    return "The operator sees this card now. Call status again whenever where your work stands changes."
+
+
+#: A running agent's one tool, which the runtime names `canopy_run_status` (its server is `cards.SERVER`).
+STATUS_TOOLS = (
+    Tool(
+        cards.TOOL,
+        "Tell the operator where your work stands, as a card that replaces the one you gave last: a summary, what you "
+        "are doing now, what is done with the proof of each, what is next, and what is in your way, if anything. Call "
+        "it early, and again whenever what you are doing changes. Plain text, each field on one line.",
+        cards.Card,
+        _status,
+    ),
+)
+
+
 @dataclass(frozen=True)
 class Mode:
     """What the server serves: the overseer's verbs, a chore its history, canopy's reports, or git."""
@@ -373,12 +408,13 @@ def run_stdio(
     chore: bool = False,
     serve_reports: bool = False,
     checkouts: Mapping[str, Path] | None = None,
+    status: bool = False,
 ) -> int:
     """Serve on this process's stdin and stdout until stdin closes, with `runner` for every process a call starts.
 
     `chore` serves a chore's run its history (`CHORE`), and `serve_reports` canopy's reports (`REPORTS`), each from the
     workspace its run names; `checkouts`, a review's or a plan's run read-only git in those checkouts, by name
-    (`git_mode`); else it serves the overseer's verbs.
+    (`git_mode`); `status`, a running agent its status card (`STATUS`); else it serves the overseer's verbs.
 
     The protocol keeps its own copy of stdout; the process's stdout and stderr then go nowhere, so nothing a call
     prints, and no warning or traceback, reaches the runtime's pipes.
@@ -399,7 +435,12 @@ def run_stdio(
     # A chore's agent may run in a `cwd` outside the workspace; its run names the workspace it belongs to.
     root = os.environ.get(history.WORKSPACE_ENV) if chore or serve_reports else None
     start = Path(root) if root else Path.cwd()
-    mode = git_mode(runner, checkouts) if checkouts else CHORE if chore else REPORTS if serve_reports else OVERSEER
+    if checkouts:
+        mode = git_mode(runner, checkouts)
+    elif status:
+        mode = STATUS
+    else:
+        mode = CHORE if chore else REPORTS if serve_reports else OVERSEER
     with contextlib.suppress(BrokenPipeError), out:
         serve(sys.stdin.buffer, write, lambda: opened(runner, start), mode)
     return 0
@@ -729,12 +770,23 @@ def _chore_refusal(opener: Opener) -> str | None:
     return None
 
 
+def _status_refusal(opener: Opener) -> str | None:  # noqa: ARG001  (it reads no workspace)
+    """Say why the status tool is not served now: CANOPY_RUN_ID names no worker's, planner's, or review's run.
+
+    Returns:
+        Why, as a refusal says it, or None when it is served.
+    """
+    return None if cards.serves(os.environ.get(conversation.RUN_ID_ENV, "")) else cards.NOT_SERVED
+
+
 #: The overseer's verbs, served inside a running tick and never inside a run.
 OVERSEER = Mode(TOOLS, _overseer_refusal)
 #: A chore's history, served inside that chore's run alone.
 CHORE = Mode(CHORE_TOOLS, _chore_refusal)
 #: canopy's read-only reports, served inside a chore's run alone, the one run the harness gives their server today.
 REPORTS = Mode(REPORT_TOOLS, _chore_refusal)
+#: A running agent's status card, served inside a worker's, a planner's, or a review's run alone.
+STATUS = Mode(STATUS_TOOLS, _status_refusal)
 
 
 def _inside_run() -> str:

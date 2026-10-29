@@ -18,9 +18,9 @@ the tools' functions, until nothing needs them (ROADMAP M48).
   runs is decided by quoting. A tool call's arguments are JSON fields, with nothing to quote, expand, or end early.
 - Each verb is its own tool name, so spend by tool (§11) splits the overseer's calls by verb.
 
-Workers are out of scope: what they report is read
-from their final line after they exit (§8), so nothing a worker writes reaches the journal while it runs, and a tool a
-worker could call mid-run would end that.
+Workers are out of scope but for their status card (§8): what they report is read from their final line after they
+exit, and the card from the calls they print, so nothing a worker writes reaches the journal but through what canopy
+observes it print.
 
 ### The server
 
@@ -60,6 +60,12 @@ bounded. `log` answers with records, each commit's fields and files apart, as st
 text, so no message or path in a PR can pass for another commit; the rest answer with git's text. Their definitions
 deny bash, the planner's but for what `runtime.allow_bash` names (§13), deny `canopy_*`, and then allow each by exact
 name; every other definition denies them. Workers keep their shell, for git's writes.
+
+Every worker's, planner's, and reviewer's run is given `canopy _mcp --status`, named `canopy_run`, which serves one
+tool, `status`, the run's status card (§8), seen as `canopy_run_status`. It lists and serves it only where
+`CANOPY_RUN_ID` names such a run, opens no workspace, and writes nothing: it checks the card and says so, and canopy
+records the card from the call's input as the run prints it, checked again. Those definitions allow it by exact name,
+last; every other one denies it.
 
 ### The tools
 

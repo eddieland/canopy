@@ -76,7 +76,11 @@ Neither version cuts a tool's input before printing it, only its output; the bou
 and the harness both hold the card to it, and the harness reads only a `completed` call. OpenCode's own `todowrite`
 (both versions: `content`, `status` of `pending`, `in_progress`, `completed`, or `cancelled`, and 1's `priority`)
 would not serve for steps: it has no `blocked`, no stage, no proof of what is done, and no summary or `now`, and
-every worker already has it; so steps go on canopy's card in stage 2, and `todowrite` is left as it is.
+every worker already has it; so steps go on canopy's card in stage 2, and `todowrite` is left as it is. Stage 1's
+core built 2026-10-29: `canopy _mcp --status` serves `status` to every worker, planner, and reviewer run, the card is
+recorded from the call `_run` and `_review` read (`run_cards`, with the tool calls since), kept after the run, and
+shown by `canopy status`, `canopy show`, and `canopy review show`; TRUST_MODEL T1, T3, and T6 and §27 say so. Left for
+later PRs: the web UI's display, the plugin's staleness nudge (with T4), and stage 2's steps.
 
 [status]: https://github.com/fullstackhouse/paseo-status
 [progress]: https://github.com/stevecastaneda/paseo-plugins/tree/main/progress
