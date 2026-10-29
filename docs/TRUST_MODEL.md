@@ -1022,6 +1022,10 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
   without following links, and rendered as text; it is never served as a file, and taking it runs no diff driver or
   textconv filter the commit names.
+- It serves the machine's processes on the system resources page: each one's name, account, use, and command line,
+  read from Linux's `/proc`, the kernel's threads left out. A command line holds whatever its program was given, an
+  argument that is a token included, and may belong to another account on the machine; `ps` shows the same to anyone
+  logged in there. It is read only while the page asks, from no path a request names, and rendered as text.
 - It serves the models the runtime lists (DESIGN §13), read when the operator opens a ticket's Model menu: it runs
   the runtime's list command, as `canopy models` does, through the process seam in the workspace root with a 30-second
   timeout, taking nothing from the request, and serves only the lines that are model ids. A choice of model is looked

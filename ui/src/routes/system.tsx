@@ -9,6 +9,7 @@ import { CopyButton } from '@/components/copy-button'
 import { Counter } from '@/components/counter'
 import { Field, Fields } from '@/components/fields'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } from '@/components/panel'
+import { ProcessTree } from '@/components/process-tree'
 import { Timestamp } from '@/components/timestamp'
 import { TrendChart } from '@/components/trend-chart'
 import type { TrendReference } from '@/components/trend-chart'
@@ -35,9 +36,9 @@ import { cn } from '@/lib/utils'
 
 // What the page shows, the same on every visit: the title's help, so the description is left for the machine.
 const HELP =
-    'The machine the loop runs on: how busy its processors are, its memory, the disks canopy writes to, and the ' +
-    `loop's own process. Read when the page opens and every ${HOST_REFRESH_MS / 1000} seconds while it is open; ` +
-    'the graphs are the last hour of readings the server keeps in memory.'
+    'The machine the loop runs on: how busy its processors are, its memory, the disks canopy writes to, what each ' +
+    `process uses, and the loop's own process. Read when the page opens and every ${HOST_REFRESH_MS / 1000} ` +
+    'seconds while it is open; the graphs are the last hour of readings the server keeps in memory.'
 
 // What a figure the operating system does not give reads as: off Linux, the standard library has no way to it.
 const UNREAD = 'not read on this system'
@@ -58,8 +59,8 @@ const NBSP = '\u00A0'
 /**
  * The machine the loop runs on (the header's host readout opens it): what is under pressure first, four counters
  * (the load, the memory used, the free space where the workspace is or on a disk under more pressure, how long the
- * loop has run), a graph of each over the last hour, then each disk canopy writes to, the processors and memory, the
- * loop's process, and the machine. In no section; read again every few seconds.
+ * loop has run), a graph of each over the last hour, the processes keeping it busy, then each disk canopy writes to,
+ * the processors and memory, the loop's process, and the machine. In no section; read again every few seconds.
  */
 export const Route = createFileRoute('/system')({
     component: SystemPage,
@@ -115,6 +116,7 @@ function Resources({ host }: { host: HostResources }) {
             )}
             <HostCounters host={host} />
             <LastHour host={host} />
+            <ProcessTree loop={host.process.pid} cores={host.cpu.cores} />
             <Panel>
                 <PanelHeader label="Disks">
                     <span className="text-xs text-muted-foreground">where canopy writes</span>

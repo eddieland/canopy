@@ -3,7 +3,8 @@
 A fixed reading, never the host's: the pages show the same machine on every run, and the public demo (demo.py) tells
 nobody about the machine it runs on. Every figure is one canopy reads on Linux, so the page shows them all, and none
 is under pressure, so the header's readout is calm. Its hour of readings (`samples`) is as fixed: a build ran twenty
-minutes before, so the graphs have a shape to show.
+minutes before, so the graphs have a shape to show. Its processes (`processes`) are a fixed list too: the loop,
+its two running runs' agents, one of them compiling, and what else a build box keeps.
 """
 
 from __future__ import annotations
@@ -12,12 +13,126 @@ import math
 from datetime import datetime, timedelta
 
 from canopy.serve import host
-from canopy.serve.schema.host import Cpu, Disk, DiskSample, HostResources, HostSample, LoopProcess, Memory
+from canopy.serve.schema.host import (
+    Cpu,
+    Disk,
+    DiskSample,
+    HostProcess,
+    HostProcesses,
+    HostResources,
+    HostSample,
+    LoopProcess,
+    Memory,
+    ProcessState,
+)
 
 _GIB = 1024**3
 _MIB = 1024**2
 #: The minutes before the last reading a build started, and ended: the hour's readings rise and settle with it.
 _BUILD_START, _BUILD_END = 25, 15
+#: The loop's process id, which its process and the processes' list share.
+_LOOP = 48213
+#: The mock's processes, parent first: pid, parent, name, user, state, processors kept busy, memory in MiB, threads,
+#: minutes since it started, and command line. Runs 41 and 43 are running in its journal; 41's agent is compiling.
+_PROCESSES: tuple[tuple[int, int, str, str, ProcessState, float, int, int, int, str], ...] = (
+    (1, 0, "systemd", "root", "sleeping", 0.002, 14, 1, 13200, "/sbin/init splash"),
+    (612, 1, "systemd-journal", "root", "sleeping", 0.004, 48, 1, 13200, "/usr/lib/systemd/systemd-journald"),
+    (880, 1, "sshd", "root", "sleeping", 0.0, 9, 1, 13199, "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"),
+    (41022, 880, "sshd", "root", "sleeping", 0.0, 11, 1, 195, "sshd: operator [priv]"),
+    (41040, 41022, "sshd", "operator", "sleeping", 0.001, 7, 1, 195, "sshd: operator@pts/0"),
+    (41041, 41040, "bash", "operator", "sleeping", 0.0, 5, 1, 195, "-bash"),
+    (
+        _LOOP,
+        41041,
+        "canopy",
+        "operator",
+        "sleeping",
+        0.031,
+        268,
+        19,
+        192,
+        "/home/operator/.local/share/uv/tools/canopy/bin/python /home/operator/.local/bin/canopy loop",
+    ),
+    (
+        50110,
+        _LOOP,
+        "python3",
+        "operator",
+        "sleeping",
+        0.002,
+        61,
+        3,
+        14,
+        "/home/operator/.local/share/uv/tools/canopy/bin/python -m canopy _run 41",
+    ),
+    (50128, 50110, "opencode", "operator", "sleeping", 0.118, 412, 22, 14, "opencode run --agent canopy-worker"),
+    (50311, 50128, "bash", "operator", "sleeping", 0.0, 4, 1, 3, "/bin/bash -c cargo test --workspace"),
+    (50312, 50311, "cargo", "operator", "sleeping", 0.046, 151, 9, 3, "cargo test --workspace"),
+    (
+        50398,
+        50312,
+        "rustc",
+        "operator",
+        "running",
+        0.982,
+        1210,
+        14,
+        1,
+        "rustc --crate-name api --edition=2021 src/lib.rs --test -C opt-level=0 -C debuginfo=2",
+    ),
+    (
+        50401,
+        50312,
+        "rustc",
+        "operator",
+        "running",
+        0.957,
+        880,
+        12,
+        1,
+        "rustc --crate-name api_server --edition=2021 src/main.rs --test -C opt-level=0 -C debuginfo=2",
+    ),
+    (
+        50140,
+        _LOOP,
+        "python3",
+        "operator",
+        "sleeping",
+        0.001,
+        58,
+        3,
+        9,
+        "/home/operator/.local/share/uv/tools/canopy/bin/python -m canopy _run 43",
+    ),
+    (50152, 50140, "opencode", "operator", "sleeping", 0.036, 377, 21, 9, "opencode run --agent canopy-worker"),
+    (50290, 50152, "git", "operator", "disk", 0.012, 22, 1, 0, "git fetch origin agent/ABC-104-retry"),
+    (1203, 1, "dockerd", "root", "sleeping", 0.009, 96, 31, 13198, "/usr/bin/dockerd -H fd://"),
+    (
+        1310,
+        1,
+        "postgres",
+        "postgres",
+        "sleeping",
+        0.003,
+        41,
+        1,
+        13198,
+        "/usr/lib/postgresql/16/bin/postgres -D /var/lib/postgresql/16/main",
+    ),
+    (1315, 1310, "postgres", "postgres", "sleeping", 0.001, 9, 1, 13198, "postgres: 16/main: walwriter"),
+    (
+        2001,
+        41041,
+        "node",
+        "operator",
+        "sleeping",
+        0.011,
+        183,
+        11,
+        180,
+        "node /home/operator/acme/web/node_modules/.bin/vite --port 5173",
+    ),
+)
 
 
 def machine(now: datetime) -> HostResources:
@@ -46,7 +161,7 @@ def machine(now: datetime) -> HostResources:
             Disk(holds=["temp"], path="/tmp", total=32 * _GIB, free=27 * _GIB + 300 * _MIB, floor=None),  # noqa: S108
         ],
         process=LoopProcess(
-            pid=48213,
+            pid=_LOOP,
             started_at=now - timedelta(hours=3, minutes=12),
             rss=268 * _MIB,
             peak_rss=412 * _MIB,
@@ -54,6 +169,33 @@ def machine(now: datetime) -> HostResources:
             open_files=61,
             max_open_files=65536,
         ),
+    )
+
+
+def processes(now: datetime) -> HostProcesses:
+    """The mock's processes as read at `now`, measured over the ten seconds before.
+
+    Returns:
+        A build box's: the loop, its two running runs' agents with a compile under one, and a few services.
+    """
+    return HostProcesses(
+        read_at=now,
+        over_seconds=10.0,
+        processes=[
+            HostProcess(
+                pid=pid,
+                parent=parent,
+                name=name,
+                command=command,
+                user=user,
+                state=state,
+                cpu=cpu,
+                rss=mib * _MIB,
+                threads=threads,
+                started_at=now - timedelta(minutes=minutes),
+            )
+            for pid, parent, name, user, state, cpu, mib, threads, minutes, command in sorted(_PROCESSES)
+        ],
     )
 
 

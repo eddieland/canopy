@@ -121,6 +121,12 @@ export type DiskUse = Schemas['DiskUse']
 export type HostHistory = Schemas['HostHistory']
 /** What the system resources page's graphs draw of one reading of the machine. */
 export type HostSample = Schemas['HostSample']
+/** The machine's processes as read when asked for, each measured since the read before; none off Linux. */
+export type HostProcesses = Schemas['HostProcesses']
+/** One process on the machine: its parent, name, command line, account, state, processors kept busy, and memory. */
+export type HostProcess = Schemas['HostProcess']
+/** What a process was doing when read; the load average counts the `running` and `disk` ones. */
+export type ProcessState = Schemas['ProcessState']
 /** What the last day and the last 30 days cost, read together, so a month never shows less than its day. */
 export type Spend = Schemas['Spend']
 /** What the agent runtime reported spending in the last `hours` hours (DESIGN §13). */
