@@ -502,6 +502,7 @@ def test_it_serves_the_eight_tools_and_nothing_else(client: Client) -> None:
     hello = client.request("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}})["result"]
     assert hello["protocolVersion"] == "2024-11-05"
     assert hello["capabilities"] == {"tools": {"listChanged": False}}
+    assert hello["instructions"] == server.INSTRUCTIONS
     assert (
         client.request("initialize", {"protocolVersion": "1999-01-01"})["result"]["protocolVersion"]
         == (canopy_mcp.PROTOCOL_VERSIONS[0])
