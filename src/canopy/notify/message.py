@@ -458,11 +458,7 @@ def digest(
     started = Counter(
         str(r[0]) for r in sql.execute(conn, sql.select("kind").from_("runs").where("started_at >= ?", since))
     )
-    ended_rows = records.fetch_all(
-        conn,
-        records.Run,
-        sql.select("*").from_("runs").where("ended_at >= ?", since).order_by("id"),
-    )
+    ended_rows = records.select(records.Run).where("ended_at >= ?", since).order_by("id").all(conn)
     ended = Counter(str(r.status) for r in ended_rows)
     named = titles(conn)
     done: list[DoneRun] = [
