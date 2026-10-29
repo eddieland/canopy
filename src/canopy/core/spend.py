@@ -74,6 +74,8 @@ _TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
 }
 #: Every kind of agent run by its table and the condition on the table's rows, the overseer's ticks included.
 KIND_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
+#: The kinds whose runs each work on one ticket, their table's `ticket_key` naming it: what `models` narrows to one.
+TICKET_KINDS: tuple[Kind, ...] = ("workers", "plans", "reviews")
 #: The budget whole, as a percentage of it: the alert always sent.
 FULL = 100
 # About how many characters make a token: what a tool's result is counted in, as an estimate of its tokens.
@@ -541,6 +543,21 @@ def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int, *, stat
         starts.setdefault(_local_hour(at), db.format_time(at))
     buckets = _Buckets(expression=_HOUR, starts=starts, name_of=lambda stamp: _local_hour(db.parse_time(stamp)))
     return _breakdown(conn, start, end, buckets, state_dir=state_dir, hours=hours)
+
+
+def models(conn: sqlite3.Connection, since: str, until: str, *, ticket: str | None = None) -> list[ModelSpend]:
+    """What each kind's runs that started in `[since, until)`, each a journal time, spent on each model.
+
+    As a breakdown's `models` lists them; with `ticket`, only that ticket's runs, of the kinds that work on one
+    (`TICKET_KINDS`).
+
+    The same read feeds the spend page's By model, narrowed to a ticket or not, and a ticket's page's canary line, which
+    sets its workers' spend on each model beside the workspace's.
+
+    Returns:
+        Each kind's rows, the most costly model first, then its runs no session named a model for, under None.
+    """
+    return _models(conn, since, until, ticket=ticket)
 
 
 def costs(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) -> Costs:
@@ -1104,43 +1121,50 @@ def _tools_of(kind: Kind, since: str, until: str) -> sql.Select:
 
 # Each kind's spend by model in the window, from its runs that started in it; then those of its runs no session named a
 # model for, under None.
-def _models(conn: sqlite3.Connection, since: str, until: str) -> list[ModelSpend]:
+def _models(conn: sqlite3.Connection, since: str, until: str, *, ticket: str | None = None) -> list[ModelSpend]:
     found: list[ModelSpend] = []
-    for kind in KINDS:
+    for kind in KINDS if ticket is None else TICKET_KINDS:
         found.extend(
             ModelSpend(kind=kind, model=str(model), runs=int(runs), replies=int(replies), cost_usd=float(cost))
-            for model, runs, replies, cost in sql.execute(conn, _named_models(kind, since, until))
+            for model, runs, replies, cost in sql.execute(conn, _named_models(kind, since, until, ticket))
         )
-        [(runs, cost)] = sql.execute(conn, _unnamed_models(kind, since, until)).fetchall()
+        [(runs, cost)] = sql.execute(conn, _unnamed_models(kind, since, until, ticket)).fetchall()
         if runs:
             found.append(ModelSpend(kind=kind, model=None, runs=int(runs), replies=0, cost_usd=cost))
     return found
 
 
 # One kind's spend by model in a window, read as `_tools_of` reads `run_tools`: the run table leads, by its `_spent`
-# index, and `run_models` is read by its key's prefix.
-def _named_models(kind: Kind, since: str, until: str) -> sql.Select:
+# index, and `run_models` is read by its key's prefix. With a ticket, only its runs, of a kind in `TICKET_KINDS`.
+def _named_models(kind: Kind, since: str, until: str, ticket: str | None = None) -> sql.Select:
     table, which = KIND_TABLES[kind]
     return (
         sql.select("m.model, count(*), SUM(m.replies), SUM(m.cost_usd)")
         .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
         .where("{}", which)
+        .where("{}", _of_ticket(ticket))
         .group_by("m.model")
         .order_by("SUM(m.cost_usd) DESC, m.model")
     )
 
 
 # One kind's runs in a window that no session named a model for, and what they reported they cost.
-def _unnamed_models(kind: Kind, since: str, until: str) -> sql.Select:
+def _unnamed_models(kind: Kind, since: str, until: str, ticket: str | None = None) -> sql.Select:
     table, which = KIND_TABLES[kind]
     return (
         sql.select("count(*), SUM(r.cost_usd)")
         .from_("{} r", sql.name(table))
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
         .where("{}", which)
+        .where("{}", _of_ticket(ticket))
         .where("NOT EXISTS (SELECT 1 FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)", table)
     )
+
+
+# The condition that keeps one ticket's runs, on a table of `TICKET_KINDS`; every run when there is no ticket.
+def _of_ticket(ticket: str | None) -> sql.Fragment:
+    return _EVERY if ticket is None else sql.frag("r.ticket_key = ?", ticket)
 
 
 # Whether a first call started cold: it read less than half of what it was sent from the cache, where a warm one reads

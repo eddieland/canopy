@@ -56,6 +56,14 @@ export const keys = {
     // Under the breakdowns' key too, so whatever marks them stale (a cost, a run's start or end, a tick's decisions)
     // marks the months stale with them.
     monthlyReport: (months: number) => ['spend', 'breakdown', 'months', months] as const,
+    spendModels: (range: SpendBreakdownRange, ticket: string | undefined) =>
+        [
+            'spend',
+            'breakdown',
+            'models',
+            range.hours === undefined ? `${range.days}d` : `${range.hours}h`,
+            ticket ?? null,
+        ] as const,
     tick: ['tick'] as const,
     // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
     tickNow: ['tick-now'] as const,
@@ -210,6 +218,19 @@ export function spendBreakdownQuery(range: SpendBreakdownRange) {
         queryKey: keys.spendBreakdown(range),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/spend/breakdown', { params: { query: range }, signal })),
+    })
+}
+
+/**
+ * What the runs that started in a window spent on each model, by kind, every run's or one `ticket`'s (its workers',
+ * plans', and reviews'): the spend page's By model narrowed to a ticket, and a ticket's canary line. Marked stale with
+ * the spend breakdowns.
+ */
+export function spendModelsQuery(range: SpendBreakdownRange, ticket?: string) {
+    return queryOptions({
+        queryKey: keys.spendModels(range, ticket),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/spend/models', { params: { query: { ...range, ticket } }, signal })),
     })
 }
 

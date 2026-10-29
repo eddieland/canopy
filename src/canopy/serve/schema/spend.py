@@ -215,6 +215,25 @@ class SpendModel(Model):
     runs reported, None when none did."""
 
 
+class SpendModels(Model):
+    """What the runs that started in a window spent on each model, every run's or one ticket's (DESIGN §13).
+
+    The spend page's By model reads it narrowed to a ticket, and a ticket's page reads it twice, its own and the
+    workspace's, to set its workers' cost per run on each model beside everyone's: a canary's comparison.
+    """
+
+    since: datetime
+    """When the window starts: local midnight on its first day, or the start of its first hour."""
+    days: int | None
+    """How many days it spans; None for a window in hours."""
+    hours: int | None = None
+    """How many hours it spans; None for a window in days."""
+    ticket: str | None = None
+    """The ticket whose runs it counts, of the kinds that work on one (workers, plans, reviews); None for every run."""
+    models: list[SpendModel]
+    """Each kind's spend on each model, as a breakdown's `models` lists it."""
+
+
 class SpendFirstCallWeek(Model):
     """The first model calls of one kind's runs that started in one local ISO week of the window (DESIGN §13).
 

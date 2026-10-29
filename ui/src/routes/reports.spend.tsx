@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
-import { spendBreakdownQuery } from '@/api/queries'
+import { spendBreakdownQuery, spendModelsQuery } from '@/api/queries'
 import type { SpendBreakdownRange } from '@/api/queries'
 import { SPEND_KINDS } from '@/api/types'
 import type {
@@ -81,6 +81,7 @@ interface SpendSearch {
     tool_kind?: SpendKind | undefined
     first_kind?: SpendKind | undefined
     first_series?: string | undefined
+    ticket?: string | undefined
 }
 
 // The search keys of the kind filters: By model's, By tool's, and First calls by week's.
@@ -184,7 +185,9 @@ const PEAK_JUSTIFY: Record<PeakAlign, string> = {
  * by the hour, or `?days=`, a week or 30 days; the nav opens the week, and the rail's Spent counters their own window.
  * `?model_kind=` and `?tool_kind=` keep one kind's rows of By model and By tool, which otherwise sum every kind's.
  * `?first_kind=` picks the kind First calls by week draws, the first with a week otherwise, and `?first_series=` one
- * of its chores or models, `chore:deps` or `model:` and the model's id, in place of all its runs.
+ * of its chores or models, `chore:deps` or `model:` and the model's id, in place of all its runs. `?ticket=` narrows By
+ * model to one ticket's runs, its workers' unless `?model_kind=` names another kind, as a ticket's canary line links
+ * here: a ticket's every kind summed would mix its reviewer's model in with its workers'.
  */
 export const Route = createFileRoute('/reports/spend')({
     // Typed search params: a window the page does not offer is dropped, which reads as the week, and a kind it does
@@ -199,6 +202,10 @@ export const Route = createFileRoute('/reports/spend')({
             first_kind: SPEND_KINDS.find((k) => k === search['first_kind']),
             // Any series is kept: one the window's weeks do not have reads as the kind's own.
             first_series: typeof search['first_series'] === 'string' ? search['first_series'] : undefined,
+            ticket:
+                typeof search['ticket'] === 'string' && search['ticket'] !== '' && search['ticket'].length <= 200
+                    ? search['ticket']
+                    : undefined,
         }
     },
     component: SpendPage,
@@ -209,6 +216,11 @@ function SpendPage() {
     const shown = rangeOf(search)
     const navigate = Route.useNavigate()
     const query = useQuery(spendBreakdownQuery(shown))
+    const { ticket } = search
+    // By model narrowed to a ticket: its own read, over the same window, a kind at a time, its workers' at first.
+    const narrowed = useQuery({ ...spendModelsQuery(shown, ticket), enabled: ticket !== undefined })
+    const spentOn = ticket === undefined ? query.data?.models : narrowed.data?.models
+    const modelKind = search.model_kind ?? (ticket === undefined ? undefined : 'workers')
     const clock = useClock()
     // What the empty panels say they looked over: `these 24 hours`, `these 7 days`.
     const span = windowName(shown)
@@ -307,28 +319,28 @@ function SpendPage() {
                     <Panel data-testid="spend-models">
                         <PanelHeader label="By model">
                             <span className="flex flex-wrap items-center gap-x-3">
+                                {ticket !== undefined && <TicketFilter ticket={ticket} />}
                                 <KindFilter
                                     name="model_kind"
-                                    kinds={kindsOffered(data?.models ?? [], search.model_kind)}
-                                    chosen={search.model_kind}
+                                    kinds={kindsOffered(spentOn ?? [], modelKind)}
+                                    chosen={modelKind}
+                                    every={ticket === undefined}
                                 />
-                                {data !== undefined && (
-                                    <Unattributed
-                                        share={unattributedShare(modelRows(data.models, search.model_kind))}
-                                    />
+                                {spentOn !== undefined && (
+                                    <Unattributed share={unattributedShare(modelRows(spentOn, modelKind))} />
                                 )}
                                 <span className="readout text-xs text-muted-foreground" data-testid="spend-model-count">
-                                    {data === undefined ? '' : modelCount(modelRows(data.models, search.model_kind))}
+                                    {spentOn === undefined ? '' : modelCount(modelRows(spentOn, modelKind))}
                                 </span>
                             </span>
                         </PanelHeader>
-                        {data === undefined ? (
+                        {spentOn === undefined ? (
                             <PanelSkeleton rows={4} className="min-h-32" />
                         ) : (
                             <Models
-                                models={modelRows(data.models, search.model_kind)}
-                                kind={search.model_kind}
-                                listed={listedModels(data.models)}
+                                models={modelRows(spentOn, modelKind)}
+                                kind={modelKind}
+                                listed={listedModels(spentOn)}
                                 span={span}
                             />
                         )}
@@ -936,6 +948,24 @@ function KindLink({
         >
             {children}
         </FilterLink>
+    )
+}
+
+/**
+ * The ticket By model is narrowed to, as a chip beside `all`, which takes it off: the canary line on a ticket's page
+ * links here with it.
+ */
+function TicketFilter({ ticket }: { ticket: string }) {
+    return (
+        <nav aria-label="Filter by ticket" className="flex flex-wrap items-center gap-1" data-testid="spend-ticket">
+            <span className="mr-1 font-mono text-xs text-muted-foreground">ticket</span>
+            <FilterLink search={(prev) => ({ ...prev, ticket: undefined })} selected={false}>
+                all
+            </FilterLink>
+            <FilterLink search={(prev) => prev} selected>
+                {ticket}
+            </FilterLink>
+        </nav>
     )
 }
 

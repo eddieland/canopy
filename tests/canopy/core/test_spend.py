@@ -970,6 +970,31 @@ def test_each_kind_s_spend_is_split_by_the_models_its_sessions_name(tmp_path: Pa
     ]
 
 
+def test_a_tickets_spend_by_model_counts_only_its_runs_of_the_kinds_that_work_on_one(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_models(conn, NOW)
+    ticket(conn, "PROJ-2")
+    run(conn, 1, "PROJ-2", earlier(NOW, 0, 1), 4.0, None)
+    served(conn, "runs", 3, ("openai/gpt-x", 7, 4.0))
+    review(conn, 1, "https://example.com/pr/1", "PROJ-1", earlier(NOW, 0, 1), 0.5)
+    served(conn, "review_runs", 1, ("openai/gpt-y", 2, 0.5))
+    since, until = (db.format_time(t) for t in spend.window(NOW, 1))
+    every = spend.models(conn, since, until)
+    assert [(m.kind, m.model, m.runs, m.cost_usd) for m in every if m.kind == "workers"] == [
+        ("workers", "openai/gpt-x", 3, 7.0),
+        ("workers", "anthropic/claude-sonnet", 1, 2.0),
+    ]
+    # PROJ-1's alone: its two worker runs and its review, never the overseer's ticks, which work on no one ticket.
+    assert [(m.kind, m.model, m.runs, m.cost_usd) for m in spend.models(conn, since, until, ticket="PROJ-1")] == [
+        ("workers", "openai/gpt-x", 2, 3.0),
+        ("workers", "anthropic/claude-sonnet", 1, 2.0),
+        ("reviews", "openai/gpt-y", 1, 0.5),
+    ]
+
+
 def test_canopy_spend_prints_the_spend_by_model(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     journal_of_models(canopy_env.journal(), noon_today())
     assert main(["spend", "--days", "1"]) == 0

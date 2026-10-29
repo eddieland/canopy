@@ -21,6 +21,7 @@ from canopy.serve.schema.spend import (
     SpendDirectory,
     SpendFirstCallWeek,
     SpendModel,
+    SpendModels,
     SpendMonth,
     SpendPullRequest,
     SpendSessions,
@@ -88,6 +89,33 @@ def spend_breakdown_hours(backend: Backend, ctx: Context, hours: int) -> SpendBr
     """
     now = backend.clock()
     return _spend_breakdown(ctx, spending.breakdown_hours(ctx.conn, now, hours, state_dir=ctx.state_dir), now)
+
+
+def spend_models(
+    backend: Backend,
+    ctx: Context,
+    *,
+    days: int | None = None,
+    hours: int | None = None,
+    ticket: str | None = None,
+) -> SpendModels:
+    """What the last `days` local days, or `hours` clock hours, spent on each model, of every run or `ticket`'s.
+
+    Returns:
+        Each kind's spend on each model, as a breakdown over the same window lists it, narrowed to `ticket`'s runs.
+    """
+    now = backend.clock()
+    start, end = spending.hour_window(now, hours) if hours is not None else spending.window(now, days or 1)
+    found = spending.models(ctx.conn, db.format_time(start), db.format_time(end), ticket=ticket)
+    return SpendModels(
+        since=start,
+        days=None if hours is not None else days,
+        hours=hours,
+        ticket=ticket,
+        models=[
+            SpendModel(kind=m.kind, model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd) for m in found
+        ],
+    )
 
 
 def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> SpendBreakdown:
