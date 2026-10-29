@@ -694,6 +694,15 @@ Patterns names what is its own.
 - **A table holds the same numbers** wherever the chart is `aria-hidden`, for a screen reader and for a value too small
   to see.
 
+A measure over time (`TrendChart`, `src/lib/trend.ts`, the system resources page's graphs) is a line, not bars: 2px
+in the accent with round joins, the area under it the accent at 10%, from zero on a 1px `border` baseline, broken where
+no reading was taken rather than bridged. Its top is a capacity where the measure has one (all the memory, a disk's
+size) and the peak with `HEADROOM` where it has none. A threshold it is read against (the cores, the tick's floor) is
+a 1px `muted-foreground` line at 40% with its name at its right end, drawn only while it is under the top. Its label and
+its latest value head it, `now · peak` after the value; the pointer snaps a crosshair and an 8px accent dot ringed in
+`surface` to the nearest reading, whose value and time stand in the latest's place. The plot is `aria-hidden`, and a
+screen reader hears its latest value, peak, and low in words in place of a table.
+
 The context chart differs where it must: its bars are its controls, each named for its call on hover and to a screen
 reader, so no table repeats them; a call's added part is 1px at least, since it is one of two segments and never a
 sliver beside four others; and its axis names short call numbers without measuring, every one up to twelve.

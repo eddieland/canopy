@@ -1,11 +1,16 @@
 """The web UI's system resources page: the machine the loop runs on, read from the operating system."""
 
+import asyncio
+import contextlib
 import os
-from datetime import UTC, datetime
+import threading
+import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from canopy.core.context import Context
 from canopy.serve import host, mock
+from canopy.serve.schema.host import HostResources
 from tests.canopy.web_helpers import client, signed_in_client
 
 NOW = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
@@ -96,3 +101,91 @@ def test_the_mock_shows_a_fixed_machine_never_its_host(tmp_path: Path) -> None:
     assert (found["hostname"], found["cpu"]["cores"], found["read_at"]) == ("build-box", 12, "2026-10-08T12:30:00Z")
     assert [d["holds"] for d in found["disks"]] == [["workspace", "journal"], ["temp"]]
     assert found["memory"]["total"] == 64 * GIB
+
+
+def test_the_server_keeps_the_last_readings_oldest_first(tmp_path: Path) -> None:
+    samples = host.Samples(kept=2, every=5)
+    reads = [_reading(tmp_path, NOW + timedelta(seconds=5 * i)) for i in range(3)]
+
+    for found in reads:
+        samples.add(found)
+
+    kept = samples.history()
+    assert (kept.every_seconds, kept.kept) == (5, 2)
+    assert [s.at for s in kept.samples] == [reads[1].read_at, reads[2].read_at]
+
+
+def test_a_sample_is_what_the_graphs_draw_of_a_reading(tmp_path: Path) -> None:
+    found = _reading(tmp_path, NOW)
+
+    taken = host.sample(found)
+
+    assert taken.load == 1.5
+    assert taken.memory_used == (16384000 - 4096000) * 1024
+    assert taken.rss == 204800 * 1024
+    assert [(d.path, d.free) for d in taken.disks] == [(d.path, d.free) for d in found.disks]
+
+
+def test_the_sampler_reads_until_cancelled_and_skips_a_read_that_fails(tmp_path: Path) -> None:
+    samples = host.Samples(every=0)
+    calls = 0
+    # Set as the fifth read starts: the sampler starts it once it kept the fourth's, the third that succeeded.
+    read_enough = threading.Event()
+
+    def read_now() -> HostResources:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("gone")
+        if calls >= 5:
+            read_enough.set()
+        return _reading(tmp_path, NOW + timedelta(seconds=calls))
+
+    async def run() -> None:
+        task = asyncio.create_task(host.sampling(read_now, samples))
+        assert await asyncio.to_thread(read_enough.wait, 5)
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    asyncio.run(run())
+
+    kept = samples.history().samples
+    assert len(kept) >= 3
+    # The second read failed, so the second sample is the third read's.
+    assert kept[1].at == NOW + timedelta(seconds=3)
+
+
+def test_the_server_reads_the_machine_into_memory_from_when_it_starts(ctx: Context) -> None:
+    c, _ = signed_in_client(ctx)
+
+    with c:
+        deadline = time.monotonic() + 10
+        found = c.get("/api/host/samples").json()
+        while not found["samples"] and time.monotonic() < deadline:
+            time.sleep(0.05)
+            found = c.get("/api/host/samples").json()
+
+    assert (found["every_seconds"], found["kept"]) == (host.SAMPLE_SECONDS, host.KEPT)
+    [first, *_] = found["samples"]
+    assert first["disks"][0]["path"] == str(ctx.workspace.root)
+
+
+def test_the_mock_serves_a_fixed_hour_ending_with_its_machine(tmp_path: Path) -> None:
+    c = client(None, mock.seed(tmp_path / "mock"))
+
+    found = c.get("/api/host/samples").json()
+
+    samples = found["samples"]
+    assert len(samples) == host.KEPT
+    assert samples[-1]["at"] == "2026-10-08T12:30:00Z"
+    assert samples[-1]["load"] == 2.41
+    assert [d["path"] for d in samples[0]["disks"]] == ["/home/operator/acme", "/tmp"]  # noqa: S108
+
+
+def _reading(tmp_path: Path, now: datetime) -> HostResources:
+    proc = tmp_path / "proc"
+    if not proc.exists():
+        fake_proc(proc)
+    found = host.read_at([("workspace", tmp_path)], proc=proc, now=now)
+    return found.model_copy(update={"cpu": found.cpu.model_copy(update={"load": [1.5, 1.0, 0.5]})})
