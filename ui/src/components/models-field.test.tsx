@@ -83,7 +83,7 @@ describe('ModelsField', () => {
         expect(screen.queryByText(/asked/u)).toBeNull()
     })
 
-    it('says what served and what canopy asked for, as needing a look, when they differ', () => {
+    it("says what canopy asked for and what served, in the field's color, when it served none of the replies", () => {
         renderModels(
             {
                 status: 'found',
@@ -92,10 +92,39 @@ describe('ModelsField', () => {
             },
             'anthropic/claude-opus-4-1',
         )
-        const said = screen.getByText(/^served/u)
-        expect(said.textContent).toBe('served anthropic/claude-sonnet-4-5, asked anthropic/claude-opus-4-1')
-        expect(said.className).toContain('text-status-blocked')
+        const said = screen.getByText(/^asked/u)
+        expect(said.textContent).toBe('asked anthropic/claude-opus-4-1 ≠ served anthropic/claude-sonnet-4-5')
+        // Worth knowing, not waiting on the operator.
+        expect(said.closest('[class*="text-status-"]')).toBeNull()
         expect(screen.getByText('anthropic/claude-sonnet-4-5').getAttribute('title')).toBe('41 replies')
+    })
+
+    it('takes a model at its default variant, which its session names alone, as the one asked for', () => {
+        renderModels(
+            { status: 'found', models: [{ model: 'openai/gpt-5', replies: 9, cost_usd: 0.4 }], error: null },
+            'openai/gpt-5@medium',
+        )
+        expect(screen.getByText('openai/gpt-5').getAttribute('title')).toBe('9 replies')
+        expect(screen.queryByText(/asked|≠/u)).toBeNull()
+    })
+
+    it('marks only the other model of a run the model asked for served too', () => {
+        renderModels(
+            {
+                status: 'found',
+                models: [
+                    { model: 'anthropic/claude-opus-4-1', replies: 23, cost_usd: 1.65 },
+                    { model: 'anthropic/claude-haiku-4-5', replies: 2, cost_usd: 0.01 },
+                ],
+                error: null,
+            },
+            'anthropic/claude-opus-4-1',
+        )
+        expect(screen.getByText(/claude-opus-4-1/u).textContent).toBe('anthropic/claude-opus-4-1 $1.65')
+        const other = screen.getByText(/claude-haiku-4-5/u)
+        expect(other.textContent).toBe('≠ anthropic/claude-haiku-4-5 $0.01')
+        expect(other.getAttribute('title')).toBe('2 replies, not the model asked for')
+        expect(screen.queryByText(/asked anthropic/u)).toBeNull()
     })
 
     it('gives why a read failed on hover', () => {
