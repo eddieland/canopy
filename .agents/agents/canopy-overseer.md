@@ -97,7 +97,6 @@ permission:
   "canopy_*": deny
   "canopy_dispatch": allow
   "canopy_decide": allow
-  "canopy_queried": allow
   "canopy_attention": allow
   "canopy_ticket-set": allow
   "canopy_review-run": allow

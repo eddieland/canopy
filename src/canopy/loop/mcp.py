@@ -143,20 +143,10 @@ TOOLS = (
     ),
     tool(
         "decide",
-        "Record decisions, one per ticket: wait, skip, or done, each with its rationale, all or none. Omit key only "
-        "for a skip of the whole tick, the only decision in its call.",
+        "Record decisions, one per ticket: wait, skip, or done, each with its rationale, all or none.",
         tools.Decisions,
         tools.Decided,
         tools.decide,
-    ),
-    tool(
-        "queried",
-        "Record that this tick ran the tracker query, naming each open ticket it returned, each then owed a decision "
-        "this tick unless the state block lists it in stopped or recently_done. Name none when it returned none, and "
-        "a long result in several calls.",
-        tools.Queried,
-        tools.QueryRecorded,
-        tools.queried,
     ),
     tool(
         "attention",

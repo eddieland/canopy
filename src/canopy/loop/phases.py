@@ -111,8 +111,8 @@ class Derived:
     #: Whether `stale` is the `tracker` source's: a ticket's own observation, its comments, or a blocker's, old or never
     #: made. False for what no source observes, and for what the `vcs` source left stale.
     stale_tracker: bool = False
-    #: Whether `stale` is the `vcs` source's, where a `tracker` source runs too, so the overseer reads no GitHub (DESIGN
-    #: §39): a unit's PR or branches, the ticket's branches, or an open blocker's PR, old or never read.
+    #: Whether `stale` is the `vcs` source's, which the overseer reads no GitHub beside (DESIGN §39): a unit's PR or
+    #: branches, the ticket's branches, or an open blocker's PR, old or never read.
     stale_vcs: bool = False
     #: On the ticket's own, unless stale: whether it is a candidate (§17), and whether the tracker said it is closed.
     candidate: bool | None = None
@@ -436,10 +436,6 @@ class _World:
     #: The tickets the journal has marked done.
     done: AbstractSet[str]
     latest_runs: Mapping[str, records.Run]
-    #: Whether a `tracker` source observes tickets at all.
-    tracked: bool
-    #: Whether a `tracker` and a `vcs` source both read, so a subject either left stale is the harness's `wait` (§39).
-    observes_all: bool
     _review_runs: dict[str, list[records.ReviewRun]] = field(default_factory=dict[str, list[records.ReviewRun]])
 
     @classmethod
@@ -482,8 +478,6 @@ class _World:
             running=running,
             done=done,
             latest_runs=db.latest_runs(conn),
-            tracked=any(s.kind == SourceKind.TRACKER for s in config.connect.named().values()),
-            observes_all=config.connect.observes_all(),
         )
 
     # A ticket's own row
@@ -502,7 +496,7 @@ class _World:
         else:
             stale = self._ticket_stale(key)
             if stale is not None:
-                return Derived(key, None, stale=stale, stale_tracker=self.tracked)
+                return Derived(key, None, stale=stale, stale_tracker=True)
             seen = self.observed[key]
             closed = seen.state is TicketState.CLOSED
             candidate = self._queued(seen)
@@ -519,7 +513,7 @@ class _World:
         if candidate and not running:
             branch = self._has_branch(key, journal)
             if branch is None:
-                return Derived(key, None, stale=self._branches_stale(), stale_vcs=self.observes_all)
+                return Derived(key, None, stale=self._branches_stale(), stale_vcs=True)
             if not branch:
                 # Only a ticket with no branch of its own may be stacked, so only its row reads a blocker's PR.
                 if seen is not None and (stale := self._blocker_prs_stale(seen)) is not None:
@@ -536,8 +530,6 @@ class _World:
         Returns:
             What, or None when everything it depends on is fresh.
         """
-        if not self.tracked:
-            return "no tracker source observes tickets"
         seen = self.observed.get(key)
         stale = self._age(key, seen)
         if stale is not None or seen is None:
@@ -571,13 +563,11 @@ class _World:
         """Say which PR of an open blocker, one the journal has not marked done, the `vcs` source left stale (§39).
 
         Whether to stack on it, and how a ticket stacked on it goes on, is read from that PR (§10), which the overseer
-        reads no longer where both sources run. Without both, it reads the PR itself, so nothing is stale here.
+        reads no longer.
 
         Returns:
             What, or None when each such PR is fresh.
         """
-        if not self.observes_all:
-            return None
         for blocker in blockers_of(seen):
             if self.observed[blocker].state is not TicketState.OPEN or blocker in self.done:
                 continue
@@ -678,7 +668,7 @@ class _World:
                 found.append(self._pr_unit(key, repo, unit, unit.pr_url))
             elif repo not in self.fresh_repos:
                 stale = f"branches of {repo} not observed since {db.format_time(self.cutoff)}"
-                found.append(Derived(key, repo, stale=stale, stale_vcs=self.observes_all))
+                found.append(Derived(key, repo, stale=stale, stale_vcs=True))
             else:
                 branch = self._branch_in(repo, key, record)
                 found.append(Derived(key, repo, (Phase.PUSHED_NO_PR,) if branch is not None else ()))
@@ -695,7 +685,7 @@ class _World:
         pr = self.prs.get(url)
         stale = self._age(url, pr)
         if stale is not None or pr is None:
-            return Derived(key, repo, stale=stale, stale_vcs=self.observes_all)
+            return Derived(key, repo, stale=stale, stale_vcs=True)
         if pr.state is PrState.MERGED:
             return Derived(key, repo, (Phase.MERGED,))
         if pr.state is not PrState.OPEN:

@@ -182,7 +182,7 @@ def test_completion_completes_commands(capsys: pytest.CaptureFixture[str]) -> No
 def test_completion_leaves_out_the_overseers_commands(capsys: pytest.CaptureFixture[str]) -> None:
     commands = complete(capsys, "canopy ")
     assert "plain,status" in commands
-    for overseers in ("attention", "decide", "dispatch", "queried", "ticket", "_run", "_chore", "_review"):
+    for overseers in ("attention", "decide", "dispatch", "ticket", "_run", "_chore", "_review"):
         assert f"plain,{overseers}" not in commands
     assert complete(capsys, "canopy chore ") == ["plain,history", "plain,install", "plain,try"]
     assert complete(capsys, "canopy chore install memory-") == ["plain,memory-tickets"]
@@ -201,7 +201,7 @@ def test_help_leaves_out_the_overseers_commands(capsys: pytest.CaptureFixture[st
     assert main(["--help"]) == 0
     listed = {line.split()[0] for line in capsys.readouterr().out.splitlines() if line.startswith("  ")}
     assert "status" in listed
-    assert not {"attention", "decide", "dispatch", "queried", "ticket", "mirror"} & listed
+    assert not {"attention", "decide", "dispatch", "ticket", "mirror"} & listed
     assert main(["review", "--help"]) == 0
     listed = {line.split()[0] for line in capsys.readouterr().out.splitlines() if line.startswith("  ")}
     assert "show" in listed

@@ -57,7 +57,6 @@ class OverseerState(TypedDict):
     observations: ObservationsState
     capacity: CapacityState
     running_workers: list[RunningWorker]
-    query_due: bool
     tick_id: int
     now: str
     dry_run: bool
@@ -255,7 +254,6 @@ def state_block(
     planned: Mapping[str, plans.PlanState] | None = None,
     feedback_planned: Mapping[str, feedback_plans.FeedbackPlanState] | None = None,
     attention: list[OpenItem] | None = None,
-    query_due: bool,
     operator_sent: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
     observations: ObservationsState,
     numbered: Mapping[int, records.ItemNumber] | None = None,
@@ -281,12 +279,11 @@ def state_block(
     status, and time, never its text (DESIGN §25); a ticket plans do not touch has no `plan` key. `feedback_planned`
     holds a ticket's feedback plan, by key, likewise; a ticket feedback plans do not touch has no `feedback_plan` key
     (DESIGN §32). `attention` is the open items the overseer recorded (`attention.for_overseer`), so it sees what
-    leaving one out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this tick or
-    works the tickets the block lists alone (DESIGN §7, Spacing the query). `operator_sent` holds, by PR, the comments
+    leaving one out drops (ROADMAP M28). `operator_sent` holds, by PR, the comments
     and reviews the operator sent through canopy (`drafts.sent_by_pr`); a unit whose PR has none has no
     `operator_sent` key (DESIGN §29). `observations` is what the connectors last read of every ticket the block lists
     or the query returned, each subject fresh, stale, or unobserved (`observations.section`, DESIGN §35). `numbered`
-    holds the items the cursors name, by journal number, so a live read of a stale subject can tell what they passed.
+    holds the items the cursors name, by journal number.
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -298,7 +295,6 @@ def state_block(
     run_reasons = run_reasons or {}
     operator_sent = operator_sent or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
-    tracked = config.connect.observes_tickets()
 
     def unit_summary(key: str, u: records.TicketUnit) -> UnitState:
         name = str(u.repo)
@@ -327,7 +323,7 @@ def state_block(
             "title": t.title,
             "phase": t.phase,
             "branch": None if any(u.branch == t.branch for u in its_units) else t.branch,
-            "cursors": {name: getattr(t, db.ticket_cursor(name, tracked=tracked)) for name in db.TICKET_CURSORS},
+            "cursors": {name: getattr(t, column) for name, column in db.TICKET_CURSORS.items()},
             "units": [unit_summary(key, u) for u in its_units],
             "needs_human_since": t.needs_human_since,
             "last_seen_at": t.last_seen_at,
@@ -389,7 +385,7 @@ def state_block(
             }
             for r in workspace.repos
         ],
-        "tickets": _name_cursors(listed, numbered or {}, tracked=tracked),
+        "tickets": _name_cursors(listed, numbered or {}),
         # Tickets the operator stopped: not candidates, whatever their labels, and owed no decision (DESIGN §22).
         "stopped": list(stopped),
         # Tickets marked done lately that the query still finds: owed no decision while the tracker shows them open
@@ -401,7 +397,7 @@ def state_block(
         **({"dispatches_to_come": dispatches_to_come} if dispatches_to_come is not None else {}),
         **({"chores": chores} if chores else {}),
         # With reviews off, nothing about them reaches the overseer (DESIGN §21).
-        **({"reviews": _scoped(reviews, listed, observations, config)} if reviews is not None else {}),
+        **({"reviews": _scoped(reviews, listed, observations)} if reviews is not None else {}),
         # The operator's notices, in force or lately ended: a failed check that ran while one was in force, and that it
         # explains, is held, not fixed (DESIGN §7).
         **({"notices": shown} if shown else {}),
@@ -416,8 +412,6 @@ def state_block(
             "available": capacity.available,
         },
         "running_workers": [_running_summary(r, run_slots, run_reasons) for r in running],
-        # Whether this tick runs the tracker query, or works the tickets above alone (DESIGN §7, Spacing the query).
-        "query_due": query_due,
         "tick_id": tick_id,
         "now": db.format_time(now),
         "dry_run": dry_run,
@@ -456,17 +450,10 @@ def state_block(
     )
 
 
-def _name_cursors(
-    tickets: list[TicketState],
-    numbered: Mapping[int, records.ItemNumber],
-    *,
-    tracked: bool,
-) -> list[TicketState]:
+def _name_cursors(tickets: list[TicketState], numbered: Mapping[int, records.ItemNumber]) -> list[TicketState]:
     """Say, in each ticket's and unit's `cursor_items`, what each of its cursors that is a journal number names.
 
-    A live read of a stale subject has no numbers, so it compares what it reads with these (DESIGN §35). The message
-    cursor is a message's id, whose message the conversation holds, and the comment cursor of a ticket no tracker source
-    observes the tracker's own id.
+    The message cursor is a message's id, whose message the conversation holds, so it is not named (DESIGN §35).
 
     Returns:
         `tickets`, each given its key only where a cursor names an item.
@@ -477,7 +464,7 @@ def _name_cursors(
         return {name: item_numbers.describe(item) for name, item in found.items() if item is not None}
 
     for ticket in tickets:
-        if named := items(ticket["cursors"], ["comment"] if tracked else []):
+        if named := items(ticket["cursors"], ["comment"]):
             ticket["cursor_items"] = named
         for unit in ticket["units"]:
             if named := items(unit["cursors"], db.UNIT_CURSORS):
@@ -533,27 +520,16 @@ def _running_summary(
     return summary
 
 
-# The reviews of the PRs the overseer may act on this tick: its listed tickets' and the review query's (DESIGN §21).
-def _scoped(
-    reviews: ReviewsSection,
-    listed: Sequence[TicketState],
-    observations: ObservationsState,
-    config: Config,
-) -> ReviewsSection:
+# The reviews of the PRs the overseer may act on this tick: its listed tickets' and the review query's (DESIGN §21). A
+# query not read fresh finds none: the overseer reads no GitHub (§39), so it waits for the `vcs` source's next read.
+def _scoped(reviews: ReviewsSection, listed: Sequence[TicketState], observations: ObservationsState) -> ReviewsSection:
     query = observations.get("review_query")
-    if query is None:
-        found: frozenset[str] | None = frozenset()  # no review query: a PR of no ticket was an operator's request
-    elif query["observed"] == "fresh":
-        found = frozenset(query.get("result", []))
-    elif config.connect.observes_all():
-        found = frozenset()  # the overseer reads no GitHub (§39): the query waits for the `vcs` source's next read
-    else:
-        found = None  # the overseer runs the query itself, and may find any PR reviewed lately
+    fresh = query is not None and query["observed"] == "fresh"
     return review_view.scoped(
         reviews,
         tickets={t["key"] for t in listed},
         prs={u["pr_url"] for t in listed for u in t["units"] if u["pr_url"] is not None},
-        found=found,
+        found=frozenset(query.get("result", [])) if query is not None and fresh else frozenset(),
     )
 
 
