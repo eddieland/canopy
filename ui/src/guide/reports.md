@@ -103,8 +103,9 @@ rail's. Then:
   hasn't read yet sit last as **none**, with what they reported costing, and the header says how much of the table
   that is (`43% not yet attributed`), since a big **none** quietly flatters every model above it. Each run's session
   is read as it ends, and the loop reads the stragglers while it waits between ticks, so **none** is mostly runs from
-  before canopy read models, and it shrinks while the loop idles. Click a model to see
-  [its runs](runs#the-runs-page). This is the table to read before and after you canary a model.
+  before canopy read models, and it shrinks while the loop idles. Click a model to see [its runs](runs#the-runs-page),
+  of the kind the table shows, or of every kind under **all**. The overseer's models aren't links: the runs page lists
+  ticks apart, under Ticks, and not by model. This is the table to read before and after you canary a model.
 - **By tool**: which tools put the most into the runs' context, by the characters their calls returned, every kind
   summed or one kind's, with the same filter. Every later model call of the run reads those again, so a chatty tool
   costs more than once. The filters stay put when you switch the window, so you can watch the workers' `bash` habit

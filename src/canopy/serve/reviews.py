@@ -182,6 +182,7 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
     tickets = db.ticket_titles(conn, {row.ticket_key for row in rows if row.ticket_key})
     drafts = review_drafts.of_reviews(conn, [row.id for row in rows])
     asked = review_requests.answered_by(conn, rows)
+    served = run_models.served_by(conn, "review_runs", [row.id for row in rows])
     return [
         summary(
             row,
@@ -191,6 +192,7 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
             or ticket_title(tickets.get(row.ticket_key or "")),
             draft=drafts.get(row.id),
             request=asked.get(row.id),
+            served=served[row.id],
         )
         for row in rows
     ]
@@ -203,10 +205,12 @@ def summary(
     title: str | None,
     draft: records.ReviewDraft | None,
     request: int | None,
+    served: Sequence[str] = (),
 ) -> ReviewSummary:
     """One review run's row, as the reviews list shows it, `seen` when the operator has seen it, its PR's `title`.
 
-    `request` is the id of the operator's request it answers, which groups it with its reviews in other personas.
+    `request` is the id of the operator's request it answers, which groups it with its reviews in other personas, and
+    `served` the models its session named.
 
     Returns:
         The run's summary. Its verdict and impact are None, and its findings 0, when it has no valid result.
@@ -235,6 +239,7 @@ def summary(
         news=review_requests.has_news(row, stored),
         seen=seen,
         draft=cast("ReviewDraftStatusName", draft.status.value) if draft is not None else None,
+        served=list(served),
     )
 
 
