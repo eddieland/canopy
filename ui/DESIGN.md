@@ -197,9 +197,9 @@ Rules:
 - The header carries, after its name, the stream's state (and `mock`), then at its end the loop's pause
   (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
   `status-failed` when it failed or was abandoned, its summary on hover, linking to its page; before the first, `no
-  tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), the host's readout last among
-  the readouts, and the theme toggle, in three groups with a hairline rule between each: the actions, the readouts, the
-  theme.
+  tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), the budget's readout while a
+  budget is set, the host's readout last among the readouts, and the theme toggle, in three groups with a hairline
+  rule between each: the actions, the readouts, the theme.
 - The stream's readout sits beside the name (`StreamReadout`), not with the readouts at the end, so a drop moves
   nothing: its word hugs its text, and only the ticker's window gives way when it changes. Held to one width at the end,
   it left a hole before `live` whenever the loop was up. The word sits in a pill with a dot, as `mock` does in a pill
@@ -239,6 +239,12 @@ Rules:
   runs, and from the click until the tick it asked for starts, which the readout and the logo show as starting
   meanwhile: the loop takes the ask at its wait's next step, after a poll of the sources if one is under way. Like the
   pause it has no `Notice`, since the tick it asked for shows in the readouts, and a failure looks the same.
+- **The budget's readout** (`BudgetReadout`) is the local month's spend against the monthly budget, while one is set:
+  a wallet's icon and the percent spent, `39%`, muted while on budget, in `status-blocked` once the month's pace heads
+  over, and in `status-failed` once it is over, the spend page's word for it and its line (`Headed over: $15.76 of $40
+  (39%), on pace for $63.04.`) on hover and as its accessible name. Short of `2xl` the icon stands alone in its color:
+  the ticker needs the room, or a tick's readout widening as the tick starts steps it out. It opens the spend page.
+  It comes with the spend on the stream, which sends it again when a cost or the budget changes.
 - **The host's readout** (`HostReadout`) is the machine the loop runs on, which serves the page: a server's icon and
   `host ok` in muted readout type, or its worst pressure in two words (`disk low`, `memory low`, `host busy`) in
   `status-blocked` while worth a look and `status-failed` past what canopy works with, a disk under the tick's

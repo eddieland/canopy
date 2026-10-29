@@ -34,6 +34,7 @@ import { phaseMeaning } from '@/lib/meanings'
 import {
     alertMarks,
     alertsText,
+    BUDGET_WORD,
     budgetPartsText,
     budgetPercent,
     budgetState,
@@ -122,9 +123,8 @@ const KIND_LABEL = {
     tasks: 'task runs',
 } as const
 
-// Where the month stands against its budget, as a word, its color, and the budget bar's fill: a state's, never a
-// spend series'.
-const BUDGET_WORD: Record<BudgetState, string> = { under: 'On budget', headed: 'Headed over', over: 'Over budget' }
+// Where the month stands against its budget, as its color and the budget bar's fill: a state's, never a spend
+// series'.
 const BUDGET_TEXT: Record<BudgetState, string> = {
     under: 'text-status-done',
     headed: 'text-status-blocked',

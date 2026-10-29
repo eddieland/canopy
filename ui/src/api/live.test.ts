@@ -23,6 +23,7 @@ describe('applyStreamEvent', () => {
             month: { since: '2026-09-08T12:00:00Z', hours: 720, cost_usd: 31.4 },
             total_usd: 120.75,
             sessions_read_at: null,
+            budget: null,
         }
         applyStreamEvent(client, { type: 'spend.updated', spend })
         applyStreamEvent(client, { type: 'tick.updated', tick: null, acknowledged: null })
@@ -45,6 +46,7 @@ describe('applyStreamEvent', () => {
             month: { since: '2026-09-08T12:00:00Z', hours: 720, cost_usd: 31.4 },
             total_usd: 120.75,
             sessions_read_at: null,
+            budget: null,
         }
         applyStreamEvent(client, { type: 'spend.updated', spend })
         expect(client.getQueryState(keys.spendBreakdown({ days: 7 }))?.isInvalidated).toBe(true)

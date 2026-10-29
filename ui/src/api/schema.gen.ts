@@ -7431,6 +7431,11 @@ export type components = {
          * @description What the last day, 30 days, and all time cost, read together, so a month never shows less than its day.
          */
         Spend: {
+            /**
+             * @description The local calendar month so far against the operator's monthly budget, as the header shows it; None when no
+             *     budget is set.
+             */
+            budget: components["schemas"]["SpendMonth"] | null;
             /** @description The last 24 hours. */
             day: components["schemas"]["SpendWindow"];
             /** @description The last 30 days. */
