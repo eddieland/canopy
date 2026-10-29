@@ -24,8 +24,9 @@ function client(runs: Run[]): QueryClient {
     return queries
 }
 
+/** Each run the ticket's page says works it now; a card's steps, a list of their own, are not among them. */
 function working(): HTMLElement[] {
-    return within(screen.getByTestId('working-now')).queryAllByRole('listitem')
+    return within(screen.getByTestId('working-now')).queryAllByTestId(/^working-\d+$/u)
 }
 
 describe('WorkingNow', () => {

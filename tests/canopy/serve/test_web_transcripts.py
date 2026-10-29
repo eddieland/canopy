@@ -100,6 +100,26 @@ def test_a_running_run_shows_its_card_whether_stale_by_its_calls_and_when_it_goe
     assert runs[39]["card"] is None  # it kept none
 
 
+def test_a_running_cards_steps_say_how_far_they_are_and_when_the_working_one_is_stuck(backend: Backend) -> None:
+    c = client(None, backend)
+    card = c.get("/api/runs/43").json()["card"]
+    assert (card["percent_done"], card["stage"]) == (33, "code")  # 1 of 3 done, `fix the backoff` working
+    assert card["steps"][1] == {
+        "title": "fix the backoff",
+        "status": "working",
+        "stage": "code",
+        "since": "2026-10-08T12:04:00Z",
+        "stuck_at": "2026-10-08T12:13:00Z",  # a fifth of the worker's 45 minutes on
+    }
+    assert [s["stuck_at"] for s in card["steps"]] == [None, "2026-10-08T12:13:00Z", None]
+    # Once the run ended, no step is stuck.
+    with backend.open() as ctx:
+        ctx.conn.execute("UPDATE runs SET status = 'done', ended_at = ? WHERE id = 43", ("2026-10-08T12:20:00.000Z",))
+    ended = c.get("/api/runs/43").json()["card"]
+    assert [s["stuck_at"] for s in ended["steps"]] == [None, None, None]
+    assert ended["steps"][1]["since"] == "2026-10-08T12:04:00Z"
+
+
 def test_only_the_recorded_sessions_events_are_shown(backend: Backend) -> None:
     c = client(None, backend)
     with backend.open() as ctx:

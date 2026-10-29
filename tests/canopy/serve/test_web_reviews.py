@@ -410,7 +410,7 @@ def test_a_reviews_page_shows_its_reviewers_card_and_its_last_once_it_ended(back
     card = cards.Card(summary="Read the diff.", now="reading retry.py", next=("write the findings",))
     with backend.open() as ctx:
         ctx.conn.execute("UPDATE review_runs SET status = 'running', ended_at = NULL WHERE id = 6")
-        cards.record_call(ctx.conn, "review_runs", 6, card)
+        cards.record_call(ctx.conn, "review_runs", 6, card, stuck_after=cards.stuck_after(20))
     c = client(None, backend)
     shown = c.get("/api/reviews/6").json()["card"]
     assert (shown["summary"], shown["now"], shown["next"], shown["calls_since"]) == (

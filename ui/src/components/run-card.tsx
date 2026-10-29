@@ -1,18 +1,20 @@
-import type { RunCard } from '@/api/types'
+import type { RunCard, RunStep } from '@/api/types'
 import { Age } from '@/components/age'
 import { Clipped } from '@/components/tip'
 import { LinkedText } from '@/components/linked-text'
+import { Word } from '@/components/status'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 /**
  * Where a worker's, planner's, or reviewer's work stands, in its own words: its card (DESIGN §41), whole. How old it
  * is leads, in tool calls and time; while the run runs, a card that has gone too long without an update is marked
- * stale in the blocked color rather than going quiet. Then its summary, what it does now, what is done with the proof
- * of each, what is next, and what is in its way. Agent text, rendered as text.
+ * stale in the blocked color rather than going quiet. Then its summary, what it does now, its steps with how far they
+ * are, what is done with the proof of each, what is next, and what is in its way. Agent text, rendered as text.
  */
 export function RunCardView({ card, running }: { card: RunCard; running: boolean }) {
-    const stale = isStale(card, useNow())
+    const now = useNow()
+    const stale = isStale(card, now)
     return (
         <div
             className={cn('flex flex-col gap-1.5 border-l-2 pl-3', stale ? 'border-status-blocked' : 'border-border')}
@@ -25,6 +27,7 @@ export function RunCardView({ card, running }: { card: RunCard; running: boolean
             <CardLine label="now">
                 <LinkedText text={card.now} />
             </CardLine>
+            {card.steps.length > 0 && <CardSteps card={card} running={running} now={now} />}
             {card.done.map((done, i) => (
                 <CardLine key={`done-${i}`} label="done">
                     <LinkedText text={done.step} />
@@ -49,8 +52,8 @@ export function RunCardView({ card, running }: { card: RunCard; running: boolean
 }
 
 /**
- * A running run's card on one line, for a row: what it says it does now, and how old the card is, marked stale as
- * `RunCardView` marks it.
+ * A running run's card on one line, for a row: what it says it does now, how much of its steps is done when it has
+ * any, and how old the card is, marked stale as `RunCardView` marks it.
  */
 export function RunCardNow({ card, className }: { card: RunCard; className?: string }) {
     const stale = isStale(card, useNow())
@@ -60,6 +63,9 @@ export function RunCardNow({ card, className }: { card: RunCard; className?: str
                 {stale ? 'stale card' : 'now'}
             </span>
             <Clipped text={card.now} className="min-w-0" />
+            {card.percent_done !== null && (
+                <span className="shrink-0 font-mono text-muted-foreground">{card.percent_done}% done</span>
+            )}
             <Age at={card.at} variant="ago" className="shrink-0" />
         </span>
     )
@@ -83,6 +89,68 @@ function CardAge({ card, running, stale }: { card: RunCard; running: boolean; st
             {stale && <span className="text-status-blocked">stale</span>}
         </p>
     )
+}
+
+// A step's status word's color: the run state it reads as, muted for one not started or skipped.
+const STEP_TONE: Record<RunStep['status'], string> = {
+    not_started: 'text-muted-foreground',
+    working: 'text-status-running',
+    blocked: 'text-status-blocked',
+    done: 'text-status-done',
+    skipped: 'text-muted-foreground',
+}
+
+/** A card's steps: how far they are and the working step's stage, then each, one stuck marked in the blocked color. */
+function CardSteps({ card, running, now }: { card: RunCard; running: boolean; now: number }) {
+    const finished = card.steps.filter((step) => step.status === 'done' || step.status === 'skipped').length
+    return (
+        <div className="flex flex-col gap-1">
+            <CardLine label="steps">
+                <span className="font-mono text-xs text-muted-foreground">
+                    {`${finished} of ${card.steps.length} finished · ${card.percent_done ?? 0}%`}
+                    {card.stage !== null && (
+                        <>
+                            {' · stage '}
+                            <LinkedText text={card.stage} />
+                        </>
+                    )}
+                </span>
+            </CardLine>
+            <ol className="flex flex-col gap-0.5 pl-12" aria-label="steps">
+                {card.steps.map((step, i) => (
+                    <li key={`step-${i}`} className="flex gap-2 text-sm">
+                        <Word
+                            word={step.status}
+                            className={cn('w-20 shrink-0 font-mono text-xs leading-5', STEP_TONE[step.status])}
+                        />
+                        <span className="min-w-0 break-words">
+                            <LinkedText text={step.title} />
+                            {step.stage !== null && (
+                                <span className="font-mono text-xs text-muted-foreground">
+                                    {' '}
+                                    <LinkedText text={step.stage} />
+                                </span>
+                            )}
+                            {isStuck(step, running, now) && step.since !== null && (
+                                <span className="text-xs text-status-blocked">
+                                    {' stuck '}
+                                    <Age at={step.since} className="text-status-blocked" />
+                                </span>
+                            )}
+                        </span>
+                    </li>
+                ))}
+            </ol>
+        </div>
+    )
+}
+
+/**
+ * Whether a step of a running run's card is stuck at `now`: left `working` at one stage past its time, a fifth of the
+ * run's timeout. An ended run's never is.
+ */
+function isStuck(step: RunStep, running: boolean, now: number): boolean {
+    return running && step.stuck_at !== null && now >= Date.parse(step.stuck_at)
 }
 
 function CardLine({
