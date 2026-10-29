@@ -139,6 +139,19 @@ def test_a_poll_that_reads_only_what_the_latest_tick_saw_ends_no_wait(
     assert (looped.woken_by, looped.started) == (["start", "timer"], [0, 30])
 
 
+def test_a_tick_a_poll_woke_is_not_idle_so_the_wait_after_it_is_not_lengthened(
+    scenario: Scenario,
+    polled: Path,
+) -> None:
+    scenario.configures(loop={"idle_max_minutes": 120})
+    tracker_shows(polled, labeled())
+    looped = loops(scenario, *waits(KEY), ticks=3, at={0: lambda: tracker_shows(polled, labeled(), REPLY)})
+    # The comment wakes the loop at minute 5; the overseer's look at it is no second look, so the timer comes 30
+    # minutes on, not 60, and the tick it brings, which finds nothing new, is idle.
+    assert (looped.woken_by, looped.started) == (["start", "poll", "timer"], [0, 5, 35])
+    assert [t.idle for t in looped.ticks] == [False, False, True]
+
+
 def test_a_failed_poll_ends_the_wait_once_and_the_first_whole_read_ends_it_again(
     scenario: Scenario,
     polled: Path,
