@@ -449,6 +449,23 @@ function nothing(costs: Costs): Costs {
     return Object.fromEntries(Object.keys(costs).map((key) => [key, null]))
 }
 
+test("the header's budget says the month is headed over, in words on hover, and opens the spend page", async ({
+    page,
+}) => {
+    // Wide enough for the percent beside the icon; narrower, the icon stands alone.
+    await page.setViewportSize({ width: 1600, height: 800 })
+    await page.goto('attention')
+    await settled(page)
+    // The mock's budget is $40, and its month's pace passes it.
+    const readout = page.getByTestId('budget-readout')
+    await expect(readout).toHaveText('39%')
+    await expect(readout).toHaveAttribute('data-state', 'headed')
+    await expect(readout).toHaveAttribute('title', /^Headed over: \$15\.76 of \$40 \(39%\), on pace for \$/u)
+    await readout.click()
+    await expect(page).toHaveURL(/\/reports\/spend$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Spend')
+})
+
 test('this month reads against the budget whatever the window, and is headed over at its pace', async ({ page }) => {
     await page.goto('reports/spend?hours=24')
     await settled(page)
