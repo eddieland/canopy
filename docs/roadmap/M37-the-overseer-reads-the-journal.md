@@ -23,8 +23,9 @@ is a field of `canopy_dispatch` or `canopy_ticket-set`, not a flag.
   refused `unauthorized` unless the tracker source observed that label on the ticket (D051 gains a code check before
   the worker's own); a `resume` for `reply` must carry a cursor to a comment by an authorized replier that is not a
   worker's, or to an operator message; a `resume` for `review` must cover an item by a trusted reviewer, or the canopy
-  review it names when `canopy:review` is trusted, and another reviewer's item only with an operator message after it
-  (D089's revisit; §32's approval stays the gate under feedback plans); every cursor must name an observed item and
+  review it names when `canopy:review` is trusted, and another reviewer's item only with an operator message after it,
+  never a comment the operator sent through canopy, known by its id (M53) (D089's revisit; §32's approval stays the
+  gate under feedback plans); every cursor must name an observed item and
   pass none the block left out, else `unobserved`. A dispatch is refused `stale` while a public ticket, a stacked
   dispatch's blocker's PR, or the PR of a unit a `resume` names is stale. A private ticket, a chore, a review, and an
   unobserved subject are not refused. Principle 1's "re-read before any action that matters" becomes "observed within
