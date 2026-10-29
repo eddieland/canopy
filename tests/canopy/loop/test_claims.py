@@ -651,7 +651,7 @@ def test_the_operators_ticket_set_is_not_checked(observed: sqlite3.Connection) -
     # Outside a tick it is the operator's, not a claim of the overseer's; with a tracker source, still a number.
     assert operator("ticket", "set", KEY, "--cursor", "comment=999") == 0
     assert present(db.get_ticket(observed, KEY)).comment_cursor == 999
-    assert operator("ticket", "set", KEY, "--cursor", "comment=c-999") == 1
+    assert operator("ticket", "set", KEY, "--cursor", "comment=c-999") == 2
 
 
 def dispatched(

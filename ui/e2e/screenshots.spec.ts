@@ -115,8 +115,8 @@ for (const theme of THEMES) {
     })
 }
 
-// Every palette but a theme's default sets only the neutrals, so one page in each shows all it changes: its main pane
-// alone, so a change to the header or the rail rewrites none of these.
+// Every palette but a theme's default sets only the neutrals and the accent, so one page in each shows all it changes:
+// its main pane alone, so a change to the header or the rail rewrites none of these.
 for (const theme of THEMES) {
     for (const palette of OTHER_PALETTES[theme]) {
         test(`attention in ${palette} ${theme}`, async ({ page }) => {
@@ -200,6 +200,16 @@ test('a long review diff folded in dark', async ({ page }) => {
     const panel = page.getByTestId('diff-file').nth(1)
     await expect(panel.getByTestId('diff-fold')).toHaveCount(2)
     await expect(panel).toHaveScreenshot('reviews-folded-dark.png')
+})
+
+// Review a PR over a PR's page, opened by R with that PR's URL filled in: the box alone, as the jump palette's.
+test('the review dialog in dark', async ({ page }) => {
+    await openInDark(page, `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
+    await page.keyboard.press('r')
+    const dialog = page.getByTestId('review-dialog')
+    await expect(dialog.getByLabel('Notes for the reviewer (optional)')).toBeFocused()
+    await expect(dialog.getByTestId('review-request-chosen')).toHaveText('in canopy, the default')
+    await expect(dialog).toHaveScreenshot('review-dialog-dark.png')
 })
 
 // The interface is a quarter larger from a 2560px window. The images are of the operator's window, which already

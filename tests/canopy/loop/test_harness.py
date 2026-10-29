@@ -410,7 +410,7 @@ def test_a_tick_leaves_a_running_ticket_to_the_harness_and_the_overseer_only_the
     # The query found it too: the harness decided it, so the overseer owes it nothing (DESIGN §6).
     query_read(scenario.conn, [KEY, "PROJ-2"], at=db.now())
     scenario.conn.commit()
-    assert scenario.tick(*waits("PROJ-2"), queried=[KEY, "PROJ-2"]).tick.status == TickStatus.OK
+    assert scenario.tick(*waits("PROJ-2")).tick.status == TickStatus.OK
     # One that records something about it anyway is refused, and the tick goes on.
     refused = scenario.tick(*waits(KEY, "PROJ-2"), raises(KEY, "needs_author"))
     assert refused.tick.status == TickStatus.OK
@@ -425,23 +425,24 @@ def test_a_tick_leaves_a_running_ticket_to_the_harness_and_the_overseer_only_the
     assert [d.decider for d in after.decisions if d.ticket_key == KEY] == [Decider.OVERSEER]
 
 
-def test_a_ticket_whose_pr_no_source_reads_waits_unlisted_until_the_operator_forgets_its_work(
+def test_a_ticket_whose_pr_no_source_reads_waits_unlisted_raising_its_item_until_the_operator_forgets_its_work(
     scenario: Scenario,
     git_pool: GitPool,
 ) -> None:
-    """No source reads its PR, nor the overseer GitHub (DESIGN §39): the harness waits, saying so, and lists nothing."""
+    """No source reads its PR, nor the overseer GitHub (DESIGN §39): the harness waits, saying so, and raises it."""
     scenario.configures(tracker={"query_every_minutes": 60})
     scenario.run(worker=pushes())
     ticked = scenario.tick()
     assert (ticked.tick.status, ticked.tick.overseer_ran) == (TickStatus.OK, False)
     waited = [(d.ticket_key, d.action, d.rationale) for d in harness.recorded(scenario.conn, ticked.tick.id)]
     assert waited == [(KEY, "wait", UNOBSERVED)]
-    assert scenario.attention() == []
-    # Its work forgotten, its unit goes with the PR, and the ticket is the overseer's again.
+    assert scenario.attention() == [(KEY, "unobserved_pr")]
+    # Its work forgotten, its unit goes with the PR, and the ticket is the overseer's again, its item gone.
     scenario.operator("forget", KEY)
     again = scenario.tick(*waits(KEY))
     assert again.tick.overseer_ran is True
     assert harness.recorded(scenario.conn, again.tick.id) == []
+    assert scenario.attention() == []
     assert [t["key"] for t in scenario.state()["observations"]["tickets"]] == [KEY]
 
 

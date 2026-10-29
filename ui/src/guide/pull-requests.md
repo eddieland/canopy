@@ -227,6 +227,14 @@ reviews list, so you can see it landed, and it waits on the [pull requests page]
 or `cli`. Once the request ends, the page says when and why: `reviewed`, `stopped`, `merged` or `closed` before a
 review got to it, or `unknown_repo` when none of your repositories holds the PR.
 
+You needn't go to the reviews page for it. Press `R` on any page, anywhere but a text field, and the same form opens
+over whatever you were reading; on a PR's page it comes with that PR's URL already in it. Or skip the key: paste a PR's
+URL anywhere outside a field and the form opens with it filled in, the focus waiting in the notes. Pasting anything
+else does nothing, so a stray paste of your shopping list stays between you and your clipboard. Escape or a click
+outside closes the form without losing what you wrote; it's still there when you open it again in the same tab, and
+it clears once the request goes through. A refusal, such as one of the loop's own PRs (`loop_pr`), keeps it open and
+says why.
+
 Already on the PR's page? Its **Pull request** panel asks for you: **Review this PR** on one canopy has never
 reviewed, and **Review again** once it has, or once your request has ended, say after the author pushed a fix. It's the
 same request, in the personas its menu names: the last request's, or those [Settings](settings#reviews) prefers. The
@@ -305,8 +313,8 @@ the PR (with its other reviews, if any, on a line under it), the persona the rev
 the base branch it was read against, and when its run ended, with a link to the run. The persona carries the start of
 its text's digest, whole on hover: two reviews in one persona with different digests had it edited between them. When
 the harness decided the review's status itself, such as failing a run that never reported, its reason is the red
-**harness** note under the summary. While the reviewer works, its [card](runs#a-running-agents-card) says where it
-stands, and a review that ended keeps its last. The status is the line under the title. Then its findings, each linking
+**harness** note under the summary. While the reviewer works, its [progress](runs#a-running-agents-progress) leads the
+page, and a review that ended keeps its last. The status is the line under the title. Then its findings, each linking
 to where it sits, and the diff, a panel per file, with each finding pinned under the line it names. A finding on a line
 the diff doesn't show sits under its file's header, and one about a file the diff doesn't touch waits in a panel of its
 own after the files. A long diff shows the lines around each finding at first, with folds that open the rest. A renamed

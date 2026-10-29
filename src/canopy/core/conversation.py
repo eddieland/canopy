@@ -125,7 +125,7 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     ),
     PR: ("grant", "start", "stop", "show", "persona"),
     CHORE: ("reply", "dismiss", "show"),
-    # A running run's reply answers the question its card asks (DESIGN §41).
+    # A running run's reply answers the question it asks you (DESIGN §41).
     RUN: ("show", "reply"),
     # `canopy review show ID` shows one; a reference to it serves to dismiss its findings, or send some to a worker
     # (DESIGN §21), to mark it seen, as that show and its page do (§22), and to note what a revision of its draft should
@@ -413,8 +413,8 @@ def reply(
         # A reply on a review is a note on its draft, a journal fact of the draft's (`review_drafts_manage.note`).
         raise Refused("unsupported", f"a note on {ref}'s draft is recorded with the draft, not as a message")
     if ref.kind == RUN:
-        # A reply on a running run answers its card's question (`answer`), a fact of the run's, not a message.
-        raise Refused("unsupported", f"a reply on {ref} answers its card's question, and is recorded on the run")
+        # A reply on a running run answers the question it asks (`answer`), a fact of the run's, not a message.
+        raise Refused("unsupported", f"a reply on {ref} answers the question it asks you, and is recorded on the run")
     if ref.kind == TASK:
         # A task's guards are in core, as its submission's are: a reply authorizes its next run (TRUST_MODEL T1).
         check_operator()
@@ -444,21 +444,22 @@ def answer(
     state_dir: Path,
     asked_at: datetime | None = None,
 ) -> cards.Answered:
-    """Record the operator's answer to the question a running run's card asks, and pass it to the agent (DESIGN §41).
+    """Record the operator's answer to the question a running run asks, and pass it to the agent (DESIGN §41).
 
     `ref` names a worker's or a planner's run, `run:ID`, or a review's, `review:ID`; `body` is the letter of one of the
-    question's options, in either case. With `asked_at`, when the question the operator was shown was asked, a card
-    that asks another since is refused. Once recorded, the answer is written to the run's answers directory in
-    `state_dir`, where canopy's plugin tells the agent on its next tool call; again for an answer already recorded, in
-    case the first write found the directory gone.
+    question's options, in either case. With `asked_at`, when the question the operator was shown was asked, an
+    update that asks another since is refused. Once recorded, the answer is written to the run's answers directory in
+    `state_dir`, where canopy's plugin tells the agent on its next tool call, in the same transaction, so the answer
+    it hears last is the one recorded last; again for an answer already recorded, in case the first write found the
+    directory gone.
 
     Returns:
         What was answered, whether the question already had this answer, and whether the agent can hear it.
 
     Raises:
         Refused: `unsupported` for a subject that is neither, `unknown` for a run canopy has no record of, `ended` for
-            one no longer running, `no_question` for one whose card asks none, `moved_on` for one whose card asks
-            another question than the one asked at `asked_at`, `bad_answer` for a body that is not the letter of one of
+            one no longer running, `no_question` for one that asks none, `moved_on` for one that asks another
+            question than the one asked at `asked_at`, `bad_answer` for a body that is not the letter of one of
             its options.
     """
     if ref.kind not in (RUN, REVIEW):
@@ -475,20 +476,22 @@ def answer(
         standing = cards.of(row)
         question = standing.card.question if standing.card is not None else None
         if question is None or standing.asked_at is None:
-            raise Refused("no_question", f"{ref}'s card asks no question")
+            raise Refused("no_question", f"{ref} asks you no question")
         if asked_at is not None and asked_at != standing.asked_at:
-            raise Refused("moved_on", f"{ref}'s card asks another question now: read it again before you answer")
+            raise Refused("moved_on", f"{ref} asks you another question now: read it again before you answer")
         letters = cards.LETTERS[: len(question.options)]
         letter = next((x for x in letters if x == body.strip().upper()), None)
         option = question.option(letter) if letter is not None else None
         if letter is None or option is None:
-            raise Refused("bad_answer", f"answer {ref} with one of {', '.join(letters)}: its card's options")
+            raise Refused("bad_answer", f"answer {ref} with one of {', '.join(letters)}: the options it gives")
         already = standing.answer == letter
         if not already and not cards.record_answer(conn, table, run_id, letter, standing.asked_at):
-            raise Refused("no_question", f"{ref}'s card asks no question")
-    answered = cards.Answered(question, standing.asked_at, letter, option, already=already, heard=False)
-    run = f"review-{run_id}" if ref.kind == REVIEW else str(run_id)
-    return dataclasses.replace(answered, heard=cards.deliver(cards.answers_dir(state_dir, run), answered))
+            raise Refused("no_question", f"{ref} asks you no question")
+        answered = cards.Answered(question, standing.asked_at, letter, option, already=already, heard=False)
+        run = f"review-{run_id}" if ref.kind == REVIEW else str(run_id)
+        # Delivered while the transaction holds the journal's write lock, so two answers at once reach the agent in the
+        # order they were recorded, and the one it hears last is the one the journal keeps.
+        return dataclasses.replace(answered, heard=cards.deliver(cards.answers_dir(state_dir, run), answered))
 
 
 def write_reply(

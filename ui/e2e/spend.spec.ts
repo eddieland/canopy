@@ -295,17 +295,39 @@ test("what the runs spent on each model, every kind's summed, or one kind's from
     await expect(page.getByTestId('spend-model-unattributed')).toHaveText(/^\d+% not yet attributed$/u)
 })
 
-test("a model's row opens the runs page on the runs it served", async ({ page }) => {
+test("a model's row opens the runs page on the runs of its kind it served", async ({ page }) => {
     await page.goto('reports/spend?model_kind=workers')
     await settled(page)
     await page.getByTestId('spend-model-table').getByRole('link', { name: 'anthropic/claude-opus-4-1' }).click()
-    await expect(page).toHaveURL(/\/runs\?model=anthropic(%2F|\/)claude-opus-4-1$/u)
+    await expect(page).toHaveURL(/\/runs\?model=anthropic(%2F|\/)claude-opus-4-1&kind=worker$/u)
     // Run 39, which switched from opus to sonnet partway, and the seven opus served in the spring (history.py).
     await expect(page.getByTestId('runs-count')).toHaveText('8')
     await expect(page.getByTestId('run-39')).toBeVisible()
-    await page.getByRole('navigation', { name: 'Filter by model' }).getByRole('link', { name: 'all' }).click()
-    await expect(page).toHaveURL(/\/runs$/u)
-    await expect(page.getByRole('navigation', { name: 'Filter by model' })).toHaveCount(0)
+    // The model's picker, as the repository's, offers every model the runs listed name, and takes it off.
+    await page.getByRole('button', { name: 'Filter by model: anthropic/claude-opus-4-1' }).click()
+    const models = page.getByRole('listbox', { name: 'Models' })
+    await expect(models.getByRole('option', { name: 'openai/gpt-5' })).toBeVisible()
+    await models.getByRole('option', { name: 'every model' }).click()
+    await expect(page).toHaveURL(/\/runs\?kind=worker$/u)
+    await expect(page.getByRole('button', { name: 'Filter by model: every model' })).toBeVisible()
+})
+
+test("under every kind, a model's row opens its runs of every kind, a review's among them", async ({ page }) => {
+    await page.goto('reports/spend')
+    await settled(page)
+    // The mock's reviewer runs on gpt-5, which served no worker.
+    await page.getByTestId('spend-model-table').getByRole('link', { name: 'openai/gpt-5' }).click()
+    await expect(page).toHaveURL(/\/runs\?model=openai(%2F|\/)gpt-5$/u)
+    await expect(page.getByText(/no recent runs on/u)).toHaveCount(0)
+    await expect(page.getByRole('link', { name: 'review:4' })).toBeVisible()
+})
+
+test("the overseer's models are not linked, as the runs page lists no tick by model", async ({ page }) => {
+    await page.goto('reports/spend?model_kind=overseer')
+    await settled(page)
+    const table = page.getByTestId('spend-model-table')
+    await expect(table.getByTestId('spend-model-unlisted').first()).toHaveAttribute('title', /lists no overseer tick/u)
+    await expect(table.getByRole('link')).toHaveCount(0)
 })
 
 test.describe('on a wide monitor', () => {
@@ -449,7 +471,7 @@ function nothing(costs: Costs): Costs {
     return Object.fromEntries(Object.keys(costs).map((key) => [key, null]))
 }
 
-test("the header's budget says the month is headed over, in words on hover, and opens the spend page", async ({
+test("the header's budget says the month is headed over, the numbers on hover, and opens the spend page", async ({
     page,
 }) => {
     // Wide enough for the percent beside the icon; narrower, the icon stands alone.
@@ -460,7 +482,11 @@ test("the header's budget says the month is headed over, in words on hover, and 
     const readout = page.getByTestId('budget-readout')
     await expect(readout).toHaveText('39%')
     await expect(readout).toHaveAttribute('data-state', 'headed')
-    await expect(readout).toHaveAttribute('title', /^Headed over: \$15\.76 of \$40 \(39%\), on pace for \$/u)
+    await expect(readout).toHaveAccessibleName(/^Headed over: \$15\.76 of \$40 \(39%\), on pace for \$/u)
+    await readout.hover()
+    const card = page.getByTestId('budget-card')
+    await expect(card).toContainText('Headed over')
+    await expect(card).toContainText('39%, $15.76 of $40')
     await readout.click()
     await expect(page).toHaveURL(/\/reports\/spend$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Spend')

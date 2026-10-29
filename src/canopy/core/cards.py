@@ -29,13 +29,23 @@ import re
 import shutil
 import sqlite3
 import sys
+import threading
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    Field,
+    StrictStr,
+    ValidationError,
+    model_validator,
+)
 
 from canopy.core import db, items, records, sql
 from canopy.core.vocab import ReviewRunStatus, RunStatus
@@ -103,6 +113,15 @@ def _line(value: str) -> str:
 Line = Annotated[StrictStr, Field(max_length=MAX_LINE), AfterValidator(_line)]
 
 
+def _one_or_more(value: object) -> object:
+    """A lone line where a card's list of lines goes, as a list of one: an agent with one step left often sends so.
+
+    Returns:
+        The value, or a lone string as a one-item tuple.
+    """
+    return (value,) if isinstance(value, str) else value
+
+
 class Done(BaseModel):
     """A finished step, with what shows it is done."""
 
@@ -157,7 +176,7 @@ class Question(BaseModel):
 
 
 class Card(BaseModel):
-    """The input of a `status` call, the agent's whole card: each call replaces the one before."""
+    """The input of a `status` call, an update of the agent's whole progress: each call replaces the one before."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
 
@@ -170,7 +189,11 @@ class Card(BaseModel):
         max_length=MAX_STEPS,
         description="The steps finished so far, in order, each with its proof.",
     )
-    next: tuple[Line, ...] = Field(default=(), max_length=MAX_STEPS, description="What is left, in order.")
+    next: Annotated[tuple[Line, ...], BeforeValidator(_one_or_more)] = Field(
+        default=(),
+        max_length=MAX_STEPS,
+        description="What is left, in order.",
+    )
     stuck: Annotated[StrictStr, Field(max_length=MAX_SUMMARY), AfterValidator(_line)] | None = Field(
         default=None,
         description="What is in your way that you are working around, such as CI down or a flaky test; else omit it.",
@@ -182,7 +205,7 @@ class Card(BaseModel):
     )
     question: Question | None = Field(
         default=None,
-        description="A decision you need from the operator and can work around meanwhile; keep it on each card until "
+        description="A decision you need from the operator and can work around meanwhile; keep it in each update until "
         "you have the answer or no longer need it, else omit it.",
     )
 
@@ -327,7 +350,8 @@ def deliver(path: Path, answered: Answered) -> bool:
         "letter": answered.letter,
         "option": answered.option,
     }
-    staged = path / f".{ANSWER_FILE}.{os.getpid()}"
+    # Its own name in each process and thread, so two writes at once never share the file one renames over the answer.
+    staged = path / f".{ANSWER_FILE}.{os.getpid()}.{threading.get_ident()}"
     try:
         staged.write_text(json.dumps(data) + "\n", encoding="utf-8")
         staged.replace(path / ANSWER_FILE)
@@ -409,21 +433,18 @@ def is_stale(standing: Standing, started_at: str, now: datetime | None = None) -
 
 
 def doing(standing: Standing, started_at: str, now: datetime | None = None) -> str | None:
-    """A running run's card on one line, for `canopy status`: what it does now, and how old the card is.
+    """A running run's progress on one line, for `canopy status`: what it does now, and when it last updated it.
 
     Returns:
-        `now: <now>  card 3m, 4 calls old`, marked `stale` when it is; `no card, 12m and 30 calls in` for a run with
-        none once that is stale; else None.
+        `now: <now>  updated 3m ago, 4 calls since`, or `no update for 18m and 4 calls` when that is stale;
+        `no progress yet, 12m and 30 calls in` for a run with none once that is stale; else None.
     """
-    stale = is_stale(standing, started_at, now)
-    mark = "  stale" if stale else ""
     if standing.card is None or standing.at is None:
-        if not stale:
+        if not is_stale(standing, started_at, now):
             return None
-        return f"no card, {items.age(started_at, now)} and {_calls(standing.calls_since)} in"
-    age = items.age(db.format_time(standing.at), now)
+        return f"no progress yet, {items.age(started_at, now)} and {_calls(standing.calls_since)} in"
     doing = f"now: {text.one_line(standing.card.now)}{_progress(standing.card)}"
-    return f"{doing}  card {age}, {_calls(standing.calls_since)} old{mark}"
+    return f"{doing}  {_updated(standing, started_at, now)}"
 
 
 def asking(standing: Standing, ref: str, now: datetime | None = None) -> str | None:
@@ -452,23 +473,23 @@ def lines(
     ref: str,
     now: datetime | None = None,
 ) -> list[str]:
-    """A run's whole card, for `canopy show`: how old it is, each field on a line of its own, its question, its steps.
+    """A run's whole progress, for `canopy show`: its last update's age, each field on a line, its question, its steps.
 
     A step of a running run is marked stuck once it has worked longer than the last fifth of `timeout_minutes`. A
     question names its options by letter, the one the agent recommends, and the operator's answer, or how to give one
     while the run runs, by `ref`, the run's reference.
 
     Returns:
-        The lines, indented; one saying there is none for a run with no card.
+        The lines, indented; one saying there is none yet for a run with no progress.
     """
     card = standing.card
     if card is None or standing.at is None:
-        return ["  no card"]
+        return ["  no progress yet"]
     if running:
-        stale = "  stale" if is_stale(standing, started_at, now) else ""
-        head = f"  card, {items.age(db.format_time(standing.at), now)} and {_calls(standing.calls_since)} old{stale}"
+        head = f"  progress, {_updated(standing, started_at, now)}"
     else:
-        head = f"  last card, {db.format_time(standing.at)}, {_calls(standing.calls_since)} before the run ended"
+        at = db.format_time(standing.at)
+        head = f"  last progress, updated {at}, {_calls(standing.calls_since)} before the run ended"
     found = [head, f"    {card.summary}", f"    now: {card.now}"]
     found.extend(f"    done: {d.step} ({d.proof})" for d in card.done)
     found.extend(f"    next: {step}" for step in card.next)
@@ -513,7 +534,7 @@ def _question(standing: Standing, question: Question, *, running: bool, ref: str
     elif running:
         found.append(f"      waiting on you: canopy reply {ref} LETTER")
     else:
-        found.append("      never answered")
+        found.append("      run ended before an answer")
     return found
 
 
@@ -598,6 +619,22 @@ def _since(raw: object) -> dict[str, datetime]:
             except ValueError:
                 continue
     return times
+
+
+def _updated(standing: Standing, started_at: str, now: datetime | None) -> str:
+    """When a running run last updated its progress, said plainly when that is stale.
+
+    Returns:
+        `updated 3m ago, 4 calls since`; once stale, `no update for 18m and 4 calls` by time, else
+        `no update in 26 tool calls`.
+    """
+    at = standing.at or db.parse_time(started_at)
+    age = items.age(db.format_time(at), now)
+    if (now or datetime.now(UTC)) - at >= timedelta(minutes=STALE_MINUTES):
+        return f"no update for {age} and {_calls(standing.calls_since)}"
+    if standing.calls_since >= STALE_CALLS:
+        return f"no update in {standing.calls_since} tool calls"
+    return f"updated {age} ago, {_calls(standing.calls_since)} since"
 
 
 def _calls(count: int) -> str:

@@ -74,6 +74,9 @@ class TaskRun(Model):
     """The most tokens one of its model calls was sent; None when the runtime reported nothing."""
     log_path: str
     """Where its log is: from the workspace root when under it."""
+    served: list[str] = []
+    """The models its session names as having served it, as `provider/model`, the most costly first; empty until
+    canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served."""
 
 
 class TaskSummary(Model):

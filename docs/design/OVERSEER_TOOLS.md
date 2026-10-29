@@ -19,7 +19,7 @@ the tools' functions, until nothing needs them (ROADMAP M48).
 - Each verb is its own tool name, so spend by tool (§11) splits the overseer's calls by verb.
 
 Workers are out of scope: what they report is read from their final line after they exit (§8). A worker's, planner's,
-or reviewer's one tool of canopy's own, `status` (§41), writes nothing: the harness records its card from the call in
+or reviewer's one tool of canopy's own, `status` (§41), writes nothing: the harness records its update from the call in
 the events the agent prints, so nothing a worker writes reaches the journal but what canopy observes it print.
 
 ### The server
@@ -63,9 +63,9 @@ name; every other definition denies them. Workers keep their shell, for git's wr
 
 ### The tools
 
-One tool per overseer verb, named for its command with hyphens for spaces: `dispatch`, `decide`, `queried`,
-`attention`, `ticket-set`, `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and
-`chore-wait`. The overseer sees them as `canopy_dispatch` and so on.
+One tool per overseer verb, named for its command with hyphens for spaces: `dispatch`, `decide`, `attention`,
+`ticket-set`, `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and `chore-wait`. The overseer
+sees them as `canopy_dispatch` and so on.
 No tool name holds an underscore: OpenCode joins server and tool with one, so `canopy_ticket_set` could also come from
 a server named `canopy_ticket`, and the later would replace the earlier. No tool reads the pool or the observations:
 the state block already holds them, and a claim on them, such as a dispatch's label or a cursor, is a field its tool

@@ -31,7 +31,7 @@ def test_a_worker_shows_its_card_while_it_runs_and_keeps_its_last_once_it_ends(
 ) -> None:
     with_events(scenario.env, "canopy-worker")
     said = (calls(STATUS, **FIRST), calls(STATUS, **LATER), calls(STATUS, **REFUSED))
-    working = scenario.starts(worker=worker_does(["true"], tools=said))
+    working = scenario.starts(worker=worker_does(["true"], tools=said)).has_called(len(said))
 
     # Each call replaces the card; the refused one records nothing, and counts as a call since.
     standing = cards.of(working.row)
@@ -49,7 +49,7 @@ def test_a_worker_shows_its_card_while_it_runs_and_keeps_its_last_once_it_ends(
 
 def test_a_planner_shows_its_card_while_it_runs(scenario: Scenario, git_pool: GitPool) -> None:
     planner = planner_does(plan="# Plan\n\nDo it.\n", tools=[calls(STATUS, **FIRST)])
-    working = scenario.starts(dispatches(kind=RunKind.PLAN), worker=planner)
+    working = scenario.starts(dispatches(kind=RunKind.PLAN), worker=planner).has_called(1)
     assert cards.of(working.row).card == cards.Card.model_validate(FIRST)
     assert cards.of(working.finishes().row).card == cards.Card.model_validate(FIRST)
 
@@ -65,11 +65,11 @@ def test_canopy_status_shows_what_a_running_card_says_now_and_marks_it_stale(
     git_pool: GitPool,
 ) -> None:
     with_events(scenario.env, "canopy-worker")
-    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **LATER)]))
+    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **LATER)])).has_called(1)
     out = scenario.operator("status").out
-    assert re.search(r"\n    now: pushing  card \d+[sm], 0 calls old\n", out), out
+    assert re.search(r"\n    now: pushing  updated \d+[sm] ago, 0 calls since\n", out), out
     scenario.time_passes(minutes=cards.STALE_MINUTES + 1)
-    assert re.search(r"\n    now: pushing  card 1\dm, 0 calls old  stale\n", scenario.operator("status").out)
+    assert re.search(r"\n    now: pushing  no update for 1\dm and 0 calls\n", scenario.operator("status").out)
     working.finishes()
 
 
@@ -79,9 +79,9 @@ def test_a_running_run_with_no_card_is_named_in_status_once_that_is_stale(
 ) -> None:
     with_events(scenario.env, "canopy-worker")
     working = scenario.starts(worker=worker_does(["true"]))
-    assert "no card" not in scenario.operator("status").out
+    assert "no progress yet" not in scenario.operator("status").out
     scenario.time_passes(minutes=cards.STALE_MINUTES + 1)
-    assert re.search(r"\n    no card, 1\dm and 0 calls in\n", scenario.operator("status").out)
+    assert re.search(r"\n    no progress yet, 1\dm and 0 calls in\n", scenario.operator("status").out)
     working.finishes()
 
 
@@ -90,7 +90,7 @@ def test_show_prints_the_whole_card_while_it_runs_and_the_last_once_it_ends(
     git_pool: GitPool,
 ) -> None:
     with_events(scenario.env, "canopy-worker")
-    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **LATER)]))
+    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **LATER)])).has_called(1)
     whole = [
         "    The fix is in and its tests pass; pushing next.",
         "    now: pushing",
@@ -100,11 +100,11 @@ def test_show_prints_the_whole_card_while_it_runs_and_the_last_once_it_ends(
         "    stuck: CI is down; running the tests here instead",
     ]
     shown = scenario.operator("show", f"run:{working.id}").out.splitlines()
-    [head] = [line for line in shown if line.startswith("  card, ")]
+    [head] = [line for line in shown if line.startswith("  progress, ")]
     assert shown[shown.index(head) + 1 :][: len(whole)] == whole
     ran = working.finishes()
     shown = scenario.operator("show", f"run:{ran.id}").out.splitlines()
-    [head] = [line for line in shown if line.startswith("  last card, ")]
+    [head] = [line for line in shown if line.startswith("  last progress, ")]
     assert head.endswith(", 2 calls before the run ended")  # the gate that held it, and `true`
     assert shown[shown.index(head) + 1 :][: len(whole)] == whole
 
@@ -122,9 +122,9 @@ def test_a_card_with_steps_shows_how_much_is_done_and_the_stage_under_way(
             {"title": "Push", "status": "not_started"},
         ],
     }
-    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **planned)]))
+    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **planned)])).has_called(1)
     assert re.search(
-        r"\n    now: reading the code  33% done, stage web  card \d+[sm], 0 calls old\n",
+        r"\n    now: reading the code  33% done, stage web  updated \d+[sm] ago, 0 calls since\n",
         scenario.operator("status").out,
     )
     shown = scenario.operator("show", f"run:{working.id}").out
@@ -139,7 +139,7 @@ def test_a_card_with_steps_shows_how_much_is_done_and_the_stage_under_way(
 def test_the_report_a_chores_agent_reads_of_a_run_leaves_its_card_out(scenario: Scenario, git_pool: GitPool) -> None:
     """A card is the operator's alone (DESIGN §41): no agent reads another's."""
     with_events(scenario.env, "canopy-worker")
-    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **LATER)]))
+    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **LATER)])).has_called(1)
     reported = readback.read_run(context(scenario.env), readback.ShowRun(run=working.id))
     assert "pushing" not in reported
     assert "    now: pushing\n" in scenario.operator("show", f"run:{working.id}").out
@@ -158,7 +158,7 @@ ASKING: Mapping[str, Any] = {
 
 def test_the_operator_answers_a_running_workers_question_by_letter(scenario: Scenario, git_pool: GitPool) -> None:
     with_events(scenario.env, "canopy-worker")
-    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **ASKING)]))
+    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **ASKING)])).has_called(1)
     ref = f"run:{working.id}"
     status = scenario.operator("status").out
     assert re.search(rf"\n    asks you, \d+[sm]: Keep the old .+  canopy reply {ref} A-C \(recommends A\)\n", status)
@@ -189,6 +189,6 @@ def test_the_operator_answers_a_running_workers_question_by_letter(scenario: Sce
 
 def test_a_run_whose_card_asks_nothing_refuses_an_answer(scenario: Scenario, git_pool: GitPool) -> None:
     with_events(scenario.env, "canopy-worker")
-    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **FIRST)]))
+    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **FIRST)])).has_called(1)
     assert "(no_question)" in scenario.operator("reply", f"run:{working.id}", "A", code=1).err
     working.finishes()

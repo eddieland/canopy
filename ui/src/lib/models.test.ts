@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mockRuns } from '@/api/mocks'
 import type { Run } from '@/api/types'
 
-import { modelNames, ranOn, runModelIds, unservedReason } from './models'
+import { modelNames, ranOn, runModelIds, sameModel, unservedReason } from './models'
 
 const [RUNNING, BLOCKED] = mockRuns as [Run, Run]
 
@@ -52,5 +52,21 @@ describe('ranOn', () => {
         expect(ranOn({ ...BLOCKED, model: 'anthropic/claude-opus-4-1' }, 'anthropic/claude-opus-4-1')).toBe(false)
         expect(ranOn({ ...RUNNING, model: 'anthropic/claude-opus-4-1' }, 'anthropic/claude-opus-4-1')).toBe(true)
         expect(ranOn(RUNNING, 'anthropic/claude-opus-4-1')).toBe(false)
+    })
+})
+
+describe('sameModel', () => {
+    it('takes a model asked for at a variant as served by the model alone, as its session names the default', () => {
+        expect(sameModel('openai/gpt-5', 'openai/gpt-5')).toBe(true)
+        expect(sameModel('openai/gpt-5@medium', 'openai/gpt-5')).toBe(true)
+        expect(sameModel('openai/gpt-5@high', 'openai/gpt-5@high')).toBe(true)
+    })
+
+    it('tells apart another model, another variant, and a variant served when none was asked for', () => {
+        expect(sameModel('openai/gpt-5', 'openai/gpt-5-mini')).toBe(false)
+        expect(sameModel('openai/gpt-5@high', 'openai/gpt-5@low')).toBe(false)
+        expect(sameModel('openai/gpt-5', 'openai/gpt-5@high')).toBe(false)
+        // An `@` in the provider is no variant.
+        expect(sameModel('me@corp/model', 'me')).toBe(false)
     })
 })

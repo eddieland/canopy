@@ -15,8 +15,12 @@ Each theme also has a palette, picked apart. The defaults tint the canvas with t
 **Indigo** in dark. Light can also be **Off-white**, a warm paper, a soft green **Sage**, or the light side of
 **Solarized**, **Nord**, **Gruvbox**, or **Rosé Pine** (its Dawn variant). Dark can be a plain **Grey**, a near
 **Black** for an OLED screen, a deep green **Forest**, a wine-dark **Plum**, or the dark side of **Solarized**,
-**Gruvbox**, or **Monokai**. Only the background, surfaces, and text change; every status color stays where you
-learned it. Scheme purists will notice the bases sit a shade off the spec, so the status colors stay readable on them.
+**Gruvbox**, or **Monokai**. The background, surfaces, text, and accent change. Schemes with an accent bring it:
+Nord and Solarized their blues, Monokai its hot pink, Rosé Pine its dusty one, Gruvbox its purple, since its orange
+looked like every run was blocked. The rest get one that suits them: ink blue on Off-white, heather on Sage,
+steel blue on Grey, ultraviolet on Black, a lake in the Forest, and orchid on Plum. Neither green one gets a green
+accent, for the same reason Gruvbox lost its orange. Every status color stays where you learned it. Scheme purists
+will notice the bases and accents sit a shade off the spec, so everything stays readable on them.
 Nord's dark side didn't make it: moved far enough for that, it was Indigo with a different name. Rosé Pine's and
 Dracula's dark sides missed out the same way.
 
@@ -138,29 +142,6 @@ The loop reads your workspace's `canopy-workspace.toml` and your `config.toml` w
 again, as `kill -HUP` on the loop does; a tick that's running finishes first. It says what changed, and which changes
 wait for a restart. A file that doesn't load changes nothing, and the error names its file and key, so a typo costs you
 a fix, not a loop. [Config files](config-files) lists every key.
-
-## Fun
-
-Sprig starts off and the rest starts on. None of it does anything useful, by design.
-
-- **Ticker**: joke headlines crawling across the header, with a speed, a gap between headlines, and topics to pick
-  from. **Tips** mixes real tips about canopy in with the jokes.
-- **Sprig**: a small wire figure at the foot of the rail, with a tip for every page. None of them help. Click it for
-  a new one, picked at random like the ticker's headlines, or **Don't show me tips again** to turn it off.
-  **Ghost**, in the row under the checkboxes, puts a Destiny Ghost in its place and turns it on: it floats around
-  Sprig's corner of the rail, its light swelling and dimming, with a tip for every page in a voice of its own, and
-  helps exactly as much. **Sprig** there brings Sprig back. The checkbox takes the name of whoever is sitting there.
-  Sprig keeps the hats; the Ghost gets shells.
-- **Quips**: a worker run's row in the rail says what it's doing as a quip, `planning in pencil`, instead of plain
-  `planning`. Each ticket keeps its quip for a phase and gets a new one with the next, in every tab, so nothing
-  changes its story while you watch. A run waiting on you gets the plain words; it isn't doing anything. Hover a
-  quip for the plain words too.
-- **The hat shop**: every dollar canopy spends is a dollar towards Sprig's hats. All sales are final.
-- **The shell shop**: the same dollars dress the Ghost. It comes in a Generalist Shell and always wears one, so a
-  shell comes off only for another. The Sprig Shell is for anyone who wanted both and couldn't choose. One wallet
-  pays for both shops, so a crown and a Vex Shell are a real decision.
-
-The switch in the panel's header does exactly what you'd fear. Sprig, if it's on, brought glow sticks.
 
 ## Session
 

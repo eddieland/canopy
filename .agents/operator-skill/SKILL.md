@@ -22,8 +22,8 @@ Everything below is for an agent helping the operator in their own session.
 - Read, explain, and suggest. Do not start ticks or loops: `canopy loop` runs until Ctrl-C and would hang your session,
   and `canopy tick` runs the overseer, which spends money. Suggest the command and let the operator run it, unless
   they ask you to run a single `canopy tick --dry-run`.
-- `canopy dispatch`, `decide`, `queried`, `attention`, and `ticket set` are the overseer's tools and refuse outside
-  a tick, by design. Nothing dispatches a ticket by hand: a ticket is worked through its queue label or `canopy start`
+- `canopy dispatch`, `decide`, `attention`, and `ticket set` are the overseer's tools and refuse outside a tick, by
+  design. Nothing dispatches a ticket by hand: a ticket is worked through its queue label or `canopy start`
   (see Getting a ticket worked).
 - Every command that acts is the operator's own, among them `start`, `stop`, `reply`, `forget`, `grant`, `plan`,
   `pause`, `resume`, `notice`, `dismiss`, `send`, and `draft`'s and `memory`'s changes: they authorize work, answer
@@ -120,12 +120,11 @@ such as `tracker.labels` and everything under `runtime`, may be set only in the 
 
 Work through these in order and stop at the first that explains it.
 
-1. Did a recent tick run? `canopy status` shows the last one. `skipped` usually means an MCP server was unreachable
-   (`mcp_unavailable: <which>`); such a tick still runs due chores, reviews, and a private ticket's resume when GitHub
-   answers, but dispatches no public ticket. `canopy_unavailable`, `disk_low`,
-   `overseer_failed`, and `reconcile_failed` have a summary, the detail in `ticks/<id>.log`. `overseer_failed` with
-   `left duties undone` names what the overseer skipped (the query, a ticket, or a chore); what that tick dispatched
-   still runs. `error` names the exception; `canopy.log` has its traceback.
+1. Did a recent tick run? `canopy status` shows the last one. `canopy_unavailable`, `disk_low`, `overseer_failed`, and
+   `reconcile_failed` have a summary, the detail in `ticks/<id>.log`. `overseer_failed` with `left duties undone` names
+   what the overseer skipped (a ticket or a chore); what that tick dispatched still runs. A source that cannot read is
+   `connector_failed` on the attention list, and a ticket it left stale is the harness's `wait`. `error` names the
+   exception; `canopy.log` has its traceback.
 2. What did the overseer decide about KEY?
 
    ```sh
@@ -184,6 +183,7 @@ The overseer may record other reasons; the detail says what it wants.
 | `flaky_rerun` | A worker judged a failed check flaky and changed nothing for it: rerun the check, or `canopy reply` that it is real. |
 | `repo_missing` | A repository in the workspace map has no clone: `canopy workspace sync`. |
 | `check_stuck` | One check has held a PR at `ci_running` an hour past every other: if it is not CI (a merge queue, a sign-off), give it a role under `[repos.REPO.checks]` in the workspace map, as the detail says. |
+| `unobserved_pr` | A unit's PR URL names no PR, so no source reads it and the ticket waits for good: `canopy forget KEY`, and its next implement starts over. |
 | `memory_proposal` | A done ticket's runs proposed lessons: `canopy memory proposals`, then `promote` or `reject` each. |
 | `lesson_review` | Lessons are due for review: `canopy memory renew ID`, graduate one into AGENTS.md, or `forget` it. |
 | `lesson_wrong` | A run reported a lesson wrong: read it with `canopy memory lessons`, then `renew` or `forget` it. |

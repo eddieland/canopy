@@ -215,6 +215,21 @@ def test_a_reviews_page_names_the_models_that_served_its_reviewer(backend: Backe
     assert (served["status"], [m["model"] for m in served["models"]]) == ("found", ["openai/gpt-5"])
 
 
+def test_the_reviews_list_names_the_models_that_served_each_review_so_the_runs_page_lists_them_by_model(
+    backend: Backend,
+) -> None:
+    reviews = client(None, backend).get("/api/reviews").json()
+    # Reviews 5 and 6 are still running, or their sessions unread.
+    assert {r["id"]: r["served"] for r in reviews} == {
+        6: [],
+        5: [],
+        4: ["openai/gpt-5"],
+        3: ["openai/gpt-5"],
+        2: ["openai/gpt-5"],
+        1: ["openai/gpt-5"],
+    }
+
+
 def test_a_review_that_ended_badly_shows_the_call_it_ended_on(backend: Backend) -> None:
     entries = client(None, backend).get("/api/reviews/3/transcript").json()["entries"]
     failed = [e for e in entries if e["kind"] == "tool" and e["status"] == "error"]

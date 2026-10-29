@@ -53,9 +53,11 @@ import {
     GROUP_HINT,
     GROUP_LABEL,
     kindsOffered,
+    listedModels,
     modelRows,
     monthName,
     perRun,
+    RUNS_KIND,
     SERIES,
     seriesCost,
     shareText,
@@ -111,6 +113,7 @@ const EST_TOKENS_HINT =
 // What a model's runs count, and why a kind's runs can have no model named, on hover.
 const MODEL_RUNS_HINT = 'The runs it wrote a reply of: a run on two models counts under each'
 const PER_RUN_HINT = 'What it spent over its runs: a run on two models counts its share of the cost under each'
+const UNLISTED_HINT = 'The runs page lists no overseer tick by model: Ticks, under Runs, lists them by tick'
 const NO_MODEL_HINT =
     "Runs whose sessions named no model: not read yet, as a tick reads a few ended runs' sessions; no longer kept by " +
     'the runtime; failed to read; or making no model call. Their cost is what the runs reported'
@@ -325,6 +328,7 @@ function SpendPage() {
                             <Models
                                 models={modelRows(data.models, search.model_kind)}
                                 kind={search.model_kind}
+                                listed={listedModels(data.models)}
                                 span={span}
                             />
                         )}
@@ -1029,10 +1033,23 @@ function FirstCalls({
 /**
  * What the runs spent on each model, as their sessions say: every kind's summed, or one kind's, the most costly first,
  * and the runs no session named a model for last, muted. Each model's id, in mono as every page sets one, opens the
- * runs page's runs on it (`?model=`), and `per run` makes two models with different run counts comparable. Until a
- * tick has read any run's session, says so rather than list only those.
+ * runs page's runs on it (`?model=`), of the kind shown (`?kind=`, `RUNS_KIND`), and `per run` makes two models with
+ * different run counts comparable. A model the runs page cannot list a run of, as only the overseer's ticks used it
+ * (`listed`), is plain, why on hover. Until a tick has read any run's session, says so rather than list only those.
  */
-function Models({ models, kind, span }: { models: ModelRow[]; kind: SpendKind | undefined; span: string }) {
+function Models({
+    models,
+    kind,
+    listed,
+    span,
+}: {
+    models: ModelRow[]
+    kind: SpendKind | undefined
+    listed: ReadonlySet<string>
+    span: string
+}) {
+    // The runs page's kind for the kind shown; undefined for every kind, and null for one it lists no run of by model.
+    const of = kind === undefined ? undefined : RUNS_KIND[kind]
     const runs = kind === undefined ? 'run' : KIND_LABEL[kind].replace(/s$/u, '')
     if (models.length === 0) {
         return (
@@ -1074,10 +1091,14 @@ function Models({ models, kind, span }: { models: ModelRow[]; kind: SpendKind | 
                             >
                                 {m.model === null ? (
                                     <None reason="no session named one" className="block truncate font-sans" />
+                                ) : of === null || !listed.has(m.model) ? (
+                                    <span title={UNLISTED_HINT} className="block" data-testid="spend-model-unlisted">
+                                        <Clipped text={m.model} className="block readout" />
+                                    </span>
                                 ) : (
                                     <Link
                                         to="/runs"
-                                        search={{ model: m.model }}
+                                        search={{ model: m.model, kind: of }}
                                         className="block text-accent underline-offset-4 hover:underline"
                                     >
                                         <Clipped text={m.model} className="block readout" />

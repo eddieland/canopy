@@ -47,6 +47,7 @@ from canopy_github import (
     emit,
     error_types,
     items,
+    login,
     number,
     obj,
     pages,
@@ -694,12 +695,7 @@ def _author(author: object) -> str:
     Returns:
         The login; a deleted account's is `ghost`.
     """
-    if not isinstance(author, dict):
-        return _GHOST
-    fields = obj(author, "author")
-    login = text(fields.get("login")) or _GHOST
-    bot = fields.get("__typename") == "Bot" and not login.endswith("[bot]")
-    return f"{login}[bot]" if bot else login
+    return login(author) or _GHOST
 
 
 def _moment(value: object) -> datetime | None:

@@ -2,8 +2,8 @@
 
 A scenario test reads the way an entry in docs/SCENARIOS.md does: the overseer ticks and decides, workers run and push,
 the operator replies, and the test checks what canopy did. The `scenario` fixture's `Scenario` tells the story; the
-functions below it are the moves in it, the overseer's (`dispatches`, `reviews`, `raises`, `sets_phase`, `skips_tick`,
-and `waits` from `helpers.py`) and a worker's (`pushes`, `asks`, `fails`, or any `*_does` helper). Each is a helper of
+functions below it are the moves in it, the overseer's (`dispatches`, `reviews`, `raises`, `sets_phase`, and `waits`
+from `helpers.py`) and a worker's (`pushes`, `asks`, `fails`, or any `*_does` helper). Each is a helper of
 `helpers.py` with the plumbing folded in: a tick's exit code checked, the runs it started waited for, a dispatch's
 flags spelled as keywords. Those moves run the overseer's commands; a tick's move may instead be a call of one of
 canopy's tools, `calls("canopy_decide", key=..., ...)` from `helpers.py`, made through the server as the overseer makes
@@ -51,9 +51,11 @@ the story says what the next command reads:
         assert action == "refused:attempt_limit"
 
 A run can be left at work while the story goes on around it: `starts`, or a tick with `hold=True`, holds each worker
-it starts before it does anything and gives the run back as `Working`. The test then says what becomes of it: it
-`finishes`, doing what its script says, or its `canopy _run` `dies`, as a crash or a shutdown would leave it, its worker
-still at work, for the next tick to find. A run still held when the test ends is stopped:
+it starts once it has made its tool calls, before its commands, and gives the run back as `Working`. canopy records
+each call a moment after the worker prints it, so a test that reads what they recorded, such as the run's card, first
+waits until it `has_called` them all. The test then says what becomes of the run: it `finishes`, doing what its script
+says, or its `canopy _run` `dies`, as a crash or a shutdown would leave it, its worker still at work, for the next tick
+to find. A run still held when the test ends is stopped:
 
     def test_a_run_whose_process_died_is_crashed_on_the_next_tick(scenario: Scenario, git_pool: GitPool) -> None:
         working = scenario.starts(worker=pushes())
@@ -63,12 +65,12 @@ still at work, for the next tick to find. A run still held when the test ends is
         ticked = scenario.tick(*waits("PROJ-1"))
         assert ticked.actions[0] == "attention:crashed"
 
-The overseer is played whole, not only its commands: what its query found (`queried=`), the line it ends on
-(`result=`), and how it runs (`exit_code=`, `says=`, ...), so a tick it fails, or a duty it leaves undone, is a story
-too:
+The overseer is played whole, not only its commands: the line it ends on (`result=`), and how it runs
+(`exit_code=`, `says=`, ...), so a tick it fails, or a duty it leaves undone, is a story too:
 
-    def test_a_ticket_the_query_found_is_owed_a_decision(scenario: Scenario) -> None:
-        failed = scenario.tick(queried=["PROJ-9"], code=1)
+    def test_a_ticket_left_out_is_owed_a_decision(scenario: Scenario) -> None:
+        scenario.seen("PROJ-9")
+        failed = scenario.tick(code=1)
         assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-9"
 
 The operator is played whole too: `operator` runs one of their commands and gives back what canopy printed, `out` and
@@ -142,7 +144,7 @@ from contextlib import AbstractContextManager, ExitStack, contextmanager, redire
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, Unpack, assert_never
+from typing import Any, Literal, Self, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
@@ -345,6 +347,15 @@ class Working:
         """The run's row as it stands."""
         return present(db.get_run(self.scenario.conn, self.id))
 
+    def has_called(self, calls: int) -> Self:
+        """Wait until canopy has recorded `calls` of the worker's tool calls, as `canopy _run` reads its events.
+
+        Returns:
+            The run, still at work.
+        """
+        _recorded(calls, lambda: int(self.row["tool_calls"]), str(self))
+        return self
+
     def finishes(self) -> Ran:
         """Let the worker go on to what its script says, and wait for the run to end.
 
@@ -418,6 +429,15 @@ class Reviewing:
     def row(self) -> records.ReviewRun:
         """The review run's row as it stands."""
         return present(review_runs.get_review_run(self.scenario.conn, self.id))
+
+    def has_called(self, calls: int) -> Self:
+        """Wait until canopy has recorded `calls` of the reviewer's tool calls, as `canopy _review` reads its events.
+
+        Returns:
+            The review run, still at work.
+        """
+        _recorded(calls, lambda: self.row.tool_calls, str(self))
+        return self
 
     def finishes(self) -> Reviewed:
         """Let the reviewer go on to what its script says, and wait for the review run to end.
@@ -558,7 +578,6 @@ class Scenario:
         dry_run: bool = False,
         hold: bool = False,
         code: int = 0,
-        queried: Sequence[str] | None = (),
         result: str = TICK_DONE,
         **overseer: Unpack[Behavior],
     ) -> Ticked:
@@ -570,19 +589,17 @@ class Scenario:
         Each run's worker does `worker`, the fake's default `done` if None, or what `workers` gives for its ticket: a
         script each ticket's run plays as made for that ticket, so `pushes()` pushes the branch of the ticket it runs
         for. With `hold`, each is held at work instead, and the tick's runs are left `working` for the test to finish
-        or kill. The overseer records `queried`, the keys its query found, when the query is due, or no query at all if
-        None; it ends on `result`, by default the line that ends a tick, and runs as `overseer` says (`exit_code`,
-        `says`, ...). The tick must exit `code`, and a failure says how it ended instead.
+        or kill. The overseer ends on `result`, by default the line that ends a tick, and runs as `overseer` says
+        (`exit_code`, `says`, ...). The tick must exit `code`, and a failure says how it ended instead.
 
         Returns:
             What the tick did.
         """
         argv = ["tick", "--dry-run"] if dry_run else ["tick"]
-        recorded = "skip" if queried is None else json.dumps(list(queried))
         commands = [move for move in moves if not isinstance(move, Called)]
         tools = [move for move in moves if isinstance(move, Called)]
         with ExitStack() as stack:
-            stack.enter_context(overseer_does(*commands, tools=tools, result=result, queried=recorded, **overseer))
+            stack.enter_context(overseer_does(*commands, tools=tools, result=result, **overseer))
             if worker is not None:
                 stack.enter_context(worker)
             stack.enter_context(_each_ticket(worker, workers or {}, moves))
@@ -1085,11 +1102,6 @@ def raises(key: str, reason: str, detail: str | None = None) -> list[str]:
     return canopy("attention", key, reason, "--detail", detail if detail is not None else f"{key} detail")
 
 
-def skips_tick(rationale: str) -> list[str]:
-    """The overseer skips the whole tick, for `rationale`, one of the tick-wide reasons: `mcp_unavailable: github`."""
-    return canopy("decide", "skip", "--rationale", rationale)
-
-
 def sets_phase(key: str, phase: Phase, *, repo: str | None = None, cursor: str | None = None) -> list[str]:
     """The overseer records `key`'s phase, its unit's in `repo` if given, and a cursor as `name=value`."""
     return canopy("ticket", "set", key, "--phase", str(phase), *_option("--repo", repo), *_option("--cursor", cursor))
@@ -1193,13 +1205,17 @@ def loops(
     before = int(scenario.conn.execute("SELECT coalesce(max(id), 0) FROM ticks").fetchone()[0])
     term, out = log_file()
     with (
-        overseer_does(*moves, queried="skip"),
+        overseer_does(*moves),
         mock.patch.object(
             tick,
             "run",
             autospec=True,
             side_effect=ticks_at,
         ),
+        # The wait looks for what ends it every half second of the fake clock, reading the journal each time: a wait of
+        # hours is tens of thousands of looks, past the tests' timeout on a busy runner. A wait still ends at its
+        # deadline, which its last sleep is cut to; an `at` action runs up to one step late.
+        mock.patch.object(repeat, "_WAIT_STEP_SECONDS", 30),
     ):
         repeat.run(
             context(scenario.env),
@@ -1368,6 +1384,14 @@ def _killed(pid: int, what: str) -> None:
     deadline = time.monotonic() + HOLD_TIMEOUT
     while procs.alive(pid):
         assert time.monotonic() < deadline, f"{what} outlived its kill"
+        time.sleep(0.02)
+
+
+def _recorded(calls: int, counted: Callable[[], int], what: str) -> None:
+    # The agent prints each call's event before its gate, but its run's process records it on its own time.
+    deadline = time.monotonic() + HOLD_TIMEOUT
+    while (made := counted()) < calls:
+        assert time.monotonic() < deadline, f"{what}: {made} of {calls} tool calls recorded after {HOLD_TIMEOUT}s"
         time.sleep(0.02)
 
 

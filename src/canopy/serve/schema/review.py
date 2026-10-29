@@ -103,6 +103,9 @@ class ReviewSummary(Model):
     that is not seen is new to them."""
     draft: ReviewDraftStatusName | None = None
     """Where its draft stands (DESIGN §34); None for a review that has none, such as one of the loop's own PRs."""
+    served: list[str] = []
+    """The models its session names as having served it, as `provider/model`, the most costly first; empty until
+    canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served."""
 
 
 class RequestedReview(Model):
@@ -429,7 +432,7 @@ class ReviewDetail(Model):
     models: ModelsServed
     """Which models served it."""
     card: RunCard | None = None
-    """Its reviewer's card (DESIGN §41), while it runs and its last once it ends; None when it kept none."""
+    """Its reviewer's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none."""
 
 
 class ReviewRequest(Model):

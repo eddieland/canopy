@@ -133,12 +133,29 @@ subject. A candidate with a unit whose PR URL names no PR, which no source reads
 source reads it, and is never listed to the overseer; so is one the `tracker` source read before canopy held it, such as
 one the query found that was read as another's blocker, whose comments it never recorded, until a read since, as the
 block already counted it stale (`loop/phases.py`, `loop/harness.py`). A ticket, blocker, PR, or repository's branches
-with no observation at all was already waited as stale. Chosen conservatively, for the operator to change: an unobserved
-unit waits until the operator forgets the ticket's work, which drops its units, and raises no item of its own; a closed
-or unlabeled ticket is still decided without its PRs; and a review's PR not read fresh stays the overseer's
-`canopy_review-wait`, taken from the read, not a live one. The tests' fake worker reports a PR no source reads, so a
-story that needs the overseer listed a ticket with a PR gives it one the fake `vcs` source reads. Left: every MCP server
-but canopy's denied; the paths config now leaves unreachable removed, the overseer prompt's live reads and tick-wide
-skips, `canopy queried` and its tool, and the loop's branches for a workspace with no `tracker` source; and the design
-folded into the sections it names. Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with
-its MCP servers (recommended: yes, and that entry with it), the fifth bullet's.
+with no observation at all was already waited as stale. Built (2026-10-29): an item for that wait, as the operator
+decided, so it never sits silent. The harness raises `unobserved_pr` about such a unit, naming its repository and the
+URL that names no PR, while its ticket is held; it goes once the unit names a PR, the operator forgets the ticket's
+work, which drops its units, or the ticket is done, stopped, or seen closed or unlabeled, and the overseer is refused
+it (`raised`) as it is the harness's other items (`loop/harness_items.py`). Chosen conservatively, for the operator to
+change: a closed or unlabeled ticket is still decided without its PRs; and a review's PR not read fresh stays the
+overseer's `canopy_review-wait`, taken from the read, not a live one. The tests' fake worker reports a PR no source
+reads, so a story that needs the overseer listed a ticket with a PR gives it one the fake `vcs` source reads, and one
+whose sink must hear no new item has its worker report none. Built (2026-10-29):
+the paths config left unreachable removed. `canopy queried`, its tool, and the duty that owed it are gone, the harness
+recording the `tracker` source's read of the query as before; every decision names its ticket, so the tick-wide `skip`
+and DESIGN §15's case for it are gone, and no tick closes `skipped`; the state block has no `query_due`, and the
+overseer's prompt no live read of the tracker or GitHub, only the observations, an unobserved subject its `wait`; and
+the loop's branches for a workspace with no `tracker` source, the comment cursor kept as the tracker's id among them,
+are gone (`loop/tick.py`, `loop/tools.py`, `loop/observations.py`, `loop/phases.py`). Kept for the journal's history:
+the `queried` decision, which the harness still records and `duties.last_queried` reads from an older release's ticks
+too; `TickStatus.SKIPPED`, which old ticks hold; and the `last_comment_id` column, no longer read. Built (2026-10-29):
+every MCP server but canopy's denied. The overseer's definition denies `*_*`, every tool OpenCode names
+`<server>_<tool>`, whatever the operator's runtime config grants, and `read` of any server's resources, before it allows
+canopy's tools by name; nothing of the tracker's config is rendered into it, so none can reopen a server
+(`.agents/agents/canopy-overseer.md`). Read from OpenCode 1.19.3's source: no built-in tool the overseer uses asks a
+permission with a `_`. Built (2026-10-29): the design folded into the sections it names, §39 cut to its Open; the
+harness's `wait` on a stale or unobserved subject is §37's, a tick that runs no overseer and the polls that end the
+wait §6's. Left: Accept's live checks, S27 re-measured over a day and a night and a source stopped for a few polls.
+Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes,
+and that entry with it), the fifth bullet's.

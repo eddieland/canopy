@@ -356,7 +356,7 @@ def run(
     """One run's row, with the worktrees it holds if it is running, its paths from the workspace `root`.
 
     On the run's own page it carries `models`, the models that served it, and for a `feedback-plan` run
-    `feedback_plan`, the plan it wrote. `timeout_minutes`, a worker's time limit, says when a step on its card is
+    `feedback_plan`, the plan it wrote. `timeout_minutes`, a worker's time limit, says when a step in its progress is
     stuck; with None, none is.
 
     Returns:
@@ -396,13 +396,13 @@ def run(
 
 
 def card(row: sqlite3.Row | records.Row, *, running: bool, timeout_minutes: int | None) -> RunCard | None:
-    """A run's or a review run's card as the API sends it (DESIGN §41), or None when it kept none.
+    """A run's or a review run's progress as the API sends it (DESIGN §41), or None when it wrote none.
 
     `timeout_minutes`, the run's time limit, says when a working step is stuck; with None, none is.
 
     Returns:
-        The card, with how old it is, and while the run runs whether and when it goes stale, and when each working
-        step is stuck: a page judges the time.
+        The progress, with how old its update is, and while the run runs whether and when it goes stale, and when
+        each working step is stuck: a page judges the time.
     """
     standing = cards.of(row)
     found = standing.card
@@ -436,10 +436,10 @@ def card(row: sqlite3.Row | records.Row, *, running: bool, timeout_minutes: int 
 
 
 def _question(standing: cards.Standing) -> RunCardQuestion | None:
-    """A card's question as the API sends it, with the operator's answer.
+    """The question a run's progress asks, as the API sends it, with the operator's answer.
 
     Returns:
-        The question; None when the card asks none.
+        The question; None when it asks none.
     """
     question = standing.card.question if standing.card is not None else None
     if question is None or standing.asked_at is None:

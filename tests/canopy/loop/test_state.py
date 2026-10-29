@@ -44,7 +44,7 @@ def test_the_state_block_of_a_new_workspace(canopy_env: CanopyEnv, markdown_snap
     ctx = context(canopy_env)
     with clock("10:00"):
         tick_id = db.start_tick(ctx.conn, dry_run=False)
-    assert rendered(canopy_env, ctx, tick_id, dry_run=False, query_due=True, running=0, leased=[]) == markdown_snapshot
+    assert rendered(canopy_env, ctx, tick_id, dry_run=False, running=0, leased=[]) == markdown_snapshot
 
 
 def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
@@ -223,10 +223,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
         ),
     ]
     with mock.patch.object(harness_dispatches, "ROWS", {Phase.CONFLICTED: CONFLICTED}):
-        assert (
-            rendered(canopy_env, ctx, tick_id, dry_run=True, query_due=False, running=1, leased=leased)
-            == markdown_snapshot
-        )
+        assert rendered(canopy_env, ctx, tick_id, dry_run=True, running=1, leased=leased) == markdown_snapshot
 
 
 def prompts(env: CanopyEnv, *names: str) -> None:
@@ -251,7 +248,7 @@ def test_a_review_query_not_read_fresh_keeps_no_pr_of_no_ticket(scenario: Scenar
         )
     # The `vcs` source does not read the review query to its end.
     connector_state.write_text(json.dumps({"github": {"end": {"repositories": ["repo"]}}}))
-    scenario.tick(queried=None)
+    scenario.tick()
     assert scenario.state()["observations"]["review_query"]["observed"] == "stale"
     assert [pr["url"] for pr in scenario.state()["reviews"].get("prs", [])] == []
 
@@ -339,7 +336,6 @@ def rendered(
     tick_id: int,
     *,
     dry_run: bool,
-    query_due: bool,
     running: int,
     leased: list[pools.Slot],
 ) -> str:
@@ -351,7 +347,6 @@ def rendered(
         dry_run=dry_run,
         now=NOW,
         reconciled=reconcile.Reconciled(capacity, {"repo": leased}),
-        query_due=query_due,
     )
     head, rest = block.split("```json\n", 1)
     compact, tail = rest.split("\n```", 1)

@@ -22,7 +22,7 @@ There is at most one source of each kind, `tracker`, `vcs`, `artifacts` (an arti
 no shell (§20) under a timeout. Every `connect.*` key is private (§12, TRUST_MODEL T7), since each runs a command with
 the operator's credentials. The `vcs` source defaults to canopy's own programs (§29), so PRs are observed with nothing
 configured. A `tracker` source that reads is required, and config refuses a workspace without one: the overseer
-reads no tracker itself (§39), so it could do nothing with a ticket no source observes. There is no default one, since
+reads no tracker itself (§13), so it could do nothing with a ticket no source observes. There is no default one, since
 the harness never branches on `tracker.provider` (§17).
 
 ### The contract
@@ -65,7 +65,7 @@ In §6 step 3, after the reconciles, the tick runs each source once, the `vcs` s
 a tick whose reconcile failed runs none, and a dry run observes as a live tick does. A source that fails, or reads less
 than it was asked, keeps its previous observations and raises the harness's `connector_failed` (§14), naming what was
 not read, each tick until a run reads everything; the overseer's view of the list leaves it out. The tick goes on: what
-was not read ages until it is stale (below), when the overseer reads it live and no dispatch rests on it (§7). The
+was not read ages until it is stale (below), when the harness waits on it and no dispatch rests on it (§7, §37). The
 loop's polls between ticks run the same sources the same way and raise nothing (§6).
 
 ### What the overseer is shown
@@ -73,8 +73,8 @@ loop's polls between ticks run the same sources the same way and raise nothing (
 - Each subject the state block shows (§6 step 4), a ticket or one of its units, is `fresh`, read whole within
   `connect.max_age_minutes`, whose default keeps what a tick read fresh through its dispatches; `stale`, past it or
   never read, naming what; or `unobserved`, when no source covers it.
-  The overseer reads the tracker or GitHub only about one stale or unobserved: the prompt's rule, not a guard, but
-  spend by tool (§11) counts each call, and no dispatch rests on a stale subject (§7).
+  The overseer reads neither world itself (§13): a candidate resting on a stale or unobserved subject is the
+  harness's `wait` and is not listed to it (§37), and no dispatch rests on a stale subject (§7).
 - Every ticket the block lists or the query returned is a candidate or not by its observed labels and state, decided
   in code (§17); one that is not is shown by key and why, with none of its text (TRUST_MODEL T7).
 - A candidate shows what the overseer decides from, its body only until its first unit and its items only past their

@@ -1,6 +1,6 @@
 """The attention items the harness raises from their causes (DESIGN §14, §37, ROADMAP M38).
 
-Each of the nine reasons over a journal written by hand, its observations fresh at `NOW`: raised while its cause
+Each of the ten reasons over a journal written by hand, its observations fresh at `NOW`: raised while its cause
 holds, and gone once the journal or a fresh observation shows the cause gone. One that rests on an observation is kept
 while that observation is stale, or when the derivation could not run. Then through ticks: kept across a `skipped`
 tick, an `overseer_failed` one, and an outage, and gone once a read shows its cause gone; and the overseer refused one
@@ -22,6 +22,8 @@ from canopy.loop import attention, harness_items, phases
 from tests.canopy.helpers import (
     KEY,
     PLAN,
+    UNOBSERVED_ITEM,
+    WORKER_PR,
     context,
     decisions,
     in_tick,
@@ -45,7 +47,6 @@ from tests.canopy.observation_helpers import (
     observe_ticket,
     review,
 )
-from tests.canopy.scenario_helpers import skips_tick
 
 if TYPE_CHECKING:
     import sqlite3
@@ -226,6 +227,17 @@ def queue_given_a_role(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     env.configure(env.shared_file, {"repos": {"repo": {"checks": {"merge-queue": "merge"}}}})
 
 
+def names_no_pr(env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    """The ticket's unit names a URL that is not a PR's as its PR, which no source reads."""
+    db.set_unit(conn, KEY, str(env.root), "repo", pr_url=WORKER_PR)
+
+
+def forgotten(env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    """The operator forgets the ticket's work, which drops its units."""
+    conn.commit()
+    assert operator("forget", KEY) == 0
+
+
 #: Each reason: what raises it, the item, and what shows its cause gone.
 CAUSES: dict[str, tuple[Callable[[CanopyEnv, sqlite3.Connection], None], Found, Callable[..., None]]] = {
     "needs_reviewer": (green, (KEY, "needs_reviewer", "repo"), pending),
@@ -237,6 +249,7 @@ CAUSES: dict[str, tuple[Callable[[CanopyEnv, sqlite3.Connection], None], Found, 
     "plan_review": (plan_waits, (KEY, "plan_review", None), plan_approved),
     "plan_changed": (plan_changed, (KEY, "plan_changed", None), plan_approved),
     "check_stuck": (queue_stuck, (KEY, "check_stuck", "repo"), queue_given_a_role),
+    "unobserved_pr": (names_no_pr, (KEY, "unobserved_pr", "repo"), forgotten),
 }
 
 
@@ -276,6 +289,53 @@ def test_its_details_are_its_own_words(canopy_env: CanopyEnv, observed: sqlite3.
         ),
     }
     assert "Rename it." not in json.dumps(found)
+
+
+def test_a_unit_whose_pr_no_source_reads_names_its_url(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
+    names_no_pr(canopy_env, observed)
+    observed.commit()
+    ctx = context(canopy_env)
+    found = {i.reason: i.detail for i in harness_items.raised(ctx, phases.derive(ctx, NOW), NOW)}
+    assert found == {"unobserved_pr": UNOBSERVED_ITEM}
+    assert WORKER_PR in UNOBSERVED_ITEM
+
+
+def test_an_unobserved_prs_item_names_its_url_without_a_credential(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    # Notification sinks send the item on, so a token a worker left in the URL stays in the journal.
+    db.set_unit(observed, KEY, str(canopy_env.root), "repo", pr_url="https://me:token@example.test/pr/1?key=secret#x")
+    observed.commit()
+    ctx = context(canopy_env)
+    [item] = harness_items.raised(ctx, phases.derive(ctx, NOW), NOW)
+    assert f"names {WORKER_PR} as its PR" in item.detail
+    assert "token" not in item.detail
+    assert "secret" not in item.detail
+
+
+def test_a_unit_whose_pr_is_observed_raises_no_unobserved_pr(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    # Observed open with nothing on it, and stale: neither is what no source reads.
+    assert raised(canopy_env) == [(KEY, "needs_reviewer", "repo")]
+    observed.execute("UPDATE observed_prs SET observed_at = ?", (OLD,))
+    observed.commit()
+    assert "unobserved_pr" not in reasons(canopy_env)
+
+
+def test_an_unobserved_pr_is_kept_while_no_derivation_runs_until_its_work_is_forgotten(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    names_no_pr(canopy_env, observed)
+    observed.commit()
+    item = (KEY, "unobserved_pr", "repo")
+    assert raise_in_an_ok_tick(canopy_env, observed) == [item]
+    assert raised(canopy_env, derive=False) == [item]
+    forgotten(canopy_env, observed)
+    assert raised(canopy_env, derive=False) == []
 
 
 def test_untrusted_feedback_raises_nothing_while_feedback_plans_plan_it(
@@ -424,7 +484,7 @@ def test_a_tick_keeps_its_item_through_a_skipped_tick_a_failed_one_and_an_outage
     assert raised_by is Decider.HARNESS
     assert scenario.attention() == [(KEY, "needs_reviewer")]
     assert scenario.state()["attention"] == []
-    scenario.tick(skips_tick("mcp_unavailable: github"), code=1)
+    scenario.tick(code=1)  # a duty left undone
     scenario.tick(result="gave up", code=1)
     # GitHub is down for longer than an observation stays fresh: the tick closes `ok`, and drops nothing (#219).
     github_state.write_text(json.dumps({"down": True}))
@@ -570,7 +630,7 @@ def test_a_slow_check_beside_one_pending_or_failed_raises_nothing(
     assert attention.CHECK_STUCK not in {reason for _, reason in scenario.attention()}
 
 
-@pytest.mark.parametrize("reason", sorted(attention.FROM_CAUSES | {attention.CHECK_STUCK}))
+@pytest.mark.parametrize("reason", sorted(harness_items.REASONS))
 def test_the_overseer_is_refused_an_item_the_harness_raises(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,

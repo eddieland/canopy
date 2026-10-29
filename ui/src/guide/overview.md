@@ -82,7 +82,7 @@ The bar across the top of every page. From the left:
   has been down a while. Before it, a `mock` pill when the server runs over a sample journal
   (`python -m canopy.serve --mock`) instead of your workspace's. No loop runs behind that one, and nothing you do there
   reaches a ticket.
-- **The ticker**, unless you turned it off in [Settings](settings#fun). Joke headlines, and the odd real tip. It stops
+- **The ticker**, unless you turned it off in [Settings](settings). Joke headlines, and the odd real tip. It stops
   under the pointer, for the ones worth reading twice.
 - **Reload**, only when canopy now serves a newer build of the UI than the page you have open. Reloading loses what
   you've typed and not sent, so send it first.
@@ -96,12 +96,13 @@ The bar across the top of every page. From the left:
   loop opens it, after any [poll](how-the-loop-works) already under way. While a tick is running, the button waits for
   it to finish.
 - **The readouts.** The last tick, as `tick:12 · 3m ago`, with its status when it didn't end ok and `(dry run)` when
-  it was one; hover it for its summary, and click it to open the tick. Before the first one, it says `no tick yet`.
-  `memory: recording` or `memory: in use` while agent memory is on, which opens the memory page. A wallet while you've
-  set a [monthly budget](reports#the-spend-page), with how much of it the month has spent beside it on a wide screen:
-  gray while you're on budget, amber once the month's pace heads over it, red once it's over. Hover it for the
-  numbers, and click it for the spend page. It warns, it doesn't stop anything; the loop spends on regardless. Then
-  the machine the loop runs on: `host ok`, or the worst thing about it in two words, `disk low`, `memory low`, or
+  it was one; hover it for its summary, its decisions, and what it cost, and click it to open the tick. Before the
+  first one, it says `no tick yet`. `memory: recording` or `memory: in use` while agent memory is on; hover it for
+  each tier's mode and any proposals waiting on you, and click it for the memory page. A wallet while you've set a
+  [monthly budget](reports#the-spend-page), with how much of it the month has spent beside it on a wide screen: gray
+  while you're on budget, amber once the month's pace heads over it, red once it's over. Hover it for the numbers,
+  pace included, and click it for the spend page. It warns, it doesn't stop anything; the loop spends on regardless.
+  Then the machine the loop runs on: `host ok`, or the worst thing about it in two words, `disk low`, `memory low`, or
   `host busy`, in amber when it's worth a look and red when it's past what canopy works with. Hover it for the
   machine at a glance, and click it for [the rest](#system-resources).
 - **The theme**, at the far right, which flips between light and dark; [Settings](settings#theme) has the rest.
@@ -121,7 +122,7 @@ ones were last read. **Working** lists every
 agent on the clock: worker runs by their ticket, reviews by their PR, chore runs by their chore, and task runs as
 `task:N#M` over your text's first line, with the runs waiting on you after them. A worker run's row says what it's
 doing under its ticket's title: `planning`, `implementing`, `fixing CI`. While it works, that comes as a quip of the
-ticket's own, `appeasing CI`; hover it for the plain words, or turn the quips off in [Settings](settings#fun). Each
+ticket's own, `appeasing CI`; hover it for the plain words, or turn the quips off in [Settings](settings). Each
 row opens its run's page. It shows four rows at most, then `+N more`, which opens the page that lists the rest, and
 it dims while the loop isn't answering, since what it shows may have ended. The 24 hours open the spend page by the
 hour, and the 30 days by the day. A ticket you stopped drops out once its run ends; a question it left behind waits
@@ -166,6 +167,18 @@ readings itself, every ten seconds from the moment it starts, whether or not any
 memory only. A restart starts the graphs over, and a gap in a line is a stretch the server wasn't reading. Point at a
 line to read any moment of it; the number over the graph turns into that moment's. It's the quickest way to answer
 "was it the build at 14:05?" without a monitoring stack you'd have to babysit too.
+
+Under the graphs, the processes, as a tree: each under the process that started it, the busiest first, so a compiler
+three levels under a run's agent shows up under that agent rather than as a stray `rustc`. Each row has the process's
+name, its pid, its command line, the account it runs as, the processors it kept busy, and the memory it holds. CPU reads
+as `top` does, a share of one core: 100% is one core the whole time, so a parallel build can show 800%. It's measured
+since the server's last read of the processes, ten seconds while the page is open; opening the page takes a second,
+since there's nothing to measure against yet. A process the load counts but isn't computing says so: `running` is on a
+core or waiting for one, and `waiting on a disk` is stuck on I/O, which raises the load while the processors sit idle.
+At first only the busy ones show, using 1% of a core or more, with every parent above them and the loop's own process;
+**All** shows every one. Fold a parent and its row adds up everything under it, the quick way to see what one run is
+costing you. The kernel's own threads are left out, and so is everything off Linux, where the standard library has no
+way to ask.
 
 Under them, each disk canopy writes to: the workspace's, where agents check out and build; the journal's, with the
 runs' logs; and the temporary directory, which builds fill when nobody's looking. Two on one filesystem share a row,
