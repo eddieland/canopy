@@ -44,6 +44,39 @@ def test_a_worker_shows_its_card_while_it_runs_and_keeps_its_last_once_it_ends(
     assert kept.calls_since == 3
 
 
+def test_a_workers_card_carries_its_steps_how_far_they_are_and_which_is_stuck(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    with_events(scenario.env, "canopy-worker")
+    said = {
+        **FIRST,
+        "steps": [
+            {"title": "1. fix the parser", "status": "done", "stage": "code"},
+            {"title": "2. test it", "status": "working", "stage": "tests"},
+            {"title": "3. push", "status": "not_started"},
+        ],
+    }
+    wrong = {**FIRST, "steps": [{"title": "push", "status": "in_progress"}]}
+    working = scenario.starts(worker=worker_does(["true"], tools=[calls(STATUS, **said), calls(STATUS, **wrong)]))
+    # The call whose step has a status the card does not know is refused, and leaves the card as it was.
+    standing = cards.of(working.row)
+    assert standing.card == cards.Card.model_validate(said)
+    assert [t.stuck_at is not None for t in standing.steps] == [False, True, False]
+    assert re.search(r"  card \d+s, 1 call old  steps 33% of 3, stage tests\n", scenario.operator("status").out)
+
+    # A fifth of the worker's 45-minute timeout later, the step still working is shown stuck.
+    scenario.time_passes(minutes=10)
+    assert re.search(r"  stale  steps 33% of 3, stage tests, 1 stuck\n", scenario.operator("status").out)
+    shown = scenario.operator("show", f"run:{working.id}").out
+    assert "    steps: 1 of 3 finished, 33%; stage tests\n    step done (code): 1. fix the parser\n" in shown
+    assert re.search(
+        r"\n    step working \(tests\): 2\. test it  stuck 1[01]m\n    step not_started: 3\. push\n",
+        shown,
+    )
+    working.finishes()
+
+
 def test_a_planner_shows_its_card_while_it_runs(scenario: Scenario, git_pool: GitPool) -> None:
     planner = planner_does(plan="# Plan\n\nDo it.\n", tools=[calls(STATUS, **FIRST)])
     working = scenario.starts(dispatches(kind=RunKind.PLAN), worker=planner)

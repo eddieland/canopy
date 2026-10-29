@@ -1034,8 +1034,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   kind, and the run's page as its `last call` field. It is agent output, rendered as text.
 - **A running agent's card** (`RunCardView`, `RunCardNow`, `src/components/run-card.tsx`, DESIGN §41): the agent's
   own account of where its work stands. Whole, it is a block with a left rule: a muted line of how old it is, in time
-  and tool calls, then the summary in prose, and `now`, `done` (each with its proof in muted mono), `next`, and `stuck`
-  as label and text lines. On one line, for a row, it is `now`, what the agent does, and the card's age. While the run
+  and tool calls, then the summary in prose, and `now`, `steps`, `done` (each with its proof in muted mono), `next`, and
+  `stuck` as label and text lines. `steps`, when the card has any, is a muted mono line of how many are finished, the
+  percent, and the working step's stage, then an ordered list: each step's status a mono word in the color of the state
+  it reads as (`working` running, `blocked` blocked, `done` done, the rest muted), its title, and its stage muted; a
+  working step past its `stuck_at` says `stuck` and for how long in `status-blocked` while the run runs. On one line,
+  for a row, it is `now`, what the agent does, its percent done when it has steps, and the card's age. While the run
   runs, a card past `stale_at` or marked `stale` turns its rule and a `stale` word `status-blocked`, judged against the
   page's clock so it turns without a new read; an ended run's last card never does. It shows on the run's page as its
   `card` field, under a ticket's `WorkingNow`, in a running run's row, and on a review's page. Agent text, as text.

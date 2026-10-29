@@ -17,6 +17,8 @@ export type RunsSince = Schemas['RunsSince']
 export type RunActivity = Schemas['RunActivity']
 /** Where a running agent's work stands, in its own words: its latest card (DESIGN §41). */
 export type RunCard = Schemas['RunCard']
+/** A step of the work on a running agent's card, with its status, its stage, and when it is stuck (DESIGN §41). */
+export type RunStep = Schemas['RunStep']
 /** Which models served an agent run, read from its session after it ended (DESIGN §13), or why none are shown. */
 export type ModelsServed = Schemas['ModelsServed']
 /** One model that wrote an agent run's replies, with how many and what they cost. */

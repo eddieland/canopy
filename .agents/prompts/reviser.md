@@ -66,7 +66,9 @@ anything, report `failed` and say why in `body`. The draft stays as it is.
 Keep your card current for the operator, who reads it instead of your transcript: call `canopy_run_status` once you
 know what the change is, after each part of it you finish, and when what you are doing changes. Each call is your whole
 card and replaces the last: `summary`, `now`, `done` (each step with its proof, such as `read the diff: 3 files`), `next`,
-and `stuck` only for something in your way that you work around. It changes nothing: what you find goes in your result.
+and `stuck` only for something in your way that you work around. Give it `steps` too, your own for the review, in order
+and the same each call as they move, each with a `title`, a `status` (`not_started`, `working`, `blocked`, `done`, or
+`skipped`), and a short `stage` where it helps. It changes nothing: what you find goes in your result.
 After many tool calls with no card, a line starting `[canopy]` asks for one.
 
 Time limit: {{TIMEOUT_MINUTES}} minutes. Near the end, canopy adds the minutes left to your tool calls' results, in a
