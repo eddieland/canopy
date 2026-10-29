@@ -2424,7 +2424,7 @@ export type components = {
             /**
              * Asked At
              * Format: date-time
-             * @description When the question the page showed was asked: a card that asks another since is refused `moved_on`.
+             * @description When the question the page showed was asked: an agent that asks another since is refused `moved_on`.
              */
             asked_at: string;
             /**
@@ -2603,7 +2603,7 @@ export type components = {
         };
         /**
          * CardStep
-         * @description A finished step on a running agent's card, with what shows it is done.
+         * @description A finished step in a running agent's progress, with what shows it is done.
          */
         CardStep: {
             /**
@@ -6266,7 +6266,7 @@ export type components = {
              * @description The branch the PR merges into.
              */
             base_branch: string | null;
-            /** @description Its reviewer's card (DESIGN §41), while it runs and its last once it ends; None when it kept none. */
+            /** @description Its reviewer's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none. */
             card: components["schemas"]["RunCard"] | null;
             /**
              * @description None when there is no diff: a review from before diffs were kept, one whose base could not be read, or one
@@ -7145,7 +7145,7 @@ export type components = {
              * @description The branch it works on.
              */
             branch: string | null;
-            /** @description Its agent's card (DESIGN §41), while it runs and its last once it ends; None when it kept none. */
+            /** @description Its agent's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none. */
             card: components["schemas"]["RunCard"] | null;
             /**
              * Cost Usd
@@ -7300,7 +7300,7 @@ export type components = {
         };
         /**
          * RunCard
-         * @description Where a worker's, planner's, or reviewer's work stands, in its own words: its latest card (DESIGN §41).
+         * @description Where a worker's, planner's, or reviewer's work stands, in its own words: its progress (DESIGN §41).
          *
          *     Each field is the agent's text, on one line: untrusted, rendered as text.
          */
@@ -7330,7 +7330,7 @@ export type components = {
             next: string[];
             /**
              * Now
-             * @description What the agent was doing when it wrote the card.
+             * @description What the agent was doing when it wrote the update.
              */
             now: string;
             /**
@@ -7352,7 +7352,7 @@ export type components = {
             stale: boolean;
             /**
              * Stale At
-             * @description While the run runs, when the card goes stale for want of an update by time, 10 minutes after `at`; None once
+             * @description While the run runs, when the progress goes stale for want of an update by time, 10 minutes after `at`; None once
              *     it ended. A page marks it stale from then, or when `stale` says so.
              */
             stale_at: string | null;
@@ -7375,7 +7375,7 @@ export type components = {
         };
         /**
          * RunCardQuestion
-         * @description A decision a running agent asks the operator for on its card, which it works around meanwhile (DESIGN §41).
+         * @description A decision a running agent asks the operator for in its progress, worked around meanwhile (DESIGN §41).
          */
         RunCardQuestion: {
             /**
@@ -7396,7 +7396,7 @@ export type components = {
             /**
              * Asked At
              * Format: date-time
-             * @description When canopy first recorded a card asking it.
+             * @description When canopy first recorded an update asking it.
              */
             asked_at: string;
             /**
@@ -7413,7 +7413,7 @@ export type components = {
         };
         /**
          * RunCardStep
-         * @description One step of a long job on a running agent's card (DESIGN §41).
+         * @description One step of a long job in a running agent's progress (DESIGN §41).
          */
         RunCardStep: {
             /**
