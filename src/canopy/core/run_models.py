@@ -223,6 +223,15 @@ def of_runs(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int])
     return found
 
 
+def served_by(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int]) -> dict[int, list[str]]:
+    """The models each of a table's runs' sessions named, by id, as `of_runs` orders them, in one read.
+
+    Returns:
+        Each run's models, as `provider/model`, every one of `run_ids` included.
+    """
+    return {run_id: [m.model for m in models] for run_id, models in of_runs(conn, table, run_ids).items()}
+
+
 def replies_of(conn: sqlite3.Connection, table: RunTable, run_id: int) -> dict[str, str]:
     """The model that wrote each reply of a run more than one model served, by the reply's message.
 
