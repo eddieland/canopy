@@ -46,8 +46,8 @@ def pull_requests(ctx: Context) -> list[PullRequest]:
         At most `PULL_REQUESTS`: the loop's own, by their units, reviewed or not, and every one canopy reviewed.
     """
     rows = pr_list.pull_requests(ctx.conn, PULL_REQUESTS)
-    reviews = review_runs.review_runs_of_prs(ctx.conn, [str(r["url"]) for r in rows])
-    return [_pull_request(ctx.conn, r, reviews.get(str(r["url"]), [])) for r in rows]
+    reviews = review_runs.review_runs_of_prs(ctx.conn, [r.url for r in rows])
+    return [_pull_request(ctx.conn, r, reviews.get(r.url, [])) for r in rows]
 
 
 def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail | None:
@@ -101,22 +101,22 @@ def review_request(conn: sqlite3.Connection, row: records.ReviewRequest) -> Revi
     )
 
 
-def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: Sequence[records.ReviewRun]) -> PullRequest:
+def _pull_request(conn: sqlite3.Connection, row: pr_list.KnownPr, reviews: Sequence[records.ReviewRun]) -> PullRequest:
     # A PR no unit records takes its ticket and repository from its reviews: an agent PR's ticket may be forgotten.
-    request = review_requests.latest_request(conn, str(row["url"]))
-    key = row["ticket_key"] or next((r.ticket_key for r in reviews if r.ticket_key), None)
-    repo = row["repo"] or next((r.repo for r in reviews if r.repo), None)
-    running = db.running_run_of(conn, str(key)) if key else None
+    request = review_requests.latest_request(conn, row.url)
+    key = row.ticket_key or next((r.ticket_key for r in reviews if r.ticket_key), None)
+    repo = row.repo or next((r.repo for r in reviews if r.repo), None)
+    running = db.running_run_of(conn, key) if key else None
     return PullRequest(
-        url=str(row["url"]),
-        ticket_key=str(key) if key else None,
-        loop_pr=row["ticket_key"] is not None,
-        ticket_title=_one_line(row["title"]),
-        title=_one_line(row["pr_title"]),
-        repo=str(repo) if repo else None,
-        branch=str(row["branch"]) if row["branch"] else None,
-        phase=str(row["phase"]) if row["phase"] else None,
-        active_at=db.parse_time(str(row["active_at"])),
+        url=row.url,
+        ticket_key=key or None,
+        loop_pr=row.ticket_key is not None,
+        ticket_title=_one_line(row.title),
+        title=_one_line(row.pr_title),
+        repo=repo or None,
+        branch=row.branch or None,
+        phase=row.phase.value if row.phase else None,
+        active_at=db.parse_time(row.active_at),
         running_run=running.id if running is not None else None,
         reviews=len(reviews),
         latest_review=summaries(conn, reviews[:1])[0] if reviews else None,

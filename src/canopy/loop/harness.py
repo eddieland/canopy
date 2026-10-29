@@ -26,7 +26,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import conversation, db, kept_items, records, sql
+from canopy.core import conversation, db, kept_items, records
 from canopy.core.vocab import Decider, Phase
 from canopy.loop import attention
 
@@ -126,14 +126,12 @@ def recorded(conn: sqlite3.Connection, tick_id: int) -> list[records.Decision]:
     Returns:
         Them, in the order they were recorded.
     """
-    return records.fetch_all(
-        conn,
-        records.Decision,
-        sql.select("*")
-        .from_("decisions")
+    return (
+        records.select(records.Decision)
         .where("tick_id = ? AND decider = ? AND ticket_key IS NOT NULL", tick_id, Decider.HARNESS)
         .where("action NOT LIKE ? AND action != ?", f"{attention.ACTION_PREFIX}%", CURSOR_ACTION)
-        .order_by("id"),
+        .order_by("id")
+        .all(conn)
     )
 
 

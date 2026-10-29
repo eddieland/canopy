@@ -21,7 +21,7 @@ import click
 
 from canopy.cli.common import CliError, Group, OverseerCommand, leave_the_tick, open_context
 from canopy.cli.params import EVAL_CASE, PERSONA, PR_URL, REPO, TICKET_KEY, TextType, verb
-from canopy.core import conversation, db, records, review_drafts, review_drafts_manage, review_revisions, sql
+from canopy.core import conversation, db, records, review_drafts, review_drafts_manage, review_revisions
 from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs
@@ -394,11 +394,7 @@ def _print_standing(conn: sqlite3.Connection, draft: records.ReviewDraft) -> Non
         click.echo(f"  Review run {revising.id} is revising it on your notes.")
     elif draft.status is ReviewDraftStatus.WAITING and review_revisions.pending(conn, draft.id):
         click.echo("  Your note asks for a revision: the next tick starts one.")
-    pr = records.fetch_one(
-        conn,
-        records.ObservedPr,
-        sql.select("*").from_("observed_prs").where("url = ?", draft.pr_url),
-    )
+    pr = records.select(records.ObservedPr).where("url = ?", draft.pr_url).one(conn)
     if pr is not None and pr.head_sha and not draft.sha.startswith(pr.head_sha):
         click.echo(f"  The PR is at {pr.head_sha} now: its comments would show as outdated, on the commit it read.")
 

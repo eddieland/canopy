@@ -21,9 +21,10 @@ plain text, one line.
 The server validates a call and writes nothing; it lists its tool only where `CANOPY_RUN_ID` names a worker's,
 planner's, or review's run. The harness records the card from the call in the events it already reads as the agent
 prints them (§8), held to the same input, so nothing the agent writes reaches the journal but what canopy observes it
-print, as with its spend: a call the server refused, or one that does not validate, records nothing. A run without
-the runtime's events keeps no card. The run counts the tool calls its agent ends, so a card is as old as the time and
-the calls since it, and the run keeps its last card once it ends.
+print, as with its spend: a call the server refused, or one that does not validate, records nothing. A run without the
+runtime's events keeps no card, nor does a one-off task's run (§36), which is never given the server. The run counts the
+tool calls its agent ends, so a card is as old as the time and the calls since it, and the run keeps its last card once
+it ends.
 
 ### Steps
 
@@ -46,12 +47,12 @@ its trust in worker text changes (TRUST_MODEL T1). Nothing on a card extends a r
 
 ### Where it shows
 
-`canopy status` and the web UI's running runs show each running run's `now` and how old its card is; `canopy show` of
-a run, `canopy review show` of a review, and their pages in the web UI, the whole card, or the last one once it has
-ended, as a ticket's page does under the run working it. A card that has gone too many tool calls or minutes without
-an update is marked stale, as is a run that has kept none that long, rather than going quiet. No notification: the
-sinks hear of what a run ends with, as before (§20). canopy's report of a run that a chore's agent may read (§27)
-leaves the card out, so no card reaches an agent.
+`canopy status` and the web UI's running runs show each running run's `now` and how old its card is; `canopy show` of a
+run, `canopy review show` of a review, and their pages in the web UI, the whole card, or the last one once it has ended,
+as a ticket's page does under the run working it. A card that has gone too many tool calls or minutes without an update
+is marked stale rather than going quiet, and `canopy status` names a running run that has kept none that long. No
+notification: the sinks hear of what a run ends with, as before (§20). canopy's report of a run that a chore's agent may
+read (§27) leaves the card out, so no card reaches an agent.
 
 ### Rejected
 

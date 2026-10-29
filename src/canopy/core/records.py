@@ -1,15 +1,22 @@
 """Typed journal rows: a frozen dataclass per table, and the queries that build them.
 
-A query that returns a table's whole rows builds them through `fetch_all` or `fetch_one` with that table's row type,
-so a misspelled column is a type error where it is read, and a query whose columns no longer match its row type fails
-where it runs, not in a caller far from it. `tests/canopy/core/test_records.py` checks every row type against its
-table after every migration: the same columns, in order, each with the type and nullability its column has.
+A query of a table's whole rows starts from its row type, which names the table and each of its columns, and ends by
+reading them as that type:
+
+    running = records.select(records.Run).where("status = ?", RunStatus.RUNNING).order_by("id").all(conn)
+    run = records.select(records.Run, "r").join("tickets t ON t.key = r.ticket_key").where("r.id = ?", 7).one(conn)
+
+So a misspelled column is a type error where it is read, and no query can read one table's rows as another's.
+`tests/canopy/core/test_records.py` checks every row type against its table after every migration: the same columns,
+in order, each with the type and nullability its column has. A query built elsewhere, such as a constant that callers
+finish, reads its rows through `fetch_all` or `fetch_one`, which check its columns against the row type where it runs.
 
 A column holding one of `vocab`'s closed vocabularies is a field of that `StrEnum`, so the row carries the member and a
 value the vocabulary does not hold is refused where the row is read, not where something later branches on it.
 
-Every journal table has a row type. A query that reads some of a table's columns, or joins in another's, reads
-`sqlite3.Row`.
+Every journal table has a row type. A query that reads some of a table's columns, computes some, or joins in another's
+reads them as a `View`: a frozen dataclass defined beside it, a field per column it returns, read through `fetch_all` or
+`fetch_one` and converted and checked as a row type's are.
 """
 
 from __future__ import annotations
@@ -18,10 +25,10 @@ import functools
 import sqlite3
 import types
 import typing
-from collections.abc import Callable, Mapping, Sequence
-from dataclasses import Field, asdict, dataclass, fields
+from collections.abc import Callable, Collection, Mapping, Sequence
+from dataclasses import Field, asdict, dataclass, fields, replace
 from enum import StrEnum
-from typing import Any, ClassVar
+from typing import Any, ClassVar, LiteralString
 
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
 from canopy.core import sql
@@ -86,12 +93,25 @@ _Convert = Callable[[object], object]
 _EXACT: dict[object, type] = {int: int, str: str, bytes: bytes}
 
 
-class Row:
+class Record:
+    """What a query's rows are read as: a frozen dataclass whose fields are the columns the query returns."""
+
+    # Set by @dataclass on each subclass; declared so `dataclasses.fields` accepts any record type.
+    __dataclass_fields__: ClassVar[dict[str, Field[Any]]]
+
+
+class Row(Record):
     """A row of one journal table: each subclass is a frozen dataclass whose fields are its columns, in order."""
 
-    TABLE: ClassVar[str]
-    # Set by @dataclass on each subclass; declared so `dataclasses.fields` accepts any row type.
-    __dataclass_fields__: ClassVar[dict[str, Field[Any]]]
+    #: The table, spelled in canopy's code, so `select` may name it.
+    TABLE: ClassVar[LiteralString]
+
+
+class View(Record):
+    """What a query that is not of one table's whole rows returns: each subclass's fields are its columns, by name.
+
+    Defined beside the query that reads it, and read through `fetch_all` or `fetch_one`, as a row type is.
+    """
 
 
 class RowError(Exception):
@@ -102,7 +122,7 @@ class RowError(Exception):
 class Tick(Row):
     """A tick (DESIGN §6): how it ended, what its overseer cost, what it read, and what the loop knew when it ran it."""
 
-    TABLE: ClassVar[str] = "ticks"
+    TABLE: ClassVar[LiteralString] = "ticks"
 
     id: int
     started_at: str
@@ -144,7 +164,7 @@ class Tick(Row):
 class Ticket(Row):
     """A ticket canopy has seen (DESIGN §6): its own phase, branch, and cursors, and where any forget left it."""
 
-    TABLE: ClassVar[str] = "tickets"
+    TABLE: ClassVar[LiteralString] = "tickets"
 
     key: str
     # The workspace root.
@@ -179,7 +199,7 @@ class Ticket(Row):
 class Forget(Row):
     """One time the operator forgot a ticket's work (DESIGN §22), and what it dropped; its row holds the latest."""
 
-    TABLE: ClassVar[str] = "forgets"
+    TABLE: ClassVar[LiteralString] = "forgets"
 
     id: int
     ticket_key: str
@@ -198,7 +218,7 @@ class Forget(Row):
 class Decision(Row):
     """A decision a tick recorded (DESIGN §6): the overseer's, a guard's refusal, or the harness's own (§37)."""
 
-    TABLE: ClassVar[str] = "decisions"
+    TABLE: ClassVar[LiteralString] = "decisions"
 
     id: int
     tick_id: int
@@ -221,7 +241,7 @@ class Decision(Row):
 class ChoreRun(Row):
     """A run of a chore (DESIGN §19): the overseer's, or the operator's `canopy chore try`, and how it ended."""
 
-    TABLE: ClassVar[str] = "chore_runs"
+    TABLE: ClassVar[LiteralString] = "chore_runs"
 
     id: int
     # None for a run the operator started with `canopy chore try`.
@@ -254,7 +274,7 @@ class ChoreRun(Row):
 class RecordedRun(Row):
     """A run the overseer asked for, recorded at the ask and spawned by the tick after its run (DESIGN §40)."""
 
-    TABLE: ClassVar[str] = "recorded_runs"
+    TABLE: ClassVar[LiteralString] = "recorded_runs"
 
     id: int
     tick_id: int
@@ -277,7 +297,7 @@ class RecordedRun(Row):
 class ReviewRun(Row):
     """A run of a reviewer on one PR at one commit (DESIGN §21): the slot it leased, and how it ended."""
 
-    TABLE: ClassVar[str] = "review_runs"
+    TABLE: ClassVar[LiteralString] = "review_runs"
 
     id: int
     tick_id: int
@@ -336,7 +356,7 @@ class ReviewRun(Row):
 class Task(Row):
     """A one-off task the operator submitted (DESIGN §36): their text, where it runs, and whether they stopped it."""
 
-    TABLE: ClassVar[str] = "tasks"
+    TABLE: ClassVar[LiteralString] = "tasks"
 
     id: int
     #: The operator's words: the task's instruction.
@@ -356,7 +376,7 @@ class Task(Row):
 class TaskRun(Row):
     """A run of a task's worker (DESIGN §36): the slot it leased, its branch, how it ended, and the head it pushed."""
 
-    TABLE: ClassVar[str] = "task_runs"
+    TABLE: ClassVar[LiteralString] = "task_runs"
 
     id: int
     task_id: int
@@ -407,7 +427,7 @@ class TaskRun(Row):
 class Attachment(Row):
     """A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22)."""
 
-    TABLE: ClassVar[str] = "attachments"
+    TABLE: ClassVar[LiteralString] = "attachments"
 
     id: int
     #: `ticket` and the ticket's key, or `task` and its id.
@@ -430,7 +450,7 @@ class Attachment(Row):
 class TaskTicket(Row):
     """A ticket a task's run reported filing in the task's project, checked on its text alone (DESIGN §36, D003)."""
 
-    TABLE: ClassVar[str] = "task_tickets"
+    TABLE: ClassVar[LiteralString] = "task_tickets"
 
     id: int
     task_id: int
@@ -445,7 +465,7 @@ class TaskTicket(Row):
 class Start(Row):
     """The operator's start of a subject worked privately (DESIGN §22): the authorization, written only by them."""
 
-    TABLE: ClassVar[str] = "starts"
+    TABLE: ClassVar[LiteralString] = "starts"
 
     subject_kind: str
     subject_id: str
@@ -461,7 +481,7 @@ class Start(Row):
 class ReviewRequest(Row):
     """The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended."""
 
-    TABLE: ClassVar[str] = "review_requests"
+    TABLE: ClassVar[LiteralString] = "review_requests"
 
     id: int
     pr_url: str
@@ -476,7 +496,7 @@ class ReviewRequest(Row):
 class ReviewRequestPersona(Row):
     """A persona the operator chose for a review request (DESIGN §31), in place of `[personas] reviewer`."""
 
-    TABLE: ClassVar[str] = "review_request_personas"
+    TABLE: ClassVar[LiteralString] = "review_request_personas"
 
     request_id: int
     #: The persona's name, as `canopy personas` lists it.
@@ -487,7 +507,7 @@ class ReviewRequestPersona(Row):
 class ReviewHead(Row):
     """A PR's head commit as canopy last saw it, and since when (DESIGN §21): the clock a review's settle time reads."""
 
-    TABLE: ClassVar[str] = "review_heads"
+    TABLE: ClassVar[LiteralString] = "review_heads"
 
     pr_url: str
     sha: str
@@ -498,7 +518,7 @@ class ReviewHead(Row):
 class PoolSlot(Row):
     """A slot of one of canopy's own pools (DESIGN §18): where it is, and its lease while it has one."""
 
-    TABLE: ClassVar[str] = "slots"
+    TABLE: ClassVar[LiteralString] = "slots"
 
     repo: str
     name: str
@@ -514,7 +534,7 @@ class PoolSlot(Row):
 class Plan(Row):
     """A plan a plan run wrote (DESIGN §25): its status, its file's hash as written, and its approval. No text."""
 
-    TABLE: ClassVar[str] = "plans"
+    TABLE: ClassVar[LiteralString] = "plans"
 
     id: int
     ticket_key: str
@@ -538,7 +558,7 @@ class Plan(Row):
 class FeedbackPlan(Row):
     """A plan a feedback plan run wrote for a ticket's PRs (DESIGN §32): its status, hashes, and approval. No text."""
 
-    TABLE: ClassVar[str] = "feedback_plans"
+    TABLE: ClassVar[LiteralString] = "feedback_plans"
 
     id: int
     ticket_key: str
@@ -568,7 +588,7 @@ class FeedbackPlan(Row):
 class FeedbackPlanPr(Row):
     """A PR a feedback plan read, and its head then (DESIGN §32, Planning again)."""
 
-    TABLE: ClassVar[str] = "feedback_plan_prs"
+    TABLE: ClassVar[LiteralString] = "feedback_plan_prs"
 
     plan_id: int
     pr_url: str
@@ -585,7 +605,7 @@ class FeedbackPlanPr(Row):
 class FeedbackPlanCheck(Row):
     """A named check at the head a feedback plan read, and its conclusion then, None while it had none."""
 
-    TABLE: ClassVar[str] = "feedback_plan_checks"
+    TABLE: ClassVar[LiteralString] = "feedback_plan_checks"
 
     plan_id: int
     pr_url: str
@@ -597,7 +617,7 @@ class FeedbackPlanCheck(Row):
 class FeedbackPlanMove(Row):
     """A waiting feedback plan's PR's head or check: its value now, and when canopy saw it take that value (§32)."""
 
-    TABLE: ClassVar[str] = "feedback_plan_moves"
+    TABLE: ClassVar[LiteralString] = "feedback_plan_moves"
 
     plan_id: int
     pr_url: str
@@ -614,7 +634,7 @@ class FeedbackPlanMove(Row):
 class FeedbackPlanSeen(Row):
     """A review or review comment a feedback plan was given, by id and its body's hash, never its text."""
 
-    TABLE: ClassVar[str] = "feedback_plan_seen"
+    TABLE: ClassVar[LiteralString] = "feedback_plan_seen"
 
     plan_id: int
     pr_url: str
@@ -632,7 +652,7 @@ class FeedbackPlanSeen(Row):
 class FeedbackPlanItem(Row):
     """An item a feedback plan covers, by its id, and what the plan proposes for it (DESIGN §32)."""
 
-    TABLE: ClassVar[str] = "feedback_plan_items"
+    TABLE: ClassVar[LiteralString] = "feedback_plan_items"
 
     plan_id: int
     #: Its place in the planner's result line, from 1: what an approval names it by.
@@ -653,7 +673,7 @@ class FeedbackPlanItem(Row):
 class TicketGrant(Row):
     """Runs the operator granted a ticket past its limit for a kind counted per ticket (DESIGN §22, §25)."""
 
-    TABLE: ClassVar[str] = "ticket_grants"
+    TABLE: ClassVar[LiteralString] = "ticket_grants"
 
     id: int
     ticket_key: str
@@ -666,7 +686,7 @@ class TicketGrant(Row):
 class TicketOverride(Row):
     """The operator's choice for one of a ticket's agents, in force until cleared (DESIGN §31, §13)."""
 
-    TABLE: ClassVar[str] = "ticket_overrides"
+    TABLE: ClassVar[LiteralString] = "ticket_overrides"
 
     ticket_key: str
     #: `worker`, `planner`, or `reviewer`.
@@ -683,7 +703,7 @@ class TicketOverride(Row):
 class NextRunPersona(Row):
     """The persona the operator chose for the next run alone of one of a ticket's agents (DESIGN §31)."""
 
-    TABLE: ClassVar[str] = "next_run_personas"
+    TABLE: ClassVar[LiteralString] = "next_run_personas"
 
     ticket_key: str
     #: `worker` or `planner`.
@@ -699,7 +719,7 @@ class NextRunPersona(Row):
 class PersonaText(Row):
     """The text of a persona a run or a review was given, once per digest (DESIGN §31)."""
 
-    TABLE: ClassVar[str] = "persona_texts"
+    TABLE: ClassVar[LiteralString] = "persona_texts"
 
     #: The sha256 of `text`, in hex, as a run's `persona_digest` names it.
     digest: str
@@ -712,7 +732,7 @@ class PersonaText(Row):
 class PlanThread(Row):
     """One of the operator's comments on a ticket's plan, anchored by its passage's words (DESIGN §25)."""
 
-    TABLE: ClassVar[str] = "plan_threads"
+    TABLE: ClassVar[LiteralString] = "plan_threads"
 
     id: int
     ticket_key: str
@@ -730,7 +750,7 @@ class PlanThread(Row):
 class PlanReply(Row):
     """A reply in a plan's comment thread (DESIGN §25)."""
 
-    TABLE: ClassVar[str] = "plan_replies"
+    TABLE: ClassVar[LiteralString] = "plan_replies"
 
     id: int
     thread_id: int
@@ -742,7 +762,7 @@ class PlanReply(Row):
 class Memory(Row):
     """A ticket's note, a worker's proposal, or the operator's lesson (DESIGN §28). `body` is None once forgotten."""
 
-    TABLE: ClassVar[str] = "memories"
+    TABLE: ClassVar[LiteralString] = "memories"
 
     id: int
     scope: MemoryScope
@@ -774,7 +794,7 @@ class Memory(Row):
 class RunMemory(Row):
     """What a run's prompt was rendered under, each memory tier's mode, and what `_run` refused of it (DESIGN §28)."""
 
-    TABLE: ClassVar[str] = "run_memory"
+    TABLE: ClassVar[LiteralString] = "run_memory"
 
     run_id: int
     ticket_notes: MemoryMode
@@ -787,7 +807,7 @@ class RunMemory(Row):
 class MemoryRead(Row):
     """A memory rendered into a run's prompt (DESIGN §28)."""
 
-    TABLE: ClassVar[str] = "memory_reads"
+    TABLE: ClassVar[LiteralString] = "memory_reads"
 
     run_id: int
     memory_id: int
@@ -799,7 +819,7 @@ class MemoryRead(Row):
 class RunReason(Row):
     """One reason a `resume` runs, as its dispatch named it (DESIGN §8)."""
 
-    TABLE: ClassVar[str] = "run_reasons"
+    TABLE: ClassVar[LiteralString] = "run_reasons"
 
     run_id: int
     reason: ResumeReason
@@ -809,7 +829,7 @@ class RunReason(Row):
 class FlakyKick(Row):
     """A push canopy made to rerun a PR's checks a worker judged flaky: its branch rebased and leased (DESIGN §23)."""
 
-    TABLE: ClassVar[str] = "flaky_kicks"
+    TABLE: ClassVar[LiteralString] = "flaky_kicks"
 
     run_id: int
     repo: str
@@ -825,7 +845,7 @@ class FlakyKick(Row):
 class RunRead(Row):
     """A repository an old triage run read without a slot, by name (M55). Kept as history; nothing reads it now."""
 
-    TABLE: ClassVar[str] = "run_reads"
+    TABLE: ClassVar[LiteralString] = "run_reads"
 
     run_id: int
     repo: str
@@ -835,7 +855,7 @@ class RunRead(Row):
 class PlanWaiver(Row):
     """A plan an old triage run waived (M55). Kept as history: nothing reads it, so no waiver holds (DESIGN §25)."""
 
-    TABLE: ClassVar[str] = "plan_waivers"
+    TABLE: ClassVar[LiteralString] = "plan_waivers"
 
     id: int
     ticket_key: str
@@ -850,7 +870,7 @@ class PlanWaiver(Row):
 class FollowUp(Row):
     """A follow-up ticket a public worker filed and its validated result reported, worked under its parent (§18)."""
 
-    TABLE: ClassVar[str] = "follow_ups"
+    TABLE: ClassVar[LiteralString] = "follow_ups"
 
     #: The follow-up's own key, a ticket of the tracker's that may have no `tickets` row yet.
     key: str
@@ -867,7 +887,7 @@ class FollowUp(Row):
 class RunTool(Row):
     """What one tool's calls in an agent run put into its context (DESIGN §13): the run, by its table and id."""
 
-    TABLE: ClassVar[str] = "run_tools"
+    TABLE: ClassVar[LiteralString] = "run_tools"
 
     run_table: str
     run_id: int
@@ -881,7 +901,7 @@ class RunTool(Row):
 class RunModelRead(Row):
     """How canopy's last read of an agent run's session for its models ended (DESIGN §13): the run, by table and id."""
 
-    TABLE: ClassVar[str] = "run_model_reads"
+    TABLE: ClassVar[LiteralString] = "run_model_reads"
 
     run_table: str
     run_id: int
@@ -899,7 +919,7 @@ class RunModelRead(Row):
 class RunModel(Row):
     """One model an agent run's session names as having written its replies (DESIGN §13), and what they cost."""
 
-    TABLE: ClassVar[str] = "run_models"
+    TABLE: ClassVar[LiteralString] = "run_models"
 
     run_table: str
     run_id: int
@@ -913,7 +933,7 @@ class RunModel(Row):
 class RuntimeSession(Row):
     """A session the agent runtime keeps, canopy's or not, as the runtime last recorded it (DESIGN §13)."""
 
-    TABLE: ClassVar[str] = "runtime_sessions"
+    TABLE: ClassVar[LiteralString] = "runtime_sessions"
 
     session_id: str
     #: The session it ran for as a subagent; None for a session of its own.
@@ -936,7 +956,7 @@ class RuntimeSession(Row):
 class RuntimeSessionModel(Row):
     """One model a runtime session's replies name, and what they cost (DESIGN §13)."""
 
-    TABLE: ClassVar[str] = "runtime_session_models"
+    TABLE: ClassVar[LiteralString] = "runtime_session_models"
 
     session_id: str
     #: As `provider/model`.
@@ -949,7 +969,7 @@ class RuntimeSessionModel(Row):
 class RuntimeSessionRead(Row):
     """How reading the runtime's sessions stands (DESIGN §13): where the next read starts, and how the last ended."""
 
-    TABLE: ClassVar[str] = "runtime_session_reads"
+    TABLE: ClassVar[LiteralString] = "runtime_session_reads"
 
     #: Always 1: the table holds one row.
     id: int
@@ -968,7 +988,7 @@ class RuntimeSessionRead(Row):
 class RunReplyModel(Row):
     """The model that wrote one reply of an agent run more than one model served (DESIGN §13)."""
 
-    TABLE: ClassVar[str] = "run_reply_models"
+    TABLE: ClassVar[LiteralString] = "run_reply_models"
 
     run_table: str
     run_id: int
@@ -982,7 +1002,7 @@ class RunReplyModel(Row):
 class RunOffer(Row):
     """canopy's ask of the runtime, as an agent run started, of what it offered the run (DESIGN §13)."""
 
-    TABLE: ClassVar[str] = "run_offers"
+    TABLE: ClassVar[LiteralString] = "run_offers"
 
     run_table: str
     run_id: int
@@ -997,7 +1017,7 @@ class RunOffer(Row):
 class RunOfferedServer(Row):
     """One MCP server the runtime offered an agent run (DESIGN §13)."""
 
-    TABLE: ClassVar[str] = "run_offered_servers"
+    TABLE: ClassVar[LiteralString] = "run_offered_servers"
 
     run_table: str
     run_id: int
@@ -1010,7 +1030,7 @@ class RunOfferedServer(Row):
 class RunOfferedSkill(Row):
     """One skill the runtime offered an agent run (DESIGN §13)."""
 
-    TABLE: ClassVar[str] = "run_offered_skills"
+    TABLE: ClassVar[LiteralString] = "run_offered_skills"
 
     run_table: str
     run_id: int
@@ -1021,7 +1041,7 @@ class RunOfferedSkill(Row):
 class RunOfferedTool(Row):
     """One of the runtime's built-in tools it offered an agent run (DESIGN §13)."""
 
-    TABLE: ClassVar[str] = "run_offered_tools"
+    TABLE: ClassVar[LiteralString] = "run_offered_tools"
 
     run_table: str
     run_id: int
@@ -1032,7 +1052,7 @@ class RunOfferedTool(Row):
 class RunOfferedServerRule(Row):
     """One rule that leaves an agent run only some of an MCP server's tools (DESIGN §13)."""
 
-    TABLE: ClassVar[str] = "run_offered_server_rules"
+    TABLE: ClassVar[LiteralString] = "run_offered_server_rules"
 
     run_table: str
     run_id: int
@@ -1047,7 +1067,7 @@ class RunOfferedServerRule(Row):
 class ObservedPr(Row):
     """A PR as canopy's GitHub reader last read it whole (DESIGN §29)."""
 
-    TABLE: ClassVar[str] = "observed_prs"
+    TABLE: ClassVar[LiteralString] = "observed_prs"
 
     url: str
     repository: str
@@ -1070,7 +1090,7 @@ class ObservedPr(Row):
 class ObservedReview(Row):
     """A review or a review comment of a PR, as the reader last read it whole (DESIGN §29). Text, never authority."""
 
-    TABLE: ClassVar[str] = "observed_reviews"
+    TABLE: ClassVar[LiteralString] = "observed_reviews"
 
     pr_url: str
     item: ReviewItem
@@ -1097,7 +1117,7 @@ class ObservedReview(Row):
 class ItemNumber(Row):
     """An item's journal number (DESIGN §35): taken when a source first observed it, or a review run ended."""
 
-    TABLE: ClassVar[str] = "item_numbers"
+    TABLE: ClassVar[LiteralString] = "item_numbers"
 
     number: int
     kind: NumberedItem
@@ -1112,7 +1132,7 @@ class ItemNumber(Row):
 class ObservedTicket(Row):
     """A ticket as the tracker connector last read it whole (DESIGN §30). Text, never authority."""
 
-    TABLE: ClassVar[str] = "observed_tickets"
+    TABLE: ClassVar[LiteralString] = "observed_tickets"
 
     key: str
     title: str
@@ -1130,7 +1150,7 @@ class ObservedTicket(Row):
 class ObservedComment(Row):
     """A tracker comment as the tracker connector first read it (DESIGN §30). Text, never authority."""
 
-    TABLE: ClassVar[str] = "observed_comments"
+    TABLE: ClassVar[LiteralString] = "observed_comments"
 
     ticket: str
     id: str
@@ -1150,7 +1170,7 @@ class ObservedComment(Row):
 class ObservedBranch(Row):
     """A branch under the branch prefix, as the `vcs` connector last read its repository whole (DESIGN §30)."""
 
-    TABLE: ClassVar[str] = "observed_branches"
+    TABLE: ClassVar[LiteralString] = "observed_branches"
 
     repository: str
     name: str
@@ -1162,7 +1182,7 @@ class ObservedBranch(Row):
 class ObservedCheck(Row):
     """A named CI context at a PR's head, as the `vcs` connector last read the PR whole (DESIGN §30)."""
 
-    TABLE: ClassVar[str] = "observed_checks"
+    TABLE: ClassVar[LiteralString] = "observed_checks"
 
     pr_url: str
     name: str
@@ -1180,7 +1200,7 @@ class ObservedCheck(Row):
 class ObservedCheckRun(Row):
     """A completed check run a `vcs` source observed, kept across later reads of its PR (DESIGN §35)."""
 
-    TABLE: ClassVar[str] = "observed_check_runs"
+    TABLE: ClassVar[LiteralString] = "observed_check_runs"
 
     pr_url: str
     run_id: int
@@ -1198,7 +1218,7 @@ class ObservedCheckRun(Row):
 class ConnectorRun(Row):
     """One run of a source (DESIGN §30): what it was asked, how it ended, and what it read."""
 
-    TABLE: ClassVar[str] = "connector_runs"
+    TABLE: ClassVar[LiteralString] = "connector_runs"
 
     id: int
     #: The tick that made it; None for the loop's poll between ticks (DESIGN §6).
@@ -1228,7 +1248,7 @@ class ConnectorRun(Row):
 class ObservedFeed(Row):
     """How far an `artifacts` source has read its store's comment feed (DESIGN §30, §38)."""
 
-    TABLE: ClassVar[str] = "observed_feeds"
+    TABLE: ClassVar[LiteralString] = "observed_feeds"
 
     source: str
     #: The cursor the next run reads from: the `seq` of the last change it read, or past changes filtered out.
@@ -1241,7 +1261,7 @@ class ObservedFeed(Row):
 class ObservedArtifactThread(Row):
     """A thread on an artifact, as the newest change the `artifacts` source read of it left it. Never authority."""
 
-    TABLE: ClassVar[str] = "observed_artifact_threads"
+    TABLE: ClassVar[LiteralString] = "observed_artifact_threads"
 
     id: str
     artifact_id: str
@@ -1266,7 +1286,7 @@ class ObservedArtifactThread(Row):
 class ObservedArtifactComment(Row):
     """A comment on an artifact, as the newest change the `artifacts` source read of it left it. Never authority."""
 
-    TABLE: ClassVar[str] = "observed_artifact_comments"
+    TABLE: ClassVar[LiteralString] = "observed_artifact_comments"
 
     id: str
     thread_id: str
@@ -1294,7 +1314,7 @@ class ObservedArtifactComment(Row):
 class Derivation(Row):
     """One subject a tick derived in code, in shadow (DESIGN §30): a ticket's own phases, or a unit's."""
 
-    TABLE: ClassVar[str] = "derivations"
+    TABLE: ClassVar[LiteralString] = "derivations"
 
     id: int
     tick_id: int
@@ -1317,7 +1337,7 @@ class Derivation(Row):
 class GcPass(Row):
     """One pass of garbage collection (DESIGN §26): the retention it ran with, and what it removed."""
 
-    TABLE: ClassVar[str] = "gc_passes"
+    TABLE: ClassVar[LiteralString] = "gc_passes"
 
     id: int
     #: The tick it ran in; None for a pass run by hand.
@@ -1343,7 +1363,7 @@ class GcPass(Row):
 class Draft(Row):
     """A comment a run would have posted, waiting on the operator to send, edit, or drop it (DESIGN §29)."""
 
-    TABLE: ClassVar[str] = "drafts"
+    TABLE: ClassVar[LiteralString] = "drafts"
 
     id: int
     run_id: int
@@ -1382,7 +1402,7 @@ class Draft(Row):
 class DraftVersion(Row):
     """One version of a draft's text: the run's own, or one of the operator's edits (DESIGN §29)."""
 
-    TABLE: ClassVar[str] = "draft_versions"
+    TABLE: ClassVar[LiteralString] = "draft_versions"
 
     draft_id: int
     version: int
@@ -1399,7 +1419,7 @@ class DraftVersion(Row):
 class ReviewDraft(Row):
     """A review's draft (DESIGN §34): a review of a PR the loop does not own, as the comment review it would post."""
 
-    TABLE: ClassVar[str] = "review_drafts"
+    TABLE: ClassVar[LiteralString] = "review_drafts"
 
     id: int
     review_run_id: int
@@ -1427,7 +1447,7 @@ class ReviewDraft(Row):
 class ReviewDraftVersion(Row):
     """One version of a review's draft, exactly what would post: its body and its comments (DESIGN §34)."""
 
-    TABLE: ClassVar[str] = "review_draft_versions"
+    TABLE: ClassVar[LiteralString] = "review_draft_versions"
 
     draft_id: int
     version: int
@@ -1447,7 +1467,7 @@ class ReviewDraftVersion(Row):
 class ReviewDraftNote(Row):
     """The operator's note on a review's draft, which asks for a revision while it is newer than the newest version."""
 
-    TABLE: ClassVar[str] = "review_draft_notes"
+    TABLE: ClassVar[LiteralString] = "review_draft_notes"
 
     id: int
     draft_id: int
@@ -1462,7 +1482,7 @@ class ReviewDraftNote(Row):
 class ReviewDraftGrant(Row):
     """Revisions the operator granted a review's draft past `policy.max_revisions_per_draft` (DESIGN §34)."""
 
-    TABLE: ClassVar[str] = "review_draft_grants"
+    TABLE: ClassVar[LiteralString] = "review_draft_grants"
 
     id: int
     draft_id: int
@@ -1474,7 +1494,7 @@ class ReviewDraftGrant(Row):
 class RunReplies(Row):
     """The `trust.review_replies` a run was rendered under, and the drafts `_run` refused of it (DESIGN §29)."""
 
-    TABLE: ClassVar[str] = "run_replies"
+    TABLE: ClassVar[LiteralString] = "run_replies"
 
     run_id: int
     mode: ReplyMode
@@ -1488,7 +1508,7 @@ class RunReplies(Row):
 class Run(Row):
     """A worker's run on a ticket (DESIGN §8): what it was asked, how it ended, and what it cost."""
 
-    TABLE: ClassVar[str] = "runs"
+    TABLE: ClassVar[LiteralString] = "runs"
 
     id: int
     tick_id: int
@@ -1547,7 +1567,7 @@ class Run(Row):
 class RunSlot(Row):
     """A pool slot a run leased (DESIGN §8), one per repository it works in."""
 
-    TABLE: ClassVar[str] = "run_slots"
+    TABLE: ClassVar[LiteralString] = "run_slots"
 
     run_id: int
     repo: str | None
@@ -1563,7 +1583,7 @@ class RunSlot(Row):
 class TicketUnit(Row):
     """A ticket's work in one repository (D058): its branch, PR, and phase."""
 
-    TABLE: ClassVar[str] = "ticket_units"
+    TABLE: ClassVar[LiteralString] = "ticket_units"
 
     ticket_key: str
     repo: str | None
@@ -1583,7 +1603,7 @@ class TicketUnit(Row):
 class Message(Row):
     """A message in a subject's conversation (DESIGN §22): a worker's report or question, or a reply to one."""
 
-    TABLE: ClassVar[str] = "messages"
+    TABLE: ClassVar[LiteralString] = "messages"
 
     id: int
     #: `ticket` and the ticket's key, `chore` and its name, or `task` and its id.
@@ -1613,7 +1633,7 @@ class Message(Row):
 class Notice(Row):
     """A notice the operator set for the overseer, until it lapses or is ended."""
 
-    TABLE: ClassVar[str] = "notices"
+    TABLE: ClassVar[LiteralString] = "notices"
 
     id: int
     body: str
@@ -1628,7 +1648,7 @@ class Notice(Row):
 class Notification(Row):
     """A notification a sink was sent (DESIGN §20), kept so the same one is not sent twice."""
 
-    TABLE: ClassVar[str] = "notifications"
+    TABLE: ClassVar[LiteralString] = "notifications"
 
     sink: str
     fingerprint: str
@@ -1642,7 +1662,7 @@ class Notification(Row):
 class NotifyEvent(Row):
     """An event in the outbox the notification sinks read (DESIGN §20)."""
 
-    TABLE: ClassVar[str] = "notify_events"
+    TABLE: ClassVar[LiteralString] = "notify_events"
 
     id: int
     grp: str
@@ -1656,7 +1676,7 @@ class NotifyEvent(Row):
 class NotifySink(Row):
     """A notification sink's place in the outbox (DESIGN §20), and how its deliveries have gone."""
 
-    TABLE: ClassVar[str] = "notify_sinks"
+    TABLE: ClassVar[LiteralString] = "notify_sinks"
 
     name: str
     #: The newest event it was delivered.
@@ -1672,7 +1692,7 @@ class NotifySink(Row):
 class Pause(Row):
     """The loop's pause, while the operator has it paused."""
 
-    TABLE: ClassVar[str] = "pause"
+    TABLE: ClassVar[LiteralString] = "pause"
 
     id: int
     paused_at: str
@@ -1683,7 +1703,7 @@ class Pause(Row):
 class PrTitle(Row):
     """A PR's title, as canopy last read it."""
 
-    TABLE: ClassVar[str] = "pr_titles"
+    TABLE: ClassVar[LiteralString] = "pr_titles"
 
     pr_url: str
     title: str
@@ -1694,7 +1714,7 @@ class PrTitle(Row):
 class ReviewDismissal(Row):
     """A review's finding the operator dismissed (DESIGN §21)."""
 
-    TABLE: ClassVar[str] = "review_dismissals"
+    TABLE: ClassVar[LiteralString] = "review_dismissals"
 
     review_run_id: int
     finding: int
@@ -1708,7 +1728,7 @@ class ReviewDismissal(Row):
 class ReviewAnswer(Row):
     """What a resumed worker answered of one of a review's findings (DESIGN §21): the worker's words, untrusted."""
 
-    TABLE: ClassVar[str] = "review_answers"
+    TABLE: ClassVar[LiteralString] = "review_answers"
 
     run_id: int
     review_run_id: int
@@ -1722,7 +1742,7 @@ class ReviewAnswer(Row):
 class ReviewHold(Row):
     """A review's finding the harness holds for the operator: it reaches no worker until they send it (DESIGN §21)."""
 
-    TABLE: ClassVar[str] = "review_holds"
+    TABLE: ClassVar[LiteralString] = "review_holds"
 
     review_run_id: int
     finding: int
@@ -1740,7 +1760,7 @@ class ReviewHold(Row):
 class FindingDismissal(Row):
     """A chore's finding the operator dismissed (DESIGN §19)."""
 
-    TABLE: ClassVar[str] = "finding_dismissals"
+    TABLE: ClassVar[LiteralString] = "finding_dismissals"
 
     chore: str
     finding_id: str
@@ -1752,7 +1772,7 @@ class FindingDismissal(Row):
 class Seen(Row):
     """A subject whose result the operator has seen (DESIGN §22), named as its reference names it."""
 
-    TABLE: ClassVar[str] = "seen"
+    TABLE: ClassVar[LiteralString] = "seen"
 
     #: The kind of subject: a reference's kind, such as `review` for `review:4`.
     kind: SeenKind
@@ -1768,7 +1788,7 @@ class Seen(Row):
 class ReviewGrant(Row):
     """Review runs the operator granted a PR past its limit (DESIGN §21)."""
 
-    TABLE: ClassVar[str] = "review_grants"
+    TABLE: ClassVar[LiteralString] = "review_grants"
 
     id: int
     pr_url: str
@@ -1780,7 +1800,7 @@ class ReviewGrant(Row):
 class AttemptGrant(Row):
     """Attempts the operator granted a ticket's runs of one kind past its limit."""
 
-    TABLE: ClassVar[str] = "attempt_grants"
+    TABLE: ClassVar[LiteralString] = "attempt_grants"
 
     id: int
     ticket_key: str
@@ -1794,7 +1814,7 @@ class AttemptGrant(Row):
 class SplitChild(Row):
     """A ticket a split run filed, and the ticket it was split from."""
 
-    TABLE: ClassVar[str] = "split_children"
+    TABLE: ClassVar[LiteralString] = "split_children"
 
     child_key: str
     parent_key: str
@@ -1806,7 +1826,7 @@ class SplitChild(Row):
 class WebWrite(Row):
     """A write request the web UI's server let through, or a sign-in, as it answered it (TRUST_MODEL T8)."""
 
-    TABLE: ClassVar[str] = "web_writes"
+    TABLE: ClassVar[LiteralString] = "web_writes"
 
     id: int
     #: When the request came in.
@@ -1822,30 +1842,43 @@ class WebWrite(Row):
     session: str | None
 
 
-def fetch_all[R: Row](conn: sqlite3.Connection, row_type: type[R], query: sql.Composable) -> list[R]:
-    """Run `query`, a statement built with `sql`, and build each row it returns as `row_type`.
+def select[R: Row](row_type: type[R], alias: LiteralString | None = None) -> Query[R]:
+    """Start a query of `row_type`'s table, selecting each of its columns, by the table's name or by `alias`.
+
+    Its columns are named in full, as `runs.id` or `r.id`, so a table it joins in cannot shadow one, and a condition
+    may name either table's.
+
+    Returns:
+        The query, to add conditions to and end with `all` or `one`.
+    """
+    source = sql.name(row_type.TABLE) if alias is None else sql.frag("{} {}", sql.name(row_type.TABLE), sql.name(alias))
+    return Query(row_type, sql.select("{}", _selected(row_type, alias or row_type.TABLE)).from_("{}", source))
+
+
+def fetch_all[R: Record](conn: sqlite3.Connection, record_type: type[R], query: sql.Composable) -> list[R]:
+    """Run `query`, a statement built with `sql`, and build each row it returns as `record_type`.
 
     Returns:
         The rows, in the order the query returned them.
     """
     cur = sql.execute(conn, query)
-    build = _builder(row_type, cur.description)
+    build = _builder(record_type, cur.description)
     return [build(r) for r in cur.fetchall()]
 
 
-def fetch_one[R: Row](conn: sqlite3.Connection, row_type: type[R], query: sql.Composable) -> R | None:
-    """Run `query`, a statement built with `sql`, and build its first row as `row_type`.
+def fetch_one[R: Record](conn: sqlite3.Connection, record_type: type[R], query: sql.Composable) -> R | None:
+    """Run `query`, a statement built with `sql`, and build its first row as `record_type`.
 
     Returns:
         The first row, or None when the query returned none.
     """
     cur = sql.execute(conn, query)
-    build = _builder(row_type, cur.description)
+    build = _builder(record_type, cur.description)
     first = cur.fetchone()
     return None if first is None else build(first)
 
 
-def columns(row: sqlite3.Row | Row) -> sqlite3.Row | dict[str, Any]:
+def columns(row: sqlite3.Row | Record) -> sqlite3.Row | dict[str, Any]:
     """A row of a table with a row type or one still read as `sqlite3.Row`, either way read by column name.
 
     For a helper that reads the same columns, such as a run's cost, from rows of several tables, while some of those
@@ -1854,20 +1887,130 @@ def columns(row: sqlite3.Row | Row) -> sqlite3.Row | dict[str, Any]:
     Returns:
         A typed row's fields by name, or the `sqlite3.Row` itself.
     """
-    return asdict(row) if isinstance(row, Row) else row
+    return asdict(row) if isinstance(row, Record) else row
 
 
-def _builder[R: Row](row_type: type[R], description: Sequence[Sequence[object]]) -> Callable[[Sequence[object]], R]:
-    """Check a query's columns against `row_type`'s fields, and return what builds one row of it.
+@dataclass(frozen=True)
+class Query[R: Row]:
+    """A SELECT of one table's whole rows, read as its row type: `select` starts one, and each method returns anew.
+
+    Only `sql` renders SQL (D125), so a query that goes in a `{}`, or is run by `sql.execute`, goes as its `statement`.
+    """
+
+    #: The row type it reads, which names its table and columns.
+    row_type: type[R]
+    statement: sql.Select
+
+    def with_(self, cte: LiteralString, *args: sql.Arg, recursive: bool = False) -> Query[R]:
+        """Add a common table expression, `name(columns) AS (select)`, to the WITH, for a condition to read.
+
+        Returns:
+            The query with it.
+        """
+        return replace(self, statement=self.statement.with_(cte, *args, recursive=recursive))
+
+    def join(self, table_on: LiteralString, *args: sql.Arg) -> Query[R]:
+        """Add an inner JOIN of `table alias ON condition`, to narrow the rows by: its columns are not read.
+
+        Returns:
+            The query with it.
+        """
+        return replace(self, statement=self.statement.join(table_on, *args))
+
+    def left_join(self, table_on: LiteralString, *args: sql.Arg) -> Query[R]:
+        """Add a LEFT JOIN of `table alias ON condition`, to narrow the rows by: its columns are not read.
+
+        Returns:
+            The query with it.
+        """
+        return replace(self, statement=self.statement.left_join(table_on, *args))
+
+    def where(self, condition: LiteralString, *args: sql.Arg) -> Query[R]:
+        """Add a condition, ANDed with any already there.
+
+        Returns:
+            The query with it.
+        """
+        return replace(self, statement=self.statement.where(condition, *args))
+
+    def where_in(self, column: LiteralString, values: Collection[sql.Value]) -> Query[R]:
+        """Add `column IN (...)` of `values`, ANDed with any condition already there.
+
+        Returns:
+            The query with it.
+        """
+        return replace(self, statement=self.statement.where_in(column, values))
+
+    def where_not_in(self, column: LiteralString, values: Collection[sql.Value]) -> Query[R]:
+        """Add `column NOT IN (...)` of `values`, ANDed with any condition already there.
+
+        Returns:
+            The query with it.
+        """
+        return replace(self, statement=self.statement.where_not_in(column, values))
+
+    def order_by(self, terms: LiteralString, *args: sql.Arg) -> Query[R]:
+        """Set its ORDER BY.
+
+        Returns:
+            The query with it.
+        """
+        return replace(self, statement=self.statement.order_by(terms, *args))
+
+    def limit(self, rows: int, offset: int | None = None) -> Query[R]:
+        """Set its LIMIT, and its OFFSET if given.
+
+        Returns:
+            The query with them.
+        """
+        return replace(self, statement=self.statement.limit(rows, offset))
+
+    def all(self, conn: sqlite3.Connection) -> list[R]:
+        """Run it on `conn`.
+
+        Returns:
+            Each row it matched, in the order it returned them.
+        """
+        return fetch_all(conn, self.row_type, self.statement)
+
+    def one(self, conn: sqlite3.Connection) -> R | None:
+        """Run it on `conn` for its first row.
+
+        Returns:
+            The first row it matched, or None when it matched none.
+        """
+        return fetch_one(conn, self.row_type, self.statement)
+
+
+# Cached: a row type's columns never change, and a query of them is started on every read.
+@functools.cache
+def _selected(row_type: type[Row], qualifier: LiteralString) -> sql.Fragment:
+    """Each of `row_type`'s columns, as `qualifier.column`, in field order.
 
     Returns:
-        A function from one row the query returns to the row type.
+        The column list, for a SELECT.
+    """
+    # A field's name is spelled in canopy's code, as the row type's is; `sql.name` still checks it is an identifier.
+    named = [
+        sql.frag("{}.{}", sql.name(qualifier), sql.name(typing.cast("LiteralString", f.name))) for f in fields(row_type)
+    ]
+    return functools.reduce(lambda listed, column: sql.frag("{}, {}", listed, column), named)
+
+
+def _builder[R: Record](
+    record_type: type[R],
+    description: Sequence[Sequence[object]],
+) -> Callable[[Sequence[object]], R]:
+    """Check a query's columns against `record_type`'s fields, and return what builds one row of it.
+
+    Returns:
+        A function from one row the query returns to the record type.
 
     Raises:
-        RowError: The query returns a column `row_type` has no field for, leaves a field out, or repeats one.
+        RowError: The query returns a column `record_type` has no field for, leaves a field out, or repeats one.
     """
     columns = [str(d[0]) for d in description]
-    converters = _converters(row_type)
+    converters = _converters(record_type)
     if sorted(columns) != sorted(converters):
         missing = sorted(set(converters) - set(columns))
         extra = sorted(set(columns) - set(converters))
@@ -1877,28 +2020,30 @@ def _builder[R: Row](row_type: type[R], description: Sequence[Sequence[object]])
         if extra:
             unfit.append(f"no field for {', '.join(extra)}")
         # Neither, when the query names a column twice.
-        raise RowError(f"query does not fit {row_type.__name__}: {'; '.join(unfit) or 'a column is repeated'}")
+        raise RowError(f"query does not fit {record_type.__name__}: {'; '.join(unfit) or 'a column is repeated'}")
     named = [(column, converters[column]) for column in columns]
 
     def build(row: Sequence[object]) -> R:
-        return row_type(**{name: convert(value) for (name, convert), value in zip(named, row, strict=True)})
+        return record_type(**{name: convert(value) for (name, convert), value in zip(named, row, strict=True)})
 
     return build
 
 
-# Cached: resolving a row type's hints costs about a millisecond, and every fetch of a row would pay it again.
+# Cached: resolving a record type's hints costs about a millisecond, and every fetch of a row would pay it again.
 @functools.cache
-def _converters(row_type: type[Row]) -> Mapping[str, _Convert]:
-    """Each field of `row_type`, by name, with what converts its column's value.
+def _converters(record_type: type[Record]) -> Mapping[str, _Convert]:
+    """Each field of `record_type`, by name, with what converts its column's value.
 
     Returns:
         The converters, in field order.
     """
-    hints = typing.get_type_hints(row_type)
-    return {f.name: _converter(row_type.TABLE, f.name, hints[f.name]) for f in fields(row_type)}
+    hints = typing.get_type_hints(record_type)
+    # A row's errors name its table's column; a view's, its own field.
+    owner = record_type.TABLE if issubclass(record_type, Row) else record_type.__name__
+    return {f.name: _converter(owner, f.name, hints[f.name]) for f in fields(record_type)}
 
 
-def _converter(table: str, name: str, hint: object) -> _Convert:
+def _converter(owner: str, name: str, hint: object) -> _Convert:
     """What converts a column's value to `hint`, refusing a value of another type.
 
     Returns:
@@ -1910,9 +2055,9 @@ def _converter(table: str, name: str, hint: object) -> _Convert:
     args = typing.get_args(hint)
     others = [a for a in args if a is not type(None)]
     if typing.get_origin(hint) in {types.UnionType, typing.Union} and type(None) in args and len(others) == 1:
-        inner = _converter(table, name, others[0])
+        inner = _converter(owner, name, others[0])
         return lambda value: None if value is None else inner(value)
-    where = f"{table}.{name}"
+    where = f"{owner}.{name}"
     exact = _EXACT.get(hint)
     if exact is not None:
         return lambda value: _checked(where, value, (exact,))
