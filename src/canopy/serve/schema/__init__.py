@@ -212,6 +212,28 @@ class CardStep(Model):
     """What shows it: `tests pass: 42/42`, `pushed abc123`, `not pushed`."""
 
 
+type CardStepStatus = Annotated[
+    Literal["not_started", "working", "blocked", "done", "skipped"],
+    Field(description="Where a step on a running agent's card stands (DESIGN §41)."),
+]
+
+
+class RunStep(Model):
+    """A step of the work on a running agent's card, as the agent tracks it (DESIGN §41)."""
+
+    title: str
+    """The step, as the plan or the agent's own checklist names it."""
+    status: CardStepStatus
+    """Where it stands."""
+    stage: str | None = None
+    """The stage it belongs to, such as `tests`; None when the agent named none."""
+    since: datetime | None = None
+    """When a card first gave it its status and stage; None where canopy kept no time for it."""
+    stuck_at: datetime | None = None
+    """While the run runs, for a `working` step, when it is shown stuck if nothing changes: a fifth of the run's
+    timeout after `since`. None for any other step, and once the run ended. A page marks it stuck from then."""
+
+
 class RunCard(Model):
     """Where a worker's, planner's, or reviewer's work stands, in its own words: its latest card (DESIGN §41).
 
@@ -237,6 +259,13 @@ class RunCard(Model):
     stale_at: datetime | None = None
     """While the run runs, when the card goes stale for want of an update by time, 10 minutes after `at`; None once
     it ended. A page marks it stale from then, or when `stale` says so."""
+    steps: list[RunStep] = []
+    """The work as steps, in order, each with its status; empty when the agent gave none."""
+    percent_done: int | None = None
+    """How much of the work is finished, its steps `done` or `skipped` over all, in whole percent rounded down; None
+    with no steps."""
+    stage: str | None = None
+    """The stage of the step the agent works on, its first `working` one; None when that names none, or none works."""
 
 
 class Run(Model):

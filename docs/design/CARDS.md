@@ -15,8 +15,10 @@ stands, and the operator reads that instead of the transcript.
 Every worker, planner, and reviewer run gets one tool, `status`, from canopy's server `canopy_run` (`canopy _mcp
 --status`), allowed by exact name in their definitions and denied to every other agent (§27). Each call is the whole
 card and replaces the last: a summary for someone who skipped the transcript, what the agent does now, what is done
-with the proof of each, what is next, and, optionally, what is in its way that it works around. Each field is bounded,
-plain text, one line.
+with the proof of each, what is next, and, optionally, what is in its way that it works around, and the work as steps,
+each with a title, a status (`not_started`, `working`, `blocked`, `done`, or `skipped`), and an optional stage. Each
+field is bounded, plain text, one line. A worker whose ticket has an approved plan (§25) is told to take its steps from
+the plan, so the operator follows the plan they approved being done; a planner's and a reviewer's steps are their own.
 
 The server validates a call and writes nothing; it lists its tool only where `CANOPY_RUN_ID` names a worker's,
 planner's, or review's run. The harness records the card from the call in the events it already reads as the agent
@@ -24,7 +26,8 @@ prints them (§8), held to the same input, so nothing the agent writes reaches t
 print, as with its spend: a call the server refused, or one that does not validate, records nothing. A run without the
 runtime's events keeps no card, nor does a one-off task's run (§36), which is never given the server. The run counts the
 tool calls its agent ends, so a card is as old as the time and the calls since it, and the run keeps its last card once
-it ends.
+it ends. Beside the card it keeps when each step, found by its title, took its status and stage, since the agent
+rewrites the whole card each call.
 
 ### Staleness
 
@@ -42,7 +45,9 @@ its trust in worker text changes (TRUST_MODEL T1). Nothing on a card extends a r
 `canopy status` and the web UI's running runs show each running run's `now` and how old its card is; `canopy show` of a
 run, `canopy review show` of a review, and their pages in the web UI, the whole card, or the last one once it has ended,
 as a ticket's page does under the run working it. A card that has gone too many tool calls or minutes without an update
-is marked stale rather than going quiet, and `canopy status` names a running run that has kept none that long. No
+is marked stale rather than going quiet, and `canopy status` names a running run that has kept none that long. A card
+with steps shows percent done, its steps done or skipped over all of them, and the stage of the step it works on; a
+step left `working` at the same stage for a fifth of the run's timeout is shown stuck while the run runs. No
 notification: the sinks hear of what a run ends with, as before (§20). canopy's report of a run that a chore's agent may
 read (§27) leaves the card out, so no card reaches an agent.
 

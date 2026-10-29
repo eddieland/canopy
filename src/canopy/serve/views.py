@@ -58,6 +58,7 @@ from canopy.serve.schema import (
     RunCard,
     RunsSince,
     RunState,
+    RunStep,
     ServedModel,
     StartStatus,
     TicketSummary,
@@ -386,12 +387,14 @@ def card(row: sqlite3.Row | records.Row, *, running: bool) -> RunCard | None:
     """A run's or a review run's card as the API sends it (DESIGN §41), or None when it kept none.
 
     Returns:
-        The card, with how old it is, and while the run runs whether and when it goes stale: a page judges the time.
+        The card, with how old it is, its steps with how far they are and the working one's stage, and while the run
+        runs whether and when it goes stale, and when each working step is stuck: a page judges the time.
     """
     standing = cards.of(row)
     found = standing.card
     if found is None or standing.at is None:
         return None
+    at = cards.working(found)
     return RunCard(
         summary=found.summary,
         now=found.now,
@@ -402,7 +405,32 @@ def card(row: sqlite3.Row | records.Row, *, running: bool) -> RunCard | None:
         calls_since=standing.calls_since,
         stale=running and standing.calls_since >= cards.STALE_CALLS,
         stale_at=standing.at + timedelta(minutes=cards.STALE_MINUTES) if running else None,
+        steps=_steps(standing, running=running),
+        percent_done=cards.percent_done(found),
+        stage=at.stage if at is not None else None,
     )
+
+
+def _steps(standing: cards.Standing, *, running: bool) -> list[RunStep]:
+    """A card's steps as the API sends them, with when each last changed and, while the run runs, when it is stuck.
+
+    Returns:
+        The steps, in the card's order.
+    """
+    card = standing.card
+    if card is None:
+        return []
+    kept = standing.steps if len(standing.steps) == len(card.steps) else [None] * len(card.steps)
+    return [
+        RunStep(
+            title=step.title,
+            status=step.status,
+            stage=step.stage,
+            since=times.since if times is not None else None,
+            stuck_at=times.stuck_at if times is not None and running else None,
+        )
+        for step, times in zip(card.steps, kept, strict=True)
+    ]
 
 
 def _served(

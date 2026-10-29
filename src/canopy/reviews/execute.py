@@ -388,6 +388,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
                 agent="reviewer",
                 fields={"review_run_id": run_id},
                 version=ctx.config.runtime.version,
+                card_stuck_after=cards.stuck_after(timeout_minutes),
             ),
         )
     out.write(f"\n--- reviewer stderr ---\n{done.stderr}\n")

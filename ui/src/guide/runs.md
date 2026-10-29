@@ -222,10 +222,18 @@ it's doing now, what it finished with the proof of each (`tests pass: 42/42`, `p
 pushed`), what's left, and anything in its way it's working around. Each update replaces the whole card. It's the
 agent's own account, so read it as you'd read a colleague's standup: useful, and checked against the diff.
 
+A card can also carry **steps**, the work as a checklist: each with a status (`not started`, `working`, `blocked`,
+`done`, or `skipped`) and, if the agent likes, a stage such as `tests`. The card then says how many are finished and
+the percent, counting a skipped step as finished since nobody has to do it, and the stage of the step it's working on.
+A worker following a plan you approved takes its steps from the plan, so you watch your plan get done, departures
+marked `skipped`; a planner's and a reviewer's steps are their own. A step left `working` at the same stage for a fifth
+of the run's timeout, 9 minutes of a worker's 45, says `stuck` in amber. That's a prompt to look, not a verdict: some
+steps are just long.
+
 The card says how old it is in time and in tool calls. One that has gone 10 minutes, or 20 tool calls, without an
 update turns amber and says `stale`, rather than going quiet, and canopy nudges the agent for a new one. A run that
 ended keeps its last card, so you can see where it thought it was when it stopped.
 
-A run's page shows the whole card; the runs list shows what it's doing now, with the card's age; a ticket's page shows
-the card under `working now`; and a review's page shows its reviewer's. Nothing on a card reaches another agent, and
-nothing on it changes what canopy does: it's for you.
+A run's page shows the whole card; the runs list shows what it's doing now, with its percent done and the card's age;
+a ticket's page shows the card under `working now`; and a review's page shows its reviewer's. Nothing on a card
+reaches another agent, and nothing on it changes what canopy does: it's for you.
