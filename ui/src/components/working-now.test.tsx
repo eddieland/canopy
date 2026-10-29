@@ -24,8 +24,12 @@ function client(runs: Run[]): QueryClient {
     return queries
 }
 
+// Each run's row, not the entries of its progress's checklist inside it.
 function working(): HTMLElement[] {
-    return within(screen.getByTestId('working-now')).queryAllByRole('listitem')
+    const list = screen.getByTestId('working-now')
+    return within(list)
+        .queryAllByRole('listitem')
+        .filter((item) => item.parentElement === list)
 }
 
 describe('WorkingNow', () => {

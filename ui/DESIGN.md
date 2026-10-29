@@ -1059,19 +1059,23 @@ sliver beside four others; and its axis names short call numbers without measuri
   in `status-running`, what the call did muted (a shell call's command, else the runtime's title; cut to fit, whole on
   hover), and how long ago. A running run's row has it where an ended run's summary goes, `WorkingNow` after the
   kind, and the run's page as its `last call` field. It is agent output, rendered as text.
-- **A running agent's card** (`RunCardView`, `RunCardNow`, `src/components/run-card.tsx`, DESIGN §41): the agent's
-  own account of where its work stands. Whole, it is a block with a left rule: a muted line of how old it is, in time
-  and tool calls, then the summary in prose, and `now`, `done` (each with its proof in muted mono), `next`, and `stuck`
-  as label and text lines, then its steps, if any: the share done and the stage under way, then each step's status
-  word in its tone (`working` `status-running`, `done` `status-done`, `blocked`, and `stuck` past its `stuck_at`,
-  `status-blocked`) and its title, then its question, if any: `asks you` in `status-blocked` while it waits, `answered
-  B`, or `never answered`, its age, the question, and each option by its letter, `· recommended` and `· your answer`
-  muted and `status-done` after it, and, while the run runs, an xs outline `answer B` button on each other option. On
-  one line, for a row, it is `now`, what the agent does, the share done, `asks you` in `status-blocked` while a
-  question waits, and the card's age. While the run
-  runs, a card past `stale_at` or marked `stale` turns its rule and a `stale` word `status-blocked`, judged against the
-  page's clock so it turns without a new read; an ended run's last card never does. It shows on the run's page as its
-  `card` field, under a ticket's `WorkingNow`, in a running run's row, and on a review's page. Agent text, as text.
+- **A running agent's progress** (`RunProgress`, `ProgressPanel`, `RunProgressLine`, `ProgressMeter`,
+  `src/components/run-progress.tsx`, DESIGN §41): the agent's own account of where its work stands, which the operator
+  reads to know what a run is up to now, so it leads wherever it shows. Whole, it is the summary in `font-medium`, a
+  meter of its steps if it has any (a segment each, 2px apart: done `status-done`, working `status-running`, blocked
+  or stuck `muted-foreground`, to do the bare `border` track) with `N of M done · stage S`, its question, then its work
+  as one checklist, each entry led by a 12px mark: a `status-done` check, the pulsing running dot, an hourglass, a
+  dash for skipped, an empty ring to do. The steps are the list when it has any, `now` under the working one, and what
+  it wrote is done and next folds under a disclosure; without steps, done (each with its proof in muted mono), now,
+  and next are the list. What it works around follows, after an hourglass. Its question is a box on
+  `status-blocked/8` with a `status-blocked/40` border while it waits (muted on `surface-raised` once answered or
+  ended): `asks you`, the question, and each option a full-width row that answers with its letter on a click, its
+  letter in a small square, `recommended · working toward it` after the one the agent works toward. Amber means that
+  question alone: a stale update is a clock and `stale` in `foreground`, a fact about the record, never a request.
+  When it was last updated, in time and tool calls, is the head line, or the right of the panel's header. A run's and
+  a review's page lead with it as a `Progress` panel (`Last progress` once ended), a ticket's `WorkingNow` shows it as a
+  bubble on the worker's side, a running run's row as one line (a 4rem meter and `N/M`, what it does now, `asks you`,
+  when), and the rail's working row of a worker run as its meter under the phase line. Agent text, as text.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub
