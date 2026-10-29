@@ -34,6 +34,7 @@ dependencies = [
     "canopy-artifacts",
     "canopy-github",
     "canopy-jira",
+    "canopy-mcp",
     "canopy-notify-slack",
     "canopy-sandbox",
     "click>=8.5.0",
@@ -127,6 +128,7 @@ canopy-artifacts = { workspace = true }
 canopy-github = { workspace = true }
 canopy-http = { workspace = true }
 canopy-jira = { workspace = true }
+canopy-mcp = { workspace = true }
 canopy-notify-slack = { workspace = true }
 canopy-review-bench = { workspace = true }
 canopy-sandbox = { workspace = true }

@@ -12,6 +12,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, override
 
+import canopy_mcp
 import click
 from click.shell_completion import CompletionItem
 from pydantic import ValidationError
@@ -86,7 +87,7 @@ def validated[R: BaseModel](click_ctx: click.Context, request: type[R], **fields
     try:
         return request.model_validate(fields)
     except ValidationError as e:
-        raise click.UsageError(tools.explain(e), click_ctx) from None
+        raise click.UsageError(canopy_mcp.explain(e), click_ctx) from None
 
 
 class PatternType(click.ParamType[str, object]):
