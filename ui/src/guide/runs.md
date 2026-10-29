@@ -95,7 +95,9 @@ The **Transcript** is the run's session, from its log, oldest first:
 - each tool call, with what it did and how long it took; click one to see its input and output. A canopy command the
   harness refused is marked `refused`, with the guard. An overseer's `decide` names each ticket and its action on its
   row, and opens to every decision on a line of its own with its rationale, so a tick that decided twelve tickets in
-  one call doesn't leave you reading them out of a JSON array;
+  one call doesn't leave you reading them out of a JSON array. Its `ticket-set` does the same: each ticket, or
+  `ABC-1 (web)` for a unit, with what it sets on the row, and opened, each on a line with its phase, `done`, every
+  cursor and the item it passes, and the title;
 - each model call, with the tokens in and out, and its cost; click one to see what it was sent and what it did. The
   first call was sent canopy's prompt, and every later one what the tools returned since. In a run that switched
   models, the first call names its model, and so does each call where the model changed, By call too, so you can see
