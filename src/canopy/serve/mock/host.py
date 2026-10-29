@@ -105,7 +105,7 @@ _PROCESSES: tuple[tuple[int, int, str, str, ProcessState, float, int, int, int, 
         "/home/operator/.local/share/uv/tools/canopy/bin/python -m canopy _run 43",
     ),
     (50152, 50140, "opencode", "operator", "sleeping", 0.036, 377, 21, 9, "opencode run --agent canopy-worker"),
-    (50290, 50152, "git", "operator", "disk", 0.012, 22, 1, 0, "git fetch origin agent/ABC-104-retry"),
+    (50290, 50152, "rg", "operator", "disk", 0.012, 22, 1, 0, "rg --line-number --hidden retry_after src"),
     (1203, 1, "dockerd", "root", "sleeping", 0.009, 96, 31, 13198, "/usr/bin/dockerd -H fd://"),
     (
         1310,

@@ -71,7 +71,7 @@ test('the processes show what keeps the machine busy as a tree, every one on ask
     await expect(rows).toHaveCount(16)
     await expect(panel.getByTestId('process-hidden')).toHaveText('4 processes using under 1% of a core left out.')
     await expect(rows.filter({ hasText: 'rustc' }).first()).toContainText('running')
-    await expect(rows.filter({ hasText: 'git fetch' })).toContainText('waiting on a disk')
+    await expect(rows.filter({ hasText: 'rg --line-number' })).toContainText('waiting on a disk')
     await expect(rows.filter({ has: page.getByTestId('process-loop') })).toContainText('48213')
 
     await panel.getByRole('button', { name: 'All' }).click()
