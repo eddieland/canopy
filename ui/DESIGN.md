@@ -1075,8 +1075,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   question alone: a stale update is a clock and `stale` in `foreground`, a fact about the record, never a request.
   When it was last updated, in time and tool calls, is the head line, or the right of the panel's header. A run's and
   a review's page lead with it as a `Progress` panel (`Last progress` once ended), a ticket's `WorkingNow` shows it as a
-  bubble on the worker's side, a running run's row as one line (a 4rem meter and `N/M`, what it does now, `asks you`,
-  when), and the rail's working row of a worker run as its meter under the phase line. Agent text, as text.
+  bubble on the worker's side, a running run's row as one line (a 4rem meter and `N/M` when it has steps, what it does
+  now, `asks you`, when), and the rail's working row of a worker run as its meter under the phase line, when it has
+  steps. Agent text, as text.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub
