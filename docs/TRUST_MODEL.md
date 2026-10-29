@@ -1050,8 +1050,10 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   `canopy attach` and `canopy detach` do (DESIGN §22),
   edit a review's draft's body and comments, drop one, add one on a line of its kept diff, note what a revision of it
   should change as `canopy reply review:ID` does, publish or stage the version the page showed, named by its hash,
-  as `canopy review edit` and `publish` do, and discard a draft as `canopy review discard` does (DESIGN §34), ask the
-  loop to read its config files again as SIGHUP does, and ask it for a tick now as `t` at its terminal does.
+  as `canopy review edit` and `publish` do, and discard a draft as `canopy review discard` does (DESIGN §34), answer the
+  question a running agent's card asks with one of its letters, the one the page showed, as `canopy reply run:ID` and
+  `review:ID` do (DESIGN §41), ask the loop to read its config files again as SIGHUP does, and ask it for a tick now as
+  `t` at its terminal does.
   Beyond the CLI's verbs it writes what no command would, through a function of its own with the same guards: the
   marks of what the operator has seen (DESIGN §22), which authorize nothing and no agent reads, and two things that
   are the operator's own words on a plan (DESIGN §25): an edit of a

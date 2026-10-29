@@ -998,6 +998,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reviews/{run_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer a running review's question
+         * @description `canopy reply review:ID LETTER` on a running review: the answer to the question its reviewer's card asks (§41).
+         *
+         *     Refused `moved_on` when its card asks another question than the one asked at `asked_at`, which the page showed.
+         */
+        post: operations["answerReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reviews/{run_id}/dismissals": {
         parameters: {
             query?: never;
@@ -1279,6 +1301,28 @@ export type paths = {
         get: operations["getRun"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer a run's question
+         * @description `canopy reply run:ID LETTER`: the operator's answer to the question the running run's card asks.
+         *
+         *     Refused `moved_on` when its card asks another question than the one asked at `asked_at`, which the page showed.
+         */
+        post: operations["answerRun"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2324,6 +2368,50 @@ export type components = {
              * @enum {string}
              */
             source: "ticket" | "config" | "default";
+        };
+        /**
+         * Answered
+         * @description The operator's answer, as recorded: what `canopy reply run:ID LETTER` says.
+         */
+        Answered: {
+            /**
+             * Already
+             * @description Whether the question already had this answer, so nothing new was recorded.
+             */
+            already: boolean;
+            /**
+             * Heard
+             * @description Whether it was written where the agent hears it on its next tool call: false once the agent has ended.
+             */
+            heard: boolean;
+            /**
+             * Letter
+             * @description The letter.
+             * @enum {string}
+             */
+            letter: "A" | "B" | "C" | "D" | "E";
+            /**
+             * Option
+             * @description The option it names.
+             */
+            option: string;
+        };
+        /**
+         * AnswerRequest
+         * @description The operator's answer to a running run's question, as `canopy reply run:ID LETTER` takes it.
+         */
+        AnswerRequest: {
+            /**
+             * Asked At
+             * Format: date-time
+             * @description When the question the page showed was asked: a card that asks another since is refused `moved_on`.
+             */
+            asked_at: string;
+            /**
+             * Letter
+             * @description The letter of one of the question's options, in either case.
+             */
+            letter: string;
         };
         /**
          * Attached
@@ -7230,6 +7318,8 @@ export type components = {
              * @description How much of its steps is done, of those not skipped, rounded down; None with no steps to count.
              */
             percent: number | null;
+            /** @description A question it asks the operator, with the answer they gave; None when it asks none. */
+            question: components["schemas"]["RunCardQuestion"] | null;
             /**
              * Stage
              * @description The stage of its first working step; None when none names one.
@@ -7262,6 +7352,44 @@ export type components = {
              * @description Where the work stands, in a sentence or two.
              */
             summary: string;
+        };
+        /**
+         * RunCardQuestion
+         * @description A decision a running agent asks the operator for on its card, which it works around meanwhile (DESIGN §41).
+         */
+        RunCardQuestion: {
+            /**
+             * Answer
+             * @description The letter the operator answered with; None while it waits on them.
+             */
+            answer: ("A" | "B" | "C" | "D" | "E") | null;
+            /**
+             * Answered At
+             * @description When they answered; None while it waits.
+             */
+            answered_at: string | null;
+            /**
+             * Ask
+             * @description The question, in the agent's words.
+             */
+            ask: string;
+            /**
+             * Asked At
+             * Format: date-time
+             * @description When canopy first recorded a card asking it.
+             */
+            asked_at: string;
+            /**
+             * Options
+             * @description The choices, in order: the first is A, the next B, and so on.
+             */
+            options: string[];
+            /**
+             * Recommend
+             * @description The letter of the option the agent recommends, and works toward meanwhile.
+             * @enum {string}
+             */
+            recommend: "A" | "B" | "C" | "D" | "E";
         };
         /**
          * RunCardStep
@@ -13340,6 +13468,96 @@ export interface operations {
             };
         };
     };
+    answerReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Answered"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     dismissReviewFinding: {
         parameters: {
             query?: never;
@@ -14429,6 +14647,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    answerRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The run's id, as `run:ID` names it. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Answered"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
             /** @description Refused before the route ran: a chunked body, with no Content-Length. */
