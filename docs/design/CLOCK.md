@@ -28,8 +28,9 @@ loads canopy's definitions loads it, and the snapshot's digest splits runs into 
 JavaScript with no imports, so it loads with no network, inside the sandbox too. It holds each job canopy asks of the
 agent process, the clock its first: each job reads only what it is handed for that job, and its hooks run in a
 try of their own, so one that throws fails neither the call nor the jobs after it. A later job joins this file rather
-than shipping a plugin of its own. Both of OpenCode's major versions load the one file: its default export carries an
-entry point for each, and each version reads only its own, so binding OpenCode 2 (D009) keeps the clock.
+than shipping a plugin of its own, as the nudge for a stale card has (§41). Both of OpenCode's major versions load
+the one file: its default export carries an entry point for each, and each version reads only its own, so binding
+OpenCode 2 (D009) keeps the clock.
 
 After each tool call that succeeds (`tool.execute.after`, MCP tools' included), once the run is in the last fifth of
 the time it had when the plugin loaded, and never more than its last 10 minutes, the plugin adds one line to the call's
