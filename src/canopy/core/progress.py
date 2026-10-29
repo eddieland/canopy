@@ -3,7 +3,8 @@
 Each line goes to the log as it comes, so the web UI reads a running session's transcript from it, and what its events
 report so far, its session and what it has spent, goes on the tick or the chore, task, or review run, whose change the
 UI's stream carries.
-A worker run's `_run` keeps its own, which also records the latest tool call on the run (§8).
+A review run's also records its reviewer's card (§41). A worker run's `_run` keeps its own, which also records the
+latest tool call and the card on the run.
 """
 
 from __future__ import annotations
@@ -11,7 +12,7 @@ from __future__ import annotations
 import sqlite3
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import db
+from canopy.core import cards, db
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
@@ -54,14 +55,24 @@ class Progress:
         self.watch = Watch(version=version)
 
     def __call__(self, line: str) -> None:
-        """Write `line` to the log, and record the session at its first event and the spend at each model call's end."""
+        """Write `line` to the log, and record the session at its first event and the spend at each model call's end.
+
+        A review run's reviewer's tool calls are counted as each ends, and a `status` call's card recorded.
+        """
         self.out.write(line)
         self.out.flush()
         change = self.watch.read(line)
-        if change is None or (not change.started and change.usage is None):
+        if change is None:
+            return
+        # A review's reviewer keeps a card, with the tool calls since it (§41); no other agent here does.
+        called = change.called if self.table == "review_runs" else None
+        if not change.started and change.usage is None and called is None:
             return
         try:
-            db.set_progress(self.conn, self.table, self.row_id, change.session_id, usage=change.usage)
+            if change.started or change.usage is not None:
+                db.set_progress(self.conn, self.table, self.row_id, change.session_id, usage=change.usage)
+            if called is not None:
+                cards.record_call(self.conn, "review_runs", self.row_id, cards.read_call(called))
         except sqlite3.Error as e:
             self.log.warning("agent progress not recorded", extra={**self.fields, "agent": self.agent, "error": str(e)})
         if change.started:
