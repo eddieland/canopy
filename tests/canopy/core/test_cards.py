@@ -78,3 +78,18 @@ def test_a_card_the_journal_holds_that_no_longer_reads_as_one_is_none(conn: sqli
     cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
     conn.execute('UPDATE runs SET card_json = \'{"summary": "s"}\' WHERE id = ?', (running,))
     assert cards.of(present(db.get_run(conn, running))) == cards.Standing(None, None, 1)
+
+
+def test_a_card_gone_too_many_tool_calls_without_an_update_is_stale(conn: sqlite3.Connection, running: int) -> None:
+    cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
+    for _ in range(cards.STALE_CALLS - 1):
+        cards.record_call(conn, "runs", running, None)
+    run = present(db.get_run(conn, running))
+    started = str(run["started_at"])
+    assert not cards.is_stale(cards.of(run), started)
+    cards.record_call(conn, "runs", running, None)
+    standing = cards.of(present(db.get_run(conn, running)))
+    assert cards.is_stale(standing, started)
+    doing = cards.doing(standing, started)
+    assert doing is not None
+    assert doing.endswith(f", {cards.STALE_CALLS} calls old  stale")
