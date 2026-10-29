@@ -130,9 +130,9 @@ run a cheaper pre-check agent, or take webhooks (TRUST_MODEL T8); the connectors
 their own programs, and wake it only for what a tick would newly record or list (§39).
 
 A tick is **idle** when it closed `ok`, dispatched nothing (a dry run paces as a live one would), and nothing reached
-the journal after the previous tick read it (step 3): no run started or ended, and the operator did nothing. Rejected:
-idle as a tick that changed nothing, since records that repeat on unchanging state kept any tick from counting
-(MEASUREMENTS 2026-10-14).
+the journal after the previous tick read it (step 3): no run started or ended, no poll ended the wait (§39), and the
+operator did nothing. Rejected: idle as a tick that changed nothing, since records that repeat on unchanging state kept
+any tick from counting (MEASUREMENTS 2026-10-14).
 
 After each idle tick in a row the wait doubles, up to `loop.idle_max_minutes` and never below the base wait; a tick that
 ran no overseer (§39) leaves the count as it was. Whatever pacing chose, the wait ends at the earliest harness gate

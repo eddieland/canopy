@@ -18,7 +18,7 @@ from canopy.core.vocab import Decider, TickStatus
 from canopy.loop import pacing, tick
 from tests.canopy.helpers import KEY, agent_runs, context, in_tick, present, waits
 from tests.canopy.observation_helpers import branches_read
-from tests.canopy.scenario_helpers import chores_ended, dispatches, due_chore, raises
+from tests.canopy.scenario_helpers import chores_ended, dispatches, due_chore, loops, raises
 
 if TYPE_CHECKING:
     import sqlite3
@@ -29,6 +29,8 @@ if TYPE_CHECKING:
 
 #: A chore with no `when`, which the harness runs (DESIGN §37), and one with a `when`, which the overseer decides.
 MINE, THEIRS = "deps", "build-health"
+#: Idle pacing on: ten minutes after a tick, doubling per idle tick in a row up to eighty.
+PACED = {"interval_minutes": 10, "idle_max_minutes": 80, "min_gap_minutes": 1}
 
 
 @pytest.fixture
@@ -107,6 +109,23 @@ def test_a_tick_that_ran_no_overseer_leaves_the_idle_count_as_it_was(
     assert pacing.count(ctx, tick.Outcome(ran, TickStatus.OK, ""), 3, idle=True, on=True) == 4
     assert pacing.count(ctx, tick.Outcome(ran, TickStatus.OK, ""), 3, idle=False, on=True) == 0
     assert pacing.count(ctx, tick.Outcome(None, "lock_busy", ""), 3, idle=False, on=True) == 0
+
+
+def test_idle_ticks_that_ran_the_overseer_lengthen_the_wait(quiet: Scenario) -> None:
+    # The overseer is left KEY, and waits on it every tick: the timer is its second look, finding nothing new.
+    quiet.seen(KEY)
+    quiet.configures(loop=PACED)
+    looped = loops(quiet, *waits(KEY), ticks=4)
+    assert [(t.overseer_ran, t.idle) for t in looped.ticks] == [(True, True)] * 4
+    assert (looped.woken_by, looped.started) == (["start", "timer", "timer", "timer"], [0, 20, 60, 140])
+
+
+def test_idle_ticks_that_ran_no_overseer_leave_the_wait(quiet: Scenario) -> None:
+    quiet.configures(loop=PACED)
+    looped = loops(quiet, ticks=4)
+    # Idle for spend, but costing nothing, so the wait stays the interval.
+    assert [(t.overseer_ran, t.idle) for t in looped.ticks] == [(False, True)] * 4
+    assert (looped.woken_by, looped.started) == (["start", "timer", "timer", "timer"], [0, 10, 20, 30])
 
 
 def at_work_with_an_item(scenario: Scenario) -> Working:
