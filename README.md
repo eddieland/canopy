@@ -13,7 +13,9 @@ deciding what to do with a comment from someone you have not trusted, and approv
 list tells you which of those is waiting on you.
 
 canopy reviews other people's PRs the same way, on request: its reviewer reads the PR, you revise the review with an
-agent until it says what you mean, and only then is it posted, as your own.
+agent until it says what you mean, and only then is it posted, as your own. Beside the loop, it runs one-off tasks in
+your own words, scheduled chores that report what matters and change nothing, and notifications on your desktop or in
+Slack.
 
 Everything runs on your machine, under your credentials. No hosted service holds standing write access to your
 repositories, your tracker, or your internal tools.
@@ -21,6 +23,17 @@ repositories, your tracker, or your internal tools.
 > Not on PyPI: `canopy` there is an unrelated project. Install canopy from this repository.
 
 ![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-dark-root-linux.png)
+
+## Why this exists
+
+- Hosted "label a ticket, get a PR" agents cannot reach systems behind your own auth, and they require granting a
+  vendor write access to your code and tracker. canopy runs where your credentials already are.
+- Getting the first PR up is the easy part. The daily cost of running several agents is everything after: checkouts to
+  juggle, CI to watch, review comments to route back, and remembering which PR is waiting on whom. canopy owns that
+  stretch and leaves you the decisions.
+- Orchestration is a prompt, not a workflow engine. Each tick, an overseer agent decides what to do from live state,
+  so ticket dependencies and branch stacking need no DSL. The guards are code, whatever the overseer asks for:
+  capacity, attempt limits, cooldowns, one worker per ticket, and never approving or merging a PR.
 
 ## The loop
 
@@ -37,88 +50,8 @@ you start a ticket in canopy, or label it in your tracker
   -> merged                 -> done
 ```
 
-| Stage | canopy does | You do |
-| --- | --- | --- |
-| Intake | picks up a started or labeled ticket when there is capacity; can stack a ticket on its blocker's branch once that PR is green (`policy.stacking`) | `canopy start KEY` to work it privately, with no label and nothing written to the ticket; or add your queue label |
-| Plan, if `policy.plan` asks for one | a planner reads the ticket and the code and writes how the work will be done; each reply of yours has it plan again; nothing is implemented until the plan is approved, by you unless you let the planner approve its own (`policy.planner_may_approve`) | read the plan, reply with what to change or edit it yourself, and approve it when it is right |
-| Implement | leases a worktree, runs a worker that implements, pushes, and opens the PR, then returns the worktree | answer with `canopy reply` or the web UI, if the worker asks |
-| CI | waits without a worktree; on red or a conflict, resumes the worker to fix it, within an attempt limit and a cooldown | `canopy grant` another attempt past the limit, or `canopy notice` an outage |
-| Review | reviews the head with its own reviewer agent, if `[review]` is on; resumes the worker for feedback from `trust.trusted_reviewers`, `canopy:review` naming its own; the worker drafts its replies on review threads rather than posting them (`trust.review_replies`) | review the PR; say what to do with anyone else's comments; read the worker's drafted replies, and edit, drop, or send them as your own |
-| Merge | marks the ticket done in its own journal once its PRs are merged and no repository is left to change; it never moves the ticket in your tracker | approve and merge, and close the ticket |
-
-Between stages a ticket holds no worktree and no capacity: its pushed branch is the checkpoint, and each run is a fresh
-worker on it (§9). Each tick, an overseer agent reads the tracker, GitHub, and canopy's journal, derives each ticket's
-phase, and picks its next step (§7). The judgment is the overseer's; the guards are code: capacity, attempt limits,
-cooldowns, one worker per ticket, and never approving or merging a PR, whatever the overseer asks for (§4).
-
-The plan is the cheapest place to steer. A planning round costs one run and touches no branch, so iterate there, and let
-the worker start from a plan you have read rather than correcting its PR afterwards (§25). With `policy.feedback_plan`,
-what comes back to a PR is planned the same way before the worker acts on it (§32, in progress).
-
-A private ticket's conversation stays in canopy: canopy posts none of the agents' questions or your answers to the
-tracker, though its PRs are as public as any. `private = true` under `[tracker]` works labeled tickets the same way
-(§22).
-
-## Reviewing other people's PRs
-
-Ask canopy to review a coworker's PR, with `canopy start PR_URL --review` or the web UI's reviews page, or every PR
-`review.query` matches. Its reviewer agent reads the PR at its head and reports findings on the lines of the diff, in
-canopy, posting nothing. The review is a draft you iterate on: dismiss findings, edit the text, or reply with what to
-change, `canopy reply review:ID`, and an agent revises it into a new version. When it says what you mean,
-`canopy review publish RUN_ID HASH` posts that one version, word for word, as your comment review: pending on GitHub for
-you to submit there, or submitted with `--submit`; `canopy review discard RUN_ID` posts nothing and stops it waiting on
-you. The review's page in the web UI does each of these too. Ask again after the author pushes, and the new head gets a
-review of its own (§21, §34).
-
-Beside the loop, canopy also runs:
-
-- **Tasks:** one-off work in your own words, about no ticket, such as finding out why a job is slow or trying an
-  approach on a branch. A worker runs it once and leaves a report, a branch, and perhaps a draft PR; reply to it for
-  another run (§36).
-- **Chores:** scheduled agents that read your CI, PRs, or tracker and report what matters to the attention list,
-  changing nothing (§19).
-- **Notifications:** on your desktop or in Slack when the attention list changes; a reply in a ticket's Slack thread
-  answers the ticket, from the people you list (§20).
-- **Memory**, opt-in: notes a ticket's runs keep for its later runs, and lessons the workers propose and you promote,
-  for every run after (§28).
-
-**Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). Every stage of the loop above
-is built, in the foreground or detached, with the web UI, plans, private tickets, joint runs across repositories,
-reviews of other people's PRs, and the work beside the loop. Built and awaiting their live checks: agent memory (M50),
-drafted review replies (M53), one-off tasks (M61), attachments (M63), and Slack replies (M64). In progress: sandboxed
-workers (M26), canopy's own worktree pools in place of treehouse (M45), artifacts the agents publish for you to comment
-on (M62), and cutting the overseer's spend (M36 to M39).
-
-- Milestones: [docs/roadmap/](docs/roadmap/README.md)
-- Live checks still to run: [docs/SCENARIOS.md](docs/SCENARIOS.md)
-- What canopy must do, and how far along each requirement is: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)
-
-Codes such as D046 name entries in [docs/DECISIONS.md](docs/DECISIONS.md), and § numbers name sections of the design in
-[docs/design/](docs/design/README.md).
-
-## Why this exists
-
-- Hosted "label a ticket, get a PR" agents cannot reach systems behind your own auth, and they require granting a
-  vendor write access to your code and tracker. canopy runs where your credentials already are.
-- Getting the first PR up is the easy part. The daily cost of running several agents is everything after: checkouts to
-  juggle, CI to watch, review comments to route back, and remembering which PR is waiting on whom. canopy owns that
-  stretch and leaves you the decisions.
-- Orchestration is a prompt, not a workflow engine. The overseer decides what to do each tick from live state, so
-  ticket dependencies and branch stacking need no DSL and no schema change.
-
-## Under the hood
-
-`canopy loop` runs one tick after another until you press Ctrl-C, waiting `loop.interval_minutes` between them, and
-longer while nothing changes. A tick takes a lock, returns the worktrees of dead workers, runs the overseer, and exits.
-Worktrees come from a [treehouse](https://github.com/kunchenguid/treehouse) pool.
-
-canopy has no tracker code. A connector, a separate program, reads your tickets into the journal (Jira's and GitHub
-Issues' ship), and agents reach the tracker through its MCP server, guided by a short provider-neutral contract and,
-where it helps, a provider skill. See [DESIGN §17](docs/design/WORKSPACES.md#17-trackers).
-
-State lives in a SQLite journal. Facts about the world (ticket status, PRs, CI, reviews) are always re-read from their
-source of truth, never from the journal. The details are in [docs/design/](docs/design/README.md), and the security
-posture in [docs/TRUST_MODEL.md](docs/TRUST_MODEL.md).
+The web UI's guide, [How the loop works](ui/src/guide/how-the-loop-works.md), tells the rest, and
+[docs/design/](docs/design/README.md) the design.
 
 ## Install (target: five steps, no more)
 
@@ -141,18 +74,18 @@ workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART
    uv tool install git+https://github.com/eddieland/canopy
    ```
 
-   Not `uv tool install canopy`: that name on PyPI is another project (D046). To upgrade, run the same command with
+   Not `uv tool install canopy`: that name on PyPI is another project To upgrade, run the same command with
    `--reinstall`.
 
 3. **Connect your MCP servers.** In your agent runtime (OpenCode), connect the GitHub MCP server and your tracker's MCP
    server (Jira, Linear, anything with one; for GitHub Issues the GitHub server is both). Your runtime holds the
    tokens; canopy never sees them. To run OpenCode 2 (2.1.4 or later), set `version = 2` under `[runtime]` in your
-   user config, and give each of those servers `"codemode": false`, since canopy's agents are denied code mode (D077).
+   user config, and give each of those servers `"codemode": false`, since canopy's agents are denied code mode.
 
    Grant only what the agents need. Workers need write tools to comment on a ticket, edit its labels, and open PRs;
    the reviewer needs only read tools. canopy's agent definitions deny the dangerous tools by name, but names differ by
    server. On GitHub, the only tool that sets labels, `issue_write`, also creates and closes issues; without it, PRs go
-   unlabeled (D084).
+   unlabeled.
 
 4. **Create a workspace.** In an empty directory, which becomes your workspace, run:
 
@@ -167,7 +100,7 @@ workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART
 
    In `.canopy/config.toml`, fill in your tracker source, the program that reads your tickets into canopy's journal:
    uncomment the table `canopy init` wrote, and the `cmd` for Jira with your site, or for GitHub Issues with your
-   repository (DESIGN §30). canopy reads no ticket any other way, so its config does not load without one. Set
+   repository. canopy reads no ticket any other way, so its config does not load without one. Set
    `tracker.query` in `canopy-workspace.toml`. Point it only at a tracker where everyone who can file a ticket is
    someone you trust, never at a public repository's issues: a ticket is the task, so its author steers your agents,
    with your credentials. Then clone your repository under `repos/`, with an HTTPS URL and a credential helper, since
@@ -178,7 +111,7 @@ workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART
    ```
 
    canopy writes nothing into your repositories and installs nothing else: agent runs load its agent definitions and
-   skills from its own directory (D016, D040).
+   skills from its own directory.
 
 5. **Run it.** Add your label (`agent-ready-<you>` by default) to a ticket, then run
    `canopy loop --dry-run --ticks 1` in the workspace and read the plan.
@@ -191,23 +124,9 @@ workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART
 ## Daily surface
 
 Leave `canopy loop` running (tmux works, or `canopy daemon start`) and work from the web UI it serves at
-`http://127.0.0.1:8765/`. It shows the attention list, every ticket's and task's conversation, plans to edit and
-approve, PRs and canopy's reviews with their findings on the diff, runs, ticks, and worktrees, your chores, memory,
-spend and monthly reports, and settings, with a search box (`/`) over the whole journal. Its guide, opened
-from the foot of the rail, says what each page holds and how to act on it. To look at it without a loop, run
-`uv run python -m canopy.serve --mock --port 8766` in a checkout, after `make ui-build`: it serves the same pages over
-the sample journal in `src/canopy/serve/mock/`, with no sign-in and `mock` shown in the header.
-
-Your part is the one in [The loop](#the-loop): start or label tickets, shape and approve their plans, answer the
-agents' questions, and review their PRs. Humans approve and merge; the agent never does. Only reviewers in
-`trust.trusted_reviewers` send a worker back to a PR on their own; anyone else's comments wait on the attention list as
-`untrusted_review` until you reply.
-
-| A ticket's conversation, waiting on your answer | A run's transcript: each tool call, and what it cost |
-| --- | --- |
-| ![A private ticket's page: its work, runs, decisions, and the worker's question waiting on your answer](ui/e2e/screenshots.spec.ts-snapshots/tickets-ABC-102-dark-root-linux.png) | ![A run's page: its summary and PR, then the transcript of the worker's tool and model calls](ui/e2e/screenshots.spec.ts-snapshots/runs-39-dark-root-linux.png) |
-| **canopy's review of a PR, its findings on the diff** | **What the overseer decided in a tick, and why** |
-| ![A review's page: its summary and verdict, then each finding at the diff lines it names](ui/e2e/screenshots.spec.ts-snapshots/pull-requests-reviews-4-dark-root-linux.png) | ![A tick's page: the overseer's decisions per ticket, a refusal among them, and its session's transcript](ui/e2e/screenshots.spec.ts-snapshots/runs-ticks-2-dark-root-linux.png) |
+`http://127.0.0.1:8765/`: the attention list, every ticket's conversation and plan, the PRs and canopy's reviews of
+them, runs and what they cost, and settings. Its guide, opened from the foot of the rail, says what each page holds
+and how to act on it.
 
 | To | Run |
 | --- | --- |
@@ -218,37 +137,14 @@ agents' questions, and review their PRs. Humans approve and merge; the agent nev
 | Have canopy review a coworker's PR | `canopy start PR_URL --review` |
 | Pause and resume the loop | `canopy pause`, `canopy resume` |
 
-The rest is in `canopy --help`, and in the web UI. `canopy skill --install` teaches your own agent session all of it.
+The rest is in `canopy --help`. `canopy skill --install` teaches your own agent session all of it.
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) goes on from one repository to several, sandboxed workers, and
+troubleshooting.
 
-Optional, in `.canopy/config.toml`: notification sinks for the desktop and Slack (§20), a reviewer agent on PRs (§21),
-chores (§19, [examples/chores/](examples/chores/README.md)), agent memory (§28), and an artifact store (§38).
+## Status
 
-The details are in [docs/design/LOOP.md](docs/design/LOOP.md) and
-[docs/design/CONVERSATIONS.md](docs/design/CONVERSATIONS.md).
-
-## Growing your setup
-
-The install steps set up a workspace of one repository. [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) goes on from
-there, one stage at a time:
-
-- slots that need local files or an install;
-- a pool of a set size, made ahead of time;
-- several repositories sharing one queue;
-- a large Bazel repository with a pool of warm slots.
-
-To run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config, run
-`canopy sandbox setup` and follow [docs/SANDBOX.md](docs/SANDBOX.md). It is opt-in, and not yet proven.
-
-To have your own agent judge how canopy is working for you, from where the spend goes to whether the planner is on the
-right model, paste one of the prompts in [docs/INSIGHTS.md](docs/INSIGHTS.md) into a session with canopy's skill.
-
-## Troubleshooting
-
-- **canopy cannot find `treehouse`:** check that it is on `PATH` (usually by adding `$(go env GOPATH)/bin`). If it is
-  outdated, rerun the pinned install from step 1, or `make treehouse` in a canopy checkout.
-- **The attention list shows `connector_failed`:** a source could not read; its detail names which, and
-  `canopy status` its last run.
-- **Anything else:** check `canopy decisions`, `canopy status`, and the log, `.canopy/canopy.log` in the workspace.
+Pre-alpha, in daily use by its operator since 2026-10-12. Every stage of the loop is built; what is in progress is in
+[docs/roadmap/](docs/roadmap/README.md).
 
 ## Related work
 
@@ -257,9 +153,8 @@ right model, paste one of the prompts in [docs/INSIGHTS.md](docs/INSIGHTS.md) in
   unattended and queue-driven.
 - **GitHub Copilot coding agent, Atlassian Rovo Dev**: hosted equivalents. See [Why this exists](#why-this-exists).
 - **OpenAI Symphony, agent-orchestrator, Hermes Agent Kanban**: open-source loops that dispatch agents from a tracker or
-  board. Why canopy is built anyway, and what their issue trackers taught: D050 and
-  [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
+  board. Why canopy is built anyway, and what their issue trackers taught: [docs/PRIOR_ART.md](docs/PRIOR_ART.md).
 
 ## License
 
-MIT (D046). See [LICENSE](LICENSE). canopy is not supported: issues and pull requests from outside may go unanswered.
+MIT. See [LICENSE](LICENSE). canopy is not supported: issues and pull requests from outside may go unanswered.
