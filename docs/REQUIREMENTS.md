@@ -290,7 +290,7 @@ trivial, without the operator having to say what that means (2026-10-19), and le
 the operator first. When it is unsure, or fails, the work is planned as before. A waived change canopy's own reviewer
 judges high impact is called out to the operator; its size alone is not, since size says little about risk.
 
-### R23. Try a model on one ticket
+### R23. Override a ticket's model
 
 Partial (M58, §13, Each agent's model): each agent's default model is set in `[runtime.models]`, and the operator alone
 overrides it per ticket (`canopy model`, or the ticket's page), checked against the runtime's list. A run records the
@@ -302,7 +302,7 @@ model is OpenCode's default unless the operator's command template names one, wh
 and the journal does not record which model a run used. canopy should choose the model itself: a default the operator
 sets, and an override per ticket that only the operator can set, never the overseer or a worker, checked against the
 models OpenCode has. Each run should record the model it was given, and the one that served it where OpenCode says so,
-and spend should split by model, so that the ticket on the other model can be compared.
+and spend should split by model, so that a ticket's runs on its override can be compared.
 
 ### R24. Personas for planning, reviews, and implementation
 

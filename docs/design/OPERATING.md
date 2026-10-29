@@ -351,7 +351,7 @@ Built: each agent's default in `[runtime.models]`, a chore's own model, variants
 `canopy model` or the ticket's page, the check of a model and its variant before every run the loop starts and a
 tick's overseer, and recording what served (REQUIREMENTS R23).
 
-The operator wants to try a model on one ticket, running its workers on another and comparing what they did and cost,
+The operator wants to override one ticket's model, running its workers on another and comparing what they did and cost,
 and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design
 promises:
 

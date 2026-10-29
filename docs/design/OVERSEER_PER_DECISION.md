@@ -101,7 +101,7 @@ spawning through an intermediate, as §27's server did, which escapes the runtim
 - Runs in parallel. Recommended: not before a queue is measured long enough that a tick's runs hold up the next tick.
 - A model per run, by the subject's rows: the strongest for `ready`, review feedback, and a reply, a cheaper one for the
   rest. Recommended: a private key from phase to model beside `runtime.models`, the operator's alone (T7), with the
-  ticket's override for the overseer (§13) applying to that ticket's runs, so a model tried on a ticket covers its
+  ticket's override for the overseer (§13) applying to that ticket's runs, so a ticket's model override covers its
   overseer too.
 - Whether a tick with a failed run closes `ok`, with an item on that subject. Recommended: yes, once §37's attention
   list is held in code, so one subject's failing run does not hold the list for the rest.

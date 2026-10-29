@@ -53,7 +53,7 @@ Below:
   repository), what the ticket has cost so far, and the persona each of its agents writes in next and the model it
   runs on. See [Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model). Once more than
   one model has served the ticket, a line under its total cost splits it by model, with `none` for runs whose
-  sessions canopy hasn't read: the trial's bill, itemized.
+  sessions canopy hasn't read: the override's bill, itemized.
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
@@ -177,19 +177,19 @@ lacks your pick, so a provider you set up a minute ago isn't turned away for bei
 your pick with a trailing `…` until it's saved, then a green **saved** beside it, in the row itself so nothing below
 jumps. It stays until the ticket's models change again.
 The override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
-**Clear the override**, below the list, where no amount of scrolling hides it. That's how you try a model: one ticket
-on the new one, the rest on the one you trust, and [the spend page](reports#the-spend-page) splits what each cost by
-model once they ran. Each run names the model it asked for while it works, then the model that served it, and both when
-they differ, on its page and in the ticket's Runs panel, so the trial ticket reads straight down the panel and you can
-check it really ran on what you picked.
-
-Under each model sit the variants the runtime lists for it, in the runtime's order, `@high` and the like for a reasoning
-effort; the model's own row, marked **(default)**, is the effort it runs at when no variant is named. So the trial you
-most likely want first, the same model at another effort, is one pick away, as `canopy model KEY openai/gpt-5@high` sets
-it: type `high` to see every model that has one, each named whole, and Enter takes the first. A variant on the button
-follows the model's id, muted. An override replaces your config's model whole, variant included: over a config of
-`openai/gpt-5@high`, picking `openai/gpt-5` itself runs it at the model's default, and the confirmation says config's
-variant no longer applies, lest the trial come back mysteriously cheaper and you credit the model.
+**Clear the override**, below the list, where no amount of scrolling hides it. One ticket can run on a different model
+from the rest, and [the spend page](reports#the-spend-page) splits what each cost by model once they ran. Each run
+names the model it asked for while it works, then the model that served it, and both when they differ, on its page and
+in the ticket's Runs panel, so a ticket with an override reads straight down the panel and you can check it really ran
+on what you picked.
+ Under each model sit the variants the runtime lists for it, in the runtime's order, `@high` and the like for a
+reasoning effort; the model's own row, marked **(default)**, is the effort it runs at when no variant is named. So the
+override you most likely want first, the same model at another effort, is one pick away, as `canopy model KEY
+openai/gpt-5@high` sets it: type `high` to see every model that has one, each named whole, and Enter takes the first. A
+variant on the button follows the model's id, muted. An override replaces your config's model whole, variant included:
+over a config of `openai/gpt-5@high`, picking `openai/gpt-5` itself runs it at the model's default, and the confirmation
+says config's
+variant no longer applies, lest the ticket come back mysteriously cheaper and you credit the model.
 
 The overseer and chores work on no one ticket, so they take only their model in `[runtime.models]`. If a model the
 override names drops off the runtime's list before the next run, that run is refused rather than sent to another

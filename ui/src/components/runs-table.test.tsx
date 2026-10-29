@@ -196,7 +196,7 @@ describe('SubjectRunsTable', () => {
         // An earlier run says the first line of what it said; its page has the rest.
         expect(earlier.getByText('Asked about the color.')).toBeDefined()
         expect(screen.queryByText(/The rest of what it said/u)).toBeNull()
-        // Each names its model too, so the runs of a ticket trying a model read down by model.
+        // Each names its model too, so the runs of a ticket with a model override read down by model.
         expect(earlier.getAllByTestId('run-model').map((model) => model.textContent)).toEqual([
             'model claude-sonnet-4-5',
             'model claude-sonnet-4-5',
