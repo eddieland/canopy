@@ -107,12 +107,11 @@ def high(conn: sqlite3.Connection, tickets: Collection[str], prs: Collection[str
     runs: dict[int, records.ReviewRun] = {}
     for named in (sql.in_("ticket_key", tickets), sql.in_("pr_url", prs)):
         query = (
-            sql.select("*")
-            .from_("review_runs")
+            records.select(records.ReviewRun)
             .where("{}", named)
             .where("revises IS NULL AND status = ?", ReviewRunStatus.DONE)
         )
-        runs.update((run.id, run) for run in records.fetch_all(conn, records.ReviewRun, query))
+        runs.update((run.id, run) for run in query.all(conn))
     latest: dict[str, str] = {}
     found_prs: set[str] = set()
     found_tickets: set[str] = set()

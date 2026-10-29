@@ -398,7 +398,7 @@ def test_the_state_block_carries_the_open_requests(
     run_id = scenario.review(reviews(head(git_pool), PR), reviewer=failing).id
     scenario.tick(dry_run=True)
     section = scenario.state()["reviews"]
-    assert (section["agent_prs"], section["query"]) == (False, None)
+    assert (section["agent_prs"], section.get("query")) == (False, None)
     [requested] = section["requests"]
     assert {k: requested[k] for k in ("url", "review_runs")} == {"url": PR, "review_runs": 1}
     # The overseer matches the PR's URL to a repository by the map's clone URL.

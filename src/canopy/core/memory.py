@@ -75,7 +75,7 @@ SEARCH_COMMAND = "canopy memory search WORDS"
 _NOTES_HEADING = "## Notes from earlier runs"
 _LESSONS_HEADING = "## Lessons from the operator"
 # Every memory's whole row, for each reader to finish.
-_MEMORIES = sql.select("*").from_("memories")
+_MEMORIES = records.select(records.Memory)
 # The step of a walk back through `supersedes` from the ids in `back`.
 _EARLIER = (
     sql.select("m.supersedes").from_("memories m").join("back b ON m.id = b.id").where("m.supersedes IS NOT NULL")
@@ -319,7 +319,7 @@ def record_rendered(conn: sqlite3.Connection, run_id: int, rendered: Rendered) -
 
 def run_memory(conn: sqlite3.Connection, run_id: int) -> records.RunMemory | None:
     """Return what run `run_id`'s prompt was rendered under, or None for a run rendered with every tier off."""
-    return records.fetch_one(conn, records.RunMemory, sql.select("*").from_("run_memory").where("run_id = ?", run_id))
+    return records.select(records.RunMemory).where("run_id = ?", run_id).one(conn)
 
 
 # What a run wrote
@@ -652,13 +652,12 @@ def end_ticket_notes(conn: sqlite3.Connection, key: str, why: str) -> int:
 
 def active_notes(conn: sqlite3.Connection, key: str) -> list[records.Memory]:
     """Return ticket `key`'s active notes, in key order."""
-    return records.fetch_all(
-        conn,
-        records.Memory,
+    return (
         _MEMORIES.where("scope = ?", MemoryScope.TICKET)
         .where("ticket_key = ?", key)
         .where("status = ?", MemoryStatus.ACTIVE)
-        .order_by("key"),
+        .order_by("key")
+        .all(conn)
     )
 
 
@@ -669,13 +668,12 @@ def notes(conn: sqlite3.Connection, key: str | None = None, *, every: bool = Fal
         The notes, by ticket, then key, then newest first.
     """
     statuses = tuple(MemoryStatus) if every else (MemoryStatus.ACTIVE,)
-    return records.fetch_all(
-        conn,
-        records.Memory,
+    return (
         _MEMORIES.where("scope = ?", MemoryScope.TICKET)
         .where("? IS NULL OR ticket_key = ?", key, key)
         .where_in("status", statuses)
-        .order_by("ticket_key, key, id DESC"),
+        .order_by("ticket_key, key, id DESC")
+        .all(conn)
     )
 
 
@@ -711,10 +709,11 @@ def ticket_notes(conn: sqlite3.Connection) -> list[TicketNotes]:
 
 def pending_proposals(conn: sqlite3.Connection) -> list[records.Memory]:
     """Return the proposals waiting on the operator, oldest first."""
-    return records.fetch_all(
-        conn,
-        records.Memory,
-        _MEMORIES.where("scope = ?", MemoryScope.PROPOSAL).where("status = ?", MemoryStatus.PENDING).order_by("id"),
+    return (
+        _MEMORIES.where("scope = ?", MemoryScope.PROPOSAL)
+        .where("status = ?", MemoryStatus.PENDING)
+        .order_by("id")
+        .all(conn)
     )
 
 
@@ -732,10 +731,11 @@ def pending_count(conn: sqlite3.Connection) -> int:
 
 def active_lessons(conn: sqlite3.Connection) -> list[records.Memory]:
     """Return the lessons in force, in key order."""
-    return records.fetch_all(
-        conn,
-        records.Memory,
-        _MEMORIES.where("scope = ?", MemoryScope.LESSON).where("status = ?", MemoryStatus.ACTIVE).order_by("key, id"),
+    return (
+        _MEMORIES.where("scope = ?", MemoryScope.LESSON)
+        .where("status = ?", MemoryStatus.ACTIVE)
+        .order_by("key, id")
+        .all(conn)
     )
 
 
@@ -744,19 +744,18 @@ def past(conn: sqlite3.Connection, scope: MemoryScope, *, limit: int = HISTORY_S
 
     A proposal leaves when rejected, lapsed, promoted, or forgotten; a lesson when replaced or forgotten.
     """
-    return records.fetch_all(
-        conn,
-        records.Memory,
+    return (
         _MEMORIES.where("scope = ?", scope)
         .where_in("status", (MemoryStatus.SUPERSEDED, MemoryStatus.INVALID))
         .order_by("coalesce(invalidated_at, created_at) DESC, id DESC")
-        .limit(limit),
+        .limit(limit)
+        .all(conn)
     )
 
 
 def get(conn: sqlite3.Connection, memory_id: int) -> records.Memory | None:
     """Return memory `memory_id`, or None."""
-    return records.fetch_one(conn, records.Memory, _MEMORIES.where("id = ?", memory_id))
+    return _MEMORIES.where("id = ?", memory_id).one(conn)
 
 
 def history(conn: sqlite3.Connection, memory_id: int) -> list[records.Memory]:
@@ -773,13 +772,12 @@ def history(conn: sqlite3.Connection, memory_id: int) -> list[records.Memory]:
     # UNION, not UNION ALL, so a cycle written into the journal by hand ends the walk rather than looping.
     start = sql.select("id").from_("memories").where("id = ?", memory_id)
     later = sql.select("m.id").from_("memories m").join("ahead a ON m.supersedes = a.id")
-    return records.fetch_all(
-        conn,
-        records.Memory,
+    return (
         _MEMORIES.with_("back(id) AS ({})", sql.union(start, _EARLIER), recursive=True)
         .with_("ahead(id) AS ({})", sql.union(start, later))
         .where("id IN ({})", sql.union(sql.select("id").from_("back"), sql.select("id").from_("ahead")))
-        .order_by("id DESC"),
+        .order_by("id DESC")
+        .all(conn)
     )
 
 
@@ -825,32 +823,28 @@ def origin(conn: sqlite3.Connection, lesson: records.Memory) -> records.Memory |
 
 def written_by(conn: sqlite3.Connection, run_id: int) -> list[records.Memory]:
     """Return what run `run_id` wrote, in the order it wrote it."""
-    return records.fetch_all(conn, records.Memory, _MEMORIES.where("run_id = ?", run_id).order_by("id"))
+    return _MEMORIES.where("run_id = ?", run_id).order_by("id").all(conn)
 
 
 def read_by(conn: sqlite3.Connection, run_id: int) -> list[records.Memory]:
     """Return the memories rendered into run `run_id`'s prompt, by id."""
-    return records.fetch_all(
-        conn,
-        records.Memory,
-        sql.select("m.*")
-        .from_("memories m")
+    return (
+        records.select(records.Memory, "m")
         .join("memory_reads r ON r.memory_id = m.id")
         .where("r.run_id = ?", run_id)
-        .order_by("m.id"),
+        .order_by("m.id")
+        .all(conn)
     )
 
 
 def citations(conn: sqlite3.Connection, run_id: int) -> dict[int, MemoryCited]:
     """Return what run `run_id` said of each memory rendered into its prompt, by id; one it did not cite is left out."""
-    reads = records.fetch_all(
-        conn,
-        records.MemoryRead,
-        sql.select("*")
-        .from_("memory_reads")
+    reads = (
+        records.select(records.MemoryRead)
         .where("run_id = ?", run_id)
         .where("cited IS NOT NULL")
-        .order_by("memory_id"),
+        .order_by("memory_id")
+        .all(conn)
     )
     return {r.memory_id: r.cited for r in reads if r.cited is not None}
 

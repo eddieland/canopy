@@ -41,6 +41,9 @@ class Spend(Model):
     sessions_read_at: datetime | None = None
     """When `canopy loop` last read the runtime's sessions, which the figures count outside canopy; None when it never
     did, and they count none."""
+    budget: SpendMonth | None = None
+    """The local calendar month so far against the operator's monthly budget, as the header shows it; None when no
+    budget is set."""
 
 
 type SpendGroup = Annotated[

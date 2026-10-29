@@ -32,7 +32,6 @@ from canopy.core import (
     recorded_runs,
     records,
     review_runs,
-    sql,
     ticket_models,
 )
 from canopy.core import review_result as result
@@ -361,7 +360,7 @@ def _base(conn: sqlite3.Connection, pr: str) -> str | None:
     Returns:
         The PR's base branch, or None.
     """
-    found = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", pr))
+    found = records.select(records.ObservedPr).where("url = ?", pr).one(conn)
     return found.base_ref if found is not None else None
 
 

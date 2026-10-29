@@ -315,7 +315,9 @@ def seed(directory: Path) -> Backend:
         user_file=user_file,
         models=_models_listed,
         # Read when the e2e tests' frozen clock says it is (`NOW` in ui/e2e/helpers.ts), so it reads as just now.
-        host=lambda _ctx: host.machine(T0 + timedelta(minutes=30)),
+        host=lambda _config, _workspace: host.machine(T0 + timedelta(minutes=30)),
+        samples=host.samples(T0 + timedelta(minutes=30)),
+        sampling=False,
     )
     with backend.open() as ctx:
         db.migrate(ctx.conn, resources.migrations_dir())
@@ -498,7 +500,7 @@ def _models_listed(ctx: Context) -> ModelList:
     Returns:
         Each model a run's session names, once, with its variants.
     """
-    served = records.fetch_all(ctx.conn, records.RunModel, sql.select("*").from_("run_models"))
+    served = records.select(records.RunModel).all(ctx.conn)
     models = frozenset(m.model for m in served)
     return ModelList(models, {m: _VARIANTS.get(m.partition("/")[0], frozenset()) for m in models})
 
