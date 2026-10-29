@@ -72,9 +72,9 @@ Write the plan as markdown to `{{SLOT}}/{{PLAN_OUT}}` with your file writing too
 - `## Summary`: in a few sentences, what this round of feedback asks for, and what the plan does about it.
 - `## Items`: a `### Item <id>: <proposal>, <what it does>` heading for each item you cover, such as `### Item 501:
   change, rename load to fetch`, in the order of your result line: the worker's progress lists the items by these
-  headings, so keep each one short line. Under it, say who wrote it and whether they are trusted, or which check failed,
-  what conflicts, or which blocker merged, what it asks, what you propose and why, and for a `change`, which files and
-  tests it touches and the test that proves it.
+  headings, so keep each to one short line. Under it, say who wrote it and whether they are trusted, or which check
+  failed, what conflicts, or which blocker merged, what it asks, what you propose and why, and for a `change`, which
+  files and tests it touches and the test that proves it.
 - `## Risks`: what the changes could break, and what to watch in review.
 
 Every claim about the code is one you read at the PR's head, not one you guessed. Give names, signatures, and tests, not
