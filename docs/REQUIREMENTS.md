@@ -306,15 +306,14 @@ and spend should split by model, so that a ticket's runs on its override can be 
 
 ### R24. Personas for planning, reviews, and implementation
 
-Partial (M60, §31): the default persona, the shipped ones, a persona per agent in private config, the override per
-ticket, and the operator's choice for one run or one review request are built; M60's live checks remain. Written down
-2026-10-19. The operator wants to give planning, reviews, or implementation a flair of its own by choosing a persona
-for the planner, the reviewer, or the workers: a short file of voice and
-emphasis, chosen by the operator alone, by default for each agent and per ticket. A default persona holds canopy's
-standard personality, taken out of the shipped prompts, so a chosen one replaces that voice rather than competing with
-it. A persona changes how an agent writes and what it weighs, never a guard, a contract, or a model. canopy ships a few,
-and the operator adds or shadows them in private config. Each run records which persona it had, so personas can be
-compared.
+Built (M60, §31): the default persona, the shipped ones, a persona per agent in private config, the override per ticket,
+and the operator's choice for one run or one review request. Written down 2026-10-19. The operator wants to give
+planning, reviews, or implementation a flair of its own by choosing a persona for the planner, the reviewer, or the
+workers: a short file of voice and emphasis, chosen by the operator alone, by default for each agent and per ticket. A
+default persona holds canopy's standard personality, taken out of the shipped prompts, so a chosen one replaces that
+voice rather than competing with it. A persona changes how an agent writes and what it weighs, never a guard, a
+contract, or a model. canopy ships a few, and the operator adds or shadows them in private config. Each run records
+which persona it had, so personas can be compared.
 
 ### R25. One-off private tasks, about no ticket
 
