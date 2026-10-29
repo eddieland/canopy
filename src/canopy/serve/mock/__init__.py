@@ -12,7 +12,8 @@ a chore, and a PR (§6). The
 workspace's policy allows one resume and two reviews, so ABC-100 is at its resume limit in web, where its run 40, a
 `fix-ci` from before a resume fixed CI, counts as one (§8), and PR 88 at its review limit (§22's grants). Run 43,
 running, is a resume for a failed check and review feedback together. The running runs 41 and 43 have the latest tool
-call on each one's row (§8).
+call on each one's row (§8). Every run on T0's day that ended reported its first model call, on the definitions snapshot
+and the runtime's version the history's last week used, so the spend page's weekly hit rate goes on from it (§13).
 Each feature's fixtures are in a module of their own in this package, named for the feature, which `seed` calls: plans,
 memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, the runs'
 transcripts, the months before T0, whose landed tickets the reports page shows, and the machine (a fixed reading).
@@ -25,7 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, LiteralString
 
 from canopy.core import chore_runs, chore_view, config, conversation, db, pools, records, review_runs, sql, workspace
 from canopy.core.context import db_path
@@ -329,6 +330,7 @@ def seed(directory: Path) -> Backend:
             feedback_plans.seed(ctx.conn, ws.state_dir, at, ctx.config.trust, slot_path(root, "web", 3))
             personas.seed(ctx.conn, ctx.config, at)
             tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
+            _first_calls(ctx.conn)
             _attachments(ctx.conn)
             # Last, so the messages their approvals wrote take ids after every other fixture's.
             feedback_plans.seed_states(
@@ -1054,4 +1056,53 @@ def _models(conn: sqlite3.Connection) -> None:
         conn,
         sql.insert_rows("run_models", ("run_table", "run_id", "model", "replies", "cost_usd")),
         served,
+    )
+
+
+# What each kind's first model call was sent on T0's day, before the run's id adds a little, and the share of it read
+# from the cache. A table's name here is fixed, never input (D125).
+_FIRST_CALLS: tuple[tuple[LiteralString, int, float], ...] = (
+    # table, sent, share read from the cache
+    ("ticks", 31_800, 0.86),
+    ("runs", 22_400, 0.88),
+    ("chore_runs", 14_200, 0.74),
+    ("review_runs", 18_600, 0.81),
+    ("task_runs", 22_100, 0.69),
+)
+
+
+def _first_calls(conn: sqlite3.Connection) -> None:
+    """What the first model call of each run on T0's day that ended was sent, read, and wrote, and what it loaded (§13).
+
+    The definitions snapshot and the runtime's version are the history's last week's, so no week of a series on the
+    spend page names a change the fixtures made.
+    """
+    day = at(-12 * 60)
+    for table, sent, hit in _FIRST_CALLS:
+        ended = "started_at >= ? AND ended_at IS NOT NULL AND cost_usd IS NOT NULL"
+        sql.execute(
+            conn,
+            sql.update(table)
+            .set_to("tokens_first_call = ? + id * 97", sent)
+            .set(definitions_digest=history.SNAPSHOT)
+            .where(ended, day),
+        )
+        sql.execute(
+            conn,
+            sql.update(table)
+            # A few points apart from run to run, so a chore's series is not its kind's.
+            .set_to("tokens_first_cache_read = CAST(tokens_first_call * (? - id % 3 * 0.03) AS INTEGER)", hit)
+            .where(ended, day),
+        )
+        sql.execute(
+            conn,
+            sql.update(table)
+            .set_to("tokens_first_cache_write = tokens_first_call - tokens_first_cache_read")
+            .where(ended, day),
+        )
+    sql.execute(
+        conn,
+        sql.update("run_model_reads")
+        .set(runtime_version=history.RUNTIME)
+        .where("status = ? AND runtime_version IS NULL", "found"),
     )
