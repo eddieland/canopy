@@ -54,8 +54,8 @@ def named(conn: sqlite3.Connection, numbers: Collection[int]) -> dict[int, recor
     Returns:
         Each item numbered, by its number; a number that names none is left out.
     """
-    query = sql.select("*").from_("item_numbers").where_in("number", numbers)
-    return {n.number: n for n in records.fetch_all(conn, records.ItemNumber, query)}
+    query = records.select(records.ItemNumber).where_in("number", numbers)
+    return {n.number: n for n in query.all(conn)}
 
 
 def describe(item: records.ItemNumber) -> str:

@@ -62,12 +62,10 @@ def agent_of(kind: str) -> Agent:
 
 def override(conn: sqlite3.Connection, ticket: str, agent: Agent) -> str | None:
     """Return the model the operator chose for `ticket`'s `agent`, or None when they chose none."""
-    found = records.fetch_one(
-        conn,
-        records.TicketOverride,
-        sql.select("*")
-        .from_("ticket_overrides")
-        .where("ticket_key = ? AND agent = ? AND kind = ?", ticket, agent, OverrideKind.MODEL),
+    found = (
+        records.select(records.TicketOverride)
+        .where("ticket_key = ? AND agent = ? AND kind = ?", ticket, agent, OverrideKind.MODEL)
+        .one(conn)
     )
     return found.value if found is not None else None
 

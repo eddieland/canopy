@@ -73,14 +73,12 @@ def current(conn: sqlite3.Connection, now: datetime | None = None) -> Notice | N
         The one notice that is neither ended nor lapsed, or None.
     """
     moment = db.format_time(now or datetime.now(UTC))
-    row = records.fetch_one(
-        conn,
-        records.Notice,
-        sql.select("*")
-        .from_("notices")
+    row = (
+        records.select(records.Notice)
         .where("ended_at IS NULL AND lapses_at > ?", moment)
         .order_by("id DESC")
-        .limit(1),
+        .limit(1)
+        .one(conn)
     )
     return _notice(row) if row is not None else None
 
@@ -126,7 +124,7 @@ def set_notice(conn: sqlite3.Connection, text: str, *, minutes: int | None, chan
         )
         lapses_at = db.format_time(moment + timedelta(minutes=lasts))
         cur = sql.execute(conn, sql.insert("notices", body=body, set_at=stamp, channel=channel, lapses_at=lapses_at))
-    [row] = records.fetch_all(conn, records.Notice, sql.select("*").from_("notices").where("id = ?", cur.lastrowid))
+    [row] = records.select(records.Notice).where("id = ?", cur.lastrowid).all(conn)
     return _notice(row)
 
 
@@ -141,7 +139,7 @@ def clear(conn: sqlite3.Connection, *, channel: str) -> Notice | None:
         if held is None:
             return None
         sql.execute(conn, sql.update("notices").set(ended_at=db.now(), ended_channel=channel).where("id = ?", held.id))
-    [row] = records.fetch_all(conn, records.Notice, sql.select("*").from_("notices").where("id = ?", held.id))
+    [row] = records.select(records.Notice).where("id = ?", held.id).all(conn)
     return _notice(row)
 
 
@@ -152,16 +150,14 @@ def recent(conn: sqlite3.Connection, now: datetime) -> list[Notice]:
         Those notices; none when the operator set none lately.
     """
     since = db.format_time(now - timedelta(days=RECENT_DAYS))
-    rows = records.fetch_all(
-        conn,
-        records.Notice,
-        sql.select("*")
-        .from_("notices")
+    rows = (
+        records.select(records.Notice)
         .where("lapses_at > ?", since)
         .where("ended_at IS NULL OR ended_at > ?", since)
         .where("set_at <= ?", db.format_time(now))
         .order_by("id DESC")
-        .limit(RECENT_LIMIT),
+        .limit(RECENT_LIMIT)
+        .all(conn)
     )
     return [_notice(r) for r in rows]
 

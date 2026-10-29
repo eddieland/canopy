@@ -276,11 +276,7 @@ def raised(
     handled = _Handled(conn, key)
     found: list[Raised] = []
     for pr in prs:
-        observed = records.fetch_one(
-            conn,
-            records.ObservedPr,
-            sql.select("*").from_("observed_prs").where("url = ?", pr),
-        )
+        observed = records.select(records.ObservedPr).where("url = ?", pr).one(conn)
         if observed is None or observed.head_sha is None:
             continue
         head = observed.head_sha
@@ -361,10 +357,8 @@ def blockers(conn: sqlite3.Connection, plan_id: int) -> dict[tuple[str, int], st
     Returns:
         The blockers' PR URLs, from the plan's snapshot; none for a plan recorded before blockers were items.
     """
-    heads = records.fetch_all(
-        conn,
-        records.FeedbackPlanPr,
-        sql.select("*").from_("feedback_plan_prs").where("plan_id = ? AND merged_blocker IS NOT NULL", plan_id),
+    heads = (
+        records.select(records.FeedbackPlanPr).where("plan_id = ? AND merged_blocker IS NOT NULL", plan_id).all(conn)
     )
     return {
         (h.pr_url, blocker_id(h.pr_url, h.head_sha, h.merged_blocker)): h.merged_blocker
@@ -379,16 +373,8 @@ def check_names(conn: sqlite3.Connection, plan_id: int) -> dict[tuple[str, int],
     Returns:
         The names, from the plan's snapshot; none for a plan recorded before snapshots were.
     """
-    heads = records.fetch_all(
-        conn,
-        records.FeedbackPlanPr,
-        sql.select("*").from_("feedback_plan_prs").where("plan_id = ?", plan_id),
-    )
-    checks = records.fetch_all(
-        conn,
-        records.FeedbackPlanCheck,
-        sql.select("*").from_("feedback_plan_checks").where("plan_id = ?", plan_id),
-    )
+    heads = records.select(records.FeedbackPlanPr).where("plan_id = ?", plan_id).all(conn)
+    checks = records.select(records.FeedbackPlanCheck).where("plan_id = ?", plan_id).all(conn)
     at = {h.pr_url: h.head_sha for h in heads if h.head_sha is not None}
     return {(c.pr_url, check_id(c.pr_url, at[c.pr_url], c.name)): c.name for c in checks if c.pr_url in at}
 
@@ -415,11 +401,7 @@ def take(
     conflicts: dict[str, bool | None] = {}
     stacked: dict[str, str | None] = {}
     for pr in prs:
-        observed = records.fetch_one(
-            conn,
-            records.ObservedPr,
-            sql.select("*").from_("observed_prs").where("url = ?", pr),
-        )
+        observed = records.select(records.ObservedPr).where("url = ?", pr).one(conn)
         head = None if observed is None else observed.head_sha
         heads[pr] = head
         conflicts[pr] = None if observed is None else observe.conflicts(observed)
@@ -473,11 +455,7 @@ def changes(conn: sqlite3.Connection, trust: Trust, plan: records.FeedbackPlan, 
     Returns:
         The changes, heads and checks first, then by PR and item, oldest first; empty when the plan is not stale.
     """
-    heads = records.fetch_all(
-        conn,
-        records.FeedbackPlanPr,
-        sql.select("*").from_("feedback_plan_prs").where("plan_id = ?", plan.id).order_by("pr_url"),
-    )
+    heads = records.select(records.FeedbackPlanPr).where("plan_id = ?", plan.id).order_by("pr_url").all(conn)
     if not heads:
         return []
     skip = not_ci(conn, ws, (h.pr_url for h in heads))
@@ -563,7 +541,7 @@ def record_values(conn: sqlite3.Connection, ws: Workspace, plan_id: int, prs: Co
     skip = not_ci(conn, ws, prs)
     rows: list[tuple[int, str, MoveKind, str, str, str]] = []
     for pr in prs:
-        found = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", pr))
+        found = records.select(records.ObservedPr).where("url = ?", pr).one(conn)
         if found is None:
             continue
         rows.append((plan_id, pr, MoveKind.HEAD, "", found.head_sha or "", now))
@@ -590,11 +568,7 @@ def moved_at(conn: sqlite3.Connection, plan_id: int, found: Iterable[Change], no
     """
     held = {
         (m.pr_url, m.kind, m.name): m
-        for m in records.fetch_all(
-            conn,
-            records.FeedbackPlanMove,
-            sql.select("*").from_("feedback_plan_moves").where("plan_id = ?", plan_id),
-        )
+        for m in records.select(records.FeedbackPlanMove).where("plan_id = ?", plan_id).all(conn)
     }
     latest: datetime | None = None
     for c in found:
@@ -642,11 +616,7 @@ def _threads(
     Returns:
         The items, oldest first.
     """
-    rows = records.fetch_all(
-        conn,
-        records.ObservedReview,
-        sql.select("*").from_("observed_reviews").where("pr_url = ?", pr).order_by("created_at, item, id"),
-    )
+    rows = records.select(records.ObservedReview).where("pr_url = ?", pr).order_by("created_at, item, id").all(conn)
     kept = [r for r in rows if not _skipped(r, trust, sent)]
     covered = _covered_comments(conn, key, pr) if key is not None else frozenset[int]()
     by_thread: dict[str, list[records.ObservedReview]] = {}
@@ -781,11 +751,7 @@ def _seen(conn: sqlite3.Connection, plan_id: int) -> dict[Key, records.FeedbackP
     Returns:
         Its snapshot's items and replies.
     """
-    rows = records.fetch_all(
-        conn,
-        records.FeedbackPlanSeen,
-        sql.select("*").from_("feedback_plan_seen").where("plan_id = ?", plan_id),
-    )
+    rows = records.select(records.FeedbackPlanSeen).where("plan_id = ?", plan_id).all(conn)
     return {(r.pr_url, PlanItem(r.item), r.item_id): r for r in rows}
 
 
@@ -916,10 +882,8 @@ def _checks_at(conn: sqlite3.Connection, pr: str, head: str | None) -> list[reco
     """
     if head is None:
         return []
-    return records.fetch_all(
-        conn,
-        records.ObservedCheck,
-        sql.select("*").from_("observed_checks").where("pr_url = ? AND head_sha = ?", pr, head).order_by("name"),
+    return (
+        records.select(records.ObservedCheck).where("pr_url = ? AND head_sha = ?", pr, head).order_by("name").all(conn)
     )
 
 
@@ -936,18 +900,14 @@ def _moved(
         went, and a merged blocker that came or went; empty while the reads hold nothing of the PR.
     """
     pr = then.pr_url
-    observed = records.fetch_one(conn, records.ObservedPr, sql.select("*").from_("observed_prs").where("url = ?", pr))
+    observed = records.select(records.ObservedPr).where("url = ?", pr).one(conn)
     if observed is None:
         return []
     if observed.head_sha != then.head_sha:
         return [Change(Changed.HEAD, pr, was=then.head_sha, now=observed.head_sha)]
     was = {
         c.name: c.conclusion
-        for c in records.fetch_all(
-            conn,
-            records.FeedbackPlanCheck,
-            sql.select("*").from_("feedback_plan_checks").where("plan_id = ? AND pr_url = ?", plan_id, pr),
-        )
+        for c in records.select(records.FeedbackPlanCheck).where("plan_id = ? AND pr_url = ?", plan_id, pr).all(conn)
     }
     found = [
         Change(Changed.CHECK, pr, name=c.name, was=_str(was.get(c.name)), now=_str(c.conclusion))
@@ -1084,22 +1044,18 @@ def _covered(conn: sqlite3.Connection, plan_id: int, seen: Mapping[Key, records.
         A change for each, in the plan's order; an item the reads no longer hold has none.
     """
     found: list[Change] = []
-    covered = records.fetch_all(
-        conn,
-        records.FeedbackPlanItem,
-        sql.select("*")
-        .from_("feedback_plan_items")
+    covered = (
+        records.select(records.FeedbackPlanItem)
         .where("plan_id = ?", plan_id)
         .where_in("item", (PlanItem.REVIEW, PlanItem.COMMENT))
-        .order_by("number"),
+        .order_by("number")
+        .all(conn)
     )
     for i in covered:
-        row = records.fetch_one(
-            conn,
-            records.ObservedReview,
-            sql.select("*")
-            .from_("observed_reviews")
-            .where("pr_url = ? AND item = ? AND id = ?", i.pr_url, i.item, i.item_id),
+        row = (
+            records.select(records.ObservedReview)
+            .where("pr_url = ? AND item = ? AND id = ?", i.pr_url, i.item, i.item_id)
+            .one(conn)
         )
         then = seen.get((i.pr_url, i.item, i.item_id))
         if row is None or then is None:

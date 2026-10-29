@@ -53,11 +53,7 @@ def reviews_on(conn: sqlite3.Connection, config: Config) -> bool:
 
 def open_requests(conn: sqlite3.Connection) -> list[records.ReviewRequest]:
     """Return the open requests, oldest first."""
-    return records.fetch_all(
-        conn,
-        records.ReviewRequest,
-        sql.select("*").from_("review_requests").where("ended_at IS NULL").order_by("id"),
-    )
+    return records.select(records.ReviewRequest).where("ended_at IS NULL").order_by("id").all(conn)
 
 
 def waiting_requests(conn: sqlite3.Connection) -> list[records.ReviewRequest]:
@@ -65,42 +61,28 @@ def waiting_requests(conn: sqlite3.Connection) -> list[records.ReviewRequest]:
 
     A request whose review ended any way but `done` waits again, since only a `done` review ends it.
     """
-    return records.fetch_all(
-        conn,
-        records.ReviewRequest,
-        sql.select("*")
-        .from_("review_requests q")
+    return (
+        records.select(records.ReviewRequest, "q")
         .where("q.ended_at IS NULL")
         .where("NOT EXISTS (SELECT 1 FROM review_runs r WHERE r.pr_url = q.pr_url AND r.status = 'running')")
-        .order_by("q.id DESC"),
+        .order_by("q.id DESC")
+        .all(conn)
     )
 
 
 def open_request(conn: sqlite3.Connection, pr_url: str) -> records.ReviewRequest | None:
     """Return the PR's open request, or None when it has none."""
-    return records.fetch_one(
-        conn,
-        records.ReviewRequest,
-        sql.select("*").from_("review_requests").where("pr_url = ? AND ended_at IS NULL", pr_url),
-    )
+    return records.select(records.ReviewRequest).where("pr_url = ? AND ended_at IS NULL", pr_url).one(conn)
 
 
 def latest_request(conn: sqlite3.Connection, pr_url: str) -> records.ReviewRequest | None:
     """Return the PR's latest request, open or ended, or None when the operator never asked for it to be reviewed."""
-    return records.fetch_one(
-        conn,
-        records.ReviewRequest,
-        sql.select("*").from_("review_requests").where("pr_url = ?", pr_url).order_by("id DESC").limit(1),
-    )
+    return records.select(records.ReviewRequest).where("pr_url = ?", pr_url).order_by("id DESC").limit(1).one(conn)
 
 
 def personas_of(conn: sqlite3.Connection, request_id: int) -> list[str]:
     """Return the personas the operator chose for request `request_id`'s reviews, in the order chosen; none for none."""
-    found = records.fetch_all(
-        conn,
-        records.ReviewRequestPersona,
-        sql.select("*").from_("review_request_personas").where("request_id = ?", request_id).order_by("rowid"),
-    )
+    found = records.select(records.ReviewRequestPersona).where("request_id = ?", request_id).order_by("rowid").all(conn)
     return [p.persona for p in found]
 
 
@@ -116,10 +98,11 @@ def answered_by(conn: sqlite3.Connection, runs: Iterable[records.ReviewRun]) -> 
     asked = [r for r in runs if r.purpose == PURPOSE and r.revises is None]
     if not asked:
         return {}
-    made = records.fetch_all(
-        conn,
-        records.ReviewRequest,
-        sql.select("*").from_("review_requests").where_in("pr_url", sorted({r.pr_url for r in asked})).order_by("id"),
+    made = (
+        records.select(records.ReviewRequest)
+        .where_in("pr_url", sorted({r.pr_url for r in asked}))
+        .order_by("id")
+        .all(conn)
     )
     found: dict[int, int] = {}
     for run in asked:
@@ -274,14 +257,12 @@ def stop(conn: sqlite3.Connection, ref: conversation.Ref) -> Stopped:
         if found is None:
             raise conversation.Refused("not_requested", f"{url} has no open review request to stop")
         _end(conn, found.id, STOPPED)
-        running = records.fetch_one(
-            conn,
-            records.ReviewRun,
-            sql.select("*")
-            .from_("review_runs")
+        running = (
+            records.select(records.ReviewRun)
             .where("pr_url = ? AND status = 'running'", url)
             .order_by("id DESC")
-            .limit(1),
+            .limit(1)
+            .one(conn)
         )
     return Stopped(request=found, running=running)
 

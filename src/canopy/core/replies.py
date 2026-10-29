@@ -95,7 +95,7 @@ def record_rendered(conn: sqlite3.Connection, run_id: int, rendered: Rendered) -
 
 def run_replies(conn: sqlite3.Connection, run_id: int) -> records.RunReplies | None:
     """Return what run `run_id`'s prompt was rendered under, or None for a run of a kind that comments nowhere."""
-    return records.fetch_one(conn, records.RunReplies, sql.select("*").from_("run_replies").where("run_id = ?", run_id))
+    return records.select(records.RunReplies).where("run_id = ?", run_id).one(conn)
 
 
 def posted_values(marks: str, label: str) -> dict[str, str]:

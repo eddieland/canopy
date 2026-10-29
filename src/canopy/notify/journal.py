@@ -30,7 +30,7 @@ def newest_event_id(conn: sqlite3.Connection) -> int:
 
 def sink(conn: sqlite3.Connection, name: str) -> records.NotifySink | None:
     """Return sink `name`'s row, or None if it has never been published to."""
-    return records.fetch_one(conn, records.NotifySink, sql.select("*").from_("notify_sinks").where("name = ?", name))
+    return records.select(records.NotifySink).where("name = ?", name).one(conn)
 
 
 def ensure_sink(conn: sqlite3.Connection, name: str) -> records.NotifySink:
@@ -78,14 +78,13 @@ def events_after(
     if not groups:
         return []
     q = (
-        sql.select("*")
-        .from_("notify_events")
+        records.select(records.NotifyEvent)
         .where("id > ?", cursor)
         .where("id <= ?", upto if upto is not None else newest_event_id(conn))
         .where_in("grp", groups)
         .order_by("id")
     )
-    return records.fetch_all(conn, records.NotifyEvent, q)
+    return q.all(conn)
 
 
 def prune_events(conn: sqlite3.Connection, now: datetime) -> int:

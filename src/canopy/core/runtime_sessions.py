@@ -100,7 +100,7 @@ def last_read(conn: sqlite3.Connection) -> records.RuntimeSessionRead | None:
     Returns:
         Its one row; None before the first read.
     """
-    return records.fetch_one(conn, records.RuntimeSessionRead, sql.select("*").from_("runtime_session_reads"))
+    return records.select(records.RuntimeSessionRead).one(conn)
 
 
 def record(conn: sqlite3.Connection, page: SessionPage, *, now: str | None = None) -> None:
@@ -194,8 +194,8 @@ def of_session(conn: sqlite3.Connection, session_id: str) -> records.RuntimeSess
     Returns:
         The session as the runtime last recorded it; None when none was read.
     """
-    query = sql.select("*").from_("runtime_sessions").where("session_id = ?", session_id)
-    return records.fetch_one(conn, records.RuntimeSession, query)
+    query = records.select(records.RuntimeSession).where("session_id = ?", session_id)
+    return query.one(conn)
 
 
 def models_of(conn: sqlite3.Connection, session_id: str) -> list[records.RuntimeSessionModel]:
@@ -205,12 +205,9 @@ def models_of(conn: sqlite3.Connection, session_id: str) -> list[records.Runtime
         A row per model; empty for a session not read, or that made no model call.
     """
     query = (
-        sql.select("*")
-        .from_("runtime_session_models")
-        .where("session_id = ?", session_id)
-        .order_by("cost_usd DESC, model")
+        records.select(records.RuntimeSessionModel).where("session_id = ?", session_id).order_by("cost_usd DESC, model")
     )
-    return records.fetch_all(conn, records.RuntimeSessionModel, query)
+    return query.all(conn)
 
 
 def sessions_in(since: str, until: str | None, state_dir: Path) -> sql.Select:

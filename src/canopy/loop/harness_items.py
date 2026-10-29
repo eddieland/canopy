@@ -183,7 +183,7 @@ def _from_rows(ctx: Context, subjects: _Subjects, limits: _Limits, now: datetime
     """
     if subjects.own is None:
         return
-    observed = records.fetch_all(ctx.conn, records.ObservedPr, sql.select("*").from_("observed_prs"))
+    observed = records.select(records.ObservedPr).all(ctx.conn)
     heads = {p.url: p.head_sha for p in observed}
     for key in sorted(subjects.keys):
         units = subjects.units.get(key, ())
@@ -242,8 +242,8 @@ def _stuck_check(ctx: Context, repo: str, url: str, head: str, now: datetime) ->
         The item's detail, naming the check and the map's key that gives it a role, or None.
     """
     roles = ctx.workspace.check_roles(repo)
-    query = sql.select("*").from_("observed_checks").where("pr_url = ? AND head_sha = ?", url, head)
-    checks = records.fetch_all(ctx.conn, records.ObservedCheck, query)
+    query = records.select(records.ObservedCheck).where("pr_url = ? AND head_sha = ?", url, head)
+    checks = query.all(ctx.conn)
     ci = [c for c in checks if roles.get(c.name, CheckRole.CI) is CheckRole.CI]
     pending = [c.name for c in ci if c.status is not CheckStatus.COMPLETED]
     finished = [c for c in ci if c.status is CheckStatus.COMPLETED]

@@ -73,11 +73,7 @@ def find(conn: sqlite3.Connection, run_id: int, number: int) -> records.Draft:
     Raises:
         Refused: (`unknown`) the run has no such draft.
     """
-    found = records.fetch_one(
-        conn,
-        records.Draft,
-        sql.select("*").from_("drafts").where("run_id = ?", run_id).where("number = ?", number),
-    )
+    found = records.select(records.Draft).where("run_id = ?", run_id).where("number = ?", number).one(conn)
     if found is None:
         raise conversation.Refused("unknown", f"run {run_id} has no draft {number}")
     return found
@@ -470,18 +466,16 @@ def _newer_comments(conn: sqlite3.Connection, draft: records.Draft) -> list[reco
         .where("r.id = o.review_id")
         .where("r.state = ?", ReviewState.PENDING)
     )
-    return records.fetch_all(
-        conn,
-        records.ObservedReview,
-        sql.select("*")
-        .from_("observed_reviews o")
+    return (
+        records.select(records.ObservedReview, "o")
         .where("o.pr_url = ?", draft.pr_url)
         .where("o.item = ?", ReviewItem.COMMENT)
         .where("o.thread_id = ?", draft.thread_id)
         .where("o.created_at > ?", draft.basis)
         .where("o.id NOT IN ({})", sent)
         .where("NOT EXISTS ({})", pending)
-        .order_by("o.created_at, o.id"),
+        .order_by("o.created_at, o.id")
+        .all(conn)
     )
 
 
@@ -836,14 +830,12 @@ def settle_by_read(conn: sqlite3.Connection, whole: Iterable[str]) -> list[recor
     prs = sorted(set(whole))
     with db.transaction(conn):
         for pr in prs:
-            for d in records.fetch_all(
-                conn,
-                records.Draft,
-                sql.select("*")
-                .from_("drafts")
+            for d in (
+                records.select(records.Draft)
                 .where("pr_url = ?", pr)
                 .where_in("status", (DraftStatus.UNCONFIRMED, DraftStatus.STAGED))
-                .where("pending_review_id IS NOT NULL"),
+                .where("pending_review_id IS NOT NULL")
+                .all(conn)
             ):
                 if d.status is DraftStatus.UNCONFIRMED:
                     _settle_one(conn, d)

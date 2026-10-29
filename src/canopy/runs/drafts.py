@@ -42,7 +42,7 @@ from canopy.infra import logs
 # The longest ticket URL a draft may name; the post command checks the rest.
 MAX_URL = 2048
 # Every draft's whole row, for each reader to finish.
-_DRAFTS = sql.select("*").from_("drafts")
+_DRAFTS = records.select(records.Draft)
 #: The stance a thread's draft takes when it does what its plan item proposed, for the proposals that draft a reply.
 _PROPOSED_STANCE: Mapping[Proposal, DraftStance] = {
     Proposal.CHANGE: DraftStance.CHANGED,
@@ -231,15 +231,13 @@ def _plan_item(
     Returns:
         The item's number, or None when the plan covers no item on that thread.
     """
-    covered = records.fetch_all(
-        conn,
-        records.FeedbackPlanItem,
-        sql.select("*")
-        .from_("feedback_plan_items")
+    covered = (
+        records.select(records.FeedbackPlanItem)
         .where("plan_id = ?", plan_id)
         .where("pr_url = ?", pr)
         .where("item = ?", ReviewItem.COMMENT)
-        .order_by("number"),
+        .order_by("number")
+        .all(conn)
     )
     thread = thread or _thread_of(conn, plan_id, pr, comment)
     for item in covered:
@@ -432,10 +430,11 @@ def check(conn: sqlite3.Connection, whole: Collection[str]) -> list[records.Draf
     """
     if not whole:
         return []
-    pending = records.fetch_all(
-        conn,
-        records.Draft,
-        _DRAFTS.where("status = ?", DraftStatus.UNCHECKED).where_in("pr_url", sorted(whole)).order_by("run_id, number"),
+    pending = (
+        _DRAFTS.where("status = ?", DraftStatus.UNCHECKED)
+        .where_in("pr_url", sorted(whole))
+        .order_by("run_id, number")
+        .all(conn)
     )
     now = db.now()
     with db.transaction(conn):
@@ -541,7 +540,7 @@ def _refuse(conn: sqlite3.Connection, draft: records.Draft, why: str) -> None:
 
 def get(conn: sqlite3.Connection, draft_id: int) -> records.Draft | None:
     """Return draft `draft_id`, or None."""
-    return records.fetch_one(conn, records.Draft, _DRAFTS.where("id = ?", draft_id))
+    return _DRAFTS.where("id = ?", draft_id).one(conn)
 
 
 def of_run(conn: sqlite3.Connection, run_id: int) -> list[records.Draft]:
@@ -550,7 +549,7 @@ def of_run(conn: sqlite3.Connection, run_id: int) -> list[records.Draft]:
     Returns:
         The drafts, whatever their status.
     """
-    return records.fetch_all(conn, records.Draft, _DRAFTS.where("run_id = ?", run_id).order_by("number"))
+    return _DRAFTS.where("run_id = ?", run_id).order_by("number").all(conn)
 
 
 def text_of(conn: sqlite3.Connection, draft_id: int) -> records.DraftVersion:
@@ -562,10 +561,8 @@ def text_of(conn: sqlite3.Connection, draft_id: int) -> records.DraftVersion:
     Raises:
         LookupError: The draft has no version, which `record_run` never writes.
     """
-    found = records.fetch_one(
-        conn,
-        records.DraftVersion,
-        sql.select("*").from_("draft_versions").where("draft_id = ?", draft_id).order_by("version DESC").limit(1),
+    found = (
+        records.select(records.DraftVersion).where("draft_id = ?", draft_id).order_by("version DESC").limit(1).one(conn)
     )
     if found is None:
         raise LookupError(f"draft {draft_id} has no text")
@@ -605,19 +602,13 @@ def from_plan(conn: sqlite3.Connection, draft: records.Draft) -> FromPlan | None
     run = sql.execute(conn, sql.select("feedback_plan_id").from_("runs").where("id = ?", draft.run_id)).fetchone()
     if run is None or run["feedback_plan_id"] is None:
         return None
-    item = records.fetch_one(
-        conn,
-        records.FeedbackPlanItem,
-        sql.select("*")
-        .from_("feedback_plan_items")
+    item = (
+        records.select(records.FeedbackPlanItem)
         .where("plan_id = ?", int(run["feedback_plan_id"]))
-        .where("number = ?", draft.plan_item),
+        .where("number = ?", draft.plan_item)
+        .one(conn)
     )
-    own = records.fetch_one(
-        conn,
-        records.DraftVersion,
-        sql.select("*").from_("draft_versions").where("draft_id = ?", draft.id).where("version = 1"),
-    )
+    own = records.select(records.DraftVersion).where("draft_id = ?", draft.id).where("version = 1").one(conn)
     if item is None or own is None:
         return None
     departs = (

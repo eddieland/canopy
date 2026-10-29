@@ -496,7 +496,7 @@ def test_a_review_records_the_prs_own_title(reviewing: CanopyEnv, scenario: Scen
     scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports({**FINDINGS, "pr_title": "Retry the\n  queue"}))
     # A result without one, as an older override prints, records none.
     scenario.review(reviews(head(git_pool), f"{PR}0"), reviewer=reviewer_reports(CLEAN))
-    titles = {str(r["url"]): r["pr_title"] for r in pr_list.pull_requests(scenario.conn, 10)}
+    titles = {r.url: r.pr_title for r in pr_list.pull_requests(scenario.conn, 10)}
     assert titles == {PR: "Retry the queue", f"{PR}0": None}  # on one line
 
 

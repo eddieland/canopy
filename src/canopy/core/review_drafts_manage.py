@@ -775,13 +775,11 @@ def settle_by_read(conn: sqlite3.Connection, whole: Iterable[str]) -> list[recor
         The drafts settled, as they now stand.
     """
     with db.transaction(conn):
-        waiting = records.fetch_all(
-            conn,
-            records.ReviewDraft,
-            sql.select("*")
-            .from_("review_drafts")
+        waiting = (
+            records.select(records.ReviewDraft)
             .where_in("pr_url", sorted(set(whole)))
-            .where_in("status", (ReviewDraftStatus.UNCONFIRMED, ReviewDraftStatus.STAGED)),
+            .where_in("status", (ReviewDraftStatus.UNCONFIRMED, ReviewDraftStatus.STAGED))
+            .all(conn)
         )
         settled = [draft.id for draft in waiting if _settle_one(conn, draft)]
     return [d for d in (review_drafts.get(conn, i) for i in settled) if d is not None]
@@ -793,14 +791,12 @@ def _settle_one(conn: sqlite3.Connection, draft: records.ReviewDraft) -> bool:
     Returns:
         Whether it is settled; False while a staged review is pending.
     """
-    review = records.fetch_one(
-        conn,
-        records.ObservedReview,
-        sql.select("*")
-        .from_("observed_reviews")
+    review = (
+        records.select(records.ObservedReview)
         .where("pr_url = ?", draft.pr_url)
         .where("item = ?", ReviewItem.REVIEW)
-        .where("id = ?", draft.pending_review_id),
+        .where("id = ?", draft.pending_review_id)
+        .one(conn)
     )
     staged = draft.status is ReviewDraftStatus.STAGED
     if review is not None and review.state is ReviewState.PENDING:
@@ -812,15 +808,13 @@ def _settle_one(conn: sqlite3.Connection, draft: records.ReviewDraft) -> bool:
         why = "the review you staged was deleted on GitHub" if staged else "the read found nothing posted"
         _unclaim(conn, draft.id, why=why, pending=None)
         return True
-    comments = records.fetch_all(
-        conn,
-        records.ObservedReview,
-        sql.select("*")
-        .from_("observed_reviews")
+    comments = (
+        records.select(records.ObservedReview)
         .where("pr_url = ?", draft.pr_url)
         .where("item = ?", ReviewItem.COMMENT)
         .where("review_id = ?", review.id)
-        .order_by("created_at, id"),
+        .order_by("created_at, id")
+        .all(conn)
     )
     sql.execute(
         conn,

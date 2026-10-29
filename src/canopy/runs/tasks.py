@@ -101,12 +101,12 @@ def submit(
 
 def get(conn: sqlite3.Connection, task_id: int) -> records.Task | None:
     """Return task `task_id`, or None if there is none."""
-    return records.fetch_one(conn, records.Task, sql.select("*").from_("tasks").where("id = ?", task_id))
+    return records.select(records.Task).where("id = ?", task_id).one(conn)
 
 
 def every(conn: sqlite3.Connection) -> list[records.Task]:
     """Return every task, the newest first: none is ever deleted (DESIGN §36)."""
-    return records.fetch_all(conn, records.Task, sql.select("*").from_("tasks").order_by("id DESC"))
+    return records.select(records.Task).order_by("id DESC").all(conn)
 
 
 def queued(conn: sqlite3.Connection) -> list[records.Task]:
@@ -127,14 +127,13 @@ def queued(conn: sqlite3.Connection) -> list[records.Task]:
         conversation.TASK,
     )
     query = (
-        sql.select("*")
-        .from_("tasks")
+        records.select(records.Task)
         .where("stopped_at IS NULL")
         .where("NOT EXISTS (SELECT 1 FROM task_runs r WHERE r.task_id = tasks.id AND r.status = 'running')")
         .where("{} OR {}", never_run, replied)
         .order_by("id")
     )
-    return records.fetch_all(conn, records.Task, query)
+    return query.all(conn)
 
 
 def standing(
@@ -199,8 +198,7 @@ def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
     """
     # Each task's latest question, as `conversation.task_question` reads one, for every task at once.
     query = (
-        sql.select("m.*")
-        .from_("messages m")
+        records.select(records.Message, "m")
         .join("tasks t ON m.subject_id = CAST(t.id AS TEXT)")
         .where("m.subject_kind = ? AND m.kind = 'question' AND t.stopped_at IS NULL", conversation.TASK)
         .where(
@@ -213,9 +211,7 @@ def awaiting(conn: sqlite3.Connection) -> list[Awaiting]:
         )
         .order_by("t.id")
     )
-    return [
-        Awaiting(int(m.subject_id), m.id, m.task_run_id, m.at) for m in records.fetch_all(conn, records.Message, query)
-    ]
+    return [Awaiting(int(m.subject_id), m.id, m.task_run_id, m.at) for m in query.all(conn)]
 
 
 def messages_of(conn: sqlite3.Connection, task_id: int) -> list[records.Message]:
@@ -225,12 +221,11 @@ def messages_of(conn: sqlite3.Connection, task_id: int) -> list[records.Message]
         The messages, by id.
     """
     query = (
-        sql.select("*")
-        .from_("messages")
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ?", conversation.TASK, str(task_id))
         .order_by("id")
     )
-    return records.fetch_all(conn, records.Message, query)
+    return query.all(conn)
 
 
 def newest_messages(conn: sqlite3.Connection) -> dict[int, int]:
@@ -253,26 +248,26 @@ def newest_messages(conn: sqlite3.Connection) -> dict[int, int]:
 
 def runs_of(conn: sqlite3.Connection, task_id: int) -> list[records.TaskRun]:
     """Return task `task_id`'s runs, the oldest first."""
-    query = sql.select("*").from_("task_runs").where("task_id = ?", task_id).order_by("id")
-    return records.fetch_all(conn, records.TaskRun, query)
+    query = records.select(records.TaskRun).where("task_id = ?", task_id).order_by("id")
+    return query.all(conn)
 
 
 def latest_runs(conn: sqlite3.Connection) -> dict[int, records.TaskRun]:
     """Return each task's newest run, by the task's id; a task never run has none."""
     newest = sql.select("max(id)").from_("task_runs").group_by("task_id")
-    query = sql.select("*").from_("task_runs").where("id IN ({})", newest)
-    return {r.task_id: r for r in records.fetch_all(conn, records.TaskRun, query)}
+    query = records.select(records.TaskRun).where("id IN ({})", newest)
+    return {r.task_id: r for r in query.all(conn)}
 
 
 def get_run(conn: sqlite3.Connection, run_id: int) -> records.TaskRun | None:
     """Return task run `run_id`, or None if there is none."""
-    return records.fetch_one(conn, records.TaskRun, sql.select("*").from_("task_runs").where("id = ?", run_id))
+    return records.select(records.TaskRun).where("id = ?", run_id).one(conn)
 
 
 def running(conn: sqlite3.Connection) -> list[records.TaskRun]:
     """Return the task runs running now, the oldest first."""
-    query = sql.select("*").from_("task_runs").where("status = 'running'").order_by("started_at, id")
-    return records.fetch_all(conn, records.TaskRun, query)
+    query = records.select(records.TaskRun).where("status = 'running'").order_by("started_at, id")
+    return query.all(conn)
 
 
 def stop(conn: sqlite3.Connection, task_id: int) -> Stopped:
@@ -417,12 +412,9 @@ def latest_report(conn: sqlite3.Connection, state_dir: Path, task_id: int) -> tu
         The run and the report's text, or None when no run left one that still reads as one.
     """
     query = (
-        sql.select("*")
-        .from_("task_runs")
-        .where("task_id = ? AND report_sha256 IS NOT NULL", task_id)
-        .order_by("id DESC")
+        records.select(records.TaskRun).where("task_id = ? AND report_sha256 IS NOT NULL", task_id).order_by("id DESC")
     )
-    for run in records.fetch_all(conn, records.TaskRun, query):
+    for run in query.all(conn):
         reading = plans.read(report_path(state_dir, task_id, run.id))
         if reading.text is not None:
             return run, reading.text
