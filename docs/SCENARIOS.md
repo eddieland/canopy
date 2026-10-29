@@ -127,6 +127,11 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   on their threads and the comment as its body, which a coworker cannot see; add a comment of your own to it and
   submit it from the PR's files page. Expect the next tick to settle both drafts `sent`, to dispatch nothing for them,
   and the body you submitted to be the one canopy staged.
+- **S68. A reply drafted, not posted, and sent unmarked** (M53). Under `trust.review_replies = "approve"`, with a
+  coworker's review comments on one of the loop's PRs, let a `resume` run. Expect it to push, and its transcript to
+  show no comment posted, a GitHub reply tool or `gh pr comment` it tried refused by its definition. Edit one draft,
+  drop one, and send the rest from the PR's page: expect one review on GitHub under your login holding exactly the sent
+  text, with no `CANOPY:` mark, and the next tick to dispatch nothing for those replies.
 - **S58. The reviewer and the planner read git through canopy's tools** (#1130). Review a stacked PR, and plan a
   ticket over two repositories, once unsandboxed and once with `canopy-sandbox` around `plan_cmd` and `review_cmd`.
   Expect `canopy show` of each run to list `canopy_git_*` among its tools, the transcripts to show the reviewer finding
