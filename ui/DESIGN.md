@@ -105,10 +105,10 @@ Rules:
   Monokai. A light canvas is never grey, which only looks dim. Every other hue is the same in all, so a component never
   knows which it is on, and an accent is read through its token, never assumed indigo; where a scheme's own bases would
   drop a hue below 4.5:1, the bases move, never the hue. A palette's accent is darkened or lightened until it reads as
-  text there and under `accent-foreground`, and sets `ring` with it. A scheme whose accent would pass for a status keeps
-  the default's, as Gruvbox's orange would. A scheme whose bases would have to move until it matched another palette is
-  left out, as Nord's dark is. `tokens.test.ts` measures every palette `src/theme/palette.ts` lists, and
-  `theme-script.test.ts` checks the inline script knows each.
+  text there, on its own tint, and under `accent-foreground`, and sets `ring` with it. A scheme whose accent would pass
+  for a status keeps the default's, as Gruvbox's orange would. A scheme whose bases would have to move until it matched
+  another palette is left out, as Nord's dark is. `tokens.test.ts` measures every palette `src/theme/palette.ts` lists,
+  and `theme-script.test.ts` checks the inline script knows each.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
