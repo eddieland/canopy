@@ -10,6 +10,11 @@ served names the model of each call in its transcript. OpenCode looks a session 
 database that holds every project's sessions, so any directory finds it. One it does not have it names on stderr,
 `Session not found: ID`, and exits 1.
 
+A sandboxed run's session is not there: its OpenCode keeps its data in its role's own directory (DESIGN §24). The
+export is never pointed there, since OpenCode would act on what a run wrote, so a session it does not have is looked
+for in each role's database instead, read as `canopy.runtime.opencode.sessions` reads it: its messages as the export
+prints them, each one's info and id, and the session's version.
+
 Its stdout is captured through a file, not a pipe. With stderr a pipe too, OpenCode exits having written only what a
 pipe's buffer holds, 64 KiB, and most sessions' exports are longer.
 
@@ -19,13 +24,15 @@ as the start of one JSON value, and the first that holds an export is the export
 
 from __future__ import annotations
 
+import json
 import re
 from typing import TYPE_CHECKING, Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr
+from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, StrictStr, ValidationError
 
 from canopy.infra import procs
 from canopy.runtime.opencode import printed as printed_json
+from canopy.runtime.opencode import sessions
 from canopy.runtime.report import (
     MAX_COST_USD,
     MAX_MODEL_NAME,
@@ -39,6 +46,7 @@ from canopy.runtime.report import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from pathlib import Path
 
 #: How long one export may take: it starts OpenCode, which reads its config and plugins, then the session.
@@ -47,6 +55,10 @@ TIMEOUT_SECONDS = 60
 COMMAND = "opencode export --sanitize"
 #: What OpenCode prints on stderr for a session it does not have.
 NOT_FOUND = "Session not found"
+#: In a sandbox role's database, the version of OpenCode that made a session, by its id.
+SESSION_SQL = "SELECT version FROM session WHERE id = ?"
+#: Its messages, by its id and at most how many, in the order OpenCode wrote them: each one's id, and its info as JSON.
+MESSAGES_SQL = "SELECT id, data FROM message WHERE session_id = ? ORDER BY time_created, id LIMIT ?"
 # Where a JSON object starts a line.
 _OBJECT_RE = re.compile(r"^\{", re.MULTILINE)
 
@@ -88,16 +100,18 @@ class _Export(BaseModel):
 def read(runner: procs.Runner, *, cwd: Path, session_id: str) -> SessionModels:
     """Export session `session_id` with OpenCode started in `cwd`, and read which models wrote its replies.
 
+    A session OpenCode does not have is read from the sandbox role's database that holds it, if one does.
+
     Returns:
-        Its models, the most costly first; `missing` when OpenCode has no such session; `failed`, with why, when
-        OpenCode could not be run or printed what canopy cannot read.
+        Its models, the most costly first; `missing` when neither OpenCode nor a sandbox role has such a session;
+        `failed`, with why, when OpenCode could not be run or printed what canopy cannot read.
     """
     try:
         printed = _export(runner, cwd, session_id)
     except _FailedError as e:
         return SessionModels("failed", error=str(e))
     if printed is None:
-        return SessionModels("missing")
+        return _from_sandbox(session_id)
     exported = printed_json.among(printed, _OBJECT_RE, _Export.model_validate_json)
     if exported is None:
         return SessionModels("failed", error=f"`{COMMAND}` printed what canopy cannot read")
@@ -109,6 +123,35 @@ def read(runner: procs.Runner, *, cwd: Path, session_id: str) -> SessionModels:
 
 class _FailedError(Exception):
     """The export could not be run, or failed for another reason than a session OpenCode does not have."""
+
+
+# The session as a sandbox role's database holds it, read as its export would be. A message canopy cannot read is left
+# out, as the session reader leaves out a reply it cannot read.
+def _from_sandbox(session_id: str) -> SessionModels:
+    found = sessions.sandbox_session(session_id, SESSION_SQL, MESSAGES_SQL)
+    if found is None:
+        return SessionModels("missing")
+    named, rows = found
+    models, replies = _models(tuple(m for row in rows if (m := _message(row)) is not None))
+    version = runtime_version(named if isinstance(named, str) else None)
+    return SessionModels("found", models, replies=replies if len(models) > 1 else {}, runtime_version=version)
+
+
+# A message's row, its id and its info as JSON, as the export prints the message; None for one canopy cannot read.
+def _message(row: Sequence[object]) -> _Message | None:
+    message_id, data = row
+    if not isinstance(data, str):
+        return None
+    try:
+        info: object = json.loads(data)
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(info, dict):
+        return None
+    try:
+        return _Message.model_validate({"info": {**info, "id": message_id}})
+    except ValidationError:
+        return None
 
 
 # What the export printed, or None for a session OpenCode does not have.
