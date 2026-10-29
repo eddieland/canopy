@@ -31,12 +31,14 @@ copy stays with its docs, and the operator's file is what runs.
 ### The reminder
 
 Every worker run that pushes, public and private, `implement`, `resume`, and a task's, hears the list once its branch
-is up: after the tool call that pushes, canopy's plugin (§33) adds the list to that call's result, after a `[canopy]`
-line asking the worker to diff its branch against the base, hold each item to the diff, fix what fails and push again,
-and answer each item in its result. A push soon after a reminder, a fix pushed, is not reminded again; a push after a
-long stretch of work is. The list reaches the run as the operator's answer to a running agent's question does
-(§41): a file in the run's answers directory, which a sandboxed run may read and not write, so the plugin still
-writes nothing and reads only what it is handed. The overseer, a planner, a reviewer, and a chore hear none.
+is up: after the tool call that pushes, and only when its result shows the push went through, canopy's plugin (§33)
+adds the list to that call's result, after a `[canopy]` line asking the worker to diff its branch against the base,
+hold each item to the diff, fix what fails and push the fix, which D116 allows, and answer each item in its result. A
+rejected push is never reminded, since a worker never retries one (§8). A push soon after a reminder, a fix pushed, is
+not reminded again; a push after a long stretch of work is. The list reaches the run as the operator's answer to a
+running agent's question does (§41): a file in the run's answers directory, which a sandboxed run may read and not
+write, so the plugin still writes nothing and reads only what it is handed. The overseer, a planner, a reviewer, and
+a chore hear none.
 
 The worker's result line gains `checklist`: for each item, `pass`, `fixed`, `held` with the reason, or `n/a`, validated
 (D026). A reminded run whose result answers no item is recorded as unanswered, never refused: its push is already made.

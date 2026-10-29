@@ -23,9 +23,10 @@ missed. Three stages, in order, each in its own PRs; stage 3 waits on stage 2's 
   so a result can be held to them. Before a worker run that may push starts (`implement`, `resume`, public and
   private, and a task's), the harness writes the list to the run's answers directory (§41), beside where an answer
   goes. canopy's plugin gains a job, in the same file as the clock, the nudge, and the answer: after a tool call whose
-  input runs `git push`, in a run `CANOPY_RUN_ID` names as a worker's, it reads the file and adds a `[canopy]` line
-  and the list to the call's result, where the clock's line goes, asking the worker to diff its branch against the
-  base, hold each item to the diff, fix what fails and push again, and answer each item in `checklist` in its result.
+  input runs `git push` and whose result shows it went through, in a run `CANOPY_RUN_ID` names as a worker's, it
+  reads the file and adds a `[canopy]` line and the list to the call's result, where the clock's line goes, asking the
+  worker to diff its branch against the base, hold each item to the diff, fix what fails and push the fix (D116), and
+  answer each item in `checklist` in its result. A rejected push is not reminded: a worker never retries one.
   It reminds once per stretch of work: not again within a number of tool calls of the last reminder, so a fix pushed
   right after is not reminded twice, and again after a long stretch. The worker prompts gain a sentence saying the
   reminder may come and what `checklist` holds; the result contract gains it, validated: per item, `pass`, `fixed`,
@@ -59,7 +60,8 @@ missed. Three stages, in order, each in its own PRs; stage 3 waits on stage 2's 
   diff against a list it already holds); T4 (the plugin reads one more file in the answers directory and writes
   nothing); T7 (one more private path, listed with the others); T3 (unchanged: nothing on a reminder extends a run or
   holds a slot).
-- **Tests with the fakes:** the plugin's own tests for the trigger (a push, not a fetch), its once-per-stretch rule,
+- **Tests with the fakes:** the plugin's own tests for the trigger (a push that went through, not a fetch or a
+  rejected push), its once-per-stretch rule,
   the block's wording and its place in a built-in and an MCP result, and a missing or overlong file adding nothing; a
   fake worker that pushes sees the list in that call's result and answers it, and its answers show on the run; a
   result without `checklist` after a reminder is recorded unanswered; an unknown item is dropped; a list the harness
