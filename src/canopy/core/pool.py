@@ -163,7 +163,8 @@ class CanopyPool:
         """Remove slot `path` if nothing in it could be lost: unleased, idle, clean, and merged.
 
         Merged means HEAD is an ancestor of the default branch as last fetched, or of the branch the slot was last
-        leased on. Nothing is fetched.
+        leased on. Nothing is fetched. An unheld slot whose directory is gone holds nothing to lose, so its row is
+        forgotten, as a lease forgets it.
 
         Returns:
             None when the slot is gone, else why it was kept, at most 500 characters.
@@ -172,6 +173,9 @@ class CanopyPool:
             row = self._row(path)
             if row is None:
                 return f"{path} is not a slot of canopy's {self.repo} pool"
+            if row.lease_holder is None and not path.exists() and not path.is_symlink():
+                self._forget_gone(path)
+                return None
             kept = self._kept(path, row)
             if kept:
                 return "; ".join(kept)[:500]
@@ -550,6 +554,17 @@ class CanopyPool:
             self._git.result(self.clone, "worktree", "remove", "--force", str(path))
         if path.parent.parent == self.directory and not path.parent.is_symlink():
             shutil.rmtree(path.parent, ignore_errors=True)
+        with db.transaction(self.conn):
+            sql.execute(self.conn, sql.delete("slots").where("path = ?", str(path)))
+
+    def _forget_gone(self, path: Path) -> None:
+        """Forget the unheld slot at `path`, whose directory is gone: its worktree's entry in the clone, and its row."""
+        if self.clone.is_dir():
+            self._git.run(self.clone, "worktree", "prune")
+        if path.parent.parent == self.directory and not path.parent.is_symlink():
+            # Only an empty container: anything else in it is not the slot's.
+            with contextlib.suppress(OSError):
+                path.parent.rmdir()
         with db.transaction(self.conn):
             sql.execute(self.conn, sql.delete("slots").where("path = ?", str(path)))
 

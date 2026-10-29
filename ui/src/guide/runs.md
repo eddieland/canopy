@@ -199,8 +199,9 @@ A slot is:
 - `broken`: the pool can't vouch for it; hover over it, or Tab to it, for the pool's own word, such as `damaged` or
   `unverified`.
 
-The chips filter by state. A slot held by no running run is marked as such: the next tick returns it. A pool larger
-than its declared size says so, and `canopy workspace sync` removes the idle slots over it.
+The chips filter by state. A slot held by no running run is marked as such: the next tick returns it, or the
+`canopy workspace release` command its note gives you returns it now. A pool larger than its declared size says so,
+and `canopy workspace sync` removes the idle slots over it. In a terminal, `canopy workspace slots` lists the same.
 
 A dirty slot is the one to look at. The pool never reuses it and counts it as busy, so it quietly shrinks the pool until
 someone deals with it, and once the rest are busy the next lease is refused. Nothing in canopy cleans it for you,

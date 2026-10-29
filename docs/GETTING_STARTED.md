@@ -241,6 +241,10 @@ Sync also fetches each clone and fast-forwards its default branch when that is c
 clones under `repos/` stay current when you read them. One on another branch, or with changes or commits of your own,
 is left as it is, and sync says why.
 
+`canopy workspace slots` lists each pool's slots, what holds each, and what frees one that waits on you.
+`canopy workspace release REPO SLOT` frees a slot nothing running holds, and `canopy workspace remove-slot REPO SLOT`
+removes an idle one, keeping it when anything in it could be lost.
+
 ## 5. A Bazel repository with several slots
 
 A large Bazel repository makes a cold slot expensive: a full build, every external repository downloaded again.
