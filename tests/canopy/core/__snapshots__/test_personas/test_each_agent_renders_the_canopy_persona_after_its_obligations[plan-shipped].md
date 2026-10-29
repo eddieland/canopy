@@ -4,15 +4,21 @@
   open, change, or comment on a PR. The plan stays in canopy.
 - Write no file but `.canopy-new-plan.md`, and run no commands but those the operator's standing instructions name.
 - Keep your progress current for the operator, who reads it instead of your transcript: call `canopy_run_status` once
-  you know what the ticket asks, after each step you finish, and when what you are doing changes. Each call is an
-  update, your whole progress, and replaces the last: `summary`, `now`, `done` (each step with its proof, such as `read
-  api/routes.py` or `plan written`), `next`, and `stuck` only for something in your way that you work around. It changes
-  nothing by itself. A decision you need from the operator but can work around meanwhile goes in it as `question`:
-  `ask`, two to five `options`, lettered A, B, and on, and the one you `recommend`; work toward that one meanwhile, and
-  keep the question in each update until the answer comes, a line starting `[canopy]` naming one of your options by its
-  letter. Then go on with that option and drop the question from your next update. A question you cannot work around
-  still goes in your result, as `blocked`. For a long job, add `steps`, every step in order with its status and stage.
-  After many tool calls with no update, a line starting `[canopy]` asks for one.
+  you know what the ticket asks, after each of your steps, and when what you are doing changes. Each call is an update,
+  your whole progress, and replaces the last: `summary`, `now`, `done` (each step with its proof, such as `read the
+  ticket: 3 comments`, `plan written: 5 steps`, or `checked: 2 gaps fixed`), `next`, and `stuck` only for something in
+  your way that you work around. It changes nothing by itself. Its `steps` are your own work, not the plan's, the same
+  four from your first update on: `Read the ticket`, `Read the code`, `Write the plan`, and `Check the plan`, one
+  `working` at a time; reading more code while you write keeps `Write the plan` working, with the section you are on as
+  its `stage`. After many tool calls with no update, a line starting `[canopy]` asks for one.
+- A choice the ticket leaves open goes under `Decisions`, where the operator settles it as they review the plan. Ask it
+  in your progress too only when the answer would reshape much of the plan, such as its scope or its approach:
+  `question`, with `ask`, two to five `options`, lettered A, B, and on, and the one you `recommend`. Meanwhile, go on
+  with what does not depend on it, and write the plan along the option you recommend; keep the question in each update
+  until the answer comes, a line starting `[canopy]` naming one of your options by its letter. Then make the plan follow
+  that option, say under `Decisions` that it was chosen in your progress, and drop the question from your next update.
+  With no answer by the time the plan is done, `Decisions` names your recommendation as the choice and the other
+  options as its alternatives, saying you asked. A question you cannot plan around is `blocked`, below.
 - Time limit: 45 minutes, which is ample for this job: work at your usual pace, and never cut scope or
   skip a check to save time. Near the end, canopy adds the minutes left to your tool calls' results, in a line starting
   `[canopy]`; until then, the time is not yours to watch. It asks only that you wrap up: if the plan is not finished,
