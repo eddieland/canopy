@@ -24,10 +24,10 @@ def insert_chore_run(conn: sqlite3.Connection, *, tick_id: int | None, chore: st
         The new chore run's id.
     """
     with db.transaction(conn):
-        run = sql.insert("chore_runs", tick_id=tick_id, chore=chore, started_at=db.now(), log_path="")
-        run_id = db.rowid(sql.execute(conn, run))
+        run = records.insert(records.ChoreRun, tick_id=tick_id, chore=chore, started_at=db.now(), log_path="")
+        run_id = db.rowid(run.run(conn))
         log_path = str(logs_dir / f"{run_id}.log")
-        sql.execute(conn, sql.update("chore_runs").set(log_path=log_path).where("id = ?", run_id))
+        records.update(records.ChoreRun).set(log_path=log_path).where("id = ?", run_id).run(conn)
     return run_id
 
 
@@ -72,18 +72,15 @@ def dismissals(conn: sqlite3.Connection, chore: str) -> dict[str, str]:
 
 def set_dismissal(conn: sqlite3.Connection, chore: str, finding_id: str, *, channel: str) -> None:
     """Record that the operator dismissed `chore`'s finding `finding_id` now, replacing an earlier dismissal of it."""
-    sql.execute(
-        conn,
-        sql.insert(
-            "finding_dismissals",
-            chore=chore,
-            finding_id=finding_id,
-            dismissed_at=db.now(),
-            channel=channel,
-        ).on_conflict(
-            "(chore, finding_id) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel",
-        ),
-    )
+    records.insert(
+        records.FindingDismissal,
+        chore=chore,
+        finding_id=finding_id,
+        dismissed_at=db.now(),
+        channel=channel,
+    ).on_conflict(
+        "(chore, finding_id) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel",
+    ).run(conn)
 
 
 def delete_dismissal(conn: sqlite3.Connection, chore: str, finding_id: str) -> bool:
@@ -92,5 +89,5 @@ def delete_dismissal(conn: sqlite3.Connection, chore: str, finding_id: str) -> b
     Returns:
         Whether there was one to take back.
     """
-    taken = sql.delete("finding_dismissals").where("chore = ? AND finding_id = ?", chore, finding_id)
-    return sql.execute(conn, taken).rowcount > 0
+    taken = records.delete(records.FindingDismissal).where("chore = ? AND finding_id = ?", chore, finding_id)
+    return taken.run(conn).rowcount > 0

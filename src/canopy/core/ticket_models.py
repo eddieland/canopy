@@ -170,20 +170,17 @@ def choose(
         check(model, listing(agent_models.parse(model).variant is not None))
     where = "ticket_key = ? AND agent = ? AND kind = ?"
     with db.transaction(conn):
-        sql.execute(conn, sql.delete("ticket_overrides").where(where, ticket, agent, OverrideKind.MODEL))
+        records.delete(records.TicketOverride).where(where, ticket, agent, OverrideKind.MODEL).run(conn)
         if model is not None:
-            sql.execute(
-                conn,
-                sql.insert(
-                    "ticket_overrides",
-                    ticket_key=ticket,
-                    agent=agent,
-                    kind=OverrideKind.MODEL,
-                    value=model,
-                    channel=channel,
-                    set_at=db.now(),
-                ),
-            )
+            records.insert(
+                records.TicketOverride,
+                ticket_key=ticket,
+                agent=agent,
+                kind=OverrideKind.MODEL,
+                value=model,
+                channel=channel,
+                set_at=db.now(),
+            ).run(conn)
     return next(n for n in next_for(conn, config, ticket) if n.agent == agent)
 
 

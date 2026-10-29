@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, records, sql
+from canopy.core import db, records
 
 if TYPE_CHECKING:
     import sqlite3
@@ -33,8 +33,8 @@ def spent(conn: sqlite3.Connection, repo: str, branch: str, head: str) -> int:
 
 def record(conn: sqlite3.Connection, run_id: int, *, repo: str, branch: str, from_head: str, to_head: str) -> None:
     """Record that run `run_id` kicks `branch` in `repo` from `from_head` to `to_head`, before it pushes (`forget`)."""
-    row = sql.insert(
-        "flaky_kicks",
+    row = records.insert(
+        records.FlakyKick,
         run_id=run_id,
         repo=repo,
         branch=branch,
@@ -42,9 +42,9 @@ def record(conn: sqlite3.Connection, run_id: int, *, repo: str, branch: str, fro
         to_head=to_head,
         kicked_at=db.now(),
     )
-    sql.execute(conn, row)
+    row.run(conn)
 
 
 def forget(conn: sqlite3.Connection, run_id: int, repo: str) -> None:
     """Drop run `run_id`'s kick in `repo`, recorded before a push that then failed: the branch was not kicked."""
-    sql.execute(conn, sql.delete("flaky_kicks").where("run_id = ? AND repo = ?", run_id, repo))
+    records.delete(records.FlakyKick).where("run_id = ? AND repo = ?", run_id, repo).run(conn)

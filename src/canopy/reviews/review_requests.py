@@ -181,13 +181,13 @@ def request(
     with db.transaction(conn):
         found = open_request(conn, url)
         if found is not None and said is not None:
-            sql.execute(conn, sql.update("review_requests").set(notes=said).where("id = ?", found.id))
+            records.update(records.ReviewRequest).set(notes=said).where("id = ?", found.id).run(conn)
             found = open_request(conn, url)
         if found is not None:
             if names:
                 _set_personas(conn, found.id, names)
             return Requested(request=found, already=True)
-        sql.execute(conn, sql.insert("review_requests", pr_url=url, created_at=db.now(), channel=channel, notes=said))
+        records.insert(records.ReviewRequest, pr_url=url, created_at=db.now(), channel=channel, notes=said).run(conn)
         made = open_request(conn, url)
         if made is not None and names:
             _set_personas(conn, made.id, names)
@@ -304,11 +304,11 @@ def answered(conn: sqlite3.Connection, pr_url: str) -> bool:
         True if this call ended a request.
     """
     with db.transaction(conn):
-        cur = sql.execute(
-            conn,
-            sql.update("review_requests")
+        cur = (
+            records.update(records.ReviewRequest)
             .set(ended_at=db.now(), end_reason=REVIEWED)
-            .where("pr_url = ? AND ended_at IS NULL", pr_url),
+            .where("pr_url = ? AND ended_at IS NULL", pr_url)
+            .run(conn)
         )
     return cur.rowcount == 1
 
@@ -329,17 +329,17 @@ def has_news(run: records.ReviewRun, found: ReviewResult | None) -> bool:
 
 def _set_personas(conn: sqlite3.Connection, request_id: int, names: Iterable[str]) -> None:
     # In place of the request's own, in the order given, inside the caller's transaction.
-    sql.execute(conn, sql.delete("review_request_personas").where("request_id = ?", request_id))
+    records.delete(records.ReviewRequestPersona).where("request_id = ?", request_id).run(conn)
     for name in names:
-        sql.execute(conn, sql.insert("review_request_personas", request_id=request_id, persona=name))
+        records.insert(records.ReviewRequestPersona, request_id=request_id, persona=name).run(conn)
 
 
 def _end(conn: sqlite3.Connection, request_id: int, reason: str) -> None:
-    sql.execute(
-        conn,
-        sql.update("review_requests")
+    (
+        records.update(records.ReviewRequest)
         .set(ended_at=db.now(), end_reason=reason)
-        .where("id = ? AND ended_at IS NULL", request_id),
+        .where("id = ? AND ended_at IS NULL", request_id)
+        .run(conn)
     )
 
 

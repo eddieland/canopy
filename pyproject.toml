@@ -240,6 +240,12 @@ ban-relative-imports = "all"
 "unittest.mock.MagicMock".msg = "Spec it: `mock.patch.object(..., autospec=True)` or `mock.create_autospec(...)`."
 # Every command line is click (D025). The workspace members turn TID251 off below, so review holds them to it.
 "argparse".msg = "Every command line is click (D025)."
+# A write to a journal table goes through its row type, which holds each column and value to the table (D125).
+"canopy.core.sql.insert".msg = "Write through the table's row type: records.insert."
+"canopy.core.sql.insert_rows".msg = "Write through the table's row type: records.insert_rows."
+"canopy.core.sql.insert_from".msg = "Write through the table's row type: records.insert_from."
+"canopy.core.sql.update".msg = "Write through the table's row type: records.update."
+"canopy.core.sql.delete".msg = "Write through the table's row type: records.delete."
 
 # `from unittest import mock`, then `mock.patch`, `mock.create_autospec` (AGENTS.md, Testing).
 [tool.ruff.lint.flake8-import-conventions]

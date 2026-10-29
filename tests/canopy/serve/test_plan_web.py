@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from canopy.core import db, personas, plans, sql
+from canopy.core import db, personas, plans, records
 from canopy.core.context import Context
 from canopy.core.vocab import PlanStatus, RunStatus
 from tests.canopy.helpers import (
@@ -85,7 +85,7 @@ def test_a_plan_carries_the_persona_its_planner_wrote_in_and_the_instructions_it
     assert c.get(f"/api/tickets/{KEY}/plans").json()["newest"]["persona"] is None
 
     def ran_in(name: str, digest: str) -> dict[str, object]:
-        sql.execute(ctx.conn, sql.update("runs").set(persona=name, persona_digest=digest).everything())
+        records.update(records.Run).set(persona=name, persona_digest=digest).everything().run(ctx.conn)
         ctx.conn.commit()
         return c.get(f"/api/tickets/{KEY}/plans/{plan_id}").json()["persona"]
 

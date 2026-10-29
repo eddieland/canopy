@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import conversation, db, sql
+from canopy.core import conversation, db, records, sql
 from canopy.core.vocab import ResumeReason, RunKind
 
 if TYPE_CHECKING:
@@ -199,10 +199,14 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
         raise conversation.Refused("unknown_repo", f"{key} has had no runs in {repo}")
     # The limit is read in the grant's own write transaction, so it counts this grant and none committed after it.
     with db.transaction(conn):
-        sql.execute(
-            conn,
-            sql.insert("attempt_grants", ticket_key=key, repo=repo, kind=kind, runs=runs, granted_at=db.now()),
-        )
+        records.insert(
+            records.AttemptGrant,
+            ticket_key=key,
+            repo=repo,
+            kind=kind,
+            runs=runs,
+            granted_at=db.now(),
+        ).run(conn)
         granted = grants(conn).get(unit(key, repo), {})
         if kind == FEEDBACK_PLAN:
             done = feedback_plan_attempts(conn).get(unit(key, repo), 0)
@@ -238,7 +242,7 @@ def grant_ticket(conn: sqlite3.Connection, config: Config, key: str, kind: str, 
         raise conversation.Refused("unknown", f"canopy has no record of {key}, so it has no attempts to grant past")
     # Read in the grant's own transaction, as `grant` reads its limit.
     with db.transaction(conn):
-        sql.execute(conn, sql.insert("ticket_grants", ticket_key=key, kind=kind, runs=runs, granted_at=db.now()))
+        records.insert(records.TicketGrant, ticket_key=key, kind=kind, runs=runs, granted_at=db.now()).run(conn)
         return TicketGranted(runs=ticket_attempts(conn, kind).get(key, 0), limit=ticket_limit(conn, config, key, kind))
 
 

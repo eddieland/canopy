@@ -49,27 +49,24 @@ def record(
         The run's id.
     """
     with db.transaction(conn):
-        cur = sql.execute(
-            conn,
-            sql.insert(
-                "connector_runs",
-                tick_id=tick_id,
-                source=name,
-                kind=SourceKind(source.kind),
-                started_at=observed.started_at,
-                ended_at=observed.ended_at,
-                status=observed.status,
-                request=json.dumps(request.to_json()),
-                recorded=json.dumps(dict(sorted(observed.recorded.items()))),
-                refused=json.dumps(dict(sorted(observed.refused.items()))),
-                missed=observed.missed,
-                stderr=observed.stderr,
-                query_result=None if observed.query_result is None else json.dumps(list(observed.query_result)),
-                review_query_result=(
-                    None if observed.review_query_result is None else json.dumps(list(observed.review_query_result))
-                ),
+        cur = records.insert(
+            records.ConnectorRun,
+            tick_id=tick_id,
+            source=name,
+            kind=SourceKind(source.kind),
+            started_at=observed.started_at,
+            ended_at=observed.ended_at,
+            status=observed.status,
+            request=json.dumps(request.to_json()),
+            recorded=json.dumps(dict(sorted(observed.recorded.items()))),
+            refused=json.dumps(dict(sorted(observed.refused.items()))),
+            missed=observed.missed,
+            stderr=observed.stderr,
+            query_result=None if observed.query_result is None else json.dumps(list(observed.query_result)),
+            review_query_result=(
+                None if observed.review_query_result is None else json.dumps(list(observed.review_query_result))
             ),
-        )
+        ).run(conn)
     return int(cur.lastrowid or 0)
 
 
