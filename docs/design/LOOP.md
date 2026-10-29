@@ -112,14 +112,14 @@ its `vcs` run read (§29). It raises no attention item, since the list is a tick
 again before recording its items.
 
 A poll that read every source whole ends the wait when a tick would now record or list what the latest tick, as it
-ended, did not: a decision, or a ticket, a row on one, an item past a cursor (§7), or a due chore listed to the
-overseer. That is compared by what is decided and listed, never by wording, so reading again what that tick saw, or an
-edit to an item it saw, wakes nothing. A poll that reads less than it was asked ends the wait once, so the tick runs the
-sources again and raises `connector_failed` if they still fail (§30); the polls after it wake nothing, since what they
-would compare may rest on what was not read, until one reads every source whole. The tick records the poll as what
-woke it. Rejected: a tick on every poll, which writes a tick's rows to learn what one comparison answers. A reply a
-`slack` source records is the operator's message, not an observation, and ends the wait as any does (§20). A hand-run
-`canopy tick` runs the sources as any tick does, and nothing polls without the loop.
+ended, did not: a decision, or a ticket, a row on one, an item past a cursor (§7), a due chore, or a PR the review query
+found (§21) listed to the overseer. That is compared by what is decided and listed, never by wording, so reading again
+what that tick saw, or an edit to an item it saw, wakes nothing. A poll that reads less than it was asked ends the wait
+once, so the tick runs the sources again and raises `connector_failed` if they still fail (§30); the polls after it wake
+nothing, since what they would compare may rest on what was not read, until one reads every source whole. The tick
+records the poll as what woke it. Rejected: a tick on every poll, which writes a tick's rows to learn what one
+comparison answers. A reply a `slack` source records is the operator's message, not an observation, and ends the wait as
+any does (§20). A hand-run `canopy tick` runs the sources as any tick does, and nothing polls without the loop.
 
 ### Idle pacing
 
