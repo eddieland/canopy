@@ -239,9 +239,9 @@ which a file canopy cannot use refuses as `bad_prompt`; a chore's follow its own
 reaches only its own role's prompts, and a role without one has no section for them.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
-skill, which canopy puts in the overseer's definition when it ships one (§13). `tracker.query` finds candidates; it
-does not authorize them (§17). It is shared though the overseer reads every ticket it returns before checking labels,
-an exposure stated in TRUST_MODEL T7's residual.
+skill the workers load (§17). `tracker.query` finds candidates; it does not authorize them (§17). It is shared: the
+`tracker` source reads it, and a ticket it returns that is not a candidate reaches the overseer by key and why alone
+(TRUST_MODEL T7).
 
 ## 13. Agent runtime
 
@@ -334,7 +334,7 @@ private run (§22) is also refused where that config names any tool of the track
 after canopy's could reopen a write tool.
 
 Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
-turns none off, but for the overseer whose body holds the tracker's skill, and the operator's skill below. A
+turns none off, but for the overseer, which reads no tracker and loads no skill (§39), and the operator's skill below. A
 repository can also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 

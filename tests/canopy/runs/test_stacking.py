@@ -8,7 +8,10 @@ import pytest
 from canopy.core import db
 from canopy.core.vocab import Phase, ResumeReason, RunKind
 from tests.canopy.helpers import (
+    KEY,
     LABEL,
+    READ_PR,
+    WORKER_DONE,
     agent_runs,
     decisions,
     pool,
@@ -21,6 +24,8 @@ from tests.conftest import GitPool, git
 
 FIRST = "agent/PROJ-1-first"
 SECOND = "agent/PROJ-2-second"
+#: The PR of SECOND, one the tests' `vcs` source reads.
+SECOND_PR = "https://github.com/acme/repo/pull/2"
 
 
 def blocker(scenario: Scenario) -> Ran:
@@ -81,12 +86,18 @@ def test_implement_stacked_on_a_blocker_starts_from_its_branch_and_targets_it(
 
 
 def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: Scenario, git_pool: GitPool) -> None:
-    blocker(scenario)
-    stacked(scenario)
+    # Each PR one the `vcs` source reads, and reads before a dispatch rests on it, so the overseer is listed both
+    # tickets (DESIGN §39).
+    first = dispatches(slug="first")
+    scenario.run(first, worker=pushes(FIRST, "PROJ-1: the blocker", prs={"repo": READ_PR}))
+    scenario.tick(*waits("PROJ-1", rationale="PR open"))
+    on_first = dispatches("PROJ-2", slug="second", base=FIRST)
+    scenario.run(on_first, worker=pushes(SECOND, "PROJ-2: stacked", prs={"repo": SECOND_PR}))
+    scenario.tick(*waits("PROJ-1", "PROJ-2", rationale="PR open"))
 
     # While the blocker's PR is open the overseer passes the base again; the run continues the pushed branch.
-    review = dispatches("PROJ-2", RunKind.RESUME, reasons=[ResumeReason.REVIEW], base=FIRST)
-    resume = scenario.run(review, worker=pushes(SECOND, "PROJ-2: review fix"))
+    again = dispatches("PROJ-2", RunKind.RESUME, reasons=[ResumeReason.CONFLICT], base=FIRST)
+    resume = scenario.run(again, worker=pushes(SECOND, "PROJ-2: conflict fix", prs={"repo": SECOND_PR}))
     assert (resume.status, slot_of(scenario.conn, resume.id).base_branch) == ("done", FIRST)
     assert f": branch `agent/PROJ-2-second` from `{FIRST}`; PR: " in read(resume)
     # The overseer sees the base a stacked ticket's latest run started from; an unstacked one's shows none.
@@ -98,7 +109,10 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: S
     merged = dispatches("PROJ-2", RunKind.RESUME, reasons=[ResumeReason.RETARGET], context="blocker merged")
     retarget = scenario.run(
         merged,
-        worker=worker_does(["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{SECOND}"]),
+        worker=worker_does(
+            ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{SECOND}"],
+            result=json.dumps(json.loads(WORKER_DONE) | {"branch": SECOND, "pr": SECOND_PR}),
+        ),
     )
     assert (retarget.status, slot_of(scenario.conn, retarget.id).base_branch) == ("done", "main")
     text = read(retarget)
@@ -106,7 +120,7 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: S
     assert ": branch `agent/PROJ-2-second` from `main`; PR: " in text
     assert "- `retarget`: the PR this ticket was stacked on has merged" in text
     assert "change this ticket's PR to target its repository's base branch listed above" in text
-    assert subjects(git_pool, "agent/PROJ-2-second")[:2] == ["PROJ-2: review fix", "PROJ-2: stacked"]
+    assert subjects(git_pool, "agent/PROJ-2-second")[:2] == ["PROJ-2: conflict fix", "PROJ-2: stacked"]
 
     # Retargeted, it is stacked no more, and its latest run shows no base.
     scenario.tick(*waits("PROJ-1", "PROJ-2", rationale="PR open"))
@@ -193,14 +207,23 @@ def test_dry_run_names_the_base(scenario: Scenario, treehouse_state: Path) -> No
     assert [c for c in calls if c[0] != "status"] == []
 
 
-def test_two_linked_tickets_are_worked_in_order(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
+def test_two_linked_tickets_are_worked_in_order(
+    scenario: Scenario,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    github_state: Path,
+) -> None:
     """M4 acceptance, the harness's half, against the fakes.
 
     The overseer's reading of blockers and PR state is prompt behavior: here a scripted overseer waits on the blocked
     ticket, then stacks it once the blocker's PR exists.
     """
+    # The blocker's PR is one the `vcs` source reads, its checks running, so the overseer is listed it (DESIGN §39).
+    running = {"name": "build", "status": "in_progress", "run_id": 11}
+    github_state.write_text(json.dumps({"prs": {READ_PR: {"checks": [running]}}}))
     # Both tickets' workers run this, so neither pushes: `_run`'s own push puts each branch on origin (DESIGN §8).
-    commits = worker_does(["git", "commit", "--quiet", "--allow-empty", "-m", "the change"])
+    done = json.dumps(json.loads(WORKER_DONE) | {"pr": READ_PR})
+    commits = worker_does(["git", "commit", "--quiet", "--allow-empty", "-m", "the change"], result=done)
     first = scenario.tick(
         dispatches(slug="first"),
         *waits("PROJ-2", rationale="blocked_by: PROJ-1"),
@@ -230,7 +253,7 @@ def test_two_linked_tickets_are_worked_in_order(scenario: Scenario, git_pool: Gi
 
 def test_the_state_block_carries_the_stacking_policy(scenario: Scenario) -> None:
     def stacking() -> str:
-        scenario.tick()
+        scenario.tick(*waits(KEY))
         return scenario.state()["policy"]["stacking"]
 
     assert stacking() == "auto"

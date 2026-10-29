@@ -177,28 +177,9 @@ def test_stale_and_unobserved_subjects_name_what(
     assert observed(canopy_env, tracked) == snapshot
 
 
-def test_without_a_tracker_source_every_ticket_and_the_query_are_unobserved(
-    canopy_env: CanopyEnv,
-    conn: sqlite3.Connection,
-    snapshot: SnapshotAssertion,
-) -> None:
-    held(canopy_env, conn, KEY)
-    db.set_unit(conn, KEY, str(canopy_env.root), "repo", pr_url=PR)
-    observe_pr(conn)
-    assert observed(canopy_env, conn) == snapshot
-
-
-@pytest.mark.parametrize("tracker", [True, False])
-def test_where_a_tracker_source_runs_the_prs_reviews_ask_about_are_shown_as_read(
-    canopy_env: CanopyEnv,
-    tracked: sqlite3.Connection,
-    *,
-    tracker: bool,
-) -> None:
+def test_the_prs_reviews_ask_about_are_shown_as_read(canopy_env: CanopyEnv, tracked: sqlite3.Connection) -> None:
     """The overseer reads no GitHub there (DESIGN §39): a request's PR, and each the query found, is shown as read."""
     canopy_env.configure(canopy_env.user_file, {"review": {"query": "is:pr review-requested:@me"}})
-    if not tracker:
-        canopy_env.configure(canopy_env.user_file, {"connect": None})
     found = "https://github.com/acme/repo/pull/9"
     tracked.execute("INSERT INTO review_requests (pr_url, created_at, channel) VALUES (?, ?, 'cli')", (PR, FRESH))
     tracked.execute(
@@ -209,9 +190,6 @@ def test_where_a_tracker_source_runs_the_prs_reviews_ask_about_are_shown_as_read
     observe_pr(tracked)
     check(tracked, "build", "completed", "success")
     shown = observed(canopy_env, tracked)
-    if not tracker:
-        assert "review_prs" not in shown
-        return
     assert shown["review_prs"] == [
         {
             "url": PR,
