@@ -7,13 +7,14 @@ module: a test module imports from no other (`test_layers.py`). Fixtures live in
 import io
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import AbstractContextManager, ExitStack, contextmanager
+from contextlib import AbstractContextManager, ExitStack, closing, contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, NamedTuple, TypedDict, Unpack, cast
 from unittest import mock
@@ -21,13 +22,26 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, git_tools, plans, prompts, recorded_runs, records, replies, sql, workspace
+from canopy.core import (
+    config,
+    connector_runs,
+    db,
+    git_tools,
+    observe,
+    plans,
+    prompts,
+    recorded_runs,
+    records,
+    replies,
+    sql,
+    workspace,
+)
 from canopy.core.context import Context
-from canopy.core.vocab import TickStatus
+from canopy.core.vocab import ConnectorRunStatus, SourceKind, TickStatus
 from canopy.infra import logs, procs, resources
 from canopy.loop import connectors, mcp, spawns
 from canopy.runs import drafted
-from tests.conftest import CanopyEnv, Journals, git
+from tests.conftest import FAKES_DIR, TRACKER_CMD, TRACKER_SOURCE, CanopyEnv, Journals, git
 
 KEY = "PROJ-1"
 #: A plan as a planner writes one, for a test that needs any.
@@ -41,14 +55,27 @@ LABEL = "agent-ready-tester"
 IMPLEMENT = ("--label", LABEL, "--kind", "implement")
 # An `implement` on the branch WORKER_DONE names.
 WORK = (*IMPLEMENT, "--slug", "work")
-WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": "https://example.test/pr/1", "summary": "did it"})
+#: The PR WORKER_DONE reports, as a URL that names no PR, so no source reads it.
+WORKER_PR = "https://example.test/pr/1"
+WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": WORKER_PR, "summary": "did it"})
 #: The PR a worker that sends drafts opens (`sends_drafts`).
 DRAFTS_PR = "https://github.com/acme/api/pull/7"
+#: A PR the tests' `vcs` source reads, open with nothing on it, unless a test's GitHub state says otherwise. A ticket
+#: with a unit at it reaches the overseer; one at WORKER_PR is the harness's `wait` instead (DESIGN §39).
+READ_PR = "https://github.com/acme/repo/pull/1"
+#: Why the harness waits on a candidate with a unit at WORKER_PR.
+UNOBSERVED = (
+    f"unobserved: {WORKER_PR} is not a PR's URL, so it is not observed; no source reads it, so it waits until the "
+    "operator forgets the ticket's work"
+)
 #: The `trust` keys of the private file that hold a worker's drafts for the operator to approve:
 #: `scenario.configures("private", trust=APPROVE)`.
 APPROVE = {"review_replies": "approve"}
+#: The tests' `tracker` source, as the user file names it (`tests.conftest.TRACKER_TOML`).
+TRACKER = {"kind": "tracker", "cmd": TRACKER_CMD}
 #: The `connect` keys of a source that posts to the tracker, for drafts on a ticket.
-TRACKER_POSTS = {"sources": {"issues": {"kind": "tracker", "post_cmd": "canopy-post-github"}}}
+#: The private file's sources replace the user file's whole, so they name the tests' tracker source again.
+TRACKER_POSTS = {"sources": {TRACKER_SOURCE: {**TRACKER, "post_cmd": "canopy-post-github"}}}
 # What a blocked worker asks (`blocked_result`).
 QUESTION = "Should the button be red or blue?"
 # The last line an overseer prints when it has finished its tick.
@@ -124,6 +151,60 @@ def in_tick(conn: sqlite3.Connection, *, dry_run: bool = False, ends_ok: bool = 
         yield tick_id
         if ends_ok:
             db.finish_tick(conn, tick_id, TickStatus.OK, "test")
+
+
+def sources(**more: Mapping[str, object]) -> dict[str, object]:
+    """The `connect` keys of the tests' `tracker` source and the sources `more` names, for the private file.
+
+    Its `connect.sources` replaces the user file's whole, so a test's sources there name the tracker source again:
+    config requires one (DESIGN §30).
+
+    Returns:
+        `{"sources": ...}`, for `configures("private", connect=...)`.
+    """
+    return {"sources": {TRACKER_SOURCE: TRACKER, **more}}
+
+
+def tracker_holds(conn: sqlite3.Connection, *keys: str) -> None:
+    """The tests' tracker holds `keys`, KEY if none, and the sources read them now, as a tick's do (DESIGN §6).
+
+    Config requires a `tracker` source (DESIGN §30), and a dispatch rests on its fresh read of the ticket and, the
+    `vcs` source running beside it, of the repositories' branches (§35, §39). The tests' workspaces run the fake
+    connector as theirs, `connector --labeled`, which holds every ticket it is asked open and labeled. Each key is
+    touched into the journal first, as the query's record would, so the source is asked for it. The `vcs` source reads
+    too unless a run of it read whole within `connect.max_age_minutes`, so a test that scripts GitHub to hang or fail
+    from a run on reads it once before it does. A test that configures a tracker of its own reads nothing here: its
+    world is what it scripts.
+    """
+    root = Path.cwd()
+    cfg = config.load(root)
+    source = cfg.connect.tracker()
+    if "--labeled" not in config.notify_words(source.cmd):
+        return
+    ctx = Context(config=cfg, conn=conn, runner=procs.SubprocessRunner(), ws=workspace.load(root))
+    with db.transaction(conn):
+        for key in keys or (KEY,):
+            db.touch_ticket(conn, key, ctx.repo)
+    log = logs.for_tick(None)
+    # The fakes first on PATH, as `fakes_on_path` puts them, for a test that runs no fake itself.
+    with mock.patch.dict(os.environ, {"PATH": os.pathsep.join([str(FAKES_DIR), os.environ.get("PATH", "")])}):
+        observe.observe(conn, cfg, ctx.runner, source, connectors.tracker_request(ctx), log=log)
+        if not _vcs_read_lately(conn, cfg.connect.max_age_minutes):
+            vcs, request = cfg.connect.vcs(), connectors.vcs_request(ctx)
+            observed = observe.observe(conn, cfg, ctx.runner, vcs, request, log=log)
+            name = config.DEFAULT_SOURCE
+            connector_runs.record(conn, None, name=name, source=vcs, request=request, observed=observed)
+
+
+def _vcs_read_lately(conn: sqlite3.Connection, minutes: int) -> bool:
+    since = db.format_time(datetime.now(UTC) - timedelta(minutes=minutes))
+    query = records.select(records.ConnectorRun).where(
+        "kind = ? AND status = ? AND ended_at >= ?",
+        SourceKind.VCS,
+        ConnectorRunStatus.OK,
+        since,
+    )
+    return bool(query.all(conn))
 
 
 def tick_starts(runner: procs.Runner | None = None, *, tick_id: int | None = None) -> None:
@@ -397,6 +478,7 @@ def dispatch_in_tick(
 ) -> Dispatched:
     """In a tick of its own, run `canopy dispatch` of `key` in `repo` with `args`; the run it starts does not run."""
     runner = runner or InlineRunner()
+    tracker_holds(conn, key)
     with in_tick(conn) as tick_id:
         code = main(["dispatch", key, "--repo", "repo", *args], runner=runner)
         tick_starts(runner, tick_id=tick_id)
@@ -416,6 +498,7 @@ def dispatch_and_run(
         The run, closed.
     """
     runner = runner or InlineRunner()
+    tracker_holds(conn, key)
     with in_tick(conn) as tick_id:
         assert main(["dispatch", key, "--repo", "repo", *args], runner=runner) == 0, decisions(conn, tick_id)
         tick_starts(runner, tick_id=tick_id)
@@ -518,6 +601,42 @@ def calls(name: str, /, **arguments: object) -> Called:
     return Called(name, arguments)
 
 
+#: The overseer's moves that name a ticket the state block lists to it: a dispatch, a decision, an attention item;
+#: and `ticket set`, which names it after its verb.
+_LISTED = ("dispatch", "decide", "attention")
+#: A ticket's key, as the tests name them, apart from a decision's action.
+_TICKET_KEY = re.compile(r"[A-Z][A-Z0-9]*-[0-9]+")
+
+
+def named_tickets(moves: Iterable[list[str] | Called]) -> list[str]:
+    """The ticket each move names that the overseer must be listed to make it, in order: the tracker holds each."""
+    found: list[str] = []
+    for move in moves:
+        if isinstance(move, Called):
+            key = move.arguments.get("key") if move.name.removeprefix("canopy_") in _LISTED else None
+        elif move[:3] == ["canopy", "ticket", "set"] and len(move) > 3:
+            key = move[3]
+        else:
+            key = move[2] if len(move) > 2 and move[:1] == ["canopy"] and move[1] in _LISTED else None
+        if isinstance(key, str) and _TICKET_KEY.fullmatch(key):
+            found.append(key)
+    return found
+
+
+def holds_listed(moves: Iterable[list[str] | Called]) -> None:
+    """The tests' tracker holds each ticket `moves` name that the journal does not know yet (`tracker_holds`).
+
+    Outside a workspace, or with no such ticket, it does nothing.
+    """
+    found = workspace.load(Path.cwd()) if (Path.cwd() / config.WORKSPACE_FILE_NAME).exists() else None
+    if found is None or not (keys := named_tickets(moves)):
+        return
+    with closing(db.connect(found.state_dir / db.DB_FILE_NAME)) as conn:
+        db.migrate(conn, resources.migrations_dir())
+        if unknown := [key for key in keys if db.get_ticket(conn, key) is None]:
+            tracker_holds(conn, *unknown)
+
+
 class Behavior(TypedDict, total=False):
     """What a fake agent does besides run its commands and print its result line, as tests/fakes/agent reads it."""
 
@@ -583,20 +702,16 @@ def overseer_does(
     *commands: list[str],
     tools: Sequence[Called] = (),
     result: str = TICK_DONE,
-    queried: str | None = None,
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
     """Until the block ends, the fake overseer makes the calls `tools` names, runs `commands`, and prints `result`.
 
-    `result` by default ends its tick.
-
-    `queried`, if given, is what it records when the tracker query is due, with the `canopy_queried` tool when it calls
-    any; see FAKE_AGENT_QUERIED in the fake.
+    `result` by default ends its tick. A ticket they name that the journal does not know yet, the tests' tracker holds
+    and reads first (`holds_listed`), so the overseer is listed it.
     """
+    holds_listed([*commands, *tools])
     settings = {"COMMANDS": json.dumps(commands), "RESULT": result}
     settings["TOOLS"] = json.dumps([[call.name, call.arguments] for call in tools])
-    if queried is not None:
-        settings["QUERIED"] = queried
     with scripted("OVERSEER", settings, behavior):
         yield
 

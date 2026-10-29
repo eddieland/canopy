@@ -38,7 +38,9 @@ from tests.canopy.helpers import (
     operator,
     present,
     tool_call,
+    tracker_holds,
 )
+from tests.canopy.observation_helpers import comment
 from tests.canopy.review_helpers import feature_commit
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, executable, git
@@ -51,7 +53,6 @@ REQUESTED = "https://github.com/acme/api/pull/8"
 TOOL_NAMES = [
     "dispatch",
     "decide",
-    "queried",
     "attention",
     "ticket-set",
     "review-run",
@@ -146,6 +147,9 @@ def fresh(env: CanopyEnv, verb: Verb) -> Iterator[sqlite3.Connection]:
         leftover.unlink()
     conn = env.journal()
     db.set_unit(conn, "PROJ-1", str(env.root), "repo", pr_url=PR)
+    # The tracker source reads PROJ-1, and shows a comment on it, journal number 1, which a cursor may name.
+    tracker_holds(conn)
+    comment(conn, "c7", "acc-1", "2026-10-18T10:00:00.000Z", "See the login page.")
     assert operator("start", REQUESTED, "--review") == 0
     with in_tick(conn, dry_run=verb.dry_run) if verb.ticking else contextlib.nullcontext():
         yield conn
@@ -174,11 +178,11 @@ RECORDS = [
                 "repos": ["repo"],
                 "slug": "add-login",
                 "context": "see comment 7",
-                "cursors": {"comment": "7"},
+                "cursors": {"comment": "1"},
             },
             [
                 *("dispatch", "PROJ-1", "--kind", "implement", "--label", LABEL, "--repo", "repo", "--slug"),
-                *("add-login", "--context", "see comment 7", "--cursor", "comment=7"),
+                *("add-login", "--context", "see comment 7", "--cursor", "comment=1"),
             ],
             dry_run=True,
             result={
@@ -200,15 +204,6 @@ RECORDS = [
             result={"decisions": [{"key": "PROJ-1", "action": "wait"}]},
         ),
         id="decide",
-    ),
-    pytest.param(
-        Verb(
-            "decide",
-            {"decisions": [{"action": "skip", "rationale": "mcp_unavailable: the tracker"}]},
-            ["decide", "skip", "--rationale", "mcp_unavailable: the tracker"],
-            result={"decisions": [{"key": None, "action": "skip"}]},
-        ),
-        id="decide-tick-wide",
     ),
     pytest.param(
         Verb(
@@ -236,15 +231,6 @@ RECORDS = [
     ),
     pytest.param(
         Verb(
-            "queried",
-            {"keys": ["PROJ-2", "PROJ-3", "PROJ-2"]},
-            ["queried", "PROJ-2", "PROJ-3", "PROJ-2"],
-            result={"keys": ["PROJ-2", "PROJ-3"]},
-        ),
-        id="queried",
-    ),
-    pytest.param(
-        Verb(
             "attention",
             {"key": "PROJ-1", "reason": "needs_author", "detail": "no one owns it", "repo": "repo"},
             ["attention", "PROJ-1", "needs_author", "--detail", "no one owns it", "--repo", "repo"],
@@ -264,7 +250,7 @@ RECORDS = [
     pytest.param(
         Verb(
             "ticket-set",
-            # A tracker's ids sent as numbers are taken as strings, and a null as the field left out. No ci cursor:
+            # A journal number sent as a number is taken as a string, and a null as the field left out. No ci cursor:
             # the PR is never observed, so one is refused (test_claims).
             {
                 "tickets": [
@@ -272,14 +258,14 @@ RECORDS = [
                         "key": "PROJ-1",
                         "repo": "repo",
                         "phase": "ci_red",
-                        "cursors": {"comment": 7},
+                        "cursors": {"comment": 1},
                         "done": None,
                         "title": "Fix the\nlogin",
                     },
                 ],
             },
             [
-                *("ticket", "set", "PROJ-1", "--repo", "repo", "--phase", "ci_red", "--cursor", "comment=7"),
+                *("ticket", "set", "PROJ-1", "--repo", "repo", "--phase", "ci_red", "--cursor", "comment=1"),
                 *("--title", "Fix the\nlogin"),
             ],
             result={
@@ -411,32 +397,6 @@ REFUSALS = [
         id="no-tick",
     ),
     pytest.param(
-        Verb("decide", {"decisions": [{"action": "wait", "rationale": "r"}]}, ["decide", "wait", "--rationale", "r"]),
-        "'wait' needs a ticket key; only a tick-wide 'skip' may omit it",
-        2,
-        id="decide-without-a-key",
-    ),
-    pytest.param(
-        Verb(
-            "decide",
-            {"decisions": [{"action": "skip", "rationale": "relabel"}]},
-            ["decide", "skip", "--rationale", "relabel"],
-        ),
-        "a skip about one ticket names its key",
-        2,
-        id="decide-a-tick-wide-skip-without-its-reason",
-    ),
-    pytest.param(
-        Verb(
-            "decide",
-            {"decisions": [{"key": "PROJ-1", "action": "skip", "rationale": "mcp_unavailable: down"}]},
-            ["decide", "PROJ-1", "skip", "--rationale", "mcp_unavailable: down"],
-        ),
-        "'mcp_unavailable' skips the whole tick, so it names no key: leave key out",
-        2,
-        id="decide-a-tick-wide-reason-under-a-key",
-    ),
-    pytest.param(
         Verb(
             "decide",
             {"decisions": [{"key": "PROJ-1", "action": "wait", "rationale": "   "}]},
@@ -460,22 +420,6 @@ REFUSALS = [
         "decide each ticket once in a call: PROJ-1 decided twice",
         2,
         id="decide-a-ticket-twice",
-    ),
-    pytest.param(
-        Verb(
-            "queried",
-            {"keys": [f"PROJ-{n}" for n in range(1000, 1300)]},
-            ["queried", *(f"PROJ-{n}" for n in range(1000, 1300))],
-        ),
-        "300 keys do not fit in one call: name them in several",
-        2,
-        id="queried-too-many",
-    ),
-    pytest.param(
-        Verb("queried", {"keys": ["PROJ 1"]}, ["queried", "PROJ 1"]),
-        "invalid ticket key 'PROJ 1': must match",
-        2,
-        id="queried-a-bad-key",
     ),
     pytest.param(
         Verb(
@@ -648,7 +592,7 @@ def test_a_refusal_is_a_tool_error_and_the_server_goes_on(overseen: CanopyEnv) -
             {"method": "resources/list"},
             {"method": "ping"},
         )
-    assert served.said(1) == ("decisions.0: 'wait' needs a ticket key; only a tick-wide 'skip' may omit it", True)
+    assert served.said(1) == ("decisions.0.key: Field required", True)
     # An unknown field is refused, not dropped: named, with nothing recorded for the call.
     assert served.said(2) == ("decisions.0.colour: Extra inputs are not permitted", True)
     assert served.said(3) == ("recorded wait for PROJ-1", False)
@@ -661,7 +605,7 @@ def test_a_refusal_is_a_tool_error_and_the_server_goes_on(overseen: CanopyEnv) -
 
 
 def test_a_batch_of_decisions_is_refused_whole_for_its_form(overseen: CanopyEnv) -> None:
-    """A tick-wide skip among other decisions, or no decision at all, records nothing."""
+    """A decision without its ticket among others, or no decision at all, records nothing."""
     conn = overseen.journal()
     with in_tick(conn) as tick_id:
         served = mcp_session(
@@ -674,10 +618,7 @@ def test_a_batch_of_decisions_is_refused_whole_for_its_form(overseen: CanopyEnv)
             ),
             tool_call("decide", decisions=[]),
         )
-    assert served.said(1) == (
-        "a skip with no key skips the whole tick, so it is the only decision in its call",
-        True,
-    )
+    assert served.said(1) == ("decisions.1.key: Field required", True)
     assert served.said(2) == ("name at least one decision", True)
     assert db.decisions_for_tick(conn, tick_id) == []
 
@@ -1302,7 +1243,9 @@ def test_a_chore_run_a_tool_asks_for_is_recorded_and_the_server_starts_nothing(o
 @pytest.mark.usefixtures("git_pool")
 def test_a_worker_a_tool_dispatches_is_recorded_and_its_cursors_wait_for_it_to_start(overseen: CanopyEnv) -> None:
     conn = overseen.journal()
-    arguments = {"key": "PROJ-1", "kind": "implement", "label": LABEL, "repos": ["repo"], "cursors": {"comment": 7}}
+    tracker_holds(conn)
+    said = comment(conn, "c7", "acc-1", "2026-10-18T10:00:00.000Z", "See the login page.")
+    arguments = {"key": "PROJ-1", "kind": "implement", "label": LABEL, "repos": ["repo"], "cursors": {"comment": said}}
     with in_tick(conn, ends_ok=True) as tick_id:
         served = mcp_session(tool_call("dispatch", **arguments))
     text, error = served.said()
@@ -1321,7 +1264,7 @@ def test_a_worker_a_tool_dispatches_is_recorded_and_its_cursors_wait_for_it_to_s
     [recorded] = recorded_runs.of_tick(conn, tick_id)
     assert (recorded.kind, recorded.ticket_key) == ("dispatch", "PROJ-1")
     assert db.decisions_for_tick(conn, tick_id) == []
-    assert present(db.get_ticket(conn, "PROJ-1")).last_comment_id is None
+    assert present(db.get_ticket(conn, "PROJ-1")).comment_cursor is None
 
 
 @pytest.mark.usefixtures("git_pool")

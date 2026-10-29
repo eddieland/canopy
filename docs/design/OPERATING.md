@@ -239,9 +239,9 @@ which a file canopy cannot use refuses as `bad_prompt`; a chore's follow its own
 reaches only its own role's prompts, and a role without one has no section for them.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
-skill, which canopy puts in the overseer's definition when it ships one (§13). `tracker.query` finds candidates; it
-does not authorize them (§17). It is shared though the overseer reads every ticket it returns before checking labels,
-an exposure stated in TRUST_MODEL T7's residual.
+skill the workers load (§17). `tracker.query` finds candidates; it does not authorize them (§17). It is shared: the
+`tracker` source reads it, and a ticket it returns that is not a candidate reaches the overseer by key and why alone
+(TRUST_MODEL T7).
 
 ## 13. Agent runtime
 
@@ -261,8 +261,8 @@ Agent definitions ship in `agents/`:
   canopy renders those last of its bash rules, after the deny of every other command, since the last match wins and
   its definition is merged after the operator's runtime config, and refuses one that runs a command it is given or is
   the loop's own (TRUST_MODEL T1). Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021) and
-  loses every decision not yet recorded. MCP: the tracker's read tools only (T6); of GitHub, its reads of PRs and
-  branches, and of issues only when they are the tickets.
+  loses every decision not yet recorded. MCP: no server but canopy's (§39, T6), every other server's tools and
+  resources denied whatever the operator's runtime config grants.
 - `canopy-worker`: edit and bash within the worktree; `runtime.allow_bash` names commands that beat its bash denies,
   rendered last, with the overseer's checks, and the private worker's the same. MCP: the tracker (comments, labels,
   follow-ups), GitHub (open and update a PR, read reviews and checks, and its issue tools only when they are the
@@ -334,7 +334,7 @@ private run (§22) is also refused where that config names any tool of the track
 after canopy's could reopen a write tool.
 
 Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
-turns none off, but for the overseer whose body holds the tracker's skill, and the operator's skill below. A
+turns none off, but for the overseer, which reads no tracker and loads no skill (§39), and the operator's skill below. A
 repository can also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
@@ -460,13 +460,13 @@ reason and a detail; the tool refuses it a reason the harness raises. Items are 
 their own (D020). `needs_author`, `multi_repo`, and `notice_rerun` it records once, naming what each is about, and the
 harness holds each until what it names ends it (§37). Any other it records every tick its cause holds: the current list
 is the attention decisions of the latest `ok` tick, so such an item disappears the first tick that does not record it,
-and a failed or `skipped` tick leaves the previous list standing; a halted tick's item (§6 step 5) is added to it while
-it is the latest tick's. The harness holds such an item of the overseer's, and a guard's, through a tick that did not
-give the overseer its subject, such as a ticket the harness decided (§37), since the overseer cannot record again what
-it was not shown; the item goes the first tick that gives the overseer its subject and leaves it out, or once its
-ticket is done or stopped. The state block lists the overseer's open items on what it is given (§6 step 4), each it
-keeps with what it names, so it records none of those twice and each other again until it sees the cause gone. An
-item's age runs from the first tick of its unbroken run.
+and a failed tick, or an older release's `skipped` one, leaves the previous list standing; a halted tick's item (§6 step
+5) is added to it while it is the latest tick's. The harness holds such an item of the overseer's, and a guard's,
+through a tick that did not give the overseer its subject, such as a ticket the harness decided (§37), since the
+overseer cannot record again what it was not shown; the item goes the first tick that gives the overseer its subject and
+leaves it out, or once its ticket is done or stopped. The state block lists the overseer's open items on what it is
+given (§6 step 4), each it keeps with what it names, so it records none of those twice and each other again until it
+sees the cause gone. An item's age runs from the first tick of its unbroken run.
 
 **Notification.** An item is identified by its ticket, reason, and repository; rewording its detail does not make it
 new. Each sink (§20), `notify.cmd` among them, keeps its own record of what it was told, and each tick sends it the new
@@ -491,14 +491,12 @@ open item is never notified twice, and an item that returns after going away is 
 - Overseer timeout or bad output: the tick closes `overseer_failed`; nothing is dispatched; the next tick retries.
   Three consecutive ticks not `ok` send a `loop.failing` notification once per streak, and `loop.recovered` at the next
   `ok` (§20); no attention item, since a failing loop cannot add to the latest `ok` tick's list.
-- Overseer left a duty undone (the query when due, a ticket's decision, a due chore's): the tick closes
-  `overseer_failed`, naming each (§6 step 5). What it dispatched stands, and the next tick owes the same duties.
+- Overseer left a duty undone (a ticket's decision, a due chore's): the tick closes `overseer_failed`, naming each
+  (§6 step 5). What it dispatched stands, and the next tick owes the same duties.
 - Tick code raises an unexpected exception: the tick closes `error`, its summary the exception's type and message, so
   the journal keeps the cause when the logs cannot; the traceback goes to `canopy.log`, and the loop goes on.
-- MCP unavailable: the overseer first does what needs nothing from the server that failed (due chores; with GitHub,
-  reviews and a private ticket's `resume`; with the tracker, closed tickets marked done), then records a tick-wide
-  `skip`. The tick closes `skipped`: what it started stands, nothing is decided on partial data, and the attention list
-  stays as it was.
+- A source down: the tick raises `connector_failed` (§30), and what the source left stale is the harness's `wait`
+  (§39); the overseer, which reads no server, has no outage of its own to skip a tick over.
 - Overseer asks for something the guards refuse: the refusal is recorded as a decision with the guard's reason.
 - An unhandled error in a tick `canopy loop` runs: the traceback is logged and the loop goes on; the next tick closes
   the row as `abandoned` (§6).

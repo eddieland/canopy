@@ -8,8 +8,9 @@ files mark for it:
 
 - the tracker's MCP server and the tools of it the private worker and the planner may call: its read tools, and for
   the private worker alone, its tools that create a ticket and those that write to a PR (DESIGN §22, §25); and the
-  overseer, the reviewer, and the chore, its reads only; off a GitHub tracker, the overseer's and the reviewer's denial
-  of GitHub's issue reads, and both workers' and the planner's of GitHub's issue tools (DESIGN §13);
+  reviewer and the chore, its reads only; off a GitHub tracker, the reviewer's denial of GitHub's issue reads, and both
+  workers' and the planner's of GitHub's issue tools (DESIGN §13). The overseer's definition denies every MCP server
+  but canopy's as shipped, so nothing of the tracker's is rendered into it (DESIGN §39);
 - the rule that lets both workers push a rebased branch with a lease, with `trust.rebase` (DESIGN §8);
 - the denial of the tools that comment, when workers draft their replies (DESIGN §29);
 - the artifact store's MCP server, denied whole to every agent, then for each agent config lets publish its tools
@@ -20,10 +21,9 @@ files mark for it:
   for its model (DESIGN §19);
 - the commands the operator allows an agent beyond its own bash rules (`runtime.allow_bash`, DESIGN §13), last of
   them;
-- the overseer's prompt, then the tracker's skill if canopy ships one, as the overseer's body: the body is the agent's
-  system prompt, which the provider caches across ticks, where the state block, the tick's message, changes every tick
-  (DESIGN §6). With the skill there, the overseer's skill tool is denied, so that OpenCode sends neither it nor the
-  list of skills.
+- the overseer's prompt as its body: the body is the agent's system prompt, which the provider caches across ticks,
+  where the state block, the tick's message, changes every tick (DESIGN §6). Its skill tool is denied, so that OpenCode
+  sends neither it nor the list of skills.
 
 Every shipped agent denies the operator's own skill, `canopy` (DESIGN §13), by name, whatever directory it is installed
 in: it is for the operator's sessions, and an agent canopy runs has its own prompt to follow.
@@ -109,38 +109,14 @@ _REPLY_TOOLS = ('  "*reply_to_pull_request_comment*": deny\n', '  "*add_comment_
 _REPLY_TOOLS_ISSUES = ('  "*add_issue_comment*": deny\n',)
 # The line of the shipped private worker's and planner's definitions the tracker's rules are rendered at.
 _TOOLS_MARKER = "  # canopy: tracker tools\n"
-# The line of the shipped overseer's, reviewer's, and chore's definitions the tracker's rules are rendered at, above
-# their denials of GitHub's tools by name and patterns, so that no allow rendered there reopens a write they close
-# (D021).
+# The line of the shipped reviewer's and chore's definitions the tracker's rules are rendered at, above their denials
+# of GitHub's tools by name and patterns, so that no allow rendered there reopens a write they close (D021).
 _READS_MARKER = "  # canopy: tracker reads\n"
 # The tracker provider whose tickets are GitHub's issues, on the same server as the PRs (the skill `tracker-github`).
 _GITHUB = "github"
-# The overseer's reads of GitHub, as its definition keeps them, allowed by name when the tracker is GitHub and so the
-# server is the tracker's: the tracker's read tools there include the PR writes a private worker needs.
-_OVERSEER_GITHUB_READS = (
-    "get_me",
-    "issue_read",
-    "list_issues",
-    "search_issues",
-    "pull_request_read",
-    "list_pull_requests",
-    "search_pull_requests",
-    "list_branches",
-)
-# GitHub's issue reads, which the overseer and the reviewer have no use for off a GitHub tracker. Rendered before the
-# tracker's rules: a read of the tracker's that one matches, such as a `list_issues` of its own, is allowed again after
-# it.
+# GitHub's issue reads, which the reviewer has no use for off a GitHub tracker. Rendered before the tracker's rules: a
+# read of the tracker's that one matches, such as a `list_issues` of its own, is allowed again after it.
 _GITHUB_ISSUE_READS = ("*issue_read*", "*list_issues*", "*search_issues*")
-# GitHub's reads of PRs and branches, and of the signed-in user, which the overseer keeps but where the sources read
-# both the tracker and GitHub for it (DESIGN §39). Denied by pattern, as its writes are: the server's name is the
-# operator's. `get_me` is anchored at the name's end, so that another server's `get_message` or `get_member` stays.
-_GITHUB_PR_READS = (
-    "*pull_request_read*",
-    "*list_pull_requests*",
-    "*search_pull_requests*",
-    "*list_branches*",
-    "*_get_me",
-)
 # GitHub's issue tools, which only the `tracker-github` skill names, so that the workers and the planner have no use
 # for them off a GitHub tracker: the reads, and what filing or labelling an issue takes. Not its issue comment tools,
 # which comment on a PR's conversation too.
@@ -168,9 +144,9 @@ _TEMPERATURE_MARKER = "# canopy: temperature\n"
 _MODEL_MARKER = "# canopy: model\n"
 # The line of the shipped overseer definition its prompt replaces, with everything after it.
 _PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
-# The line of the shipped overseer definition the denial of its skill tool is rendered at, when its body holds the
-# tracker's skill: nothing is left for it to load, and a tool whose last rule denies `*` is not sent. The line ends its
-# `skill` rules, after the denial of the operator's skill.
+# The line of the shipped overseer definition the denial of its skill tool is rendered at: it reads no tracker, so it
+# has no skill to load, and a tool whose last rule denies `*` is not sent. The line ends its `skill` rules, after the
+# denial of the operator's skill.
 _SKILL_MARKER = "    # canopy: skill rule\n"
 _SKILL_RULE = '    "*": deny\n'
 # The line of a shipped definition the commands config allows it are rendered at: the last of its bash rules, so each
@@ -234,19 +210,7 @@ def render(files: Mapping[str, bytes], rules: Rules) -> dict[str, bytes]:
             found[rel] = render_github_issues(text, rel, rules.tracker_tools, rules.tracker_provider).encode()
     _render_by_agent(found, rules)
     if _OVERSEER_FILE in found:
-        # Where the sources read the tracker and GitHub, the overseer reads neither (DESIGN §39): no skill says how to.
-        observed = rules.observes_all
-        skill = None if observed else _tracker_skill(found, rules.tracker_provider)
-        text = found[_OVERSEER_FILE].decode()
-        server = rules.tracker_server if observed else None
-        text = render_overseer_reads(
-            text,
-            rules.tracker_tools,
-            rules.tracker_provider,
-            observed=observed,
-            server=server,
-        )
-        found[_OVERSEER_FILE] = render_overseer(text, rules.overseer_prompt, skill, no_skills=observed).encode()
+        found[_OVERSEER_FILE] = render_overseer(found[_OVERSEER_FILE].decode(), rules.overseer_prompt).encode()
     if _REVIEWER_FILE in found:
         text = found[_REVIEWER_FILE].decode()
         found[_REVIEWER_FILE] = render_reviewer_reads(text, rules.tracker_tools, rules.tracker_provider).encode()
@@ -454,52 +418,13 @@ def render_bash_allows(text: str, name: str, allows: Sequence[str]) -> str:
     return text.replace(_BASH_ALLOWS_MARKER, _BASH_ALLOWS_MARKER + "".join(rules), 1)
 
 
-def render_overseer_reads(
-    text: str,
-    tools: McpTools | None,
-    provider: str,
-    *,
-    observed: bool = False,
-    server: str | None = None,
-) -> str:
-    """Return the overseer's definition with the tracker's rules at its marked line: it may only read the tracker.
-
-    As for the planner, every tool of the server is denied by a wildcard and the reads allowed after it (D021): the
-    tracker's read tools, or on a GitHub tracker, whose server the PRs share, the overseer's own reads of GitHub, since
-    the provider's read tools there hold the PR writes a private worker needs. Off a GitHub tracker, GitHub's issue
-    reads are denied first. With no tools known, the marked line stays as it is, and the overseer keeps the tracker's
-    tools and GitHub's issue reads: a pattern could take a read it needs.
-
-    `observed` is a `tracker` source reading the tickets, beside the `vcs` source, which always runs, so the overseer
-    reads neither the tracker nor GitHub (DESIGN §39): GitHub's issue, PR, and branch reads are denied by pattern, and
-    the tracker's server whole, by the name its tools give, or with none known, `server`, which on a GitHub tracker is
-    GitHub's.
-
-    Raises:
-        DefinitionsError: `text` has no marked line to render the tracker's rules at.
-    """
-    _require_reads_marker(text, _OVERSEER_FILE)
-    if observed:
-        # The tracker's server by the name its tools or config give; with neither, only GitHub's reads are denied.
-        named = tools.server if tools is not None else server
-        whole = () if named is None else (f"{named}_*",)
-        rules = "".join(map(_deny, (*_GITHUB_ISSUE_READS, *_GITHUB_PR_READS, *whole)))
-        return text.replace(_READS_MARKER, _READS_MARKER + rules, 1)
-    if tools is None:
-        return text
-    github = provider == _GITHUB
-    reads = _OVERSEER_GITHUB_READS if github else tools.allowed
-    return _render_reads(text, tools.server, reads, issue_reads=not github)
-
-
 def render_reviewer_reads(text: str, tools: McpTools | None, provider: str) -> str:
     """Return the reviewer's definition with the tracker's rules at its marked line: it may only read the tracker.
 
-    It reads the ticket and writes nothing (DESIGN §21, TRUST_MODEL T6), so as for the overseer every tool of the
-    tracker's server is denied by a wildcard and its read tools allowed after it, less the writes canopy knows of it,
-    with GitHub's issue reads denied first. On a GitHub tracker the line stays as it is: the server is the one the
-    reviewer reads the PR through, and its patterns govern it. With no tools known it stays as well, as the
-    overseer's does.
+    It reads the ticket and writes nothing (DESIGN §21, TRUST_MODEL T6), so every tool of the tracker's server is
+    denied by a wildcard and its read tools allowed after it, less the writes canopy knows of it, with GitHub's issue
+    reads denied first. On a GitHub tracker the line stays as it is: the server is the one the
+    reviewer reads the PR through, and its patterns govern it. With no tools known it stays as well.
 
     Raises:
         DefinitionsError: `text` has no marked line to render the tracker's rules at.
@@ -520,14 +445,11 @@ def render_chore_reads(text: str, tools: McpTools | None, provider: str) -> str:
     return _render_tracker_reads(text, tools, provider, _CHORE_FILE, issue_reads=False)
 
 
-def render_overseer(text: str, prompt: str, skill: str | None, *, no_skills: bool = False) -> str:
-    """Return the overseer's definition with `prompt`, then `skill` if given, as its body from its marked line on.
+def render_overseer(text: str, prompt: str) -> str:
+    """Return the overseer's definition with `prompt` as its body from its marked line on, and its skill tool denied.
 
-    The body is the agent's system prompt, so it is cached across ticks with the tools (DESIGN §6, §13). `skill` is the
-    tracker's skill, its own frontmatter left out: given here, the overseer need not load it with a tool call each tick,
-    so its skill tool is denied too. Without one, the prompt has it load the tracker's skill by name, unless
-    `no_skills`: a `tracker` source reads the tracker, so there is none for it to load (DESIGN §39), and the tool is
-    denied too.
+    The body is the agent's system prompt, so it is cached across ticks with the tools (DESIGN §6, §13). The `tracker`
+    source reads the tracker, so the overseer has no tracker skill to load (DESIGN §39), and the tool is denied.
 
     Raises:
         DefinitionsError: `text` has no marked line to render the prompt at, or none for the skill rule.
@@ -537,10 +459,8 @@ def render_overseer(text: str, prompt: str, skill: str | None, *, no_skills: boo
         raise DefinitionsError(f"{_OVERSEER_FILE} has no line {_PROMPT_MARKER.strip()!r} to render the prompt at")
     if _SKILL_MARKER not in head:
         raise DefinitionsError(f"{_OVERSEER_FILE} has no line {_SKILL_MARKER.strip()!r} to render the skill rule at")
-    if skill is not None or no_skills:
-        head = head.replace(_SKILL_MARKER, _SKILL_MARKER + _SKILL_RULE, 1)
-    parts = [prompt] if skill is None else [prompt, skill]
-    return head + "\n\n".join(part.strip("\n") for part in parts) + "\n"
+    head = head.replace(_SKILL_MARKER, _SKILL_MARKER + _SKILL_RULE, 1)
+    return head + prompt.strip("\n") + "\n"
 
 
 def _require_reads_marker(text: str, name: str) -> None:
@@ -584,19 +504,3 @@ def _render_reads(text: str, server: str, reads: Iterable[str], *, issue_reads: 
 
 def _deny(pattern: str) -> str:
     return f'  "{pattern}": deny\n'
-
-
-def _tracker_skill(found: Mapping[str, bytes], provider: str) -> str | None:
-    """Return the shipped skill for `provider`, introduced by name, without the frontmatter that names it for loading.
-
-    Returns:
-        The skill's text, or None when canopy ships no skill for `provider`.
-    """
-    name = f"tracker-{provider}"
-    data = found.get(f"{SKILLS_SUBDIR}/{name}/SKILL.md")
-    if data is None:
-        return None
-    text = data.decode()
-    if text.startswith("---\n"):
-        _, _, text = text.removeprefix("---\n").partition("\n---\n")
-    return f"The skill `{name}` follows, given here so that you need not load it.\n\n{text.strip()}"

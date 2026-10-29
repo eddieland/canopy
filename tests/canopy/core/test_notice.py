@@ -26,6 +26,7 @@ from tests.canopy.helpers import (
     InlineRunner,
     in_tick,
     present,
+    tracker_holds,
     waits,
 )
 from tests.canopy.scenario_helpers import FEEDBACK_RED, Scenario, dispatches, github_shows, with_a_pr
@@ -195,13 +196,13 @@ def test_setting_a_notice_replaces_the_one_in_force_and_status_shows_it(scenario
 
 
 def test_the_state_block_carries_the_notice_in_force_and_drops_one_ended_with_no_unit(scenario: Scenario) -> None:
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     # With none set, nothing about notices reaches the overseer.
     assert "notices" not in scenario.state()
 
     scenario.operator("notice", "The staging cluster is being rebuilt.")
     scenario.operator("notice", OUTAGE, "--for", "1h")
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     [now, before] = scenario.conn.execute("SELECT * FROM notices ORDER BY id DESC").fetchall()
     assert scenario.state()["notices"] == [
         {"text": OUTAGE, "set_at": now["set_at"], "until": now["lapses_at"], "in_force": True},
@@ -335,6 +336,7 @@ def test_a_resume_for_ci_after_the_notice_moved_mid_tick_is_refused(
     moved: bool,  # noqa: FBT001  (a parametrized fixture)
 ) -> None:
     # The overseer decided from a state block without the notice; the tick the notice wakes decides with it.
+    tracker_holds(conn)
     if not moved:
         notice.set_notice(conn, OUTAGE, minutes=60, channel="cli")
     with in_tick(conn) as tick_id:

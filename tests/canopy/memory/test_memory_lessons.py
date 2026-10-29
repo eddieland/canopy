@@ -28,6 +28,7 @@ from tests.canopy.helpers import (
     memories,
     planner_does,
     present,
+    waits,
     with_memory,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
@@ -659,7 +660,8 @@ def test_a_done_tickets_pending_proposals_raise_memory_proposal_for_the_operator
     [item] = memory_attention.items(conn, cfg)
     assert (item.ticket_key, item.reason) == (KEY, "memory_proposal")
     assert item.detail.startswith(f"proposals {ids[0]}, {ids[1]} from {KEY}'s runs wait on you")
-    scenario.tick()
+    # Another ticket left to the overseer, so it runs; KEY, done, is not listed to it.
+    scenario.tick(*waits("PROJ-2"))
     assert scenario.attention() == [(KEY, "memory_proposal")]
     assert "memory_proposal" not in str(scenario.state())
     assert attention.for_overseer(conn) == []

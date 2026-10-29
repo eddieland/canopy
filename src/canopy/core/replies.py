@@ -70,7 +70,7 @@ def render(
     trust = config.trust
     mode = trust.review_replies
     tracker = config.connect.tracker()
-    ticket = mode is ReplyMode.APPROVE and not private and tracker is not None and bool(tracker.post_cmd.strip())
+    ticket = mode is ReplyMode.APPROVE and not private and bool(tracker.post_cmd.strip())
     marks = mark_comments(trust.comment_prefix, trust.comment_suffix)
     label = config.tracker.needs_human_label
     if mode is ReplyMode.POST:

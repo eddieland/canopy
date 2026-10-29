@@ -94,22 +94,20 @@ Controls:
 - The overseer's state block carries what canopy's connectors observed (DESIGN §30): each ticket marked a candidate or
   not in code from its observed labels and state, a non-candidate by key and why with none of its text, and a
   candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a trusted
-  reviewer, a worker). By prompt, the overseer decides a subject observed within `connect.max_age_minutes` from it, and
-  reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut and marked. `canopy dispatch`
-  checks the overseer's claims against them in code (DESIGN §7), before its other guards: the label must be one observed
-  on the ticket, a `resume` for `reply` must cover a new comment by an authorized replier that is not a worker's or a
-  new operator message, a `resume` for `review` must cover a trusted reviewer's item, or anyone else's only with an
-  operator message after it (`unauthorized`), and each cursor, a tick's `canopy ticket set` included, must name an item
-  observed and shown (`unobserved`). A `resume`'s cursors the overseer leaves out default in code to the newest items
-  shown that these checks let it cover (DESIGN §37). A dispatch resting on a public ticket or a PR observed past that
-  age is refused `stale`. A private ticket and a subject no source covers keep their claims, checked by the worker as
-  before. Where a `tracker` source runs, beside the `vcs` source, which always does, the overseer reads neither world
-  live (DESIGN §39): a candidate whose ticket, PR, branches, or open blocker's PR a source left stale is the harness's
-  `wait`, the PRs its reviews ask about are shown as the `vcs` source read them, and its definition denies GitHub's
-  reads and, wherever config or the provider names it, the tracker's server, so it skips no tick over an outage.
-  Residual: the guards trust what a connector printed, and a label removed since its read authorizes until the
-  worker's check. Off a GitHub tracker, GitHub's server is denied by its tools' names, as its writes are, since its
-  name is the operator's: a tool no pattern names is still the overseer's.
+  reviewer, a worker). By prompt, the overseer decides from them alone, and a subject no source can read gets its
+  `wait`. The text stays data, cut and marked. `canopy dispatch` checks the overseer's claims against them in code
+  (DESIGN §7), before its other guards: the label must be one observed on the ticket, a `resume` for `reply` must cover
+  a new comment by an authorized replier that is not a worker's or a new operator message, a `resume` for `review` must
+  cover a trusted reviewer's item, or anyone else's only with an operator message after it (`unauthorized`), and each
+  cursor, a tick's `canopy ticket set` included, must name an item observed and shown (`unobserved`). A `resume`'s
+  cursors the overseer leaves out default in code to the newest items shown that these checks let it cover (DESIGN §37).
+  A dispatch resting on a public ticket or a PR observed longer ago than `connect.max_age_minutes` is refused `stale`. A
+  private ticket and a subject no source covers keep their claims, checked by the worker as before. Config requires a
+  `tracker` source, and the `vcs` source always runs, so the overseer reads neither world live (DESIGN §39): a candidate
+  whose ticket, comments, PR, branches, or open blocker's PR a source left stale, or whose PR no source reads, is the
+  harness's `wait`, the PRs its reviews ask about are shown as the `vcs` source read them, and its definition denies
+  every MCP server's tools but canopy's, so it skips no tick over an outage. Residual: the guards trust what a connector
+  printed, and a label removed since its read authorizes until the worker's check.
 - An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own, cut
   as a tracker comment is, with the store's id for each author and whether the comment is an agent's or carries every
   comment mark. A comment on an artifact whose origin names a ticket the journal holds is also recorded once in that
@@ -333,6 +331,9 @@ Controls:
   its MCP server is down. The server is named in the overseer process's environment alone, from which the harness
   removes it before any run it starts; it lists no tool and refuses every call under `CANOPY_RUN_ID` or outside a
   running tick, the overseer's definition allows each tool by exact name, and every other definition denies them all.
+  It reaches no other MCP server (DESIGN §39): its definition denies every server's tools, `<server>_<tool>` as
+  OpenCode names them, whatever the operator's runtime config grants, and every server's resources, before it allows
+  canopy's, and nothing from config is rendered there to reopen one.
   A steered overseer can still make any call its tools take, as it could run any `canopy` command before; the guards
   in the tools bound what that does. Its bash rules deny every command but those `runtime.allow_bash` names. That key
   is private (T7): only the operator widens the overseer's shell, and canopy renders each pattern last of its bash
@@ -447,9 +448,10 @@ Controls:
   reads the replies in its threads, reads the same file and sends the token only to Slack's API. Both talk to Slack
   through `canopy-http` (D130), following no redirect. The GitHub reader and poster,
   `canopy-connect-github` and `canopy-post-github` (DESIGN §29), read the token `gh` holds for the host a PR's or an
-  issue's URL, or a repository's clone URL in the map, names, when they run, only once `gh` names that host as one it
-  is logged in to, and send it only to that host's API, following no redirect, through `canopy-http` (D130), whose
-  client is bound to one origin; canopy never reads it.
+  issue's URL, a repository's clone URL in the map, or the repository a `tracker` source's `--repo` names in the
+  private config, names, when they run, only once `gh` names that host as one it is logged in to, and send it only to
+  that host's API, following no redirect, through `canopy-http` (D130), whose client is bound to one origin; canopy
+  never reads it.
   `canopy-connect-jira` (DESIGN §30) reads an email and API token from an operator-only file of its own, held to the
   Slack sink's checks, never from canopy's config, argv, journal, or logs, and sends them only to the Jira site the
   operator names, over https, following no redirect, through `canopy-http` (D130). Lint bans network modules in the
@@ -792,7 +794,7 @@ Controls:
   reviewer under the same definition, nothing outside the version it reports. Its definition denies commenting or
   replying anywhere, submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth;
   the operator's runtime need not grant it a write tool at all. Off a GitHub tracker, the tracker's server is denied
-  whole but its read tools, allowed by name, as for the overseer, so a write there no pattern names fails closed.
+  whole but its read tools, allowed by name, as for the planner, so a write there no pattern names fails closed.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, subagent, or shell tools,
   one tool of canopy's, `canopy_chore_history`, which reads its own chore's earlier runs and writes nothing, and denies
   MCP write tools by name. That tool's server is named in the chore run's environment alone (DESIGN §27), lists nothing
@@ -824,12 +826,14 @@ Residual: real. An unsandboxed run can send anything it reads to any host. A san
 reads, the worktree and whatever its template re-allows, to any allowed host, with the credentials it holds: with
 `github.com` allowed and a push credential in reach, it can push or post anywhere the operator can. A sandboxed
 overseer reads the workspace's whole state, private tickets' conversations and plans among it, and can send it to its
-model provider, its tracker, or GitHub's API with the tokens its MCP servers hold. Scoping those credentials is the
-next step (HOST_ISOLATION §8); until then this risk is accepted and documented. Behind a corporate proxy, which `srt`
-forwards through, `srt` makes no address checks and the proxy's rules are the only ones. A chore steered by what it
-read can put up to 20 findings of its choosing in front of the operator and into `notify.cmd`, wherever that sends
-them, and a finding's link can carry data in its URL. A steered agent likewise chooses up to 500 characters per
-attention item, and 300 per worker summary and question, that a sink puts in front of whoever reads its destination.
+model provider, or through a command `runtime.allow_bash` names, to its tracker or GitHub's API: its definition denies
+every MCP server but canopy's, though the runtime may still start the ones its config names, with their tokens. Scoping
+those credentials is the next step (HOST_ISOLATION §8); until then this risk is accepted and documented. Behind a
+corporate proxy, which `srt` forwards through, `srt` makes no address checks and the proxy's rules are the only ones. A
+chore steered by what it read can put up to 20 findings of its choosing in front of the operator and into `notify.cmd`,
+wherever that sends them, and a finding's link can carry data in its URL. A steered agent likewise chooses up to 500
+characters per attention item, and 300 per worker summary and question, that a sink puts in front of whoever reads its
+destination.
 A steered reviewer can put what it read into its findings, which reach the operator and, through `resume`, a worker on
 that ticket, who can push and comment; the worker reads them as data, as it reads any review comment. A write tool
 the operator's runtime grants anyway, on GitHub's server or another the tracker's rules do not cover, under a name the
@@ -932,16 +936,13 @@ Residual: the repository still chooses the tracker provider, the query, `needs_h
 and `tracker.ticket_url`. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled tickets,
 agent branches under an unexpected prefix, which branch protection (§7) still governs, or the web UI's ticket links
 leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
-nothing. The query can still widen what the overseer reads: without a `tracker` source, it reads every ticket a query
-returns, text and comments, before it checks for a label, so a widened query puts tickets nobody labeled, any the
-operator's tracker account can see, in front of the model, where their text can try to steer it (T1). It cannot make one
-a candidate. With a `tracker` source, a ticket observed fresh that is not a candidate reaches the overseer by key and
-why alone, and its prompt says not to read it (DESIGN §30); a stale one is the harness's `wait` and never reaches it,
-and its definition denies GitHub's issue reads and, wherever config or the provider names it, the tracker's server
-whole, and carries no skill for it, so its prompt reads no ticket live (DESIGN §39). Settled
-(2026-10-15, the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator
-who shares the workspace with people they do not trust overrides it in the private file. Requiring a `tracker` source
-would close what is left (DESIGN §35). The provider also picks the default tracker server and tools a private ticket's
+nothing. The query cannot widen what the overseer reads: config requires a `tracker` source, which reads the query,
+and a ticket observed fresh that is not a candidate reaches the overseer by key and why alone, and its prompt says not
+to read it (DESIGN §30); a stale one is the harness's `wait` and never reaches it, and its definition denies every MCP
+server but canopy's and carries no skill for the tracker, so it reads no ticket live (DESIGN §39). Settled (2026-10-15,
+the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator who shares
+the workspace with people they do not trust overrides it in the private file. The provider also picks the default
+tracker server and tools a private ticket's
 worker gets (T6): a repository that names another provider leaves the real tracker's server
 undenied in that definition. An operator who works private tickets in a repository they do not control sets
 `tracker.mcp_server` and `tracker.read_tools`, which are private, to pin them. Through the runtime's own config it can

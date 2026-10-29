@@ -115,22 +115,10 @@ TOOLS = (
         "decide",
         "Record a wait, skip, or done for tickets, each with its rationale. A dispatch, a review, an attention item, "
         "or a refusal that its own tool recorded already counts as a ticket's decision. Decide each ticket once in a "
-        "call; the call records all its decisions or none. Omit key only to skip the whole tick when it cannot go on: "
-        "its rationale starts mcp_unavailable: or tracker_unsupported:, and it is the only decision in its call. "
-        f"Returns the decisions recorded, in order. {_REFUSED}",
+        f"call; the call records all its decisions or none. Returns the decisions recorded, in order. {_REFUSED}",
         tools.Decisions,
         tools.Decided,
         tools.decide,
-    ),
-    tool(
-        "queried",
-        "Record that this tick ran the tracker query, naming each open ticket it returned, labeled or not. Call it "
-        "once the query has run: each ticket named is then owed a decision this tick, unless the state block lists it "
-        "in stopped or recently_done. Name none when the query returned none, and split a long result across several "
-        f"calls. Returns the keys recorded, each once. {_REFUSED}",
-        tools.Queried,
-        tools.QueryRecorded,
-        tools.queried,
     ),
     tool(
         "attention",

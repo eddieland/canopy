@@ -14,8 +14,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
 
-import pytest
-
 from canopy.core import config, conversation, db, item_numbers, pools, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import NumberedItem, Phase, ResumeReason, RunStatus, StartStatus, TickStatus
@@ -46,7 +44,7 @@ def test_the_state_block_of_a_new_workspace(canopy_env: CanopyEnv, markdown_snap
     ctx = context(canopy_env)
     with clock("10:00"):
         tick_id = db.start_tick(ctx.conn, dry_run=False)
-    assert rendered(canopy_env, ctx, tick_id, dry_run=False, query_due=True, running=0, leased=[]) == markdown_snapshot
+    assert rendered(canopy_env, ctx, tick_id, dry_run=False, running=0, leased=[]) == markdown_snapshot
 
 
 def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
@@ -74,9 +72,8 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             root,
             title="Retry flaky uploads",
             phase=Phase.CI_RUNNING,
-            cursors={"comment": "10001"},
-            # No tracker source observes its tickets: its comment cursor is the tracker's id.
-            tracked=False,
+            # The tracker source numbers the comments it observes: its comment cursor is a journal number.
+            cursors={"comment": "3"},
         )
         implement = db.insert_run(
             conn,
@@ -226,10 +223,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
         ),
     ]
     with mock.patch.object(harness_dispatches, "ROWS", {Phase.CONFLICTED: CONFLICTED}):
-        assert (
-            rendered(canopy_env, ctx, tick_id, dry_run=True, query_due=False, running=1, leased=leased)
-            == markdown_snapshot
-        )
+        assert rendered(canopy_env, ctx, tick_id, dry_run=True, running=1, leased=leased) == markdown_snapshot
 
 
 def prompts(env: CanopyEnv, *names: str) -> None:
@@ -240,17 +234,11 @@ def prompts(env: CanopyEnv, *names: str) -> None:
         prompt.write_text(f"# {name}\n")
 
 
-@pytest.mark.parametrize("tracker", [True, False])
-def test_a_review_query_not_read_fresh_keeps_no_pr_of_no_ticket_where_the_overseer_reads_no_github(
-    scenario: Scenario,
-    connector_state: Path,
-    *,
-    tracker: bool,
-) -> None:
-    """Where a `tracker` source runs, the overseer runs no query itself (DESIGN §39): nothing it might find is kept."""
+def test_a_review_query_not_read_fresh_keeps_no_pr_of_no_ticket(scenario: Scenario, connector_state: Path) -> None:
+    """The overseer runs no query itself (DESIGN §39): nothing it might find is kept."""
     vcs = {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1}
     jira = {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}
-    scenario.configures("private", connect={"sources": {"github": vcs, **({"jira": jira} if tracker else {})}})
+    scenario.configures("private", connect={"sources": {"github": vcs, "jira": jira}})
     scenario.configures("private", review={"query": "is:pr review-requested:@me"})
     with in_tick(scenario.conn, ends_ok=True) as tick_id:
         scenario.conn.execute(
@@ -260,9 +248,9 @@ def test_a_review_query_not_read_fresh_keeps_no_pr_of_no_ticket_where_the_overse
         )
     # The `vcs` source does not read the review query to its end.
     connector_state.write_text(json.dumps({"github": {"end": {"repositories": ["repo"]}}}))
-    scenario.tick(queried=None if tracker else [])
+    scenario.tick()
     assert scenario.state()["observations"]["review_query"]["observed"] == "stale"
-    assert [pr["url"] for pr in scenario.state()["reviews"].get("prs", [])] == ([] if tracker else [PR])
+    assert [pr["url"] for pr in scenario.state()["reviews"].get("prs", [])] == []
 
 
 def derive_conflicted(conn: sqlite3.Connection, tick_id: int, key: str) -> None:
@@ -348,7 +336,6 @@ def rendered(
     tick_id: int,
     *,
     dry_run: bool,
-    query_due: bool,
     running: int,
     leased: list[pools.Slot],
 ) -> str:
@@ -360,7 +347,6 @@ def rendered(
         dry_run=dry_run,
         now=NOW,
         reconciled=reconcile.Reconciled(capacity, {"repo": leased}),
-        query_due=query_due,
     )
     head, rest = block.split("```json\n", 1)
     compact, tail = rest.split("\n```", 1)

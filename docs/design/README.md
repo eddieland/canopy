@@ -147,8 +147,9 @@ cannot reach internal systems and require handing a vendor write access.
 - A hosted service, a service installed with the OS, or a workflow DSL. `canopy loop` (§6) runs where the operator
   started it, in the foreground or detached by `canopy daemon`, and nothing restarts it. A listener is allowed only on
   loopback or the operator's private network, behind the operator's secret (TRUST_MODEL T8, D055); none is built yet.
-- Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
-  provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
+- Tracker-specific code. Any issue tracker with an MCP server and a connector works (§30), canopy shipping Jira's
+  and GitHub Issues'; provider differences live in config and optional provider skills (§17). A second VCS host is
+  likewise a prompt and config concern, not code.
 - A sandbox the harness knows about. Sandboxing is an opt-in prefix on the command templates (§24), which canopy adds
   itself only for the repositories the operator lists; beyond that, the harness never learns whether a run is
   sandboxed (D118).
@@ -159,7 +160,7 @@ cannot reach internal systems and require handing a vendor write access.
    treehouse owns worktrees and leases. The SQLite journal owns facts about the loop: what it saw, decided,
    dispatched, and what came back. What it saw is an observation, a dated copy of a world fact (§30), never the fact
    itself: an action that matters rests on one observed within `connect.max_age_minutes`, or no dispatch (§7), and a
-   subject no source observes is re-read live. Drift is then a stale cache, not a correctness bug.
+   stale one waits for the next whole read (§39). Drift is then a stale cache, not a correctness bug.
 2. **Policy in prompts, guards in code.** What to do about a ticket is decided
    by the overseer prompt. What the loop may never do (exceed capacity, run two
    workers on one ticket, merge, retry forever) is enforced by the harness.
@@ -169,8 +170,9 @@ cannot reach internal systems and require handing a vendor write access.
 4. **Deterministic core, judgment at the edges.** Python never calls an LLM.
    The overseer and workers are agent processes the harness runs and observes.
 5. **Connectivity through the agent runtime.** The tracker (Jira, GitHub Issues, Linear, anything with an MCP server)
-   and GitHub are reached via the runtime's MCP servers. The harness contains no tracker or VCS host code and never
-   handles their credentials. It knows the tracker only as the strings in `[tracker]`.
+   and GitHub are reached via the runtime's MCP servers, and read into the journal by connectors, separate programs
+   (§30). The harness contains no tracker or VCS host code and never handles their credentials. It knows the tracker
+   only as the strings in `[tracker]`.
 6. **Smallest surface that works.** Five install steps. Coworkers' daily surface is labels, ticket comments, and PR
    review. The operator's is the web UI `canopy loop` serves (§22): one attention list, the runs, and every ticket's
    conversation, with the CLI's verbs for the same.
@@ -238,11 +240,10 @@ Where later work goes:
 Roles:
 
 - **Harness**: schedules, locks, guards, journals, renders. Runs the overseer once per tick and workers on demand.
-- **Overseer**: an agent run with `overseer_cmd`. Reads the world from the state block's observations, and through MCP
-  only about a subject they leave stale or unobserved (§30), decides one next action per ticket, and acts only through
-  `canopy dispatch`, `canopy decide`, `canopy queried`, `canopy attention`, `canopy chore run`, `canopy chore wait`
-  (§19), `canopy review run`, and `canopy review wait` (§21). Read-only everywhere else. What it owes every tick is
-  checked when it ends (§6 step 5).
+- **Overseer**: an agent run with `overseer_cmd`. Reads the world from the state block's observations alone (§30, §39),
+  decides one next action per ticket, and acts only through `canopy dispatch`, `canopy decide`, `canopy attention`,
+  `canopy chore run`, `canopy chore wait` (§19), `canopy review run`, and `canopy review wait` (§21). Read-only
+  everywhere else. What it owes every tick is checked when it ends (§6 step 5).
 - **Worker**: an agent run with `worker_cmd` in a leased worktree with a task prompt. Writes code, pushes a branch,
   opens or updates a PR, comments on the ticket, prints a result line, exits. Never merges, approves, or moves a ticket
   to Done. A private ticket's worker runs with `private_worker_cmd` and writes nothing to the ticket (§22).

@@ -42,7 +42,7 @@ are the ones you run.
 - **Never start the loop.** `canopy loop` without `--ticks` runs until Ctrl-C and would hang this session;
   `canopy daemon start` leaves it running. The one tick you may run is the dry one in stage 9, with the operator's
   go-ahead, because it spends a model call.
-- **Never run canopy's overseer tools**: `canopy dispatch`, `decide`, `queried`, `attention`, `ticket set`.
+- **Never run canopy's overseer tools**: `canopy dispatch`, `decide`, `attention`, `ticket set`.
   They refuse outside a tick by design.
 - **Keep agent config out of the workspace.** Do not write an `opencode.json`, `.opencode/`, or any other agent
   runtime's config into the workspace or the clones under `repos/`: the overseer runs there, and canopy refuses to start
@@ -122,8 +122,11 @@ README "Install" step 4, and GETTING_STARTED stage 1.
 1. Make sure git can reach each repository over HTTPS without a prompt: `git ls-remote <url> HEAD`. If it asks for a
    password, the operator sets up a credential helper (`gh auth setup-git`, or another), then you check again. Use
    HTTPS URLs even if the operator usually uses SSH: a sandboxed worker cannot reach an SSH agent.
-2. Run `canopy init --provider <tracker> <url>...` in the workspace. Show what it wrote and what it printed.
+2. Run `canopy init --provider <tracker>` in the workspace. Show what it wrote and what it printed.
 3. Fill in, with the operator:
+   - the tracker source in `.canopy/config.toml`, which config requires: uncomment the table `canopy init` wrote, and
+     the `cmd` for their tracker with their Jira site or GitHub repository. Then run `canopy workspace add <url>...`,
+     which clones each repository;
    - `tracker.query` in `canopy-workspace.toml`: help them write the query that finds their candidate tickets;
    - each repository's one-line `summary` under `[repos.<name>]`, and `MAP.md` if there are several (stage 4 of
      GETTING_STARTED);
@@ -211,9 +214,9 @@ well-described ticket. Then ask before you run, because the overseer spends a mo
 canopy loop --dry-run --ticks 1 --no-serve
 ```
 
-The overseer plans and dispatches nothing. Read the plan with them, and `canopy decisions`. A `skip` with
-`mcp_unavailable` means OpenCode lacks an MCP server (stage 4). A ticket missing from the plan usually means the query
-or the label does not find it. Fix what it shows and, with their go-ahead, run it again.
+The overseer plans and dispatches nothing. Read the plan with them, and `canopy decisions`. A `connector_failed`
+item means a source could not read (stage 4). A ticket missing from the plan usually means the query or the label does
+not find it. Fix what it shows and, with their go-ahead, run it again.
 
 ## 10. Hand over
 

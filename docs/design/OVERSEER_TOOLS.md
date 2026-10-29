@@ -63,9 +63,9 @@ name; every other definition denies them. Workers keep their shell, for git's wr
 
 ### The tools
 
-One tool per overseer verb, named for its command with hyphens for spaces: `dispatch`, `decide`, `queried`,
-`attention`, `ticket-set`, `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and
-`chore-wait`. The overseer sees them as `canopy_dispatch` and so on.
+One tool per overseer verb, named for its command with hyphens for spaces: `dispatch`, `decide`, `attention`,
+`ticket-set`, `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and `chore-wait`. The overseer
+sees them as `canopy_dispatch` and so on.
 No tool name holds an underscore: OpenCode joins server and tool with one, so `canopy_ticket_set` could also come from
 a server named `canopy_ticket`, and the later would replace the earlier. No tool reads the pool or the observations:
 the state block already holds them, and a claim on them, such as a dispatch's label or a cursor, is a field its tool

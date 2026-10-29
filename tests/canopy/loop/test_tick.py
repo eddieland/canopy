@@ -21,6 +21,7 @@ from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import lock, logs, procs
 from canopy.loop import attention, duties, mcp, tick
 from tests.canopy.helpers import (
+    KEY,
     LABEL,
     agent_runs,
     calls,
@@ -34,10 +35,11 @@ from tests.canopy.helpers import (
     titled_overseer,
     tools_of,
     tools_printed,
+    tracker_holds,
     waits,
     with_events,
 )
-from tests.canopy.scenario_helpers import Scenario, Ticked, sets_phase
+from tests.canopy.scenario_helpers import Scenario, sets_phase
 from tests.conftest import CanopyEnv, executable
 
 
@@ -125,12 +127,12 @@ def _acted_through_its_tools(run: Mapping[str, object]) -> None:
     assert run["commands"] == []
     made = run["tools"]
     assert isinstance(made, list)
+    # The tracker source read the query, which canopy recorded, so the overseer records none (DESIGN §39).
     assert [c["name"] for c in made] == [
-        f"canopy_{name}" for name in ("queried", "decide", "ticket-set", "dispatch", "attention", "decide")
+        f"canopy_{name}" for name in ("decide", "ticket-set", "dispatch", "attention", "decide")
     ]
-    assert made[0]["arguments"] == {"keys": []}  # the query was due, and found nothing
     # A refusal is a tool error naming the field, and the overseer goes on: nothing recorded it.
-    assert [c["error"] for c in made] == [False] * 5 + [True], made
+    assert [c["error"] for c in made] == [False] * 4 + [True], made
     assert made[-1]["text"].startswith("decisions.0.key: invalid ticket key 'PROJ-4;rm'")
 
 
@@ -159,12 +161,12 @@ def test_a_tick_run_by_hand_gives_its_overseer_a_session_title(scenario: Scenari
     ci_running = sets_phase("PROJ-1", Phase.CI_RUNNING, repo="repo")
     for _ in range(2):
         scenario.tick(ci_running, *waits("PROJ-1", rationale="checks pending"), dry_run=True)
-    assert overseer_titles(scenario.agent_log) == ["tick 1 · by hand · nothing open", "tick 2 · by hand · 1 ticket"]
+    assert overseer_titles(scenario.agent_log) == ["tick 1 · by hand · 1 ticket", "tick 2 · by hand · 1 ticket"]
 
 
 def test_overseer_state_names_the_configured_needs_human_label(scenario: Scenario) -> None:
     scenario.configures("workspace", tracker={"needs_human_label": "blocked-on-team"})
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     [run] = agent_runs(scenario.agent_log)
     argv = run["argv"]
     assert isinstance(argv, list)
@@ -174,7 +176,7 @@ def test_overseer_state_names_the_configured_needs_human_label(scenario: Scenari
 def test_overseer_state_names_the_comment_marks(scenario: Scenario) -> None:
     # The overseer recognizes workers' comments by these, since workers post as the operator (D069).
     scenario.configures(trust={"comment_suffix": "(canopy)"})
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     [run] = agent_runs(scenario.agent_log)
     argv = run["argv"]
     assert isinstance(argv, list)
@@ -183,7 +185,7 @@ def test_overseer_state_names_the_comment_marks(scenario: Scenario) -> None:
 
 
 def test_next_tick_sees_the_journal(scenario: Scenario) -> None:
-    scenario.tick(sets_phase("PROJ-9", Phase.NEEDS_HUMAN, repo="repo"), dry_run=True)
+    scenario.tick(sets_phase("PROJ-9", Phase.NEEDS_HUMAN, repo="repo"), *waits("PROJ-9"), dry_run=True)
     scenario.tick(*waits("PROJ-9", rationale="needs a human"), dry_run=True)
     second = agent_runs(scenario.agent_log)[1]["argv"]
     assert isinstance(second, list)
@@ -233,8 +235,7 @@ def test_the_state_block_names_the_tickets_marked_done_lately(scenario: Scenario
 
 
 def test_the_query_runs_every_tick_by_default(scenario: Scenario) -> None:
-    ticks = [scenario.tick(), scenario.tick()]
-    assert scenario.state()["query_due"] is True
+    ticks = [scenario.tick(*waits(KEY)), scenario.tick(*waits(KEY))]
     assert [t.tick.query_due for t in ticks] == [True, True]
 
 
@@ -242,16 +243,10 @@ def test_the_query_runs_again_once_its_spacing_has_passed(scenario: Scenario) ->
     scenario.configures(tracker={"query_every_minutes": 30})
     # A ticket to decide, so a tick the query is not due on still runs the overseer (DESIGN §39).
     scenario.seen("PROJ-2")
-    due: list[bool] = []
-    ticks: list[Ticked] = []
-    for _ in range(2):
-        ticks.append(scenario.tick(*waits("PROJ-2")))
-        due.append(scenario.state()["query_due"])
+    ticks = [scenario.tick(*waits("PROJ-2")) for _ in range(2)]
     # The first tick ran it 31 minutes ago; the second, which left it out, does not count.
     scenario.time_passes(minutes=31)
     ticks.append(scenario.tick(*waits("PROJ-2")))
-    due.append(scenario.state()["query_due"])
-    assert due == [True, False, True]
     assert [t.tick.query_due for t in ticks] == [True, False, True]
 
 
@@ -259,15 +254,9 @@ def test_only_a_live_ok_tick_counts_as_having_run_the_query(scenario: Scenario) 
     scenario.configures(tracker={"query_every_minutes": 30})
     # A ticket to decide, so a tick the query is not due on still runs the overseer (DESIGN §39).
     scenario.seen("PROJ-2")
-    due: list[bool] = []
-    scenario.tick(*waits("PROJ-2"), dry_run=True)
-    due.append(scenario.state()["query_due"])
-    scenario.tick(exit_code=3, code=1)
-    due.append(scenario.state()["query_due"])
-    for _ in range(2):
-        scenario.tick(*waits("PROJ-2"))
-        due.append(scenario.state()["query_due"])
-    assert due == [True, True, True, False]
+    ticks = [scenario.tick(*waits("PROJ-2"), dry_run=True), scenario.tick(exit_code=3, code=1)]
+    ticks += [scenario.tick(*waits("PROJ-2")) for _ in range(2)]
+    assert [t.tick.query_due for t in ticks] == [True, True, True, False]
 
 
 def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(scenario: Scenario) -> None:
@@ -277,8 +266,7 @@ def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(scenario: Sce
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
     assert conn.execute("SELECT query_due FROM ticks").fetchone()["query_due"] is None
     scenario.seen("PROJ-2")
-    scenario.tick(*waits("PROJ-2"))
-    assert scenario.state()["query_due"] is False
+    assert scenario.tick(*waits("PROJ-2")).tick.query_due is False
 
 
 @pytest.mark.parametrize(
@@ -291,7 +279,7 @@ def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(scenario: Sce
 )
 def test_overseer_failure_closes_the_tick(scenario: Scenario, case: tuple[int, str, str]) -> None:
     exit_code, last_line, summary = case
-    failed = scenario.tick(result=last_line, exit_code=exit_code, dry_run=True, code=1)
+    failed = scenario.tick(*waits(KEY), result=last_line, exit_code=exit_code, dry_run=True, code=1)
     assert only_tick(scenario.conn).id == failed.tick.id
     assert failed.tick.status == "overseer_failed"
     assert summary in failed.tick.summary
@@ -310,14 +298,20 @@ def test_overseer_failure_closes_the_tick(scenario: Scenario, case: tuple[int, s
 )
 def test_the_done_token_is_a_line_anywhere_in_the_final_message(scenario: Scenario, final: str, status: str) -> None:
     with_events(scenario.env, "canopy-overseer")
-    ticked = scenario.tick(result=final, dry_run=True, code=0 if status == "ok" else 1)
+    ticked = scenario.tick(*waits(KEY), result=final, dry_run=True, code=0 if status == "ok" else 1)
     assert ticked.tick.status == status
 
 
 def test_the_done_token_in_an_earlier_message_fails_the_tick(scenario: Scenario) -> None:
     """A run that named the token, then stopped before the procedure's end, did not finish it."""
     with_events(scenario.env, "canopy-overseer")
-    failed = scenario.tick(result="Now reading the next ticket.", says="CANOPY_TICK_DONE", dry_run=True, code=1)
+    failed = scenario.tick(
+        *waits(KEY),
+        result="Now reading the next ticket.",
+        says="CANOPY_TICK_DONE",
+        dry_run=True,
+        code=1,
+    )
     assert only_tick(scenario.conn).id == failed.tick.id
     assert (failed.tick.status, failed.tick.summary) == (
         "overseer_failed",
@@ -336,7 +330,14 @@ def test_an_overseer_failure_names_the_error_the_runtime_reported(
 ) -> None:
     with_events(scenario.env, "canopy-overseer")
     server = {"name": "UnknownError", "data": {"message": "Unexpected server error.", "ref": "err_ccf1"}}
-    failed = scenario.tick(result="", exit_code=exit_code, errors=json.dumps([server]), dry_run=True, code=1)
+    failed = scenario.tick(
+        *waits(KEY),
+        result="",
+        exit_code=exit_code,
+        errors=json.dumps([server]),
+        dry_run=True,
+        code=1,
+    )
     assert (failed.tick.status, failed.tick.summary) == (
         "overseer_failed",
         f"{failure}; the runtime reported UnknownError: Unexpected server error. (err_ccf1)",
@@ -355,7 +356,7 @@ def test_an_overseer_failure_names_each_distinct_error_the_first_and_last_past_t
     """The first error may be the cause, and the last ended the run (OpenCode goes on after a context overflow)."""
     with_events(scenario.env, "canopy-overseer")
     errors = json.dumps([{"name": name} for name in names])
-    failed = scenario.tick(result="", exit_code=1, errors=errors, dry_run=True, code=1)
+    failed = scenario.tick(*waits(KEY), result="", exit_code=1, errors=errors, dry_run=True, code=1)
     assert failed.tick.summary == f"overseer exited 1; the runtime reported {reported}"
 
 
@@ -374,7 +375,7 @@ def test_an_overseer_printing_json_events_is_read_by_their_text(
 ) -> None:
     """With OpenCode's `--format json`, its last line of stdout is an event; the done line is in the events' text."""
     with_events(scenario.env, "canopy-overseer")
-    ticked = scenario.tick(result=last_line, dry_run=True, code=0 if status == "ok" else 1)
+    ticked = scenario.tick(*waits(KEY), result=last_line, dry_run=True, code=0 if status == "ok" else 1)
     assert ticked.tick.status == status
 
 
@@ -384,7 +385,7 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(scenario: Scenario, la
     with_events(scenario.env, "canopy-overseer")
     read = ["echo", "read it"]
     code = 0 if last_line == "CANOPY_TICK_DONE" else 1
-    ticked = scenario.tick(read, result=last_line, session="ses_o1", dry_run=True, code=code)
+    ticked = scenario.tick(*waits(KEY), read, result=last_line, session="ses_o1", dry_run=True, code=code)
 
     conn = scenario.conn
     tick = ticked.tick
@@ -395,7 +396,7 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(scenario: Scenario, la
     assert tick.tokens_peak_context == 5500
     assert (tick.tokens_first_call, tick.tokens_first_cache_write, tick.tokens_first_cache_read) == (5500, 500, 4000)
     assert (scenario.env.state_dir / definitions.RUNTIME_DIR / present(tick.definitions_digest)).is_dir()
-    # `canopy queried` and the echo, each a `bash` call that returned its stdout.
+    # The wait and the echo, each a `bash` call that returned its stdout.
     [(tool, calls, _, _)] = tools_of(conn, "ticks", tick.id)
     assert (tool, calls) == ("bash", 2)
     assert tools_of(conn, "ticks", tick.id) == tools_printed(scenario.agent_log, "canopy-overseer")
@@ -408,13 +409,12 @@ def test_a_running_tick_shows_its_overseer_session_spend_and_output_so_far(scena
     So a page or `canopy decisions` shows it mid-tick: its session, what its finished model calls cost, and its output.
     """
     with_events(scenario.env, "canopy-overseer")
-    scenario.tick(canopy("decisions"), session="ses_o1", dry_run=True)
+    scenario.tick(canopy("decisions"), *waits(KEY), session="ses_o1", dry_run=True)
 
     [run] = agent_runs(scenario.agent_log)
     commands = run["commands"]
     assert isinstance(commands, list)
-    queried, decisions = commands
-    assert queried["argv"] == ["canopy", "queried"]
+    decisions, _ = commands
     assert "Tick 1: running (dry run)" in decisions["stdout"]
     # The first of its two model calls has ended, before it ran its commands.
     assert "overseer session ses_o1  $0.12, 1.7k tokens, 5.5k peak context\n" in decisions["stdout"]
@@ -437,7 +437,7 @@ def test_overseer_refuses_to_start_when_the_workspace_defines_its_agent(scenario
     # The overseer runs at the workspace root, where OpenCode reads config (D044).
     config = scenario.env.root / "opencode.json"
     config.write_text('{"agent": {"canopy-overseer": {"permission": {"bash": {"*": "deny", "rm *": "allow"}}}}}')
-    failed = scenario.tick(dry_run=True, code=1)
+    failed = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert only_tick(scenario.conn).id == failed.tick.id
     assert failed.tick.status == "overseer_failed"
     assert f"defines one of canopy's agents or its MCP server `canopy` ({config})" in failed.tick.summary
@@ -478,6 +478,7 @@ class TimingOutAgent:
 
 
 def test_overseer_timeout(canopy_env: CanopyEnv, treehouse_state: Path) -> None:
+    tracker_holds(canopy_env.journal())  # a ticket left to the overseer, so it runs
     assert main(["tick", "--dry-run"], runner=TimingOutAgent()) == 1
     tick = only_tick(canopy_env.journal(migrate=False))
     assert (tick.status, tick.summary) == ("overseer_failed", "overseer timed out after 15 minutes")
@@ -486,7 +487,7 @@ def test_overseer_timeout(canopy_env: CanopyEnv, treehouse_state: Path) -> None:
 def test_missing_overseer_command(scenario: Scenario) -> None:
     command = "no-such-program OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-overseer {prompt}"
     scenario.configures(runtime={"overseer_cmd": command})
-    failed = scenario.tick(dry_run=True, code=1)
+    failed = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert only_tick(scenario.conn).id == failed.tick.id
     assert failed.tick.status == "overseer_failed"
     assert "command not found" in failed.tick.summary
@@ -510,7 +511,7 @@ def test_an_overseer_template_that_places_no_prompt_gets_the_block_on_stdin(scen
         runtime={"overseer_cmd": "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-overseer"},
     )
     with block_padded_past_one_argument():
-        scenario.tick(dry_run=True)
+        scenario.tick(*waits(KEY), dry_run=True)
     [run] = agent_runs(scenario.agent_log)
     assert run["argv"] == ["run", "--agent", "canopy-overseer"]
     assert run["stdin"].startswith("## State\n")
@@ -519,7 +520,7 @@ def test_an_overseer_template_that_places_no_prompt_gets_the_block_on_stdin(scen
 
 def test_a_block_too_long_for_one_argument_fails_the_tick_naming_why(scenario: Scenario) -> None:
     with block_padded_past_one_argument():
-        failed = scenario.tick(dry_run=True, code=1)
+        failed = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert failed.tick.status == "overseer_failed"
     assert "arguments and environment too long to start env: its longest argument is " in failed.tick.summary
     assert not scenario.agent_log.exists()
@@ -543,7 +544,7 @@ def test_a_tick_that_raises_closes_error_naming_it(scenario: Scenario) -> None:
         write_private(path, text)
 
     with mock.patch.object(logs, "write_private", autospec=True, side_effect=disk_full):
-        failed = scenario.tick(dry_run=True, code=1)
+        failed = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert only_tick(scenario.conn).id == failed.tick.id
     assert failed.tick.status == TickStatus.ERROR
     assert failed.tick.summary == "OSError: [Errno 28] No space left on device"
@@ -576,10 +577,10 @@ def test_a_server_that_cannot_start_closes_the_tick_without_the_overseer(
     script: str | None,
     summary: str,
 ) -> None:
-    scenario.tick(dry_run=True)  # an `ok` tick, whose list the failed one leaves standing
+    scenario.tick(*waits(KEY), dry_run=True)  # an `ok` tick, whose list the failed one leaves standing
     summary = summary.format(server=tmp_path / "broken-server")
     with broken_server(tmp_path, script):
-        broken = [scenario.tick(dry_run=True, code=1) for _ in range(2)]
+        broken = [scenario.tick(*waits(KEY), dry_run=True, code=1) for _ in range(2)]
     # The overseer ran for the first tick alone: one that started would have no tools, so could record nothing.
     assert len(agent_runs(scenario.agent_log)) == 1
 
@@ -587,19 +588,19 @@ def test_a_server_that_cannot_start_closes_the_tick_without_the_overseer(
     assert scenario.attention() == [(None, "canopy_unavailable")]
     [item] = attention.current(scenario.conn)
     assert item.detail.startswith(f"{summary}; the overseer did not run.")
-    assert item.since == broken[0].decisions[0].created_at  # open since the first tick of the streak
+    raised = next(d for d in broken[0].decisions if d.action.startswith("attention:"))
+    assert item.since == raised.created_at  # open since the first tick of the streak
     assert "canopy_unavailable" in (scenario.env.state_dir / "attention.md").read_text()
 
     # Once the server starts again, the next tick runs the overseer and the item is gone.
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     assert len(agent_runs(scenario.agent_log)) == 2
     assert scenario.attention() == []
 
 
 def test_a_tick_that_runs_no_overseer_skips_the_server_check(scenario: Scenario, tmp_path: Path) -> None:
-    # The query spaced an hour apart and run once, so the next tick leaves the overseer nothing (DESIGN §39).
-    scenario.configures(tracker={"query_every_minutes": 60})
-    scenario.tick()
+    # A ticket left to the overseer, which marks it done, so the next tick leaves it nothing (DESIGN §39).
+    scenario.tick(canopy("ticket", "set", KEY, "--done"), *waits(KEY))
     with broken_server(tmp_path, "#!/bin/sh\nexit 1\n"):
         quiet = scenario.tick()
     assert (quiet.tick.status, quiet.tick.overseer_ran) == (TickStatus.OK, False)
@@ -608,9 +609,9 @@ def test_a_tick_that_runs_no_overseer_skips_the_server_check(scenario: Scenario,
 
 
 def test_too_little_free_disk_closes_the_tick_without_the_overseer(scenario: Scenario) -> None:
-    scenario.tick(dry_run=True)  # an `ok` tick, whose list the halted one leaves standing
+    scenario.tick(*waits(KEY), dry_run=True)  # an `ok` tick, whose list the halted one leaves standing
     scenario.configures(loop={"min_free_disk_mib": 2**40})  # more than any disk the tests run on has free
-    low = [scenario.tick(dry_run=True, code=1) for _ in range(2)]
+    low = [scenario.tick(*waits(KEY), dry_run=True, code=1) for _ in range(2)]
     assert len(agent_runs(scenario.agent_log)) == 1  # the overseer ran for the first tick alone
 
     assert [t.tick.status for t in low] == [TickStatus.DISK_LOW] * 2
@@ -620,11 +621,12 @@ def test_too_little_free_disk_closes_the_tick_without_the_overseer(scenario: Sce
     assert scenario.attention() == [(None, "disk_low")]
     [item] = attention.current(scenario.conn)
     assert item.detail == f"{summary}; the overseer did not run. Free space there, and the next tick runs it"
-    assert item.since == low[0].decisions[0].created_at  # open since the first tick of the streak
+    raised = next(d for d in low[0].decisions if d.action.startswith("attention:"))
+    assert item.since == raised.created_at  # open since the first tick of the streak
 
     # `0` turns the check off: the next tick runs the overseer, and the item is gone.
     scenario.configures(loop={"min_free_disk_mib": 0})
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     assert len(agent_runs(scenario.agent_log)) == 2
     assert scenario.attention() == []
 
@@ -635,10 +637,10 @@ def test_an_overseers_model_the_runtime_does_not_list_closes_the_tick_without_it
 ) -> None:
     """The overseer's model is looked up before it runs, as a worker's is, and never fallen back from (DESIGN §13)."""
     model = "acme/fake-model-1"
-    scenario.tick(dry_run=True)  # an `ok` tick, whose list the halted one leaves standing
+    scenario.tick(*waits(KEY), dry_run=True)  # an `ok` tick, whose list the halted one leaves standing
     listed(opencode_state, "acme/fake-model-2")
     scenario.configures(runtime={"models": {"overseer": model}})
-    halted = [scenario.tick(dry_run=True, code=1) for _ in range(2)]
+    halted = [scenario.tick(*waits(KEY), dry_run=True, code=1) for _ in range(2)]
     assert len(agent_runs(scenario.agent_log)) == 1  # the overseer ran for the first tick alone
 
     missing = (
@@ -649,11 +651,12 @@ def test_an_overseers_model_the_runtime_does_not_list_closes_the_tick_without_it
     assert scenario.attention() == [(None, "model_missing")]
     [item] = attention.current(scenario.conn)
     assert item.detail == f"{missing}; the overseer did not run. The next tick looks it up again"
-    assert item.since == halted[0].decisions[0].created_at  # open since the first tick of the streak
+    raised = next(d for d in halted[0].decisions if d.action.startswith("attention:"))
+    assert item.since == raised.created_at  # open since the first tick of the streak
 
     # A list that cannot be read halts it too, with a status of its own.
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
-    failed = scenario.tick(dry_run=True, code=1)
+    failed = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert failed.tick.status == TickStatus.MODEL_LIST_FAILED
     assert failed.tick.summary == (
         f"could not look up the model {model} chosen in runtime.models: `opencode models` exited 1. Nothing ran on "
@@ -663,7 +666,7 @@ def test_an_overseers_model_the_runtime_does_not_list_closes_the_tick_without_it
 
     # Once the runtime lists it, the next tick runs the overseer, and the item is gone.
     listed(opencode_state, "acme/fake-model-2", model)
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     assert len(agent_runs(scenario.agent_log)) == 2
     assert scenario.attention() == []
 
@@ -696,7 +699,7 @@ def test_prompt_override(scenario: Scenario) -> None:
     overrides = scenario.env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "overseer.md").write_text("# my overseer\n")
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     [run] = agent_runs(scenario.agent_log)
     argv, env = run["argv"], run["env"]
     assert isinstance(argv, list)
@@ -704,7 +707,7 @@ def test_prompt_override(scenario: Scenario) -> None:
     # The override still wins, and reaches the run in its definition, not its message (DESIGN §6, §12).
     assert argv[-1].startswith("## State\n")
     definition = Path(env["OPENCODE_CONFIG_DIR"]) / "agents" / "canopy-overseer.md"
-    assert "\n---\n\n# my overseer\n\n" in definition.read_text()
+    assert definition.read_text().endswith("\n---\n\n# my overseer\n")
     assert "# canopy overseer" not in definition.read_text()
 
 
@@ -714,7 +717,7 @@ def test_overseer_output_is_private_even_if_the_file_existed(scenario: Scenario)
     stale = ticks / "1.log"
     stale.write_text("left over from a restored backup\n")
     stale.chmod(0o644)
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     assert stale.stat().st_mode & 0o777 == 0o600
     assert stale.read_text().startswith("fake agent: starting")
 
@@ -725,7 +728,7 @@ def test_overseer_output_refuses_a_symlink(scenario: Scenario, tmp_path: Path) -
     target = tmp_path / "elsewhere.txt"
     target.write_text("not yours\n")
     (ticks / "1.log").symlink_to(target)
-    failed = scenario.tick(dry_run=True, code=1)
+    failed = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert failed.tick.status == TickStatus.ERROR
     assert failed.tick.summary == f"OSError: [Errno {errno.ELOOP}] {os.strerror(errno.ELOOP)}: '{ticks / '1.log'}'"
     assert target.read_text() == "not yours\n"
@@ -749,7 +752,7 @@ def test_the_state_block_lists_the_overseers_open_attention_items(scenario: Scen
     db.finish_tick(conn, broken, TickStatus.CANOPY_UNAVAILABLE, "")
     since = [r[0] for r in conn.execute("SELECT created_at FROM decisions ORDER BY id")]
 
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     assert scenario.state()["attention"] == [
         {"ticket": "PROJ-1", "repo": "repo", "reason": "flaky_rerun", "since": since[0]},
         {"pr": pr, "reason": "flaky_rerun", "since": since[1]},

@@ -11,7 +11,7 @@ guard's refusal, or a call outside a running tick, is `Refused`, exit 1. Either 
 
 This module holds what every verb shares, the bounds, the `Request` and `Result` bases, and the running tick, and the
 ticket's verbs:
-dispatch, decide, queried, attention, and ticket set. A feature's own verbs are in a module of their own, the
+dispatch, decide, attention, and ticket set. A feature's own verbs are in a module of their own, the
 reviews' in `loop.review_tools` and the chores' in `loop.chore_tools`.
 """
 
@@ -40,7 +40,7 @@ from pydantic_core import PydanticUndefined
 from canopy.core import config, contract, conversation, db, kept_items, memory, recorded_runs, vocab
 from canopy.core.vocab import RecordedStatus, ResumeReason, RunKind, TickStatus
 from canopy.infra import logs
-from canopy.loop import attention, claims, duties, harness, harness_dispatches
+from canopy.loop import attention, claims, harness, harness_dispatches
 from canopy.reviews import findings
 from canopy.runs import dispatch, policy
 
@@ -168,9 +168,8 @@ def cursor(name: str, cursor_id: str) -> tuple[str, str]:
         raise ValueError(f"cursor must be NAME=ID with NAME one of {', '.join(db.CURSOR_COLUMNS)}")
     if not CURSOR_VALUE_RE.fullmatch(cursor_id):
         raise ValueError(f"invalid cursor id {cursor_id!r}")
-    # A message cursor is a journal message id (DESIGN §22); a review or ci cursor a journal number (§35). A comment
-    # cursor is one too, but on a ticket no tracker source observes, which only the call's context can tell.
-    if name in {"message", "review", "ci"} and not _digits(cursor_id):
+    # A message cursor is a journal message id (DESIGN §22); a comment, review, or ci cursor a journal number (§35).
+    if not _digits(cursor_id):
         what = "a message id, a number" if name == "message" else "an item's journal number, as the state block shows"
         raise ValueError(f"a {name} cursor is {what}; got {cursor_id!r}")
     return name, cursor_id
@@ -433,7 +432,6 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
     """
     current = running_tick(ctx)
     key, kind, repos, reasons = request.key, request.kind, request.repos, request.reasons
-    _comment_cursor(ctx, request.cursors)
     tick_id = current.id
     _refuse_decided(ctx, tick_id, key, "dispatch")
     log = logs.for_tick(tick_id)
@@ -564,7 +562,6 @@ def spawn_dispatch(ctx: Context, recorded: records.RecordedRun) -> None:
     tick_id = recorded.tick_id
     key, kind, repos, reasons = request.key, request.kind, request.repos, request.reasons
     cursor_pairs: list[tuple[str, str]] = list(request.cursors.items())
-    tracked = ctx.config.connect.observes_tickets()
     unit_cursors = [name for name, _ in cursor_pairs if name in db.UNIT_CURSORS]
     log = logs.for_tick(tick_id)
     try:
@@ -605,7 +602,7 @@ def spawn_dispatch(ctx: Context, recorded: records.RecordedRun) -> None:
     recorded_runs.close(ctx.conn, recorded.id, RecordedStatus.STARTED, run_id=started.run_id)
     # Cursors advance only now, so what a refused dispatch was meant to handle is still new next tick.
     ticket_cursors = {name: value for name, value in cursor_pairs if name in db.TICKET_CURSORS}
-    db.set_ticket(ctx.conn, key, ctx.repo, cursors=ticket_cursors, tracked=tracked)
+    db.set_ticket(ctx.conn, key, ctx.repo, cursors=ticket_cursors)
     if unit_cursors:
         cursors = {name: value for name, value in cursor_pairs if name in db.UNIT_CURSORS}
         db.set_unit(ctx.conn, key, ctx.repo, started.repos[0], cursors=cursors)
@@ -656,10 +653,10 @@ def _authorized(label: str, *, starts: bool) -> str:
 
 
 class Decide(Request):
-    """A decision about a ticket, or a tick-wide skip."""
+    """A decision about a ticket."""
 
-    #: The ticket; none only for a tick-wide skip.
-    key: Annotated[Key | None, Field(description="The ticket; omit it only for a tick-wide skip.")] = None
+    #: The ticket.
+    key: Annotated[Key, Field(description="The ticket.")]
     #: What was decided.
     action: Annotated[
         Literal["wait", "skip", "done"],
@@ -670,35 +667,7 @@ class Decide(Request):
         ),
     ]
     #: Why, in the overseer's own words.
-    rationale: Annotated[
-        Text,
-        Field(
-            description="Why, in your own words. A skip with no key starts 'mcp_unavailable:' or "
-            "'tracker_unsupported:'; a skip with a key may not.",
-        ),
-    ]
-
-    @model_validator(mode="after")
-    def _form(self) -> Self:
-        key, action, rationale = self.key, self.action, self.rationale
-        if key is None and action != "skip":
-            raise ValueError(f"{action!r} needs a ticket key; only a tick-wide 'skip' may omit it")
-        # A skip's form is checked, not left to the overseer's guess: a tick-wide reason under a made-up key skips
-        # nothing and leaves the tick going on, and a ticket's skip without its key would close the whole tick
-        # `skipped`.
-        reasons = " or ".join(f"'{reason}: ...'" for reason in duties.TICK_WIDE_SKIPS)
-        if key is None and not duties.tick_wide(rationale):
-            raise ValueError(
-                f"a skip with no key skips the whole tick, so its rationale is {reasons}; "
-                "a skip about one ticket names its key",
-            )
-        if key is not None and action == "skip" and duties.tick_wide(rationale):
-            raise ValueError(
-                f"{rationale.split(':', 1)[0].strip()!r} skips the whole tick, so it names no key: leave key out "
-                "(a decide of skip with only a rationale), only when the tick cannot go on; "
-                "otherwise decide each ticket under its own key",
-            )
-        return self
+    rationale: Annotated[Text, Field(description="Why, in your own words.")]
 
 
 class Decisions(Request):
@@ -710,8 +679,7 @@ class Decisions(Request):
         # Its one item is checked below, not by `min_length`, which would also refuse a call whose only item is wrong.
         Field(
             json_schema_extra={"minItems": 1},
-            description="Each decision, one per ticket, recorded together or not at all. A tick-wide skip is the "
-            "only one in its call.",
+            description="Each decision, one per ticket, recorded together or not at all.",
         ),
     ]
 
@@ -719,19 +687,17 @@ class Decisions(Request):
     def _batch(self) -> Self:
         if not self.decisions:
             raise ValueError("name at least one decision")
-        if len(self.decisions) > 1 and any(d.key is None for d in self.decisions):
-            raise ValueError("a skip with no key skips the whole tick, so it is the only decision in its call")
         keys = [d.key for d in self.decisions]
-        if twice := sorted({key for key in keys if key is not None and keys.count(key) > 1}):
+        if twice := sorted({key for key in keys if keys.count(key) > 1}):
             raise ValueError(f"decide each ticket once in a call: {', '.join(twice)} decided twice")
         return self
 
 
 class Decision(Result):
-    """A decision recorded about a ticket, or about the whole tick."""
+    """A decision recorded about a ticket."""
 
-    #: The ticket; none for a tick-wide skip.
-    key: Annotated[str | None, Field(description="The ticket; none for a tick-wide skip.")]
+    #: The ticket.
+    key: Annotated[str, Field(description="The ticket.")]
     #: What was decided.
     action: Annotated[Literal["wait", "skip", "done"], Field(description="What was decided.")]
 
@@ -750,82 +716,22 @@ def decide(ctx: Context, request: Decisions) -> Outcome[Decided]:
         What the command prints, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick; about a ticket the harness decided this tick, whose refusal is recorded and
-            leaves every decision of the call unrecorded; or a tick-wide skip for a world a source reads: the
-            tracker's, where a `tracker` source runs, or any server's, where the `vcs` source runs beside it.
+        Refused: Outside a running tick, or about a ticket the harness decided this tick, whose refusal is recorded and
+            leaves every decision of the call unrecorded.
     """
     current = running_tick(ctx)
-    tick_wide = [d.rationale.split(":", 1)[0].strip() for d in request.decisions if d.key is None]
-    if duties.TRACKER_UNSUPPORTED in tick_wide and ctx.config.connect.observes_tickets():
-        raise Refused(
-            f"decide refused: a `tracker` source reads the tracker, and you read none, so no tick is skipped "
-            f"'{duties.TRACKER_UNSUPPORTED}' (DESIGN §39); decide each ticket under its own key",
-        )
-    if duties.MCP_UNAVAILABLE in tick_wide and ctx.config.connect.observes_all():
-        raise Refused(
-            f"decide refused: the sources read the tracker and GitHub, and you read neither, so no tick is skipped "
-            f"'{duties.MCP_UNAVAILABLE}' (DESIGN §39): a source down is `connector_failed`, and what it left stale "
-            "is the harness's wait; decide each ticket under its own key",
-        )
-    keys = [d.key for d in request.decisions if d.key is not None]
+    keys = [d.key for d in request.decisions]
     if refused := [r for key in keys if (r := _decided_by_harness(ctx, current.id, key, "decide")) is not None]:
         recorded = "the refusal was recorded" if len(refused) == 1 else "the refusals were recorded"
         unrecorded = "" if len(request.decisions) == 1 else ", and nothing else in the call: decide the rest again"
         raise Refused(f"decide refused ({DECIDED}): {'; '.join(refused)}; {recorded}{unrecorded}")
     with db.transaction(ctx.conn):
         for d in request.decisions:
-            if d.key is not None:
-                db.touch_ticket(ctx.conn, d.key, ctx.repo)
+            db.touch_ticket(ctx.conn, d.key, ctx.repo)
             db.record_decision(ctx.conn, current.id, d.key, d.action, d.rationale)
     return Outcome(
-        "\n".join(f"recorded {d.action} for {d.key or 'this tick'}" for d in request.decisions),
+        "\n".join(f"recorded {d.action} for {d.key}" for d in request.decisions),
         Decided(decisions=tuple(Decision(key=d.key, action=d.action) for d in request.decisions)),
-    )
-
-
-class Queried(Request):
-    """That this tick ran the tracker query, naming each open ticket it returned."""
-
-    #: Each open ticket the query returned; none when it returned none.
-    keys: Annotated[
-        tuple[Key, ...],
-        Field(description="Each open ticket the query returned; none when it returned none."),
-    ] = ()
-
-    @model_validator(mode="after")
-    def _fits(self) -> Self:
-        found = list(dict.fromkeys(self.keys))
-        if len(duties.queried_rationale(found)) > MAX_TEXT:
-            raise ValueError(f"{len(found)} keys do not fit in one call: name them in several")
-        return self
-
-
-class QueryRecorded(Result):
-    """The tracker query recorded, with the open tickets it returned."""
-
-    #: Each open ticket named, once, in the order first named.
-    keys: Annotated[tuple[str, ...], Field(description="Each open ticket named, once, in the order first named.")]
-
-
-def queried(ctx: Context, request: Queried) -> Outcome[QueryRecorded]:
-    """Record the tracker query, and each ticket it returned, which is owed a decision this tick.
-
-    Returns:
-        What the command prints, and the same as fields.
-
-    Raises:
-        Refused: Outside a running tick, or where a `tracker` source reads the query, whose read canopy records.
-    """
-    current = running_tick(ctx)
-    if ctx.config.connect.observes_tickets():
-        raise Refused(
-            "queried refused: a `tracker` source reads the query, and canopy records its result itself (DESIGN §39); "
-            "run no query, and record none",
-        )
-    found = duties.record_queried(ctx.conn, current.id, ctx.repo, request.keys)
-    return Outcome(
-        f"recorded the query: {found} open ticket(s)",
-        QueryRecorded(keys=tuple(dict.fromkeys(request.keys))),
     )
 
 
@@ -1049,8 +955,6 @@ class _Checked:
     unit: str | None
     #: The phase, when it is a unit's.
     unit_phase: str | None
-    #: Whether a tracker source observes tickets, which says where the comment cursor is kept.
-    tracked: bool
 
 
 def _check_setting(ctx: Context, current: records.Tick | None, setting: TicketSet) -> _Checked:
@@ -1069,12 +973,11 @@ def _check_setting(ctx: Context, current: records.Tick | None, setting: TicketSe
     unit = _unit(ctx, setting.repo)
     if unit is None and (unit_cursor is not None or unit_phase is not None):
         unit = _only_unit(ctx, key, f"a {unit_cursor} cursor" if unit_cursor else f"the {unit_phase} phase")
-    tracked = _comment_cursor(ctx, setting.cursors)
     if current is not None:
         _refuse_decided(ctx, current.id, key, "ticket set")
         if cursors:
             _check_cursors(ctx, current.id, key, unit, cursors)
-    return _Checked(setting, unit, unit_phase, tracked)
+    return _Checked(setting, unit, unit_phase)
 
 
 def _record_setting(ctx: Context, checked: _Checked, *, dry_run: bool) -> Outcome[TicketUpdated]:
@@ -1099,7 +1002,6 @@ def _record_setting(ctx: Context, checked: _Checked, *, dry_run: bool) -> Outcom
         cursors=ticket_cursors,
         done=done and not dry_run,
         title=setting.title,
-        tracked=checked.tracked,
     )
     if done and not dry_run:
         # A done ticket's notes are invalidated: its work merged or was closed (DESIGN §28, Retention).
@@ -1119,24 +1021,6 @@ def _record_setting(ctx: Context, checked: _Checked, *, dry_run: bool) -> Outcom
             dry_run=dry_run,
         ),
     )
-
-
-def _comment_cursor(ctx: Context, cursors: Mapping[CursorName, str]) -> bool:
-    """Refuse a comment cursor that is not a journal number where a tracker source observes tickets (DESIGN §35).
-
-    Without one, a ticket's comments have no numbers, so its comment cursor is the tracker's comment id.
-
-    Returns:
-        Whether a tracker source observes tickets, which says where the comment cursor is kept.
-
-    Raises:
-        Refused: The comment cursor is not a number where it must be one; nothing is recorded.
-    """
-    tracked = ctx.config.connect.observes_tickets()
-    comment = cursors.get("comment")
-    if tracked and comment is not None and not _digits(comment):
-        raise Refused(f"a comment cursor is a comment's journal number, as the state block shows it; got {comment!r}")
-    return tracked
 
 
 def _check_cursors(ctx: Context, tick_id: int, key: str, repo: str | None, cursors: Mapping[str, str]) -> None:

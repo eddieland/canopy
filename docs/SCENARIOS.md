@@ -173,6 +173,15 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   where a PR has more; `observed_branches` the branch; the run's review query result the PRs GitHub's search shows;
   and the derivation no longer counting the PR-less ticket stale for its branches. Point the map at a repository on
   a host `gh` is not logged in to: expect a `partial` run naming it, and the other repositories still read.
+- **S67. GitHub Issues read by canopy's own reader** (M39). With `gh` logged in, in a workspace whose tracker is
+  GitHub Issues, add `[connect.sources.issues]` with `kind = "tracker"` and
+  `cmd = "canopy-connect-github --repo <owner>/<name>"`, and run `canopy tick --dry-run`. Expect `canopy status` to
+  name the source with an `ok` run; `observed_tickets` to hold every open issue the query returns, keyed `GH-<N>`,
+  and no PR it returns; each watched ticket's blockers, from GitHub's issue dependencies and a `Blocked by #N` line
+  alike; and a label's time from the issue's timeline; and `observed_comments` each watched ticket's comments, authors
+  as logins, a bot's ending `[bot]`. Make an open issue of another repository block a watched one: expect a `partial`
+  run naming it, and the ticket stale. Run it once on a GitHub Enterprise server too, `--repo <host>/<owner>/<name>`,
+  where an older server without issue dependencies fails every read, naming the field.
 
 ## Measurements
 

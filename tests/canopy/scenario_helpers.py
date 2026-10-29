@@ -2,8 +2,8 @@
 
 A scenario test reads the way an entry in docs/SCENARIOS.md does: the overseer ticks and decides, workers run and push,
 the operator replies, and the test checks what canopy did. The `scenario` fixture's `Scenario` tells the story; the
-functions below it are the moves in it, the overseer's (`dispatches`, `reviews`, `raises`, `sets_phase`, `skips_tick`,
-and `waits` from `helpers.py`) and a worker's (`pushes`, `asks`, `fails`, or any `*_does` helper). Each is a helper of
+functions below it are the moves in it, the overseer's (`dispatches`, `reviews`, `raises`, `sets_phase`, and `waits`
+from `helpers.py`) and a worker's (`pushes`, `asks`, `fails`, or any `*_does` helper). Each is a helper of
 `helpers.py` with the plumbing folded in: a tick's exit code checked, the runs it started waited for, a dispatch's
 flags spelled as keywords. Those moves run the overseer's commands; a tick's move may instead be a call of one of
 canopy's tools, `calls("canopy_decide", key=..., ...)` from `helpers.py`, made through the server as the overseer makes
@@ -63,12 +63,12 @@ still at work, for the next tick to find. A run still held when the test ends is
         ticked = scenario.tick(*waits("PROJ-1"))
         assert ticked.actions[0] == "attention:crashed"
 
-The overseer is played whole, not only its commands: what its query found (`queried=`), the line it ends on
-(`result=`), and how it runs (`exit_code=`, `says=`, ...), so a tick it fails, or a duty it leaves undone, is a story
-too:
+The overseer is played whole, not only its commands: the line it ends on (`result=`), and how it runs
+(`exit_code=`, `says=`, ...), so a tick it fails, or a duty it leaves undone, is a story too:
 
-    def test_a_ticket_the_query_found_is_owed_a_decision(scenario: Scenario) -> None:
-        failed = scenario.tick(queried=["PROJ-9"], code=1)
+    def test_a_ticket_left_out_is_owed_a_decision(scenario: Scenario) -> None:
+        scenario.seen("PROJ-9")
+        failed = scenario.tick(code=1)
         assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-9"
 
 The operator is played whole too: `operator` runs one of their commands and gives back what canopy printed, `out` and
@@ -180,6 +180,7 @@ from tests.canopy.helpers import (
     seen,
     state_block,
     tick_starts,
+    tracker_holds,
     wait_for_run,
     worker_does,
 )
@@ -557,7 +558,6 @@ class Scenario:
         dry_run: bool = False,
         hold: bool = False,
         code: int = 0,
-        queried: Sequence[str] | None = (),
         result: str = TICK_DONE,
         **overseer: Unpack[Behavior],
     ) -> Ticked:
@@ -569,19 +569,17 @@ class Scenario:
         Each run's worker does `worker`, the fake's default `done` if None, or what `workers` gives for its ticket: a
         script each ticket's run plays as made for that ticket, so `pushes()` pushes the branch of the ticket it runs
         for. With `hold`, each is held at work instead, and the tick's runs are left `working` for the test to finish
-        or kill. The overseer records `queried`, the keys its query found, when the query is due, or no query at all if
-        None; it ends on `result`, by default the line that ends a tick, and runs as `overseer` says (`exit_code`,
-        `says`, ...). The tick must exit `code`, and a failure says how it ended instead.
+        or kill. The overseer ends on `result`, by default the line that ends a tick, and runs as `overseer` says
+        (`exit_code`, `says`, ...). The tick must exit `code`, and a failure says how it ended instead.
 
         Returns:
             What the tick did.
         """
         argv = ["tick", "--dry-run"] if dry_run else ["tick"]
-        recorded = "skip" if queried is None else json.dumps(list(queried))
         commands = [move for move in moves if not isinstance(move, Called)]
         tools = [move for move in moves if isinstance(move, Called)]
         with ExitStack() as stack:
-            stack.enter_context(overseer_does(*commands, tools=tools, result=result, queried=recorded, **overseer))
+            stack.enter_context(overseer_does(*commands, tools=tools, result=result, **overseer))
             if worker is not None:
                 stack.enter_context(worker)
             stack.enter_context(_each_ticket(worker, workers or {}, moves))
@@ -620,6 +618,7 @@ class Scenario:
         command = command or dispatches()
         assert command[:2] == ["canopy", "dispatch"], command
         runner = runner or InlineRunner()
+        tracker_holds(self.conn, command[2])
         with ExitStack() as stack:
             if worker is not None:
                 stack.enter_context(_made_for(worker, command[2]))
@@ -650,6 +649,7 @@ class Scenario:
         """
         command = command or dispatches()
         assert command[:2] == ["canopy", "dispatch"], command
+        tracker_holds(self.conn, command[2])
         with ExitStack() as stack:
             if worker is not None:
                 stack.enter_context(_made_for(worker, command[2]))
@@ -776,6 +776,8 @@ class Scenario:
         """
         review = command[:3] in REVIEW_COMMANDS
         assert review or command[:2] == ["canopy", "dispatch"], command
+        if not review:
+            tracker_holds(self.conn, command[2])
         with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
             exited, printed = _printing(lambda: main(command[1:], runner=InlineRunner()))
             if exited == 0:
@@ -846,6 +848,9 @@ class Scenario:
             What it printed, as the overseer would read it.
         """
         command = shlex.join(["canopy", *args])
+        # A ticket it dispatches that the journal does not know yet, the tracker reads first, as `tick` has it.
+        if keys := [key for key in _dispatched([["canopy", *args]]) if db.get_ticket(self.conn, key) is None]:
+            tracker_holds(self.conn, *keys)
         with ExitStack() as stack:
             tick_id = self.open_tick
             if tick_id is None:
@@ -1077,11 +1082,6 @@ def raises(key: str, reason: str, detail: str | None = None) -> list[str]:
     return canopy("attention", key, reason, "--detail", detail if detail is not None else f"{key} detail")
 
 
-def skips_tick(rationale: str) -> list[str]:
-    """The overseer skips the whole tick, for `rationale`, one of the tick-wide reasons: `mcp_unavailable: github`."""
-    return canopy("decide", "skip", "--rationale", rationale)
-
-
 def sets_phase(key: str, phase: Phase, *, repo: str | None = None, cursor: str | None = None) -> list[str]:
     """The overseer records `key`'s phase, its unit's in `repo` if given, and a cursor as `name=value`."""
     return canopy("ticket", "set", key, "--phase", str(phase), *_option("--repo", repo), *_option("--cursor", cursor))
@@ -1185,7 +1185,7 @@ def loops(
     before = int(scenario.conn.execute("SELECT coalesce(max(id), 0) FROM ticks").fetchone()[0])
     term, out = log_file()
     with (
-        overseer_does(*moves, queried="skip"),
+        overseer_does(*moves),
         mock.patch.object(
             tick,
             "run",
@@ -1310,11 +1310,7 @@ def _each_ticket(
     moves: Iterable[list[str] | Called],
 ) -> Iterator[None]:
     # Each ticket a move dispatches, and each `workers` names, gets its script made for it; a run reads its own.
-    dispatched = [
-        str(move.arguments["key"]) if isinstance(move, Called) else move[2]
-        for move in moves
-        if (move.name == "canopy_dispatch" if isinstance(move, Called) else move[:2] == ["canopy", "dispatch"])
-    ]
+    dispatched = _dispatched(moves)
     every = worker if isinstance(worker, Script) else None
     made = {
         key: script.for_ticket(key)
@@ -1325,6 +1321,15 @@ def _each_ticket(
     tickets = {key: dict(script.settings) for key, script in made.items()}
     with mock.patch.dict(os.environ, {"FAKE_WORKER_FOR": json.dumps(tickets)}):
         yield
+
+
+def _dispatched(moves: Iterable[list[str] | Called]) -> list[str]:
+    """The ticket each move that dispatches names, in order."""
+    return [
+        str(move.arguments["key"]) if isinstance(move, Called) else move[2]
+        for move in moves
+        if (move.name == "canopy_dispatch" if isinstance(move, Called) else move[:2] == ["canopy", "dispatch"])
+    ]
 
 
 def _made_for(worker: Worker, key: str) -> Worker:

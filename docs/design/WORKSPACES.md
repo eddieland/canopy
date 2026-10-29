@@ -9,8 +9,10 @@ canopy](OPERATING.md). Next: [Chores, notifications, and reviews](CHORES_NOTIFIC
 
 ## 17. Trackers
 
-canopy works with any issue tracker the agent runtime can reach through an MCP server. There is no adapter interface and
-no tracker code in the harness. Tracker differences are handled in three places, in order of preference:
+canopy works with any issue tracker the agent runtime can reach through an MCP server and a `tracker` source can read,
+which config requires (§30): canopy ships one for Jira and one for GitHub Issues, and the contract is a page of Python
+for another. There is no adapter interface and no tracker code in the harness. Tracker differences are handled in
+three places, in order of preference:
 
 1. **The contract below.** Agents map it onto the tools a tracker's MCP server exposes without being told how. This is
    the default for any tracker.
@@ -23,7 +25,7 @@ no tracker code in the harness. Tracker differences are handled in three places,
 3. **A provider skill**, `.agents/skills/tracker-<provider>/SKILL.md`, for what an agent would otherwise get wrong:
    identity fields, how "closed" is expressed, where blockers live, and text that silently triggers a tracker action.
    Skills ship for `jira` and `github`. Add one when the decisions show the loop misreading a tracker, not in advance.
-   The overseer gets the skill for `tracker.provider` in its prompt (§13); workers load it as a skill.
+   Workers load the skill for `tracker.provider`; the overseer reads no tracker (§39), so it gets none.
 
 ### Contract
 
@@ -40,17 +42,16 @@ What the loop needs from a tracker, as capabilities, each used by the role in pa
 | When a label was added (overseer, optional) | `human_replied` |
 | Create a ticket linked to a parent (worker, optional) | follow-ups |
 
-"Label" means the tracker's tagging primitive, whatever it is called. A `tracker` source (§30) reads the overseer's rows
-into the journal, so the overseer reads them there, and the tracker itself only about a ticket the observations leave
-stale or unobserved. Without blocker relations, tickets are treated as unblocked. Without label history, the worker's
-question comment is the reference point for `human_replied`. If a tracker cannot do a required row, the overseer records
-`skip` with rationale `tracker_unsupported: <capability>`.
+"Label" means the tracker's tagging primitive, whatever it is called. The `tracker` source config requires (§30) reads
+the overseer's rows into the journal, and the overseer reads them there alone (§39). Without blocker relations, tickets
+are treated as unblocked. Without label history, the worker's question comment is the reference point for
+`human_replied`. A required row the source cannot read leaves its tickets stale, the harness's `wait`.
 
 ### Authorization is the same everywhere
 
 The query only finds tickets. A ticket is a candidate only if reading it shows one of `tracker.labels` present and the
-ticket not closed, so a sloppy query can waste a tick but cannot authorize work. Where a tracker source observes it,
-that is decided in code, and a ticket that is not a candidate reaches the overseer by key and why alone, none of its
+ticket not closed, so a sloppy query can waste a tick but cannot authorize work. That is decided in code, from what
+the `tracker` source observed, and a ticket that is not a candidate reaches the overseer by key and why alone, none of its
 text (§30). Replies are authorized only by `trust.authorized_repliers`, compared against the author's stable account id
 (Jira `accountId`, GitHub login), never a display name, and marked in code on each comment a source observes (§7).
 

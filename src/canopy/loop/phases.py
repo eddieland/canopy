@@ -108,15 +108,17 @@ class Derived:
     phases: Sequence[Phase] = ()
     #: The stale or missing observation the subject depends on; None when it was derived.
     stale: str | None = None
-    #: Whether `stale` is the `tracker` source's: a ticket's own observation, or a blocker's, old or never made. False
-    #: for what no source observes, and for what the `vcs` source left stale.
+    #: Whether `stale` is the `tracker` source's: a ticket's own observation, its comments, or a blocker's, old or never
+    #: made. False for what no source observes, and for what the `vcs` source left stale.
     stale_tracker: bool = False
-    #: Whether `stale` is the `vcs` source's, where a `tracker` source runs too, so the overseer reads no GitHub (DESIGN
-    #: §39): a unit's PR or branches, the ticket's branches, or an open blocker's PR, old or never read.
+    #: Whether `stale` is the `vcs` source's, which the overseer reads no GitHub beside (DESIGN §39): a unit's PR or
+    #: branches, the ticket's branches, or an open blocker's PR, old or never read.
     stale_vcs: bool = False
     #: On the ticket's own, unless stale: whether it is a candidate (§17), and whether the tracker said it is closed.
     candidate: bool | None = None
     closed: bool | None = None
+    #: Whether `stale` is what no source reads at all, so no read will come: a unit's URL that names no PR.
+    unobserved: bool = False
 
 
 def derive(ctx: Context, now: datetime) -> list[Derived]:
@@ -434,10 +436,6 @@ class _World:
     #: The tickets the journal has marked done.
     done: AbstractSet[str]
     latest_runs: Mapping[str, records.Run]
-    #: Whether a `tracker` source observes tickets at all.
-    tracked: bool
-    #: Whether a `tracker` and a `vcs` source both read, so a subject either left stale is the harness's `wait` (§39).
-    observes_all: bool
     _review_runs: dict[str, list[records.ReviewRun]] = field(default_factory=dict[str, list[records.ReviewRun]])
 
     @classmethod
@@ -480,8 +478,6 @@ class _World:
             running=running,
             done=done,
             latest_runs=db.latest_runs(conn),
-            tracked=any(s.kind == SourceKind.TRACKER for s in config.connect.named().values()),
-            observes_all=config.connect.observes_all(),
         )
 
     # A ticket's own row
@@ -500,11 +496,10 @@ class _World:
         else:
             stale = self._ticket_stale(key)
             if stale is not None:
-                return Derived(key, None, stale=stale, stale_tracker=self.tracked)
+                return Derived(key, None, stale=stale, stale_tracker=True)
             seen = self.observed[key]
             closed = seen.state is TicketState.CLOSED
-            labels = {label["name"] for label in labels_of(seen)}
-            candidate = not closed and bool(labels & set(self.ctx.config.tracker.labels))
+            candidate = self._queued(seen)
             blockers_open = any(self.observed[b].state is TicketState.OPEN for b in blockers_of(seen))
         if closed:
             return Derived(key, None, candidate=False, closed=True)
@@ -518,7 +513,7 @@ class _World:
         if candidate and not running:
             branch = self._has_branch(key, journal)
             if branch is None:
-                return Derived(key, None, stale=self._branches_stale(), stale_vcs=self.observes_all)
+                return Derived(key, None, stale=self._branches_stale(), stale_vcs=True)
             if not branch:
                 # Only a ticket with no branch of its own may be stacked, so only its row reads a blocker's PR.
                 if seen is not None and (stale := self._blocker_prs_stale(seen)) is not None:
@@ -527,13 +522,14 @@ class _World:
         return Derived(key, None, _in_order(phases), candidate=candidate, closed=False)
 
     def _ticket_stale(self, key: str) -> str | None:
-        """Say what a public ticket's row depends on that is stale or missing: its observation, or a blocker's.
+        """Say what a public ticket's row rests on that is stale or missing: its observation, a blocker's, or comments.
+
+        Comments are recorded only of a ticket canopy holds (§30), and a candidate's rows read them: one read before
+        canopy held it, such as one the query found that was read as another's blocker, waits for a read since.
 
         Returns:
             What, or None when everything it depends on is fresh.
         """
-        if not self.tracked:
-            return "no tracker source observes tickets"
         seen = self.observed.get(key)
         stale = self._age(key, seen)
         if stale is not None or seen is None:
@@ -542,7 +538,19 @@ class _World:
             stale = self._age(f"blocker {blocker}", self.observed.get(blocker))
             if stale is not None:
                 return stale
+        held = self.tickets.get(key)
+        if self._queued(seen) and (held is None or held.first_seen_at > seen.observed_at):
+            return f"comments of {key} not observed since canopy first held it"
         return None
+
+    def _queued(self, seen: records.ObservedTicket) -> bool:
+        """Whether an observed ticket is open and carries a queue label: a public candidate (§17).
+
+        Returns:
+            True if it is.
+        """
+        labels = {label["name"] for label in labels_of(seen)}
+        return seen.state is not TicketState.CLOSED and bool(labels & set(self.ctx.config.tracker.labels))
 
     def _age(self, what: str, seen: records.ObservedTicket | records.ObservedPr | None) -> str | None:
         if seen is None:
@@ -555,13 +563,11 @@ class _World:
         """Say which PR of an open blocker, one the journal has not marked done, the `vcs` source left stale (§39).
 
         Whether to stack on it, and how a ticket stacked on it goes on, is read from that PR (§10), which the overseer
-        reads no longer where both sources run. Without both, it reads the PR itself, so nothing is stale here.
+        reads no longer.
 
         Returns:
             What, or None when each such PR is fresh.
         """
-        if not self.observes_all:
-            return None
         for blocker in blockers_of(seen):
             if self.observed[blocker].state is not TicketState.OPEN or blocker in self.done:
                 continue
@@ -662,7 +668,7 @@ class _World:
                 found.append(self._pr_unit(key, repo, unit, unit.pr_url))
             elif repo not in self.fresh_repos:
                 stale = f"branches of {repo} not observed since {db.format_time(self.cutoff)}"
-                found.append(Derived(key, repo, stale=stale, stale_vcs=self.observes_all))
+                found.append(Derived(key, repo, stale=stale, stale_vcs=True))
             else:
                 branch = self._branch_in(repo, key, record)
                 found.append(Derived(key, repo, (Phase.PUSHED_NO_PR,) if branch is not None else ()))
@@ -675,11 +681,11 @@ class _World:
             The unit's row.
         """
         if not observe.is_pr_url(url):
-            return Derived(key, repo, stale=f"{url} is not a PR's URL, so it is not observed")
+            return Derived(key, repo, stale=f"{url} is not a PR's URL, so it is not observed", unobserved=True)
         pr = self.prs.get(url)
         stale = self._age(url, pr)
         if stale is not None or pr is None:
-            return Derived(key, repo, stale=stale, stale_vcs=self.observes_all)
+            return Derived(key, repo, stale=stale, stale_vcs=True)
         if pr.state is PrState.MERGED:
             return Derived(key, repo, (Phase.MERGED,))
         if pr.state is not PrState.OPEN:

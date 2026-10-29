@@ -552,15 +552,6 @@ class Tracker(Section):
     # must not.
     private: Annotated[StrictBool, Scope.PRIVATE] = False
 
-    def server(self) -> str | None:
-        """The tracker's MCP server, as config names it or else the provider's default, even with no read tools known.
-
-        Returns:
-            The server's name, or None when neither names one.
-        """
-        default = DEFAULT_TRACKER_TOOLS.get(self.provider)
-        return self.mcp_server or (default.server if default is not None else None)
-
     def tools(self) -> McpTools | None:
         """The server and tools a private worker gets, or None if neither config nor a default names any.
 
@@ -1300,6 +1291,13 @@ GITHUB_READER = "canopy-connect-github"
 GITHUB_POSTER = "canopy-post-github"
 # The name canopy's own `vcs` source goes by when none is configured, in `connector_runs` and `canopy status`.
 DEFAULT_SOURCE = "github"
+#: Why config refuses a workspace with no `tracker` source that reads: the overseer reads the tracker no longer, so it
+#: could do nothing with a ticket no source observes (DESIGN §30, §39).
+TRACKER_REQUIRED = (
+    'a tracker source is required: add a [connect.sources.<name>] table with kind = "tracker" and a cmd that reads '
+    'your tracker, such as "canopy-connect-jira --site acme.atlassian.net" or "canopy-connect-github --repo '
+    "OWNER/NAME\", to the workspace's private config or your user config (DESIGN §30)"
+)
 #: The order a tick runs the sources in, by kind: the `vcs` run is also the reconcile read of the drafts (DESIGN §29).
 _SOURCE_ORDER = ("tracker", "vcs", "artifacts", "slack")
 #: A person's Slack user id, as a `slack` source's `operators` names one: `U...`, or `W...` on an Enterprise Grid.
@@ -1378,6 +1376,9 @@ class Connect(Section):
         kinds = [source.kind for source in self.sources.values()]
         if len(kinds) != len(set(kinds)):
             raise ValueError("at most one source of each kind, tracker, vcs, artifacts, and slack")
+        tracker = self._of("tracker")
+        if tracker is None or not notify_words(tracker.cmd):
+            raise ValueError(TRACKER_REQUIRED)
         if self.max_age_minutes < self.every_minutes:
             raise ValueError("max_age_minutes must be at least every_minutes")
         return self
@@ -1402,33 +1403,13 @@ class Connect(Section):
         found = self._of("vcs")
         return found or Source(kind="vcs", cmd=GITHUB_READER, post_cmd=GITHUB_POSTER)
 
-    def observes_tickets(self) -> bool:
-        """Whether a `tracker` source reads tickets: without one, a ticket's comments have no journal numbers (§35).
+    def tracker(self) -> Source:
+        """The `tracker` source, which config requires (`_one_per_kind`); canopy configures none of its own.
 
         Returns:
-            True if one does.
+            The source.
         """
-        return any(s.kind == "tracker" for s in self.named().values())
-
-    def observes_all(self) -> bool:
-        """Whether a `tracker` and a `vcs` source both read, so the overseer reads neither world itself (DESIGN §39).
-
-        A `vcs` source always reads, canopy's own when none is configured (`named`), so both do where a `tracker`
-        source does.
-
-        Returns:
-            True if both do.
-        """
-        kinds = {s.kind for s in self.named().values()}
-        return {"tracker", "vcs"} <= kinds
-
-    def tracker(self) -> Source | None:
-        """The `tracker` source, if the operator configured one; canopy configures none of its own.
-
-        Returns:
-            The source, or None.
-        """
-        return self._of("tracker")
+        return next(source for source in self.sources.values() if source.kind == "tracker")
 
     def _of(self, kind: str) -> Source | None:
         return next((source for source in self.sources.values() if source.kind == kind), None)

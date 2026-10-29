@@ -21,7 +21,7 @@ from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import Decider, NumberedItem, Phase
 from canopy.loop import phases
 from tests.canopy.helpers import KEY, canopy, context, in_tick, seen
-from tests.canopy.observation_helpers import artifact_comment
+from tests.canopy.observation_helpers import artifact_comment, held
 
 if TYPE_CHECKING:
     import sqlite3
@@ -301,9 +301,9 @@ def derived(env: CanopyEnv) -> list[phases.Derived]:
 
 @pytest.fixture
 def observed(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> sqlite3.Connection:
-    """A tracker source configured, and KEY seen and observed open with the queue label. Returns the journal."""
+    """A tracker source configured, and KEY held, then observed open with the queue label. Returns the journal."""
     canopy_env.configure(canopy_env.user_file, {"connect": TRACKER})
-    seen(conn, canopy_env)
+    held(canopy_env, conn, KEY)
     observe_ticket(conn)
     conn.commit()
     return conn
@@ -374,11 +374,6 @@ def test_a_ticket_that_depends_on_a_stale_or_missing_observation_is_stale(
     # Stale by the `tracker` source's reads, but for the branches, which the `vcs` source's read.
     vcs = stale.startswith("branches")
     assert derived(canopy_env) == [phases.Derived(KEY, None, stale=stale, stale_tracker=not vcs, stale_vcs=vcs)]
-
-
-def test_without_a_tracker_source_a_public_ticket_is_stale(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    seen(conn, canopy_env)
-    assert derived(canopy_env) == [phases.Derived(KEY, None, stale="no tracker source observes tickets")]
 
 
 def test_a_unit_whose_pr_is_stale_is_stale(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
@@ -674,7 +669,6 @@ def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
         canopy("decide", "PROJ-1", "wait", "--rationale", "waits on a human"),
         canopy("ticket", "set", "PROJ-2", "--phase", "needs_human"),
         canopy("decide", "PROJ-2", "wait", "--rationale", "waits on a human"),
-        queried=None,
     )
     tick_id = ticked.tick.id
     rows = records.fetch_all(

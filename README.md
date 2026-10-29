@@ -103,8 +103,9 @@ Codes such as D046 name entries in [docs/DECISIONS.md](docs/DECISIONS.md), and �
 longer while nothing changes. A tick takes a lock, returns the worktrees of dead workers, runs the overseer, and exits.
 Worktrees come from a [treehouse](https://github.com/kunchenguid/treehouse) pool.
 
-canopy has no tracker code. Agents reach the tracker through its MCP server, guided by a short provider-neutral contract
-and, where it helps, a provider skill (Jira and GitHub Issues ship). See [DESIGN §17](docs/design/WORKSPACES.md#17-trackers).
+canopy has no tracker code. A connector, a separate program, reads your tickets into the journal (Jira's and GitHub
+Issues' ship), and agents reach the tracker through its MCP server, guided by a short provider-neutral contract and,
+where it helps, a provider skill. See [DESIGN §17](docs/design/WORKSPACES.md#17-trackers).
 
 State lives in a SQLite journal. Facts about the world (ticket status, PRs, CI, reviews) are always re-read from their
 source of truth, never from the journal. The details are in [docs/design/](docs/design/README.md), and the security
@@ -147,20 +148,28 @@ workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART
 4. **Create a workspace.** In an empty directory, which becomes your workspace, run:
 
    ```sh
-   canopy init --provider jira https://github.com/acme/api.git
+   canopy init --provider jira
    ```
 
-   Use `github`, or your tracker's name, in place of `jira`. Use an HTTPS clone URL with a credential helper: worker
-   sandboxing is not expected to support SSH. `canopy init`:
+   Use `github`, or your tracker's name, in place of `jira`. `canopy init`:
 
    - writes the workspace's private config, yours alone, with a queue label of your own, to `.canopy/config.toml`;
-   - writes the workspace's `canopy-workspace.toml`;
-   - clones the repository under `repos/`.
+   - writes the workspace's `canopy-workspace.toml`.
 
-   Then set `tracker.query` in `canopy-workspace.toml`. Point it only at a tracker where everyone who can file a
-   ticket is someone you trust, never at a public repository's issues: a ticket is the task, so its author steers your
-   agents, with your credentials. canopy writes nothing into your repositories and installs nothing else: agent runs
-   load its agent definitions and skills from its own directory (D016, D040).
+   In `.canopy/config.toml`, fill in your tracker source, the program that reads your tickets into canopy's journal:
+   uncomment the table `canopy init` wrote, and the `cmd` for Jira with your site, or for GitHub Issues with your
+   repository (DESIGN §30). canopy reads no ticket any other way, so its config does not load without one. Set
+   `tracker.query` in `canopy-workspace.toml`. Point it only at a tracker where everyone who can file a ticket is
+   someone you trust, never at a public repository's issues: a ticket is the task, so its author steers your agents,
+   with your credentials. Then clone your repository under `repos/`, with an HTTPS URL and a credential helper, since
+   worker sandboxing is not expected to support SSH:
+
+   ```sh
+   canopy workspace add https://github.com/acme/api.git
+   ```
+
+   canopy writes nothing into your repositories and installs nothing else: agent runs load its agent definitions and
+   skills from its own directory (D016, D040).
 
 5. **Run it.** Add your label (`agent-ready-<you>` by default) to a ticket, then run
    `canopy loop --dry-run --ticks 1` in the workspace and read the plan.
@@ -253,7 +262,8 @@ right model, paste one of the prompts in [docs/INSIGHTS.md](docs/INSIGHTS.md) in
 
 - **canopy cannot find `treehouse`:** check that it is on `PATH` (usually by adding `$(go env GOPATH)/bin`). If it is
   outdated, rerun the pinned install from step 1, or `make treehouse` in a canopy checkout.
-- **The overseer records `skip` with `mcp_unavailable: github`:** configure the GitHub MCP server in your agent runtime.
+- **The attention list shows `connector_failed`:** a source could not read; its detail names which, and
+  `canopy status` its last run.
 - **Anything else:** check `canopy decisions`, `canopy status`, and the log, `.canopy/canopy.log` in the workspace.
 
 ## Related work

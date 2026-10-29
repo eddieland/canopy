@@ -1,8 +1,10 @@
 """The subcommands the overseer calls during a tick, and `canopy status`."""
 
+import json
 import sqlite3
 from collections.abc import Iterable
 from importlib.metadata import version
+from pathlib import Path
 
 import pytest
 
@@ -13,7 +15,7 @@ from canopy.loop import attention
 from canopy.runtime.report import Usage
 from tests.canopy.helpers import agent_runs, canopy, in_tick, waits
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
-from tests.conftest import CanopyEnv, GitPool
+from tests.conftest import TRACKER_SOURCE, CanopyEnv, GitPool
 
 #: A review cursor as canopy keeps one: the newest handled item's journal number (DESIGN §35).
 REVIEWED = "review=4127"
@@ -58,9 +60,8 @@ def test_decide_records_and_touches_ticket(scenario: Scenario) -> None:
     conn = scenario.conn
     with scenario.ticking() as tick_id:
         scenario.overseer("decide", "PROJ-1", "skip", "--rationale", "  blocked by PROJ-0  ")
-        scenario.overseer("decide", "skip", "--rationale", "mcp_unavailable: tracker")
     rows = [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
-    assert rows == [("PROJ-1", "skip", "blocked by PROJ-0"), (None, "skip", "mcp_unavailable: tracker")]
+    assert rows == [("PROJ-1", "skip", "blocked by PROJ-0")]
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert ticket["repo"] == str(scenario.env.root)
 
@@ -87,7 +88,7 @@ def test_decide_records_several_in_one_call(scenario: Scenario) -> None:
             "merged",
         )
         assert said.out == "recorded wait for PROJ-1\nrecorded done for PROJ-2\n"
-        # Each KEY ACTION pair needs its own --rationale, and a tick-wide skip goes alone.
+        # Each KEY ACTION pair needs its own --rationale, and every decision names its ticket.
         scenario.overseer("decide", "PROJ-3", "wait", "PROJ-4", "wait", "--rationale", "r", code=2)
         scenario.overseer("decide", "PROJ-3", "wait", "--rationale", "r", "--rationale", "s", code=2)
         scenario.overseer(
@@ -107,16 +108,14 @@ def test_decide_records_several_in_one_call(scenario: Scenario) -> None:
     assert {row["key"] for row in scenario.conn.execute("SELECT key FROM tickets")} == {"PROJ-1", "PROJ-2"}
 
 
-def test_only_a_tick_wide_reason_skips_the_tick(scenario: Scenario) -> None:
+def test_every_skip_is_a_tickets_own(scenario: Scenario) -> None:
+    """The overseer reads no tracker nor GitHub, which the sources read (DESIGN §39): no skip is the whole tick's."""
     with scenario.ticking() as tick_id:
-        refused = scenario.overseer("decide", "skip", "--rationale", "wanted to relabel PROJ-1", code=2)
-        assert "a skip about one ticket names its key" in refused.err
-        queue = ["decide", "queue", "skip", "--rationale", "tracker_unsupported: queue is not an issue"]
-        assert "'tracker_unsupported' skips the whole tick, so it names no key" in scenario.overseer(*queue, code=2).err
-        scenario.overseer("decide", "skip", "--rationale", "tracker_unsupported: labels")
-        scenario.overseer("decide", "PROJ-1", "wait", "--rationale", "mcp_unavailable: github, for its PR")
+        refused = scenario.overseer("decide", "skip", "--rationale", "tracker_unsupported: labels", code=2)
+        assert "expected KEY ACTION for each of 1 --rationale" in refused.err
+        scenario.overseer("decide", "PROJ-1", "skip", "--rationale", "mcp_unavailable: github, for its PR")
     rows = [(d.ticket_key, d.rationale) for d in db.decisions_for_tick(scenario.conn, tick_id)]
-    assert rows == [(None, "tracker_unsupported: labels"), ("PROJ-1", "mcp_unavailable: github, for its PR")]
+    assert rows == [("PROJ-1", "mcp_unavailable: github, for its PR")]
 
 
 def test_long_text_is_truncated(scenario: Scenario) -> None:
@@ -130,10 +129,13 @@ def test_attention_reason_format(scenario: Scenario) -> None:
     scenario.overseer("attention", "PROJ-1", "Needs Reviewer", "--detail", "d", code=2)
 
 
-def test_dry_run_dispatch_records_branch_cursors_and_context(scenario: Scenario) -> None:
+def test_dry_run_dispatch_records_branch_cursors_and_context(scenario: Scenario, connector_state: Path) -> None:
     conn = scenario.conn
+    # The tracker shows a comment on PROJ-2, its first item, so journal number 1 (DESIGN §35).
+    said = {"kind": "comment", "ticket": "PROJ-2", "id": "c7", "author": "acc-1", "time": "2026-10-18T10:00:00Z"}
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"lines": [said]}}))
     ticked = scenario.tick(
-        dispatches("PROJ-2", context="see comment 7", cursors={"comment": "7"}),
+        dispatches("PROJ-2", context="see comment 7", cursors={"comment": "1"}),
         dispatches("PROJ-3", slug="add-login"),
         dry_run=True,
     )
@@ -141,7 +143,7 @@ def test_dry_run_dispatch_records_branch_cursors_and_context(scenario: Scenario)
     assert [d.rationale for d in ticked.decisions[1:]] == [
         (
             "dry run: not dispatched; would work on agent/PROJ-2-work in repo; label agent-ready-tester; "
-            "cursor comment=7; context=see comment 7"
+            "cursor comment=1; context=see comment 7"
         ),
         "dry run: not dispatched; would work on agent/PROJ-3-add-login in repo; label agent-ready-tester",
     ]
@@ -239,8 +241,9 @@ def test_ticket_set_outside_a_tick_advances_cursors(scenario: Scenario) -> None:
         REVIEWED,
         "--done",
     )
+    # A `tracker` source numbers the comments it observes, so the comment cursor is a journal number (DESIGN §35).
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-    assert (row["last_comment_id"], row["done"]) == ("10001", 1)
+    assert (row["comment_cursor"], row["done"]) == (10001, 1)
     # In a single repository, the review cursor goes to the ticket's one unit without naming it.
     [unit] = db.units(conn, "PROJ-1")
     assert (unit.repo, unit.review_cursor) == ("repo", 4127)
