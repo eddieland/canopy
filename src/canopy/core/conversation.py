@@ -1042,14 +1042,14 @@ def operator_section(
     }
     if comments:
         found["artifact_comments"] = [
-            {"id": m.id, "at": db.to_minute(m.at), "author": m.author, "comment": m.comment_id, "body": m.body}
-            for m in comments
+            {"id": m.id, "at": m.at, "author": m.author, "comment": m.comment_id, "body": m.body} for m in comments
         ]
     return found
 
 
 def _operator_message(row: records.Message) -> OperatorMessage:
-    return {"id": row.id, "at": db.to_minute(row.at), "answers": row.answers, "body": row.body}
+    # Exact: the overseer orders it against a failed run's end (`db.to_minute`).
+    return {"id": row.id, "at": row.at, "answers": row.answers, "body": row.body}
 
 
 def has_operator_messages(conn: sqlite3.Connection, key: str) -> bool:

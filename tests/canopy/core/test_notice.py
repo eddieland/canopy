@@ -204,12 +204,7 @@ def test_the_state_block_carries_the_notice_in_force_and_drops_one_ended_with_no
     scenario.tick(dry_run=True)
     [now, before] = scenario.conn.execute("SELECT * FROM notices ORDER BY id DESC").fetchall()
     assert scenario.state()["notices"] == [
-        {
-            "text": OUTAGE,
-            "set_at": db.to_minute(now["set_at"]),
-            "until": db.to_minute(now["lapses_at"]),
-            "in_force": True,
-        },
+        {"text": OUTAGE, "set_at": now["set_at"], "until": now["lapses_at"], "in_force": True},
     ]
     # Replaced, so it ended when the next was set: a check that ran before then may be the first one's. No ticket has
     # a unit, so no check can be held, and the block leaves it out.
