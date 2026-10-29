@@ -395,10 +395,10 @@ Controls:
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
-- A running agent's card (DESIGN §41) is its own text, which may echo a ticket's or a PR's. canopy's `status` server
-  writes nothing; the harness records the card from the call the agent prints, bounded, plain text, as it records the
-  agent's spend, and shows it to the operator as data. No card goes into another agent's prompt.
-- The operator's answer to the question a running agent's card asks (DESIGN §41) is the one operator word that reaches
+- A running agent's progress (DESIGN §41) is its own text, which may echo a ticket's or a PR's. canopy's `status` server
+  writes nothing; the harness records each update from the call the agent prints, bounded, plain text, as it records the
+  agent's spend, and shows it to the operator as data. No progress goes into another agent's prompt.
+- The operator's answer to the question a running agent asks (DESIGN §41) is the one operator word that reaches
   an agent while it runs: a letter, one of the options the agent offered, never the operator's own words. canopy
   writes it to a file in the run's answers directory, which a sandboxed run may read but not write, and canopy's plugin
   tells
@@ -478,7 +478,8 @@ Controls in code, not prompts:
   started by a later tick. A dry run records none.
 - Workers exit when their work is pushed. They may push again for a fix found after a push (D116), but do not poll
   CI or retry a rejected push; the run timeout bounds the rest.
-- A card (DESIGN §41) neither extends a run nor holds a slot: what an agent says of where it stands changes no guard.
+- A run's progress (DESIGN §41) neither extends a run nor holds a slot: what an agent says of where it stands changes
+  no guard.
 - The clock (DESIGN §33) is advice, not a limit: near its timeout an agent hears the minutes left, from the same clock
   the harness kills it by, and nothing it does with them extends the run or holds off the kill.
 - A tick that cannot acquire the lock exits immediately.
@@ -555,7 +556,7 @@ Controls now:
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
 - canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose jobs are the
-  clock, the split, the nudge for a stale card and the answer to its question (DESIGN §41), and, under OpenCode 2,
+  clock, the split, the nudge for a stale update and the answer to its question (DESIGN §41), and, under OpenCode 2,
   holding a session's first prompt until its MCP tools are registered (DESIGN §33), from the snapshot. canopy takes
   the snapshot's write permission away once it is written, the operator's included, so no run changes it through its
   permissions or its sandbox, and the runtime installs nothing into it. The plugin reads three variables,
@@ -1022,6 +1023,10 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
   without following links, and rendered as text; it is never served as a file, and taking it runs no diff driver or
   textconv filter the commit names.
+- It serves the machine's processes on the system resources page: each one's name, account, use, and command line,
+  read from Linux's `/proc`, the kernel's threads left out. A command line holds whatever its program was given, an
+  argument that is a token included, and may belong to another account on the machine; `ps` shows the same to anyone
+  logged in there. It is read only while the page asks, from no path a request names, and rendered as text.
 - It serves the models the runtime lists (DESIGN §13), read when the operator opens a ticket's Model menu: it runs
   the runtime's list command, as `canopy models` does, through the process seam in the workspace root with a 30-second
   timeout, taking nothing from the request, and serves only the lines that are model ids. A choice of model is looked
@@ -1052,7 +1057,7 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   edit a review's draft's body and comments, drop one, add one on a line of its kept diff, note what a revision of it
   should change as `canopy reply review:ID` does, publish or stage the version the page showed, named by its hash,
   as `canopy review edit` and `publish` do, and discard a draft as `canopy review discard` does (DESIGN §34), answer the
-  question a running agent's card asks with one of its letters, the one the page showed, as `canopy reply run:ID` and
+  question a running agent asks with one of its letters, the one the page showed, as `canopy reply run:ID` and
   `review:ID` do (DESIGN §41), ask the loop to read its config files again as SIGHUP does, and ask it for a tick now as
   `t` at its terminal does.
   Beyond the CLI's verbs it writes what no command would, through a function of its own with the same guards: the

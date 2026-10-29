@@ -46,6 +46,15 @@ def test_a_card_is_plain_lines_held_to_its_bounds() -> None:
             cards.Card.model_validate(wrong)
 
 
+def test_a_lone_line_for_next_is_a_list_of_one() -> None:
+    assert cards.Card.model_validate({**CARD, "next": " open\tthe PR "}).next == ("open the PR",)
+    assert cards.read_call(status({**CARD, "next": "open the PR"})) == cards.Card.model_validate(
+        {**CARD, "next": ["open the PR"]},
+    )
+    with pytest.raises(ValidationError):
+        cards.Card.model_validate({**CARD, "next": " \n "})
+
+
 def test_only_a_completed_status_call_that_validates_is_a_card() -> None:
     assert cards.tool_name() == "canopy_run_status"
     assert cards.read_call(status(CARD)) == cards.Card.model_validate(CARD)
@@ -147,7 +156,7 @@ def test_a_card_gone_too_many_tool_calls_without_an_update_is_stale(conn: sqlite
     assert cards.is_stale(standing, started)
     doing = cards.doing(standing, started)
     assert doing is not None
-    assert doing.endswith(f", {cards.STALE_CALLS} calls old  stale")
+    assert doing.endswith(f"  no update in {cards.STALE_CALLS} tool calls")
 
 
 QUESTION: dict[str, object] = {
@@ -226,4 +235,4 @@ def test_show_lists_a_questions_options_by_letter_and_says_how_to_answer_it(
     assert cards.asking(answered, "run:7") is None
     db.finish_run(conn, "runs", running, RunStatus.DONE, "{}")
     ended = cards.lines(standing, started_at=OLD, running=False, timeout_minutes=45, ref="run:7")
-    assert ended[-1] == "      never answered"
+    assert ended[-1] == "      run ended before an answer"

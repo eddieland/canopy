@@ -1,7 +1,7 @@
 # canopy-mcp
 
 The MCP server protocol every server canopy ships speaks (D124): `canopy _mcp`, which serves the overseer's verbs, a
-chore's history, canopy's reports, read-only git, and a run's card, and the local artifact store (`canopy-artifacts`).
+chore's history, canopy's reports, read-only git, and a run's progress, and the local artifact store (`canopy-artifacts`).
 It is a library, with no command of its own, and imports nothing from canopy, so the artifact store, which canopy never
 imports, can serve through it too.
 

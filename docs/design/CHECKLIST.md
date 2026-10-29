@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: the operator's own list of rules no linter checks, asked of a
 worker's diff before it is done, and of a PR by a second review when that is not enough. Sections are numbered across
-the whole design; the [README](README.md) has the map. Previous: [Where a running agent stands](CARDS.md).
+the whole design; the [README](README.md) has the map. Previous: [Where a running agent stands](PROGRESS.md).
 
 ## 42. The operator's checklist
 
@@ -34,9 +34,9 @@ Every worker run that pushes, public and private, `implement`, `resume`, and a t
 is up: after the tool call that pushes, canopy's plugin (§33) adds the list to that call's result, after a `[canopy]`
 line asking the worker to diff its branch against the base, hold each item to the diff, fix what fails and push again,
 and answer each item in its result. A push soon after a reminder, a fix pushed, is not reminded again; a push after a
-long stretch of work is. The list reaches the run as the operator's answer to a card's question does (§41): a file in
-the run's answers directory, which a sandboxed run may read and not write, so the plugin still writes nothing and
-reads only what it is handed. The overseer, a planner, a reviewer, and a chore hear none.
+long stretch of work is. The list reaches the run as the operator's answer to a running agent's question does
+(§41): a file in the run's answers directory, which a sandboxed run may read and not write, so the plugin still
+writes nothing and reads only what it is handed. The overseer, a planner, a reviewer, and a chore hear none.
 
 The worker's result line gains `checklist`: for each item, `pass`, `fixed`, `held` with the reason, or `n/a`, validated
 (D026). A reminded run whose result answers no item is recorded as unanswered, never refused: its push is already made.
@@ -57,12 +57,12 @@ persona (§31); the commit is reviewed once each has ended and the adversarial o
 holds (§21), but the per-PR limit, which bounds the rounds between a worker and the adversarial reviewer: the checklist
 review starts only on a commit that limit allows, and one that ends `failed` or `unknown` is not started again on that
 commit (T3). It is a review run as any other: read-only, posting nothing (D114), no persona, its definition allowing
-canopy's git tools and the card (§41) alone, on `runtime.models.checklist`. Its result answers each item asked, `pass`,
-`fail` with each `path:line` and what fails the rule, or `n/a`; a result that skips an item or answers one not asked is
-`unknown`. The harness makes the findings, each with the item's title and severity, the operator's words, and from
-there they are any review's: a `resume` carries them with the adversarial review's, trusted under `canopy:review`
-(D089), a dismissal is counted per item, a coworker's PR's keeps its own draft (§34), and rebuttals and late findings
-are held as §21 holds them.
+canopy's git tools and the `status` tool (§41) alone, on `runtime.models.checklist`. Its result answers each item
+asked, `pass`, `fail` with each `path:line` and what fails the rule, or `n/a`; a result that skips an item or
+answers one not asked is `unknown`. The harness makes the findings, each with the item's title and severity, the
+operator's words, and from there they are any review's: a `resume` carries them with the adversarial review's,
+trusted under `canopy:review` (D089), a dismissal is counted per item, a coworker's PR's keeps its own draft (§34),
+and rebuttals and late findings are held as §21 holds them.
 
 ### Rejected
 
