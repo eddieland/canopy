@@ -188,10 +188,8 @@ def record(
 
 # The runtime's version a read before this one kept for `run`, or None.
 def _runtime_version(conn: sqlite3.Connection, run: Due) -> str | None:
-    before = records.fetch_one(
-        conn,
-        records.RunModelRead,
-        sql.select("*").from_("run_model_reads").where("run_table = ? AND run_id = ?", run.run_table, run.run_id),
+    before = (
+        records.select(records.RunModelRead).where("run_table = ? AND run_id = ?", run.run_table, run.run_id).one(conn)
     )
     return before.runtime_version if before is not None else None
 
@@ -215,13 +213,12 @@ def of_runs(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int])
     if not run_ids:
         return found
     query = (
-        sql.select("*")
-        .from_("run_models")
+        records.select(records.RunModel)
         .where("run_table = ?", table)
         .where_in("run_id", run_ids)
         .order_by("run_id, cost_usd DESC, model")
     )
-    for row in records.fetch_all(conn, records.RunModel, query):
+    for row in query.all(conn):
         found[row.run_id].append(row)
     return found
 
@@ -232,8 +229,8 @@ def replies_of(conn: sqlite3.Connection, table: RunTable, run_id: int) -> dict[s
     Returns:
         Each reply's model; empty for a run one model served, and for one not read yet or read before canopy kept them.
     """
-    query = sql.select("*").from_("run_reply_models").where("run_table = ? AND run_id = ?", table, run_id)
-    return {row.message: row.model for row in records.fetch_all(conn, records.RunReplyModel, query)}
+    query = records.select(records.RunReplyModel).where("run_table = ? AND run_id = ?", table, run_id)
+    return {row.message: row.model for row in query.all(conn)}
 
 
 def reads_of(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int]) -> dict[int, records.RunModelRead]:
@@ -244,8 +241,8 @@ def reads_of(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int]
     """
     if not run_ids:
         return {}
-    query = sql.select("*").from_("run_model_reads").where("run_table = ?", table).where_in("run_id", run_ids)
-    return {row.run_id: row for row in records.fetch_all(conn, records.RunModelRead, query)}
+    query = records.select(records.RunModelRead).where("run_table = ?", table).where_in("run_id", run_ids)
+    return {row.run_id: row for row in query.all(conn)}
 
 
 def of_ticket(conn: sqlite3.Connection, key: str) -> list[ModelTotal]:

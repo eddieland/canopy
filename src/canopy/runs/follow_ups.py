@@ -242,7 +242,7 @@ def record_follow_up(conn: sqlite3.Connection, key: str, parent: str, run_id: in
 
 def get_follow_up(conn: sqlite3.Connection, key: str) -> records.FollowUp | None:
     """Return `key`'s follow-up record, or None if no run reported it."""
-    return records.fetch_one(conn, records.FollowUp, sql.select("*").from_("follow_ups").where("key = ?", key))
+    return records.select(records.FollowUp).where("key = ?", key).one(conn)
 
 
 def valid_key(key: object) -> bool:

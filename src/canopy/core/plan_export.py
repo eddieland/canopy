@@ -219,11 +219,8 @@ def export(
             written.
     """
     rows: list[tuple[Kind, records.Plan | records.FeedbackPlan]] = [
-        *(("plan", p) for p in records.fetch_all(conn, records.Plan, sql.select("*").from_("plans"))),
-        *(
-            ("feedback plan", p)
-            for p in records.fetch_all(conn, records.FeedbackPlan, sql.select("*").from_("feedback_plans"))
-        ),
+        *(("plan", p) for p in records.select(records.Plan).all(conn)),
+        *(("feedback plan", p) for p in records.select(records.FeedbackPlan).all(conn)),
     ]
     rows.sort(key=lambda kind_row: (kind_row[1].ticket_key, kind_row[1].run_id))
     prompt_paths = _prompt_paths(conn, state_dir) if prompts else None
@@ -849,9 +846,9 @@ def _threads(conn: sqlite3.Connection, planned: AbstractSet[str]) -> dict[str, l
     Returns:
         Each thread, oldest first, with its replies, by its ticket's key; a ticket with none is not there.
     """
-    found = records.fetch_all(conn, records.PlanThread, sql.select("*").from_("plan_threads").order_by("id"))
+    found = records.select(records.PlanThread).order_by("id").all(conn)
     replies: dict[int, list[records.PlanReply]] = {}
-    for r in records.fetch_all(conn, records.PlanReply, sql.select("*").from_("plan_replies").order_by("id")):
+    for r in records.select(records.PlanReply).order_by("id").all(conn):
         replies.setdefault(r.thread_id, []).append(r)
     threads: dict[str, list[plan_threads.Thread]] = {}
     for t in found:
@@ -928,12 +925,11 @@ def _messages(conn: sqlite3.Connection, key: str, last: int) -> list[records.Mes
         The messages.
     """
     query = (
-        sql.select("*")
-        .from_("messages")
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND id <= ?", db.SUBJECT_TICKET, key, last)
         .order_by("id")
     )
-    return records.fetch_all(conn, records.Message, query)
+    return query.all(conn)
 
 
 def _quoted(text: str) -> list[str]:

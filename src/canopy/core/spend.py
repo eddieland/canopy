@@ -684,14 +684,12 @@ def idle_ticks(
     Returns:
         At most `limit` ticks, as `db.recent_ticks` reads them.
     """
-    found = records.fetch_all(
-        conn,
-        records.Tick,
-        sql.select("*")
-        .from_("ticks")
+    found = (
+        records.select(records.Tick)
         .where("started_at >= ? AND started_at < ? AND dry_run = 0 AND idle = 1", since, until)
         .order_by("id DESC")
-        .limit(limit),
+        .limit(limit)
+        .all(conn)
     )
     return db.with_decision_counts(conn, found)
 

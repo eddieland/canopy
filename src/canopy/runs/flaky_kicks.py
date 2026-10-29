@@ -21,8 +21,8 @@ def spent(conn: sqlite3.Connection, repo: str, branch: str, head: str) -> int:
     Returns:
         The length of the chain of kicks that ends at `head`: 0 when no kick pushed it.
     """
-    query = sql.select("*").from_("flaky_kicks").where("repo = ? AND branch = ?", repo, branch)
-    made = {k.to_head: k.from_head for k in records.fetch_all(conn, records.FlakyKick, query)}
+    query = records.select(records.FlakyKick).where("repo = ? AND branch = ?", repo, branch)
+    made = {k.to_head: k.from_head for k in query.all(conn)}
     count = 0
     # Bounded by the rows: a commit pushed again after a kick replaced it never loops the walk.
     while head in made and count < len(made):
