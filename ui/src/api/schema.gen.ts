@@ -1526,6 +1526,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the skills
+         * @description Every skill the runtime finds in the workspace root, with where its file is and its text.
+         */
+        get: operations["listSkills"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/spend": {
         parameters: {
             query?: never;
@@ -7682,6 +7702,58 @@ export type components = {
              */
             secret: string;
         };
+        /**
+         * Skill
+         * @description A skill the runtime finds where the loop starts its agents: where its file is, and what it says.
+         */
+        Skill: {
+            /**
+             * Body
+             * @description Its instructions, the file after its front matter: untrusted text, rendered as text.
+             */
+            body: string;
+            /**
+             * Description
+             * @description What its front matter says it is for: what an agent reads to decide whether to load it; None when it says
+             *     nothing.
+             */
+            description: string | null;
+            /**
+             * Name
+             * @description The skill's name, as an agent loads it and the runtime's rules match it.
+             */
+            name: string;
+            /**
+             * Path
+             * @description Its file: under the workspace's root relative to it, under the operator's home from `~/`, and otherwise as the
+             *     runtime names it.
+             */
+            path: string;
+            /** @description Where its file is. */
+            source: components["schemas"]["SkillSource"];
+        };
+        /**
+         * SkillList
+         * @description Every skill the runtime finds, as `canopy agents` asks it, with each one's file and text.
+         */
+        SkillList: {
+            /**
+             * Error
+             * @description Why the runtime could not list its skills, in canopy's words; None when it did.
+             */
+            error: string | null;
+            /**
+             * Skills
+             * @description Each skill, by name; none when the runtime could not list them.
+             * @default []
+             */
+            skills: components["schemas"]["Skill"][];
+        };
+        /**
+         * @description Where a skill's file is (DESIGN §13): `canopy` for the skills canopy ships, in its definitions snapshot; `workspace` for one under the workspace's root; `home` for one under the operator's home; `built-in` for one the runtime carries itself; `other` for any other file.
+         * @enum {string}
+         */
+        SkillSource: "canopy" | "workspace" | "home" | "built-in" | "other";
         /**
          * Spend
          * @description What the last day, 30 days, and all time cost, read together, so a month never shows less than its day.
@@ -15614,6 +15686,71 @@ export interface operations {
             };
             /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillList"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
