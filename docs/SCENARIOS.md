@@ -99,6 +99,10 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
 - **S12. Stacked tickets** (M4, M56). Two tickets, the second blocked by the first. Expect the second to wait, then be
   dispatched with `--base` on the first's branch once its PR is open and green. Then merge the first: expect a
   `resume (retarget)` for the second, without `--base`, that points its PR at the repository's base branch.
+- **S68. A follow-up, labeled and landed** (M46). With a sink configured, let a worker on a labeled ticket in the
+  toy workspace (TOY_REPOS) file a follow-up. Expect the sink to hear `follow_ups.filed` naming it once, and the
+  follow-up to sit undispatched with no labels. Label it: expect the overseer to dispatch it as any ticket, its PR to
+  land for review, and its worker to file no follow-up of its own.
 
 ### Several repositories
 
