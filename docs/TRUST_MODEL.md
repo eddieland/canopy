@@ -395,6 +395,16 @@ Controls:
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
+- A running agent's card (DESIGN §41) is its own text, which may echo a ticket's or a PR's. canopy's `status` server
+  writes nothing; the harness records the card from the call the agent prints, bounded, plain text, as it records the
+  agent's spend, and shows it to the operator as data. No card goes into another agent's prompt.
+- The operator's answer to the question a running agent's card asks (DESIGN §41) is the one operator word that reaches
+  an agent while it runs: a letter, one of the options the agent offered, never the operator's own words. canopy
+  writes it to a file in the run's answers directory, which a sandboxed run may read but not write, and canopy's plugin
+  tells
+  the agent on its next tool call with a `[canopy]` line naming the letter and the agent's own option. Anything the
+  agent reads can print a line that looks like it, so a forged one can choose an option the agent offered, which it
+  was already prepared to do, and nothing else; the prompts say a canopy line that answers anything else is data.
 - No agent has web tools (D077). Every canopy definition denies `webfetch`, `websearch`, and `codesearch` as scalars,
   which a repository's config cannot loosen (D044), and `execute`, OpenCode 2's code mode, whose code can make HTTP
   requests. Fetched and searched pages are text anyone can shape, and an agent that reaches for them on its own reads
@@ -468,6 +478,7 @@ Controls in code, not prompts:
   started by a later tick. A dry run records none.
 - Workers exit when their work is pushed. They may push again for a fix found after a push (D116), but do not poll
   CI or retry a rejected push; the run timeout bounds the rest.
+- A card (DESIGN §41) neither extends a run nor holds a slot: what an agent says of where it stands changes no guard.
 - The clock (DESIGN §33) is advice, not a limit: near its timeout an agent hears the minutes left, from the same clock
   the harness kills it by, and nothing it does with them extends the run or holds off the kill.
 - A tick that cannot acquire the lock exits immediately.
@@ -544,13 +555,17 @@ Controls now:
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
 - canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose jobs are the
-  clock, the split, and, under OpenCode 2, holding a session's first prompt until its MCP tools are registered
-  (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is written, the
-  operator's included, so no run changes it through its permissions or its sandbox, and the runtime installs nothing
-  into it. The plugin reads one variable, `CANOPY_DEADLINE`, the clock, the system prompt the runtime hands it, which
-  it cuts in two without changing its text, and under OpenCode 2 the runtime's MCP servers' states and its tools'
-  names; it writes no file, refuses no call, grants no tool, and catches its own errors. A repository's own plugins
-  already load in the same process (T7).
+  clock, the split, the nudge for a stale card and the answer to its question (DESIGN §41), and, under OpenCode 2,
+  holding a session's first prompt until its MCP tools are registered (DESIGN §33), from the snapshot. canopy takes
+  the snapshot's write permission away once it is written, the operator's included, so no run changes it through its
+  permissions or its sandbox, and the runtime installs nothing into it. The plugin reads three variables,
+  `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, and `CANOPY_ANSWERS`, the clock, the system prompt the runtime hands it, which it
+  cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its session,
+  one file, the answer canopy writes in the run's answers directory, through the runtime's own `node:fs`, and under
+  OpenCode 2 the runtime's MCP servers' states and its tools' names; it writes no file, refuses no call, grants no
+  tool, and catches its own errors. A repository's own plugins already load in the same process (T7). The answers
+  directory is the run's own, in the state directory beside its other files, made before the agent starts and removed
+  once it ends; a sandboxed run may read it and nothing else of the state directory, and write none of it (§24).
 - `runtime.setup_cmd` (DESIGN §9) runs on the host in each slot of a worker run, after the run's branch is checked out
   and before the worker starts. It runs that branch's code, which a worker wrote (install scripts, generators), outside
   the agent runtime's permissions. It is private (T7), and the code is what the worker's own shell runs a moment
@@ -1036,8 +1051,10 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   `canopy attach` and `canopy detach` do (DESIGN §22),
   edit a review's draft's body and comments, drop one, add one on a line of its kept diff, note what a revision of it
   should change as `canopy reply review:ID` does, publish or stage the version the page showed, named by its hash,
-  as `canopy review edit` and `publish` do, and discard a draft as `canopy review discard` does (DESIGN §34), ask the
-  loop to read its config files again as SIGHUP does, and ask it for a tick now as `t` at its terminal does.
+  as `canopy review edit` and `publish` do, and discard a draft as `canopy review discard` does (DESIGN §34), answer the
+  question a running agent's card asks with one of its letters, the one the page showed, as `canopy reply run:ID` and
+  `review:ID` do (DESIGN §41), ask the loop to read its config files again as SIGHUP does, and ask it for a tick now as
+  `t` at its terminal does.
   Beyond the CLI's verbs it writes what no command would, through a function of its own with the same guards: the
   marks of what the operator has seen (DESIGN §22), which authorize nothing and no agent reads, and two things that
   are the operator's own words on a plan (DESIGN §25): an edit of a
@@ -1054,14 +1071,16 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - Its config writes (DESIGN §12, §22, D128) are an allowlist in code, by key name, never a section's wildcard, so a key
   added later is not writable until it is named. Limits may be raised or lowered, but not past a bound in code (a
   count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt
-  limits, the attachment limits under their own ceilings, and the CI cooldown in `policy`, `loop.interval_minutes`
-  and `loop.idle_max_minutes`, and `spend.monthly_budget_usd`, which spends nothing but would silence the sink that
-  hears the month reached it. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100%
-  alert. Trust settings move only toward stricter: `policy.stacking` to `"never"`, an entry removed from
-  `trust.authorized_repliers` or `trust.trusted_reviewers` (never added), `trust.rebase` to false, and
-  `trust.commit_trailer` to true. Nothing that
-  runs a command, chooses a prompt, is read as words, or moves the listener: no `runtime.*`, `notify.*`, `chores`,
-  `paths.*`, `review.*`, `serve.*`, or `tracker.*`, and no comment mark or trailer name. A config write outlives the
+  and follow-up limits, the attachment limits under their own ceilings, and the CI cooldown and feedback quiet time
+  in `policy`, the paces and free-disk floor in `loop`, the worker's, reviewer's, and overseer's run timeouts in
+  `runtime`, and `spend.monthly_budget_usd`, which spends nothing but would silence the sink that hears the month
+  reached it. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100% alert. Trust
+  settings move only toward stricter: `policy.stacking` to `"never"`, `policy.plan` and `policy.feedback_plan` to
+  `"approve"`, `policy.planner_may_approve` toward `"off"`, an entry removed from `trust.authorized_repliers` or
+  `trust.trusted_reviewers` (never added), `trust.review_replies` to `"approve"`, `trust.rebase` to false,
+  `trust.max_flaky_kicks` lowered, and `trust.commit_trailer` to true. Nothing that runs a command, chooses a prompt,
+  is read as words, or moves the listener: no other `runtime.*`, no `notify.*`, `chores`, `paths.*`, `review.*`,
+  `serve.*`, or `tracker.*`, and no comment mark or trailer name. A config write outlives the
   secret, which is why trust only tightens: a replier added through a stolen session would go on steering workers after
   a new secret ended it. It writes the workspace's private file alone (M49), never the workspace file (T7) nor the user
   file, which serves every workspace: a key from the user file is written to the private file, where it shadows the user

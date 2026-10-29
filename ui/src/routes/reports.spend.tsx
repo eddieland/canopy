@@ -8,6 +8,7 @@ import { SPEND_KINDS } from '@/api/types'
 import type {
     SpendBreakdown,
     SpendDay,
+    SpendFirstCallWeek,
     SpendKind,
     SpendMonth,
     SpendPullRequest,
@@ -15,6 +16,7 @@ import type {
     SpendTicket,
 } from '@/api/types'
 import { Cost } from '@/components/cost'
+import { FirstCallChart } from '@/components/first-call-chart'
 import { None } from '@/components/none'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -30,10 +32,12 @@ import type { AxisRoom } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
+import { firstKind, KIND_SERIES, seriesOf, seriesWeeks } from '@/lib/first-calls'
 import { phaseMeaning } from '@/lib/meanings'
 import {
     alertMarks,
     alertsText,
+    BUDGET_WORD,
     budgetPartsText,
     budgetPercent,
     budgetState,
@@ -73,17 +77,20 @@ interface SpendSearch {
     hours?: number | undefined
     model_kind?: SpendKind | undefined
     tool_kind?: SpendKind | undefined
+    first_kind?: SpendKind | undefined
+    first_series?: string | undefined
 }
 
-// The search keys of the two kind filters, By model's and By tool's.
-type KindKey = 'model_kind' | 'tool_kind'
+// The search keys of the kind filters: By model's, By tool's, and First calls by week's.
+type KindKey = 'model_kind' | 'tool_kind' | 'first_kind'
 
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP =
     'What agent runs cost each day, or each hour of the last 24, as the runtime reported it: the overseer, idle ' +
     "ticks' part of it apart, the workers, plans, chores, and reviews it started, and your tasks' runs; beside it, " +
     "the tickets the loop marked done, and what each ticket's and PR's own runs cost; what each kind spent on each " +
-    "model; and which tools put the most into the runs' context. As canopy spend --days N prints it."
+    "model; which tools put the most into the runs' context; and how much of each kind's first model call the cache " +
+    'served, week by week. As canopy spend --days N prints it.'
 
 // What each share of the sessions panel counts, said when the operator hovers its name.
 const SESSIONS_CANOPY_HINT =
@@ -122,9 +129,8 @@ const KIND_LABEL = {
     tasks: 'task runs',
 } as const
 
-// Where the month stands against its budget, as a word, its color, and the budget bar's fill: a state's, never a
-// spend series'.
-const BUDGET_WORD: Record<BudgetState, string> = { under: 'On budget', headed: 'Headed over', over: 'Over budget' }
+// Where the month stands against its budget, as its color and the budget bar's fill: a state's, never a spend
+// series'.
 const BUDGET_TEXT: Record<BudgetState, string> = {
     under: 'text-status-done',
     headed: 'text-status-blocked',
@@ -174,6 +180,8 @@ const PEAK_JUSTIFY: Record<PeakAlign, string> = {
  * what it got done: the tickets marked done, and what each ticket's and PR's own runs cost. The window is `?hours=24`,
  * by the hour, or `?days=`, a week or 30 days; the nav opens the week, and the rail's Spent counters their own window.
  * `?model_kind=` and `?tool_kind=` keep one kind's rows of By model and By tool, which otherwise sum every kind's.
+ * `?first_kind=` picks the kind First calls by week draws, the first with a week otherwise, and `?first_series=` one
+ * of its chores or models, `chore:deps` or `model:` and the model's id, in place of all its runs.
  */
 export const Route = createFileRoute('/reports/spend')({
     // Typed search params: a window the page does not offer is dropped, which reads as the week, and a kind it does
@@ -185,6 +193,9 @@ export const Route = createFileRoute('/reports/spend')({
             hours: picked?.hours,
             model_kind: SPEND_KINDS.find((k) => k === search['model_kind']),
             tool_kind: SPEND_KINDS.find((k) => k === search['tool_kind']),
+            first_kind: SPEND_KINDS.find((k) => k === search['first_kind']),
+            // Any series is kept: one the window's weeks do not have reads as the kind's own.
+            first_series: typeof search['first_series'] === 'string' ? search['first_series'] : undefined,
         }
     },
     component: SpendPage,
@@ -335,6 +346,26 @@ function SpendPage() {
                             <PanelSkeleton rows={5} className="min-h-40" />
                         ) : (
                             <Tools tools={toolRows(data.tools, search.tool_kind)} kind={search.tool_kind} span={span} />
+                        )}
+                    </Panel>
+                    <Panel data-testid="spend-first-calls">
+                        <PanelHeader label="First calls by week">
+                            <KindFilter
+                                name="first_kind"
+                                kinds={kindsOffered(data?.first_call_weeks ?? [], search.first_kind)}
+                                chosen={firstKind(data?.first_call_weeks ?? [], search.first_kind)}
+                                every={false}
+                            />
+                        </PanelHeader>
+                        {data === undefined ? (
+                            <PanelSkeleton rows={6} className="min-h-72" />
+                        ) : (
+                            <FirstCalls
+                                weeks={data.first_call_weeks}
+                                kind={firstKind(data.first_call_weeks, search.first_kind)}
+                                series={search.first_series ?? KIND_SERIES}
+                                span={span}
+                            />
                         )}
                     </Panel>
                     <Panel data-testid="spend-sessions">
@@ -849,16 +880,29 @@ function PullRequests({ pullRequests, span }: { pullRequests: SpendPullRequest[]
 }
 
 /**
- * A panel's kind filter, in its header as the runs page's is: `all`, which sums every kind's rows, then each kind the
- * window has rows of. The choice is kept in the search under `name`, beside the window and the other filter.
+ * A panel's kind filter, in its header as the runs page's is: `all`, which sums every kind's rows, unless `every` is
+ * false for a panel whose kinds do not sum, then each kind the window has rows of. The choice is kept in the search
+ * under `name`, beside the window and the other filters.
  */
-function KindFilter({ name, kinds, chosen }: { name: KindKey; kinds: SpendKind[]; chosen: SpendKind | undefined }) {
+function KindFilter({
+    name,
+    kinds,
+    chosen,
+    every = true,
+}: {
+    name: KindKey
+    kinds: SpendKind[]
+    chosen: SpendKind | undefined
+    every?: boolean
+}) {
     return (
         <nav aria-label="Filter by kind" className="flex flex-wrap items-center gap-1" data-testid={`spend-${name}`}>
             <span className="mr-1 font-mono text-xs text-muted-foreground">kind</span>
-            <KindLink name={name} kind={undefined} selected={chosen === undefined}>
-                all
-            </KindLink>
+            {every && (
+                <KindLink name={name} kind={undefined} selected={chosen === undefined}>
+                    all
+                </KindLink>
+            )}
             {kinds.map((k) => (
                 <KindLink key={k} name={name} kind={k} selected={chosen === k}>
                     {k}
@@ -881,19 +925,104 @@ function KindLink({
     children: ReactNode
 }) {
     return (
+        // Another kind of first calls has other chores and models: its series starts as all its runs.
+        <FilterLink
+            search={(prev) => ({ ...prev, [name]: kind, ...(name === 'first_kind' && { first_series: undefined }) })}
+            selected={selected}
+        >
+            {children}
+        </FilterLink>
+    )
+}
+
+/** A filter chip, the runs page's look: the page with `search` as its search, marked when it is the one shown. */
+function FilterLink({
+    search,
+    selected,
+    className,
+    children,
+}: {
+    search: (prev: SpendSearch) => SpendSearch
+    selected: boolean
+    className?: string
+    children: ReactNode
+}) {
+    return (
         <Link
             to="/reports/spend"
-            search={(prev) => ({ ...prev, [name]: kind })}
+            search={search}
             resetScroll={false}
             data-selected={selected}
             className={cn(
-                'flex h-6 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',
+                'flex h-6 min-w-0 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',
                 'hover:bg-surface-raised hover:text-foreground',
                 'data-[selected=true]:bg-accent/16 data-[selected=true]:text-foreground',
+                className,
             )}
         >
             {children}
         </Link>
+    )
+}
+
+/**
+ * The first calls panel's body: the kind's series to pick from, all its runs, each chore's, and each model's, then the
+ * picked one's weeks drawn (`FirstCallChart`) in the kind's fill, and a line on what to read in them. A window with no
+ * first call recorded, of any kind or of the kind picked, says so.
+ */
+function FirstCalls({
+    weeks,
+    kind,
+    series,
+    span,
+}: {
+    weeks: SpendFirstCallWeek[]
+    kind: SpendKind | undefined
+    series: string
+    span: string
+}) {
+    if (kind === undefined) {
+        return <Empty size="panel">no run reported its first model call in these {span}</Empty>
+    }
+    const offered = seriesOf(weeks, kind)
+    const shown = offered.some((s) => s.id === series) ? series : KIND_SERIES
+    const drawn = seriesWeeks(weeks, kind, shown)
+    if (drawn.length === 0) {
+        return (
+            <Empty size="panel">
+                no {KIND_LABEL[kind].replace(/s$/u, '')} reported its first model call in these {span}
+            </Empty>
+        )
+    }
+    const fill = SERIES.find((s) => s.key === kind)?.fill ?? 'bg-spend-workers'
+    return (
+        <div className="flex flex-col">
+            {offered.length > 1 && (
+                <nav
+                    aria-label="Filter by chore or model"
+                    className="flex flex-wrap items-center gap-1 px-3 pt-3"
+                    data-testid="spend-first-series"
+                >
+                    <span className="mr-1 font-mono text-xs text-muted-foreground">runs</span>
+                    {offered.map((s) => (
+                        <FilterLink
+                            key={s.id}
+                            search={(prev) => ({ ...prev, first_series: s.id === KIND_SERIES ? undefined : s.id })}
+                            selected={s.id === shown}
+                            className="max-w-full"
+                        >
+                            <Clipped text={s.label} className="block" />
+                        </FilterLink>
+                    ))}
+                </nav>
+            )}
+            <FirstCallChart weeks={drawn} fill={fill} />
+            <p className="max-w-3xl px-3 pb-3 text-xs text-muted-foreground">
+                Each bar is how much of the week&apos;s first model calls the cache served: the prefix every run starts
+                with. A fall is a prefix the cache no longer holds; a rule marks a week whose runs used a runtime
+                version or definitions snapshot the week before&apos;s did not.
+            </p>
+        </div>
     )
 }
 

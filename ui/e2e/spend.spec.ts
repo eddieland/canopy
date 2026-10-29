@@ -449,6 +449,23 @@ function nothing(costs: Costs): Costs {
     return Object.fromEntries(Object.keys(costs).map((key) => [key, null]))
 }
 
+test("the header's budget says the month is headed over, in words on hover, and opens the spend page", async ({
+    page,
+}) => {
+    // Wide enough for the percent beside the icon; narrower, the icon stands alone.
+    await page.setViewportSize({ width: 1600, height: 800 })
+    await page.goto('attention')
+    await settled(page)
+    // The mock's budget is $40, and its month's pace passes it.
+    const readout = page.getByTestId('budget-readout')
+    await expect(readout).toHaveText('39%')
+    await expect(readout).toHaveAttribute('data-state', 'headed')
+    await expect(readout).toHaveAttribute('title', /^Headed over: \$15\.76 of \$40 \(39%\), on pace for \$/u)
+    await readout.click()
+    await expect(page).toHaveURL(/\/reports\/spend$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Spend')
+})
+
 test('this month reads against the budget whatever the window, and is headed over at its pace', async ({ page }) => {
     await page.goto('reports/spend?hours=24')
     await settled(page)
@@ -472,4 +489,52 @@ test('this month reads against the budget whatever the window, and is headed ove
     await expect(page.getByTestId('spend-budget-alert-50')).toBeAttached()
     await expect(page.getByTestId('spend-budget-alert-80')).toBeAttached()
     await expect(page.getByTestId('spend-budget-alerts')).toContainText('hears at 50%, 80%, and 100%.')
+})
+
+test("each kind's first calls by week mark where a runtime or snapshot changed, a chore's or model's apart", async ({
+    page,
+}) => {
+    await page.goto('reports/spend?days=30')
+    await settled(page)
+    const panel = page.getByTestId('spend-first-calls')
+    const kinds = panel.getByTestId('spend-first_kind')
+    // The overseer first, as canopy spend orders the kinds; no `all`, since kinds' prefixes do not sum.
+    await expect(kinds.getByRole('link')).toHaveText(['overseer', 'workers', 'plans', 'chores', 'reviews', 'tasks'])
+    await expect(kinds.getByRole('link', { name: 'overseer' })).toHaveAttribute('data-selected', 'true')
+
+    await kinds.getByRole('link', { name: 'workers' }).click()
+    await expect(page).toHaveURL(/\/reports\/spend\?days=30&first_kind=workers$/u)
+    // The history's September: the week of a prompt change read little from the cache, and the runtime moved the next.
+    await expect(panel.getByTestId(/^first-call-bar-/u)).toHaveCount(5)
+    await expect(panel.getByTestId('first-call-bar-2026-W39')).toHaveText('57%')
+    await expect(panel.getByTestId('first-call-marker')).toHaveCount(2)
+    await expect(panel.getByRole('list', { name: 'What changed' }).getByRole('listitem')).toHaveText([
+        'Week of Sep 21: snapshot a81d2c4e9f306b17',
+        'Week of Sep 28: runtime 1.0.104',
+    ])
+    await expect(panel.getByTestId('first-call-table').locator('tbody tr').first()).toHaveAttribute(
+        'data-testid',
+        'first-call-week-2026-W41',
+    )
+
+    // A kind's series: all its runs, then each chore's and each model's.
+    await kinds.getByRole('link', { name: 'chores' }).click()
+    const series = panel.getByTestId('spend-first-series')
+    await expect(series.getByRole('link')).toHaveText([
+        'all runs',
+        'build-health',
+        'deps',
+        'anthropic/claude-haiku-4-5',
+    ])
+    await series.getByRole('link', { name: 'deps' }).click()
+    await expect(page).toHaveURL(/first_series=chore%3Adeps/u)
+    await expect(series.getByRole('link', { name: 'deps' })).toHaveAttribute('data-selected', 'true')
+    await expect(panel.getByTestId('first-call-table').locator('tbody tr')).toHaveCount(1)
+
+    // Another kind starts on all its runs; the week holds the fixtures' alone, one bar and nothing changed.
+    await kinds.getByRole('link', { name: 'workers' }).click()
+    await expect(page).not.toHaveURL(/first_series/u)
+    await page.getByTestId('spend-window-7').click()
+    await expect(panel.getByTestId(/^first-call-bar-/u)).toHaveCount(1)
+    await expect(panel.getByRole('list', { name: 'What changed' })).toHaveCount(0)
 })

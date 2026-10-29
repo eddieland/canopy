@@ -1,6 +1,7 @@
 """How long `canopy loop` waits after a tick: longer after idle ticks in a row, never past a gate (DESIGN §6).
 
-A tick is idle when it dispatched nothing and nothing reached the journal after the tick before read it (`idle`).
+A tick is idle when it dispatched nothing, no poll woke it, and nothing reached the journal after the tick before read
+it (`idle`); only the overseer's runs count (`count`, DESIGN §39).
 After the n-th idle tick in a row the wait is `base * 2^n`, up to the cap and never below `base`; the CI cooldown's end
 or a chore's `due_at` still ahead, a PR head's settle time, or the lapse of the operator's notice to workers, ends it
 sooner (`gate`). While the loop waits, a run that ends after the tick read the journal (`read_at`) wakes it, as the
@@ -74,7 +75,7 @@ def before(ctx: Context) -> Before:
     return Before(attention.listed(ctx), db.phases(ctx.conn))
 
 
-def idle(ctx: Context, outcome: tick.Outcome) -> bool:
+def idle(ctx: Context, outcome: tick.Outcome, *, woken_by: tick.WokenBy | None = None) -> bool:
     """Whether the tick that ended with `outcome` was idle, read from the journal (DESIGN §6, Idle pacing).
 
     It closed `ok`, dispatched no run, and no run started or ended, and the operator recorded no message, started or
@@ -82,10 +83,14 @@ def idle(ctx: Context, outcome: tick.Outcome) -> bool:
     recorded besides (waits, refusals, `done`, attention items, phases) does not count: none of it starts work.
     Without a previous tick that read it, not idle.
 
+    Nor is a tick a poll woke, by `woken_by`: a poll ends the wait only for what a tick would newly record or list, or
+    for a source failing or reading whole again, so that tick is not the timer's second look at what the overseer was
+    left and waited on, which alone lengthens the wait (DESIGN §39).
+
     Returns:
         True if the tick was idle.
     """
-    if outcome.status != TickStatus.OK or outcome.tick_id is None:
+    if outcome.status != TickStatus.OK or outcome.tick_id is None or woken_by == "poll":
         return False
     previous = db.previous_tick(ctx.conn, outcome.tick_id)
     if previous is None or previous.read_at is None or previous.message_id is None:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import click
 
-from canopy.cli.common import Group, OverseerCommand
 from canopy.cli.params import (
     KEY_RE,
     PR_URL,
@@ -20,7 +19,7 @@ from canopy.cli.params import (
 from canopy.loop import tools
 
 
-@click.command("decide", cls=OverseerCommand)
+@click.command("decide", hidden=True)
 # click has no groups of arguments, so `KEY ACTION`, once for each --rationale, is parsed by hand: the Nth KEY ACTION
 # pair is the Nth --rationale's.
 @click.argument("words", nargs=-1, required=True, metavar="KEY ACTION")
@@ -59,7 +58,7 @@ def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationales: tup
     return verb(click_ctx, tools.decide, tools.Decisions, decisions=decisions)
 
 
-@click.command("attention", cls=OverseerCommand)
+@click.command("attention", hidden=True)
 # click has no optional positional before a required one, so `[KEY] REASON` is parsed by hand.
 @click.argument("words", nargs=-1, required=True, metavar="[KEY] REASON")
 @click.option(
@@ -107,12 +106,12 @@ def cmd_attention(  # noqa: PLR0917  (click passes each option)
     )
 
 
-@click.group("ticket", cls=Group)
+@click.group("ticket", hidden=True)
 def ticket_group() -> None:
     """Update the journal's view of a ticket (overseer only)."""
 
 
-@ticket_group.command("set", cls=OverseerCommand)
+@ticket_group.command("set")
 @click.argument("keys", nargs=-1, required=True, type=TICKET_KEY, metavar="KEY...")
 @click.option(
     "--repo",

@@ -342,6 +342,20 @@ class ReviewRun(Row):
     #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
     #: canopy kept it.
     tokens_first_cache_read: int | None
+    #: Its reviewer's latest card, as JSON, when it was recorded, and the tool calls made by then (DESIGN §41); None
+    #: with no card.
+    card_json: str | None
+    card_at: str | None
+    card_calls: int | None
+    #: The tool calls its reviewer has ended so far.
+    tool_calls: int
+    #: When each step its card names as working was first seen so, as JSON by title (DESIGN §41); None with none.
+    card_working_since: str | None
+    #: When the question its card asks was first asked, the letter the operator answered it with, and when (DESIGN
+    #: §41); None while it asks none, or waits on the operator.
+    card_asked_at: str | None
+    card_answer: str | None
+    card_answered_at: str | None
 
 
 @dataclass(frozen=True)
@@ -1544,6 +1558,20 @@ class Run(Row):
     #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
     #: canopy kept it.
     tokens_first_cache_read: int | None
+    #: Its agent's latest card, as JSON, when it was recorded, and the tool calls made by then (DESIGN §41); None with
+    #: no card.
+    card_json: str | None
+    card_at: str | None
+    card_calls: int | None
+    #: The tool calls its agent has ended so far.
+    tool_calls: int
+    #: When each step its card names as working was first seen so, as JSON by title (DESIGN §41); None with none.
+    card_working_since: str | None
+    #: When the question its card asks was first asked, the letter the operator answered it with, and when (DESIGN
+    #: §41); None while it asks none, or waits on the operator.
+    card_asked_at: str | None
+    card_answer: str | None
+    card_answered_at: str | None
 
 
 @dataclass(frozen=True)

@@ -14,7 +14,7 @@ from typing import override
 
 import click
 
-from canopy.cli.common import Group, Obj
+from canopy.cli.common import Obj
 from canopy.core import config, db
 from canopy.infra import procs
 
@@ -74,7 +74,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
 }
 
 
-class LazyGroup(Group):
+class LazyGroup(click.Group):
     """The root group: it lists every command in COMMANDS and imports one's module when click first looks it up.
 
     `--help` and shell completion look up every command, so they import them all; running one imports only its own.

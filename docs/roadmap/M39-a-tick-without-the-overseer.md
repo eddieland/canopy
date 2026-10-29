@@ -112,40 +112,44 @@ found, and the block shows the PRs of the open review requests and the fresh que
 overseer's definition denies GitHub's PR, branch, and user reads by pattern, and on a GitHub tracker its server whole.
 Chosen conservatively, for the operator to change: a review PR's checks are all counted as CI, since which repository
 it is in is the overseer's to match; a blocker not listed to the overseer is not stacked on; and off a GitHub tracker
-GitHub's server is denied by its tools' names, its own name being the operator's. Built (2026-10-29): §30's `tracker`
-connector for GitHub Issues, `canopy-connect-github --repo OWNER/NAME` (`canopy_github/issues.py`), so a workspace on
-GitHub Issues has a source to require: `GH-N` is issue N, read as `canopy-connect-jira` reads Jira's. Chosen
-conservatively, for the operator to change: a blocker is an issue dependency or a `Blocked by #N` line of the body,
-either; a ticket an open issue of another repository blocks, which no key names, is not read whole, so it stays stale;
-and a query that returns another repository's issue is not read. Built (2026-10-29): config requiring a `tracker`
-source, one with a `cmd` that reads, a workspace without one refused with what to add (`core/config.py`), so every
-live tick takes the observed path above; the tests' workspaces run the fake connector as theirs, holding every
-ticket they work open and labeled. The overseer's definition loses the tracker's skill and read tools on every
-path. Chosen conservatively, for the operator to change: `canopy init` writes the table commented out, since only the
-operator knows their site or repository and a guess would send their credentials to someone else's, so a new
-workspace's config does not load, nor `canopy init` clone its repositories, until they fill it in. Built
-(2026-10-29): the harness's `wait` on an unobserved subject. A candidate with a unit whose PR URL names no PR, which no
-source reads, is the harness's `wait`, saying no source reads it, and is never listed to the overseer; so is one the
-`tracker` source read before canopy held it, such as one the query found that was read as another's blocker, whose
-comments it never recorded, until a read since, as the block already counted it stale (`loop/phases.py`,
-`loop/harness.py`). A ticket, blocker, PR, or repository's branches with no observation at all was already waited as
-stale. Chosen conservatively, for the operator to change: an unobserved unit waits until the operator forgets the
-ticket's work, which drops its units, and raises no item of its own; a closed or unlabeled ticket is still decided
-without its PRs; and a review's PR not read fresh stays the overseer's `canopy_review-wait`, taken from the read, not a
-live one. The tests' fake worker reports a PR no source reads, so a story that needs the overseer listed a ticket with a
-PR gives it one the fake `vcs` source reads. Built (2026-10-29): the paths config left unreachable removed. `canopy
-queried`, its tool, and the duty that owed it are gone, the harness recording the `tracker` source's read of the query
-as before; every decision names its ticket, so the tick-wide `skip` and DESIGN §15's case for it are gone, and no tick
-closes `skipped`; the state block has no `query_due`, and the overseer's prompt no live read of the tracker or GitHub,
-only the observations, an unobserved subject its `wait`; and the loop's branches for a workspace with no `tracker`
-source, the comment cursor kept as the tracker's id among them, are gone (`loop/tick.py`, `loop/tools.py`,
-`loop/observations.py`, `loop/phases.py`). Kept for the journal's history: the `queried` decision, which the harness
-still records and `duties.last_queried` reads from an older release's ticks too; `TickStatus.SKIPPED`, which old ticks
-hold; and the `last_comment_id` column, no longer read. Built (2026-10-29): every MCP server but canopy's denied. The
-overseer's definition denies `*_*`, every tool OpenCode names `<server>_<tool>`, whatever the operator's runtime config
-grants, and `read` of any server's resources, before it allows canopy's tools by name; nothing of the tracker's config
-is rendered into it, so none can reopen a server (`.agents/agents/canopy-overseer.md`). Read from OpenCode 1.19.3's
-source: no built-in tool the overseer uses asks a permission with a `_`. Left: the third bullet; and the design folded
-into the sections it names.
+GitHub's server is denied by its tools' names, its own name being the operator's. Built (2026-10-29): the third bullet.
+The count was already the overseer's alone; what was left was a tick a poll woke, which counted as idle and lengthened
+the wait after it. It is idle no more (`pacing.idle`): a poll wakes the loop only for what is new, so the wait lengthens
+after the overseer's second looks at what it was left and waited on, which the timer brings, and not after its first
+look at what a poll found. Chosen conservatively, for the operator to change: a failed poll's wake, and the whole read
+after one, count as any poll's; the operator's tick-now counts as before. Built (2026-10-29): §30's `tracker` connector
+for GitHub Issues, `canopy-connect-github --repo OWNER/NAME` (`canopy_github/issues.py`), so a workspace on GitHub
+Issues has a source to require: `GH-N` is issue N, read as `canopy-connect-jira` reads Jira's. Chosen conservatively,
+for the operator to change: a blocker is an issue dependency or a `Blocked by #N` line of the body, either; a ticket an
+open issue of another repository blocks, which no key names, is not read whole, so it stays stale; and a query that
+returns another repository's issue is not read. Built (2026-10-29): config requiring a `tracker` source, one with a
+`cmd` that reads, a workspace without one refused with what to add (`core/config.py`), so every live tick takes the
+observed path above; the tests' workspaces run the fake connector as theirs, holding every ticket they work open and
+labeled. The overseer's definition loses the tracker's skill and read tools on every path. Chosen conservatively, for
+the operator to change: `canopy init` writes the table commented out, since only the operator knows their site or
+repository and a guess would send their credentials to someone else's, so a new workspace's config does not load, nor
+`canopy init` clone its repositories, until they fill it in. Built (2026-10-29): the harness's `wait` on an unobserved
+subject. A candidate with a unit whose PR URL names no PR, which no source reads, is the harness's `wait`, saying no
+source reads it, and is never listed to the overseer; so is one the `tracker` source read before canopy held it, such as
+one the query found that was read as another's blocker, whose comments it never recorded, until a read since, as the
+block already counted it stale (`loop/phases.py`, `loop/harness.py`). A ticket, blocker, PR, or repository's branches
+with no observation at all was already waited as stale. Chosen conservatively, for the operator to change: an unobserved
+unit waits until the operator forgets the ticket's work, which drops its units, and raises no item of its own; a closed
+or unlabeled ticket is still decided without its PRs; and a review's PR not read fresh stays the overseer's
+`canopy_review-wait`, taken from the read, not a live one. The tests' fake worker reports a PR no source reads, so a
+story that needs the overseer listed a ticket with a PR gives it one the fake `vcs` source reads. Built (2026-10-29):
+the paths config left unreachable removed. `canopy queried`, its tool, and the duty that owed it are gone, the harness
+recording the `tracker` source's read of the query as before; every decision names its ticket, so the tick-wide `skip`
+and DESIGN §15's case for it are gone, and no tick closes `skipped`; the state block has no `query_due`, and the
+overseer's prompt no live read of the tracker or GitHub, only the observations, an unobserved subject its `wait`; and
+the loop's branches for a workspace with no `tracker` source, the comment cursor kept as the tracker's id among them,
+are gone (`loop/tick.py`, `loop/tools.py`, `loop/observations.py`, `loop/phases.py`). Kept for the journal's history:
+the `queried` decision, which the harness still records and `duties.last_queried` reads from an older release's ticks
+too; `TickStatus.SKIPPED`, which old ticks hold; and the `last_comment_id` column, no longer read. Built (2026-10-29):
+every MCP server but canopy's denied. The overseer's definition denies `*_*`, every tool OpenCode names
+`<server>_<tool>`, whatever the operator's runtime config grants, and `read` of any server's resources, before it allows
+canopy's tools by name; nothing of the tracker's config is rendered into it, so none can reopen a server
+(`.agents/agents/canopy-overseer.md`). Read from OpenCode 1.19.3's source: no built-in tool the overseer uses asks a
+permission with a `_`. Left: the design folded into the sections it names.
 Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes,
 and that entry with it), the fifth bullet's.

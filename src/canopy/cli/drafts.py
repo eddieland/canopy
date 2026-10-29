@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 import click
 
-from canopy.cli.common import CliError, Group, open_context
+from canopy.cli.common import CliError, open_context
 from canopy.core import conversation, records, replies
 from canopy.core.memory_text import visible
 from canopy.core.vocab import DraftKind, DraftStatus, Reaction, ReviewItem
@@ -52,7 +52,7 @@ def _wanted(run_id: int, wanted: tuple[str, ...]) -> list[drafts_manage.Wanted]:
     return named
 
 
-@click.group("draft", cls=Group)
+@click.group("draft")
 def draft_group() -> None:
     """Read, edit, drop, and send the comments workers drafted for you under `trust.review_replies = "approve"`."""
 
