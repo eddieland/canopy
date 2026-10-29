@@ -21,6 +21,7 @@ from canopy.runs import policy
 from tests.canopy.helpers import (
     KEY,
     LABEL,
+    READ_PR,
     Called,
     InlineRunner,
     agent_runs,
@@ -61,7 +62,7 @@ def test_a_dispatch_starts_once_the_overseer_has_exited_in_order_with_the_harnes
     scenario: Scenario,
     door: Literal["tool", "command"],
 ) -> None:
-    scenario.run(dispatches("PROJ-2"), worker=pushes())
+    scenario.run(dispatches("PROJ-2"), worker=pushes(prs={"repo": READ_PR}))
     due_chore(scenario, MINE)
     implement = {"key": KEY, "kind": "implement", "label": LABEL, "repos": ["repo"]}
     resume = {"key": "PROJ-2", "kind": "resume", "label": LABEL, "repos": ["repo"], "reasons": ["conflict"]}

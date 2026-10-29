@@ -16,6 +16,7 @@ from tests.canopy.helpers import (
     KEY,
     LABEL,
     QUESTION,
+    READ_PR,
     planner_does,
     present,
     waits,
@@ -52,7 +53,7 @@ def test_a_ticket_plans_do_not_touch_has_no_plan_in_the_state_block(scenario: Sc
 
 def test_a_ticket_with_a_branch_has_no_plan_in_the_state_block(scenario: Scenario, git_pool: GitPool) -> None:
     # Started before plans were wanted: a started ticket is never planned, so its plan decides nothing.
-    scenario.run(dispatches(), worker=pushes())
+    scenario.run(dispatches(), worker=pushes(prs={"repo": READ_PR}))
     scenario.configures("workspace", policy={"plan": "approve"})
     scenario.tick(*waits(KEY), dry_run=True)
     assert "plan" not in scenario.ticket_state()

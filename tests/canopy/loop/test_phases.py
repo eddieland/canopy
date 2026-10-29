@@ -21,7 +21,7 @@ from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import Decider, NumberedItem, Phase
 from canopy.loop import phases
 from tests.canopy.helpers import KEY, canopy, context, in_tick, seen
-from tests.canopy.observation_helpers import artifact_comment
+from tests.canopy.observation_helpers import artifact_comment, held
 
 if TYPE_CHECKING:
     import sqlite3
@@ -301,9 +301,9 @@ def derived(env: CanopyEnv) -> list[phases.Derived]:
 
 @pytest.fixture
 def observed(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> sqlite3.Connection:
-    """A tracker source configured, and KEY seen and observed open with the queue label. Returns the journal."""
+    """A tracker source configured, and KEY held, then observed open with the queue label. Returns the journal."""
     canopy_env.configure(canopy_env.user_file, {"connect": TRACKER})
-    seen(conn, canopy_env)
+    held(canopy_env, conn, KEY)
     observe_ticket(conn)
     conn.commit()
     return conn

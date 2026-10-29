@@ -22,6 +22,8 @@ from canopy.notify import message
 from canopy.runtime.report import SessionPage, SessionSpend
 from tests.canopy.helpers import (
     KEY,
+    READ_PR,
+    WORKER_DONE,
     InlineRunner,
     canopy,
     chore_reports,
@@ -537,7 +539,8 @@ def test_a_digest_says_what_its_runs_cost_by_kind(
     out = tmp_path / "digest.txt"
     add_sink(scenario, sink_script, "daily", out, events=[], digest_every_minutes=60)
     with_events(scenario.env, "canopy-worker")
-    scenario.run(worker=worker_does())  # two model calls at 0.125
+    # Two model calls at 0.125, and a PR the `vcs` source reads, so the overseer is listed the ticket (DESIGN §39).
+    scenario.run(worker=worker_does(result=json.dumps(json.loads(WORKER_DONE) | {"pr": READ_PR})))
     scenario.tick(*waits("PROJ-1"))
 
     [message] = json_messages(out)
