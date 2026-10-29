@@ -40,9 +40,9 @@ in its own PRs.
   says which.
 - **Rejected:** the list as `paths.reviewer_instructions` (no per-item record, one paragraph against a whole change);
   a persona (it cannot narrow, §31); one run per item (as many leases per commit); the worker self-checking before
-  it pushes (the author's blind spots; revisit after stage 2 as a cheaper first pass); the list read from the
-  repository (T1, T7); a run on its own without an adversarial review of the commit (nothing yet asks for it; the
-  guards would need a source of their own).
+  it pushes (the operator's `paths.worker_instructions` already emphasize these rules, and workers miss them: the
+  same context that wrote the code reads it); the list read from the repository (T1, T7); a run on its own without
+  an adversarial review of the commit (nothing yet asks for it; the guards would need a source of their own).
 - **TRUST_MODEL**, in the PR that builds stage 1: T7 (one more private path, listed with the others); T1 (the list is
   the operator's instructions, the diff is data, and the definition writes nothing anywhere, as the reviewer's); T3
   (one more run per reviewed commit, under review capacity, `max_workers`, and the daily limit, and not the per-PR
