@@ -16,9 +16,9 @@ RUNS_SQL = frozenset({"execute", "executemany", "executescript"})
 EXEMPT = {
     # The migrations are files of SQL, run whole as they shipped.
     ("core/db.py", "migrate", "executescript"),
-    # The runtime's own database, not the journal, which the runtime's layer, below `core`, reads with its literal
-    # queries and bound values alone (`canopy.runtime.opencode.sessions`).
-    ("runtime/opencode/sessions.py", "read", "execute"),
+    # The runtime's own databases, not the journal, which the runtime's layer, below `core`, reads with its literal
+    # queries and bound values alone, through one function (`canopy.runtime.opencode.sessions`).
+    ("runtime/opencode/sessions.py", "_query", "execute"),
 }
 
 
