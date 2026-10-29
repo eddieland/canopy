@@ -2,14 +2,17 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 
-import { HOST_REFRESH_MS, hostQuery, metaQuery } from '@/api/queries'
-import type { Disk, HostResources } from '@/api/types'
+import { HOST_REFRESH_MS, hostQuery, hostSamplesQuery, metaQuery } from '@/api/queries'
+import type { Disk, HostHistory, HostResources } from '@/api/types'
 import { Age } from '@/components/age'
 import { CopyButton } from '@/components/copy-button'
 import { Counter } from '@/components/counter'
 import { Field, Fields } from '@/components/fields'
-import { PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } from '@/components/panel'
 import { Timestamp } from '@/components/timestamp'
+import { TrendChart } from '@/components/trend-chart'
+import type { TrendReference } from '@/components/trend-chart'
+import { HEADROOM } from '@/lib/chart'
 import {
     bytesText,
     concerns,
@@ -25,12 +28,15 @@ import {
 } from '@/lib/host'
 import type { Pressure } from '@/lib/host'
 import { age, useNow } from '@/lib/time'
+import { trend } from '@/lib/trend'
+import type { Trend } from '@/lib/trend'
 import { cn } from '@/lib/utils'
 
 // What the page shows, the same on every visit: the title's help, so the description is left for the machine.
 const HELP =
     'The machine the loop runs on: how busy its processors are, its memory, the disks canopy writes to, and the ' +
-    `loop's own process. Read when the page opens and every ${HOST_REFRESH_MS / 1000} seconds while it is open.`
+    `loop's own process. Read when the page opens and every ${HOST_REFRESH_MS / 1000} seconds while it is open; ` +
+    'the graphs are the last hour of readings the server keeps in memory.'
 
 // What a figure the operating system does not give reads as: off Linux, the standard library has no way to it.
 const UNREAD = 'not read on this system'
@@ -51,8 +57,8 @@ const NBSP = '\u00A0'
 /**
  * The machine the loop runs on (the header's host readout opens it): what is under pressure first, four counters
  * (the load, the memory used, the free space where the workspace is or on a disk under more pressure, how long the
- * loop has run), then each disk canopy writes to, the processors and memory, the loop's process, and the machine. In
- * no section; read again every few seconds.
+ * loop has run), a graph of each over the last hour, then each disk canopy writes to, the processors and memory, the
+ * loop's process, and the machine. In no section; read again every few seconds.
  */
 export const Route = createFileRoute('/system')({
     component: SystemPage,
@@ -107,6 +113,7 @@ function Resources({ host }: { host: HostResources }) {
                 </Panel>
             )}
             <HostCounters host={host} />
+            <LastHour host={host} />
             <Panel>
                 <PanelHeader label="Disks">
                     <span className="text-xs text-muted-foreground">where canopy writes</span>
@@ -177,6 +184,107 @@ function HostCounters({ host }: { host: HostResources }) {
             </Counter>
         </div>
     )
+}
+
+/** One graph the last hour's panel draws. */
+interface Graph {
+    label: string
+    detail?: string
+    trend: Trend
+    top: number
+    format: (value: number) => string
+    reference?: TrendReference
+}
+
+/**
+ * The server's readings of the machine over the last hour, kept in memory since it started: the load, the memory in
+ * use, the loop's own, and each disk's free space, each a graph of its own. A measure the system gives no reading of
+ * draws none.
+ */
+function LastHour({ host }: { host: HostResources }) {
+    const { data } = useQuery(hostSamplesQuery)
+    return (
+        <Panel data-testid="host-graphs">
+            <PanelHeader label="Last hour">
+                {data !== undefined && (
+                    <span className="text-xs text-muted-foreground">read every {data.every_seconds} seconds</span>
+                )}
+            </PanelHeader>
+            {data === undefined ? (
+                <PanelSkeleton rows={3} className="min-h-32" />
+            ) : (
+                <Graphs host={host} history={data} />
+            )}
+        </Panel>
+    )
+}
+
+/** Each graph of `history` there are readings for, or what says there are none yet. */
+function Graphs({ host, history }: { host: HostResources; history: HostHistory }) {
+    const graphs = graphsOf(host, history)
+    if (graphs.length === 0) {
+        return <Empty>no readings yet: the server reads the machine every {history.every_seconds} seconds</Empty>
+    }
+    return (
+        <div className="grid divide-y sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-3">
+            {graphs.map((g) => (
+                <TrendChart key={`${g.label} ${g.detail ?? ''}`} {...g} />
+            ))}
+        </div>
+    )
+}
+
+// The graphs of `history`: the load against the cores, the memory against all there is, the loop's own memory, and
+// each disk's free space against its size, with the tick's floor where it has one.
+function graphsOf(host: HostResources, history: HostHistory): Graph[] {
+    const graphs: Graph[] = []
+    const load = trend(history, (s) => s.load)
+    if (load !== null) {
+        const cores = host.cpu.cores
+        graphs.push({
+            label: 'Load',
+            detail: 'over a minute',
+            trend: load,
+            top: headroom(load.peak),
+            format: loadText,
+            reference: cores === null ? undefined : { value: cores, label: `${cores} cores` },
+        })
+    }
+    const memory = trend(history, (s) => s.memory_used)
+    if (memory !== null) {
+        graphs.push({
+            label: 'Memory used',
+            detail: host.memory.total === null ? undefined : `of ${bytesText(host.memory.total)}`,
+            trend: memory,
+            top: host.memory.total ?? headroom(memory.peak),
+            format: bytesText,
+        })
+    }
+    const rss = trend(history, (s) => s.rss)
+    if (rss !== null) {
+        graphs.push({ label: "Loop's memory", trend: rss, top: headroom(rss.peak), format: bytesText })
+    }
+    for (const disk of host.disks) {
+        const free = trend(history, (s) => s.disks.find((d) => d.path === disk.path)?.free ?? null)
+        if (free !== null) {
+            graphs.push({
+                label: 'Disk free',
+                // In a word each, as the disks' rows below name them in full: a graph's label has little room.
+                detail: disk.holds.join(' and '),
+                trend: free,
+                top: disk.total,
+                format: bytesText,
+                reference:
+                    disk.floor === null ? undefined : { value: disk.floor, label: `floor ${bytesText(disk.floor)}` },
+            })
+        }
+    }
+    return graphs
+}
+
+// A graph's top over its peak, the room Charts keeps over a bar's; a peak of nothing still has a top.
+function headroom(peak: number): number {
+    return peak > 0 ? peak * HEADROOM : 1
 }
 
 /** One disk: what canopy keeps there, its path, a bar of what is used, and the tick's floor when it has one. */

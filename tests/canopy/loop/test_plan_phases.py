@@ -20,7 +20,7 @@ from tests.canopy.helpers import (
     present,
     waits,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, raises, sets_phase
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, raises, sets_phase
 from tests.conftest import GitPool
 
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
@@ -46,6 +46,14 @@ def test_under_approve_a_dry_run_tick_dispatches_a_plan_for_a_ready_ticket(scena
 
 def test_a_ticket_plans_do_not_touch_has_no_plan_in_the_state_block(scenario: Scenario) -> None:
     scenario.seen()
+    scenario.tick(*waits(KEY), dry_run=True)
+    assert "plan" not in scenario.ticket_state()
+
+
+def test_a_ticket_with_a_branch_has_no_plan_in_the_state_block(scenario: Scenario, git_pool: GitPool) -> None:
+    # Started before plans were wanted: a started ticket is never planned, so its plan decides nothing.
+    scenario.run(dispatches(), worker=pushes())
+    scenario.configures("workspace", policy={"plan": "approve"})
     scenario.tick(*waits(KEY), dry_run=True)
     assert "plan" not in scenario.ticket_state()
 

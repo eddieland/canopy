@@ -33,6 +33,7 @@ from canopy.infra import procs
 from canopy.runs import tasks
 from canopy.runtime import models as runtime_models
 from canopy.serve import host
+from canopy.serve.host import Samples
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -152,7 +153,12 @@ class Backend:
     every: int | None = None
     #: The machine the loop runs on, for the system resources page: read from the operating system. The mock's is a
     #: fixed reading, so its pages show the same machine every time and the demo shows none of its host's.
-    host: Callable[[Context], HostResources] = field(default=host.read)
+    host: Callable[[Config, Workspace], HostResources] = field(default=host.read)
+    #: The readings of the machine the page's graphs draw, kept in memory across the server's restarts in the loop.
+    samples: Samples = field(default_factory=Samples)
+    #: Whether the server reads the machine into `samples` while it runs (`host.sampling`). The mock's does not: its
+    #: readings are seeded, as fixed as its machine.
+    sampling: bool = True
     #: Seconds on a clock that only moves forward, for how long a model list read from the runtime is served.
     monotonic: Callable[[], float] = field(default=time.monotonic)
     # Held while `config` and `workspace` are read or replaced, so a request never gets one of each.
@@ -208,6 +214,16 @@ class Backend:
         """Serve `config` and `workspace` from the next request on: the loop read its config again."""
         with self._lock:
             self.config, self.workspace = config, workspace
+
+    def read_host(self) -> HostResources:
+        """The machine the loop runs on, read now on the config and workspace served now.
+
+        Returns:
+            What `host` reads.
+        """
+        with self._lock:
+            cfg, ws = self.config, self.workspace
+        return self.host(cfg, ws)
 
     def model_list(self, ctx: Context, *, refresh: bool = False) -> ModelList:
         """The models `models` lists on `ctx`'s config and workspace, read at most MODEL_LIST_SECONDS ago.

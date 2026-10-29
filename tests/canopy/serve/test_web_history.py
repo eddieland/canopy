@@ -159,7 +159,8 @@ def test_the_pull_requests_are_what_weighing_every_one_finds(journals: Journals,
             for repo in ("api", "web"):
                 url = owned.pop() if owned and rnd.random() < 0.6 else None
                 conn.execute(
-                    "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, ?, 'b', ?, 'p')",
+                    "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) "
+                    "VALUES (?, ?, 'b', ?, 'ci_red')",
                     (key, repo, url),
                 )
         for _ in range(25):
@@ -171,10 +172,11 @@ def test_the_pull_requests_are_what_weighing_every_one_finds(journals: Journals,
                 (rnd.choice(urls), start, ended, "running" if ended is None else "done"),
             )
     for limit in range(1, len(urls) + 2):
-        found = [tuple(r) for r in pr_list.pull_requests(conn, limit)]
+        found = [dataclasses.astuple(r) for r in pr_list.pull_requests(conn, limit)]
         assert found == every_pull_request(conn, limit), limit
     for url in urls:
-        assert [tuple(r) for r in pr_list.pull_requests(conn, 1, url=url)] == every_pull_request(conn, 1, url=url)
+        found = [dataclasses.astuple(r) for r in pr_list.pull_requests(conn, 1, url=url)]
+        assert found == every_pull_request(conn, 1, url=url)
 
 
 def test_a_findings_start_is_read_back_once(backend: Backend) -> None:

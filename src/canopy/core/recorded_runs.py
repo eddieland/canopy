@@ -91,8 +91,8 @@ def of_tick(conn: sqlite3.Connection, tick_id: int) -> list[records.RecordedRun]
 
 def get(conn: sqlite3.Connection, recorded_id: int) -> records.RecordedRun | None:
     """Return the recorded run `recorded_id`, or None."""
-    query = sql.select("*").from_("recorded_runs").where("id = ?", recorded_id)
-    return records.fetch_one(conn, records.RecordedRun, query)
+    query = records.select(records.RecordedRun).where("id = ?", recorded_id)
+    return query.one(conn)
 
 
 def request_of(recorded: records.RecordedRun) -> dict[str, object]:

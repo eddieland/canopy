@@ -353,7 +353,7 @@ def test_a_ticket_is_active_when_it_changes_not_when_a_tick_sets_what_it_already
     def active() -> tuple[str, str, str]:
         [ticket] = db.recent_tickets(conn, 5)
         [pr] = pr_list.pull_requests(conn, 5)
-        return ticket["last_seen_at"], ticket["active_at"], pr["active_at"]
+        return ticket["last_seen_at"], ticket["active_at"], pr.active_at
 
     with mock.patch.object(db, "now", autospec=True, return_value=at(0)):
         db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, title="Sign in")

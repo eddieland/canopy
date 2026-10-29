@@ -361,11 +361,7 @@ def _to_conversation(conn: sqlite3.Connection, change: _Change) -> None:
     source is `worker` when the comment carries the workers' marks, else `artifact`; what it counts for is
     `artifact_authority`'s to decide.
     """
-    observed = records.fetch_one(
-        conn,
-        records.ObservedArtifactComment,
-        sql.select("*").from_("observed_artifact_comments").where("id = ?", change.comment_id),
-    )
+    observed = records.select(records.ObservedArtifactComment).where("id = ?", change.comment_id).one(conn)
     key = change.ticket
     if observed is None or observed.deleted_at is not None or key is None or db.get_ticket(conn, key) is None:
         return

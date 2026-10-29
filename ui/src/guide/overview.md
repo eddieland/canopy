@@ -97,10 +97,13 @@ The bar across the top of every page. From the left:
   it to finish.
 - **The readouts.** The last tick, as `tick:12 · 3m ago`, with its status when it didn't end ok and `(dry run)` when
   it was one; hover it for its summary, and click it to open the tick. Before the first one, it says `no tick yet`.
-  `memory: recording` or `memory: in use` while agent memory is on, which opens the memory page. Then the machine the
-  loop runs on: `host ok`, or the worst thing about it in two words, `disk low`, `memory low`, or `host busy`, in
-  amber when it's worth a look and red when it's past what canopy works with. Hover it for the machine at a glance,
-  and click it for [the rest](#system-resources).
+  `memory: recording` or `memory: in use` while agent memory is on, which opens the memory page. A wallet while you've
+  set a [monthly budget](reports#the-spend-page), with how much of it the month has spent beside it on a wide screen:
+  gray while you're on budget, amber once the month's pace heads over it, red once it's over. Hover it for the
+  numbers, and click it for the spend page. It warns, it doesn't stop anything; the loop spends on regardless. Then
+  the machine the loop runs on: `host ok`, or the worst thing about it in two words, `disk low`, `memory low`, or
+  `host busy`, in amber when it's worth a look and red when it's past what canopy works with. Hover it for the
+  machine at a glance, and click it for [the rest](#system-resources).
 - **The theme**, at the far right, which flips between light and dark; [Settings](settings#theme) has the rest.
 
 While a notice to workers is in force, a banner above every page shows it until it lapses. **Edit** opens its words
@@ -155,6 +158,13 @@ The machine the loop runs on, read every ten seconds while the page is open: it'
 `canopy loop` serves it. Anything under pressure is listed first, in amber or red, then four counters: the load over
 five minutes, the memory in use, the free space on the fullest disk canopy writes to, and how long the loop has been
 up.
+
+Under the counters, the last hour in graphs: the load over a minute against your cores, the memory in use against all
+there is, the loop's own memory, and each disk's free space with the tick's floor drawn in. The server takes these
+readings itself, every ten seconds from the moment it starts, whether or not anyone is looking, and keeps them in
+memory only. A restart starts the graphs over, and a gap in a line is a stretch the server wasn't reading. Point at a
+line to read any moment of it; the number over the graph turns into that moment's. It's the quickest way to answer
+"was it the build at 14:05?" without a monitoring stack you'd have to babysit too.
 
 Under them, each disk canopy writes to: the workspace's, where agents check out and build; the journal's, with the
 runs' logs; and the temporary directory, which builds fill when nobody's looking. Two on one filesystem share a row,

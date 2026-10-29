@@ -856,15 +856,13 @@ def latest_question(conn: sqlite3.Connection, key: str) -> records.Message | Non
 
     A question asked before the operator forgot the ticket's work waits on nothing.
     """
-    row = records.fetch_one(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    row = (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ?", TICKET, key)
         .where("kind = 'question' AND id > ?", db.forgotten_message_id(conn, key))
         .order_by("id DESC")
-        .limit(1),
+        .limit(1)
+        .one(conn)
     )
     if row is None or any(answers_questions(m) for m in operator_messages_after(conn, key, row.id)):
         return None
@@ -882,14 +880,12 @@ def answers_questions(message: records.Message) -> bool:
 
 def task_question(conn: sqlite3.Connection, task_id: int) -> records.Message | None:
     """Return task `task_id`'s latest question if no operator message came after it, else None (DESIGN §36)."""
-    row = records.fetch_one(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    row = (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND kind = 'question'", TASK, str(task_id))
         .order_by("id DESC")
-        .limit(1),
+        .limit(1)
+        .one(conn)
     )
     if row is None:
         return None
@@ -944,13 +940,11 @@ def stopped(conn: sqlite3.Connection) -> list[str]:
 
 def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> list[records.Message]:
     """Return a ticket's operator messages newer than message id `after`, oldest first."""
-    return records.fetch_all(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    return (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?", TICKET, key, after)
-        .order_by("id"),
+        .order_by("id")
+        .all(conn)
     )
 
 
@@ -1098,15 +1092,13 @@ def prompt_operator_messages(
     comments = {m.id: m for m in authorized if m.id > forgotten}
     if not has_operator_messages(conn, key) and not comments:
         return None
-    rows = records.fetch_all(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    rows = (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, forgotten)
         .where("source = 'operator' OR kind = 'question'")
         .order_by("id DESC")
-        .limit(PROMPT_MESSAGES),
+        .limit(PROMPT_MESSAGES)
+        .all(conn)
     )
     latest = sorted({**{m.id: m for m in rows}, **comments}.values(), key=lambda m: m.id)[-PROMPT_MESSAGES:]
     return _bounded([_prompt_message(m, authority=m.id in comments) for m in latest])
@@ -1122,16 +1114,14 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str | None:
     Returns:
         The messages; None, which leaves the prompt's section out, when there are none.
     """
-    rows = records.fetch_all(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    rows = (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, db.forgotten_message_id(conn, key))
         .where("source != ?", CANOPY)
         .where("run_id IS NULL OR run_id NOT IN (SELECT id FROM runs WHERE kind = ?)", RunKind.NEEDS_PLAN)
         .order_by("id DESC")
-        .limit(PROMPT_MESSAGES),
+        .limit(PROMPT_MESSAGES)
+        .all(conn)
     )
     return _bounded([_prompt_message(m) for m in reversed(rows)])
 
@@ -1177,14 +1167,12 @@ def prompt_task_conversation(conn: sqlite3.Connection, task_id: int, up_to: int 
     """
     if up_to is None:
         return None
-    rows = records.fetch_all(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    rows = (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND id <= ?", TASK, str(task_id), up_to)
         .order_by("id DESC")
-        .limit(PROMPT_MESSAGES),
+        .limit(PROMPT_MESSAGES)
+        .all(conn)
     )
     return _bounded([_prompt_message(m) for m in reversed(rows)])
 
