@@ -19,7 +19,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db, definitions, run_models, workspace
+from canopy.core import cards, config, db, definitions, run_models, workspace
 from canopy.core.vocab import RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
@@ -77,6 +77,8 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
         "OPENCODE_CONFIG_DIR": str(snapshot),
         # The trailers canopy's git hooks add to its commits (TRUST_MODEL T5).
         "CANOPY_COMMIT_TRAILERS": "Co-authored-by: canopy worker <noreply@canopy.invalid>",
+        # The server of its status card, canopy's one server a worker is given (DESIGN §8, §27).
+        **servers.env(cards.served(), version=Version.ONE, cwd=scenario.env.root.absolute()),
     }
     assert not objects.exists()  # removed once the run was over
     argv = w["argv"]
@@ -101,7 +103,7 @@ def test_a_worker_inherits_no_server_its_process_was_given(scenario: Scenario) -
     with mock.patch.dict(os.environ, given):
         scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)
-    assert not set(given) & set(w["env"])
+    assert set(json.loads(w["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]) == {cards.SERVER}
 
 
 @pytest.mark.usefixtures("git_pool")

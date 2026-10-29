@@ -107,6 +107,9 @@ permission:
   "canopy_git_blame": allow
   "canopy_git_grep": allow
   "canopy_git_files": allow
+  # canopy's `status` tool, the run's status card, which the operator reads and no agent does (DESIGN §8, §27), allowed
+  # by exact name: after every pattern, so none above closes it, `canopy_*` among them.
+  "canopy_run_status": allow
 ---
 
 Your task is the prompt canopy starts this run with. If it is not a "# canopy worker: plan" prompt, print

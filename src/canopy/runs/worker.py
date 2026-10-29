@@ -32,6 +32,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, S
 
 from canopy.core import (
     agent_models,
+    cards,
     commit_hooks,
     contract,
     conversation,
@@ -72,7 +73,7 @@ from canopy.runs import (
     tidy,
 )
 from canopy.runs.checkpoint import SetupError
-from canopy.runtime import agents, project_config, stdout
+from canopy.runtime import agents, project_config, servers, stdout
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
@@ -514,19 +515,18 @@ def _run_agent(
     out.write("--- worker stdout ---\n")
     out.flush()
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). A sandbox wrapper points git at the object
-    # directory; an unsandboxed worker ignores it (DESIGN §8). A planner, which has no shell, reads its worktrees'
-    # history through canopy's read-only git tools, over those worktrees alone, each named for its repository (§27).
+    # directory; an unsandboxed worker ignores it (DESIGN §8). Every agent keeps its status card through canopy's
+    # `status` tool (`cards`). A planner, which has no shell, reads its worktrees' history through canopy's read-only
+    # git tools, over those worktrees alone, each named for its repository (§27).
     env = {conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))}
+    served = cards.served()
+    if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
+        served |= git_tools.served({s.repo: s.path for s in slots})
+    env |= servers.env(served, version=ctx.config.runtime.version, cwd=ctx.workspace.root.absolute())
     # A public worker that may publish names its ticket to the store through canopy, not its own word (DESIGN §38).
     publishing = ctx.config.artifacts.publishing()
     if not read_only and publishing is not None and agents.WORKER in publishing.agents:
         env |= artifact_feed.origin_env(ctx.workspace.name, str(run["ticket_key"]), run_id)
-    if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
-        env |= git_tools.run_env(
-            {s.repo: s.path for s in slots},
-            version=ctx.config.runtime.version,
-            cwd=ctx.workspace.root.absolute(),
-        )
     env |= commit_hooks.env(snapshot, marks, os.environ)
     with run_offers.probing(
         ctx.conn,
@@ -571,9 +571,10 @@ def _run_agent(
 class _Progress:
     """Each line the worker prints, as it prints it: written to the run log, and its events read (DESIGN §8).
 
-    What they say so far is recorded on the run, so a running run shows its session, what it has spent, and its latest
-    tool call. A line comes on `_run`'s own thread, so this may use the journal connection. A journal write that fails
-    is logged, not raised: raising would kill the worker, and the session and spend are recorded again when it ends.
+    What they say so far is recorded on the run, so a running run shows its session, what it has spent, its latest tool
+    call, and the status card its agent last gave (`cards`). A line comes on `_run`'s own thread, so this may use the
+    journal connection. A journal write that fails is logged, not raised: raising would kill the worker, and the
+    session and spend are recorded again when it ends.
     """
 
     def __init__(self, ctx: Context, run_id: int, out: TextIO, log: logs.TickAdapter) -> None:
@@ -591,6 +592,7 @@ class _Progress:
             return
         try:
             db.set_run_progress(self.ctx.conn, self.run_id, change.session_id, usage=change.usage, did=change.did)
+            cards.seen(self.ctx.conn, "runs", self.run_id, change)
         except sqlite3.Error as e:
             self.log.warning("worker progress not recorded", extra={"run_id": self.run_id, "error": str(e)})
         if change.started:

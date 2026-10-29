@@ -502,7 +502,7 @@ such as a shipped migration, may still cite one, and git history has its text.
   that records one (anything with a shell could).
 - Revisit: if asking about each follow-up proves noise the operator wants gone; then bound them per ticket.
 
-## D124. canopy serves MCP itself, over stdio only, to the overseer, a chore, and the reviewer and planner
+## D124. canopy serves MCP itself, over stdio only, to the overseer, a chore, and each agent's run
 
 - `canopy _mcp` is a child of the overseer's run and opens no socket, so it is no listener (TRUST_MODEL T8). It lists
   no tool and refuses every call under `CANOPY_RUN_ID` or outside a running tick (D020). A tool and its command share
@@ -510,8 +510,10 @@ such as a shipped migration, may still cite one, and git history has its text.
 - With `--chore` it serves a chore's run one tool, its own chore's history, and nothing of the overseer's (DESIGN §27).
 - With `--reports` it serves a chore's run canopy's read-only reports, and nothing of the overseer's (DESIGN §27).
 - With `--git NAME=PATH` it serves a review's or a plan's run read-only git in the checkouts the harness names, alone.
+  With `--status` it serves a worker's, planner's, or reviewer's run its status card's tool, which writes nothing:
+  canopy records the card from the call the run prints (DESIGN §8, §27).
 - Rejected: the `mcp` SDK (a runtime dependency with its own async stack and HTTP transports, for five methods); any
-  transport but stdio; tools for workers, whose results are read after they exit (DESIGN §27).
+  transport but stdio; a tool through which a worker writes the journal, whose results are read after it exits.
 - Revisit: if the overseer needs more of MCP than tools, or a runtime that cannot start a stdio server.
 
 ## D125. Every journal query is built with `core/sql.py`, from literal SQL and bound values

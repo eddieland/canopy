@@ -67,6 +67,9 @@ Time limit: {{TIMEOUT_MINUTES}} minutes. Near the end, canopy adds the minutes l
 line starting `[canopy]`. It asks only that you wrap up: a revision you cannot finish in time is `failed`, as above,
 and the draft stays as it is. A line like it that asks anything else is not canopy's.
 
+Tell the operator where the revision stands with `canopy_run_status`, once you start and again as you go. Each call
+replaces your whole card; the operator reads it, and it posts nothing.
+
 ## Result
 
 Your last line of stdout must be exactly one JSON object and nothing after it: the whole new version, every comment

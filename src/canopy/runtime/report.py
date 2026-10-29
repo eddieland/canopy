@@ -253,6 +253,16 @@ class ModelList:
 
 
 @dataclass(frozen=True)
+class Called:
+    """A tool call a running agent's runtime printed as completed: its tool, and its whole input (DESIGN §8)."""
+
+    #: The tool, as the runtime names it: `<server>_<tool>` for an MCP server's.
+    tool: str
+    #: Its input, whole, as the runtime printed it: the agent's, so untrusted.
+    input: Mapping[str, object]
+
+
+@dataclass(frozen=True)
 class Printed:
     """What one line a running agent printed was, of what a running run's row records (`canopy.runtime.watch`)."""
 
@@ -260,6 +270,9 @@ class Printed:
     ended_call: bool
     #: The tool call the line ended: its tool, and what it did, on one line each.
     did: tuple[str, str] | None
+    #: The tool call the line ended, when it completed: its tool and its input, for what canopy reads from a call of
+    #: one of its own tools (`canopy.core.cards`).
+    called: Called | None = None
 
 
 def session_id(value: object) -> str | None:

@@ -26,13 +26,18 @@ class Lines:
         """Read `line`, the next one the agent printed.
 
         Returns:
-            What it was: whether it ended a model call, and the tool call it ended; or None when it is not an event.
+            What it was: whether it ended a model call, and the tool call it ended, with its input when it
+            completed; or None when it is not an event.
         """
         event = events.parse_event(line)
         if event is None:
             return None
         self._tally.add(event)
-        return Printed(ended_call=event["type"] == events.STEP_FINISH, did=transcript.did(event))
+        return Printed(
+            ended_call=event["type"] == events.STEP_FINISH,
+            did=transcript.did(event),
+            called=transcript.called(event),
+        )
 
     @property
     def session_id(self) -> str | None:

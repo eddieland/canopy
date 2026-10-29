@@ -95,9 +95,9 @@ permission:
   # (DESIGN §38): canopy renders it denied whole at the marked line.
   # canopy: artifact tools
   # canopy's own tools, from the server the harness names in this run's inline config alone (DESIGN §27): every tool of
-  # a server whose name starts `canopy_` is denied, the reviewer's and planner's git tools, a chore's history, and the
-  # reports among them, then each of the overseer's is allowed by its exact name, last so no pattern above takes one
-  # back. An allow by pattern would also match another server's tools.
+  # a server whose name starts `canopy_` is denied, the reviewer's and planner's git tools, a chore's history, the
+  # reports, and a running agent's status card among them, then each of the overseer's is allowed by its exact name,
+  # last so no pattern above takes one back. An allow by pattern would also match another server's tools.
   "canopy_*": deny
   "canopy_dispatch": allow
   "canopy_decide": allow

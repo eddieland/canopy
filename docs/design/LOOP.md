@@ -292,7 +292,10 @@ run. A `plan` writes the ticket's plan before its first `implement`, with guards
    overseer. A ticket stopped or started privately since dispatch ends the run `stopped`.
 2. Record each slot's git links, check out the branch or base at a detached HEAD, never a local branch, since a pool's
    slots share branch refs (D109), and put an approved plan in place (§25).
-3. Run the worker in the slot, or a joint run's desk (§18), until its timeout, recording its session and spend.
+3. Run the worker in the slot, or a joint run's desk (§18), until its timeout, recording its session and spend, and
+   its status card, which it gives through canopy's `status` tool (§27), as a planner and a reviewer do: a summary,
+   what it does now, what is done with the proof of each, what is next, and what is in its way. Each call replaces
+   the card, and the run keeps the last; it is the agent's text, shown to the operator and to no agent (TRUST_MODEL T1).
 4. Parse the result contract (§13); missing or invalid is `unknown`. A plan (§25) pushes nothing.
 5. If a slot's git links changed, the run is `crashed` and no git runs in its slots, which may now point at a git
    directory the worker made. Otherwise push once where the branch is not on origin, never with force (with

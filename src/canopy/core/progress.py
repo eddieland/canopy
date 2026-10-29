@@ -2,8 +2,8 @@
 
 Each line goes to the log as it comes, so the web UI reads a running session's transcript from it, and what its events
 report so far, its session and what it has spent, goes on the tick or the chore, task, or review run, whose change the
-UI's stream carries.
-A worker run's `_run` keeps its own, which also records the latest tool call on the run (§8).
+UI's stream carries, and a review's status card (`cards`) on the review.
+A worker run's `_run` keeps its own, which also records the latest tool call and the status card on the run (§8).
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 import sqlite3
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import db
+from canopy.core import cards, db
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
@@ -58,7 +58,15 @@ class Progress:
         self.out.write(line)
         self.out.flush()
         change = self.watch.read(line)
-        if change is None or (not change.started and change.usage is None):
+        if change is None:
+            return
+        if self.table == "review_runs":
+            # A reviewer keeps a status card, as a worker does (`cards`).
+            try:
+                cards.seen(self.conn, self.table, self.row_id, change)
+            except sqlite3.Error as e:
+                self.log.warning("agent card not recorded", extra={**self.fields, "agent": self.agent, "error": str(e)})
+        if not change.started and change.usage is None:
             return
         try:
             db.set_progress(self.conn, self.table, self.row_id, change.session_id, usage=change.usage)

@@ -21,7 +21,7 @@ import click
 
 from canopy.cli.common import CliError, Group, OverseerCommand, leave_the_tick, open_context
 from canopy.cli.params import EVAL_CASE, PERSONA, PR_URL, REPO, TICKET_KEY, TextType, verb
-from canopy.core import conversation, db, records, review_drafts, review_drafts_manage, review_revisions, sql
+from canopy.core import cards, conversation, db, records, review_drafts, review_drafts_manage, review_revisions, sql
 from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs
@@ -118,6 +118,10 @@ def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
             click.echo(findings.described(ctx.conn, run_id))
         except findings.Unusable as e:
             raise CliError(str(e)) from None
+        # The reviewer's own text, for the operator alone (TRUST_MODEL T1).
+        card = cards.of_run(ctx.conn, "review_runs", run_id)
+        if card is not None:
+            click.echo("\n" + "\n".join(cards.shown(card)))
         # Seen once shown to the operator. Inside one of canopy's own runs it marks nothing, and a review still running
         # has no result to see yet: either refusal leaves it as it was, and the show stands.
         with contextlib.suppress(conversation.Refused):

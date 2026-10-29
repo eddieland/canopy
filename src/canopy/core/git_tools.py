@@ -38,7 +38,6 @@ from canopy.runtime import servers
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from canopy.runtime.implementation import Version
 
 #: The MCP server canopy gives a review's or a plan's run, as its inline config names it. The runtime joins it to each
 #: tool's name, `canopy_git_diff`; no tool's own name holds an underscore, as none of canopy's tools do (DESIGN §27).
@@ -143,17 +142,14 @@ def parse_checkout(value: str) -> tuple[str, Path]:
     return name, Path(path)
 
 
-def run_env(checkouts: Mapping[str, Path], *, version: Version, cwd: Path) -> dict[str, str]:
-    """The environment that gives a run these tools over `checkouts`, by name, the server started in `cwd`.
-
-    The run is of the runtime `version` runs.
+def served(checkouts: Mapping[str, Path]) -> dict[str, tuple[str, ...]]:
+    """The server that gives a run these tools over `checkouts`, by name, for `canopy.runtime.servers.env`.
 
     Returns:
-        The variables to set on the agent's process.
+        Its name and the command the runtime starts it with.
     """
     named = [checkout_arg(name, path.absolute()) for name, path in checkouts.items()]
-    command = (*SERVER_COMMAND, *(arg for n in named for arg in ("--git", n)))
-    return servers.env({SERVER: command}, version=version, cwd=cwd)
+    return {SERVER: (*SERVER_COMMAND, *(arg for n in named for arg in ("--git", n)))}
 
 
 def tool_names() -> list[str]:

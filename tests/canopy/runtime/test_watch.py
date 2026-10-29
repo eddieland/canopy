@@ -3,6 +3,7 @@
 import json
 
 from canopy.runtime.implementation import Version
+from canopy.runtime.report import Called
 from canopy.runtime.watch import Change, Watch
 
 TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
@@ -20,7 +21,16 @@ def test_each_line_says_what_it_changed() -> None:
     assert started == Change("ses_abc123", started=True, usage=None, did=None)
     assert watch.read(event("text", {"text": "Working on it."})) is None  # the same session, nothing spent or done
     ran = watch.read(event("tool_use", {"tool": "bash", "state": {"status": "completed", "input": {"command": "ls"}}}))
-    assert ran == Change("ses_abc123", started=False, usage=None, did=("bash", "ls"))
+    assert ran == Change(
+        "ses_abc123",
+        started=False,
+        usage=None,
+        did=("bash", "ls"),
+        called=Called("bash", {"command": "ls"}),
+    )
+    # A call that ended in an error says what it did, and gives no input to read a call of canopy's tools from.
+    failed = watch.read(event("tool_use", {"tool": "bash", "state": {"status": "error", "input": {"command": "ls"}}}))
+    assert failed == Change("ses_abc123", started=False, usage=None, did=("bash", "ls"))
     spent = watch.read(event("step_finish", {"cost": 0.25, "tokens": TOKENS}))
     assert spent is not None
     assert spent.usage is not None

@@ -328,6 +328,12 @@ Controls:
   `awaiting_reply`, and the loop's wake read operator messages only. A private worker's prompt labels one as data,
   with its author. The overseer has no tool that writes one. Residual: the comments the overseer mirrored before M37
   stay as it recorded them, and a later observation of the same comment does not replace one.
+- A worker's, planner's, or reviewer's status card (DESIGN §8, §27, ROADMAP M65) is the agent's text, which may echo a
+  ticket's or a PR's. Its server, named in the run's inline config alone, lists its one tool only where
+  `CANOPY_RUN_ID` names such a run and writes nothing; canopy records the card from the call the run prints, checked
+  again as bounded plain text on one line with no hidden character. It is shown to the operator as data, in `canopy
+  status` and `canopy show`, and given to no agent: no prompt, no state block, and not the reports' page of a run,
+  which a chore reads. It authorizes nothing.
 - The overseer has no edit or write tools, and can act only through canopy's own MCP tools, whose guards are code
   (D020, DESIGN §27), and the commands the operator names for it in `runtime.allow_bash`, such as a tracker's CLI while
   its MCP server is down. The server is named in the overseer process's environment alone, from which the harness
@@ -468,6 +474,7 @@ Controls in code, not prompts:
   CI or retry a rejected push; the run timeout bounds the rest.
 - The clock (DESIGN §33) is advice, not a limit: near its timeout an agent hears the minutes left, from the same clock
   the harness kills it by, and nothing it does with them extends the run or holds off the kill.
+- A running agent's status card (DESIGN §8) is a record of what it said: nothing on it extends a run or holds a slot.
 - A tick that cannot acquire the lock exits immediately.
 - Reviews: one `done` review per commit, or per commit and persona for a request naming several (DESIGN §31), each
   counting toward `policy.max_reviews_per_pr` per PR (raised only by the operator, in config or
@@ -774,7 +781,8 @@ Controls:
   cut to their limits, and the Slack sink escapes Slack's markup so the text cannot mention anyone or disguise a link.
   The desktop sink passes text to its tool as arguments, never as a shell command or a script.
 - The reviewer writes nothing outside its result line (D114), and a revision of a review's draft, which runs as the
-  reviewer under the same definition, nothing outside the version it reports. Its definition denies commenting or
+  reviewer under the same definition, nothing outside the version it reports; each one's status card stays in the
+  journal for the operator (T1). Its definition denies commenting or
   replying anywhere, submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth;
   the operator's runtime need not grant it a write tool at all. Off a GitHub tracker, the tracker's server is denied
   whole but its read tools, allowed by name, as for the overseer, so a write there no pattern names fails closed.
