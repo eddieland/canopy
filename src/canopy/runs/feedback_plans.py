@@ -901,7 +901,7 @@ def _newest(
     return {
         "id": plan.id,
         "status": plan.status,
-        "created_at": plan.created_at,
+        "created_at": db.to_minute(plan.created_at),
         "repos": list(repos(conn, plan)),
         "spent": plan.spent_run_id is not None,
         "stale": bool(found.changes),

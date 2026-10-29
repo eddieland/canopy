@@ -747,7 +747,7 @@ def test_the_state_block_lists_the_overseers_open_attention_items(scenario: Scen
     broken = db.start_tick(conn, dry_run=True)
     db.record_decision(conn, broken, None, "attention:canopy_unavailable", "`canopy _mcp` exited 1")
     db.finish_tick(conn, broken, TickStatus.CANOPY_UNAVAILABLE, "")
-    since = [r[0] for r in conn.execute("SELECT created_at FROM decisions ORDER BY id")]
+    since = [db.to_minute(r[0]) for r in conn.execute("SELECT created_at FROM decisions ORDER BY id")]
 
     scenario.tick(dry_run=True)
     assert scenario.state()["attention"] == [

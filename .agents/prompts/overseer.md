@@ -11,7 +11,9 @@ did, never live state. The observations are live state as of their age: decide a
 and re-read the tracker or GitHub, before every decision that matters, only about one they mark `stale` or
 `unobserved` (see "Observations"). In `tickets` and `reviews`, a key whose value would be null or an empty list or
 object is left out, at any depth: read an absent key as that, such as a cursor not yet set, a ticket's `last_run`
-before its first run, a private ticket's `new_operator_messages` with none new, or a clean review's `findings`.
+before its first run, a private ticket's `new_operator_messages` with none new, or a clean review's `findings`. The
+block's times are UTC to the minute, such as `2026-10-16T09:50Z`; where this prompt compares two, the same minute
+counts as after.
 
 ## Tools you have
 

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from importlib.metadata import version
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, LiteralString, assert_never
+from typing import TYPE_CHECKING, Literal, LiteralString, assert_never, overload
 
 from canopy.core import item_numbers, records, sql
 from canopy.core.vocab import (
@@ -145,6 +145,36 @@ def parse_time(stamp: str) -> datetime:
         The moment `stamp` names, with its timezone set to UTC.
     """
     return datetime.fromisoformat(stamp).astimezone(UTC)
+
+
+@overload
+def to_minute(moment: datetime | str) -> str: ...
+
+
+@overload
+def to_minute(moment: datetime | str | None) -> str | None: ...
+
+
+def to_minute(moment: datetime | str | None) -> str | None:
+    """A time as the overseer's state block gives it: UTC, to the minute, which is all a decision there reads.
+
+    The journal keeps its milliseconds; the block, read again at every step of a tick, carries several times per
+    ticket, and the overseer passes none back. A string that is no ISO 8601 time, as a pool's lease time may be, is
+    given as it is.
+
+    Returns:
+        `moment` in UTC as `YYYY-MM-DDTHH:MMZ`, or None for None.
+    """
+    if moment is None:
+        return None
+    if isinstance(moment, str):
+        try:
+            parsed = datetime.fromisoformat(moment)
+        except ValueError:
+            return moment
+        # A time with no offset is UTC, as the journal's and every source's are.
+        moment = parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%MZ")
 
 
 def now() -> str:

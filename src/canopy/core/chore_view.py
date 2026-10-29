@@ -359,7 +359,7 @@ def state_section(states_: Iterable[ChoreState], now: datetime) -> list[ChoreSum
             "name": state.name,
             "every_minutes": state.chore.every_minutes,
             "when": state.chore.when or None,
-            "due_at": db.format_time(due_at) if due_at is not None else None,
+            "due_at": db.to_minute(due_at),
             "due": due,
             "running": running,
             "latest_run": _latest_run(state.latest, whole=whole) if state.latest is not None else None,
@@ -380,7 +380,7 @@ def _latest_run(latest: records.ChoreRun, *, whole: bool) -> LatestRun:
     return {
         "run_id": latest.id,
         "status": latest.status,
-        "started_at": latest.started_at,
-        "ended_at": latest.ended_at,
+        "started_at": db.to_minute(latest.started_at),
+        "ended_at": db.to_minute(latest.ended_at),
         "summary": str(harness) if harness else (stored.summary if stored is not None else None),
     }

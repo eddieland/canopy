@@ -438,7 +438,7 @@ class Reader:
         return {
             "url": url,
             "observed": "fresh",
-            "observed_at": pr.observed_at,
+            "observed_at": db.to_minute(pr.observed_at),
             "pr": _pr(url, pr),
             "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], {}),
         }
@@ -482,10 +482,10 @@ class Reader:
             "key": key,
             "observed": "fresh",
             "candidate": True,
-            "observed_at": seen.observed_at,
+            "observed_at": db.to_minute(seen.observed_at),
             "title": seen.title,
             "state": seen.state,
-            "labels": [{"name": str(x["name"]), "added_at": x.get("added_at")} for x in labels],
+            "labels": [{"name": str(x["name"]), "added_at": db.to_minute(x.get("added_at"))} for x in labels],
             "blockers": [{"key": b, "state": self.observed[b].state} for b in phases.blockers_of(seen)],
         }
         # The repository and the slug are chosen from the body; once the ticket has a unit, its work says the rest.
@@ -522,14 +522,14 @@ class Reader:
         if not any(u.pr_url for u in self.units_of.get(key, [])):
             old = sorted(r.name for r in self.ctx.workspace.repos if r.name not in self.fresh_repos)
             if old:
-                return f"branches of {', '.join(old)} not observed since {db.format_time(self.cutoff)}"
+                return f"branches of {', '.join(old)} not observed since {db.to_minute(self.cutoff)}"
         return None
 
     def _age(self, what: str, seen: records.ObservedTicket | records.ObservedPr | None) -> str | None:
         if seen is None:
             return f"{what} never observed"
         if db.parse_time(seen.observed_at) < self.cutoff:
-            return f"{what} last observed {seen.observed_at}"
+            return f"{what} last observed {db.to_minute(seen.observed_at)}"
         return None
 
     def _comment(self, c: records.ObservedComment) -> CommentState:
@@ -537,7 +537,7 @@ class Reader:
             "number": c.number,
             "id": c.id,
             "author": c.author,
-            "at": c.commented_at,
+            "at": db.to_minute(c.commented_at),
             "authorized": c.author in self.ctx.config.trust.authorized_repliers,
             "worker": c.source == "worker",
             "body": c.body,
@@ -564,7 +564,7 @@ class Reader:
         if unit is not None and unit.pr_url is not None:
             found = self._pr_unit(repo, unit, unit.pr_url)
         elif repo not in self.fresh_repos:
-            why = f"branches of {repo} not observed since {db.format_time(self.cutoff)}"
+            why = f"branches of {repo} not observed since {db.to_minute(self.cutoff)}"
             found = {"repo": repo, "observed": "stale", "why": why}
         else:
             record = self.journal.get(key)
@@ -598,7 +598,7 @@ class Reader:
         observed: UnitObservation = {
             "repo": repo,
             "observed": "fresh",
-            "observed_at": pr.observed_at,
+            "observed_at": db.to_minute(pr.observed_at),
             "pr": _pr(url, pr),
             "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], roles),
             "verdicts": _verdicts(self.reviews.get(url, []), trusted),
@@ -617,7 +617,7 @@ class Reader:
             "author": r.author,
             "trusted": (r.author or "").lower() in trusted,
             "worker": conversation.worker_marked(r.body, trust.comment_prefix, trust.comment_suffix),
-            "at": r.created_at,
+            "at": db.to_minute(r.created_at),
             "url": r.url,
             "body": r.body,
         }
@@ -667,10 +667,14 @@ def _query_state(
         return {"observed": "unobserved", "why": NO_TRACKER}
     if run is None:
         return {"observed": "stale", "why": "never read to its end"}
-    found: QueryState = {"observed": "fresh", "read_at": run.ended_at, "result": _result(_query_of(run, kind))}
+    found: QueryState = {
+        "observed": "fresh",
+        "read_at": db.to_minute(run.ended_at),
+        "result": _result(_query_of(run, kind)),
+    }
     if db.parse_time(run.ended_at) < cutoff:
         found["observed"] = "stale"
-        found["why"] = f"last read {run.ended_at}"
+        found["why"] = f"last read {db.to_minute(run.ended_at)}"
     return found
 
 

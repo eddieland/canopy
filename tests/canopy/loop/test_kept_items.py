@@ -91,7 +91,8 @@ def test_a_needs_author_naming_a_comment_is_held_until_the_comment_cursor_passes
     ticks(conn, TickStatus.OK, TickStatus.SKIPPED, TickStatus.OVERSEER_FAILED, TickStatus.OK)
     assert open_items(conn) == [(KEY, "needs_author", None)]
     [listed] = attention.for_overseer(conn)
-    assert listed == {"ticket": KEY, "reason": "needs_author", "since": decision.created_at, "kept": True, "item": asks}
+    since = db.to_minute(decision.created_at)
+    assert listed == {"ticket": KEY, "reason": "needs_author", "since": since, "kept": True, "item": asks}
     # A cursor short of it ends nothing; one at it does.
     db.set_ticket(conn, KEY, str(canopy_env.root), cursors={"comment": str(asks - 1)})
     assert open_items(conn) == [(KEY, "needs_author", None)]

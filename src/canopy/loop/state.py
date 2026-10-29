@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
@@ -310,7 +311,7 @@ def state_block(
             "phase": u.phase,
             "cursors": {cursor: getattr(u, column) for cursor, column in db.UNIT_CURSORS.items()},
             "attempts": dict(attempts.get(unit, no_attempts)),
-            "ci_cooldown_until": _stamp(ci_cooldowns.get(unit)),
+            "ci_cooldown_until": db.to_minute(ci_cooldowns.get(unit)),
         }
         if unit in grants:
             summary["granted"] = dict(grants[unit])
@@ -329,8 +330,8 @@ def state_block(
             "branch": None if any(u.branch == t.branch for u in its_units) else t.branch,
             "cursors": {name: getattr(t, db.ticket_cursor(name, tracked=tracked)) for name in db.TICKET_CURSORS},
             "units": [unit_summary(key, u) for u in its_units],
-            "needs_human_since": t.needs_human_since,
-            "last_seen_at": t.last_seen_at,
+            "needs_human_since": db.to_minute(t.needs_human_since),
+            "last_seen_at": db.to_minute(t.last_seen_at),
             "last_run": _run_summary(last_runs.get(key), run_slots, run_reasons, config.trust.branch_prefix),
         }
         # A private ticket's conversation state, or a public one's new operator messages, each only when it has one.
@@ -382,7 +383,7 @@ def state_block(
                 "summary": r.summary,
                 "cloned": r.cloned,
                 "leased_slots": [
-                    {"path": str(s.path), "lease_holder": s.lease_holder, "leased_at": s.leased_at}
+                    {"path": str(s.path), "lease_holder": s.lease_holder, "leased_at": db.to_minute(s.leased_at)}
                     for s in leased.get(r.name, [])
                     if not tasks.held_by_task(s.lease_holder)
                 ],
@@ -419,7 +420,7 @@ def state_block(
         # Whether this tick runs the tracker query, or works the tickets above alone (DESIGN §7, Spacing the query).
         "query_due": query_due,
         "tick_id": tick_id,
-        "now": db.format_time(now),
+        "now": db.to_minute(now),
         "dry_run": dry_run,
     }
     if dry_run:
@@ -474,7 +475,12 @@ def _name_cursors(
 
     def items(cursors: Mapping[str, str | int | None], names: Iterable[str]) -> dict[str, str]:
         found = {name: numbered.get(value) for name in names if isinstance(value := cursors[name], int)}
-        return {name: item_numbers.describe(item) for name, item in found.items() if item is not None}
+        # Named as the block gives every time, to the minute.
+        return {
+            name: item_numbers.describe(replace(item, numbered_at=db.to_minute(item.numbered_at)))
+            for name, item in found.items()
+            if item is not None
+        }
 
     for ticket in tickets:
         if named := items(ticket["cursors"], ["comment"] if tracked else []):
@@ -493,7 +499,12 @@ def _run_summary(
 ) -> RunState | None:
     if run is None:
         return None
-    summary: RunState = {"run_id": run.id, "kind": run.kind, "status": run.status, "ended_at": run.ended_at}
+    summary: RunState = {
+        "run_id": run.id,
+        "kind": run.kind,
+        "status": run.status,
+        "ended_at": db.to_minute(run.ended_at),
+    }
     slots = run_slots.get(run.id, [])
     # A stacked base is always under the prefix, as the dispatch guard checks (DESIGN §10); a repository's own is not.
     if any(_under(branch_prefix, s.base_branch) for s in slots):
@@ -526,7 +537,7 @@ def _running_summary(
         "repos": [s.repo for s in run_slots.get(int(run["id"]), [])],
         "kind": run["kind"],
         "branch": run["branch"],
-        "started_at": run["started_at"],
+        "started_at": db.to_minute(str(run["started_at"])),
     }
     if int(run["id"]) in run_reasons:
         summary["reasons"] = list(run_reasons[int(run["id"])])
@@ -594,7 +605,12 @@ def _may_hold(unit: UnitObservation) -> bool:
 
 
 def _notice(held: Notice, now: datetime) -> NoticeState:
-    return {"text": held.text, "set_at": held.set_at, "until": held.until, "in_force": held.in_force(now)}
+    return {
+        "text": held.text,
+        "set_at": db.to_minute(held.set_at),
+        "until": db.to_minute(held.until),
+        "in_force": held.in_force(now),
+    }
 
 
 def _compact(value: object) -> object:
@@ -618,7 +634,3 @@ def _compact(value: object) -> object:
 def _empty(value: object) -> bool:
     # Neither `False` nor `0` equals `[]` or `{}`, so both stay.
     return value is None or value in ([], {})
-
-
-def _stamp(moment: datetime | None) -> str | None:
-    return db.format_time(moment) if moment is not None else None

@@ -261,7 +261,7 @@ def state_section(
         "limit": limit,
         "newest": None
         if newest is None
-        else {"id": newest.id, "status": newest.status, "created_at": newest.created_at},
+        else {"id": newest.id, "status": newest.status, "created_at": db.to_minute(newest.created_at)},
         "changes_asked": changes_asked(conn, ticket) is not None,
         "blocked": blocked,
     }

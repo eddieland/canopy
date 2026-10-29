@@ -108,7 +108,7 @@ def next_midnight() -> str:
 def test_outside_its_window_a_chore_is_refused_and_not_due(scenario: Scenario, closed: Path) -> None:
     scenario.tick(dry_run=True)
     [section] = scenario.state()["chores"]
-    assert (section["due"], section["due_at"]) == (False, next_midnight())
+    assert (section["due"], section["due_at"]) == (False, db.to_minute(next_midnight()))
 
     with scenario.ticking() as tick_id:
         scenario.overseer("chore", "run", "build-health", code=1)
