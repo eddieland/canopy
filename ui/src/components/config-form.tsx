@@ -11,6 +11,7 @@ import { RepoSelect } from '@/components/repo-picker'
 import { Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
     boundText,
     configForm,
@@ -24,7 +25,6 @@ import type { ConfigDrafts } from '@/lib/config-settings'
 
 // The trust switches, and the side the page may move each to: the stricter one (TRUST_MODEL T8).
 const STRICTER_ON: Record<string, boolean> = { 'trust.rebase': false, 'trust.commit_trailer': true }
-const STACKING = 'policy.stacking'
 // What an unset count's field says it is: an unmanaged pool for the pools' counts, no budget for the budget.
 const UNSET: Record<string, string> = { 'spend.monthly_budget_usd': 'none' }
 
@@ -265,7 +265,10 @@ function RepoSlots({
     )
 }
 
-/** The control for one key: a number field, a switch, a list's entries to keep, or the budget's alerts as typed. */
+/**
+ * The control for one key: a number field, a switch, a choice, a list's entries to keep, or the budget's alerts as
+ * typed.
+ */
 function Control({
     setting,
     draft,
@@ -312,21 +315,28 @@ function Control({
             </fieldset>
         )
     }
-    if (name === STACKING) {
-        const picked = typeof draft === 'string' ? draft : value
+    if (setting.choices.length > 0) {
+        // Loosest first: a choice before the one the files give now is looser, and the page does not offer it.
+        const current = typeof value === 'string' ? value : ''
+        const now = setting.choices.indexOf(current)
         return (
-            <label htmlFor={name} className="inline-flex items-center gap-2 text-xs">
-                <Checkbox
-                    id={name}
-                    checked={picked === 'never'}
-                    disabled={value === 'never'}
-                    data-testid={name}
-                    onCheckedChange={(checked) =>
-                        onDraft(checked === true || typeof value !== 'string' ? 'never' : value)
+            <ToggleGroup
+                type="single"
+                value={typeof draft === 'string' ? draft : current}
+                aria-label={name}
+                data-testid={name}
+                onValueChange={(picked) => {
+                    if (picked !== '') {
+                        onDraft(picked)
                     }
-                />
-                never
-            </label>
+                }}
+            >
+                {setting.choices.map((choice, i) => (
+                    <ToggleGroupItem key={choice} value={choice} disabled={i < now} data-testid={`${name}-${choice}`}>
+                        {choice}
+                    </ToggleGroupItem>
+                ))}
+            </ToggleGroup>
         )
     }
     if (typeof value === 'boolean') {

@@ -724,12 +724,16 @@ class ConfigKey(Model):
     file, where it shadows the user file's for this workspace), the workspace file (a shared `policy.*` key), or
     none."""
     kind: Literal["limit", "stricter", "free"]
-    """`limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries). `free`:
-    set whole to anything the config loader takes (`spend.budget_alerts`, beside the 100% alert always sent)."""
+    """`limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries, a count
+    only goes down, a choice only moves later in `choices`). `free`: set whole to anything the config loader takes
+    (`spend.budget_alerts`, beside the 100% alert always sent)."""
     bound: int | None
-    """A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes. The file can set any."""
+    """A limit's loosest value from the page: a count's ceiling, or a pace's floor. The file can set any."""
     looser: Literal["higher", "lower"] | None
     """Which way loosens a limit: a count's higher, a pace's lower. None for a `stricter` key."""
+    choices: list[str]
+    """A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
+    key."""
 
 
 class ConfigSettings(Model):

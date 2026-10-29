@@ -2928,13 +2928,20 @@ export type components = {
         ConfigKey: {
             /**
              * Bound
-             * @description A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes. The file can set any.
+             * @description A limit's loosest value from the page: a count's ceiling, or a pace's floor. The file can set any.
              */
             bound: number | null;
             /**
+             * Choices
+             * @description A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
+             *     key.
+             */
+            choices: string[];
+            /**
              * Kind
-             * @description `limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries). `free`:
-             *     set whole to anything the config loader takes (`spend.budget_alerts`, beside the 100% alert always sent).
+             * @description `limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries, a count
+             *     only goes down, a choice only moves later in `choices`). `free`: set whole to anything the config loader takes
+             *     (`spend.budget_alerts`, beside the 100% alert always sent).
              * @enum {string}
              */
             kind: "limit" | "stricter" | "free";
