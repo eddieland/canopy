@@ -16,8 +16,9 @@ evidence gate). A row that rests on what a connector observed joins them only by
 the derivation right on it; no switch in config turns one on.
 
 Whatever the overseer records about a ticket the harness decided, through a tool or its command, is refused `decided`
-(`loop.tools`), and the duties check owes it nothing about one (§6). A cursor the harness moves past what needs no
-handling (`loop.harness_cursors`) is its decision too, `CURSOR_ACTION`, but decides nothing about the ticket.
+(`loop.tools`), and the duties check owes it nothing about one (§6). A cursor the harness moves, past what needs no
+handling or what its own run handles (`loop.harness_cursors`), is its decision too, `CURSOR_ACTION`, but decides
+nothing about the ticket.
 """
 
 from __future__ import annotations
@@ -37,8 +38,8 @@ if TYPE_CHECKING:
     from canopy.loop.phases import Derived
 
 
-#: The decision a cursor the harness moved past what needs no handling is recorded as (`loop.harness_cursors`): its
-#: own, about the ticket, yet no decision of the ticket's, which stays the overseer's.
+#: The decision a cursor the harness moved is recorded as (`loop.harness_cursors`): its own, about the ticket, yet no
+#: decision of the ticket's.
 CURSOR_ACTION = "cursor"
 
 

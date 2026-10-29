@@ -1,10 +1,11 @@
 """The harness's dispatches (DESIGN §37, ROADMAP M38).
 
 Planned before the overseer, made after it in §7's order, none in a dry run or a tick halted before the overseer, and
-`reserved` for the overseer's that would take their workers.
+`reserved` for the overseer's that would take their workers. A run moves the cursors of its reasons once its worker
+starts, as the overseer's `resume` does, each move its own decision; a dry run or a refused run moves none.
 
 The one row enabled is a chore's: due, with no `when`. No ticket's row is, since each rests on an observation, so the
-cases about a ticket's run enable two rows here, as a measurement would, and write the tick's derivation by hand.
+cases about a ticket's run enable rows here, as a measurement would, and write the tick's derivation by hand.
 """
 
 from __future__ import annotations
@@ -19,9 +20,9 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from canopy.core.vocab import Decider, Phase, ResumeReason, RunKind, TickStatus
+from canopy.core.vocab import Decider, NumberedItem, Phase, ResumeReason, RunKind, TickStatus
 from canopy.infra import procs
-from canopy.loop import attention, harness_dispatches, mcp, phases
+from canopy.loop import attention, harness, harness_cursors, harness_dispatches, mcp, phases
 from tests.canopy.helpers import (
     KEY,
     LABEL,
@@ -39,7 +40,7 @@ from tests.canopy.helpers import (
     tool_call,
     waits,
 )
-from tests.canopy.observation_helpers import observe_ticket
+from tests.canopy.observation_helpers import PR, TRUST, number_of, observe_ticket, review_number
 from tests.canopy.scenario_helpers import dispatches, pushes
 
 if TYPE_CHECKING:
@@ -54,6 +55,13 @@ ENABLED = {
     Phase.CONFLICTED: harness_dispatches.Row(ResumeReason.CONFLICT, "The PR conflicts with its base: bring it in."),
     Phase.PUSHED_NO_PR: harness_dispatches.Row(ResumeReason.NO_PR, "The branch has no PR: open one."),
 }
+#: Two rows whose reasons have cursors: `ci`'s and `review`'s.
+WITH_CURSORS = {
+    Phase.CI_RED: harness_dispatches.Row(ResumeReason.CI, "A check failed at the head: fix it."),
+    Phase.CHANGES_REQUESTED: harness_dispatches.Row(ResumeReason.REVIEW, "A reviewer asked for changes: make them."),
+}
+#: A check run of PR that failed at its head, as the fake GitHub holds it.
+FAILED = {"name": "build", "status": "completed", "conclusion": "failure", "run_id": 11}
 #: A chore with no `when`, which the harness runs, and one with a `when`, which the overseer decides.
 MINE, THEIRS = "deps", "build-health"
 
@@ -186,9 +194,9 @@ def test_the_overseers_verbs_about_the_harnesss_chore_are_refused(conn: sqlite3.
 
 
 @contextmanager
-def enabled() -> Iterator[None]:
-    """Until the block ends, the harness dispatches for ENABLED's rows."""
-    with mock.patch.object(harness_dispatches, "ROWS", ENABLED):
+def enabled(rows: Mapping[Phase, harness_dispatches.Row] = ENABLED) -> Iterator[None]:
+    """Until the block ends, the harness dispatches for `rows`."""
+    with mock.patch.object(harness_dispatches, "ROWS", rows):
         yield
 
 
@@ -320,6 +328,102 @@ def test_what_the_overseer_records_about_a_ticket_the_harness_dispatches_is_refu
         [(action, reason)] = decisions(conn, tick_id)
     assert action == "refused:decided"
     assert reason.startswith(f"the harness dispatches {KEY} this tick (the state block's `dispatches_to_come`)")
+
+
+# Its cursors
+
+
+@pytest.fixture
+def red(scenario: Scenario, git_pool: GitPool, github_state: Path) -> Scenario:
+    """KEY pushed with PR its pull request and observed with the queue label; the fake GitHub holds PR red at its head.
+
+    Returns the scenario.
+    """
+    scenario.configures(**TRUST)
+    scenario.run(dispatches(), worker=pushes(prs={"repo": PR}))
+    observe_ticket(scenario.conn, KEY, at=db.now())
+    scenario.conn.commit()
+    github_state.write_text(json.dumps({"prs": {PR: {"checks": [FAILED]}}}))
+    return scenario
+
+
+def test_its_resume_moves_the_cursor_of_its_reason_once_its_worker_starts(red: Scenario) -> None:
+    with enabled(WITH_CURSORS), derived(*unit_at(KEY, Phase.CI_RED)):
+        ticked = red.tick()
+    [run] = ticked.runs
+    assert run.reasons == (ResumeReason.CI,)
+    failed = number_of(red.conn, NumberedItem.CHECK_RUN, 11)
+    assert unit_cursors(red.conn) == (None, failed)
+    # The move is the harness's decision, after its dispatch, and decides nothing more about the ticket.
+    assert [(d.action, d.repo, d.decider) for d in ticked.decisions if d.ticket_key == KEY] == [
+        ("dispatch:resume", None, Decider.HARNESS),
+        (harness.CURSOR_ACTION, "repo", Decider.HARNESS),
+    ]
+    moved = ticked.decisions[-1]
+    assert moved.rationale == f"ci cursor in repo from unset to {failed}, handled by run {run.id}, a resume for ci"
+    assert f"[harness] ci cursor in repo from unset to {failed}" in red.operator("decisions").out
+
+
+def test_its_resume_for_review_stops_short_of_feedback_with_no_go_ahead(red: Scenario, github_state: Path) -> None:
+    reviews = [
+        {"item": "review", "id": 1, "author": "octocat", "state": "changes_requested", "time": "2026-10-18T10:00:00Z",
+         "body": "Rename the helper."},
+        {"item": "review", "id": 2, "author": "stranger", "state": "changes_requested", "time": "2026-10-18T11:00:00Z",
+         "body": "Why not a map?"},
+    ]  # fmt: skip
+    github_state.write_text(json.dumps({"prs": {PR: {"reviews": reviews}}}))
+    with enabled(WITH_CURSORS), derived(*unit_at(KEY, Phase.CHANGES_REQUESTED)):
+        ticked = red.tick()
+    assert [r.reasons for r in ticked.runs] == [(ResumeReason.REVIEW,)]
+    # The trusted reviewer's is handled; the stranger's waits on the operator's go-ahead, so it stays new.
+    trusted = int(review_number(red.conn, 1))
+    assert unit_cursors(red.conn) == (trusted, None)
+    assert trusted < int(review_number(red.conn, 2))
+    assert [d.rationale for d in ticked.decisions if d.action == harness.CURSOR_ACTION] == [
+        f"review cursor in repo from unset to {trusted}, handled by run {ticked.runs[0].id}, a resume for review",
+    ]
+
+
+def test_a_cursor_already_past_is_not_moved_back(red: Scenario) -> None:
+    failed = number_of(red.conn, NumberedItem.CHECK_RUN, 11)
+    with in_tick(red.conn) as tick_id:
+        moves = harness_cursors.handled(red.conn, KEY, "repo", {"ci": str(failed)}, "handled by run 9")
+        assert [m.rationale() for m in harness_cursors.record(red.conn, tick_id, moves)] == [
+            f"ci cursor in repo from unset to {failed}, handled by run 9",
+        ]
+        # The overseer passed it further meanwhile: the move leaves it, and records nothing.
+        red.conn.execute("UPDATE ticket_units SET ci_cursor = ? WHERE ticket_key = ?", (failed + 5, KEY))
+        assert harness_cursors.record(red.conn, tick_id, moves) == []
+    assert unit_cursors(red.conn) == (None, failed + 5)
+
+
+def test_a_dry_run_names_the_cursors_it_would_move_and_moves_none(red: Scenario) -> None:
+    with enabled(WITH_CURSORS), derived(*unit_at(KEY, Phase.CI_RED)):
+        dry = red.tick(dry_run=True)
+    failed = number_of(red.conn, NumberedItem.CHECK_RUN, 11)
+    assert [(d.action, d.rationale) for d in dry.decisions if d.decider is Decider.HARNESS] == [
+        ("dispatch:resume", f"dry run: not dispatched; resume {KEY} in repo, for ci_red; cursor ci={failed}"),
+    ]
+    assert dry.runs == []
+    assert unit_cursors(red.conn) == (None, None)
+
+
+def test_a_resume_the_claims_refuse_moves_no_cursor(red: Scenario, github_state: Path) -> None:
+    # GitHub cannot read the PR, so the run would rest on a stale observation: refused as the overseer's would be.
+    github_state.write_text(json.dumps({"prs": {PR: {"checks": [FAILED]}}, "unread": [PR]}))
+    with enabled(WITH_CURSORS), derived(*unit_at(KEY, Phase.CI_RED)):
+        ticked = red.tick()
+    assert [(d.action, d.decider) for d in ticked.decisions if d.ticket_key == KEY] == [
+        ("refused:stale", Decider.HARNESS),
+    ]
+    assert ticked.runs == []
+    assert unit_cursors(red.conn) == (None, None)
+
+
+def unit_cursors(conn: sqlite3.Connection) -> tuple[int | None, int | None]:
+    """KEY's unit's `review` and `ci` cursors."""
+    [unit] = conn.execute("SELECT review_cursor, ci_cursor FROM ticket_units WHERE ticket_key = ?", (KEY,)).fetchall()
+    return unit["review_cursor"], unit["ci_cursor"]
 
 
 def refused_as_tool(name: str, arguments: Mapping[str, object]) -> bool:

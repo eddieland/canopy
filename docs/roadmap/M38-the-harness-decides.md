@@ -164,8 +164,17 @@ a private ticket, for a joint `resume`, or for another kind (an `implement` carr
 no `comment` or `message` default unless the ticket is observed a fresh candidate, and no `ci` or `review` default
 unless its PR is observed fresh; a message sent after the tick read the journal is not passed; no `ci` default while a
 notice is in force or lately ended, since whether it holds a check is judgment; and a `review` cursor stops short of
-untrusted feedback with feedback plans on too. Left: every other row, each on its measurement; cursors moved past what
-the harness's own decisions handle; the prompt cut to the judgment; and the design folded into the sections it names.
+untrusted feedback with feedback plans on too. Built (2026-10-29): the sixth bullet's cursors past what the harness's
+own decisions handle. A `resume` the harness makes is checked against the claims (§35), as the overseer's is at its
+spawn, and moves the cursors of its reasons as the overseer's does, to its default cursors, once its worker starts and
+never back; each move is its decision `cursor`, marked as its own and naming the run that handles what it passes
+(`harness_cursors.handled`); a refused run moves none, and a dry run moves none and names them in its decision (D036).
+So stage 2's harness that moved no cursor is gone. No row enabled moves one, since `ROWS` is empty: it is tested with
+`ci_red`'s and `changes_requested`'s rows enabled by hand. Chosen conservatively, for the operator to change: the
+harness's other decisions move no cursor, since a `wait` leaves what came meanwhile new for the run after it; and its
+`resume` moves only the defaults the overseer's would, so none on a private ticket, none for `ci` while a notice is in
+force or lately ended, and none past untrusted feedback with no go-ahead. Left: every other row, each on its
+measurement; the prompt cut to the judgment; and the design folded into the sections it names.
 Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each
 disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a PR
 (recommended: yes).

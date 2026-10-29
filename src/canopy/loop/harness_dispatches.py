@@ -7,7 +7,9 @@ verbs and a chore's are refused `decided`. After the overseer's run, whatever it
 runs the overseer recorded, in §7's order (`loop.spawns`, §40), each under every guard an overseer's dispatch passes
 (§8, §19) and recorded as the harness's own; a dry run checks the guards and starts none (D036). A dispatch of the
 overseer's that would leave fewer workers free than the harness's runs ranked above it hold is refused `reserved`
-(`reserved`).
+(`reserved`). Its `resume` is checked against the claims (§35) and moves the cursors of its reasons as the overseer's
+does, to the newest item of each kind the block showed, short of the first it may not cover (`claims.default_cursors`),
+once its worker starts; each move is recorded as its own (`harness_cursors.handled`).
 
 The plan is read from the journal each time, never kept: the tick's derivation (`phases.recorded`), the attention list,
 and the chores' runs, so the state block, the overseer's tools, and the dispatches after it read the same plan. A chore
@@ -21,14 +23,14 @@ config and the journal alone.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import IntEnum
 from typing import TYPE_CHECKING, TypedDict, assert_never
 
 from canopy.chores import start as chore_start
 from canopy.core import chore_view, conversation, db, records
 from canopy.core.vocab import Decider, Phase, ResumeReason, RunKind
-from canopy.loop import attention, phases
+from canopy.loop import attention, claims, harness_cursors, phases
 from canopy.runs import dispatch, feedback_plans
 
 if TYPE_CHECKING:
@@ -271,11 +273,16 @@ def section(planned: Plan) -> ToCome | None:
 
 
 def make_resume(ctx: Context, tick_id: int, run: TicketRun, *, dry_run: bool, log: logs.TickAdapter) -> None:
-    """Dispatch `run`, or in a dry run check its guards, and record the dispatch or its refusal as the harness's."""
+    """Dispatch `run`, or in a dry run check its guards, and record the dispatch or its refusal as the harness's.
+
+    It moves the cursors of its reasons as the overseer's `resume` does, once its worker starts, each move recorded as
+    the harness's; a refused one, or a dry run, moves none (D036), and a dry run's decision names what it would move.
+    """
     key, repos, kind = run.key, (run.repo,), RunKind.RESUME
     db.touch_ticket(ctx.conn, key, ctx.repo)
     rows = ", ".join(run.phases)
     try:
+        cursors = _cursors(ctx, tick_id, run)
         if dry_run:
             dispatch.check(
                 ctx,
@@ -287,8 +294,11 @@ def make_resume(ctx: Context, tick_id: int, run: TicketRun, *, dry_run: bool, lo
                 base=None,
                 repos=repos,
                 reasons=run.reasons,
+                cursors=frozenset(cursors),
             )
-            rationale = f"dry run: not dispatched; resume {key} in {run.repo}, for {rows}"
+            would = "".join(f"; cursor {name}={value}" for name, value in cursors.items())
+            rationale = f"dry run: not dispatched; resume {key} in {run.repo}, for {rows}{would}"
+            started = None
         else:
             started = dispatch.start(
                 ctx,
@@ -301,6 +311,7 @@ def make_resume(ctx: Context, tick_id: int, run: TicketRun, *, dry_run: bool, lo
                 context=run.context,
                 repos=repos,
                 reasons=run.reasons,
+                cursors=frozenset(cursors),
             )
             rationale = f"run {started.run_id}: resume {key} in {run.repo}, for {rows}"
     except dispatch.Refusal as r:
@@ -311,6 +322,13 @@ def make_resume(ctx: Context, tick_id: int, run: TicketRun, *, dry_run: bool, lo
         return
     _record(ctx, tick_id, key, f"dispatch:{kind}", rationale)
     log.info("harness dispatched", extra={"ticket": key, "kind": kind, "dry_run": dry_run})
+    if started is None or not cursors:
+        return
+    # Cursors move only once its worker started, so what a refused run was meant to handle is still new next tick.
+    why = f"handled by run {started.run_id}, a resume for {', '.join(run.reasons)}"
+    moved = harness_cursors.record(ctx.conn, tick_id, harness_cursors.handled(ctx.conn, key, run.repo, cursors, why))
+    if moved:
+        log.info("harness moved cursors", extra={"ticket": key, "cursors": [m.rationale() for m in moved]})
 
 
 def make_chore(ctx: Context, tick_id: int, name: str, *, dry_run: bool, log: logs.TickAdapter) -> None:
@@ -330,6 +348,51 @@ def make_chore(ctx: Context, tick_id: int, name: str, *, dry_run: bool, log: log
         return
     _record(ctx, tick_id, None, chore_start.DISPATCH_ACTION, rationale, chore=name)
     log.info("harness started a chore", extra={"chore": name, "dry_run": dry_run})
+
+
+def _cursors(ctx: Context, tick_id: int, run: TicketRun) -> dict[str, str]:
+    """The cursors `run` moves, as the overseer's `resume` for its reasons would, checked against the claims (§35).
+
+    Each is the newest item of its kind the state block showed, short of the first the run may not cover: one past the
+    block's bound, or untrusted feedback with no go-ahead (`claims.default_cursors`). A private ticket has none, nor a
+    stale subject, nor a reason with no cursor, such as `conflict`.
+
+    Returns:
+        Them, by name.
+
+    Raises:
+        Refusal: The claims refuse the run (`claims.check`), as they would the overseer's.
+    """
+    tick = db.get_tick(ctx.conn, tick_id)
+    now = datetime.now(UTC)
+    key, kind, repos, reasons = run.key, RunKind.RESUME, (run.repo,), run.reasons
+    found: dict[str, str] = {}
+    if tick is not None:
+        found = claims.default_cursors(
+            ctx,
+            tick,
+            now,
+            key=key,
+            kind=kind,
+            repos=repos,
+            reasons=reasons,
+            cursors={},
+            review_run=None,
+        )
+    claims.check(
+        ctx,
+        tick_id,
+        now,
+        key=key,
+        kind=kind,
+        label=run.label,
+        repos=repos,
+        reasons=reasons,
+        cursors=found,
+        review_run=None,
+        base=None,
+    )
+    return found
 
 
 def _held(conn: sqlite3.Connection) -> set[str]:
