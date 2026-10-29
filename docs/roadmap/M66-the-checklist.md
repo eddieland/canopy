@@ -1,0 +1,78 @@
+# M66. The checklist, asked before the push
+
+REQUIREMENTS R27, DESIGN §8, §12, §21, §31, §33, §41, and §42, TRUST_MODEL T1, T3, T4, and T7. Asked for by the
+operator (2026-10-29): the team keeps meeting the same nits, rules its architect asks for that `AGENTS.md` states and
+no linter checks, and reviewers hold them only sometimes, canopy's adversarial reviewer among them. The operator's
+standing worker instructions already emphasize them, and workers still miss them. Asking an agent one plain question,
+"does this diff do X?", gets a reliable answer; a rule among forty at the top of a long run does not. So canopy asks
+the operator's list at the moment it matters, after the worker pushes and before it finishes, in the worker's own run,
+and records each answer (DESIGN §42). A second review that asks the same list of a PR waits on what that measures.
+
+Today a worker reads the rules once, in the repository's docs and `paths.worker_instructions`, and the adversarial
+reviewer is told to look for defects, not style (§21, step 3). Neither records, per rule, what was held and what was
+missed. Three stages, in order, each in its own PRs; stage 3 waits on stage 2's numbers.
+
+- **Stage 0, the first list.** The operator writes it, before stage 1 starts, from the rules review already holds by
+  hand: `AGENTS.md`'s "No linter checks this, so review does" is one (the most general parameter type), newspaper
+  order and `#:` doc comments are two more, and the architect's are the rest. Each item has an id, the paths it is
+  about, and the rule with one example that passes and one that fails. Ten to fifteen items; a longer list is a sign
+  two lists are being asked for. Read by the operator as M60's stage 0 list was, since the list is what the feature is.
+- **Stage 1, the reminder.** `paths.checklist`, private, a Markdown file: one `## <id>` heading per item, an optional
+  `paths:` line of globs compared as `high_impact_paths` are (§21), an optional `severity:` line stage 3 reads, then
+  the rule. Bounded at 16 KiB, refused with hidden characters as a persona is, and parsed by the harness for its ids,
+  so a result can be held to them. Before a worker run that may push starts (`implement`, `resume`, public and
+  private, and a task's), the harness writes the list to the run's answers directory (§41), beside where an answer
+  goes. canopy's plugin gains a job, in the same file as the clock, the nudge, and the answer: after a tool call whose
+  input runs `git push`, in a run `CANOPY_RUN_ID` names as a worker's, it reads the file and adds a `[canopy]` line
+  and the list to the call's result, where the clock's line goes, asking the worker to diff its branch against the
+  base, hold each item to the diff, fix what fails and push again, and answer each item in `checklist` in its result.
+  It reminds once per stretch of work: not again within a number of tool calls of the last reminder, so a fix pushed
+  right after is not reminded twice, and again after a long stretch. The worker prompts gain a sentence saying the
+  reminder may come and what `checklist` holds; the result contract gains it, validated: per item, `pass`, `fixed`,
+  `held` with a `reason`, or `n/a`; an item the list does not hold is dropped, and a reminded run with no `checklist`
+  is recorded unanswered. `canopy show-run` and the run's page show the answers; `canopy checklist` (and a web UI
+  view) counts per item reminded, pass, fixed, held, and unanswered, over a period. No attention item.
+- **Stage 2, the measurement.** Two weeks of real use in `MEASUREMENTS.md`: per item, the counts above, and the nits
+  of that item that still reached a human reviewer's comment on canopy's PRs, counted by the operator from the PRs. An
+  item mostly `n/a` or never failing is reworded or dropped; an item often `held` is argued with the architect. The
+  measurement says whether stage 3 is needed, and for which items.
+- **Stage 3, the review, if stage 2 says so.** `checklist.review = true` turns on a checklist review (§42, The
+  review): a review run of a new kind, `adversarial` or `checklist`, a `core/vocab.py` enum with its `CHECK`, owed
+  wherever an adversarial review is and started by the same `canopy review run` and `canopy start URL --review`, as
+  a persona's is, so the overseer's prompt changes by a line at most. A prompt, `checklist.md`, and a definition,
+  `canopy-checklist.md`, each in `.agents/sizes.toml`: the reviewer's definition with every MCP server denied but
+  canopy's git tools and the `status` tool, no persona, no standing instructions. The prompt carries the diff's range,
+  the items whose paths the diff touches, and the previous checklist review of the PR with the worker's answers, as
+  the reviewer's does. `runtime.models.checklist`, defaulting to the reviewer's model. The result per item in §42,
+  validated; the harness builds each `fail`'s findings with the item's title and severity. `canopy review show` and
+  the review's page show the items as a table; the noise count gains the item as a dimension; `review.eval_cases`
+  take `kind = "checklist"` with an `item` and its `lines`, scored by `canopy review eval --checklist`. The
+  `TRUST_MODEL` lines for it: T7 (one more private key), T1 (the list is the operator's instructions, the diff is
+  data, the definition writes nothing), T3 (one more run per reviewed commit under review capacity, `max_workers`,
+  and the daily limit, not the per-PR limit, and not retried on a commit).
+- **Rejected:** the list as standing instructions (the operator's already emphasize these rules, and workers miss
+  them; no record per item); a persona (it cannot narrow, §31); the review first (a run, a slot, and a `resume` per
+  commit before the cheaper ask is measured); one review run per item (as many leases per commit); the list read from
+  the repository (T1, T7); a reminder to the adversarial reviewer (its prompt already holds the repository's rules as
+  one input; the list's place there is the checklist review).
+- **TRUST_MODEL**, in the PR that builds stage 1: T1 (a forged `[canopy]` line can only ask the agent to check its own
+  diff against a list it already holds); T4 (the plugin reads one more file in the answers directory and writes
+  nothing); T7 (one more private path, listed with the others); T3 (unchanged: nothing on a reminder extends a run or
+  holds a slot).
+- **Tests with the fakes:** the plugin's own tests for the trigger (a push, not a fetch), its once-per-stretch rule,
+  the block's wording and its place in a built-in and an MCP result, and a missing or overlong file adding nothing; a
+  fake worker that pushes sees the list in that call's result and answers it, and its answers show on the run; a
+  result without `checklist` after a reminder is recorded unanswered; an unknown item is dropped; a list the harness
+  cannot read refuses `bad_prompt`, and a list in the workspace file is a config error; the overseer, a planner, a
+  reviewer, and a chore get no file; a sandboxed run reads the file and cannot write it (the sandbox's tests); the
+  counts per item; `test_prompt_sizes.py` for the prompts, `test_frozen.py` for the answer type, and `core/test_db.py`
+  and `test_records.py` for where the answers are kept.
+
+Accept: Stage 0's list read by the operator, before stage 1 starts. Live, once stage 1 is built: a worker on a toy
+ticket with a deliberate hit on two items is reminded in its push's result, as its transcript shows, fixes both, pushes
+again, and its run's page shows `fixed` on those and `pass` or `n/a` on the rest, before the PR is `green_unreviewed`;
+a sandboxed worker the same; and two weeks of real use are in `MEASUREMENTS.md` as stage 2 says, with the operator's
+call on stage 3 recorded on the `Status:` line.
+
+Status: not started. Designed 2026-10-29 (DESIGN §42); the operator chose the reminder over the review as the first
+stage the same day, on the evidence that standing instructions already emphasize these rules and workers miss them.

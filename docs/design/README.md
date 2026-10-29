@@ -122,9 +122,9 @@ not go in the middle of the sequence.
 - [Where a running agent stands](CARDS.md): the card a running worker, planner, or reviewer keeps of where its work
   stands, for the operator.
   - [41. Where a running agent stands](CARDS.md#41-where-a-running-agent-stands)
-- [Checklist reviews](CHECKLIST_REVIEWS.md): a second, narrower review that asks the operator's own questions of a
-  change, one at a time.
-  - [42. Checklist reviews](CHECKLIST_REVIEWS.md#42-checklist-reviews)
+- [The operator's checklist](CHECKLIST.md): the operator's rules no linter checks, asked of a worker's diff before
+  it finishes, and of a PR by a second review when that is not enough.
+  - [42. The operator's checklist](CHECKLIST.md#42-the-operators-checklist)
 
 ## 1. Problem
 
