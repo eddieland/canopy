@@ -243,6 +243,8 @@ grants another.
 
 Someone in `trust.trusted_reviewers`, whose review may send a worker back to a PR on its own say-so. Anyone else's
 waits as `untrusted review` for your word, and that includes canopy's own reviewer until you list `canopy:review`.
+While the PR's checks are still running, their review waits for them, so one worker can fix the build and the comments
+together, but only `policy.feedback_ci_wait_minutes` (30 by default): a backed-up CI queue doesn't get to hold it.
 
 ### Verdict
 

@@ -155,7 +155,7 @@ of `attention.md` and the `text` format, and the Slack sink escapes it (§20).
 | `running` | active `runs` row | wait |
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `conflicted` | PR open, GitHub reports it conflicts with its base | dispatch `resume` to bring the base in |
-| `ci_running` | PR open, checks pending | wait |
+| `ci_running` | PR open, checks pending, and no trusted feedback that waited out its time on them (below) | wait |
 | `ci_red` | PR open, checks failed, newer than cursor | dispatch `resume` for `ci`, with anything else the unit has (§8, One resume for what comes back to a PR); at the attempt limit, attention; in cooldown, wait; held for a notice, wait (§8); left by a worker as flaky, attention, or wait if the harness kicked it (§23) |
 | `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
 | `review_findings` | with `review.agent_prs` and `canopy:review` trusted: findings on the head's review, newer than the cursor | as comments (§7) |
@@ -172,6 +172,9 @@ from its cause (§14); the overseer records `wait` there.
 
 A PR's checks are its head commit's check runs and commit statuses. GitHub runs no checks on a PR that conflicts with
 its base, so `conflicted` comes before every CI and review phase; the `resume` attempt limit bounds its repeats (D030).
+Trusted feedback waits on pending checks, so one `resume` can carry a red build with it, but only
+`policy.feedback_ci_wait_minutes` from when a source first observed it: a queue of builds would otherwise hold it as long
+as the queue lasts. Past that the unit is not `ci_running`, and the poll that finds it so ends the loop's wait (§39).
 
 **Order.** Dispatches take capacity in this order, whoever decides them (§37): a review the operator requested; a human
 waiting (`human_replied`, `changes_requested`, `review_findings`); `conflicted` and `ci_red`; `pushed_no_pr`; the
