@@ -115,6 +115,8 @@ class Server[C, R]:
     failed: Callable[[str, Exception], str]
     #: Whether it lists its tools now; one that lists none still answers each call, which checks for itself.
     listing: Callable[[], bool] = lambda: True
+    #: How its tools fit together, which `initialize` gives a client to put before the model; None for nothing.
+    instructions: str | None = None
 
 
 def serve[C, R](lines: Iterable[bytes], write: Callable[[str], object], server: Server[C, R]) -> None:
@@ -275,11 +277,14 @@ def _read(line: bytes) -> _Message | None:
 def _initialize[C, R](params: Mapping[str, object], server: Server[C, R]) -> dict[str, object]:
     asked = _parsed(_Initialize, params)
     version = asked.protocol_version if asked.protocol_version in PROTOCOL_VERSIONS else PROTOCOL_VERSIONS[0]
-    return {
+    said: dict[str, object] = {
         "protocolVersion": version,
         "capabilities": {"tools": {"listChanged": False}},
         "serverInfo": {"name": server.name, "version": server.version},
     }
+    if server.instructions is not None:
+        said["instructions"] = server.instructions
+    return said
 
 
 def _call[C, R](params: Mapping[str, object], server: Server[C, R]) -> dict[str, object]:

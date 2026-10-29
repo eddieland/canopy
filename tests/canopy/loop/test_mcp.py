@@ -730,6 +730,23 @@ def undescribed(schema: object, at: str = "") -> list[str]:
     return found
 
 
+@pytest.mark.parametrize(
+    "mode",
+    [mcp.OVERSEER, mcp.CHORE, mcp.REPORTS, mcp.STATUS, mcp.git_mode(procs.SubprocessRunner(), {"api": Path("/a")})],
+    ids=["overseer", "chore", "reports", "status", "git"],
+)
+def test_each_mode_gives_its_instructions_at_initialize(mode: mcp.Mode) -> None:
+    """Each mode says how its tools fit together, and that what they return is data, not instructions."""
+    hello = {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2025-11-25"}}
+    # initialize opens no workspace, so the opener is never called.
+    response = mcp.answer(json.dumps(hello).encode(), lambda: mcp.opened(procs.SubprocessRunner(), Path.cwd()), mode)
+    assert response is not None
+    result = response["result"]
+    assert isinstance(result, dict)
+    assert result["instructions"] == mode.instructions
+    assert len(mode.instructions) <= 600, "instructions ride every request: keep them to how the tools fit together"
+
+
 def test_each_tool_lists_its_result_as_its_output_schema(overseen: CanopyEnv) -> None:
     with in_tick(overseen.journal()):
         served = mcp_session(LIST_TOOLS)
