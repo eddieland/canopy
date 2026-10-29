@@ -232,8 +232,11 @@ def state_section(
     """Return a ticket's plan for the overseer's state block, or None when plans do not touch it.
 
     A ticket that needs no plan, has none, and had no plan run has no `plan` key, so with `policy.plan` off the block
-    is as it was before plans (DESIGN §25).
+    is as it was before plans (DESIGN §25). Nor has a ticket with a branch, which is never planned (`ask`): its plan,
+    approved or never wanted, decides nothing the overseer does.
     """
+    if ticket.branch:
+        return None
     key = ticket.key
     needed_now = needed(policy.plan, ticket.plan_setting)
     newest = records.fetch_one(
