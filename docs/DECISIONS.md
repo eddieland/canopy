@@ -510,6 +510,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 - With `--chore` it serves a chore's run one tool, its own chore's history, and nothing of the overseer's (DESIGN §27).
 - With `--reports` it serves a chore's run canopy's read-only reports, and nothing of the overseer's (DESIGN §27).
 - With `--git NAME=PATH` it serves a review's or a plan's run read-only git in the checkouts the harness names, alone.
+- It and the local artifact store speak the protocol through one workspace member, `canopy-mcp`, never a copy each.
 - Rejected: the `mcp` SDK (a runtime dependency with its own async stack and HTTP transports, for five methods); any
   transport but stdio; tools for workers, whose results are read after they exit (DESIGN §27).
 - Revisit: if the overseer needs more of MCP than tools, or a runtime that cannot start a stdio server.

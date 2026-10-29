@@ -19,6 +19,7 @@ from canopy_github import (
     cut,
     error_types,
     items,
+    login,
     more,
     number,
     obj,
@@ -73,7 +74,7 @@ _PULL = (
     """
 fragment Pull on PullRequest {
   id url number title state isDraft headRefOid baseRefName mergeable mergeStateStatus
-  author { login }
+  author { __typename login }
   labels(first: 100) { pageInfo { hasNextPage endCursor } nodes { name } }
   reviews(first: 100) { pageInfo { hasNextPage endCursor } nodes { ...Review } }
   reviewThreads(first: 50) { pageInfo { hasNextPage endCursor } nodes { ...Thread } }
@@ -342,7 +343,7 @@ def _pr_line(ref: Ref, pr: Mapping[str, object], labels: Sequence[Mapping[str, o
         "draft": pr.get("isDraft") is True,
         "mergeable": mergeable.lower() if mergeable else None,
         "mergeable_state": merge_state.lower() if merge_state else None,
-        "author": _login(pr.get("author")),
+        "author": login(pr.get("author")),
         # The author's text, which canopy cuts and marks; for display only.
         "title": text(pr.get("title")),
         "labels": [name for label in labels if (name := text(label.get("name"))) is not None],
@@ -427,7 +428,7 @@ def _review(ref: Ref, node: Mapping[str, object]) -> Mapping[str, object]:
         "pr": ref.url,
         "id": number(node.get("fullDatabaseId")),
         "node": text(node.get("id")),
-        "author": _login(node.get("author")),
+        "author": login(node.get("author")),
         "bot": _bot(node.get("author")),
         "state": state.lower() if state else None,
         # A pending review has not been submitted.
@@ -465,7 +466,7 @@ def _comment(ref: Ref, where: Mapping[str, object], node: Mapping[str, object]) 
         "pr": ref.url,
         "id": number(node.get("fullDatabaseId")),
         "node": text(node.get("id")),
-        "author": _login(node.get("author")),
+        "author": login(node.get("author")),
         "bot": _bot(node.get("author")),
         "time": text(node.get("createdAt")),
         "body": cut(node.get("body")),
@@ -473,11 +474,6 @@ def _comment(ref: Ref, where: Mapping[str, object], node: Mapping[str, object]) 
         "review": number(obj(review, "review").get("fullDatabaseId")) if isinstance(review, dict) else None,
         "thread": dict(where),
     }
-
-
-def _login(author: object) -> str | None:
-    # A deleted account's content has no author.
-    return text(obj(author, "author").get("login")) if isinstance(author, dict) else None
 
 
 def _bot(author: object) -> bool:

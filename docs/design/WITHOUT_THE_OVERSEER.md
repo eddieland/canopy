@@ -48,7 +48,9 @@ grants: it has canopy's tools (§27), or its `canopy` commands until those reach
 - A stale or unobserved subject (§30) gets the harness's `wait`, naming what is old or that no source covers it,
   instead of a live read, and leaves §37's list of what the overseer is left. A stale one's source has raised
   `connector_failed` (§30), and the ticket moves again once a read is whole; an unobserved one is no outage, and the
-  wait says so. A dispatch resting on a stale one is still refused `stale` (§7).
+  wait says so. No read will ever end that wait, so the harness raises `unobserved_pr` about the unit (§14), naming
+  its URL, until the unit names a PR or the operator forgets the ticket's work. A dispatch resting on a stale one is
+  still refused `stale` (§7).
 - The tracker query is read by the `tracker` source alone, on its polls as M36 built them, and the harness records the
   latest whole read when §7 says the query is due, so no tick owes `canopy queried`. A query the source failed to read
   is `connector_failed`, and a ticket it would have found waits for the read that finds it.

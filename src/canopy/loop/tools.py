@@ -32,7 +32,6 @@ from pydantic import (
     Field,
     StrictBool,
     StrictInt,
-    ValidationError,
     WithJsonSchema,
     model_validator,
 )
@@ -87,24 +86,6 @@ STARTS_AFTER = "it starts once your run ends, if its guards still allow it"
 
 class Refused(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
     """A guard refused the call, or it came from outside a running tick. Its text is what the command prints."""
-
-
-def explain(error: ValidationError) -> str:
-    """Say what was wrong with a request, as the overseer reads it from a tool's error or a command's usage error.
-
-    It names each field and what was wrong with it, never pydantic's copy of the input; a check echoes a value only for
-    short, bounded fields, never free text, which may be a tracker's or a reviewer's.
-
-    Returns:
-        One line per problem: a rule across fields as its own sentence, a field's as `field: problem`.
-    """
-    lines: list[str] = []
-    for problem in error.errors(include_url=False, include_input=False):
-        where = ".".join(str(part) for part in problem["loc"])
-        cause = (problem.get("ctx") or {}).get("error")
-        what = str(cause) if problem["type"] == "value_error" and cause is not None else problem["msg"]
-        lines.append(f"{where}: {what}" if where else what)
-    return "\n".join(lines)
 
 
 # The bounds of what the overseer passes in, each as a check the click parameter types share.
@@ -348,7 +329,11 @@ class Dispatch(Request):
         RunKind,
         BeforeValidator(_known_kind),
         WithJsonSchema({"type": "string", "enum": list(policy.DISPATCH_KINDS)}),
-        Field(description="What the worker does."),
+        Field(
+            description="What the worker does: implement builds the ticket; resume carries on its PR for the reasons "
+            "named; plan writes a plan before its first implement; feedback-plan plans the answer to what came back "
+            "on a unit's PR, before the resume that acts on it.",
+        ),
     ]
     #: The queue label read on the ticket just now; none for a ticket the operator started.
     label: Annotated[
@@ -382,7 +367,12 @@ class Dispatch(Request):
     reasons: Annotated[
         tuple[ResumeReason, ...],
         _null_left_out(tuple, tuple[ResumeReason, ...] | None),
-        Field(description="resume only, and required for it: why it runs, each once."),
+        Field(
+            description="resume only, and required for it: why it runs, each once. ci: failed checks; review: review "
+            "feedback or a canopy review's findings; reply: an authorized reply or the operator's message; conflict: "
+            "the PR conflicts with its base; no_pr: the branch is pushed and has no PR; retarget: the PR's blocker "
+            "merged, so it targets the base branch again.",
+        ),
     ] = ()
     #: What the worker should read or do: links, comment ids, check names. Never quoted text.
     context: Annotated[
@@ -668,7 +658,14 @@ class Decide(Request):
     #: The ticket.
     key: Annotated[Key, Field(description="The ticket.")]
     #: What was decided.
-    action: Literal["wait", "skip", "done"]
+    action: Annotated[
+        Literal["wait", "skip", "done"],
+        Field(
+            description="wait: nothing to do until something changes, such as checks still running; skip: the loop "
+            "leaves the ticket alone, such as one not labeled, or one you would act on but may not; done: its work is "
+            "over, such as a closed ticket.",
+        ),
+    ]
     #: Why, in the overseer's own words.
     rationale: Annotated[Text, Field(description="Why, in your own words.")]
 
@@ -1126,7 +1123,7 @@ def _refuse_raised(
     Raises:
         Refused: `reason` is one the harness raises.
     """
-    if reason not in attention.FROM_CAUSES and reason != attention.CHECK_STUCK:
+    if reason not in attention.FROM_CAUSES | attention.ONLY_FROM_CAUSES:
         return
     why = f"the harness raises {reason} itself while its cause holds, and ends it when the cause is gone"
     db.record_decision(ctx.conn, tick_id, key, f"refused:{RAISED}", why, repo=repo, pr=pr)
