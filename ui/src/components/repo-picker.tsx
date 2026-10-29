@@ -1,22 +1,14 @@
-import { Check, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
-import type { ReactNode } from 'react'
 
-import { Button } from '@/components/ui/button'
-import {
-    Command,
-    CommandEmpty,
-    CommandInput,
-    CommandItem,
-    CommandList,
-    CommandSeparator,
-} from '@/components/ui/command'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { PickerButton, PickerItem, PickerList } from '@/components/picker'
+import { CommandSeparator } from '@/components/ui/command'
+import { Popover } from '@/components/ui/popover'
 import { reposSummary } from '@/lib/repo-filter'
-import { cn } from '@/lib/utils'
 
 // The item that stands for every repository: words no repository's name has, since a name holds no space.
 const EVERY = 'every repository'
+// What a repository picker's field and list are named, and what it says when what is typed leaves none.
+const REPOSITORIES = { find: 'Find a repository', label: 'Repositories', empty: 'no repository has that name' }
 
 /**
  * A filter by repository, for a workspace of any size (DESIGN.md, the repository picker): a button saying what is
@@ -59,21 +51,21 @@ export function RepoFilter({
             <PickerButton label={`Filter by repository: ${summary}`} quiet={chosen.length === 0}>
                 {summary}
             </PickerButton>
-            <PickerList>
-                <RepoItem value={EVERY} checked={chosen.length === 0} onSelect={() => onChoose([])}>
+            <PickerList {...REPOSITORIES}>
+                <PickerItem value={EVERY} checked={chosen.length === 0} onSelect={() => onChoose([])}>
                     {EVERY}
-                </RepoItem>
+                </PickerItem>
                 <CommandSeparator />
                 {first.map((r) => (
-                    <RepoItem key={r} value={r} checked={chosen.includes(r)} onSelect={() => toggle(r)}>
+                    <PickerItem key={r} value={r} checked={chosen.includes(r)} onSelect={() => toggle(r)}>
                         {r}
-                    </RepoItem>
+                    </PickerItem>
                 ))}
                 {first.length > 0 && rest.length > 0 && <CommandSeparator />}
                 {rest.map((r) => (
-                    <RepoItem key={r} value={r} checked={chosen.includes(r)} onSelect={() => toggle(r)}>
+                    <PickerItem key={r} value={r} checked={chosen.includes(r)} onSelect={() => toggle(r)}>
                         {r}
-                    </RepoItem>
+                    </PickerItem>
                 ))}
             </PickerList>
         </Popover>
@@ -109,9 +101,9 @@ export function RepoSelect({
             <PickerButton label={`${label}: ${summary}`} quiet={false}>
                 {summary}
             </PickerButton>
-            <PickerList>
+            <PickerList {...REPOSITORIES}>
                 {choices.map((name) => (
-                    <RepoItem
+                    <PickerItem
                         key={name ?? EVERY}
                         value={name ?? EVERY}
                         checked={name === value}
@@ -121,71 +113,9 @@ export function RepoSelect({
                         }}
                     >
                         {name ?? EVERY}
-                    </RepoItem>
+                    </PickerItem>
                 ))}
             </PickerList>
         </Popover>
-    )
-}
-
-/** The button that opens a picker, saying what is chosen; `quiet`, in `muted-foreground`, while it filters nothing. */
-function PickerButton({ label, quiet, children }: { label: string; quiet: boolean; children: ReactNode }) {
-    return (
-        <PopoverTrigger asChild>
-            <Button
-                variant="outline"
-                size="sm"
-                aria-label={label}
-                className={cn('max-w-64 font-mono text-xs font-normal', quiet && 'text-muted-foreground')}
-            >
-                <span className="truncate">{children}</span>
-                <ChevronDown aria-hidden className="size-3 text-muted-foreground" />
-            </Button>
-        </PopoverTrigger>
-    )
-}
-
-/** A picker's open list, under the field that narrows it, its width the widest of the button and 16rem. */
-function PickerList({ children }: { children: ReactNode }) {
-    return (
-        <PopoverContent align="start" className="w-auto max-w-80 min-w-(--radix-popover-trigger-width) p-0">
-            {/* What is typed is found anywhere in a name, as the page's own filter field finds words, rather than by
-                cmdk's fuzzy match, which would find `web` in worker-backend. */}
-            <Command label="Find a repository" filter={holds} className="min-w-64">
-                {/* cmdk names the field by the command's label, and the list by its own. */}
-                <CommandInput placeholder="Find a repository" />
-                <CommandList label="Repositories">
-                    <CommandEmpty>no repository has that name</CommandEmpty>
-                    {children}
-                </CommandList>
-            </Command>
-        </PopoverContent>
-    )
-}
-
-/** How an item ranks for what is typed in the field: 1 when its name holds it, else 0, which hides it. */
-function holds(value: string, search: string): number {
-    return value.includes(search.trim().toLowerCase()) ? 1 : 0
-}
-
-/** A repository in a picker's list, with a check at its left while it is chosen. */
-function RepoItem({
-    value,
-    checked,
-    onSelect,
-    children,
-}: {
-    value: string
-    checked: boolean
-    onSelect: () => void
-    children: ReactNode
-}) {
-    return (
-        <CommandItem value={value} onSelect={onSelect} aria-checked={checked} className="font-mono text-xs">
-            <span className="flex size-4 items-center justify-center">
-                {checked && <Check aria-hidden className="size-4 text-accent" />}
-            </span>
-            <span className="truncate">{children}</span>
-        </CommandItem>
     )
 }
