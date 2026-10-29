@@ -15,8 +15,9 @@ question is as old as the first card that asked it, and keeps the operator's ans
 cards after it ask it still.
 
 The answer reaches the running agent through a file canopy writes in the run's answers directory, which the run is
-told of in `CANOPY_ANSWERS` and may read but not write, sandboxed or not: canopy's plugin reads it on each tool call and
-tells the agent once (`.agents/plugins/canopy.js`).
+told of in `CANOPY_ANSWERS` and, sandboxed, may read but not write: canopy's plugin reads it on each tool call and tells
+the agent once (`.agents/plugins/canopy.js`). An unsandboxed run could write it, as it could any of the operator's
+files; what it wrote could only name one of its own options.
 """
 
 from __future__ import annotations
@@ -332,6 +333,8 @@ def deliver(path: Path, answered: Answered) -> bool:
         staged.replace(path / ANSWER_FILE)
     except FileNotFoundError:
         return False
+    finally:
+        staged.unlink(missing_ok=True)
     return True
 
 

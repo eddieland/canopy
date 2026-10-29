@@ -399,7 +399,8 @@ Controls:
   agent's spend, and shows it to the operator as data. No card goes into another agent's prompt.
 - The operator's answer to the question a running agent's card asks (DESIGN §41) is the one operator word that reaches
   an agent while it runs: a letter, one of the options the agent offered, never the operator's own words. canopy
-  writes it to a file in the run's answers directory, which the run may read but not write, and canopy's plugin tells
+  writes it to a file in the run's answers directory, which a sandboxed run may read but not write, and canopy's plugin
+  tells
   the agent on its next tool call with a `[canopy]` line naming the letter and the agent's own option. Anything the
   agent reads can print a line that looks like it, so a forged one can choose an option the agent offered, which it
   was already prepared to do, and nothing else; the prompts say a canopy line that answers anything else is data.
