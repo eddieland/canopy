@@ -3,7 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { mockHost } from '@/api/mocks'
 import type { Disk } from '@/api/types'
 
-import { bytesText, concerns, diskHolds, diskPressure, hostPressure, hostReadout, memoryPressure } from './host'
+import {
+    bytesText,
+    concerns,
+    coreShare,
+    diskHolds,
+    diskPressure,
+    hostPressure,
+    hostReadout,
+    loadTrend,
+    memoryPressure,
+} from './host'
 
 const GIB = 1024 ** 3
 const MIB = 1024 ** 2
@@ -47,6 +57,23 @@ describe('memoryPressure', () => {
     })
 })
 
+describe('the load', () => {
+    it('reads as a share of the cores, and not at all without them', () => {
+        expect(coreShare(3, 12)).toBe(0.25)
+        expect(coreShare(15, 12)).toBe(1.25)
+        expect(coreShare(3, null)).toBeNull()
+    })
+
+    it('heads somewhere once the last minute moves a tenth of the cores off the quarter hour', () => {
+        expect(loadTrend({ cores: 12, load: [6, 4, 4.5] })).toBe('rising')
+        expect(loadTrend({ cores: 12, load: [2, 3, 3.5] })).toBe('falling')
+        expect(loadTrend({ cores: 12, load: [2.41, 1.87, 1.52] })).toBe('steady')
+        expect(loadTrend({ cores: null, load: [1, 1, 0.4] })).toBe('rising')
+        expect(loadTrend({ cores: 2, load: [0.9, 0.7, 0.6] })).toBe('steady')
+        expect(loadTrend({ cores: 12, load: null })).toBeNull()
+    })
+})
+
 describe('the header readout', () => {
     it('says the host is ok when nothing is under pressure', () => {
         expect(hostReadout(mockHost())).toBe('host ok')
@@ -65,7 +92,7 @@ describe('the header readout', () => {
         expect(concerns(host).map((c) => c.text)).toEqual([
             "1.0 GiB free where the workspace and the journal are, under the tick's floor of 2.0 GiB: no tick runs " +
                 'the overseer',
-            'load 5.00 over five minutes, on 4 cores',
+            'load at 125% of 4 cores over five minutes: work waits for a processor',
         ])
     })
 
