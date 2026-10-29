@@ -96,7 +96,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M57. A clock for running agents](M57-a-clock-for-running-agents.md): in progress.
 - [M58. canopy chooses each agent's model](M58-canopy-chooses-the-workers-model.md): in progress.
 - [M59. Lessons edited, with their history](M59-lessons-edited-with-their-history.md): done 2026-10-29.
-- [M60. Personas](M60-personas.md): in progress.
+- [M60. Personas](M60-personas.md): done 2026-10-29.
 - [M61. One-off tasks](M61-one-off-tasks.md): in progress.
 - [M62. Artifacts, and comments on them back to the ticket](M62-artifacts.md): in progress.
 - [M63. Attachments on tickets and tasks](M63-attachments.md): in progress.
