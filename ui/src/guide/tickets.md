@@ -182,14 +182,15 @@ from the rest, and [the spend page](reports#the-spend-page) splits what each cos
 names the model it asked for while it works, then the model that served it, and both when they differ, on its page and
 in the ticket's Runs panel, so a ticket with an override reads straight down the panel and you can check it really ran
 on what you picked.
- Under each model sit the variants the runtime lists for it, in the runtime's order, `@high` and the like for a
-reasoning effort; the model's own row, marked **(default)**, is the effort it runs at when no variant is named. So the
-override you most likely want first, the same model at another effort, is one pick away, as `canopy model KEY
-openai/gpt-5@high` sets it: type `high` to see every model that has one, each named whole, and Enter takes the first. A
-variant on the button follows the model's id, muted. An override replaces your config's model whole, variant included:
-over a config of `openai/gpt-5@high`, picking `openai/gpt-5` itself runs it at the model's default, and the confirmation
-says config's
-variant no longer applies, lest the ticket come back mysteriously cheaper and you credit the model.
+
+Under each model sit the variants the runtime lists for it, in the runtime's order, `@high` and the like for a reasoning
+effort; the model's own row, marked **(default)**, is the effort it runs at when no variant is named. So the override
+you most likely want first, the same model at another effort, is one pick away, as
+`canopy model KEY openai/gpt-5@high` sets it: type `high` to see every model that has one, each named whole, and Enter
+takes the first. A variant on the button follows the model's id, muted. An override replaces your config's model whole,
+variant included: over a config of `openai/gpt-5@high`, picking `openai/gpt-5` itself runs it at the model's default,
+and the confirmation says config's variant no longer applies, lest the ticket come back mysteriously cheaper and you
+credit the model.
 
 The overseer and chores work on no one ticket, so they take only their model in `[runtime.models]`. If a model the
 override names drops off the runtime's list before the next run, that run is refused rather than sent to another
