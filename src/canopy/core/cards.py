@@ -176,7 +176,7 @@ class Question(BaseModel):
 
 
 class Card(BaseModel):
-    """The input of a `status` call, the agent's whole card: each call replaces the one before."""
+    """The input of a `status` call, an update of the agent's whole progress: each call replaces the one before."""
 
     model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
 
@@ -205,7 +205,7 @@ class Card(BaseModel):
     )
     question: Question | None = Field(
         default=None,
-        description="A decision you need from the operator and can work around meanwhile; keep it on each card until "
+        description="A decision you need from the operator and can work around meanwhile; keep it in each update until "
         "you have the answer or no longer need it, else omit it.",
     )
 
