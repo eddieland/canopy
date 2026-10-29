@@ -399,7 +399,7 @@ def _poster(config: Config, key: _Key) -> Source:
         Refused: (`no_post`) no source posts there.
     """
     source = config.connect.vcs() if key.pr is not None else config.connect.tracker()
-    if source is None or not notify_words(source.post_cmd):
+    if not notify_words(source.post_cmd):
         where = key.pr or f"{key.ticket}'s ticket"
         raise conversation.Refused("no_post", f"no [connect.sources] post_cmd posts to {where}")
     return source

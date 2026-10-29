@@ -26,6 +26,7 @@ from canopy.notify import message
 from canopy.runs import reconcile, task_starts, task_tickets, tasks
 from tests.canopy.helpers import (
     DEAD_PID,
+    KEY,
     InlineRunner,
     agent_runs,
     commit_and_push,
@@ -43,6 +44,7 @@ from tests.canopy.helpers import (
     running_run,
     tools_of,
     trailers_on,
+    waits,
     with_events,
     with_rebase,
 )
@@ -186,7 +188,8 @@ def test_a_queued_task_starts_on_the_next_live_tick_and_not_a_dry_one(scenario: 
     scenario.tick(dry_run=True)
     assert every_run(scenario.conn) == []
     with private_worker_does(*commit_and_push(BRANCH), result=DONE):
-        scenario.tick()
+        # A ticket left to the overseer, so it runs, and plans around the task's slot.
+        scenario.tick(*waits(KEY))
         [run] = every_run(scenario.conn)
         run = wait_for_task_run(scenario.conn, run.id)
     assert (run.status, run.branch, run.head) == (RunStatus.DONE, BRANCH, git_pool.remote_head(BRANCH))

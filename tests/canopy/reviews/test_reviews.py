@@ -68,7 +68,7 @@ from tests.conftest import CanopyEnv, GitPool, git
 
 
 def test_with_reviews_off_nothing_about_them_reaches_the_overseer(scenario: Scenario) -> None:
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits("PROJ-1"), dry_run=True)
     assert "reviews" not in scenario.state()
     [(action, _)] = scenario.refuses(reviews("a" * 40))
     assert action == "refused:reviews_off"

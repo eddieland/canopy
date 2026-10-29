@@ -23,8 +23,10 @@ from tests.canopy.helpers import (
     in_run,
     present,
     reads,
+    sources,
     thread,
     tick_reads,
+    tracker_holds,
 )
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
 from tests.conftest import executable
@@ -167,6 +169,7 @@ def test_a_comment_since_the_draft_refuses_the_send_once_and_names_it(scenario: 
 @pytest.mark.usefixtures("git_pool")
 def test_a_draft_that_waits_on_a_read_cannot_be_sent(scenario: Scenario, github_state: Path) -> None:
     scenario.configures("private", trust=APPROVE)
+    tracker_holds(scenario.conn)  # the sources read the world before GitHub goes down
     github_has(github_state, comment(501), down=True)
     run_id = scenario.run(dispatches(slug="work"), worker=sends_drafts([thread(501)])).id
     refused = scenario.operator("draft", "send", f"run:{run_id}", hashed(scenario.conn, run_id, 1), code=1)
@@ -583,7 +586,7 @@ def test_a_stage_that_names_no_id_for_a_reply_is_unconfirmed_not_staged(
     ]
     printed = "".join(f"print({json.dumps(json.dumps(line))})\n" for line in lines)
     poster = executable(tmp_path / "poster", f"#!/usr/bin/env python3\nimport sys\nsys.stdin.read()\n{printed}")
-    vcs = {"sources": {"github": {"kind": "vcs", "cmd": "canopy-connect-github", "post_cmd": str(poster)}}}
+    vcs = sources(github={"kind": "vcs", "cmd": "canopy-connect-github", "post_cmd": str(poster)})
     run_id = drafted_run(scenario, github_state, [thread(501)], vcs)
     scenario.operator("draft", "stage", f"run:{run_id}", hashed(conn, run_id, 1), code=1)
     [draft] = all_drafts(conn)

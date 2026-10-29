@@ -23,6 +23,7 @@ from tests.canopy.helpers import (
     present,
     slot_of,
     tick_starts,
+    tracker_holds,
     waits,
     worker_does,
 )
@@ -42,6 +43,7 @@ WORKER = (
 
 
 def dispatch(conn: sqlite3.Connection, runner: InlineRunner) -> int:
+    tracker_holds(conn)
     with in_tick(conn) as tick_id:
         args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
         assert main([*args, "--slug", "work"], runner=runner) == 0

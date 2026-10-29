@@ -28,6 +28,7 @@ from tests.canopy.helpers import (
     present,
     running_run,
     tick_starts,
+    tracker_holds,
     worker_does,
 )
 from tests.canopy.helpers import context as loop_context
@@ -88,6 +89,7 @@ def test_under_canopy_a_run_leases_from_canopy_s_pool_and_its_slot_goes_back_the
     use(canopy_env, "canopy")
     conn = ws.journal()
     runner = InlineRunner()
+    tracker_holds(conn)
     with worker_does(*commit_and_push(BRANCH)), in_tick(conn) as tick_id:
         assert main(implement("api"), runner=runner) == 0
         tick_starts(runner)
@@ -114,6 +116,7 @@ def test_a_lease_goes_back_to_the_pool_that_made_it_after_a_switch(
     seed_pools(ws, treehouse_state)
     conn = ws.journal()
     runner = InlineRunner()
+    tracker_holds(conn)
     with worker_does(*commit_and_push(BRANCH)), in_tick(conn) as tick_id:
         assert main(implement("api"), runner=runner) == 0
         tick_starts(runner)

@@ -254,6 +254,7 @@ def test_a_joint_resume_for_review_keeps_its_claim(ws_scenario: Scenario, ws: Ws
         db.set_unit(conn, KEY, str(ws.root), repo, pr_url=url)
         observe_pr(conn, url=url, at=ago())
     review(conn, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    observe_ticket(conn, at=ago())
     joint = ["dispatch", KEY, "--repo", "api", "--repo", "web", "--kind", "resume", "--label", LABEL]
     ws_scenario.overseer(*joint, "--reason", "review", dry_run=True)
 
@@ -400,17 +401,10 @@ def test_a_private_tickets_re_run_red_again_is_not_handled(observed: sqlite3.Con
 def test_an_unobserved_pr_keeps_its_ci_claim(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     # No source reads a PR of another host: what failed there, and whether a worker had it, stays the overseer's word.
     held(canopy_env, conn, KEY, at=ago(hours=1))
+    observe_ticket(conn, at=ago())
     with_unit(canopy_env, conn, KEY, pr="https://git.example.com/acme/repo/-/merge_requests/7")
     conn.execute("UPDATE ticket_units SET ci_cursor = 11")
     assert dispatched(conn, kind="resume", label=LABEL, reasons=["ci"], cursors={"ci": "12"})[0] == "dispatch:resume"
-
-
-def test_an_unobserved_ticket_keeps_its_claims(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    # No tracker source covers it: the label and the reply stay the overseer's word, as the worker checks again (D051).
-    held(canopy_env, conn, KEY, at=ago(hours=1))
-    with_unit(canopy_env, conn, KEY, pr=None)
-    found = dispatched(conn, kind="resume", label=LABEL, reasons=["reply"], cursors={"comment": "101"})
-    assert found[0] == "dispatch:resume"
 
 
 def test_a_resume_moves_each_cursor_of_its_reasons_to_the_newest_item_shown(observed: sqlite3.Connection) -> None:
@@ -643,15 +637,10 @@ def test_a_ticket_set_cursor_on_a_stale_subject_passes_nothing_new(
     assert reason.startswith(why)
 
 
-def test_a_ticket_set_on_a_private_or_unobserved_ticket_is_not_refused(
-    canopy_env: CanopyEnv,
-    conn: sqlite3.Connection,
-) -> None:
-    # No tracker source covers it: its cursor stays the overseer's word, as a dispatch's does.
+def test_a_ticket_set_on_a_private_ticket_is_not_refused(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    # Its start record authorizes it, whatever was observed of it (DESIGN §22).
     held(canopy_env, conn, KEY, at=ago(hours=1))
     with_unit(canopy_env, conn, KEY, pr=None)
-    assert ticket_set(conn, {"comment": "999", "ci": "77"}) == []
-    # Its start record authorizes a private one, whatever was observed of it (DESIGN §22).
     canopy_env.configure(canopy_env.user_file, TRACKER)
     observe_ticket(conn, at=ago(hours=1))
     assert operator("start", KEY) == 0

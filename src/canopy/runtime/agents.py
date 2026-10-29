@@ -101,8 +101,9 @@ class Rules:
     #: Each agent's temperature by name, None to set none and leave the model's own: some models, such as OpenAI's
     #: reasoning models, refuse a request that sets one. An agent not named keeps its file's marked line as it is.
     temperatures: Mapping[str, float | None]
-    #: The overseer's prompt, and the tracker's provider, whose shipped skill, if any, follows it.
+    #: The overseer's prompt.
     overseer_prompt: str
+    #: The tracker's provider, which says whether GitHub's issue tools are the tracker's.
     tracker_provider: str
     #: The commands config allows each agent beyond its own bash rules, by agent name: each a rule the runtime matches
     #: a command line against (`canopy.runtime.definitions.BASH_ALLOW_RE`). An agent not named gets none.
@@ -114,9 +115,6 @@ class Rules:
     models: Mapping[str, Model]
     #: The chores' own copies of `CHORE` by name (`chore_agent`), each rendered as `CHORE` is, then with its own model.
     chore_agents: Sequence[str]
-    #: Whether a `tracker` source reads tickets into the journal, beside the `vcs` source, which always runs: the
-    #: overseer then reads neither the tracker nor GitHub itself (DESIGN §39).
-    observes_all: bool
     #: The tracker's MCP server, as config or the provider's defaults name it, even with no read tools known; None when
     #: neither names one.
     tracker_server: str | None

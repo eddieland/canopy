@@ -11,7 +11,7 @@ import pytest
 from canopy.core import replies
 from canopy.core.vocab import DraftKind, DraftStance, DraftStatus, Reaction, ReplyMode
 from canopy.runs import drafts
-from tests.canopy.helpers import APPROVE, DRAFTS_PR, KEY, TRACKER_POSTS, all_drafts, present
+from tests.canopy.helpers import APPROVE, DRAFTS_PR, KEY, TRACKER_POSTS, all_drafts, present, tracker_holds
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
 
 if TYPE_CHECKING:
@@ -30,8 +30,12 @@ POST = {"review_replies": "post"}
 
 
 @pytest.fixture(autouse=True)
-def github_down(github_state: Path) -> None:
-    """GitHub cannot be reached, so the read after a run reads nothing and its drafts stay unchecked."""
+def github_down(github_state: Path, scenario: Scenario) -> None:
+    """GitHub cannot be reached, so the read after a run reads nothing and its drafts stay unchecked.
+
+    The sources read the world once before it goes down, so a dispatch rests on a fresh read of the branches.
+    """
+    tracker_holds(scenario.conn)
     github_state.write_text(json.dumps({"down": True}))
 
 

@@ -14,7 +14,7 @@ from canopy.core.config import ConfigError, PlannerApproval, load, render_comman
 from canopy.core.context import Context
 from canopy.loop import reread
 from canopy.runtime.implementation import Version
-from tests.conftest import HERMETIC_GIT, SHARED_TOML, CanopyEnv, git, user_toml
+from tests.conftest import HERMETIC_GIT, SHARED_TOML, TRACKER_SOURCE, TRACKER_TOML, CanopyEnv, git, user_toml
 
 #: A reviewer's command the operator set, without a private server.
 REVIEW_CMD = "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer"
@@ -674,23 +674,58 @@ def test_review_replies_and_the_vcs_source_default_to_drafting_and_canopys_own_p
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.trust.review_replies == "approve"
     assert cfg.connect.vcs() == config.Source(kind="vcs", cmd="canopy-connect-github", post_cmd="canopy-post-github")
-    assert cfg.connect.tracker() is None
-    assert list(cfg.connect.named()) == [config.DEFAULT_SOURCE]
+    assert list(cfg.connect.named()) == [TRACKER_SOURCE, config.DEFAULT_SOURCE]
     assert (cfg.connect.max_age_minutes, cfg.connect.every_minutes) == (30, 2)
 
 
 def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text().replace(TRACKER_TOML, ""))
     canopy_env.append_user(
         '\n[trust]\nreview_replies = "post"\n\n[connect.sources.ghe]\nkind = "vcs"\n'
         'cmd = "ghe-read --host ghe.example.com"\ntimeout_minutes = 5\n'
-        '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n',
+        '\n[connect.sources.issues]\nkind = "tracker"\ncmd = "canopy-connect-github --repo acme/api"\n'
+        'post_cmd = "canopy-post-github"\n',
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.trust.review_replies == "post"
     assert cfg.connect.vcs() == config.Source(kind="vcs", cmd="ghe-read --host ghe.example.com", timeout_minutes=5)
-    assert cfg.connect.tracker() == config.Source(kind="tracker", post_cmd="canopy-post-github")
-    # A tick runs only a source that reads: `issues` only posts.
-    assert list(cfg.connect.named()) == ["ghe"]
+    assert cfg.connect.tracker() == config.Source(
+        kind="tracker",
+        cmd="canopy-connect-github --repo acme/api",
+        post_cmd="canopy-post-github",
+    )
+    assert list(cfg.connect.named()) == ["issues", "ghe"]
+
+
+@pytest.mark.parametrize(
+    "toml",
+    [
+        pytest.param("", id="none"),
+        pytest.param('\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "post"\n', id="posts only"),
+        pytest.param('\n[connect.sources.ghe]\nkind = "vcs"\ncmd = "ghe-read"\n', id="a vcs source alone"),
+    ],
+)
+def test_a_workspace_with_no_tracker_source_that_reads_is_refused(canopy_env: CanopyEnv, toml: str) -> None:
+    """Config requires a tracker source with a cmd, since canopy reads no ticket any other way (DESIGN §30, §39)."""
+    canopy_env.write_user(canopy_env.user_file.read_text().replace(TRACKER_TOML, "") + toml)
+    with pytest.raises(ConfigError) as e:
+        load(canopy_env.root, canopy_env.user_file)
+    assert str(e.value) == f"connect: Value error, {config.TRACKER_REQUIRED}"
+    assert main(["status"]) == 2
+
+
+def test_a_private_files_sources_replace_the_user_files_so_they_name_the_tracker_source_too(
+    canopy_env: CanopyEnv,
+) -> None:
+    """`connect.sources` is one key: the private file's table replaces the user file's whole, its tracker source too."""
+    canopy_env.write_private('[connect.sources.ghe]\nkind = "vcs"\ncmd = "ghe-read"\n')
+    with pytest.raises(ConfigError, match="a tracker source is required"):
+        load(canopy_env.root, canopy_env.user_file)
+    canopy_env.write_private(
+        '[connect.sources.ghe]\nkind = "vcs"\ncmd = "ghe-read"\n'
+        '\n[connect.sources.jira]\nkind = "tracker"\ncmd = "canopy-connect-jira --site acme.atlassian.net"\n',
+    )
+    assert list(load(canopy_env.root, canopy_env.user_file).connect.named()) == ["jira", "ghe"]
 
 
 @pytest.mark.parametrize(
@@ -725,6 +760,7 @@ def test_a_level_planner_may_approve_does_not_have_is_refused(canopy_env: Canopy
 
 
 def test_a_tick_runs_the_tracker_then_the_vcs_then_the_artifacts_then_the_slack_source(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text().replace(TRACKER_TOML, ""))
     canopy_env.append_user(
         '\n[connect.sources.a-slack]\nkind = "slack"\ncmd = "canopy-connect-slack --channel C1"\noperators = ["U1A"]\n'
         '\n[connect.sources.a-feed]\nkind = "artifacts"\ncmd = "canopy-artifacts feed --store /s"\n'

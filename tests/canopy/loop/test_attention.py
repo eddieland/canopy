@@ -15,7 +15,7 @@ from canopy.core.config import ConfigError, load
 from canopy.core.vocab import Decider, ReviewRunStatus
 from canopy.loop import attention
 from tests.canopy.helpers import KEY, context, in_tick, messages, operator, seen, waits
-from tests.canopy.scenario_helpers import Scenario, raises, skips_tick
+from tests.canopy.scenario_helpers import Scenario, raises
 from tests.conftest import CanopyEnv
 
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
@@ -152,25 +152,6 @@ def test_a_failed_tick_leaves_the_list_and_notifies_nothing_new(
     scenario.tick(*recorded(("PROJ-3", "needs_author")))
     scenario.tick(result="gave up", code=1)
     assert "- PROJ-3, " in (canopy_env.state_dir / "attention.md").read_text()
-    assert len(messages(notified)) == 1
-
-
-def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
-    scenario: Scenario,
-    canopy_env: CanopyEnv,
-    notified: Path,
-) -> None:
-    scenario.tick(*recorded(("PROJ-3", "needs_author")), dry_run=True)
-    skipped = scenario.tick(skips_tick("mcp_unavailable: github"), dry_run=True, code=1)
-    assert skipped.printed.out == "tick 2: skipped: dry run; overseer skipped the tick: mcp_unavailable: github\n"
-
-    assert skipped.tick.status == "skipped"
-    assert scenario.attention() == [("PROJ-3", "needs_author")]
-    assert "- PROJ-3, " in (canopy_env.state_dir / "attention.md").read_text()
-    assert len(messages(notified)) == 1  # the first tick's; nothing resolved
-
-    # The overseer sees the world again and still records the item: it was never gone, so it is not new.
-    scenario.tick(*recorded(("PROJ-3", "needs_author")), dry_run=True)
     assert len(messages(notified)) == 1
 
 

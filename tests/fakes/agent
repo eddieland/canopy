@@ -16,7 +16,8 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
                         config names (OPENCODE_CONFIG_CONTENT), as OpenCode starts it: its command, in its cwd, with
                         the agent's whole environment. Stands in for an overseer calling `canopy_decide`, or a chore
                         `canopy_chore_history`. Default none. A call no server named answers fails as OpenCode's would.
-    FAKE_AGENT_QUERIED  for an overseer whose state block says `"query_due": true`: a JSON list of the ticket keys it
+    FAKE_AGENT_QUERIED  for an overseer whose state block says `"query_due": true` and shows no `fresh` query that
+                        canopy recorded for it: a JSON list of the ticket keys it
                         records before its commands, as the prompt's step 1 does once it has run the query: with the
                         `canopy_queried` tool, first, when it calls tools, else with `canopy queried`. Default `[]`, the
                         query found nothing open. `skip` records no query.
@@ -229,7 +230,10 @@ def prompt(argv: list[str]) -> str:
 
 
 def query_due(prompt: str) -> bool:
-    """Whether `prompt`, an overseer's state block, says the query is due: its JSON between the fences."""
+    """Whether `prompt`, an overseer's state block, says the query is due and is the overseer's to run.
+
+    Its JSON is between the fences. A query the block shows `fresh` canopy recorded from its source's read.
+    """
     _, fenced, rest = prompt.partition("```json\n")
     if not fenced:
         return False
@@ -237,7 +241,10 @@ def query_due(prompt: str) -> bool:
         state = json.loads(rest.partition("\n```")[0])
     except json.JSONDecodeError:
         return False
-    return isinstance(state, dict) and state.get("query_due") is True
+    if not isinstance(state, dict) or state.get("query_due") is not True:
+        return False
+    query = (state.get("observations") or {}).get("query") or {}
+    return query.get("observed") != "fresh"
 
 
 def events(argv: list[str]) -> bool:

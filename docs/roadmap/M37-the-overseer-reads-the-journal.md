@@ -136,5 +136,5 @@ the claims and their refusals, and cursors as journal numbers, §7's, with §8's
 to its open questions. TRUST_MODEL T1, T2 (`canopy-connect-jira`), and T7 (`connect.*` private, the widened query's
 residual left to "required") and D003 record what is built; D051 and D089 already had their code checks.
 Left: the live re-measurement.
-Open for the operator: whether a tracker with no connector keeps the live-read procedure or a `tracker` source is
-required (recommended: required), and how many new items a subject shows before the rest are counted.
+Settled by the operator (2026-10-28): a `tracker` source is required, and config requires one since M39
+(2026-10-29). Open for the operator: how many new items a subject shows before the rest are counted.

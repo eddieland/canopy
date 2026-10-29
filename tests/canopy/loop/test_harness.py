@@ -20,6 +20,8 @@ from canopy.loop import attention, harness, phases
 from tests.canopy.helpers import (
     KEY,
     LABEL,
+    UNOBSERVED,
+    WORKER_PR,
     context,
     decisions,
     in_tick,
@@ -43,7 +45,7 @@ from tests.canopy.observation_helpers import (
     observe_ticket,
     query_read,
 )
-from tests.canopy.scenario_helpers import dispatches, raises
+from tests.canopy.scenario_helpers import dispatches, pushes, raises
 
 if TYPE_CHECKING:
     import sqlite3
@@ -177,16 +179,6 @@ def test_a_ticket_marked_done_is_not_waited_on_though_the_query_finds_it_stale(
     assert decided(canopy_env) == []
 
 
-def test_a_ticket_no_source_observes_is_left_to_the_overseer_to_read(
-    canopy_env: CanopyEnv,
-    conn: sqlite3.Connection,
-) -> None:
-    """With no `tracker` source the overseer still reads the tracker itself, so the harness does not wait it."""
-    held(canopy_env, conn, KEY)
-    conn.commit()
-    assert decided(canopy_env) == []
-
-
 @pytest.mark.parametrize(
     ("stale", "why"),
     [
@@ -211,28 +203,54 @@ def test_a_candidate_the_vcs_source_left_stale_is_the_harnesss_wait_naming_what_
     assert decided(canopy_env) == [expected]
 
 
-def test_a_closed_ticket_whose_pr_is_stale_is_left_to_the_overseer_to_mark_done(
+@pytest.mark.parametrize("running", [False, True])
+def test_a_candidate_whose_unit_names_no_pr_is_the_harnesss_wait_saying_no_source_reads_it(
     canopy_env: CanopyEnv,
     observed: sqlite3.Connection,
+    *,
+    running: bool,
 ) -> None:
-    """Marking it done reads nothing of GitHub's, so nothing waits on the `vcs` source (DESIGN §7)."""
-    db.set_unit(observed, KEY, str(canopy_env.root), "repo", pr_url=PR)
-    observed.execute("UPDATE observed_tickets SET state = 'closed'")
+    """No source reads such a URL, nor the overseer GitHub (DESIGN §39): no outage, and the wait says so."""
+    if running:
+        running_run(context(canopy_env), KEY, private=False)
+    db.set_unit(observed, KEY, str(canopy_env.root), "repo", pr_url=WORKER_PR)
     observed.commit()
-    assert decided(canopy_env) == []
+    assert decided(canopy_env) == [harness.Decision(KEY, None, "wait", UNOBSERVED)]
 
 
-def test_without_a_tracker_source_a_stale_pr_is_left_to_the_overseer_to_read(
+@pytest.mark.parametrize(
+    "held_at",
+    [pytest.param("2026-10-20T11:59:30.000Z", id="held-since"), pytest.param(None, id="found-by-the-query")],
+)
+def test_a_candidate_read_before_canopy_held_it_is_the_harnesss_wait_for_its_comments(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
+    held_at: str | None,
 ) -> None:
-    """The overseer still reads GitHub there, as it reads the tracker, so the harness does not wait it."""
-    assert operator("start", KEY) == 0
-    db.set_unit(conn, KEY, str(canopy_env.root), "repo", pr_url=PR)
-    observe_pr(conn, at=OLD)
+    """Comments are recorded only of a ticket canopy holds (DESIGN §30): read before that, it waits a read since."""
+    canopy_env.configure(canopy_env.user_file, TRACKER)
+    observe_ticket(conn)
+    if held_at is None:
+        query_read(conn, [KEY])
+    else:
+        held(canopy_env, conn, KEY, at=held_at)
     conn.commit()
-    [own, unit] = phases.derive(context(canopy_env), NOW)
-    assert (own.stale, unit.stale, unit.stale_vcs) == (None, f"{PR} last observed {OLD}", False)
+    why = (
+        f"stale: comments of {KEY} not observed since canopy first held it; it waits for the tracker source to read it"
+    )
+    assert decided(canopy_env) == [harness.Decision(KEY, None, "wait", f"{why} again")]
+
+
+@pytest.mark.parametrize("url", [pytest.param(PR, id="stale"), pytest.param(WORKER_PR, id="unobserved")])
+def test_a_closed_ticket_whose_pr_is_stale_or_unobserved_is_left_to_the_overseer_to_mark_done(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    url: str,
+) -> None:
+    """Marking it done reads nothing of GitHub's, so nothing waits on the `vcs` source (DESIGN §7)."""
+    db.set_unit(observed, KEY, str(canopy_env.root), "repo", pr_url=url)
+    observed.execute("UPDATE observed_tickets SET state = 'closed'")
+    observed.commit()
     assert decided(canopy_env) == []
 
 
@@ -405,6 +423,26 @@ def test_a_tick_leaves_a_running_ticket_to_the_harness_and_the_overseer_only_the
     # Its run ended: the ticket is the overseer's again.
     after = scenario.tick(*waits(KEY, "PROJ-2"))
     assert [d.decider for d in after.decisions if d.ticket_key == KEY] == [Decider.OVERSEER]
+
+
+def test_a_ticket_whose_pr_no_source_reads_waits_unlisted_until_the_operator_forgets_its_work(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """No source reads its PR, nor the overseer GitHub (DESIGN §39): the harness waits, saying so, and lists nothing."""
+    scenario.configures(tracker={"query_every_minutes": 60})
+    scenario.run(worker=pushes())
+    ticked = scenario.tick()
+    assert (ticked.tick.status, ticked.tick.overseer_ran) == (TickStatus.OK, False)
+    waited = [(d.ticket_key, d.action, d.rationale) for d in harness.recorded(scenario.conn, ticked.tick.id)]
+    assert waited == [(KEY, "wait", UNOBSERVED)]
+    assert scenario.attention() == []
+    # Its work forgotten, its unit goes with the PR, and the ticket is the overseer's again.
+    scenario.operator("forget", KEY)
+    again = scenario.tick(*waits(KEY))
+    assert again.tick.overseer_ran is True
+    assert harness.recorded(scenario.conn, again.tick.id) == []
+    assert [t["key"] for t in scenario.state()["observations"]["tickets"]] == [KEY]
 
 
 def test_an_item_the_overseer_raised_stands_while_the_harness_decides_its_ticket(

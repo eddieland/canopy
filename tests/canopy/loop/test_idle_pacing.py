@@ -7,6 +7,7 @@ the fake overseer on a fake clock, as `test_loop.py` does.
 import contextlib
 import json
 import os
+import re
 import sqlite3
 import sys
 from collections.abc import Callable
@@ -510,7 +511,8 @@ def test_idle_ticks_lengthen_the_wait_to_the_cap_and_a_change_resets_it(
         text = out.getvalue()
         assert "wait 1 minute after each tick ends, up to 4 minutes when idle" in text
         assert "idle 2, next tick in 4m at" in text
-        assert "attention 0  ·  next tick in 1m at" in text
+        # The line after a tick that ran the overseer names how its phases agreed with the derivation, then the wait.
+        assert re.search(r"attention 0  ·  derived [^\n]*  ·  next tick in 1m at", text)
         [started] = log_lines(canopy_env, "loop started")
         assert started["idle_max_minutes"] == 4
         assert [line["idle"] for line in log_lines(canopy_env, "loop waits")] == [False, True, True, False, True]
@@ -531,7 +533,8 @@ def test_the_cap_stays_the_cap_however_long_nothing_changes(
     agent_log: Path,
 ) -> None:
     loop_config(canopy_env, interval=1, cap=3)
-    with overseer_does():
+    # A ticket left to the overseer, so each tick runs it: idle pacing paces its runs alone (DESIGN §39).
+    with overseer_does(canopy("decide", KEY, "wait", "--rationale", "checks pending")):
         time = FakeTime()
         term, _ = console()
         repeat.run(

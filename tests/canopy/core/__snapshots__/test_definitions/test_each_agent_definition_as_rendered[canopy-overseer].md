@@ -35,39 +35,28 @@ permission:
     # canopy: bash allows
   # Nothing to plan across calls: a tick's work is its decisions, each recorded as it is made.
   todowrite: deny
-  # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents. With the
-  # tracker's skill in its body, canopy renders `"*": deny` at the marked line, last, so the tool is denied whole: the
-  # overseer has nothing to load. Otherwise the prompt has it load the skill by name, if there is one.
+  # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents. canopy
+  # renders `"*": deny` at the marked line, last, so the tool is denied whole: the overseer reads no tracker, so it has
+  # no skill to load (DESIGN §39).
   skill:
     "canopy": deny
     # The artifact store's skill is for the agents that publish to it (DESIGN §38).
     "canopy-artifacts": deny
     # canopy: skill rule
     "*": deny
-  # The overseer only reads the tracker (TRUST_MODEL T6). At the marked line canopy renders the tracker's server denied
-  # by a wildcard, then each of its read tools allowed by name: for GitHub, whose server it shares, the reads kept
-  # below. Off a GitHub tracker, GitHub's issue reads are denied first, and an allow after them reopens a read of the
-  # tracker's they match. The denials below come after, so no allow reopens a write they close. With no read tools
-  # known, the line stays as it is. Where a `tracker` source runs, beside the `vcs` source, the overseer reads neither
-  # (DESIGN §39): canopy renders there the GitHub reads kept below denied by pattern, and the tracker's server whole
-  # where it knows it.
+  # The overseer reads neither the tracker nor GitHub: the `tracker` source config requires and the `vcs` source read
+  # both for it (DESIGN §39, TRUST_MODEL T6). At the marked line canopy renders the GitHub reads kept below denied by
+  # pattern, and the tracker's server whole where it knows it. The denials below come after.
   # canopy: tracker reads
   "*issue_read*": deny
   "*list_issues*": deny
   "*search_issues*": deny
+  "*pull_request_read*": deny
+  "*list_pull_requests*": deny
+  "*search_pull_requests*": deny
+  "*list_branches*": deny
+  "*_get_me": deny
   "atlassian_*": deny
-  "atlassian_atlassianUserInfo": allow
-  "atlassian_getAccessibleAtlassianResources": allow
-  "atlassian_getJiraIssue": allow
-  "atlassian_getJiraIssueTypeMetaWithFields": allow
-  "atlassian_listJiraIssueChangelogs": allow
-  "atlassian_listJiraIssueComments": allow
-  "atlassian_listJiraIssueLinkTypes": allow
-  "atlassian_listJiraIssueRemoteIssueLinks": allow
-  "atlassian_listJiraProjectIssueTypesMetadata": allow
-  "atlassian_listJiraProjects": allow
-  "atlassian_lookupJiraAccountId": allow
-  "atlassian_searchJiraIssuesUsingJql": allow
   # GitHub's MCP tools are permissioned by name, `<server>_<tool>`, and the server's name is the operator's, so each
   # tool is denied by its own: OpenCode sends no tool a rule denies whole, which cuts each tick's request. Kept are the
   # reads the prompt makes, PRs (with their checks, reviews, comments, and merge state) and branches; issues, when they
@@ -829,65 +818,3 @@ around it. A field the tool cannot take records nothing: correct the call.
 
 In a dry run, `canopy_dispatch` records what it would have done and does nothing.
 Behave exactly as you would otherwise.
-
-The skill `tracker-jira` follows, given here so that you need not load it.
-
-# Jira for canopy agents
-
-What is specific to Jira as canopy's tracker. Where a tool named here differs from what your Atlassian MCP server
-exposes, use the closest equivalent.
-
-## Keys
-
-The ticket key is the Jira issue key as-is: `PROJ-123`.
-
-## Finding tickets
-
-`tracker.query` is JQL: run it through the server's JQL search tool. Atlassian remote MCP tools usually need a cloud
-id; if they ask for one, resolve it once per run from the accessible-resources tool and reuse it. The query only finds
-tickets: confirm the label is in each result's `labels` field before treating it as a candidate.
-
-## Closed
-
-A ticket is closed when its status category is Done. Do not match on status names; they differ per project and workflow.
-
-## Identities
-
-Comment authors are identified by `accountId`. Compare `trust.authorized_repliers` against it exactly. Display names
-and email addresses are not identities; two people can share a display name.
-
-## Labels
-
-Jira labels cannot contain spaces. Set them with the issue edit tool (on Atlassian's remote server, `editJiraIssue`
-with only `labels` in its fields), never with a command-line client, and pass no other field. Editing fields cannot
-change an issue's status; that takes a transition, which canopy agents never make. An edit may replace the whole list:
-read the current labels immediately before the edit, not earlier in the run, add or remove only the one you mean to,
-and write the full list back, dropping or re-adding no other label.
-
-When a label was added is in the issue changelog; if the server cannot read the changelog, use the timestamp of the
-worker's question comment.
-
-## Creating tickets
-
-Only an `implement` or `resume` worker creates issues, the follow-ups its prompt allows. Create each in the parent's
-project, with the parent's issue type unless that type cannot be created, with an empty `labels` field and no assignee.
-Link it to the parent with a "relates to" link, not as a subtask; a private ticket's worker, which has the create tool
-and no link tool, names the parent in the body instead, on a line of its own, `Part of <parent key>`. Order the new
-issues with "Blocks" links: the earlier one blocks the later one. The new issue's key is the key Jira returns.
-
-## Comments and ordering
-
-Order comments by their created timestamp, and use the comment id as the cursor. Write comments in plain text; the
-server converts them to Jira's format.
-
-## Blockers
-
-Blockers are issue links of type "Blocks", read from the inward side ("is blocked by"). A blocker is resolved when its
-status category is Done. Other link types ("relates to", "clones") and parent or subtask relations are not blockers.
-A blocker's PR is found on GitHub by its head branch, `<branch prefix><KEY>-*`, not from links in the issue.
-
-## Text that acts
-
-Jira smart commits run commands found in commit messages: `PROJ-123 #done`, `#resolve`, `#close`, `#comment`, `#time`,
-or any `#<transition-name>`. Never write `#` followed by a word after an issue key in a commit message, PR title, or PR
-body. Mention the key plainly (`PROJ-123: add retry to uploader`).

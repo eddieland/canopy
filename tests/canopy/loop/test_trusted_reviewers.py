@@ -136,7 +136,10 @@ def test_every_public_worker_hears_the_operator_with_the_question_a_reply_answer
     asked = db.latest_message_id(scenario.conn)
     message = reply(scenario, "Keep it until the client migrates.")
     reasons = [ResumeReason.REPLY] if kind == RunKind.RESUME else []
-    run = scenario.run(dispatches(kind=kind, reasons=reasons, context=f"Operator message {message}"), worker=pushes())
+    # A resume for the reply names it as what authorizes it (DESIGN §35).
+    cursors = {"message": str(message)} if kind == RunKind.RESUME else None
+    command = dispatches(kind=kind, reasons=reasons, context=f"Operator message {message}", cursors=cursors)
+    run = scenario.run(command, worker=pushes())
     prompt = run.prompt
     assert prompt.startswith(f"# canopy worker: {kind}")
     section = prompt.split("## Messages from the operator\n\n", 1)[1].split("\n\nThe operator wrote these", 1)[0]

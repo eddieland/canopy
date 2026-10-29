@@ -4,12 +4,13 @@ import json
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from unittest import mock
 
 from canopy.core import contract
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.notify import message
-from tests.canopy.helpers import KEY, WORKER_DONE, waits, worker_does
+from tests.canopy.helpers import KEY, READ_PR, WORKER_DONE, waits, worker_does
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes
 from tests.conftest import GitPool, git
 
@@ -78,13 +79,30 @@ def test_without_kicks_a_flaky_check_is_left_to_the_operator(scenario: Scenario,
 def test_a_flaky_check_is_kicked_onto_the_base_until_the_head_has_had_its_kicks(
     scenario: Scenario,
     git_pool: GitPool,
+    github_state: Path,
 ) -> None:
     scenario.configures(trust={"max_flaky_kicks": 2})
-    scenario.run(worker=pushes())
+    # A PR the `vcs` source reads, so the overseer is listed the ticket (DESIGN §39), read within the hour.
+    scenario.configures("private", connect={"max_age_minutes": 60})
+    scenario.run(worker=pushes(prs={"repo": READ_PR}))
+    run_ids = iter(range(77, 80))
+
+    def red_again() -> Ran:
+        """A tick reads a new head of the PR whose check failed, and a `resume` leaves the failure as flaky."""
+        run_id = next(run_ids)
+        failed = {"name": "unit-tests", "status": "completed", "conclusion": "failure", "run_id": run_id}
+        github_state.write_text(
+            json.dumps({"prs": {READ_PR: {"pr": {"head_sha": f"abc{run_id:04d}"}, "checks": [failed]}}}),
+        )
+        scenario.tick(*waits(KEY, rationale="its check failed"))
+        scenario.time_passes(minutes=31)
+        leaves = json.loads(LEAVES_FLAKY) | {"pr": READ_PR}
+        return scenario.run(resumes(ResumeReason.CI), worker=worker_does(result=json.dumps(leaves)))
+
     heads = [git_pool.remote_head(BRANCH)]
     for name in ("m1", "m2"):
         main_moves(git_pool, name)
-        kicked = leaves_flaky(scenario)
+        kicked = red_again()
         assert kicked.status == "done", harness_note(kicked)
         assert contract.stored_object(kicked.row["result_json"])["kicked"] == ["repo"]
         head = git_pool.remote_head(BRANCH)
@@ -98,7 +116,7 @@ def test_a_flaky_check_is_kicked_onto_the_base_until_the_head_has_had_its_kicks(
     assert scenario.ticket_state()["last_run"]["kicked"] == ["repo"]
 
     main_moves(git_pool, "m3")
-    spent = leaves_flaky(scenario)
+    spent = red_again()
     assert spent.status == "done"
     assert git_pool.remote_head(BRANCH) == heads[-1]
     assert f"repo: not kicked: {BRANCH} has had 2 kick(s) since its work was pushed" in harness_note(spent)

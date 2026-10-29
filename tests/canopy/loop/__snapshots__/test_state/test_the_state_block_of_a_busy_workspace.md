@@ -55,7 +55,7 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "title": "Retry flaky uploads",
       "phase": "ci_running",
       "cursors": {
-        "comment": "10001"
+        "comment": 3
       },
       "units": [
         {
@@ -230,14 +230,14 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
     "max_age_minutes": 30,
     "max_new_items": 10,
     "query": {
-      "observed": "unobserved",
-      "why": "no tracker source observes tickets"
+      "observed": "stale",
+      "why": "never read to its end"
     },
     "tickets": [
       {
         "key": "PROJ-1",
-        "observed": "unobserved",
-        "why": "no tracker source observes tickets",
+        "observed": "stale",
+        "why": "PROJ-1 never observed",
         "units": [
           {
             "repo": "repo",
@@ -248,8 +248,8 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       },
       {
         "key": "PROJ-4",
-        "observed": "unobserved",
-        "why": "no tracker source observes tickets",
+        "observed": "stale",
+        "why": "PROJ-4 never observed",
         "units": [
           {
             "repo": "repo",
@@ -260,11 +260,12 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       },
       {
         "key": "PROJ-6",
-        "observed": "unobserved",
-        "why": "no tracker source observes tickets",
+        "observed": "stale",
+        "why": "PROJ-6 never observed",
         "units": []
       }
-    ]
+    ],
+    "review_prs": []
   },
   "capacity": {
     "max_workers": 2,

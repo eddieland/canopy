@@ -180,6 +180,7 @@ from tests.canopy.helpers import (
     seen,
     state_block,
     tick_starts,
+    tracker_holds,
     wait_for_run,
     worker_does,
 )
@@ -620,6 +621,7 @@ class Scenario:
         command = command or dispatches()
         assert command[:2] == ["canopy", "dispatch"], command
         runner = runner or InlineRunner()
+        tracker_holds(self.conn, command[2])
         with ExitStack() as stack:
             if worker is not None:
                 stack.enter_context(_made_for(worker, command[2]))
@@ -650,6 +652,7 @@ class Scenario:
         """
         command = command or dispatches()
         assert command[:2] == ["canopy", "dispatch"], command
+        tracker_holds(self.conn, command[2])
         with ExitStack() as stack:
             if worker is not None:
                 stack.enter_context(_made_for(worker, command[2]))
@@ -776,6 +779,8 @@ class Scenario:
         """
         review = command[:3] in REVIEW_COMMANDS
         assert review or command[:2] == ["canopy", "dispatch"], command
+        if not review:
+            tracker_holds(self.conn, command[2])
         with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
             exited, printed = _printing(lambda: main(command[1:], runner=InlineRunner()))
             if exited == 0:
@@ -846,6 +851,9 @@ class Scenario:
             What it printed, as the overseer would read it.
         """
         command = shlex.join(["canopy", *args])
+        # A ticket it dispatches that the journal does not know yet, the tracker reads first, as `tick` has it.
+        if keys := [key for key in _dispatched([["canopy", *args]]) if db.get_ticket(self.conn, key) is None]:
+            tracker_holds(self.conn, *keys)
         with ExitStack() as stack:
             tick_id = self.open_tick
             if tick_id is None:
@@ -1306,11 +1314,7 @@ def _each_ticket(
     moves: Iterable[list[str] | Called],
 ) -> Iterator[None]:
     # Each ticket a move dispatches, and each `workers` names, gets its script made for it; a run reads its own.
-    dispatched = [
-        str(move.arguments["key"]) if isinstance(move, Called) else move[2]
-        for move in moves
-        if (move.name == "canopy_dispatch" if isinstance(move, Called) else move[:2] == ["canopy", "dispatch"])
-    ]
+    dispatched = _dispatched(moves)
     every = worker if isinstance(worker, Script) else None
     made = {
         key: script.for_ticket(key)
@@ -1321,6 +1325,15 @@ def _each_ticket(
     tickets = {key: dict(script.settings) for key, script in made.items()}
     with mock.patch.dict(os.environ, {"FAKE_WORKER_FOR": json.dumps(tickets)}):
         yield
+
+
+def _dispatched(moves: Iterable[list[str] | Called]) -> list[str]:
+    """The ticket each move that dispatches names, in order."""
+    return [
+        str(move.arguments["key"]) if isinstance(move, Called) else move[2]
+        for move in moves
+        if (move.name == "canopy_dispatch" if isinstance(move, Called) else move[:2] == ["canopy", "dispatch"])
+    ]
 
 
 def _made_for(worker: Worker, key: str) -> Worker:

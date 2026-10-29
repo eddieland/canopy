@@ -37,28 +37,33 @@ Run `canopy` from the workspace root or anywhere below it.
 
 The smallest setup: canopy works tickets in one repository.
 
-1. In an empty directory, run `canopy init` with the repository's HTTPS clone URL (add `--provider jira` or
-   `--provider github` to skip the question):
+1. In an empty directory, run `canopy init` (add `--provider jira` or `--provider github` to skip the question):
 
    ```sh
-   canopy init --provider jira https://github.com/acme/api.git
+   canopy init --provider jira
    ```
 
    It writes, overwriting nothing, `.canopy/config.toml`, the workspace's private config, yours alone, with a queue
-   label of your own (`agent-ready-<you>`); and, in the directory, `canopy-workspace.toml`, `MAP.md`, and a `.gitignore`
-   for what canopy keeps there. It clones the repository into `repos/api/` and prints the branch protection canopy
-   relies on. Run in a git checkout, init refuses: canopy keeps nothing in your repositories.
-2. In `canopy-workspace.toml`, set `tracker.query` to find candidate tickets and write a one-line `summary` under
+   label of your own (`agent-ready-<you>`) and a tracker source to fill in; and, in the directory,
+   `canopy-workspace.toml`, `MAP.md`, and a `.gitignore` for what canopy keeps there. Run in a git checkout, init
+   refuses: canopy keeps nothing in your repositories.
+2. In `.canopy/config.toml`, fill in your tracker source, the program that reads your tickets into the journal:
+   uncomment its table, and the `cmd` for Jira with your site, or for GitHub Issues with your repository (DESIGN §30).
+   canopy reads no ticket any other way, so the config does not load without one. Then clone the repository with its
+   HTTPS URL: `canopy workspace add https://github.com/acme/api.git` clones it into `repos/api/` and prints the
+   branch protection canopy relies on. Passed the URL, `canopy init` does the same once your user config names a
+   tracker source.
+3. In `canopy-workspace.toml`, set `tracker.query` to find candidate tickets and write a one-line `summary` under
    `[repos.api]`. Create the `needs-human` label in your tracker (or set `needs_human_label` to one you have).
    `examples/canopy-workspace.toml` is a full one. Commit the workspace to a repository of its own only if teammates
    share it.
-3. In `.canopy/config.toml`, add your tracker account id to `trust.authorized_repliers`, so your comments can unblock
+4. In `.canopy/config.toml`, add your tracker account id to `trust.authorized_repliers`, so your comments can unblock
    a ticket, and your GitHub login to `trust.trusted_reviewers`, so your review comments send a worker back to its PR.
    `examples/config.toml` lists every key with its default. What should hold in every workspace, such as the runtime
    templates, goes in `~/.config/canopy/config.toml` instead.
-4. Add your queue label to a ticket, then run `canopy loop --dry-run --ticks 1` in the workspace and read the plan it
+5. Add your queue label to a ticket, then run `canopy loop --dry-run --ticks 1` in the workspace and read the plan it
    prints. `canopy decisions` shows it again.
-5. Once you trust it, leave `canopy loop` running.
+6. Once you trust it, leave `canopy loop` running.
 
 Each run leases a slot (a git worktree of `repos/api/`) from the repository's pool under `.treehouse/`, works in it, and
 returns it. `capacity.max_workers` (2 by default) caps how many workers run at once.

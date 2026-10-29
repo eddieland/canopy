@@ -38,6 +38,8 @@ from tests.canopy.helpers import (
     overseer_does,
     present,
     running_run,
+    tracker_holds,
+    waits,
     with_events,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, raises
@@ -163,13 +165,13 @@ def test_a_transcript_names_each_calls_model_once_canopy_reads_a_session_two_mod
     # The fake overseer's two calls write replies `msg_1` and `msg_2`, which the session's record names the models of.
     served = [["anthropic", "claude-x", 0.25], ["openai", "gpt-y", 0.5]]
     opencode_state.write_text(json.dumps({"sessions": {"ses_fake": served}}))
-    tick_id = scenario.tick().tick.id
+    tick_id = scenario.tick(*waits(KEY)).tick.id
     c, _ = signed_in_client(ctx)
     steps = [e for e in c.get(f"/api/ticks/{tick_id}/transcript").json()["entries"] if e["kind"] == "step"]
     assert [s["model"] for s in steps] == ["anthropic/claude-x", "openai/gpt-y"]
     # One model's session names none: the tick's models name it.
     opencode_state.write_text(json.dumps({"sessions": {"ses_fake": [served[0], served[0]]}}))
-    tick_id = scenario.tick().tick.id
+    tick_id = scenario.tick(*waits(KEY)).tick.id
     steps = [e for e in c.get(f"/api/ticks/{tick_id}/transcript").json()["entries"] if e["kind"] == "step"]
     assert [s["model"] for s in steps] == [None, None]
 
@@ -1124,7 +1126,8 @@ def test_a_loop_that_serves_the_ui_links_its_notifications_to_it(
     serve_on(canopy_env, port, f"{moved}[notify.sinks.slack]\ncmd = '{sink_script} {out}'\n")
     secret.create(secret.path(), rotate=False)
     term, _ = console()
-    with overseer_does(raises(KEY, "needs_author")):
+    tracker_holds(canopy_env.journal())
+    with overseer_does(raises(KEY, "needs_author"), *waits(KEY)):
         statuses = repeat.run(
             context(canopy_env),
             dry_run=True,
