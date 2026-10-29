@@ -9,15 +9,7 @@ import type { AgentModel } from '@/api/types'
 import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-    CommandSeparator,
-} from '@/components/ui/command'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { failedText, MODEL_SOURCES, modelName, modelText } from '@/lib/outcomes'
 import { cn } from '@/lib/utils'
@@ -143,9 +135,10 @@ export function TicketModels({
 /**
  * The picker for one agent's model: the trigger names the model its next run goes to, its variant set apart, and
  * opens a list of the models the runtime lists under a field that narrows it, grouped by provider, each model's
- * variants under it, with the model chosen now pinned at the top and checked wherever it is, whatever sets it.
- * Picking one sets the ticket's override and closes the list; `Clear the override` at its foot, reachable whatever is
- * typed, clears it.
+ * variants under it in the runtime's order, with the model chosen now pinned at the top and checked wherever it is,
+ * whatever sets it. What is typed finds each row by its own id alone, the pinned one set aside, so a variant typed
+ * and Enter picks the first model at that variant. Picking one sets the ticket's override and closes the list;
+ * `Clear the override`, below the list rather than in it, so a long list never scrolls it away, clears it.
  */
 function ModelPicker({
     current,
@@ -159,6 +152,8 @@ function ModelPicker({
     onChoose: (model: string | null) => void
 }) {
     const [open, setOpen] = useState(false)
+    // What is typed in the field, which a variant's row reads to name its model when the model's own row is hidden.
+    const [search, setSearch] = useState('')
     // Read when the list opens, not before: each read starts the runtime.
     const listed = useQuery({ ...modelsQuery, enabled: open })
     const reading = listed.isPending || listed.isFetching
@@ -179,8 +174,14 @@ function ModelPicker({
         onChoose(model)
     }
 
+    function openChange(now: boolean) {
+        setOpen(now)
+        // Each opening starts from the whole list, as cmdk's own field does.
+        setSearch('')
+    }
+
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={openChange}>
             <PopoverTrigger asChild>
                 <Button
                     variant="outline"
@@ -211,29 +212,34 @@ function ModelPicker({
                     cmdk's fuzzy match, which would find `opus` in openai/gpt-5-plus. */}
                 <Command label={`Find a model for the ${current.agent}`} filter={holds} className="min-w-72">
                     {/* cmdk names the field by the command's label, and the list by its own. */}
-                    <CommandInput placeholder="Find a model" />
+                    <CommandInput placeholder="Find a model" value={search} onValueChange={setSearch} />
                     <CommandList label="Models">
                         {models !== undefined && <CommandEmpty>no model has that name</CommandEmpty>}
-                        <CommandGroup heading="Chosen now">
-                            {/* Pinned, so a long list keeps it in reach: the id, then where it comes from, or why it
-                                cannot be chosen again. The runtime's default is a state, not a choice. */}
-                            <ModelItem
-                                value="current"
-                                keywords={[current.model ?? MODEL_SOURCES.default]}
-                                checked={current.model !== null}
-                                disabled={current.model === null || refusal !== null}
-                                title={refusal ?? undefined}
-                                // An override chosen again is the same override: nothing to save.
-                                onSelect={() => (current.source === 'ticket' ? setOpen(false) : choose(current.model))}
-                            >
-                                <span className={cn(current.model === null && 'font-sans text-muted-foreground')}>
-                                    {modelName(current.model)}
-                                </span>
-                                <span className="font-sans text-muted-foreground">
-                                    {refusal ?? sourceOf(current.source)}
-                                </span>
-                            </ModelItem>
-                        </CommandGroup>
+                        {/* Pinned, so a long list keeps it in reach: the id, then where it comes from, or why it
+                            cannot be chosen again. The runtime's default is a state, not a choice. Set aside while
+                            something is typed, which finds the model chosen in its provider's group, so Enter takes
+                            what was typed for. */}
+                        {search.trim() === '' && (
+                            <CommandGroup heading="Chosen now">
+                                <ModelItem
+                                    value="current"
+                                    checked={current.model !== null}
+                                    disabled={current.model === null || refusal !== null}
+                                    title={refusal ?? undefined}
+                                    // An override chosen again is the same override: nothing to save.
+                                    onSelect={() =>
+                                        current.source === 'ticket' ? setOpen(false) : choose(current.model)
+                                    }
+                                >
+                                    <span className={cn(current.model === null && 'font-sans text-muted-foreground')}>
+                                        {modelName(current.model)}
+                                    </span>
+                                    <span className="font-sans text-muted-foreground">
+                                        {refusal ?? sourceOf(current.source)}
+                                    </span>
+                                </ModelItem>
+                            </CommandGroup>
+                        )}
                         {reading && (
                             <p className="px-2 py-1.5 text-sm text-muted-foreground">
                                 Reading the runtime&apos;s models…
@@ -254,16 +260,22 @@ function ModelPicker({
                             <CommandGroup key={provider} heading={provider}>
                                 {ids.flatMap((model) => {
                                     const each = (variants[model] ?? []).map((v) => `${model}@${v}`)
+                                    // A variant found by what is typed, its model not, names its model to the eye too.
+                                    const alone = holds(model, search) === 0
                                     return [
-                                        // Found by its variants too, so a variant found keeps its model above it.
+                                        // Found by its own id alone: a variant typed then finds the variant's row
+                                        // first, so Enter takes it rather than the model at its default.
                                         <ModelItem
                                             key={model}
                                             value={model}
-                                            keywords={each}
                                             checked={model === current.model}
                                             onSelect={() => choose(model)}
+                                            label={each.length === 0 ? undefined : `${model} (default)`}
                                         >
                                             {model}
+                                            {each.length > 0 && (
+                                                <span className="font-sans text-muted-foreground">(default)</span>
+                                            )}
                                         </ModelItem>,
                                         ...each.map((atVariant) => (
                                             <ModelItem
@@ -275,24 +287,34 @@ function ModelPicker({
                                                 label={atVariant}
                                                 className="pl-6"
                                             >
-                                                {atVariant.slice(model.length)}
+                                                {alone ? (
+                                                    <span>
+                                                        <span className="text-muted-foreground">{model}</span>
+                                                        {atVariant.slice(model.length)}
+                                                    </span>
+                                                ) : (
+                                                    atVariant.slice(model.length)
+                                                )}
                                             </ModelItem>
                                         )),
                                     ]
                                 })}
                             </CommandGroup>
                         ))}
-                        <CommandSeparator alwaysRender />
-                        <CommandItem
-                            forceMount
-                            value="clear the override"
-                            disabled={current.source !== 'ticket'}
-                            onSelect={() => choose(null)}
-                        >
-                            Clear the override
-                        </CommandItem>
                     </CommandList>
                 </Command>
+                {/* Out of the list, so it stays in sight however far the list scrolls; a Tab from the field. */}
+                <div className="border-t border-border p-1">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={current.source !== 'ticket'}
+                        onClick={() => choose(null)}
+                        className="w-full justify-start font-normal"
+                    >
+                        Clear the override
+                    </Button>
+                </div>
             </PopoverContent>
         </Popover>
     )
@@ -301,7 +323,6 @@ function ModelPicker({
 /** A model in the picker's list, with a check at its left while it is the one chosen now. */
 function ModelItem({
     value,
-    keywords,
     checked,
     disabled,
     title,
@@ -311,7 +332,6 @@ function ModelItem({
     children,
 }: {
     value: string
-    keywords?: string[]
     checked: boolean
     disabled?: boolean
     title?: string
@@ -323,7 +343,6 @@ function ModelItem({
     return (
         <CommandItem
             value={value}
-            keywords={keywords}
             disabled={disabled}
             title={title}
             onSelect={onSelect}
@@ -357,10 +376,9 @@ function sourceOf(source: AgentModel['source']): string {
     return source === 'default' ? 'nothing sets one' : MODEL_SOURCES[source]
 }
 
-/** How an item ranks for what is typed in the field: 1 when its id, or a keyword, holds it, else 0, which hides it. */
-function holds(value: string, search: string, keywords?: string[]): number {
-    const typed = search.trim().toLowerCase()
-    return [value, ...(keywords ?? [])].some((word) => word.toLowerCase().includes(typed)) ? 1 : 0
+/** How an item ranks for what is typed in the field: 1 when its id holds it, else 0, which hides it. */
+function holds(value: string, search: string): number {
+    return value.toLowerCase().includes(search.trim().toLowerCase()) ? 1 : 0
 }
 
 /** The models by provider, the part of `provider/model` before the slash, each group in the list's own order. */

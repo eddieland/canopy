@@ -32,5 +32,6 @@ def model_list(
     """
     with backend.open() as ctx:
         found = backend.model_list(ctx, refresh=refresh)
-    variants = {model: sorted(found.variants[model]) for model in sorted(found.variants) if found.variants[model]}
+    # Each model's variants in the order the runtime lists them, as a picker offers them.
+    variants = {model: list(found.variants[model]) for model in sorted(found.variants) if found.variants[model]}
     return ModelList(models=sorted(found.models), variants=variants, error=found.error)

@@ -246,8 +246,9 @@ class ModelList:
 
     #: Each model, as `provider/model`; empty when the list could not be read, and when the runtime lists none.
     models: AbstractSet[str] = frozenset()
-    #: The variants each model lists, by model, when they were asked for; a model with none maps to an empty set.
-    variants: Mapping[str, AbstractSet[str]] = field(default_factory=dict)
+    #: The variants each model lists, by model, in the runtime's order, when they were asked for; a model with none
+    #: maps to an empty sequence.
+    variants: Mapping[str, Sequence[str]] = field(default_factory=dict)
     #: Why the list could not be read, in canopy's words, never what the runtime printed; None when it was read.
     error: str | None = None
 

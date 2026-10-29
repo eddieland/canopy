@@ -169,24 +169,27 @@ keeps the list it read for five minutes, or until the loop reads its config agai
 moment to fill, and the next ones don't. A runtime with a gateway or two behind it lists hundreds, so they come grouped
 by provider under a field that narrows them to the ids holding what you type, and the model chosen now is pinned at the
 top, with where it comes from, and checked wherever it sits in the list, whether your config or this ticket set it. The
-arrow keys walk the list from the field and Enter picks. If the runtime can't answer, the picker says why in red and
-offers **Read again**; until it answers, the only thing you can do is clear the override, since canopy won't take a
-model it can't look up. Picking one saves it after checking it against that list, asked again first if the list lacks
-your pick, so a provider you set up a minute ago isn't turned away for being newer than the list. The button shows your
-pick with a trailing `…` until it's saved, then a green **saved** beside it, in the row itself so nothing below jumps.
-It stays until the ticket's models change again.
+arrow keys walk the list from the field and Enter picks. While you type, the pinned row steps aside, so Enter takes the
+first id that holds what you typed, not the model you already have. If the runtime can't answer, the picker says why in
+red and offers **Read again**; until it answers, the only thing you can do is clear the override, since canopy won't
+take a model it can't look up. Picking one saves it after checking it against that list, asked again first if the list
+lacks your pick, so a provider you set up a minute ago isn't turned away for being newer than the list. The button shows
+your pick with a trailing `…` until it's saved, then a green **saved** beside it, in the row itself so nothing below
+jumps. It stays until the ticket's models change again.
 The override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
-**Clear the override**. That is the canary: one ticket on the new model, the rest on the one you trust, and
-[the spend page](reports#the-spend-page) splits what each cost by model once they ran. Each run names the model it
-asked for while it works, then the model that served it, and both when they differ, on its page and in the ticket's
-Runs panel, so a canary ticket reads straight down the panel and you can check the canary actually sang.
+**Clear the override**, below the list, where no amount of scrolling hides it. That is the canary: one ticket on the new
+model, the rest on the one you trust, and [the spend page](reports#the-spend-page) splits what each cost by model once
+they ran. Each run names the model it asked for while it works, then the model that served it, and both when they
+differ, on its page and in the ticket's Runs panel, so a canary ticket reads straight down the panel and you can check
+the canary actually sang.
 
-Under each model sit the variants the runtime lists for it, `@high` and the like for a reasoning effort, so the canary
-you most likely want first, the same model at another effort, is one pick away, as `canopy model KEY
-openai/gpt-5@high` sets it; type `high` to see every model that has one. A variant on the button follows the model's
-id, muted. An override replaces your config's model whole, variant included: over a config of `openai/gpt-5@high`,
-picking `openai/gpt-5` itself runs it at the model's default, and the confirmation says config's variant no longer
-applies, lest the canary come back mysteriously cheaper and you credit the model.
+Under each model sit the variants the runtime lists for it, in the runtime's order, `@high` and the like for a reasoning
+effort; the model's own row, marked **(default)**, is the effort it runs at when no variant is named. So the canary you
+most likely want first, the same model at another effort, is one pick away, as `canopy model KEY openai/gpt-5@high` sets
+it: type `high` to see every model that has one, each named whole, and Enter takes the first. A variant on the button
+follows the model's id, muted. An override replaces your config's model whole, variant included: over a config of
+`openai/gpt-5@high`, picking `openai/gpt-5` itself runs it at the model's default, and the confirmation says config's
+variant no longer applies, lest the canary come back mysteriously cheaper and you credit the model.
 
 The overseer and chores work on no one ticket, so they take only their model in `[runtime.models]`. If a model the
 override names drops off the runtime's list before the next run, that run is refused rather than sent to another

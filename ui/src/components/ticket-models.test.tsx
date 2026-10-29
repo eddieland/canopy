@@ -42,8 +42,8 @@ const MODELS: AgentModel[] = [
         last_served: 'acme/fast-1',
     },
 ]
-/** Each listed model's variants, as the server sends them: acme/fast-1 has none. */
-const VARIANTS = { 'acme/deep-2': ['high', 'low'] }
+/** Each listed model's variants, as the server sends them, in the runtime's order: acme/fast-1 has none. */
+const VARIANTS = { 'acme/deep-2': ['low', 'high'] }
 /** The planner on config's acme/deep-2 at its `high` variant. */
 const AT_HIGH: AgentModel = {
     agent: 'planner',
@@ -120,14 +120,19 @@ function pinned(list: HTMLElement): HTMLElement {
     return within(within(list).getByRole('group', { name: 'Chosen now' })).getByRole('option')
 }
 
-/** The models the list offers, in order, under their providers: every option but the pinned one and the foot. */
+/** The models the list offers, in order, under their providers: every option but the pinned one. */
 async function offered(list: HTMLElement): Promise<HTMLElement[]> {
     // Once the runtime's list is read, or could not be.
     await waitFor(() => expect(within(list).queryByText(/^Reading the runtime/u)).toBeNull())
     // The pinned one is narrowed away too, when what is typed is not in it.
     const top = within(list).queryByRole('group', { name: 'Chosen now' })
     const options = within(list).getAllByRole('option')
-    return options.filter((o) => !top?.contains(o) && !['Clear the override', 'Read again'].includes(o.textContent))
+    return options.filter((o) => !top?.contains(o) && o.textContent !== 'Read again')
+}
+
+/** The button below the list that clears the ticket's override. */
+function clearButton(): HTMLElement {
+    return screen.getByRole('button', { name: 'Clear the override' })
 }
 
 /** What an option says: its label, as a model's variant under it has, else its text. */
@@ -166,9 +171,7 @@ describe('TicketModels', () => {
         // The default is pinned as a state, not a choice: nothing is checked while nothing sets a model.
         expect(readOption(pinned(list))).toEqual(['runtime defaultnothing sets one', 'false', 'true'])
         expect((await offered(list)).map((o) => o.getAttribute('aria-checked'))).toEqual(['false', 'false'])
-        expect(within(list).getByRole('option', { name: 'Clear the override' }).getAttribute('aria-disabled')).toBe(
-            'true',
-        )
+        expect(clearButton().hasAttribute('disabled')).toBe(true)
         fireEvent.click(within(list).getByRole('option', { name: 'acme/deep-2' }))
         expect(screen.queryByRole('listbox')).toBeNull()
         // Confirmed in the agent's row, which shows the choice before the ticket is read again.
@@ -197,8 +200,8 @@ describe('TicketModels', () => {
             Array.from({ length: 10 }, (_, i) => `charlie/model-4${i}`),
         )
         expect(within(list).queryByRole('group', { name: 'acme' })).toBeNull()
-        // The foot stays in reach whatever is typed.
-        expect(within(list).getByRole('option', { name: 'Clear the override' })).toBeDefined()
+        // Below the list, out of it, so in reach whatever is typed and however far the list scrolls.
+        expect(list.contains(clearButton())).toBe(false)
         fireEvent.change(field('reviewer'), { target: { value: 'nope' } })
         expect(within(list).getByText('no model has that name')).toBeDefined()
     })
@@ -263,7 +266,7 @@ describe('TicketModels', () => {
             last_served: null,
         })
         renderModels()
-        let list = openPicker('worker model: acme/deep-2')
+        const list = openPicker('worker model: acme/deep-2')
         expect(readOption(pinned(list))).toEqual(["acme/deep-2this ticket's override", 'true', 'false'])
         expect((await offered(list)).map((o) => readOption(o))).toEqual([
             ['acme/fast-1', 'false', 'false'],
@@ -273,8 +276,8 @@ describe('TicketModels', () => {
         expect(screen.queryByRole('listbox')).toBeNull()
         expect(sent.map((s) => s.method)).toEqual(['GET'])
 
-        list = openPicker('worker model: acme/deep-2')
-        fireEvent.click(within(list).getByRole('option', { name: 'Clear the override' }))
+        openPicker('worker model: acme/deep-2')
+        fireEvent.click(clearButton())
         expect((await screen.findByRole('status')).textContent).toBe(
             "saved: ABC-1's worker runs use the runtime's default from their next run: nothing sets one.",
         )
@@ -293,9 +296,7 @@ describe('TicketModels', () => {
         expect(await within(list).findByText('Could not read its models: `opencode models` exited 1')).toBeDefined()
         // Every choice would be refused `model_list_failed`: none is offered, but clearing needs no list.
         expect(await offered(list)).toEqual([])
-        expect(within(list).getByRole('option', { name: 'Clear the override' }).getAttribute('aria-disabled')).toBe(
-            'false',
-        )
+        expect(clearButton().hasAttribute('disabled')).toBe(false)
         listed = undefined
         fireEvent.click(within(list).getByRole('option', { name: 'Read again' }))
         await within(list).findByRole('group', { name: 'acme' })
@@ -342,17 +343,20 @@ describe('TicketModels', () => {
         renderModels()
         const list = openPicker('reviewer model: runtime default')
         const options = await offered(list)
+        // In the runtime's order, the model at its default first.
         expect(options.map((o) => said(o))).toEqual([
             'acme/fast-1',
-            'acme/deep-2',
-            'acme/deep-2@high',
+            'acme/deep-2 (default)',
             'acme/deep-2@low',
+            'acme/deep-2@high',
         ])
         // Each variant under its model, which it names to the eye no more.
-        expect(options.at(-1)?.textContent).toBe('@low')
-        // What is typed finds a variant, and keeps its model above it.
+        expect(options.at(-1)?.textContent).toBe('@high')
+        // What is typed finds a variant by its own id, and names its model with it, the model's row hidden.
         fireEvent.change(field('reviewer'), { target: { value: 'high' } })
-        expect((await offered(list)).map((o) => said(o))).toEqual(['acme/deep-2', 'acme/deep-2@high'])
+        expect((await offered(list)).map((o) => [said(o), o.textContent])).toEqual([
+            ['acme/deep-2@high', 'acme/deep-2@high'],
+        ])
         fireEvent.click(within(list).getByRole('option', { name: 'acme/deep-2@high' }))
         expect((await screen.findByRole('status')).textContent).toBe(
             "saved: ABC-1's reviewer runs use acme/deep-2@high from their next run: this ticket's override.",
@@ -364,6 +368,34 @@ describe('TicketModels', () => {
         })
     })
 
+    it('takes the first model at a variant typed when Enter is pressed, not a model at its default', async () => {
+        const many = ['acme/deep-2', 'acme/deep-3', 'bravo/wide-1']
+        listed = Response.json({
+            models: many,
+            variants: { 'acme/deep-2': ['low', 'high'], 'acme/deep-3': ['high'], 'bravo/wide-1': ['high'] },
+            error: null,
+        })
+        answer = Response.json({ ...AT_HIGH, source: 'ticket' })
+        // The planner on config's acme/deep-2 at high: what is typed passes the pinned model by.
+        renderModels([AT_HIGH])
+        const list = openPicker('planner model: acme/deep-2@high')
+        await offered(list)
+        fireEvent.change(field('planner'), { target: { value: 'high' } })
+        expect((await offered(list)).map((o) => said(o))).toEqual([
+            'acme/deep-2@high',
+            'acme/deep-3@high',
+            'bravo/wide-1@high',
+        ])
+        expect(within(list).queryByRole('group', { name: 'Chosen now' })).toBeNull()
+        fireEvent.keyDown(field('planner'), { key: 'Enter' })
+        expect((await screen.findByRole('status')).textContent).toMatch(/^saved: /u)
+        expect(sent.at(-1)?.body).toEqual({ agent: 'planner', model: 'acme/deep-2@high' })
+        // Opened again, the list is whole, the pinned model at its top.
+        const again = openPicker('planner model: acme/deep-2@high')
+        expect(field('planner')).toHaveProperty('value', '')
+        expect(within(again).getByRole('group', { name: 'Chosen now' })).toBeDefined()
+    })
+
     it("shows config's model at its variant, checked at that variant, and takes it whole as the override", async () => {
         listed = Response.json({ models: LISTED, variants: VARIANTS, error: null })
         answer = Response.json({ ...AT_HIGH, source: 'ticket' })
@@ -373,9 +405,9 @@ describe('TicketModels', () => {
         const list = openPicker('planner model: acme/deep-2@high')
         expect((await offered(list)).map((o) => readOption(o))).toEqual([
             ['acme/fast-1', 'false', 'false'],
-            ['acme/deep-2', 'false', 'false'],
-            ['acme/deep-2@high', 'true', 'false'],
+            ['acme/deep-2 (default)', 'false', 'false'],
             ['acme/deep-2@low', 'false', 'false'],
+            ['acme/deep-2@high', 'true', 'false'],
         ])
         expect(readOption(pinned(list))).toEqual(['acme/deep-2@high[runtime.models]', 'true', 'false'])
         fireEvent.click(pinned(list))
@@ -396,7 +428,7 @@ describe('TicketModels', () => {
         })
         renderModels([AT_HIGH])
         const list = openPicker('planner model: acme/deep-2@high')
-        fireEvent.click(await within(list).findByRole('option', { name: 'acme/deep-2' }))
+        fireEvent.click(await within(list).findByRole('option', { name: 'acme/deep-2 (default)' }))
         const status = await screen.findByRole('status')
         expect(within(status).getByText("ABC-1's", { exact: false }).textContent).toBe(
             ": ABC-1's planner runs use acme/deep-2 from their next run: this ticket's override (config's variant " +
