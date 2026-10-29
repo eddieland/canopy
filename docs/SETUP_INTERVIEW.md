@@ -42,7 +42,7 @@ are the ones you run.
 - **Never start the loop.** `canopy loop` without `--ticks` runs until Ctrl-C and would hang this session;
   `canopy daemon start` leaves it running. The one tick you may run is the dry one in stage 9, with the operator's
   go-ahead, because it spends a model call.
-- **Never run canopy's overseer tools**: `canopy dispatch`, `decide`, `queried`, `attention`, `ticket set`.
+- **Never run canopy's overseer tools**: `canopy dispatch`, `decide`, `attention`, `ticket set`.
   They refuse outside a tick by design.
 - **Keep agent config out of the workspace.** Do not write an `opencode.json`, `.opencode/`, or any other agent
   runtime's config into the workspace or the clones under `repos/`: the overseer runs there, and canopy refuses to start
@@ -214,9 +214,9 @@ well-described ticket. Then ask before you run, because the overseer spends a mo
 canopy loop --dry-run --ticks 1 --no-serve
 ```
 
-The overseer plans and dispatches nothing. Read the plan with them, and `canopy decisions`. A `skip` with
-`mcp_unavailable` means OpenCode lacks an MCP server (stage 4). A ticket missing from the plan usually means the query
-or the label does not find it. Fix what it shows and, with their go-ahead, run it again.
+The overseer plans and dispatches nothing. Read the plan with them, and `canopy decisions`. A `connector_failed`
+item means a source could not read (stage 4). A ticket missing from the plan usually means the query or the label does
+not find it. Fix what it shows and, with their go-ahead, run it again.
 
 ## 10. Hand over
 

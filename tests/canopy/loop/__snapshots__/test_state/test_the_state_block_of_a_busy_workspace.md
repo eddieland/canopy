@@ -284,7 +284,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "started_at": "2026-10-16T09:55:00.000Z"
     }
   ],
-  "query_due": false,
   "tick_id": 2,
   "now": "2026-10-16T10:00:00.000Z",
   "dry_run": true

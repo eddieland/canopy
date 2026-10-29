@@ -16,11 +16,6 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
                         config names (OPENCODE_CONFIG_CONTENT), as OpenCode starts it: its command, in its cwd, with
                         the agent's whole environment. Stands in for an overseer calling `canopy_decide`, or a chore
                         `canopy_chore_history`. Default none. A call no server named answers fails as OpenCode's would.
-    FAKE_AGENT_QUERIED  for an overseer whose state block says `"query_due": true` and shows no `fresh` query that
-                        canopy recorded for it: a JSON list of the ticket keys it
-                        records before its commands, as the prompt's step 1 does once it has run the query: with the
-                        `canopy_queried` tool, first, when it calls tools, else with `canopy queried`. Default `[]`, the
-                        query found nothing open. `skip` records no query.
     FAKE_AGENT_LOG      if set, a JSON object of "argv", "stdin", "cwd", "env", "tools", and "commands", on one line,
                         is appended to this file per run. `stdin` is what was piped to it, None from a terminal or
                         /dev/null, as `opencode run` takes a piped prompt. `env` holds the CANOPY_* and OPENCODE_*
@@ -103,7 +98,7 @@ def ticket_settings(argv: list[str]) -> dict[str, str]:
 
 def run_commands(argv: list[str]) -> list[dict[str, object]]:
     ran: list[dict[str, object]] = []
-    for command in [*queried(argv), *json.loads(setting(argv, "COMMANDS", "[]"))]:
+    for command in json.loads(setting(argv, "COMMANDS", "[]")):
         proc = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603  (argv from the test)
         ran.append({"argv": command, "returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})
         if events(argv):
@@ -114,32 +109,16 @@ def run_commands(argv: list[str]) -> list[dict[str, object]]:
     return ran
 
 
-def queried(argv: list[str]) -> list[list[str]]:
-    keys = queried_keys(argv)
-    return [] if keys is None or calls_tools(argv) else [["canopy", "queried", *keys]]
-
-
-def queried_keys(argv: list[str]) -> list[str] | None:
-    """The keys an overseer whose query is due records it found, or None when it records no query."""
-    found = setting(argv, "QUERIED", "[]")
-    if role(argv) != "OVERSEER" or found == "skip" or not query_due(prompt(argv)):
-        return None
-    keys: list[str] = json.loads(found)
-    return keys
-
-
 def calls_tools(argv: list[str]) -> bool:
     return bool(json.loads(setting(argv, "TOOLS", "[]")))
 
 
 def call_tools(argv: list[str]) -> list[dict[str, object]]:
-    """Call each tool the script names, the query's record first, through the server the inline config names for it.
+    """Call each tool the script names, through the server the inline config names for it.
 
     One session for each run of calls to the same server, as OpenCode keeps one open for the whole run.
     """
-    keys = queried_keys(argv) if calls_tools(argv) else None
-    calls: list[list[Any]] = [*([] if keys is None else [["canopy_queried", {"keys": keys}]])]
-    calls += json.loads(setting(argv, "TOOLS", "[]"))
+    calls: list[list[Any]] = json.loads(setting(argv, "TOOLS", "[]"))
     mcp: dict[str, Any] = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
     # OpenCode 2's shape, `mcp.servers`, or 1's, the servers by name under `mcp`.
     servers: dict[str, dict[str, Any]] = mcp["servers"] if isinstance(mcp.get("servers"), dict) else mcp
@@ -219,32 +198,6 @@ def piped() -> str | None:
     if sys.stdin.isatty():
         return None
     return sys.stdin.read() or None
-
-
-def prompt(argv: list[str]) -> str:
-    """Its message, for the state block it reads: what was piped, else its last argument, where templates place it."""
-    text = piped()
-    if text is None:
-        return argv[-1] if argv else ""
-    return text
-
-
-def query_due(prompt: str) -> bool:
-    """Whether `prompt`, an overseer's state block, says the query is due and is the overseer's to run.
-
-    Its JSON is between the fences. A query the block shows `fresh` canopy recorded from its source's read.
-    """
-    _, fenced, rest = prompt.partition("```json\n")
-    if not fenced:
-        return False
-    try:
-        state = json.loads(rest.partition("\n```")[0])
-    except json.JSONDecodeError:
-        return False
-    if not isinstance(state, dict) or state.get("query_due") is not True:
-        return False
-    query = (state.get("observations") or {}).get("query") or {}
-    return query.get("observed") != "fresh"
 
 
 def events(argv: list[str]) -> bool:

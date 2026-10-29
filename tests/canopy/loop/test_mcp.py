@@ -52,7 +52,6 @@ REQUESTED = "https://github.com/acme/api/pull/8"
 TOOL_NAMES = [
     "dispatch",
     "decide",
-    "queried",
     "attention",
     "ticket-set",
     "review-run",
@@ -386,24 +385,6 @@ def test_each_tool_records_what_its_command_records(
 
 REFUSALS = [
     pytest.param(
-        # The sources read the tracker and GitHub for it (DESIGN §39): it has no outage to skip a tick over.
-        Verb(
-            "decide",
-            {"decisions": [{"action": "skip", "rationale": "mcp_unavailable: the tracker"}]},
-            ["decide", "skip", "--rationale", "mcp_unavailable: the tracker"],
-        ),
-        "no tick is skipped 'mcp_unavailable'",
-        1,
-        id="decide-tick-wide",
-    ),
-    pytest.param(
-        # The `tracker` source reads the query, which canopy records itself (DESIGN §39).
-        Verb("queried", {"keys": ["PROJ-2", "PROJ-3"]}, ["queried", "PROJ-2", "PROJ-3"]),
-        "queried refused: a `tracker` source reads the query",
-        1,
-        id="queried",
-    ),
-    pytest.param(
         Verb(
             "decide",
             {"decisions": [{"key": "PROJ-1", "action": "wait", "rationale": "r"}]},
@@ -413,32 +394,6 @@ REFUSALS = [
         "no tick is running (CANOPY_TICK_ID is not set); the overseer's verbs run only inside one",
         1,
         id="no-tick",
-    ),
-    pytest.param(
-        Verb("decide", {"decisions": [{"action": "wait", "rationale": "r"}]}, ["decide", "wait", "--rationale", "r"]),
-        "'wait' needs a ticket key; only a tick-wide 'skip' may omit it",
-        2,
-        id="decide-without-a-key",
-    ),
-    pytest.param(
-        Verb(
-            "decide",
-            {"decisions": [{"action": "skip", "rationale": "relabel"}]},
-            ["decide", "skip", "--rationale", "relabel"],
-        ),
-        "a skip about one ticket names its key",
-        2,
-        id="decide-a-tick-wide-skip-without-its-reason",
-    ),
-    pytest.param(
-        Verb(
-            "decide",
-            {"decisions": [{"key": "PROJ-1", "action": "skip", "rationale": "mcp_unavailable: down"}]},
-            ["decide", "PROJ-1", "skip", "--rationale", "mcp_unavailable: down"],
-        ),
-        "'mcp_unavailable' skips the whole tick, so it names no key: leave key out",
-        2,
-        id="decide-a-tick-wide-reason-under-a-key",
     ),
     pytest.param(
         Verb(
@@ -464,22 +419,6 @@ REFUSALS = [
         "decide each ticket once in a call: PROJ-1 decided twice",
         2,
         id="decide-a-ticket-twice",
-    ),
-    pytest.param(
-        Verb(
-            "queried",
-            {"keys": [f"PROJ-{n}" for n in range(1000, 1300)]},
-            ["queried", *(f"PROJ-{n}" for n in range(1000, 1300))],
-        ),
-        "300 keys do not fit in one call: name them in several",
-        2,
-        id="queried-too-many",
-    ),
-    pytest.param(
-        Verb("queried", {"keys": ["PROJ 1"]}, ["queried", "PROJ 1"]),
-        "invalid ticket key 'PROJ 1': must match",
-        2,
-        id="queried-a-bad-key",
     ),
     pytest.param(
         Verb(
@@ -652,7 +591,7 @@ def test_a_refusal_is_a_tool_error_and_the_server_goes_on(overseen: CanopyEnv) -
             {"method": "resources/list"},
             {"method": "ping"},
         )
-    assert served.said(1) == ("decisions.0: 'wait' needs a ticket key; only a tick-wide 'skip' may omit it", True)
+    assert served.said(1) == ("decisions.0.key: Field required", True)
     # An unknown field is refused, not dropped: named, with nothing recorded for the call.
     assert served.said(2) == ("decisions.0.colour: Extra inputs are not permitted", True)
     assert served.said(3) == ("recorded wait for PROJ-1", False)
@@ -665,7 +604,7 @@ def test_a_refusal_is_a_tool_error_and_the_server_goes_on(overseen: CanopyEnv) -
 
 
 def test_a_batch_of_decisions_is_refused_whole_for_its_form(overseen: CanopyEnv) -> None:
-    """A tick-wide skip among other decisions, or no decision at all, records nothing."""
+    """A decision without its ticket among others, or no decision at all, records nothing."""
     conn = overseen.journal()
     with in_tick(conn) as tick_id:
         served = mcp_session(
@@ -678,10 +617,7 @@ def test_a_batch_of_decisions_is_refused_whole_for_its_form(overseen: CanopyEnv)
             ),
             tool_call("decide", decisions=[]),
         )
-    assert served.said(1) == (
-        "a skip with no key skips the whole tick, so it is the only decision in its call",
-        True,
-    )
+    assert served.said(1) == ("decisions.1.key: Field required", True)
     assert served.said(2) == ("name at least one decision", True)
     assert db.decisions_for_tick(conn, tick_id) == []
 

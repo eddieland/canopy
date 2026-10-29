@@ -14,8 +14,8 @@ A tick reads `running` while it works, and ends:
 
 - `ok`, the usual. Its summary starts `no overseer, nothing left to judge` when canopy's own decisions left the
   overseer nothing, so it didn't run and cost nothing (see [How the loop works](how-the-loop-works#ticks));
-- `skipped`, when the overseer couldn't see the world, such as an MCP server that wasn't there. It still did the
-  chores and whatever else needed nothing from the missing server, then left the attention list alone;
+- `skipped`, only on a tick from before canopy read the tracker for the overseer, when it couldn't see the world.
+  These days a source that's down is `connector_failed` on the attention list, and the overseer never notices;
 - `overseer failed`, when the overseer didn't finish its job, such as deciding about every ticket;
 - `canopy unavailable`, when the overseer couldn't run canopy at all, so nothing was decided;
 - `disk low`, when the disk had less free than `loop.min_free_disk_mib`, 2 GiB by default, so the overseer didn't run

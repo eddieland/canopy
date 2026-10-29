@@ -175,6 +175,8 @@ class Ticket(Row):
     phase: Phase | None
     # Fixed by its first implement, and the same in every unit.
     branch: str | None
+    #: The comment cursor of a ticket no `tracker` source observed, the tracker's comment id: unread since config
+    #: required one (DESIGN §39), and kept, since no migration drops a column.
     last_comment_id: str | None
     needs_human_since: str | None
     done: bool
@@ -190,8 +192,7 @@ class Ticket(Row):
     plan_setting: PlanSetting | None
     #: When it last changed: made, or its phase, title, done flag, plan setting, or a unit's phase or PR set anew.
     changed_at: str
-    #: The comment cursor, a journal number (DESIGN §35); `last_comment_id` holds it, a tracker's id, instead for a
-    #: ticket no tracker source observes.
+    #: The comment cursor, a journal number (DESIGN §35).
     comment_cursor: int | None
 
 

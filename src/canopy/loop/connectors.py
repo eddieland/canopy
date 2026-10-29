@@ -125,9 +125,9 @@ def vcs_request(ctx: Context) -> observe.Request:
     on a read of it (§29), a review's draft among them (§34), while a requested review's draft waits on the operator
     and no read has seen it merged or closed (§34), and while the reader last saw it open, so no PR's observation stays
     open unread once its ticket is done or forgotten. A PR with the operator's open review request is
-    watched too, so its review knows the branch it merges into (§21). Where a `tracker` source runs, so the overseer
-    reads no GitHub itself (§39), so is each PR the review query last found, which it reviews from the read. A PR that
-    is not a PR's URL cannot be read, so it is not asked about.
+    watched too, so its review knows the branch it merges into (§21). The overseer reads no GitHub itself (§39), so
+    each PR the review query last found is watched too, which it reviews from the read. A PR that is not a PR's URL
+    cannot be read, so it is not asked about.
 
     Returns:
         The request.
@@ -152,7 +152,7 @@ def vcs_request(ctx: Context) -> observe.Request:
         (r.pr_url for r in review_requests.open_requests(ctx.conn) if observe.is_pr_url(r.pr_url)),
     )
     query = ctx.config.review.query.strip()
-    if query and ctx.config.connect.observes_all():
+    if query:
         prs.update(pr for pr in _review_query_found(ctx.conn) if observe.is_pr_url(pr))
     return observe.Request(
         prs=sorted(prs),

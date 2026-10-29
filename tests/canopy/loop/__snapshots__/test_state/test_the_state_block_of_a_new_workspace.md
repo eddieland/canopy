@@ -62,7 +62,6 @@ This is a live tick.
     "available": 2
   },
   "running_workers": [],
-  "query_due": true,
   "tick_id": 1,
   "now": "2026-10-16T10:00:00.000Z",
   "dry_run": false

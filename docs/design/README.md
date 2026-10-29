@@ -160,7 +160,7 @@ cannot reach internal systems and require handing a vendor write access.
    treehouse owns worktrees and leases. The SQLite journal owns facts about the loop: what it saw, decided,
    dispatched, and what came back. What it saw is an observation, a dated copy of a world fact (§30), never the fact
    itself: an action that matters rests on one observed within `connect.max_age_minutes`, or no dispatch (§7), and a
-   subject no source observes is re-read live. Drift is then a stale cache, not a correctness bug.
+   stale one waits for the next whole read (§39). Drift is then a stale cache, not a correctness bug.
 2. **Policy in prompts, guards in code.** What to do about a ticket is decided
    by the overseer prompt. What the loop may never do (exceed capacity, run two
    workers on one ticket, merge, retry forever) is enforced by the harness.
@@ -239,11 +239,10 @@ Where later work goes:
 Roles:
 
 - **Harness**: schedules, locks, guards, journals, renders. Runs the overseer once per tick and workers on demand.
-- **Overseer**: an agent run with `overseer_cmd`. Reads the world from the state block's observations, and through MCP
-  only about a subject they leave stale or unobserved (§30), decides one next action per ticket, and acts only through
-  `canopy dispatch`, `canopy decide`, `canopy queried`, `canopy attention`, `canopy chore run`, `canopy chore wait`
-  (§19), `canopy review run`, and `canopy review wait` (§21). Read-only everywhere else. What it owes every tick is
-  checked when it ends (§6 step 5).
+- **Overseer**: an agent run with `overseer_cmd`. Reads the world from the state block's observations alone (§30, §39),
+  decides one next action per ticket, and acts only through `canopy dispatch`, `canopy decide`, `canopy attention`,
+  `canopy chore run`, `canopy chore wait` (§19), `canopy review run`, and `canopy review wait` (§21). Read-only
+  everywhere else. What it owes every tick is checked when it ends (§6 step 5).
 - **Worker**: an agent run with `worker_cmd` in a leased worktree with a task prompt. Writes code, pushes a branch,
   opens or updates a PR, comments on the ticket, prints a result line, exits. Never merges, approves, or moves a ticket
   to Done. A private ticket's worker runs with `private_worker_cmd` and writes nothing to the ticket (§22).

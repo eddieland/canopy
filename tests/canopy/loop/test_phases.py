@@ -669,7 +669,6 @@ def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
         canopy("decide", "PROJ-1", "wait", "--rationale", "waits on a human"),
         canopy("ticket", "set", "PROJ-2", "--phase", "needs_human"),
         canopy("decide", "PROJ-2", "wait", "--rationale", "waits on a human"),
-        queried=None,
     )
     tick_id = ticked.tick.id
     rows = records.fetch_all(

@@ -52,22 +52,18 @@ in order:
    environment alone (§27); they refuse unless it names a running tick (D020). Its output goes to a log only the
    operator can read, never to the journal. It succeeded if it exited 0 and a line of its final message (§13) is
    exactly `CANOPY_TICK_DONE`, which catches a run that exits 0 short of the last step; otherwise the tick closes
-   `overseer_failed`. A successful run that recorded a tick-wide skip, such as the tracker's MCP being down, closes the
-   tick `skipped`, which leaves the attention list standing, so an outage does not resolve and re-raise every item.
-   What it asked for before the skip still starts: an outage of one server does not hold work that needs nothing from
-   it (§15).
+   `overseer_failed`. Every decision is about a ticket: the overseer reads no server, so it has no outage to skip a
+   tick over (§39).
 
    Once its run ends, whatever it ended as, the tick starts every run it asked for, each recorded at the ask and none
    in its process tree, with the harness's own, in §7's order, each under its guards again (§8, §40). One the tick
    does not start is closed unstarted as it closes.
 
-   **The overseer's duties.** A successful run is then checked for what a tick owes: the query when it is due (§7),
-   unless a source read it fresh, when the harness records its result before the overseer runs; a decision for every
-   ticket in the block and every ticket the query returned, except those stopped, recently done, or decided by the
-   harness (§37); and a run, wait, or refusal for every chore due. A duty left undone closes the tick
-   `overseer_failed`, naming each, so the attention list stands and the query stays due; its dispatches still start.
-   Why: the prompt alone did not hold a cheaper overseer to the procedure, and a skipped query stalls new work with no
-   tick failing (MEASUREMENTS 2026-10-15). The check sees that a duty was done, not that it was done well.
+   **The overseer's duties.** A successful run is then checked for what a tick owes: a decision for every ticket in
+   the block and every ticket the query returned (§7), except those stopped, recently done, or decided by the harness
+   (§37); and a run, wait, or refusal for every chore due. A duty left undone closes the tick `overseer_failed`, naming
+   each, so the attention list stands; its dispatches still start. Why: the prompt alone did not hold a cheaper
+   overseer to the procedure (MEASUREMENTS 2026-10-15). The check sees that a duty was done, not that it was done well.
 
    In a dry run (D036), dispatch checks the live guards (§8) and starts nothing, no cursor advances, and nothing is
    marked done. What the overseer writes is rendered into a later prompt, so its tools validate its keys, verbs,
@@ -144,8 +140,8 @@ it was idle and what ended the wait before it, for spend (§11).
 
 ## 7. Ticket phases and next actions
 
-The overseer derives phases each tick from the observations (§30), and from a live read only of a subject they leave
-stale or unobserved. They are recorded for the status view, never read back as truth. The PR phases, `pushed_no_pr`
+The overseer derives phases each tick from the observations (§30) alone: a subject they leave stale is the harness's
+`wait` (§39). They are recorded for the status view, never read back as truth. The PR phases, `pushed_no_pr`
 to `merged`, are a unit's (§18).
 
 A ticket's title, its display name in canopy, is one short line the overseer sets. It is model-written, so it stays out
@@ -213,8 +209,7 @@ a subject no source observes keep their claims, checked again by the worker (D05
 - `unobserved`: a cursor naming no item observed for its subject, or passing one the block left out for its bound. A
   tick's `canopy ticket set` is checked so too, and moves no stale subject's cursor past what it already passed.
 - `stale`: the ticket, the PR of a unit a `resume` names, or a stacked dispatch's blocker's PR (§10), not observed
-  within `connect.max_age_minutes`. A live read of a stale subject can mark a closed ticket done or raise an attention
-  item, never start a run, and one whose source keeps failing waits for it to recover (§30).
+  within `connect.max_age_minutes`. One whose source keeps failing waits for it to recover (§30).
 - `handled`: a `resume` for CI alone whose every failure at the head is behind the `ci` cursor or repeats, at the same
   head and context, one that is, so a re-run that went red to red starts nothing (PRIOR_ART, CI newness).
 
@@ -234,14 +229,14 @@ past. A cursor but `message` is a journal number: each comment, review, review c
 the next one when a source first
 observes it, and keeps it across reads, and a canopy review run takes one when it ends. So "newer" is one order for
 every kind, and a re-run at the same head is new. Rejected: the source's ids, which no tracker orders, and times, which
-a late submission backdates. The `comment` cursor of a ticket no tracker source observes stays the tracker's comment
-id, since its comments have no numbers (§35).
+a late submission backdates.
 
 The configured query runs every tick it is due, before any ticket is read: the block holds only tickets the loop has
-seen, so the query is the only way a newly labeled ticket becomes a candidate. When the block shows it `fresh` (§30),
-the harness records its result before the overseer runs; else the overseer runs it and records it with `canopy queried`.
-Either way each open ticket it returned is touched into the journal (§11). `tracker.query_every_minutes` spaces it out,
-delaying only how soon a new ticket is found; a ticket the operator starts is in the block already.
+seen, so the query is the only way a newly labeled ticket becomes a candidate. The `tracker` source reads it, and when
+the block shows that read `fresh` (§30), the harness records its result before the overseer runs, touching each open
+ticket it returned into the journal (§11); a query no source read fresh does not run that tick and stays due (§39).
+`tracker.query_every_minutes` spaces it out, delaying only how soon a new ticket is found; a ticket the operator starts
+is in the block already.
 
 "Closed" means whatever the tracker calls finished; the provider skill says which. A closed ticket is not a candidate
 and has no phase: the overseer marks it done, whatever its labels, branch, or PR, unless a worker is running for it,

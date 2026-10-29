@@ -39,7 +39,7 @@ from tests.canopy.helpers import (
     waits,
     with_events,
 )
-from tests.canopy.scenario_helpers import Scenario, Ticked, sets_phase
+from tests.canopy.scenario_helpers import Scenario, sets_phase
 from tests.conftest import CanopyEnv, executable
 
 
@@ -236,7 +236,6 @@ def test_the_state_block_names_the_tickets_marked_done_lately(scenario: Scenario
 
 def test_the_query_runs_every_tick_by_default(scenario: Scenario) -> None:
     ticks = [scenario.tick(*waits(KEY)), scenario.tick(*waits(KEY))]
-    assert scenario.state()["query_due"] is True
     assert [t.tick.query_due for t in ticks] == [True, True]
 
 
@@ -244,16 +243,10 @@ def test_the_query_runs_again_once_its_spacing_has_passed(scenario: Scenario) ->
     scenario.configures(tracker={"query_every_minutes": 30})
     # A ticket to decide, so a tick the query is not due on still runs the overseer (DESIGN §39).
     scenario.seen("PROJ-2")
-    due: list[bool] = []
-    ticks: list[Ticked] = []
-    for _ in range(2):
-        ticks.append(scenario.tick(*waits("PROJ-2")))
-        due.append(scenario.state()["query_due"])
+    ticks = [scenario.tick(*waits("PROJ-2")) for _ in range(2)]
     # The first tick ran it 31 minutes ago; the second, which left it out, does not count.
     scenario.time_passes(minutes=31)
     ticks.append(scenario.tick(*waits("PROJ-2")))
-    due.append(scenario.state()["query_due"])
-    assert due == [True, False, True]
     assert [t.tick.query_due for t in ticks] == [True, False, True]
 
 
@@ -261,15 +254,9 @@ def test_only_a_live_ok_tick_counts_as_having_run_the_query(scenario: Scenario) 
     scenario.configures(tracker={"query_every_minutes": 30})
     # A ticket to decide, so a tick the query is not due on still runs the overseer (DESIGN §39).
     scenario.seen("PROJ-2")
-    due: list[bool] = []
-    scenario.tick(*waits("PROJ-2"), dry_run=True)
-    due.append(scenario.state()["query_due"])
-    scenario.tick(exit_code=3, code=1)
-    due.append(scenario.state()["query_due"])
-    for _ in range(2):
-        scenario.tick(*waits("PROJ-2"))
-        due.append(scenario.state()["query_due"])
-    assert due == [True, True, True, False]
+    ticks = [scenario.tick(*waits("PROJ-2"), dry_run=True), scenario.tick(exit_code=3, code=1)]
+    ticks += [scenario.tick(*waits("PROJ-2")) for _ in range(2)]
+    assert [t.tick.query_due for t in ticks] == [True, True, True, False]
 
 
 def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(scenario: Scenario) -> None:
@@ -279,8 +266,7 @@ def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(scenario: Sce
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
     assert conn.execute("SELECT query_due FROM ticks").fetchone()["query_due"] is None
     scenario.seen("PROJ-2")
-    scenario.tick(*waits("PROJ-2"))
-    assert scenario.state()["query_due"] is False
+    assert scenario.tick(*waits("PROJ-2")).tick.query_due is False
 
 
 @pytest.mark.parametrize(
@@ -410,7 +396,7 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(scenario: Scenario, la
     assert tick.tokens_peak_context == 5500
     assert (tick.tokens_first_call, tick.tokens_first_cache_write, tick.tokens_first_cache_read) == (5500, 500, 4000)
     assert (scenario.env.state_dir / definitions.RUNTIME_DIR / present(tick.definitions_digest)).is_dir()
-    # `canopy queried` and the echo, each a `bash` call that returned its stdout.
+    # The wait and the echo, each a `bash` call that returned its stdout.
     [(tool, calls, _, _)] = tools_of(conn, "ticks", tick.id)
     assert (tool, calls) == ("bash", 2)
     assert tools_of(conn, "ticks", tick.id) == tools_printed(scenario.agent_log, "canopy-overseer")

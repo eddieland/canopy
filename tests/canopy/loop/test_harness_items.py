@@ -45,7 +45,6 @@ from tests.canopy.observation_helpers import (
     observe_ticket,
     review,
 )
-from tests.canopy.scenario_helpers import skips_tick
 
 if TYPE_CHECKING:
     import sqlite3
@@ -424,7 +423,7 @@ def test_a_tick_keeps_its_item_through_a_skipped_tick_a_failed_one_and_an_outage
     assert raised_by is Decider.HARNESS
     assert scenario.attention() == [(KEY, "needs_reviewer")]
     assert scenario.state()["attention"] == []
-    scenario.tick(skips_tick("mcp_unavailable: github"), code=1)
+    scenario.tick(code=1)  # a duty left undone
     scenario.tick(result="gave up", code=1)
     # GitHub is down for longer than an observation stays fresh: the tick closes `ok`, and drops nothing (#219).
     github_state.write_text(json.dumps({"down": True}))

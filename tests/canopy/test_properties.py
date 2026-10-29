@@ -12,7 +12,6 @@ from hypothesis import strategies as st
 from pydantic import ValidationError
 
 from canopy.cli.params import (
-    CURSOR_VALUE_RE,
     KEY_RE,
     MAX_TEXT,
     REASON,
@@ -30,6 +29,9 @@ from canopy.runtime.definitions import BASH_ALLOW_RE
 from canopy.setup import init
 from tests.conftest import TRACKER_TOML
 
+#: What a cursor's id may be: a number, a journal number or a message's id (DESIGN §35), as long as `CURSOR_VALUE_RE`
+#: lets one be.
+CURSOR_NUMBER_RE = re.compile(r"[0-9]{1,200}")
 # Characters that mean something to a shell, a path, a glob, or a git ref.
 UNSAFE = set(" \t\n\r\x0b\x0c/\\;$`&|<>()'\"*?#~!{}[]=:^@,.%+")
 fixtures = [HealthCheck.function_scoped_fixture]
@@ -100,7 +102,7 @@ VALIDATORS = [
     pytest.param(KEY_RE, accepts_ticket_key, id="ticket-key-type"),
     pytest.param(KEY_RE, valid_key, id="decide-key"),
     pytest.param(REASON_RE, accepts_reason, id="reason-type"),
-    pytest.param(CURSOR_VALUE_RE, accepts_cursor_id, id="cursor-type"),
+    pytest.param(CURSOR_NUMBER_RE, accepts_cursor_id, id="cursor-type"),
     pytest.param(init.PROVIDER_RE, init.valid_provider, id="provider"),
     pytest.param(dispatch.SLUG_RE, accepts_slug, id="slug-type"),
     pytest.param(dispatch.SLUG_RE, dispatch.valid_slug, id="dispatch-slug"),
