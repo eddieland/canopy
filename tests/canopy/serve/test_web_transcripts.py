@@ -88,6 +88,18 @@ def test_a_running_run_shows_its_latest_tool_call(backend: Backend) -> None:
     assert runs[39]["activity"] is None  # ended: its result says what it did
 
 
+def test_a_running_run_shows_its_card_whether_stale_by_its_calls_and_when_it_goes_stale_by_time(
+    backend: Backend,
+) -> None:
+    runs = {r["id"]: r for r in client(None, backend).get("/api/runs").json()}
+    fresh, stale = runs[41]["card"], runs[43]["card"]
+    assert (fresh["now"], fresh["at"], fresh["calls_since"]) == ("running the login tests", "2026-10-08T12:24:00Z", 3)
+    assert fresh["done"] == [{"step": "add the SSO callback", "proof": "tests pass: 12/12"}]
+    assert (fresh["stale"], fresh["stale_at"]) == (False, "2026-10-08T12:34:00Z")
+    assert (stale["stale"], stale["calls_since"]) == (True, 26)  # past `cards.STALE_CALLS`
+    assert runs[39]["card"] is None  # it kept none
+
+
 def test_only_the_recorded_sessions_events_are_shown(backend: Backend) -> None:
     c = client(None, backend)
     with backend.open() as ctx:

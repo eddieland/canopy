@@ -3,6 +3,7 @@
 import json
 
 from canopy.runtime.implementation import Version
+from canopy.runtime.report import Called
 from canopy.runtime.watch import Change, Watch
 
 TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
@@ -20,7 +21,8 @@ def test_each_line_says_what_it_changed() -> None:
     assert started == Change("ses_abc123", started=True, usage=None, did=None)
     assert watch.read(event("text", {"text": "Working on it."})) is None  # the same session, nothing spent or done
     ran = watch.read(event("tool_use", {"tool": "bash", "state": {"status": "completed", "input": {"command": "ls"}}}))
-    assert ran == Change("ses_abc123", started=False, usage=None, did=("bash", "ls"))
+    called = Called("bash", completed=True, input={"command": "ls"})
+    assert ran == Change("ses_abc123", started=False, usage=None, did=("bash", "ls"), called=called)
     spent = watch.read(event("step_finish", {"cost": 0.25, "tokens": TOKENS}))
     assert spent is not None
     assert spent.usage is not None
@@ -36,3 +38,12 @@ def test_a_model_call_that_cannot_be_read_reports_nothing_spent_from_then_on() -
         did=None,
     )
     assert watch.read(event("step_finish", {"cost": 0.25, "tokens": TOKENS})) is None
+
+
+def test_a_tool_call_is_given_as_the_agent_made_it_under_either_version() -> None:
+    for version in Version:
+        watch = Watch(version=version)
+        state = {"status": "error", "input": {"summary": "s"}, "error": "refused"}
+        change = watch.read(event("tool_use", {"tool": "canopy_run_status", "state": state}))
+        assert change is not None
+        assert change.called == Called("canopy_run_status", completed=False, input={"summary": "s"})

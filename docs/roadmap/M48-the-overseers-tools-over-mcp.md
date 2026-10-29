@@ -74,8 +74,8 @@ the overseer is given the server first. Nothing the overseer runs changes.
 **Stage 3, MCP only.** The operator's end state (2026-10-16): the CLI keeps the verbs only while the tools settle.
 
 - The overseer's verbs leave the CLI (`dispatch`, `decide`, `queried`, `attention`, `ticket set`, `mirror` if M37 has
-  not retired it, `review run`, `review wait`, `review end`, `chore run`, `chore wait`), and `OverseerCommand` and its
-  completion filter with them. Tests that drove a command drive its tool. D020 names the tools alone.
+  not retired it, `review run`, `review wait`, `review end`, `chore run`, `chore wait`). Tests that drove a command
+  drive its tool. D020 names the tools alone.
 - Open: tool results as JSON rather than the CLI's text (§27, Open).
 - Check: `make install-check`'s dry tick passes against the fakes, its overseer acting through the tools.
 
