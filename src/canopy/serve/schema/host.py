@@ -137,3 +137,50 @@ class HostHistory(Model):
     """How many readings it keeps at most; past that the oldest is dropped."""
     samples: list[HostSample]
     """The readings, oldest first. A gap longer than `every_seconds` is a time the server was not reading."""
+
+
+type ProcessState = Annotated[
+    Literal["running", "disk", "sleeping", "idle", "stopped", "zombie", "other"],
+    Field(
+        description="What a process was doing when read: `running` on a core or waiting for one, `disk` waiting on "
+        "the disk or another device and not to be interrupted, `sleeping` waiting for something else, `idle` a "
+        "kernel thread with nothing to do, `stopped` paused by a signal or a debugger, `zombie` ended and not yet "
+        "reaped by its parent, `other` anything else. The load average counts the `running` and `disk` ones.",
+    ),
+]
+
+
+class HostProcess(Model):
+    """One process on the machine, as Linux's `/proc` describes it."""
+
+    pid: int
+    """Its process id."""
+    parent: int
+    """Its parent's process id; 0 for the first process, which has none."""
+    name: str
+    """Its name, as the kernel keeps it: at most 15 characters, often the program's file name."""
+    command: str
+    """Its command line, its arguments joined by spaces, at most 400 characters; empty for a zombie, whose is gone."""
+    user: str
+    """The account it runs as, or its uid where the machine names no such account."""
+    state: ProcessState
+    """What it was doing when read."""
+    cpu: float
+    """The processors it kept busy, on average since the last read: 1.0 is one core the whole time."""
+    rss: int
+    """The memory it holds, in bytes."""
+    threads: int
+    """How many threads it runs."""
+    started_at: datetime | None
+    """When it started; None when the machine's boot time could not be read."""
+
+
+class HostProcesses(Model):
+    """The processes on the machine the loop runs on, as read when it was asked, the kernel's own threads left out."""
+
+    read_at: datetime
+    """When they were read."""
+    over_seconds: float | None
+    """The seconds each process's `cpu` is averaged over: since the read before; None where they were not read."""
+    processes: list[HostProcess] | None
+    """Every process but the kernel's threads, by process id; None where only Linux's `/proc` says."""
