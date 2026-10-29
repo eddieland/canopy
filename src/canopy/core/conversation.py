@@ -449,8 +449,9 @@ def answer(
     `ref` names a worker's or a planner's run, `run:ID`, or a review's, `review:ID`; `body` is the letter of one of the
     question's options, in either case. With `asked_at`, when the question the operator was shown was asked, an
     update that asks another since is refused. Once recorded, the answer is written to the run's answers directory in
-    `state_dir`, where canopy's plugin tells the agent on its next tool call; again for an answer already recorded, in
-    case the first write found the directory gone.
+    `state_dir`, where canopy's plugin tells the agent on its next tool call, in the same transaction, so the answer
+    it hears last is the one recorded last; again for an answer already recorded, in case the first write found the
+    directory gone.
 
     Returns:
         What was answered, whether the question already had this answer, and whether the agent can hear it.
@@ -486,9 +487,11 @@ def answer(
         already = standing.answer == letter
         if not already and not cards.record_answer(conn, table, run_id, letter, standing.asked_at):
             raise Refused("no_question", f"{ref} asks you no question")
-    answered = cards.Answered(question, standing.asked_at, letter, option, already=already, heard=False)
-    run = f"review-{run_id}" if ref.kind == REVIEW else str(run_id)
-    return dataclasses.replace(answered, heard=cards.deliver(cards.answers_dir(state_dir, run), answered))
+        answered = cards.Answered(question, standing.asked_at, letter, option, already=already, heard=False)
+        run = f"review-{run_id}" if ref.kind == REVIEW else str(run_id)
+        # Delivered while the transaction holds the journal's write lock, so two answers at once reach the agent in the
+        # order they were recorded, and the one it hears last is the one the journal keeps.
+        return dataclasses.replace(answered, heard=cards.deliver(cards.answers_dir(state_dir, run), answered))
 
 
 def write_reply(

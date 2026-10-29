@@ -29,6 +29,7 @@ import re
 import shutil
 import sqlite3
 import sys
+import threading
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -349,7 +350,8 @@ def deliver(path: Path, answered: Answered) -> bool:
         "letter": answered.letter,
         "option": answered.option,
     }
-    staged = path / f".{ANSWER_FILE}.{os.getpid()}"
+    # Its own name in each process and thread, so two writes at once never share the file one renames over the answer.
+    staged = path / f".{ANSWER_FILE}.{os.getpid()}.{threading.get_ident()}"
     try:
         staged.write_text(json.dumps(data) + "\n", encoding="utf-8")
         staged.replace(path / ANSWER_FILE)
