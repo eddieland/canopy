@@ -81,6 +81,8 @@ def read_at(
         python=platform.python_version(),
         booted_at=booted,
         read_at=now,
+        # The machine's cores, not this process's affinity: the load average counts what is runnable on the whole
+        # machine, inside a container too, so it is weighed against all of them.
         cpu=Cpu(cores=os.cpu_count(), load=_load()),
         memory=Memory(
             total=_kib(meminfo, "MemTotal") or _physical(),
@@ -169,7 +171,8 @@ def _process(proc: Path, booted: datetime | None) -> LoopProcess:
     status = _fields(proc / "self" / "status")
     threads = status.get("Threads", "")
     try:
-        open_files: int | None = sum(1 for _ in (proc / "self" / "fd").iterdir())
+        # Listing the directory opens a descriptor on it, which the listing holds too.
+        open_files: int | None = max(0, sum(1 for _ in (proc / "self" / "fd").iterdir()) - 1)
     except OSError:
         open_files = None
     soft, _ = resource.getrlimit(resource.RLIMIT_NOFILE)
