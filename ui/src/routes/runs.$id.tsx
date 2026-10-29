@@ -133,7 +133,11 @@ function RunPanel({
                 )}
                 {run.card !== null && (
                     <Field label="card">
-                        <RunCardView card={run.card} running={run.ended_at === null} />
+                        <RunCardView
+                            card={run.card}
+                            running={run.ended_at === null}
+                            answers={{ kind: 'run', id: run.id }}
+                        />
                     </Field>
                 )}
                 {run.activity && (

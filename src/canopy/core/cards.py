@@ -217,6 +217,8 @@ class Answered:
     option: str
     #: Whether the question already had this answer, so nothing new was recorded.
     already: bool
+    #: Whether it was written where the agent hears it on its next tool call: false once the agent has ended.
+    heard: bool
 
 
 def tool_name() -> str:

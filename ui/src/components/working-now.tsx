@@ -36,7 +36,7 @@ export function WorkingNow({ ticketKey }: { ticketKey: string }) {
                             <Age variant="span" started={run.started_at} ended={null} />
                         </span>
                     </span>
-                    {run.card !== null && <RunCardView card={run.card} running />}
+                    {run.card !== null && <RunCardView card={run.card} running answers={{ kind: 'run', id: run.id }} />}
                 </li>
             ))}
         </ul>

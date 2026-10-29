@@ -1,7 +1,15 @@
-import type { RunCard } from '@/api/types'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+
+import { answerQuestion, refreshAnswered } from '@/api/mutations'
+import type { AnswerTarget } from '@/api/mutations'
+import type { RunCard, RunCardQuestion } from '@/api/types'
 import { Age } from '@/components/age'
-import { Clipped } from '@/components/tip'
 import { LinkedText } from '@/components/linked-text'
+import { Notice } from '@/components/notice'
+import { Clipped } from '@/components/tip'
+import { Button } from '@/components/ui/button'
+import { answeredText } from '@/lib/outcomes'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -9,10 +17,11 @@ import { cn } from '@/lib/utils'
  * Where a worker's, planner's, or reviewer's work stands, in its own words: its card (DESIGN §41), whole. How old it
  * is leads, in tool calls and time; while the run runs, a card that has gone too long without an update is marked
  * stale in the blocked color rather than going quiet. Then its summary, what it does now, what is done with the proof
- * of each, what is next, what is in its way, and for a long job its steps, how much of them is done, and the stage
- * under way. Agent text, rendered as text.
+ * of each, what is next, what is in its way, for a long job its steps, how much of them is done, and the stage under
+ * way, and a question it asks you, which `answers`, the run or review it is, lets the page answer. Agent text, rendered
+ * as text.
  */
-export function RunCardView({ card, running }: { card: RunCard; running: boolean }) {
+export function RunCardView({ card, running, answers }: { card: RunCard; running: boolean; answers?: AnswerTarget }) {
     const stale = isStale(card, useNow())
     return (
         <div
@@ -45,6 +54,7 @@ export function RunCardView({ card, running }: { card: RunCard; running: boolean
                     <LinkedText text={card.stuck} />
                 </CardLine>
             )}
+            {card.question !== null && <CardQuestion question={card.question} running={running} answers={answers} />}
             {card.steps.length > 0 && <CardSteps card={card} />}
         </div>
     )
@@ -52,7 +62,7 @@ export function RunCardView({ card, running }: { card: RunCard; running: boolean
 
 /**
  * A running run's card on one line, for a row: what it says it does now, how much of its steps is done when it has
- * any, and how old the card is, marked stale as `RunCardView` marks it.
+ * any, that it asks you a question still unanswered, and how old the card is, marked stale as `RunCardView` marks it.
  */
 export function RunCardNow({ card, className }: { card: RunCard; className?: string }) {
     const stale = isStale(card, useNow())
@@ -63,6 +73,9 @@ export function RunCardNow({ card, className }: { card: RunCard; className?: str
             </span>
             <Clipped text={card.now} className="min-w-0" />
             {card.percent !== null && <span className="readout shrink-0 text-muted-foreground">{card.percent}%</span>}
+            {card.question !== null && card.question.answer === null && (
+                <span className="shrink-0 text-status-blocked">asks you</span>
+            )}
             <Age at={card.at} variant="ago" className="shrink-0" />
         </span>
     )
@@ -85,6 +98,85 @@ function CardAge({ card, running, stale }: { card: RunCard; running: boolean; st
             <span>{running ? `${calls} since` : `${calls} before the run ended`}</span>
             {stale && <span className="text-status-blocked">stale</span>}
         </p>
+    )
+}
+
+/** The letters a question's options go by, in order. */
+const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
+
+/**
+ * A card's question: whether it waits on you, the question, and each option by its letter, the one the agent
+ * recommends marked, and once you answered, your letter. While the run runs and the page knows which it is
+ * (`answers`), each other option is a button that answers with its letter, as `canopy reply run:ID LETTER` does; the
+ * agent hears it on its next tool call, and a later answer replaces it. A card that asks another question since the
+ * page read it is refused `moved_on`.
+ */
+function CardQuestion({
+    question,
+    running,
+    answers,
+}: {
+    question: RunCardQuestion
+    running: boolean
+    answers: AnswerTarget | undefined
+}) {
+    const client = useQueryClient()
+    const [said, setSaid] = useState<string | null>(null)
+    const mutation = useMutation({
+        mutationFn: ({ target, letter }: { target: AnswerTarget; letter: string }) =>
+            answerQuestion(target, letter, question.asked_at),
+        onSuccess: (answered, { target }) => {
+            setSaid(answeredText(answered))
+            void refreshAnswered(client, target)
+        },
+    })
+    let state = 'never answered'
+    if (question.answer !== null) {
+        state = `answered ${question.answer}`
+    } else if (running) {
+        state = 'asks you'
+    }
+    return (
+        <div className="flex flex-col gap-1 pt-1" data-testid="run-card-question">
+            <p className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
+                <span className={cn(question.answer === null && running && 'text-status-blocked')}>{state}</span>
+                <Age at={question.asked_at} variant="ago" />
+            </p>
+            <p className="text-sm">
+                <LinkedText text={question.ask} />
+            </p>
+            <ol className="flex flex-col gap-1">
+                {question.options.map((option, i) => {
+                    const letter = LETTERS[i] ?? '?'
+                    const chosen = letter === question.answer
+                    return (
+                        <li key={letter} className="flex items-baseline gap-2 text-sm">
+                            <span className="w-4 shrink-0 font-mono text-xs text-muted-foreground">{letter}</span>
+                            <span className="min-w-0 break-words">
+                                <LinkedText text={option} />
+                                {letter === question.recommend && (
+                                    <span className="text-xs text-muted-foreground"> · recommended</span>
+                                )}
+                                {chosen && <span className="text-xs text-status-done"> · your answer</span>}
+                            </span>
+                            {running && answers !== undefined && !chosen && (
+                                <Button
+                                    size="xs"
+                                    variant="outline"
+                                    className="ml-auto shrink-0"
+                                    disabled={mutation.isPending}
+                                    aria-label={`Answer ${letter}: ${option}`}
+                                    onClick={() => mutation.mutate({ target: answers, letter })}
+                                >
+                                    answer {letter}
+                                </Button>
+                            )}
+                        </li>
+                    )
+                })}
+            </ol>
+            <Notice error={mutation.error}>{said}</Notice>
+        </div>
     )
 }
 

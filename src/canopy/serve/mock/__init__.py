@@ -781,8 +781,8 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             conn,
             sql.update("runs").set(activity_tool=tool, activity=did, activity_at=at(minutes)).where("id = ?", run_id),
         )
-    # What each running run's agent says of where it stands, its card (DESIGN §41): 41's fresh, 43's stale, gone more
-    # tool calls than `cards.STALE_CALLS` without an update.
+    # What each running run's agent says of where it stands, its card (DESIGN §41): 41's fresh, asking a question, 43's
+    # stale, gone more tool calls than `cards.STALE_CALLS` without an update.
     said = (
         (
             LIVE_RUN,
@@ -797,6 +797,12 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
                     cards.Step(title="Wire the login button", status="working", stage="Web"),
                     cards.Step(title="Remember the last provider", status="skipped", stage="Web"),
                     cards.Step(title="Push and open the PR", status="not_started"),
+                ),
+                # A question it works around meanwhile, waiting on the operator.
+                question=cards.Question(
+                    ask="Keep the password form beside the SSO button, or hide it behind a link?",
+                    options=("keep both side by side", "hide the form behind a link", "drop the password form"),
+                    recommend="B",
                 ),
             ),
             24,
@@ -821,6 +827,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         recorded = sql.update("runs").set(card_json=card.model_dump_json(), card_at=at(minutes))
         recorded = recorded.set(card_calls=by_then, tool_calls=by_then + since).where("id = ?", run_id)
         working = {s.title: at(minutes) for s in card.steps if s.status == "working"}
+        recorded = recorded.set(card_asked_at=at(minutes) if card.question is not None else None)
         sql.execute(conn, recorded.set(card_working_since=json.dumps(working) if working else None))
     # Run 39's peak is the most one model call in its transcript was sent (transcripts.py), as its page's chart shows.
     sql.execute(conn, sql.update("runs").set(tokens_peak_context=30200).where("id = 39"))
