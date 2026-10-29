@@ -18,9 +18,9 @@ the tools' functions, until nothing needs them (ROADMAP M48).
   runs is decided by quoting. A tool call's arguments are JSON fields, with nothing to quote, expand, or end early.
 - Each verb is its own tool name, so spend by tool (§11) splits the overseer's calls by verb.
 
-Workers are out of scope: what they report is read
-from their final line after they exit (§8), so nothing a worker writes reaches the journal while it runs, and a tool a
-worker could call mid-run would end that.
+Workers are out of scope: what they report is read from their final line after they exit (§8). A worker's, planner's,
+or reviewer's one tool of canopy's own, `status` (§41), writes nothing: the harness records its card from the call in
+the events the agent prints, so nothing a worker writes reaches the journal but what canopy observes it print.
 
 ### The server
 
@@ -86,8 +86,8 @@ it is listed with. A refusal carries the text alone.
 - The overseer's definition denies `canopy_*`, then allows each tool by exact name: an allow by pattern would also
   match another server whose name starts `canopy_`, a chore's or the git tools' among them. Its bash rules deny every
   command but those `runtime.allow_bash` names. Every other definition denies `canopy_*`, and a chore's then allows
-  its own tools by name, and the reviewer's and the planner's their git tools, last, since the last matching rule wins
-  (D021).
+  its own tools by name, the reviewer's and the planner's their git tools, and theirs and the workers' `status` (§41),
+  last, since the last matching rule wins (D021).
 - The shadowing check (§13) refuses a workspace config that names an MCP server `canopy` (TRUST_MODEL T7): merging keeps
   keys canopy's entry leaves out, so the workspace could set the environment of canopy's own interpreter. It can still
   add servers under other names, and plugins.

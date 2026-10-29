@@ -3,10 +3,10 @@
 # tests/canopy/test_prompt_sizes.py names the line to update; `make prompt-sizes` prints the sizes, with tokens.
 "agents/canopy-chore.md" = 3758
 "agents/canopy-overseer.md" = 6415
-"agents/canopy-planner.md" = 5808
-"agents/canopy-reviewer.md" = 5041
-"agents/canopy-worker-private.md" = 8125
-"agents/canopy-worker.md" = 6830
+"agents/canopy-planner.md" = 5952
+"agents/canopy-reviewer.md" = 5185
+"agents/canopy-worker-private.md" = 8303
+"agents/canopy-worker.md" = 7008
 "personas/canopy.md" = 1048
 "personas/eddie.md" = 2589
 "personas/explainer.md" = 1106
