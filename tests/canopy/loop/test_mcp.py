@@ -760,7 +760,11 @@ def test_each_tool_describes_every_field_and_says_whether_it_only_reads(
         hints = listed["annotations"]
         assert isinstance(hints, dict)
         assert (hints["readOnlyHint"], hints["openWorldHint"]) == (read_only, False), found.name
-        assert ("destructiveHint" in hints) is not read_only, found.name
+        if not read_only:
+            # (destructive, idempotent): only these overwrite or end what is recorded, and only these may be repeated.
+            expected = {"ticket-set": (True, True), "review-end": (True, False), "status": (False, True)}
+            wrote = (hints["destructiveHint"], hints["idempotentHint"])
+            assert wrote == expected.get(found.name, (False, False)), found.name
 
 
 def undescribed(schema: object, at: str = "") -> list[str]:

@@ -23,4 +23,5 @@ What it promises:
   own tells the client. A line that is not JSON, a method it does not have, or a tool it does not list is a JSON-RPC
   error, and the server goes on serving.
 
-`explain` says what was wrong with a tool's arguments, naming each field and never echoing its value.
+`explain` says what was wrong with a tool's arguments, naming each field, never pydantic's copy of the input. A
+validator's own message is passed on, so a validator echoes a value only for a short, bounded field, never free text.

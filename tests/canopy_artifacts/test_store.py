@@ -516,7 +516,18 @@ def test_it_serves_the_eight_tools_and_nothing_else(client: Client) -> None:
     assert all(field.get("description") for t in tools for field in t["inputSchema"]["properties"].values())
     reads = {"artifact_read", "artifact_list", "thread_list", "comment_feed"}
     assert {t["name"] for t in tools if t["annotations"]["readOnlyHint"]} == reads
-    assert not any(t["annotations"]["openWorldHint"] or t["annotations"].get("destructiveHint") for t in tools)
+    assert not any(t["annotations"]["openWorldHint"] for t in tools)
+    # (destructive, idempotent) of each tool that writes: none removes what the store holds; resolving may be repeated.
+    assert {
+        t["name"]: (t["annotations"]["destructiveHint"], t["annotations"]["idempotentHint"])
+        for t in tools
+        if t["name"] not in reads
+    } == {
+        "artifact_publish": (False, False),
+        "comment_reply": (False, False),
+        "comment_create": (False, False),
+        "thread_resolve": (False, True),
+    }
     create = next(t for t in tools if t["name"] == "comment_create")["inputSchema"]
     assert create["properties"]["anchor"]["anyOf"][0]["properties"].keys() == {"exact", "prefix", "suffix"}
     assert client.request("resources/list")["error"]["code"] == canopy_mcp.METHOD_NOT_FOUND

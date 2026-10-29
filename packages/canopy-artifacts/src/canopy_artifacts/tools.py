@@ -152,6 +152,8 @@ class Resolve(_Request):
 
 #: What a tool that writes says of a store it may not write to.
 _READ_ONLY = "A store opened read-only refuses it (read_only)."
+#: What a tool that names an artifact or a thread says of an id it cannot serve.
+_UNKNOWN = "An id the store does not have, or another scope's, is refused (not_found, out_of_scope)."
 
 TOOLS = (
     tool(
@@ -159,7 +161,7 @@ TOOLS = (
         "Publish a page for people to read and comment on: a report, a design, a mock-up. Without artifact_id it makes "
         "a new artifact; with one it adds a version, whose threads carry over by their passages' words, so publish a "
         "revision as a new version rather than a new artifact. Returns the artifact's id, the version's number, and "
-        f"its url. {_READ_ONLY}",
+        f"its url. A title, page, or origin over its bound is refused (too_long). {_UNKNOWN} {_READ_ONLY}",
         Publish,
         lambda store, r: store.publish(
             title=r.title,
@@ -174,7 +176,7 @@ TOOLS = (
         "artifact_read",
         "Read a version of an artifact, its latest unless named: its metadata, its content as published, and its "
         "text, which comment_create's anchors are quoted from: an HTML page's words as a reader sees them, or a "
-        "Markdown page's source, whitespace collapsed either way.",
+        f"Markdown page's source, whitespace collapsed either way. {_UNKNOWN}",
         Read,
         lambda store, r: store.read(r.artifact_id, r.version),
         canopy_mcp.READS,
@@ -182,7 +184,8 @@ TOOLS = (
     tool(
         "artifact_list",
         f"List artifacts, newest first, {LIST_PAGE} to a page, each with its id, title, origin, and latest version; "
-        "narrow it by origin. When next_cursor is not null, pass it as cursor for the next page.",
+        "narrow it by origin. When next_cursor is not null, pass it as cursor for the next page; a cursor the store "
+        "did not give is refused (invalid).",
         ListArtifacts,
         lambda store, r: store.artifacts(r.origin, r.cursor),
         canopy_mcp.READS,
@@ -192,7 +195,7 @@ TOOLS = (
         "List an artifact's threads, oldest first, each with its comments and its state, open or resolved. Each "
         "thread's anchor is looked for in a version, its latest unless named: found, or passage_gone when its words "
         "are no longer there; null for a thread on the whole artifact. Use it to read one artifact's discussion; "
-        "comment_feed follows what changed across artifacts.",
+        f"comment_feed follows what changed across artifacts. {_UNKNOWN}",
         ThreadList,
         lambda store, r: store.threads(r.artifact_id, state=r.state, version=r.version),
         canopy_mcp.READS,
@@ -201,7 +204,8 @@ TOOLS = (
         "comment_feed",
         "Read the changes to comments and threads after since, oldest first, one JSON object to a line, ending with "
         '{"kind": "end", "through": SEQ}: pass that SEQ as since for the next page. A page without its end line is '
-        "incomplete. Use it to follow new comments across artifacts without reading every thread.",
+        "incomplete. Use it to follow new comments across artifacts without reading every thread. A negative since, or "
+        f"a limit outside 1 to {MAX_FEED}, is refused (invalid).",
         Feed,
         lambda store, r: store.feed(r.origin, r.since, r.limit),
         canopy_mcp.READS,
@@ -209,7 +213,8 @@ TOOLS = (
     tool(
         "comment_reply",
         "Reply in a thread, open or resolved, as a new comment at its end; it leaves the thread's state as it is. "
-        f"Returns the comment's id and its seq. {_READ_ONLY}",
+        "Returns the comment's id and its seq. A blank body is refused (invalid), and one too long (too_long). "
+        f"{_UNKNOWN} {_READ_ONLY}",
         Reply,
         lambda store, r: store.reply(r.thread_id, r.body),
         canopy_mcp.WRITES,
@@ -219,7 +224,8 @@ TOOLS = (
         "Comment on a passage of an artifact's latest version, quoted by its words and the text either side, or on "
         "the whole artifact: a new open thread. A passage not in that version's text is refused (anchor_not_found). "
         "To answer a comment, reply in its thread instead. Returns the thread's id, its first comment's id, and that "
-        f"comment's seq. {_READ_ONLY}",
+        "comment's seq. A blank body is refused (invalid), and one too long (too_long). "
+        f"{_UNKNOWN} {_READ_ONLY}",
         Create,
         lambda store, r: store.comment(
             r.artifact_id,
@@ -230,7 +236,8 @@ TOOLS = (
     ),
     tool(
         "thread_resolve",
-        f"Resolve a thread, or reopen one; a thread already so is left as it is. Returns its state. {_READ_ONLY}",
+        "Resolve a thread, or reopen one; a thread already so is left as it is. Returns its state. "
+        f"{_UNKNOWN} {_READ_ONLY}",
         Resolve,
         lambda store, r: store.resolve(r.thread_id, resolved=r.resolved),
         canopy_mcp.Hints(read_only=False, idempotent=True),

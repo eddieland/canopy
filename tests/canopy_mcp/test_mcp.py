@@ -136,8 +136,8 @@ def test_what_it_cannot_answer_is_a_json_rpc_error_and_it_goes_on_serving() -> N
     assert failures == ["tools/call"]
 
 
-def test_explain_names_each_field_and_never_echoes_its_value() -> None:
-    """What was wrong is told by field, without the value, which may be a whole page."""
+def test_explain_names_each_field_and_never_echoes_pydantics_copy_of_the_input() -> None:
+    """What was wrong is told by field, without pydantic's copy of the value, which may be a whole page."""
     with pytest.raises(ValidationError) as raised:
         _Said.model_validate({"text": 7, "secret": "a page of text"})
     said = canopy_mcp.explain(raised.value)
