@@ -29,8 +29,9 @@ if TYPE_CHECKING:
 
 #: A chore with no `when`, which the harness runs (DESIGN §37), and one with a `when`, which the overseer decides.
 MINE, THEIRS = "deps", "build-health"
-#: Idle pacing on: ten minutes after a tick, doubling per idle tick in a row up to eighty.
-PACED = {"interval_minutes": 10, "idle_max_minutes": 80, "min_gap_minutes": 1}
+#: Idle pacing on: a minute after a tick, doubling per idle tick in a row up to eight.
+# Short, since each tick and each half-second step of a wait take real time: a long timeline overran CI's timeout.
+PACED = {"interval_minutes": 1, "idle_max_minutes": 8, "min_gap_minutes": 1}
 
 
 @pytest.fixture
@@ -118,7 +119,7 @@ def test_idle_ticks_that_ran_the_overseer_lengthen_the_wait(quiet: Scenario) -> 
     quiet.configures(loop=PACED)
     looped = loops(quiet, *waits(KEY), ticks=4)
     assert [(t.overseer_ran, t.idle) for t in looped.ticks] == [(True, True)] * 4
-    assert (looped.woken_by, looped.started) == (["start", "timer", "timer", "timer"], [0, 20, 60, 140])
+    assert (looped.woken_by, looped.started) == (["start", "timer", "timer", "timer"], [0, 2, 6, 14])
 
 
 def test_idle_ticks_that_ran_no_overseer_leave_the_wait(quiet: Scenario) -> None:
@@ -126,7 +127,7 @@ def test_idle_ticks_that_ran_no_overseer_leave_the_wait(quiet: Scenario) -> None
     looped = loops(quiet, ticks=4)
     # Idle for spend, but costing nothing, so the wait stays the interval.
     assert [(t.overseer_ran, t.idle) for t in looped.ticks] == [(False, True)] * 4
-    assert (looped.woken_by, looped.started) == (["start", "timer", "timer", "timer"], [0, 10, 20, 30])
+    assert (looped.woken_by, looped.started) == (["start", "timer", "timer", "timer"], [0, 1, 2, 3])
 
 
 def at_work_with_an_item(scenario: Scenario) -> Working:
