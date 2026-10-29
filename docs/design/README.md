@@ -119,9 +119,9 @@ not go in the middle of the sequence.
 - [The overseer per decision](OVERSEER_PER_DECISION.md): one overseer run for each subject left to judgment, and the
   runs it asks for, which the tick starts outside its process tree.
   - [40. The overseer per decision](OVERSEER_PER_DECISION.md#40-the-overseer-per-decision)
-- [Where a running agent stands](CARDS.md): the card a running worker, planner, or reviewer keeps of where its work
-  stands, for the operator.
-  - [41. Where a running agent stands](CARDS.md#41-where-a-running-agent-stands)
+- [Where a running agent stands](PROGRESS.md): the progress a running worker, planner, or reviewer keeps of where its
+  work stands, for the operator.
+  - [41. Where a running agent stands](PROGRESS.md#41-where-a-running-agent-stands)
 
 ## 1. Problem
 
