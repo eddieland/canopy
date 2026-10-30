@@ -6,7 +6,7 @@ import { TicketModels } from '@/components/ticket-models'
 
 /**
  * A ticket's run refused its model (`model_missing`, `model_list_failed`, DESIGN §13): the ticket's models as its page
- * shows them (`TicketModels`), each a menu to choose another the runtime lists or clear the override, the fix the item
+ * shows them (`ModelChoice`), each a menu to choose another the runtime lists or clear the override, the fix the item
  * asks for. The runtime's list is read as the item opens rather than when a menu does, so the model it no longer lists
  * is marked before the operator goes looking for it; a list that cannot be read says why in the menu.
  */
