@@ -1,0 +1,14 @@
+# serializer version: 1
+# name: test_the_counts_are_printed_as_a_table
+  '''
+  Checklists over 7 days, since 2026-10-02 UTC, by repository and item.
+  
+  repo  item           reminded  pass  fixed  held  n/a  unanswered
+  api   general-types         3     2      1     0    0           0
+  api   newspaper             3     0      1     1    1           0
+  api   doc-comments          3     1      0     0    0           2
+  web   no-any                1     0      0     1    0           0
+  
+  Why a run held an item is on its run: canopy show run:ID.
+  '''
+# ---

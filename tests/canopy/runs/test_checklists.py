@@ -6,6 +6,7 @@ the run, leasing no slot. What the run answered of each item is recorded with it
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, cast
 
 from canopy.core import cards, checklist_answers, checklists, contract, records
@@ -125,3 +126,37 @@ def test_a_run_that_answers_nothing_is_recorded_unanswered(scenario: Scenario, g
     (checklists_dir(scenario.env) / "repo.md").unlink()
     run = scenario.run(worker=worker_does(result=worker_result(checklist={"repo": {"general-types": "pass"}})))
     assert checklist_answers.of_run(scenario.conn, run.id) == []
+
+
+def test_canopy_checklist_counts_what_the_runs_answered(scenario: Scenario, git_pool: GitPool) -> None:
+    (checklists_dir(scenario.env) / "repo.md").write_text(f"{LIST}\n## newspaper\n\nPublic names first.\n")
+    held = {"answer": "held", "reason": "The helper stays where it is."}
+    scenario.run(worker=worker_does(result=worker_result(checklist={"repo": {"general-types": "fixed"}})))
+    scenario.run(worker=worker_does(result=worker_result(checklist={"repo": {"newspaper": held}})))
+    found = json.loads(scenario.operator("checklist", "--json").out)
+    # A run's reason for holding an item is its own, on its run: the counts say only how many.
+    assert found["items"] == [
+        {
+            "repo": "repo",
+            "item": "general-types",
+            "reminded": 2,
+            "pass": 0,
+            "fixed": 1,
+            "held": 0,
+            "n/a": 0,
+            "unanswered": 1,
+        },
+        {
+            "repo": "repo",
+            "item": "newspaper",
+            "reminded": 2,
+            "pass": 0,
+            "fixed": 0,
+            "held": 1,
+            "n/a": 0,
+            "unanswered": 1,
+        },
+    ]
+    assert scenario.operator("checklist", "--repo", "other").out.endswith(
+        "\n\nNo worker run of the window was given a list.\n",
+    )
