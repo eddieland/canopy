@@ -73,7 +73,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M34. A cacheable overseer prompt](M34-a-cacheable-overseer-prompt.md): done 2026-10-15.
 - [M35. Temporary notices to workers](M35-temporary-notices-to-workers.md): done 2026-10-15.
 - [M36. Connectors: the world observed into the journal, in shadow](M36-connectors-in-shadow.md): done 2026-10-29.
-- [M37. The overseer reads the journal](M37-the-overseer-reads-the-journal.md): in progress.
+- [M37. The overseer reads the journal](M37-the-overseer-reads-the-journal.md): done 2026-10-30.
 - [M38. The harness decides what needs no judgment](M38-the-harness-decides.md): in progress.
 - [M39. A tick without the overseer](M39-a-tick-without-the-overseer.md): in progress.
 - [M40. The overseer per decision](M40-the-overseer-per-decision.md): in progress.
