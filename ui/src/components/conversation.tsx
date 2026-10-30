@@ -23,15 +23,19 @@ const WHO: Record<Message['source'], string> = {
 }
 
 // Written out so Tailwind finds them. Each message is a bubble: the operator's own words on the right in the accent's
-// tint, a question in the tint of what waits on a person, canopy's note on what a tick did as a muted outline, since
-// it is about the loop rather than the work, anything else on the raised surface.
+// tint, a worker's on the raised surface, a tracker comment quoted, a hairline on the panel's own surface, since it is
+// data from outside the loop, and canopy's note on what a tick did as a muted dashed outline, since it is about the
+// loop rather than the work. A question is on the raised surface once answered; the one still open is `OPEN_QUESTION`.
 const TONE: Record<Message['kind'], string> = {
     report: 'bg-surface-raised',
-    question: 'bg-status-blocked/12',
-    reply: 'bg-accent/12',
-    comment: 'bg-surface-raised',
+    question: 'bg-surface-raised',
+    reply: 'bg-accent/18',
+    comment: 'border bg-surface',
     note: 'border border-dashed text-muted-foreground',
 }
+
+// The question still waiting on the operator, in the tint and hairline of what waits on a person: the one amber bubble.
+const OPEN_QUESTION = 'border border-status-blocked/40 bg-status-blocked/8'
 
 const UNREAD = 'No tick has read it yet. The loop acts on it, and the attention list catches up, at the next tick.'
 const SEEN = 'A tick has read it: the loop is acting on it.'
@@ -101,7 +105,7 @@ export function Conversation({
                     data-testid={messageAnchor(message.id)}
                     data-source={message.source}
                     operator={message.source === 'operator'}
-                    tone={TONE[message.kind]}
+                    tone={message.id === waiting ? OPEN_QUESTION : TONE[message.kind]}
                     body={message.body}
                     head={
                         <Head
