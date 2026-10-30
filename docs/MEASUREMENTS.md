@@ -999,3 +999,50 @@ the agent's body so that runs of one agent in different directories share a cach
 - Between the two directories, and between the two `TMPDIR`s, the tools, the body, and every block but the
   environment were identical. So every run of an agent, sandboxed or not, shares the tools and the body as a prefix
   with breakpoints of its own, which the split gives OpenCode 1's unsandboxed runs alone, and OpenCode 2 needs none.
+
+## 2026-10-30: where M66's checklist can hold a worker's push
+
+Whether the checklist's hold before a push (DESIGN §42) belongs in canopy's plugin, as a `tool.execute.before` that
+refuses the call, or in canopy's own `pre-push` hook, which every worker's git already runs (`core/commit_hooks.py`).
+Cited by M66.
+
+### Setup
+
+- The hook: git 2.43, a bare origin, a primary clone with prek's hooks installed (`prek install`, a local `pre-push`
+  hook that records it ran), and a worktree slot of it, as treehouse makes. canopy's shipped hooks from
+  `commit_hooks.files()`, with a prototype hold added to their `pre-push`, and a worker's environment from
+  `commit_hooks.env()` with a trailer and a prefix, the list's path, and `CANOPY_DEADLINE`. The hold keeps a marker,
+  the time it held, in the slot's own git directory, and lets pushes through for a window after. 21 cases, run.
+- The plugin: OpenCode's source read, not run (installing OpenCode from npm was refused in the session): 1.19.5's
+  `session/tools.ts`, `plugin/index.ts`, `session/processor.ts`, `session/message-v2.ts`, and `tool/shell.ts`; 2.1.4's
+  and 2.2.3's `core/src/plugin/hooks.ts`; and 2.1.2's plugin adapter, which canopy's plugin checks pin.
+- The sandbox's rules read in `canopy_sandbox`, not run (its runtime comes from npm too).
+
+### Findings
+
+| Case | Plugin hold | Hook hold |
+|---|---|---|
+| First `git push` of a stretch | Refused; the model gets the error's message as the call's result, in 1 and 2 | Held, the list in git's output (run) |
+| The push after a hold | Runs | Runs, and the repository's own `pre-push` with it (run) |
+| `git commit … && git push`, one call | Nothing in the call runs: the commit too | The commit is made, the push held (run) |
+| A push through a script or `make` | Not seen: the call does not say `git push` | Held (run) |
+| `--no-verify`, or `-c core.hooksPath=/dev/null` | Held | Not held (run) |
+| Nothing to push | Held, unless the plugin asks git | Not held, once the hook reads its refs (run) |
+| `--dry-run`; a push the remote will refuse | Held, then git refuses the next | Held, then git refuses the next: git runs `pre-push` for both (run) |
+| In the clock's last stretch | Runs | Runs: the shell gets OpenCode's environment (run; source) |
+| A repository without a list | Runs | Runs (run) |
+| Trailer and prefix both off | Unchanged | Runs today: canopy points git at its hooks only with a mark to add (run) |
+| canopy's own fallback push | Not held | Not held: canopy's git runs no hooks (run) |
+| A sandboxed run | Keeps its state in memory | Writes the marker in the slot's own git directory, which the sandbox lets it write |
+| A joint run | One state for every repository | A marker per slot (run) |
+| A push through an MCP tool | Not seen | Not seen; the worker's definition denies `push_files` and `create_or_update_file` |
+
+- OpenCode 1 runs `tool.execute.before` inside the tool's `execute`, uncaught; a throw fails that call, and the
+  model gets the error's message (`errorText`). OpenCode 2's hooks let `execute.before` alone fail, "a Tool.Error
+  rejects the call before it runs", and its promise adapter makes a thrown error one. canopy's plugin registers no
+  `execute.before` under 2 today, and its `joined` catches every job's error, so a hold needs both changed.
+- OpenCode's shell tool returns stdout and stderr together, so the hook's output reaches the model.
+- git runs `pre-push` with nothing on its input when there is nothing to push, and a hook that reads its input must
+  hand it on: with the input dropped, prek's `pre-push` ran nothing and said nothing.
+- A marker cleared after the push it lets through holds every other push; once per stretch needs a window.
+- canopy's commit marks are still added under the prototype's hooks.
