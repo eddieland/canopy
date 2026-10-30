@@ -48,7 +48,8 @@ doesn't push the other rows off the page. In a narrow window, such as half a mon
 the kind; how long stays.
 
 The chips filter by kind, `workers`, `reviews`, `chores`, or `tasks`, and by the latest run's state: `running`,
-`waiting on you` (the worker stopped to ask something), `failed`, `stopped`, and `done`. The two keep each other, so
+`waiting on you` (the worker stopped to ask something, or a running one asks you a question it works around, which
+keeps it under `running` too), `failed`, `stopped`, and `done`. The two keep each other, so
 `reviews` then `failed` is every PR whose latest review failed. A cost of `–` means the runtime reported none, which
 is not the same as free.
 
@@ -256,7 +257,8 @@ Click an option, or run `canopy reply run:ID LETTER` (`review:ID` for a review),
 next tool call; click another to change your mind, as long as it runs. An answer is a letter, never words: you choose
 among its options, which is also all a line forged to look like canopy's could do. A question it can't work around
 still ends the run as `blocked`, as before. A task's run asks none here: its questions end the run, and your reply
-starts the next.
+starts the next. While a question waits, it's an item on [the attention list](attention#the-list) too, answerable
+right there, the rail's row for the run reads `asks you` in amber, and the tab's title and icon count it.
 
 A run's page, a review's, and a task run's lead with the whole of it; the runs list shows what it's doing now, `asks
 you` while a question waits, and when it was last updated, after a small meter when it has steps; a ticket's page shows

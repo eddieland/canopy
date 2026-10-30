@@ -9,13 +9,16 @@ import {
     attentionQuery,
     choreQuery,
     pullRequestQuery,
+    reviewQuery,
+    runQuery,
     taskQuery,
     tasksQuery,
     ticketPlansQuery,
     ticketQuery,
     ticketsQuery,
 } from '@/api/queries'
-import type { AttentionItem, Draft, Run, TicketSummary, Unit, WaitingFeedbackPlan } from '@/api/types'
+import type { AnswerTarget } from '@/api/mutations'
+import type { AttentionItem, Draft, Run, RunCard, TicketSummary, Unit, WaitingFeedbackPlan } from '@/api/types'
 import { EmptyAttention } from '@/components/all-clear'
 import { Age } from '@/components/age'
 import { ChoreFindingText } from '@/components/chore-finding'
@@ -31,9 +34,12 @@ import { Notice } from '@/components/notice'
 import { PlanCard } from '@/components/plan-card'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { ReviewLink } from '@/components/review-link'
 import { LessonsDue, LessonsWrong, ProposalsWaiting } from '@/components/memory-attention'
 import { ModelAttention } from '@/components/model-attention'
 import { InlineCode } from '@/components/rich-text'
+import { RunLink } from '@/components/run-link'
+import { ProgressQuestion } from '@/components/run-progress'
 import { RunsTable } from '@/components/runs-table'
 import { Chip } from '@/components/status'
 import { TaskLink } from '@/components/task-link'
@@ -404,10 +410,11 @@ function Answered() {
  * command to run. A ticket's item then shows its answer: its conversation and the reply form, with the ticket's own
  * actions and grants under them, or ahead of them when the reason asks for nothing else; a chore's item its notes and
  * the form for another, and for a finding the button to dismiss it; a review's draft's item the review's page, where
- * the draft is read and published; a task's item the task's page, where it is read and answered; a PR's other item its
- * review limit and its grant, for a PR no ticket owns; an item about none of them, what it says. `ticket` is the item's
- * ticket as the tickets list has it, which tells a feedback plan's `plan_review` from a ticket plan's. `onReplied`
- * hears each reply sent from it, with what the form said of it.
+ * the draft is read and published; a running run's question, by letter, as its page answers it, before its ticket's
+ * conversation when it has a ticket; a task's item the task's page, where it is read and answered; a PR's other item
+ * its review limit and its grant, for a PR no ticket owns; an item about none of them, what it says. `ticket` is the
+ * item's ticket as the tickets list has it, which tells a feedback plan's `plan_review` from a ticket plan's.
+ * `onReplied` hears each reply sent from it, with what the form said of it.
  */
 function Detail({
     item,
@@ -422,6 +429,9 @@ function Detail({
 }) {
     const asks = ask(item, ticket)
     const command = asks === 'command' ? commandOf(item) : null
+    const toast = useToast()
+    // An answer takes the question off the list at once, and the item with it: a toast says what the answer did.
+    const onAnswered = (said: string) => toast({ title: said, tone: 'done' })
     return (
         <Panel data-testid="attention-detail">
             <ItemHead item={item} asks={asks} done={done} />
@@ -435,6 +445,7 @@ function Detail({
             )}
             {asks === 'plan' && item.ticket_key !== null && <PlanReview ticketKey={item.ticket_key} />}
             {asks === 'feedback-plan' && <FeedbackPlanReview item={item} plan={ticket?.feedback_plan ?? null} />}
+            {asks === 'question' && <RunQuestion item={item} onAnswered={onAnswered} />}
             {item.reason === 'memory_proposal' && item.ticket_key !== null && (
                 <ProposalsWaiting ticketKey={item.ticket_key} />
             )}
@@ -468,6 +479,9 @@ function ItemHead({ item, asks, done }: { item: AttentionItem; asks: Ask; done: 
     }
     if (item.reason === 'awaiting_reply' && item.task !== null) {
         return <TaskAwaitingHead item={item} task={item.task} done={done} />
+    }
+    if (asks === 'question') {
+        return <QuestionHead item={item} done={done} />
     }
     return <Head item={item} done={done} asks={asks} links={asks !== 'pull-request'} />
 }
@@ -618,6 +632,103 @@ function TaskAwaitingHead({ item, task, done }: { item: AttentionItem; task: num
     return <Head item={item} done={done} body={body} />
 }
 
+/**
+ * A running run's question's head: as any item's, but naming whose question it is and when it was asked rather than
+ * saying it, as a ticket's question's does, since the question is under it with its options (ui/DESIGN.md, "One home
+ * per fact").
+ */
+function QuestionHead({ item, done }: { item: AttentionItem; done: boolean }) {
+    const body = (
+        <p className="text-sm" data-testid="question-line">
+            Waits on your answer to {item.run !== null && <RunLink id={item.run} />}
+            {item.review !== null && <ReviewLink id={item.review} />}&apos;s question, asked{' '}
+            <Age at={item.since} variant="ago" />.
+        </p>
+    )
+    return <Head item={item} done={done} body={body} />
+}
+
+/**
+ * A running run's question (DESIGN §41), as its page shows it (`ProgressQuestion`): the question and each option by
+ * its letter, each one a button that answers with it, as `canopy reply run:ID LETTER` does. It is what the item asks
+ * for, so it comes before the ticket's conversation. The run's progress is read as its page reads it; once it asks
+ * nothing, as after an answer, the item leaves the list.
+ */
+function RunQuestion({ item, onAnswered }: { item: AttentionItem; onAnswered: (said: string) => void }) {
+    if (item.run !== null) {
+        return <WorkerQuestion id={item.run} onAnswered={onAnswered} />
+    }
+    if (item.review !== null) {
+        return <ReviewQuestion id={item.review} onAnswered={onAnswered} />
+    }
+    return null
+}
+
+/** A worker's or a planner's run's question, from the run as its page reads it. */
+function WorkerQuestion({ id, onAnswered }: { id: number; onAnswered: (said: string) => void }) {
+    const { data, error } = useQuery(runQuery(id))
+    return (
+        <QuestionBlock
+            card={data?.card}
+            running={data?.state === 'running'}
+            error={error}
+            answers={{ kind: 'run', id }}
+            onAnswered={onAnswered}
+        />
+    )
+}
+
+/** A review's question, from the review as its page reads it. */
+function ReviewQuestion({ id, onAnswered }: { id: number; onAnswered: (said: string) => void }) {
+    const { data, error } = useQuery(reviewQuery(id))
+    return (
+        <QuestionBlock
+            card={data?.card}
+            running={data?.review.state === 'running'}
+            error={error}
+            answers={{ kind: 'review', id }}
+            onAnswered={onAnswered}
+        />
+    )
+}
+
+/** The question a run's progress asks, `card` undefined until it is read; nothing once it asks none. */
+function QuestionBlock({
+    card,
+    running,
+    error,
+    answers,
+    onAnswered,
+}: {
+    card: RunCard | null | undefined
+    running: boolean
+    error: Error | null
+    answers: AnswerTarget
+    onAnswered: (said: string) => void
+}) {
+    if (error instanceof ApiError) {
+        return <Notice error={error} className="border-b p-3" />
+    }
+    if (card === undefined) {
+        return <PanelSkeleton rows={2} className="min-h-44 border-b" />
+    }
+    const question = card?.question ?? null
+    if (question === null) {
+        return null
+    }
+    return (
+        <div className="border-b p-3" data-testid="attention-question">
+            <ProgressQuestion
+                key={question.asked_at}
+                question={question}
+                running={running}
+                answers={answers}
+                onAnswered={onAnswered}
+            />
+        </div>
+    )
+}
+
 function Subject({ item }: { item: AttentionItem }) {
     if (item.ticket_key !== null) {
         return (
@@ -645,6 +756,9 @@ function Subject({ item }: { item: AttentionItem }) {
                 <TaskTitle id={item.task} />
             </>
         )
+    }
+    if (item.review !== null) {
+        return <ReviewLink id={item.review} />
     }
     return <span className="font-mono text-xs">{item.subject}</span>
 }

@@ -380,6 +380,9 @@ def test_a_running_runs_card_asks_its_question_and_the_operator_answers_it_by_le
     assert (question["recommend"], question["asked_at"], question["answer"]) == ("B", "2026-10-08T12:24:00Z", None)
     asked = question["asked_at"]
     headers = signed_in(c)
+    # It waits on the operator on the attention list too, about the run's ticket, until they answer (DESIGN §41).
+    [item] = [i for i in c.get("/api/attention").json() if i["reason"] == "run_question"]
+    assert (item["subject"], item["run"], item["ticket_key"], item["since"]) == ("run:41", 41, "ABC-101", asked)
 
     refused = c.post("/api/runs/41/answers", json={"letter": "D", "asked_at": asked}, headers=headers)
     assert (refused.status_code, refused.json()["detail"]["guard"]) == (409, "bad_answer")
@@ -389,6 +392,7 @@ def test_a_running_runs_card_asks_its_question_and_the_operator_answers_it_by_le
     answered = c.post("/api/runs/41/answers", json={"letter": "b", "asked_at": asked}, headers=headers).json()
     assert answered == {"letter": "B", "option": "hide the form behind a link", "already": False, "heard": False}
     assert c.get("/api/runs/41").json()["card"]["question"]["answer"] == "B"
+    assert "run_question" not in [i["reason"] for i in c.get("/api/attention").json()]
     # Once its answers directory is there, as while its agent runs, the answer is written where the agent hears it.
     with backend.open() as ctx:
         answers = cards.answers_dir(ctx.state_dir, "41")

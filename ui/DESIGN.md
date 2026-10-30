@@ -1068,7 +1068,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`; a feedback plan's,
   which shares the reason and is told apart by its detail or its ticket's `feedback_plan`, a line naming the plan, its
   PRs, its items, and whether it is stale, with an outline `Approve it on org/repo#N`, a router link to the PR's page at
-  `#feedback-plan`, where it is approved. Memory's items
+  `#feedback-plan`, where it is approved. A running run's question (`run_question`): its head names whose question
+  it is and when it was asked, `Waits on your answer to run:41's question, asked 3m ago`, and under it the question
+  as the run's page draws it (`ProgressQuestion`), each option a button that answers by letter; a toast says what the
+  answer did, since the item leaves with it, and a worker's ticket's conversation follows, as a plan's does. Memory's
+  items
   (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above).
   Replies a run drafted (`drafts_waiting`): an outline `Read the drafts on org/repo#N`, a router link to the PR's page,
   where they sit on their threads; for a ticket's own draft, which names no PR, its waiting drafts (`TicketDrafts`,

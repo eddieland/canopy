@@ -3,7 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { mockChores, mockReviews, mockRuns, mockTasks } from '@/api/mocks'
 import type { ChoreSummary, ReviewSummary, Run, TaskSummary } from '@/api/types'
 
-import { busy, byTicket, railWork, runningTasks, runsListed, subjectRuns, workingOn } from './run-state'
+import {
+    asksYou,
+    busy,
+    byTicket,
+    inState,
+    railWork,
+    runningTasks,
+    runsListed,
+    subjectRuns,
+    workingOn,
+} from './run-state'
 import type { RailItem, SubjectRuns } from './run-state'
 
 const running = mockRuns[0] as Run
@@ -192,6 +202,45 @@ describe('subjectRuns', () => {
         ])
         expect(groups.flatMap((g) => (g.of === 'task' ? [g.task.id] : []))).toEqual([6, 4, 1])
         expect(runsListed(groups)).toBe(4)
+    })
+})
+
+// The mock's running run, its progress asking a question, answered with `answer` when given.
+function asking(answer: 'A' | 'B' | null = null): Run {
+    const card = running.card as NonNullable<Run['card']>
+    const question = {
+        ask: 'Keep the password form?',
+        options: ['keep it', 'hide it'],
+        recommend: 'B' as const,
+        asked_at: '2026-10-08T12:20:00Z',
+        answer,
+        answered_at: answer === null ? null : '2026-10-08T12:25:00Z',
+    }
+    return { ...running, card: { ...card, question } }
+}
+
+describe('asksYou and inState', () => {
+    it('says a running run whose progress asks a question unanswered waits on you, and running too', () => {
+        expect(asksYou(asking())).toBe(true)
+        expect(asksYou(asking('B'))).toBe(false)
+        expect(asksYou(running)).toBe(false)
+        // An ended run's last question waits on nothing: its agent is gone.
+        expect(asksYou(finished(asking(), '2026-10-08T12:30:00Z'))).toBe(false)
+        const [group] = subjectRuns({ runs: [asking()] })
+        expect(inState(group as SubjectRuns, 'blocked')).toBe(true)
+        expect(inState(group as SubjectRuns, 'running')).toBe(true)
+        expect(inState(group as SubjectRuns, 'done')).toBe(false)
+        const [answered] = subjectRuns({ runs: [asking('A')] })
+        expect(inState(answered as SubjectRuns, 'blocked')).toBe(false)
+    })
+
+    it("keeps a running review that asks you under waiting on you, and a blocked run's ticket as before", () => {
+        const asks = { ...review(7, 'running', '2026-10-08T12:05:00Z'), asks_you: true }
+        const groups = subjectRuns({ runs: mockRuns, reviews: [asks, review(8, 'running', '2026-10-08T12:06:00Z')] })
+        expect(groups.filter((g) => inState(g, 'blocked')).map((g) => `${g.of}:${g.latest.id}`)).toEqual([
+            'review:7',
+            'worker:42',
+        ])
     })
 })
 

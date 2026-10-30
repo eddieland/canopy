@@ -126,6 +126,33 @@ describe('RailWorking', () => {
         expect(router.state.location.pathname).toBe('/chores/deps/runs/3')
     })
 
+    it('says a run or a review whose progress asks you a question asks you, in place of its age', async () => {
+        const card = RUNNING.card as NonNullable<Run['card']>
+        const question = {
+            ask: 'Keep the password form?',
+            options: ['keep it', 'hide it'],
+            recommend: 'B' as const,
+            asked_at: '2026-10-08T12:02:00Z',
+            answer: null,
+            answered_at: null,
+        }
+        const asking: Run = { ...RUNNING, card: { ...card, question } }
+        const review = { ...(mockReviews[0] as ReviewSummary), asks_you: true }
+        await renderRouted(<RailWorking />, { client: rail([asking], [review]) })
+        const region = screen.getByRole('region', { name: 'Working' })
+        const [run, reviewing] = within(region).getAllByRole('link') as [HTMLElement, HTMLElement]
+        expect(within(run).getByText('asks you')).toBeDefined()
+        expect(within(run).queryByText('3m')).toBeNull()
+        expect(within(reviewing).getByText('asks you')).toBeDefined()
+        cleanup()
+
+        const answered: Run = { ...asking, card: { ...card, question: { ...question, answer: 'B' } } }
+        await renderRouted(<RailWorking />, { client: rail([answered]) })
+        const row = within(screen.getByRole('region', { name: 'Working' })).getByRole('link')
+        expect(within(row).queryByText('asks you')).toBeNull()
+        expect(within(row).getByText('3m')).toBeDefined()
+    })
+
     it("says what a worker run is doing as its phase's quip, the plain words on hover", async () => {
         await renderRouted(<RailWorking />, { client: rail([RUNNING]) })
         const phase = screen.getByTestId('rail-phase-41')

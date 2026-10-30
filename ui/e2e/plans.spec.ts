@@ -284,6 +284,8 @@ async function listPlanReview(page: Page) {
                     chore: null,
                     pr: null,
                     task: null,
+                    run: null,
+                    review: null,
                     repo: null,
                     finding: false,
                     subject: 'ABC-105',

@@ -12,10 +12,10 @@ from unittest import mock
 import pytest
 from pydantic import ValidationError
 
-from canopy.core import cards, conversation, db
-from canopy.core.vocab import RunStatus
+from canopy.core import cards, conversation, db, review_runs
+from canopy.core.vocab import ReviewRunStatus, RunStatus
 from canopy.runtime.report import Called
-from tests.canopy.helpers import plan_run, present
+from tests.canopy.helpers import in_tick, plan_run, present
 
 CARD: dict[str, object] = {
     "summary": "Fixing the parser;\nthe tests pass.",
@@ -292,3 +292,43 @@ def test_show_lists_a_questions_options_by_letter_and_says_how_to_answer_it(
     db.finish_run(conn, "runs", running, RunStatus.DONE, "{}")
     ended = cards.lines(standing, started_at=OLD, running=False, timeout_minutes=45, ref="run:7")
     assert ended[-1] == "      run ended before an answer"
+
+
+def test_a_running_runs_question_waits_on_the_operator_until_they_answer_or_the_run_ends(
+    conn: sqlite3.Connection,
+    running: int,
+    tmp_path: Path,
+) -> None:
+    """Each running run's or review's question unanswered is an attention item, named by its run (DESIGN §41)."""
+    with in_tick(conn) as tick_id:
+        review = review_runs.insert_review_run(
+            conn,
+            tick_id=tick_id,
+            pr_url="https://example.test/acme/repo/pull/9",
+            sha="a" * 40,
+            ticket=None,
+            repo=None,
+            purpose="request",
+            logs_dir=tmp_path,
+        )
+    assert cards.questions(conn) == []
+    # A card that asks nothing raises none.
+    cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
+    assert cards.questions(conn) == []
+    for table, run_id in (("runs", running), ("review_runs", review)):
+        cards.record_call(conn, table, run_id, cards.Card.model_validate({**CARD, "question": QUESTION}))
+    asked = cards.of(present(db.get_run(conn, running))).asked_at
+    assert asked is not None
+    [run_item, review_item] = cards.questions(conn)
+    assert (run_item.ticket_key, run_item.reason) == (f"run:{running}", "run_question")
+    assert run_item.since == db.format_time(asked)
+    assert run_item.detail == (
+        f"run:{running} (implement, PROJ-1) asks you, recommends A: {QUESTION['ask']}; "
+        f"answer with `canopy reply run:{running} LETTER`"
+    )
+    assert review_item.ticket_key == f"review:{review}"
+    assert review_item.detail.startswith(f"review:{review} (of https://example.test/acme/repo/pull/9) asks you, ")
+    # Answered, it waits on no one; the review's ends with its run.
+    assert cards.record_answer(conn, "runs", running, "B", asked)
+    assert db.finish_run(conn, "review_runs", review, ReviewRunStatus.DONE, "{}")
+    assert cards.questions(conn) == []

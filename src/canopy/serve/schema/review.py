@@ -106,6 +106,8 @@ class ReviewSummary(Model):
     served: list[str] = []
     """The models its session names as having served it, as `provider/model`, the most costly first; empty until
     canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served."""
+    asks_you: bool = False
+    """Whether it runs with a question in its progress that waits on the operator's answer (DESIGN §41)."""
 
 
 class RequestedReview(Model):

@@ -226,7 +226,9 @@ function EarlierRow({ run, names }: { run: Run; names: ModelNames }) {
 
 /**
  * A review on the runs page, in a worker run's columns: how its run went, its id, its ticket, `review`, its PR's
- * title, cost, and when, and under them the PR and the commit it read with what it found. Its findings are on its page.
+ * title, cost, and when, and under them the PR and the commit it read with what it found, and while it runs, `asks you`
+ * when its progress asks a question you have not answered, as a worker run's progress line says. Its findings, and the
+ * question, are on its page.
  */
 function ReviewBody({ review }: { review: ReviewSummary }) {
     return (
@@ -248,6 +250,9 @@ function ReviewBody({ review }: { review: ReviewSummary }) {
             <RowLine from="title" className="flex flex-wrap items-center gap-x-3 gap-y-1">
                 <PullRequestLink url={review.pr_url} />
                 <ReviewFound review={review} />
+                {review.state === 'running' && review.asks_you && (
+                    <span className="shrink-0 text-xs text-status-blocked">asks you</span>
+                )}
             </RowLine>
         </>
     )

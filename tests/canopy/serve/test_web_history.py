@@ -58,7 +58,7 @@ def backend(tmp_path: Path) -> Backend:
     """The mock's journal, served as `canopy loop` serves its own: the loop's attention list and limits."""
     return dataclasses.replace(
         serve_mock.seed(tmp_path / "mock"),
-        attention=attention.listed,
+        attention=attention.shown,
         limits=web.limits,
         review_limit=web.review_limit,
     )

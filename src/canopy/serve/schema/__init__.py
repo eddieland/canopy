@@ -122,9 +122,10 @@ class AttentionItem(Model):
     id: str
     """Stable across ticks and rewordings: the item's fingerprint."""
     subject: str
-    """How the CLI names it: `PROJ-1`, `api`, `PROJ-1 (api)`, `chore:deps`."""
+    """How the CLI names it: `PROJ-1`, `api`, `PROJ-1 (api)`, `chore:deps`, `run:41`."""
     ticket_key: str | None = None
-    """The ticket it is about, when it is about one; a chore's, a task's, and a repository's items have none."""
+    """The ticket it is about, when it is about one; a chore's, a task's, and a repository's items have none. A run's
+    question is about its run's ticket, and a review's about the review's, when it has one."""
     ticket_title: str | None = None
     """That ticket's title, as the overseer named it (DESIGN §13); None until it does, or when it is about none."""
     chore: str | None = None
@@ -145,6 +146,10 @@ class AttentionItem(Model):
     task: int | None = None
     """The one-off task it is about, by its id, when it is about one (DESIGN §36): `awaiting_reply` or
     `task_ticket_unrecorded`."""
+    run: int | None = None
+    """The running worker's or planner's run whose question it is, by its id (DESIGN §41): `run_question`."""
+    review: int | None = None
+    """The running review whose question it is, by its id (DESIGN §41): `run_question`."""
 
 
 class RunsSince(Model):

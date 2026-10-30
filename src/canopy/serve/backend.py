@@ -129,7 +129,7 @@ class Backend:
 
     config: Config
     workspace: Workspace
-    # The attention list as `canopy status` shows it.
+    # The attention list as `canopy status` shows it, with each running run's question unanswered (DESIGN §41).
     attention: Callable[[Context], list[Item]]
     # End a running run as `canopy stop --now` does; False if it had already ended.
     end_run: Callable[[Context, records.Run], bool]

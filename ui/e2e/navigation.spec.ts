@@ -15,9 +15,9 @@ test('the root redirects to the attention list', async ({ page }) => {
 test('the tab names the page, after what blocks on the operator', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
-    // The mock's ten items less the PR that waits on a reviewer and the chore's finding, which block nothing.
-    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(10)
-    const count = 8
+    // The mock's eleven items less the PR that waits on a reviewer and the chore's finding, which block nothing.
+    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(11)
+    const count = 9
     await expect(page).toHaveTitle(`(${count}) Attention · canopy`)
 
     const nav = page.getByRole('navigation', { name: 'Main' })
@@ -170,15 +170,15 @@ test('search params are typed: a known state filters, an unknown one is dropped'
     const filters = page.getByRole('navigation', { name: 'Filter by state' })
     await expect(filters.getByRole('link', { name: 'waiting on you' })).toHaveAttribute('data-selected', 'true')
     await expect(filters.getByRole('link', { name: 'all' })).toHaveAttribute('data-selected', 'false')
-    // A ticket's worker and task 4's run each asked a question.
-    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(2)
+    // A ticket's worker and task 4's run each asked a question, and run 41 asks one as it runs.
+    await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(3)
     // The panel is named for its noun and counts what it lists, as every Runs panel does.
-    await expect(page.getByTestId('runs-count')).toHaveText('2')
+    await expect(page.getByTestId('runs-count')).toHaveText('3')
 
     // The router leaves the URL as typed; what matters is the page never sees the value.
     await page.goto('runs?state=bogus')
     await expect(filters.getByRole('link', { name: 'all' })).toHaveAttribute('data-selected', 'true')
-    await expect(page.getByTestId('runs').locator(':scope > li')).not.toHaveCount(2)
+    await expect(page.getByTestId('runs').locator(':scope > li')).not.toHaveCount(3)
 })
 
 test('the runs page lists a ticket once, by its latest run, and opens its earlier runs under it', async ({ page }) => {
