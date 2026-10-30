@@ -57,7 +57,8 @@ class ReportModel(Model):
     """What one model's replies cost in a month, over every kind of run, as each run's session says (DESIGN §13)."""
 
     model: str | None = None
-    """As `provider/model`, as the runtime names it; None for the runs no session named a model for."""
+    """As `provider/model`, as the runtime names it; None for the runs no session named a model for, in two rows by
+    `unread`."""
     runs: int
     """How many runs it wrote a reply of: a run on two models counts under each."""
     replies: int
@@ -65,6 +66,9 @@ class ReportModel(Model):
     cost_usd: float | None = None
     """What the sessions priced those replies at, in US dollars; for the runs no session named a model for, what the
     runs reported, None when none did."""
+    unread: bool = False
+    """For a row of no model, whether canopy has yet to read its runs' sessions: running, not read yet, or a read that
+    failed. False for the rest, read that named none, and for a model's row."""
 
 
 class ReportTicket(Model):

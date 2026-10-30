@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, runtime_sessions, sql
+from canopy.core import contract, db, run_models, runtime_sessions, sql
 from canopy.core.spend import KIND_TABLES, KINDS, done_in
 from canopy.core.vocab import RunKind, RunStatus
 
@@ -41,6 +41,8 @@ _WORK_KINDS = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
 _MONTH_FORMAT = "%Y-%m"
 # A review that judged the PR, as against one GitHub keeps while its author is still writing it, or one dismissed.
 _JUDGED = ("approved", "changes_requested", "commented")
+# A month's row by model: its model, and for no model, whether its runs are unread.
+type _ModelKey = tuple[str | None, bool]
 
 
 @dataclass(frozen=True)
@@ -105,12 +107,15 @@ class Outside:
 class ModelMonth:
     """What one model's replies cost in a month, over every kind of run, as the runs' sessions name it (§13)."""
 
-    #: The model; None for the runs no session named one for, at what they reported they cost.
+    #: The model; None for the runs no session named one for, at what they reported they cost, in two rows by `unread`.
     model: str | None
     #: The runs it wrote a reply of: a run on two models counts under each.
     runs: int
     replies: int
     cost_usd: float | None
+    #: For a row of no model, whether canopy has yet to read its runs' sessions (`run_models.unread`); False for the
+    #: runs read that named none, and for a model's row.
+    unread: bool = False
 
 
 @dataclass(frozen=True)
@@ -149,7 +154,7 @@ class Month:
     until: str
     #: Each kind in `spend.KINDS` order, one that ran nothing among them.
     kinds: Sequence[KindMonth]
-    #: The costliest first, the runs no session named a model for last.
+    #: The costliest first, the runs no session named a model for last, those unread before the rest.
     models: Sequence[ModelMonth]
     #: The latest first.
     landed: Sequence[Landed]
@@ -324,15 +329,16 @@ def _outside(conn: sqlite3.Connection, since: str, until: str, state_dir: Path) 
 
 
 # Each month's spend by model, every kind's summed, read as `spend` reads a kind's: the run table leads, and
-# `run_models` is read by its key's prefix. Then the runs no session named a model for, under None.
-def _models(conn: sqlite3.Connection, since: str, until: str) -> dict[str, dict[str | None, ModelMonth]]:
-    found: dict[str, dict[str | None, ModelMonth]] = {}
+# `run_models` is read by its key's prefix. Then the runs no session named a model for, under None, those canopy has
+# yet to read apart from the rest.
+def _models(conn: sqlite3.Connection, since: str, until: str) -> dict[str, dict[_ModelKey, ModelMonth]]:
+    found: dict[str, dict[_ModelKey, ModelMonth]] = {}
 
-    def add(month: str, model: str | None, runs: int, replies: int, cost: float | None) -> None:
-        had = found.setdefault(month, {}).get(model)
+    def add(month: str, model: str | None, runs: int, replies: int, cost: float | None, *, unread: bool) -> None:
+        had = found.setdefault(month, {}).get((model, unread))
         if had is not None:
             runs, replies, cost = had.runs + runs, had.replies + replies, _sum([had.cost_usd, cost])
-        found[month][model] = ModelMonth(model=model, runs=runs, replies=replies, cost_usd=cost)
+        found[month][model, unread] = ModelMonth(model=model, runs=runs, replies=replies, cost_usd=cost, unread=unread)
 
     for table, which in KIND_TABLES.values():
         named = (
@@ -346,22 +352,29 @@ def _models(conn: sqlite3.Connection, since: str, until: str) -> dict[str, dict[
             .group_by("month, m.model")
         )
         for month, model, runs, replies, cost in sql.execute(conn, named):
-            add(str(month), str(model), int(runs), int(replies), cost)
+            add(str(month), str(model), int(runs), int(replies), cost, unread=False)
         unnamed = (
-            sql.select("{} AS month, count(*), SUM(r.cost_usd)", _bucket(sql.frag("r.started_at")))
+            sql.select(
+                "{} AS month, {} AS unread, count(*), SUM(r.cost_usd)",
+                _bucket(sql.frag("r.started_at")),
+                run_models.unread(table),
+            )
             .from_("{} r", sql.name(table))
             .where("r.started_at >= ? AND r.started_at < ?", since, until)
             .where("{}", which)
             .where("NOT EXISTS (SELECT 1 FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)", table)
-            .group_by("month")
+            .group_by("month, unread")
         )
-        for month, runs, cost in sql.execute(conn, unnamed):
-            add(str(month), None, int(runs), 0, cost)
+        for month, unread, runs, cost in sql.execute(conn, unnamed):
+            add(str(month), None, int(runs), 0, cost, unread=bool(unread))
     return found
 
 
-def _costliest(models: Mapping[str | None, ModelMonth]) -> list[ModelMonth]:
-    return sorted(models.values(), key=lambda m: (m.model is None, -(m.cost_usd or 0.0), m.model or ""))
+def _costliest(models: Mapping[_ModelKey, ModelMonth]) -> list[ModelMonth]:
+    return sorted(
+        models.values(),
+        key=lambda m: (m.model is None, not m.unread, -(m.cost_usd or 0.0), m.model or ""),
+    )
 
 
 # Each PR a run that started before `until` names, and when the first run that names it started: when the PR first

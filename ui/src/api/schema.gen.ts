@@ -3347,6 +3347,13 @@ export type components = {
              * @description How many worker runs it counts, a running one included.
              */
             runs: number;
+            /**
+             * Unread Cost Usd
+             * @description A ticket's: what its runs whose sessions canopy has yet to read reported, of that rest (running, not read yet,
+             *     or a read that failed); the remainder is the runs read that named none. None when none reported a cost, and for a
+             *     PR's.
+             */
+            unread_cost_usd: number | null;
         };
         /**
          * Cpu
@@ -6122,7 +6129,8 @@ export type components = {
             cost_usd: number | null;
             /**
              * Model
-             * @description As `provider/model`, as the runtime names it; None for the runs no session named a model for.
+             * @description As `provider/model`, as the runtime names it; None for the runs no session named a model for, in two rows by
+             *     `unread`.
              */
             model: string | null;
             /**
@@ -6135,6 +6143,13 @@ export type components = {
              * @description How many runs it wrote a reply of: a run on two models counts under each.
              */
             runs: number;
+            /**
+             * Unread
+             * @description For a row of no model, whether canopy has yet to read its runs' sessions: running, not read yet, or a read that
+             *     failed. False for the rest, read that named none, and for a model's row.
+             * @default false
+             */
+            unread: boolean;
         };
         /**
          * ReportMonth
@@ -8224,8 +8239,8 @@ export type components = {
             kind: components["schemas"]["SpendKind"];
             /**
              * Model
-             * @description As `provider/model`, as the runtime names it; None for the kind's runs no session named a model for: not read
-             *     yet, no longer kept, failed to read, or making no model call.
+             * @description As `provider/model`, as the runtime names it; None for the kind's runs no session named a model for, in two
+             *     rows by `unread`.
              */
             model: string | null;
             /**
@@ -8238,6 +8253,14 @@ export type components = {
              * @description How many of those runs it wrote a reply of: a run on two models counts under each.
              */
             runs: number;
+            /**
+             * Unread
+             * @description For a row of no model, whether canopy has yet to read its runs' sessions: running, not read yet, or a read that
+             *     failed. False for the rest, read that named none (no longer kept, no session to read, or no model call), and for a
+             *     model's row.
+             * @default false
+             */
+            unread: boolean;
             /**
              * Workspace Cost Usd
              * @description What those runs spent on the model, as `cost_usd` counts it; None as `workspace_runs` is.

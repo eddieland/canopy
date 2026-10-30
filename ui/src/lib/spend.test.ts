@@ -22,6 +22,7 @@ import {
     comparedModels,
     listedModels,
     modelKind,
+    modelKey,
     modelRows,
     monthName,
     perRun,
@@ -31,7 +32,7 @@ import {
     spendLine,
     spendWindow,
     toolRows,
-    unattributedShare,
+    unreadShare,
     windowId,
     windowName,
     workspacePerRun,
@@ -41,7 +42,7 @@ const H24: Clock = { hours: '24', zone: false }
 const H12: Clock = { hours: '12', zone: false }
 
 // A By model row of the whole workspace, with no ticket's runs set beside the workspace's.
-const ALONE = { workspace_runs: null, workspace_cost_usd: null }
+const ALONE = { workspace_runs: null, workspace_cost_usd: null, unread: false }
 
 const NONE: SpendCosts = {
     overseer: null,
@@ -212,17 +213,35 @@ describe('spend', () => {
         expect(modelRows(models, 'plans')).toEqual([])
     })
 
-    it("gives a model's spend per run, so two models' runs compare, and the share no session named a model for", () => {
+    it('keeps the runs canopy has yet to read apart from those read that named none, unread first', () => {
+        const models: SpendModel[] = [
+            { kind: 'overseer', model: null, runs: 1, replies: 0, cost_usd: 3, ...ALONE },
+            { kind: 'overseer', model: null, runs: 2, replies: 0, cost_usd: 0.5, ...ALONE, unread: true },
+            { kind: 'workers', model: 'a/big', runs: 1, replies: 9, cost_usd: 1.5, ...ALONE },
+            { kind: 'workers', model: null, runs: 3, replies: 0, cost_usd: 1, ...ALONE, unread: true },
+        ]
+        const rows = modelRows(models, undefined)
+        expect(rows.map((m) => [modelKey(m), m.runs, m.cost_usd])).toEqual([
+            ['a/big', 1, 1.5],
+            ['unread', 5, 1.5],
+            ['none', 1, 3],
+        ])
+        // The header's share is the unread row's alone: none will never name a model.
+        expect(unreadShare(rows)).toBe(0.25)
+        expect(unreadShare(rows.filter((m) => !m.unread))).toBeNull()
+    })
+
+    it("gives a model's spend per run, so two models' runs compare, and the share canopy has yet to read", () => {
         const rows = [
             { model: 'a/small', runs: 6, replies: 46, cost_usd: 1.5, ...ALONE },
             { model: 'a/big', runs: 1, replies: 9, cost_usd: 0.5, ...ALONE },
-            { model: null, runs: 5, replies: 0, cost_usd: 2, ...ALONE },
+            { model: null, runs: 5, replies: 0, cost_usd: 2, ...ALONE, unread: true },
         ]
         expect(rows.map((row) => perRun(row))).toEqual([0.25, 0.5, 0.4])
         expect(perRun({ model: null, runs: 2, replies: 0, cost_usd: null, ...ALONE })).toBeNull()
-        expect(unattributedShare(rows)).toBe(0.5)
-        expect(unattributedShare(rows.slice(0, 2))).toBeNull()
-        expect(unattributedShare([{ model: null, runs: 2, replies: 0, cost_usd: null, ...ALONE }])).toBeNull()
+        expect(unreadShare(rows)).toBe(0.5)
+        expect(unreadShare(rows.slice(0, 2))).toBeNull()
+        expect(unreadShare([{ model: null, runs: 2, replies: 0, cost_usd: null, ...ALONE, unread: true }])).toBeNull()
     })
 
     it("sets a ticket's rows beside the workspace's per run, summed over every kind as their own are", () => {
@@ -235,6 +254,7 @@ describe('spend', () => {
                 cost_usd: 2.2,
                 workspace_runs: 5,
                 workspace_cost_usd: 4.5,
+                unread: false,
             },
             {
                 kind: 'reviews',
@@ -244,6 +264,7 @@ describe('spend', () => {
                 cost_usd: 0.3,
                 workspace_runs: 3,
                 workspace_cost_usd: 0.75,
+                unread: false,
             },
         ]
         const [summed] = modelRows(models, undefined)

@@ -16,9 +16,10 @@ const OPUS: SpendModel = {
     cost_usd: 2.2,
     workspace_runs: 5,
     workspace_cost_usd: 4.4,
+    unread: false,
 }
 const SONNET: SpendModel = { ...OPUS, model: 'anthropic/claude-sonnet-4-5', runs: 1, cost_usd: 0.6 }
-const UNREAD: SpendModel = { ...OPUS, model: null, runs: 3, cost_usd: 1, workspace_runs: 9 }
+const UNREAD: SpendModel = { ...OPUS, model: null, runs: 3, cost_usd: 1, workspace_runs: 9, unread: true }
 
 function worker(source: AgentModel['source']): AgentModel {
     return {

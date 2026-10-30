@@ -204,8 +204,8 @@ class SpendModel(Model):
     kind: SpendKind
     """The kind of run; the overseer's include dry runs."""
     model: str | None = None
-    """As `provider/model`, as the runtime names it; None for the kind's runs no session named a model for: not read
-    yet, no longer kept, failed to read, or making no model call."""
+    """As `provider/model`, as the runtime names it; None for the kind's runs no session named a model for, in two
+    rows by `unread`."""
     runs: int
     """How many of those runs it wrote a reply of: a run on two models counts under each."""
     replies: int
@@ -218,6 +218,10 @@ class SpendModel(Model):
     them, to compare with; None for a row of the whole workspace."""
     workspace_cost_usd: float | None = None
     """What those runs spent on the model, as `cost_usd` counts it; None as `workspace_runs` is."""
+    unread: bool = False
+    """For a row of no model, whether canopy has yet to read its runs' sessions: running, not read yet, or a read that
+    failed. False for the rest, read that named none (no longer kept, no session to read, or no model call), and for a
+    model's row."""
 
 
 class SpendFirstCallWeek(Model):
