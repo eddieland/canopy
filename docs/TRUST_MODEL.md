@@ -314,7 +314,8 @@ Controls:
 - Each agent's model (DESIGN §13, M58), and the variant it runs at, is the operator's choice alone: `runtime.models`
   and a chore's `model`, both private (T7), which canopy writes into the agent's definition, or for one ticket's worker,
   planner, or reviewer an override of the model, at one of its variants or none, set with `canopy model` or the
-  ticket's page (T8), which refuses inside a tick or a run and refuses a model the runtime does not list, or a variant
+  ticket's page (T8), or for the reviews of a PR they requested `canopy start URL --review --model` or the web UI
+  (T8), each of which refuses inside a tick or a run and refuses a model the runtime does not list, or a variant
   the model lacks. The overseer, a dispatch, ticket text, and labels choose none, the overseer's own included, and a
   `runtime` template, prefix, or suffix that passes a model or a variant is a config error, as is a chore's command
   that does while it runs canopy's chore agent, so no agent's command line overrides it unseen. A worker run whose

@@ -35,6 +35,7 @@ const server: Middleware = {
                     ended_at: null,
                     end_reason: null,
                     notes: null,
+                    model: null,
                     personas: [],
                 },
                 running_review: null,

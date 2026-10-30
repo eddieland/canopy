@@ -2,6 +2,7 @@
 
 import os
 import sqlite3
+from pathlib import Path
 from unittest import mock
 
 import httpx2
@@ -13,13 +14,15 @@ from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.reviews import review_requests
-from tests.canopy.helpers import KEY, context, operator, overseer_calls, personas_dir, waits
+from tests.canopy.helpers import KEY, context, listed, operator, overseer_calls, personas_dir, ran_on, waits
 from tests.canopy.review_helpers import CLEAN, FINDINGS, head, review_decisions, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, review_ends, reviews
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
 PR = "https://github.com/acme/other/pull/12"
+MODEL = "acme/fake-model-1"
+OTHER = "acme/fake-model-2"
 LOOP_PR = "https://github.com/acme/api/pull/7"
 
 
@@ -222,6 +225,78 @@ def test_a_request_in_several_personas_is_reviewed_once_in_each_side_by_side(
         scenario.operator("review", "show", str(both[0].id)).out
     )
     assert "  in explainer\n" in scenario.operator("show", PR).out
+
+
+def test_a_requests_model_runs_each_of_its_reviews_and_no_other_prs(
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    opencode_state: Path,
+    agent_log: Path,
+    git_pool: GitPool,
+) -> None:
+    # DESIGN §13: the request's model takes the place of the reviewer's, for every review the request makes.
+    listed(opencode_state, MODEL, OTHER)
+    scenario.configures(capacity={"max_reviews": 2}, runtime={"models": {"reviewer": OTHER}})
+    out = scenario.operator("start", PR, "--review", "--persona", "skeptic", "--persona", "explainer", "--model", MODEL)
+    assert out.out.endswith(f"side by side.\nIts reviews run on {MODEL}.\n")
+    assert review_requests.open_requests(scenario.conn)[0].model == MODEL
+    assert f"  model: {MODEL}\n" in scenario.operator("show", PR).out
+    # One model for the whole request: each persona's review runs on it.
+    both = scenario.reviews_each(reviews(head(git_pool), PR), reviewer=reviewer_reports(CLEAN))
+    assert [(r.row.persona, r.row.model) for r in both] == [("skeptic", MODEL), ("explainer", MODEL)]
+    assert ran_on(agent_log, "canopy-reviewer") == MODEL
+    # Another PR's request with none takes config's, as before.
+    other = "https://github.com/acme/other/pull/13"
+    assert "Its reviews run on" not in scenario.operator("start", other, "--review").out
+    assert scenario.review(reviews("b" * 40, other), reviewer=reviewer_reports(CLEAN)).row.model == OTHER
+
+
+def test_a_requests_model_takes_the_place_of_its_tickets_reviewer_override(
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    opencode_state: Path,
+    git_pool: GitPool,
+) -> None:
+    listed(opencode_state, MODEL, OTHER)
+    scenario.operator("start", PR, "--review")
+    # Asked again with a model, the open request's is replaced, as its notes are.
+    again = scenario.operator("start", PR, "--review", "--model", MODEL).out
+    assert again == f"{PR} was already requested for review. Its reviews run on {MODEL}.\n"
+    assert scenario.operator("start", PR, "--review").out == f"{PR} was already requested for review.\n"
+    assert review_requests.open_requests(scenario.conn)[0].model == MODEL
+    # The PR becomes the ticket's unit's, whose reviewer the operator put on another model: the request is the more
+    # specific, more recent ask.
+    db.set_unit(scenario.conn, KEY, str(requests_env.root), "repo", pr_url=PR)
+    scenario.operator("model", KEY, OTHER, "--agent", "reviewer")
+    assert scenario.review(reviews(head(git_pool), PR, ticket=KEY), reviewer=reviewer_reports(CLEAN)).row.model == MODEL
+
+
+def test_a_requests_model_the_runtime_does_not_list_is_refused_as_asked_and_as_its_review_starts(
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+    opencode_state: Path,
+    git_pool: GitPool,
+) -> None:
+    listed(opencode_state, MODEL, variants={MODEL: ["high"]})
+    usage = scenario.operator("start", KEY, "--model", MODEL, code=2).err
+    assert "--model is for a PR's review, with --review" in usage
+    err = scenario.operator("start", PR, "--review", "--model", OTHER, code=1).err
+    assert f"start refused (unknown_model): OpenCode does not list the model {OTHER}" in err
+    err = scenario.operator("start", PR, "--review", "--model", f"{MODEL}@max", code=1).err
+    assert f"start refused (unknown_model): OpenCode lists the model {MODEL} but not its variant max" in err
+    assert requests_of(scenario.conn) == []
+    scenario.operator("start", PR, "--review", "--model", f"{MODEL}@high")
+    # The runtime drops the variant before the review starts: refused, never run on another model, and its refusal
+    # names where the model was chosen.
+    listed(opencode_state, MODEL)
+    reason = (
+        f"OpenCode lists the model {MODEL} chosen for {PR}'s review request (`canopy start {PR} --review --model`) "
+        "but not its variant high (it lists none for it); nothing ran. Choose a variant it lists"
+    )
+    refused = scenario.refuses(reviews(head(git_pool), PR))
+    assert refused == [("refused:model_missing", reason), ("attention:model_missing", reason)]
+    assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
+    assert requests_of(scenario.conn) == [(PR, "cli", None)]
 
 
 def test_a_persona_is_reviewed_once_per_commit_and_waits_on_room_for_its_review(
@@ -459,3 +534,22 @@ def test_the_web_channel_requests_and_stops_a_review_as_the_cli_does(ctx: Contex
     assert (request["end_reason"], request["ended_at"] is not None) == ("stopped", True)
     with pytest.raises(conversation.Refused, match="not_requested"):
         review_requests.stop(ctx.conn, conversation.parse_ref(PR))
+
+
+def test_the_web_channel_records_a_requests_model_and_refuses_one_not_listed(
+    ctx: Context,
+    opencode_state: Path,
+) -> None:
+    listed(opencode_state, MODEL)
+    c, headers = signed_in_client(ctx)
+
+    def start(body: dict[str, object]) -> httpx2.Response:
+        return c.post("/api/pull-request/start", params={"url": PR}, json=body, headers=headers)
+
+    assert refused(start({"model": OTHER})).startswith("unknown_model")
+    assert start({}).json()["request"]["model"] is None
+    assert start({"model": MODEL}).json()["request"]["model"] == MODEL
+    # None leaves it as it was.
+    assert start({"notes": "The cache."}).json()["request"]["model"] == MODEL
+    page = c.get("/api/pull-request", params={"url": PR}).json()
+    assert page["pull_request"]["review_request"]["model"] == MODEL
