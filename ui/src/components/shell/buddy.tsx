@@ -5,12 +5,14 @@ import type { CSSProperties, RefObject } from 'react'
 
 import { ShellCrest, ShellEye, ShellPlates, ShellRing } from '@/components/ghost-shell'
 import { HatDrawing } from '@/components/hat'
+import { SeasonDecoration } from '@/components/season'
 import { useFits } from '@/hooks/use-fits'
 import { NAMES, nextTip, setBuddy, tipsFor, typeBurst, useCompanion } from '@/lib/buddy'
 import type { Companion, View } from '@/lib/buddy'
 import { useWardrobe } from '@/lib/hats'
 import type { HatId } from '@/lib/hats'
 import { onRaveStart, useRave } from '@/lib/rave'
+import { useSeason } from '@/lib/seasons'
 import { useVault } from '@/lib/shells'
 import type { ShellId } from '@/lib/shells'
 import { cn } from '@/lib/utils'
@@ -68,6 +70,9 @@ interface Offer {
  *
  * Settings can put a Destiny Ghost in Sprig's place: it floats where Sprig stands, in a voice of its own
  * (src/lib/ghost.ts), and keeps every rule above. A tip one of them offered is never shown under the other's name.
+ *
+ * In a season (src/lib/seasons.ts), a jack-o'-lantern or the like stands beside whichever of them is there, in the
+ * same slot, so it steps out with them.
  */
 export function Buddy() {
     const view = viewOf(useRouterState({ select: (state) => state.matches.at(-1)?.routeId }))
@@ -87,6 +92,7 @@ export function Buddy() {
     const [slot, room] = useFits(roomFor)
     const { worn } = useWardrobe()
     const shell = useVault().worn
+    const season = useSeason()
     // Offers the next tip, about the view on screen or the rave, never the one just offered.
     const offerNext = (asked: boolean, raving: boolean) =>
         setOffer({
@@ -154,22 +160,27 @@ export function Buddy() {
                     onAnother={another}
                     onClose={close}
                 />
-                <button
-                    type="button"
-                    aria-label={`Ask ${name} for a tip`}
-                    data-testid="buddy-sprig"
-                    onClick={another}
-                    className={cn(
-                        'rounded-md p-1 transition-transform',
-                        'outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5',
-                    )}
-                >
-                    {companion === 'ghost' ? (
-                        <GhostFigure cue={offer.n} rave={rave} shell={shell} />
-                    ) : (
-                        <Figure cue={offer.n} hat={worn} rave={rave} />
-                    )}
-                </button>
+                {/* Sprig and, in a season, what stands beside it on the same floor; the row is the figure roomFor
+                    measures, as tall as Sprig. */}
+                <div className="flex items-end gap-1">
+                    <button
+                        type="button"
+                        aria-label={`Ask ${name} for a tip`}
+                        data-testid="buddy-sprig"
+                        onClick={another}
+                        className={cn(
+                            'rounded-md p-1 transition-transform outline-none',
+                            'focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5',
+                        )}
+                    >
+                        {companion === 'ghost' ? (
+                            <GhostFigure cue={offer.n} rave={rave} shell={shell} />
+                        ) : (
+                            <Figure cue={offer.n} hat={worn} rave={rave} />
+                        )}
+                    </button>
+                    {season === null ? null : <SeasonDecoration id={season} className="mb-1 h-9 w-10" />}
+                </div>
             </aside>
         </div>
     )
