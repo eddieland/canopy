@@ -1,14 +1,14 @@
 # M66. The checklist, asked before the push
 
-REQUIREMENTS R27, DESIGN §8, §12, §21, §31, §33, §41, and §42, TRUST_MODEL T1, T3, T4, and T7. Asked for by the
-operator (2026-10-29): the team keeps meeting the same nits, rules its architect asks for that `AGENTS.md` states and
-no linter checks, and reviewers hold them only sometimes, canopy's adversarial reviewer among them. The operator's
-standing worker instructions already emphasize them, and workers still miss them. Asking an agent one plain question,
-"does this diff do X?", gets a reliable answer; a rule among forty at the top of a long run does not. So canopy asks
-the operator's list at the moment it matters, after the worker pushes and before it finishes, in the worker's own run,
-and records each answer (DESIGN §42). A second review that asks the same list of a PR waits on what that measures.
-The rules are a repository's, not the workspace's: a workspace maps repositories of different languages and teams, so
-each has its own list, and one without a list is not asked (the operator, 2026-10-30).
+REQUIREMENTS R27, DESIGN §8, §12, §21, §31, §33, §41, and §42, TRUST_MODEL T1, T3, T4, and T7. Asked for by the operator
+(2026-10-29): the team keeps meeting the same nits, rules its architect asks for that `AGENTS.md` states and no linter
+checks, and reviewers hold them only sometimes, canopy's adversarial reviewer among them. The operator's standing worker
+instructions already emphasize them, and workers still miss them. Asking an agent one plain question, "does this diff do
+X?", gets a reliable answer; a rule among forty at the top of a long run does not. So canopy asks the operator's list at
+the moment it matters, once the worker's diff is whole and before it pushes, so a fix costs no CI run, in the worker's
+own run, and records each answer (DESIGN §42). A second review that asks the same list of a PR waits on what that
+measures. The rules are a repository's, not the workspace's: a workspace maps repositories of different languages and
+teams, so each has its own list, and one without a list is not asked (the operator, 2026-10-30).
 
 Today a worker reads the rules once, in the repository's docs and `paths.worker_instructions`, and the adversarial
 reviewer is told to look for defects, not style (§21, step 3). Neither records, per rule, what was held and what was
@@ -27,15 +27,19 @@ missed. Three stages, in order, each in its own PRs; stage 3 waits on stage 2's 
   result can be held to them. Before a worker run that may push starts (`implement`, `resume`, public and private, and a
   task's), the harness writes the list of each of the run's repositories that has one to the run's answers directory
   (§41), beside where an answer goes; a run none of whose repositories has a list gets no file and is never reminded.
-  canopy's plugin gains a job, in the same file as the clock, the nudge, and the answer: after a tool call whose input
-  runs `git push` and whose result shows it went through, in a run `CANOPY_RUN_ID` names as a worker's, it reads the
-  file and adds a `[canopy]` line and the lists, each under its repository's name, to the call's result, where the
-  clock's line goes, asking the worker to diff each branch against its base, hold each item to its repository's diff,
-  fix what fails and push the fix (D116), and answer each item in `checklist` in its result. A joint run hears every
-  list of its repositories at once, rather than the plugin telling from a push which repository it went to. A rejected
-  push is not reminded: a worker never retries one. It reminds once per stretch of work: not again within a number of
-  tool calls of the last reminder, so a fix pushed right after is not reminded twice, and again after a long stretch.
-  The worker prompts gain a sentence saying the reminder may come and what `checklist` holds; the result contract gains
+  canopy's plugin gains a job, in the same file as the clock, the nudge, and the answer: before a tool call whose input
+  runs `git push` (`tool.execute.before`), in a run `CANOPY_RUN_ID` names as a worker's, it reads the file and holds the
+  call, which does not run: the call's error is a `[canopy]` line saying the push was held, not rejected, and the lists,
+  each under its repository's name, asking the worker to diff each branch against its base, hold each item to its
+  repository's diff, commit what fails, answer each item in `checklist` in its result, and push again. A joint run hears
+  every list of its repositories at once, rather than the plugin telling from a push which repository it would go to. It
+  holds once per stretch of work: the push after a hold goes through, and one after a long stretch is held again, so a
+  worker is never kept from pushing. In the clock's last stretch it holds nothing: the push runs, and only once its
+  result shows it went through does the plugin add the lists to that result, where the clock's line goes, asking for the
+  fix pushed again (D116); a rejected push is not reminded, since a worker never retries one. Stage 1 confirms that both
+  of OpenCode's major versions hand a hook's error to the agent as the call's result; under one that does not, the
+  plugin reminds after the push alone. The worker prompts gain a sentence saying a push may be held, that a held push is
+  pushed again once the list is answered, unlike a rejected one, and what `checklist` holds; the result contract gains
   it, validated: per repository and item, `pass`, `fixed`, `held` with a `reason`, or `n/a`; an item or a repository the
   run's lists do not hold is dropped, and a reminded run with no `checklist` is recorded unanswered. `canopy show-run`
   and the run's page show the answers; `canopy checklist` (and a web UI view) counts per repository and item reminded,
@@ -59,32 +63,40 @@ missed. Three stages, in order, each in its own PRs; stage 3 waits on stage 2's 
   review eval --checklist`. The `TRUST_MODEL` lines for it: T7 (one more private key), T1 (the list is the operator's
   instructions, the diff is data, the definition writes nothing), T3 (one more run per reviewed commit under review
   capacity, `max_workers`, and the daily limit, not the per-PR limit, and not retried on a commit).
-- **Rejected:** the list as standing instructions (the operator's already emphasize these rules, and workers miss them;
-  no record per item); a persona (it cannot narrow, §31); the review first (a run, a slot, and a `resume` per commit
-  before the cheaper ask is measured); one review run per item (as many leases per commit); one list for the workspace
-  (another repository's items are `n/a` noise, and keeping them apart by `paths:` grows one list past its bound); the
-  list read from the repository's checkout, a file of its own included (T1, T7); a reminder to the adversarial reviewer
-  (its prompt already holds the repository's rules as one input; the list's place there is the checklist review).
+- **Rejected:** the reminder after the push alone (the fix it asks for is a second CI run); after each commit (a diff
+  not yet whole, asked again and again); a git `pre-push` hook (`core.hooksPath` replaces the repository's own, and its
+  state would live in the checkout); the list as standing instructions (the operator's already emphasize these rules,
+  and workers miss them; no record per item); a persona (it cannot narrow, §31); the review first (a run, a slot, and a
+  `resume` per commit before the cheaper ask is measured); one review run per item (as many leases per commit); one list
+  for the workspace (another repository's items are `n/a` noise, and keeping them apart by `paths:` grows one list past
+  its bound); the list read from the repository's checkout, a file of its own included (T1, T7); a reminder to the
+  adversarial reviewer (its prompt already holds the repository's rules as one input; the list's place there is the
+  checklist review).
 - **TRUST_MODEL**, in the PR that builds stage 1: T1 (a forged `[canopy]` line can only ask the agent to check its own
   diff against a list it already holds); T4 (the plugin reads one more file in the answers directory and writes
-  nothing); T7 (one more private path, listed with the others); T3 (unchanged: nothing on a reminder extends a run or
-  holds a slot).
-- **Tests with the fakes:** the plugin's own tests for the trigger (a push that went through, not a fetch or a rejected
-  push), its once-per-stretch rule, a joint run's lists each under its repository, the block's wording and its place in
-  a built-in and an MCP result, and a missing or overlong file adding nothing; a fake worker that pushes sees the list
-  in that call's result and answers it, and its answers show on the run; a result without `checklist` after a reminder
-  is recorded unanswered; an unknown item or repository is dropped; a run in a repository without a list gets no file
-  and is not reminded; a list the harness cannot read refuses `bad_prompt`, and a list in the workspace file is a config
-  error; the overseer, a planner, a reviewer, and a chore get no file; a sandboxed run reads the file and cannot write
-  it (the sandbox's tests); the counts per repository and item; `test_prompt_sizes.py` for the prompts, `test_frozen.py`
-  for the answer type, and `core/test_db.py` and `test_records.py` for where the answers are kept.
+  nothing, and the one call it refuses is a worker's push, once per stretch and never in the clock's last stretch,
+  where today it refuses none); T7 (one more private path, listed with the others); T3 (unchanged: nothing on a
+  reminder extends a run or holds a slot).
+- **Tests with the fakes:** the plugin's own tests for the hold (a push held, not a fetch, a commit, or a worker's push
+  right after a hold), the clock's last stretch (the push runs, and only one that went through is reminded, not a
+  rejected one), its once-per-stretch rule, another job's error never holding a call, a joint run's lists each under its
+  repository, the block's wording and its place in a built-in and an MCP result, and a missing or overlong file adding
+  nothing; a fake worker that pushes is held, sees the list in that call's error, pushes again, and answers it, and its
+  answers show on the run; a result without `checklist` after a reminder is recorded unanswered; an unknown item or
+  repository is dropped; a run in a repository without a list gets no file and is not reminded; a list the harness
+  cannot read refuses `bad_prompt`, and a list in the workspace file is a config error; the overseer, a planner, a
+  reviewer, and a chore get no file; a sandboxed run reads the file and cannot write it (the sandbox's tests); the
+  counts per repository and item; `test_prompt_sizes.py` for the prompts, `test_frozen.py` for the answer type, and
+  `core/test_db.py` and `test_records.py` for where the answers are kept.
 
 Accept: Stage 0's list read by the operator, before stage 1 starts. Live, once stage 1 is built: a worker on a toy
-ticket with a deliberate hit on two items is reminded in its push's result, as its transcript shows, fixes both, pushes
-again, and its run's page shows `fixed` on those and `pass` or `n/a` on the rest, before the PR is `green_unreviewed`; a
-sandboxed worker the same; a worker in a repository without a list is not reminded; and two weeks of real use are in
-`MEASUREMENTS.md` as stage 2 says, with the operator's call on stage 3 recorded on the `Status:` line.
+ticket with a deliberate hit on two items has its push held, as its transcript shows, fixes both, and pushes once, so
+its branch's CI runs once, and its run's page shows `fixed` on those and `pass` or `n/a` on the rest, before the PR is
+`green_unreviewed`; a sandboxed worker the same; a worker in a repository without a list is not reminded; and two weeks
+of real use are in `MEASUREMENTS.md` as stage 2 says, with the operator's call on stage 3 recorded on the `Status:`
+line.
 
 Status: not started. Designed 2026-10-29 (DESIGN §42); the operator chose the reminder over the review as the first
 stage the same day, on the evidence that standing instructions already emphasize these rules and workers miss them.
-Made a list per repository 2026-10-30, at the operator's ask.
+Made a list per repository 2026-10-30, at the operator's ask, and the reminder held before the push the same day, so a
+fix costs no CI run.

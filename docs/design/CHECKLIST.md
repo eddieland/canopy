@@ -7,16 +7,16 @@ the whole design; the [README](README.md) has the map. Previous: [Where a runnin
 ## 42. The operator's checklist
 
 Proposed (REQUIREMENTS R27, ROADMAP M66). The checklist is the operator's list of rules a team holds and no linter
-checks, each a question that can be asked of a diff, one list per repository, since a workspace's repositories differ
-in language and team. canopy asks it at the moment it matters: when a worker has pushed
-and is about to finish, as a reminder in its own run, with the worker's answer to each item recorded. If that is not
-enough, or for PRs workers did not write, a checklist review asks the same list of a PR at one commit, as a second
-review beside the adversarial one (§21).
+checks, each a question that can be asked of a diff, one list per repository, since a workspace's repositories differ in
+language and team. canopy asks it at the moment it matters: when a worker's diff is whole and before it is pushed, as a
+reminder in its own run, with the worker's answer to each item recorded. If that is not enough, or for PRs workers did
+not write, a checklist review asks the same list of a PR at one commit, as a second review beside the adversarial one
+(§21).
 
 Why asked, rather than told: the worker's prompt already carries these rules, in the repository's docs and the
 operator's standing instructions (§12), and workers miss them, as the adversarial reviewer does, which is asked for
 defects and weighs a rule among the whole change. Asked one plain question of one diff, an agent answers it reliably.
-A reminder is that question, put when the diff is whole and before the run ends; a review is the same question put
+A reminder is that question, put when the diff is whole and before CI is spent on it; a review is the same question put
 by a run that did not write the code.
 
 ### The list
@@ -32,15 +32,18 @@ shared workspace cannot vouch for (T1, T7); the team's copy stays with its docs,
 
 ### The reminder
 
-Every worker run that pushes, public and private, `implement`, `resume`, and a task's, hears the list once its branch is
-up: after the tool call that pushes, and only when its result shows the push went through, canopy's plugin (§33) adds
-the list of each of the run's repositories to that call's result, a joint run's all at once, after a `[canopy]` line
-asking the worker to diff each branch against its base, hold each item to its repository's diff, fix what fails and push
-the fix, which D116 allows, and answer each item in its result. A rejected push is never reminded, since a worker never
-retries one (§8). A push soon after a reminder, a fix pushed, is not reminded again; a push after a long stretch of work
-is. The list reaches the run as the operator's answer to a running agent's question does (§41): a file in the run's
-answers directory, which a sandboxed run may read and not write, so the plugin still writes nothing and reads only what
-it is handed. The overseer, a planner, a reviewer, and a chore hear none.
+Every worker run that pushes, public and private, `implement`, `resume`, and a task's, hears the list before its branch
+goes up, so a fix costs no CI run: canopy's plugin (§33) holds the tool call that would push (`tool.execute.before`),
+which does not run, and the call's error carries the list of each of the run's repositories, a joint run's all at once,
+after a `[canopy]` line saying the push was held, not rejected, and asking the worker to diff each branch against its
+base, hold each item to its repository's diff, commit what fails, answer each item in its result, and push again. The
+push after a hold goes through, so a worker is held once and never kept from pushing; a push after a long stretch of
+work is held again. Near the deadline, in the clock's last stretch (§33), the plugin holds nothing, since a held push
+then risks the run ending `unpushed`: it lets the push run and, once its result shows it went through, adds the list
+there instead, asking for the fix pushed again, which D116 allows. A rejected push is never reminded, since a worker
+never retries one (§8). The list reaches the run as the operator's answer to a running agent's question does (§41): a
+file in the run's answers directory, which a sandboxed run may read and not write, so the plugin still writes nothing
+and reads only what it is handed. The overseer, a planner, a reviewer, and a chore hear none.
 
 The worker's result line gains `checklist`: for each repository and item, `pass`, `fixed`, `held` with the reason, or
 `n/a`, validated (D026). A reminded run whose result answers no item is recorded as unanswered, never refused: its push
@@ -51,7 +54,8 @@ page for them.
 
 What lets it run (TRUST_MODEL): a forged `[canopy]` line can only ask the agent to check its own diff against a list
 it already holds, so it fails safe, as the clock's and the nudge's do (T1); nothing a worker does with it extends its
-run (T3); the plugin reads one more file in a directory the harness made and writes nothing (T4).
+run (T3); the plugin reads one more file in a directory the harness made and writes nothing, and the one call it refuses
+is a worker's push, once per stretch and never near the deadline, which only delays what the worker may do (T4).
 
 ### The review
 
@@ -71,6 +75,11 @@ review's, trusted under `canopy:review` (D089), a dismissal is counted per item,
 
 ### Rejected
 
+- The reminder after the push: the fix it asks for is a second push, and a second CI run, on most reminded runs.
+- The reminder after each commit: a worker commits many times before its diff is whole, so it is asked of half a change,
+  and again and again.
+- A git `pre-push` hook: `core.hooksPath` would replace the repository's own hooks, and the hook keeps state in a
+  checkout a sandboxed run writes; the plugin already sees the call and the clock.
 - The list in `paths.worker_instructions` or `paths.reviewer_instructions`: the operator's already emphasize these
   rules, read once at the top of a long run and weighed against everything after; no record per item.
 - A persona: voice and emphasis, which cannot narrow a run or a review, and the prompt comes first (§31).
