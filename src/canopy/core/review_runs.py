@@ -38,6 +38,7 @@ def insert_review_run(
     persona_digest: str | None = None,
     persona_text: str | None = None,
     revises: tuple[int, int] | None = None,
+    model: str | None = None,
 ) -> int:
     """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
 
@@ -45,7 +46,7 @@ def insert_review_run(
     asked for, `query` for a `review.query` match. `persona` and `persona_digest` are the name and text digest of the
     persona its prompt carries (DESIGN §31), and `persona_text` that text, kept once per digest
     (`db.record_persona_text`). `revises` makes it a revision (§34): the draft it revises, by its id, and the version of
-    it the revision reads.
+    it the revision reads. `model` is the one its reviewer asks for (DESIGN §13), None for the runtime's default.
 
     Returns:
         The new review run's id.
@@ -65,6 +66,7 @@ def insert_review_run(
             persona_digest=persona_digest,
             revises=revises[0] if revises is not None else None,
             revises_version=revises[1] if revises is not None else None,
+            model=model,
         )
         run_id = db.rowid(run.run(conn))
         db.record_persona_text(conn, persona_digest, persona_text)

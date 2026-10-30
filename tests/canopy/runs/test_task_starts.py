@@ -278,6 +278,8 @@ def test_the_commit_trailer_names_the_private_workers_chosen_model(
     assert f"`{trailer}`" in worker["argv"][-1]
     assert trailers_on(git_pool.origin, BRANCH) == [[trailer]]
     assert run.status == RunStatus.DONE
+    # The run records the model it asked for, as a worker run does.
+    assert run.model == "provider/model-a"
     assert "harness" not in json.loads(present(run.result_json))
 
 

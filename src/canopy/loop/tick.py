@@ -894,6 +894,9 @@ def _run_overseer(
         log.error("overseer not started", extra={"reason": str(e), "dry_run": dry_run})  # noqa: TRY400
         return str(e), None
     command = render_command(ctx.config.runtime.overseer_cmd, block, definitions_dir, title)
+    # What the definitions just rendered hold for it, as `_check_model` found it listed.
+    model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.overseer_cmd)
+    db.set_tick_model(ctx.conn, tick_id, model.name if model is not None else None)
     argv = command.argv
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     # Its tools, in its process's environment alone (DESIGN §27). A call may take as long as the overseer may: a

@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import db, personas, prompts, recorded_runs, review_drafts, review_revisions, review_runs
+from canopy.core import agent_models, db, personas, prompts, recorded_runs, review_drafts, review_revisions, review_runs
 from canopy.core import review_result as result
 from canopy.core.conversation import printable
 from canopy.core.vocab import RecordedKind, ReviewDraftStatus
@@ -103,6 +103,8 @@ def begin(ctx: Context, *, tick_id: int, run_id: int, spawning: int | None = Non
         target = _guard(ctx, run_id, spawning=spawning)
         persona = _persona(ctx, target.review)
         review = target.review
+        # A revision has no ticket, so no override reaches it: config's reviewer, as a review of a PR with none takes.
+        model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.review_cmd)
         revision = review_runs.insert_review_run(
             ctx.conn,
             tick_id=tick_id,
@@ -115,6 +117,7 @@ def begin(ctx: Context, *, tick_id: int, run_id: int, spawning: int | None = Non
             persona=persona.name,
             persona_digest=persona.digest,
             revises=(target.draft.id, target.version.number),
+            model=model.name if model is not None else None,
         )
         # The diff the draft sits on is the review's, from the base it read.
         lease = start.lease_slot(ctx, revision, target.repo, base=review.base_branch)
