@@ -217,7 +217,6 @@ def review(
     return number
 
 
-#: Who comments on an artifact in the helpers' changes: a person the store signed in.
 def sent_draft(env: CanopyEnv, conn: sqlite3.Connection, *, comment_id: int, review_id: int) -> None:
     """Record a run's thread draft the operator sent on PR as review comment `comment_id`, in review `review_id`."""
     run_id = running_run(context(env), KEY, private=False)
@@ -230,6 +229,7 @@ def sent_draft(env: CanopyEnv, conn: sqlite3.Connection, *, comment_id: int, rev
     )
 
 
+#: Who comments on an artifact in the helpers' changes: a person the store signed in.
 ANA = {"id": "u_ana", "display_name": "Ana", "kind": "person"}
 
 
