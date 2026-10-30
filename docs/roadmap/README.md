@@ -83,7 +83,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M44. Plans before implementing](M44-plans-before-implementing.md): done 2026-10-17.
 - [M45. canopy's own worktree pools, replacing treehouse in stages](M45-canopys-own-worktree-pools.md): in progress.
 - [M46. Workers file follow-up tickets](M46-workers-file-follow-up-tickets.md): done 2026-10-29.
-- [M47. Garbage collection](M47-garbage-collection.md): in progress.
+- [M47. Garbage collection](M47-garbage-collection.md): done 2026-10-30.
 - [M48. The overseer's tools over MCP](M48-the-overseers-tools-over-mcp.md): in progress.
 - [M49. Config per workspace](M49-config-per-workspace.md): done 2026-10-17.
 - [M50. Agent memory, opt-in](M50-agent-memory-opt-in.md): in progress.

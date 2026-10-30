@@ -115,8 +115,8 @@ each check recorded on the `Status:` line as it passes.
   count, so a worker cannot renew or retire a note it never saw. A used note gets its last use and count; a wrong one is
   invalidated.
 - Retention: a ticket's notes are invalidated when it is marked done and on `canopy forget`, matching
-  `{{PREVIOUS_RUNS}}`' "since any forget"; `canopy stop` keeps them. M47's pass deletes invalidated rows after
-  `retention.memory_days` (30), leaving a tombstone without the body. Where M47 is not built yet, nothing is deleted.
+  `{{PREVIOUS_RUNS}}`' "since any forget"; `canopy stop` keeps them. The pass (DESIGN §26) is to delete their text
+  after `retention.memory_days` (30), leaving a tombstone without the body. Not built yet, so nothing is deleted.
 - `canopy memory list [REF]`, `canopy memory forget ID`, and `canopy memory purge --ticket REF | --run ID | --all`:
   forget and purge delete the body with `PRAGMA secure_delete` on, so a purged poison or a leaked secret does not
   survive in free pages. All three that write refuse as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set.
