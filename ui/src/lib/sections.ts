@@ -1,5 +1,6 @@
 // The side nav's sections, each with a color of its own (ui/DESIGN.md, "Tokens"). A section's color is identity,
-// never state: it marks the nav's icons, its highlight, and the trail over each page, and nothing in the data.
+// never state: it marks the nav's icons, its highlight and active label, and the trail over each page, and nothing in
+// the data.
 
 /**
  * Every section, by its path, in the nav's order: by how often the operator opens it, so what they work in is at the
@@ -36,7 +37,7 @@ export const SECTION_LABEL: Record<Section, string> = {
 
 // Full class names, written out, so Tailwind finds them. One entry per section; the types make a missing one an error.
 
-/** Each section's color as text: its icon and the label over its pages. */
+/** Each section's color as text: its icon, its nav label while it is shown, and the label over its pages. */
 export const SECTION_TEXT: Record<Section, string> = {
     '/attention': 'text-section-attention',
     '/runs': 'text-section-runs',
@@ -49,20 +50,20 @@ export const SECTION_TEXT: Record<Section, string> = {
     '/settings': 'text-section-settings',
 }
 
-/** Each section's color as a faint background: the nav's highlight on the section shown. */
+/** Each section's color as a tint: the nav's highlight on the section shown, under its label in that color. */
 export const SECTION_TINT: Record<Section, string> = {
-    '/attention': 'bg-section-attention/16',
-    '/runs': 'bg-section-runs/16',
-    '/tickets': 'bg-section-tickets/16',
-    '/tasks': 'bg-section-tasks/16',
-    '/pull-requests': 'bg-section-pull-requests/16',
-    '/chores': 'bg-section-chores/16',
-    '/reports': 'bg-section-reports/16',
-    '/memory': 'bg-section-memory/16',
-    '/settings': 'bg-section-settings/16',
+    '/attention': 'bg-section-attention/24',
+    '/runs': 'bg-section-runs/24',
+    '/tickets': 'bg-section-tickets/24',
+    '/tasks': 'bg-section-tasks/24',
+    '/pull-requests': 'bg-section-pull-requests/24',
+    '/chores': 'bg-section-chores/24',
+    '/reports': 'bg-section-reports/24',
+    '/memory': 'bg-section-memory/24',
+    '/settings': 'bg-section-settings/24',
 }
 
-/** Each section's color as a solid fill: the bar at the nav highlight's left edge. */
+/** Each section's color as a solid fill: the bar down the nav highlight's left edge. */
 export const SECTION_FILL: Record<Section, string> = {
     '/attention': 'bg-section-attention',
     '/runs': 'bg-section-runs',

@@ -15,7 +15,15 @@ const AA = 4.5
 const GRAPHICS = 3
 
 type Rgb = [number, number, number]
-type Theme = Record<string, Rgb>
+type Oklch = [number, number, number]
+type Theme = Record<string, Oklch>
+
+// How a theme inks the nav's active label: in the token a palette that draws the highlight as a solid block names
+// (`--nav-on-ink`), else in its section's color shaded toward black by `--nav-label-shade`, on the highlight's tint.
+interface NavLabel {
+    ink: string | undefined
+    shade: number
+}
 
 const css = readFileSync(resolve(import.meta.dirname, 'tokens.css'), 'utf8')
 // Each theme's default, then every other palette in PALETTES, which sets some tokens over its theme's default, so each
@@ -26,6 +34,16 @@ const THEMES: Record<string, Theme> = Object.fromEntries(
         PALETTES[mode].map((palette, index) => [
             `${palette} ${mode}`,
             index === 0 ? DEFAULTS[mode] : { ...DEFAULTS[mode], ...theme(paletteRule(mode, palette)) },
+        ]),
+    ),
+)
+// The same, for the nav's active label: a palette keeps its default's shade unless it sets its own.
+const NAV_DEFAULTS: Record<ResolvedTheme, NavLabel> = { light: navLabel(':root', 0), dark: navLabel('.dark', 0) }
+const NAV: Record<string, NavLabel> = Object.fromEntries(
+    (['light', 'dark'] as const).flatMap((mode) =>
+        PALETTES[mode].map((palette, index) => [
+            `${palette} ${mode}`,
+            index === 0 ? NAV_DEFAULTS[mode] : navLabel(paletteRule(mode, palette), NAV_DEFAULTS[mode].shade),
         ]),
     ),
 )
@@ -60,6 +78,11 @@ const TEXT = [
     'proposal-ask',
 ]
 const BASES = ['background', 'surface', 'surface-raised']
+const SECTIONS = TEXT.filter((name) => name.startsWith('section-'))
+// The nav's highlight on the section shown (`SECTION_TINT` in src/lib/sections.ts).
+const NAV_TINT = 0.24
+// The rail's own fill over the canvas (`bg-surface/60` in src/components/shell/app-shell.tsx).
+const RAIL = 0.6
 
 // The spend chart's series: fills on a panel's surface, never text (ui/DESIGN.md, "Tokens").
 const SERIES = [
@@ -80,14 +103,15 @@ const CONTEXT = ['context-carried', 'context-added']
 // button (12%, 20% hovered), a question's bubble (12%) on a raised surface. So does a feedback plan's proposal, a chip.
 const TINTED = TEXT.filter((name) => name.startsWith('status-') || name.startsWith('proposal-'))
 
-describe.each(Object.entries(THEMES))('%s theme', (_, colors) => {
-    const token = (name: string): Rgb => {
+describe.each(Object.entries(THEMES))('%s theme', (themeName, colors) => {
+    const coords = (name: string): Oklch => {
         const value = colors[name]
         if (value === undefined) {
             throw new Error(`tokens.css sets no --${name} in this theme`)
         }
         return value
     }
+    const token = (name: string): Rgb => srgb(...coords(name))
 
     it('reads every text token on the canvas and surfaces', () => {
         const low = TEXT.flatMap((name) =>
@@ -105,6 +129,28 @@ describe.each(Object.entries(THEMES))('%s theme', (_, colors) => {
                 below(`${name} on its 12% on surface-raised`, fg, over(fg, 0.12, token('surface-raised'))),
                 below(`${name} on its 20% on surface`, fg, over(fg, 0.2, token('surface'))),
             ]
+        }).filter((line) => line !== null)
+        expect(low).toEqual([])
+    })
+
+    // The rail is the surface at 60% over the canvas beside the page, and the surface itself in the sheet under `lg`.
+    // A shade toward black, as `color-mix(in oklab, ..., black)` paints it, scales the color's lightness and chroma.
+    it("reads the nav's active label on its highlight", () => {
+        const rails = { rail: over(token('surface'), RAIL, token('background')), sheet: token('surface') }
+        const nav = NAV[themeName]
+        if (nav === undefined) {
+            throw new Error(`no nav label for ${themeName}`)
+        }
+        const { ink, shade } = nav
+        const low = SECTIONS.flatMap((section) => {
+            if (ink !== undefined) {
+                return [below(`${ink} on ${section}'s block`, token(ink), token(section))]
+            }
+            const [l, c, h] = coords(section)
+            const label = srgb(l * (1 - shade), c * (1 - shade), h)
+            return Object.entries(rails).map(([where, rail]) =>
+                below(`${section}'s label on its 24% in the ${where}`, label, over(token(section), NAV_TINT, rail)),
+            )
         }).filter((line) => line !== null)
         expect(low).toEqual([])
     })
@@ -168,18 +214,34 @@ function paletteRule(mode: ResolvedTheme, palette: string): string {
         : `.dark[data-dark-palette='${palette}']`
 }
 
-/** The opaque oklch tokens a rule sets, by name, as sRGB. */
+/** The opaque oklch tokens a rule sets, by name. */
 function theme(selector: string): Theme {
+    const body = rule(selector)
+    const colors: Theme = {}
+    for (const [, name, l, c, h] of body.matchAll(/--([\w-]+): oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/gu)) {
+        colors[name ?? ''] = [Number(l), Number(c), Number(h)]
+    }
+    return colors
+}
+
+/**
+ * How a rule inks the nav's active label: the token it names when it draws the highlight as a block, and the shade
+ * it sets, as a fraction, or `shade` when it sets none.
+ */
+function navLabel(selector: string, shade: number): NavLabel {
+    const body = rule(selector)
+    const ink = body.includes('--nav-block: 1;') ? /--nav-on-ink: var\(--([\w-]+)\)/u.exec(body)?.[1] : undefined
+    const own = /--nav-label-shade: ([\d.]+)%/u.exec(body)?.[1]
+    return { ink, shade: own === undefined ? shade : Number(own) / 100 }
+}
+
+/** The body of the rule for `selector`. */
+function rule(selector: string): string {
     const start = css.indexOf(`\n${selector} {`)
     if (start === -1) {
         throw new Error(`tokens.css has no rule for ${selector}`)
     }
-    const body = css.slice(start, css.indexOf('\n}', start))
-    const colors: Theme = {}
-    for (const [, name, l, c, h] of body.matchAll(/--([\w-]+): oklch\(([\d.]+) ([\d.]+) ([\d.]+)\)/gu)) {
-        colors[name ?? ''] = srgb(Number(l), Number(c), Number(h))
-    }
-    return colors
+    return css.slice(start, css.indexOf('\n}', start))
 }
 
 /** A line naming the pair when it reads below AA, else null. */

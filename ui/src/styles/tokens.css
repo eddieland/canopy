@@ -7,7 +7,7 @@
  *
  * Every color used as text reads at 4.5:1 (WCAG AA) on background, surface, and surface-raised in its theme, and a
  * status color on its own tint up to 20% (bg-status-failed/12) too; tokens.test.ts measures each pair. Section colors
- * are tuned the same way, as an icon, as text, and at 16%.
+ * are tuned the same way, as an icon and as text, and the nav's active label (--nav-label-*) on its section's 24%.
  *
  * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
@@ -47,6 +47,20 @@
     --section-reports: oklch(0.525 0.105 95);
     --section-memory: oklch(0.49 0.11 225);
     --section-settings: oklch(0.5 0.03 250);
+
+    /* The nav's active label: its section's color on the highlight's tint, shaded toward black by `--nav-label-shade`.
+     * Light's section colors sit near 4.5:1 on the bare canvas, so on their own tint they need the shade; dark's need
+     * none, and set it to 0%. Each is set once, here, and resolves against whichever palette is worn. */
+    --nav-label-shade: 15%;
+    --nav-label-attention: color-mix(in oklab, var(--section-attention), black var(--nav-label-shade));
+    --nav-label-runs: color-mix(in oklab, var(--section-runs), black var(--nav-label-shade));
+    --nav-label-tickets: color-mix(in oklab, var(--section-tickets), black var(--nav-label-shade));
+    --nav-label-tasks: color-mix(in oklab, var(--section-tasks), black var(--nav-label-shade));
+    --nav-label-pull-requests: color-mix(in oklab, var(--section-pull-requests), black var(--nav-label-shade));
+    --nav-label-chores: color-mix(in oklab, var(--section-chores), black var(--nav-label-shade));
+    --nav-label-reports: color-mix(in oklab, var(--section-reports), black var(--nav-label-shade));
+    --nav-label-memory: color-mix(in oklab, var(--section-memory), black var(--nav-label-shade));
+    --nav-label-settings: color-mix(in oklab, var(--section-settings), black var(--nav-label-shade));
 
     /* A diff's added and removed lines: a line's change, never a run's state. Used as tints and as the +/- marks. */
     --diff-add: oklch(0.5 0.135 150);
@@ -161,7 +175,8 @@
     --status-failed: oklch(0.725 0.17 23);
 
     --section-attention: oklch(0.75 0.17 2);
-    --section-runs: oklch(0.66 0.12 272);
+    /* Bluer than the canvas's 270, so the nav's highlight on Runs reads as a color, not a lighter canvas. */
+    --section-runs: oklch(0.73 0.135 262);
     --section-tickets: oklch(0.77 0.13 242);
     --section-tasks: oklch(0.86 0.165 115);
     --section-pull-requests: oklch(0.75 0.16 302);
@@ -169,6 +184,8 @@
     --section-reports: oklch(0.86 0.15 100);
     --section-memory: oklch(0.83 0.09 218);
     --section-settings: oklch(0.74 0.03 250);
+
+    --nav-label-shade: 0%;
 
     --diff-add: oklch(0.78 0.15 150);
     --diff-del: oklch(0.72 0.17 20);
@@ -449,7 +466,7 @@
     --section-tickets: oklch(0.76 0.16 242);
     --section-tasks: oklch(0.89 0.21 120);
     --section-pull-requests: oklch(0.72 0.22 305);
-    --section-runs: oklch(0.68 0.19 275);
+    --section-runs: oklch(0.7 0.19 275);
     --section-chores: oklch(0.79 0.18 52);
     --section-reports: oklch(0.89 0.18 98);
     --section-memory: oklch(0.86 0.12 215);
