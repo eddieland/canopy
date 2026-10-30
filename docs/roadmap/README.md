@@ -91,7 +91,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M52. Memory's verbs from the web UI](M52-memorys-verbs-from-the-web-ui.md): done 2026-10-20.
 - [M53. Review replies the operator sends](M53-review-replies-the-operator-sends.md): done 2026-10-29.
 - [M54. Plans before feedback runs](M54-plans-before-feedback-runs.md): in progress.
-- [M55. Trivial work skips its plan](M55-trivial-work-skips-its-plan.md): deferred 2026-10-20.
+- [M55. Trivial work skips its plan](M55-trivial-work-skips-its-plan.md): done 2026-10-30.
 - [M56. Fixing CI is part of resume](M56-fixing-ci-is-part-of-resume.md): done 2026-10-29.
 - [M57. A clock for running agents](M57-a-clock-for-running-agents.md): in progress.
 - [M58. canopy chooses each agent's model](M58-canopy-chooses-the-workers-model.md): done 2026-10-29.
@@ -121,5 +121,3 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - Workers against OpenCode's server (M15's last bullets): when the operator wants to prompt a running worker rather than
   read its transcript and answer it after. The listener follows TRUST_MODEL T8, and OpenCode's server authentication on
   the pinned version is checked first.
-- Triage before a plan (M55): when the spend page shows plan runs on tickets the operator calls trivial costing enough
-  that a cheaper judge would pay for its own runs. The bullets stand as a sketch; DESIGN §25 no longer describes it.
