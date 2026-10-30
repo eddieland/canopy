@@ -105,6 +105,9 @@ for (const theme of THEMES) {
         await page.keyboard.press('Control+k')
         const palette = page.getByTestId('jump-palette')
         await expect(palette.getByRole('option')).toHaveCount(2)
+        // Each title fills in once the tickets load: under load, the box was taken with both still untitled.
+        await expect(palette.getByRole('option', { name: /Debounce search input/u })).toBeVisible()
+        await expect(palette.getByRole('option', { name: /Schedule report exports/u })).toBeVisible()
         await expect(palette).toHaveScreenshot(`jump-palette-${theme}.png`)
     })
 
@@ -119,8 +122,8 @@ for (const theme of THEMES) {
     })
 }
 
-// Every palette but a theme's default sets only the neutrals and the accent, so one page in each shows all it changes:
-// its main pane alone, so a change to the header or the rail rewrites none of these.
+// Every palette but a theme's default sets the neutrals, the accent, and its corners, edges, and depth, all of which
+// one page's panels show: its main pane alone, so a change to the header or the rail rewrites none of these.
 for (const theme of THEMES) {
     for (const palette of OTHER_PALETTES[theme]) {
         test(`attention in ${palette} ${theme}`, async ({ page }) => {
@@ -134,6 +137,21 @@ for (const theme of THEMES) {
             await screenshotMain(page, `attention-${palette}-${theme}.png`)
         })
     }
+}
+
+// A palette that gives the shell a form of its own, its aurora, name, and nav highlight: the whole page, so the header
+// and the rail show.
+for (const palette of ['gruvbox', 'black'] as const) {
+    test(`the shell in ${palette} dark`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, 'dark')
+        await storePalette(page, 'dark', palette)
+        await signIn(page)
+        await page.goto('tickets/ABC-102')
+        await settled(page)
+        await expect(page.locator('html')).toHaveAttribute('data-dark-palette', palette)
+        await screenshotWhole(page, `shell-${palette}-dark.png`)
+    })
 }
 
 // A PR's feedback plan in each state it has, each on a PR of its own (canopy/serve/mock/feedback_plans.py): the panel
