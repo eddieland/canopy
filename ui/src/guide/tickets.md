@@ -165,18 +165,19 @@ before you changed the override.
 
 Open an agent's picker there to set this ticket's override, as `canopy model KEY MODEL --agent AGENT` does. The picker
 lists the runtime's models, the same list `canopy models` prints. Asking takes the runtime a few seconds, so canopy
-keeps the list it read for five minutes, or until the loop reads its config again: the first picker you open takes a
-moment to fill, and the next ones don't. A runtime with a gateway or two behind it lists hundreds, so they come grouped
-by provider under a field that narrows them to the ids holding what you type, and the model chosen now is pinned at the
-top, with where it comes from, and checked wherever it sits in the list, whether your config or this ticket set it. The
-arrow keys walk the list from the field and Enter picks. While you type, the pinned row steps aside, so Enter takes the
-first id that holds what you typed, not the model you already have. If the runtime can't answer, the picker says why in
-red and offers **Read again**; until it answers, the only thing you can do is clear the override, since canopy won't
-take a model it can't look up. Picking one saves it after checking it against that list, asked again first if the list
-lacks your pick, so a provider you set up a minute ago isn't turned away for being newer than the list. The button shows
-your pick with a trailing `…` until it's saved, then a green **saved** where it says where the model comes from, so
-nothing below jumps, and the keyboard's focus is back on the button you started from. It stays until the ticket's
-models change again; a pick canopy refuses says why in that agent's row.
+keeps the list it read for five minutes, or until the loop reads its config again. The page asks as it opens whenever an
+agent's row names a model, so a picker rarely makes you wait; with every agent on the default, nothing is asked until
+you open one. A runtime with a gateway or two behind it lists hundreds, so they come grouped by provider under a field
+that narrows them to the ids holding what you type, and the model chosen now is pinned at the top, with where it comes
+from, and checked wherever it sits in the list, whether your config or this ticket set it. The arrow keys walk the list
+from the field and Enter picks. While you type, the pinned row steps aside, so Enter takes the first id that holds what
+you typed, not the model you already have. If the runtime can't answer, the picker says why in red and offers **Read
+again**; until it answers, the only thing you can do is clear the override, since canopy won't take a model it can't
+look up. Picking one saves it after checking it against that list, asked again first if the list lacks your pick, so a
+provider you set up a minute ago isn't turned away for being newer than the list. The button shows your pick with a
+trailing `…` until it's saved, then a green **saved** (**cleared**, for a clear) where it says where the model comes
+from, so nothing below jumps, and the keyboard's focus is back on the button you started from. It stays until the
+ticket's models change again; a pick canopy refuses says why in that agent's row.
 The override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
 **Clear the override**, below the list, where no amount of scrolling hides it. One ticket can run on a different model
 from the rest, and [the spend page](reports#the-spend-page) splits what each cost by model once they ran. Each run
@@ -196,9 +197,10 @@ credit the model.
 The overseer and chores work on no one ticket, so they take only their model in `[runtime.models]`. If a model the
 override names drops off the runtime's list before the next run, that run is refused rather than sent to another
 model, and the ticket lands on your attention list as `model_missing`, broken, with these same pickers under it. The
-picker sees it first: once it has read the list, the agent's button turns amber and the pinned model shows greyed out
-as **no longer listed**, or **variant no longer listed** for a variant the model lost. Pick another, or set its
-provider up again.
+page sees it first: once it has read the list, which it does as it opens, the agent's button turns red, the same red as
+the attention item, since a model that refuses every run is broken rather than merely waiting. Open it and the pinned
+model is greyed out, with **no longer listed**, or **variant no longer listed** for a variant the model lost, in red
+under it. Pick another, or set its provider up again.
 
 ## Attaching files
 

@@ -11,6 +11,7 @@ import { PanelLoading } from '@/components/panel'
 import { Chip } from '@/components/status'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { RUNTIME_DEFAULT } from '@/lib/models'
+import { readFailure } from '@/lib/read-failure'
 
 /**
  * The model config chooses for each of canopy's agents and each chore (DESIGN §13, §19), read only: a row each, its
@@ -150,7 +151,10 @@ function Code({ children }: { children: ReactNode }) {
     return <code className="font-mono text-xs">{children}</code>
 }
 
-/** The models the runtime lists, as `canopy models` prints them: read when opened, since each read starts it. */
+/**
+ * The models the runtime lists, as `canopy models` prints them: read when opened, since a read can start it, or found
+ * already read by a ticket's page, as its model menus share the list.
+ */
 function RuntimeModels() {
     const [open, setOpen] = useState(false)
     const listed = useQuery({ ...modelsQuery, enabled: open })
@@ -163,7 +167,8 @@ function RuntimeModels() {
                     {listed.isPending && (
                         <p className="text-xs text-muted-foreground">Reading the runtime&apos;s models…</p>
                     )}
-                    <Notice error={listed.data?.error ?? listed.error} />
+                    {/* A read that failed did nothing, so it says so in a read's words, as the model picker does. */}
+                    <Notice error={listed.data?.error ?? (listed.isError ? readFailure(listed.error) : null)} />
                     {models.length > 0 && (
                         <ul className="flex flex-col gap-0.5 font-mono text-xs" aria-label="The runtime's models">
                             {models.map((model) => (
