@@ -50,7 +50,13 @@ SELECT
         WHEN status = 'overseer_failed' AND summary LIKE '%overseer left duties undone%' THEN 'undone'
         ELSE 'failed'
     END,
-    CASE WHEN status IN ('ok', 'skipped', 'running', 'abandoned') THEN NULL ELSE summary END,
+    CASE
+        WHEN status IN ('ok', 'skipped', 'running', 'abandoned') THEN NULL
+        -- From the duties on, as the tick writes an undone run's `failure`, without the summary's prefixes.
+        WHEN status = 'overseer_failed' AND summary LIKE '%overseer left duties undone%'
+            THEN substr(summary, instr(summary, 'overseer left duties undone'))
+        ELSE summary
+    END,
     session_id,
     model,
     cost_usd,

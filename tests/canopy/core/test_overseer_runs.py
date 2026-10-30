@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 #: The migration that made `overseer_runs`.
 VERSION = 113
-UNDONE = "dry run; overseer left duties undone: no decision for PROJ-1"
+UNDONE = "overseer left duties undone: no decision for PROJ-1"
 
 
 def test_each_past_tick_that_ran_its_overseer_gets_a_run_ending_as_its_tick_did(
@@ -28,7 +28,7 @@ def test_each_past_tick_that_ran_its_overseer_gets_a_run_ending_as_its_tick_did(
         # id, status, overseer_ran, summary, session, cost
         (1, "ok", 1, "1 decisions: wait=1", "ses_1", 0.5),
         (2, "ok", 0, "no overseer, nothing left to judge; 0 decisions: none", None, None),
-        (3, "overseer_failed", 1, UNDONE, "ses_3", 0.25),
+        (3, "overseer_failed", 1, f"dry run; {UNDONE}", "ses_3", 0.25),
         (4, "overseer_failed", 1, "overseer exited 1", None, None),
         (5, "disk_low", 0, "1 MiB free", None, None),
         (6, "abandoned", 1, "the tick process exited without finishing", "ses_6", None),
