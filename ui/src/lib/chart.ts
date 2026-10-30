@@ -30,3 +30,37 @@ export function axisStep(count: number, all: number, room?: AxisRoom): number {
 export function axisNames(index: number, count: number, step: number): boolean {
     return (count - 1 - index) % step === 0
 }
+
+/** Where a chart's peak is among its bars' totals, the latest of any equal, so its value sits over it; -1 for none. */
+export function peakIndex(totals: readonly number[]): number {
+    const top = Math.max(0, ...totals)
+    return top === 0 ? -1 : totals.findLastIndex((total) => total === top)
+}
+
+/** One series of a day chart: what it counts, its name in the legend, what that means on hover, and its fill. */
+export interface DayChartSeries {
+    /** What it counts, its segments' key. */
+    key: string
+    /** Its name, as the legend and the page's table say it. */
+    label: string
+    /** What it counts, on its name's hover. */
+    hint: string
+    /** Its fill, written out so Tailwind finds it: a fill token, never a state's color. */
+    fill: string
+}
+
+/** One bar of a day chart: a day, or an hour, its series' values stacked bottom up. */
+export interface DayBar {
+    /** The day's or the hour's name, as the server gives it, `2026-10-07`: its key and its test ids'. */
+    key: string
+    /** Its name on the axis: `Oct 7`, `14:00`. */
+    label: string
+    /** It on hover, with its values in their units. */
+    hint: string
+    /** Its whole, which sets its height against the chart's top. */
+    total: number
+    /** Its whole as said over its bar when it is the chart's peak: `$4.50`, `6`. */
+    totalText: string
+    /** Each series' value, bottom up; a series at 0 draws nothing. */
+    segments: readonly { key: string; fill: string; value: number }[]
+}

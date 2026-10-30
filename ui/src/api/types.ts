@@ -167,6 +167,8 @@ export type ReportModel = Schemas['ReportModel']
 export type ReportTicket = Schemas['ReportTicket']
 /** The tokens a month's runs reported, by kind, and the share of what was sent read from the cache. */
 export type ReportTokens = Schemas['ReportTokens']
+/** How many of a kind's ended runs reported no cost, of how many. */
+export type SpendUnpriced = Schemas['SpendUnpriced']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */
