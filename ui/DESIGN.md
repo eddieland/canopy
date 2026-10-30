@@ -1123,8 +1123,10 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **A running agent's progress** (`RunProgress`, `ProgressPanel`, `RunProgressLine`, `ProgressMeter`,
   `src/components/run-progress.tsx`, DESIGN §41): the agent's own account of where its work stands, which the operator
   reads to know what a run is up to now, so it leads wherever it shows. Whole, it is the summary in `font-medium`, a
-  meter of its steps if it has any (a segment each, 2px apart: done `status-done`, working `status-running`, blocked
-  or stuck `muted-foreground`, to do the bare `border` track) with `N of M done · stage S`, its question, then its work
+  meter of its steps if it has any (a segment each, 2px apart, on the bare `border` track: only done fills its
+  segment, in `status-done`, so the filled ones are the `N` beside it; working fills half in `status-running`, a shade
+  passing along it while the run runs, blocked
+  or stuck half in `muted-foreground`; to do is the track) with `N of M done · stage S`, its question, then its work
   as one checklist, each entry led by a 12px mark: a `status-done` check, the pulsing running dot, an hourglass, a
   dash for skipped, an empty ring to do. The steps are the list when it has any, `now` under the working one, and what
   it wrote is done and next folds under a disclosure; without steps, done (each with its proof in muted mono), now,
