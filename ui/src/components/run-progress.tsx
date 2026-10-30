@@ -280,7 +280,8 @@ const STATUS_WORD: Record<ItemStatus, string> = {
 
 /**
  * Each entry with a mark of where it stands and its title: a working one pulses and, when its steps are counted, has
- * what the agent says it does now under it. When no step is working, what it does now leads the list.
+ * what the agent says it does now under it, unless that only says the step's title again. When no step is working,
+ * what it does now leads the list.
  */
 function Checklist({ items, now, counted }: { items: readonly Item[]; now: string; counted: boolean }) {
     const working = items.some((i) => i.status === 'working' || i.status === 'stuck')
@@ -322,17 +323,35 @@ function Checklist({ items, now, counted }: { items: readonly Item[]; now: strin
                                     <span className="text-xs text-muted-foreground"> · {STATUS_WORD[item.status]}</span>
                                 )}
                             </span>
-                            {counted && (item.status === 'working' || item.status === 'stuck') && (
-                                <span className="text-xs text-muted-foreground">
-                                    now <span className="text-foreground">{now}</span>
-                                </span>
-                            )}
+                            {counted &&
+                                (item.status === 'working' || item.status === 'stuck') &&
+                                !sameWords(now, item.title) && (
+                                    <span className="text-xs text-muted-foreground">
+                                        now <span className="text-foreground">{now}</span>
+                                    </span>
+                                )}
                         </span>
                     </li>
                 ))}
             </ol>
         </div>
     )
+}
+
+/** Whether two lines say the same words, apart from case, spacing, and a closing period. */
+function sameWords(a: string, b: string): boolean {
+    return words(a) === words(b)
+}
+
+/** A line's words, lowercased and single-spaced, without a closing period. */
+function words(line: string): string {
+    return line
+        .toLowerCase()
+        .trim()
+        .replace(/[.…]+$/u, '')
+        .split(/\s+/u)
+        .filter(Boolean)
+        .join(' ')
 }
 
 /** The mark that leads an entry: a check, a pulsing dot, an hourglass, a dash, or an empty ring. */
@@ -396,16 +415,19 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
  * recommends marked as the one it works toward meanwhile, and once you answered, your letter. While it waits it sits on
  * the tint of what waits on you. While the run runs and the page knows which it is (`answers`), each other option is a
  * button that answers with its letter, as `canopy reply run:ID LETTER` does; the agent hears it on its next tool call,
- * and a later answer replaces it. A question asked since the page read it is refused `moved_on`.
+ * and a later answer replaces it. A question asked since the page read it is refused `moved_on`. `onAnswered` hears
+ * what an answer did, in the CLI's words, for a page the answer takes the question off, as the attention list's item.
  */
-function ProgressQuestion({
+export function ProgressQuestion({
     question,
     running,
     answers,
+    onAnswered,
 }: {
     question: RunCardQuestion
     running: boolean
     answers: AnswerTarget | undefined
+    onAnswered?: (said: string) => void
 }) {
     const client = useQueryClient()
     const [said, setSaid] = useState<string | null>(null)
@@ -414,6 +436,7 @@ function ProgressQuestion({
             answerQuestion(target, letter, question.asked_at),
         onSuccess: (answered, { target }) => {
             setSaid(answeredText(answered))
+            onAnswered?.(answeredText(answered))
             void refreshAnswered(client, target)
         },
     })

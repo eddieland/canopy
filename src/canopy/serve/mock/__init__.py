@@ -16,8 +16,9 @@ running, is a resume for a failed check and review feedback together. The runnin
 call on each one's row (§8). Every run on T0's day that ended reported its first model call, on the definitions snapshot
 and the runtime's version the history's last week used, so the spend page's weekly hit rate goes on from it (§13).
 Each feature's fixtures are in a module of their own in this package, named for the feature, which `seed` calls: plans,
-memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, the runs'
-transcripts, the months before T0, whose landed tickets the reports page shows, and the machine (a fixed reading).
+memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, the worker
+runs' answers to the checklists, the runs' transcripts, the months before T0, whose landed tickets the reports page
+shows, and the machine (a fixed reading).
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -49,6 +50,7 @@ from canopy.infra import resources
 from canopy.runtime.report import ModelList
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
 from canopy.serve.mock import (
+    checklists,
     chores,
     drafts,
     feedback_plans,
@@ -354,6 +356,7 @@ def seed(directory: Path) -> Backend:
             feedback_plans.seed(ctx.conn, ws.state_dir, at, ctx.config.trust, slot_path(root, "web", 3))
             personas.seed(ctx.conn, ctx.config, at)
             tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
+            checklists.seed(ctx.conn)
             _first_calls(ctx.conn)
             _attachments(ctx.conn)
             # Last but `_every_kind`, so the messages their approvals wrote take ids after every other fixture's.
@@ -436,14 +439,16 @@ def _attention(ctx: Context) -> list[Item]:
     """The fixtures' list, less a finding the operator dismissed, as `loop.attention.listed` leaves one out.
 
     Returns:
-        `ATTENTION` without the findings dismissed in the mock journal, and the tasks' items as the journal has them.
+        `ATTENTION` without the findings dismissed in the mock journal, the tasks' items as the journal has them, and
+        the running runs' questions unanswered, as `loop.attention.shown` adds them.
     """
     dismissed = {
         (f"chore:{f.chore}", f.finding.id)
         for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace, starts=ctx.finding_starts)
         if f.dismissed
     }
-    return [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed] + tasks.attention(ctx.conn)
+    listed = [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed] + tasks.attention(ctx.conn)
+    return listed + cards.questions(ctx.conn)
 
 
 def _end_run(ctx: Context, run: records.Run) -> bool:

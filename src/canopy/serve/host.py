@@ -3,7 +3,8 @@
 Each read is a handful of small files under `/proc` and a `statvfs` per directory, no process started, so it costs less
 than a journal read and the page asks for it every few seconds while it is open. Everything comes from the standard
 library: on Linux from `/proc`, elsewhere what `os`, `resource`, and `shutil` give, which leaves out the memory
-available, the swap, when the machine and the process started, and what the process holds; those are None there.
+available, the swap, the processors' time, the pressure stalls, when the machine and the process started, and what the
+process holds; those are None there. The stalls are None on a Linux too old to keep them, before 4.20.
 
 A disk is each filesystem canopy writes to: the workspace's, with its repositories and worktrees, where agents check
 out and build; the journal's, with the runs' logs; and the temporary directory, which builds fill. Two on one
@@ -11,7 +12,9 @@ filesystem are one disk, so its free space is not counted twice.
 
 The page's graphs are the last hour of readings, which the server takes itself every SAMPLE_SECONDS from when it
 starts (`sampling`), page open or not, and keeps in memory alone (`Samples`): they are the machine's, not the
-journal's, and a restart that loses them loses an hour of numbers the next hour replaces.
+journal's, and a restart that loses them loses an hour of numbers the next hour replaces. How busy the processors were
+is the one figure a reading cannot give alone: their time is a count that only grows, so each sample measures it
+against the reading before.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from typing import TYPE_CHECKING
 
 from canopy.serve.schema.host import (
     Cpu,
+    CpuTime,
     Disk,
     DiskSample,
     DiskUse,
@@ -40,6 +44,7 @@ from canopy.serve.schema.host import (
     HostSample,
     LoopProcess,
     Memory,
+    Stalls,
 )
 
 if TYPE_CHECKING:
@@ -52,6 +57,8 @@ if TYPE_CHECKING:
 PROC = Path("/proc")
 #: The unit `/proc/meminfo` and `/proc/self/status` count in.
 _KIB = 1024
+#: The counts of `/proc/stat`'s `cpu` line the processors' time sums: every one before the guests'.
+_CPU_COUNTS = 8
 #: The uses on a disk the tick's free-space check reads (DESIGN §6).
 _CHECKED: frozenset[DiskUse] = frozenset({"workspace", "journal"})
 #: Seconds from one reading the server keeps to the next: the page's own pace, so each read it makes finds a new one.
@@ -88,12 +95,14 @@ class Samples:
         self.every = every
         self._kept: deque[HostSample] = deque(seeded, maxlen=kept)
         self._lock = threading.Lock()
+        # The processors' time at the last reading added, which the next measures how busy they were against.
+        self._time: CpuTime | None = None
 
     def add(self, found: HostResources) -> None:
         """Keep what the graphs draw of `found`, dropping the oldest reading once `kept` are kept."""
-        taken = sample(found)
         with self._lock:
-            self._kept.append(taken)
+            self._kept.append(sample(found, self._time))
+            self._time = found.cpu.time
 
     def history(self) -> HostHistory:
         """The readings kept, oldest first.
@@ -107,21 +116,44 @@ class Samples:
         return HostHistory(every_seconds=self.every, kept=most, samples=kept)
 
 
-def sample(found: HostResources) -> HostSample:
-    """What the page's graphs draw of a reading: the load over a minute, the memory in use, the loop's, each disk free.
+def sample(found: HostResources, before: CpuTime | None = None) -> HostSample:
+    """What the page's graphs draw of a reading, with its processors measured against their time at `before`.
+
+    The load over a minute, the processors busy since `before`, the memory and swap in use, the pressure stalls, the
+    loop's memory, and each disk's free space.
 
     Returns:
         The sample, read when `found` was.
     """
     memory = found.memory
     used = None if memory.total is None or memory.available is None else memory.total - memory.available
+    swap = None if memory.swap_total is None or memory.swap_free is None else memory.swap_total - memory.swap_free
     return HostSample(
         at=found.read_at,
         load=found.cpu.load[0] if found.cpu.load else None,
+        cpu_busy=busy_between(before, found.cpu.time),
         memory_used=used,
+        swap_used=swap,
+        memory_stalled=found.stalled.memory,
+        io_stalled=found.stalled.io,
         rss=found.process.rss,
         disks=[DiskSample(path=d.path, free=d.free) for d in found.disks],
     )
+
+
+def busy_between(before: CpuTime | None, after: CpuTime | None) -> float | None:
+    """The share of the processors' time busy from `before` to `after`: 1.0 is every core the whole time.
+
+    Returns:
+        The share; None when either is missing, or the counts did not grow, as across a reboot.
+    """
+    if before is None or after is None:
+        return None
+    total = after.total - before.total
+    busy = after.busy - before.busy
+    if total <= 0 or busy < 0:
+        return None
+    return round(min(busy / total, 1.0), 4)
 
 
 async def sampling(read_now: Callable[[], HostResources], samples: Samples) -> None:
@@ -169,13 +201,14 @@ def read_at(
         read_at=now,
         # The machine's cores, not this process's affinity: the load average counts what is runnable on the whole
         # machine, inside a container too, so it is weighed against all of them.
-        cpu=Cpu(cores=os.cpu_count(), load=_load()),
+        cpu=Cpu(cores=os.cpu_count(), load=_load(), time=cpu_time(proc)),
         memory=Memory(
             total=_kib(meminfo, "MemTotal") or _physical(),
             available=_kib(meminfo, "MemAvailable"),
             swap_total=_kib(meminfo, "SwapTotal"),
             swap_free=_kib(meminfo, "SwapFree"),
         ),
+        stalled=Stalls(memory=_stalled(proc / "pressure" / "memory"), io=_stalled(proc / "pressure" / "io")),
         disks=disks(places, floor),
         process=_process(proc, booted),
     )
@@ -223,6 +256,53 @@ def booted_at(proc: Path) -> datetime | None:
         name, _, value = line.partition(" ")
         if name == "btime" and value.strip().isdigit():
             return datetime.fromtimestamp(int(value), UTC)
+    return None
+
+
+def cpu_time(proc: Path) -> CpuTime | None:
+    """The processors' time since the machine started, as `/proc/stat`'s `cpu` line counts it over every core.
+
+    Its counts are user, nice, system, idle, iowait, irq, softirq, and steal, then the guests' time, which user and nice
+    count already. Busy is all of the first eight but idle and iowait: waiting on a disk is a core with nothing to do.
+
+    Returns:
+        The time, in seconds; None where `proc` has no such file, as off Linux, or its line is not as Linux writes it.
+    """
+    try:
+        lines = (proc / "stat").read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        name, *counts = line.split() or [""]
+        if name != "cpu":
+            continue
+        if len(counts) < _CPU_COUNTS or not all(c.isdigit() for c in counts[:_CPU_COUNTS]):
+            return None
+        ticks = [int(c) for c in counts[:_CPU_COUNTS]]
+        total = sum(ticks)
+        per_second = os.sysconf("SC_CLK_TCK")
+        return CpuTime(busy=(total - ticks[3] - ticks[4]) / per_second, total=total / per_second)
+    return None
+
+
+def _stalled(path: Path) -> float | None:
+    # `some avg10=0.12 avg60=0.05 avg300=0.01 total=1234`: the percent of the last ten seconds some process waited.
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        kind, *figures = line.split() or [""]
+        if kind != "some":
+            continue
+        for figure in figures:
+            name, _, value = figure.partition("=")
+            if name == "avg10":
+                try:
+                    return round(float(value) / 100, 4)
+                except ValueError:
+                    return None
+        return None
     return None
 
 

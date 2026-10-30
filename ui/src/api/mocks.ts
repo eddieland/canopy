@@ -126,6 +126,8 @@ export const mockAttention: AttentionItem[] = [
         finding: false,
         pr: null,
         task: null,
+        run: null,
+        review: null,
     },
 ]
 
@@ -174,6 +176,7 @@ export const mockReviews: ReviewSummary[] = [
         seen: false,
         draft: null,
         served: [],
+        asks_you: false,
     },
 ]
 
@@ -545,8 +548,9 @@ export function mockHost(fields: Partial<HostResources> = {}): HostResources {
         python: '3.13.1',
         booted_at: '2026-09-29T08:30:00Z',
         read_at: '2026-10-08T12:30:00Z',
-        cpu: { cores: 12, load: [2.41, 1.87, 1.52] },
+        cpu: { cores: 12, load: [2.41, 1.87, 1.52], time: { busy: 1_425_600, total: 9_504_000 } },
         memory: { total: 64 * GIB, available: 23 * GIB + 410 * MIB, swap_total: 8 * GIB, swap_free: 7 * GIB },
+        stalled: { memory: 0, io: 0.004 },
         disks: [
             {
                 holds: ['workspace', 'journal'],

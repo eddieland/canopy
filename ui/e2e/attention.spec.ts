@@ -12,7 +12,7 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     await settled(page)
     const rows = page.getByTestId('attention-list').getByRole('link')
     // Broken work, what waits on the operator, the rest by how long it has been open, then a chore's finding.
-    await expect(rows).toHaveCount(10)
+    await expect(rows).toHaveCount(11)
     const reasons = [
         'worker failed',
         'review waiting',
@@ -20,6 +20,7 @@ test('the list is most severe first, and the most severe ticket opens beside it'
         'awaiting reply',
         'plan review',
         'awaiting reply',
+        'run question',
         'repo missing',
         'needs reviewer',
         'task ticket unrecorded',
@@ -31,10 +32,10 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     // A reason reads as words, and keeps the CLI's spelling on hover.
     await expect(rows.first().getByTitle('worker_failed')).toHaveText('worker failed')
     // A finding's id is the agent's text: its chip says `finding`, and the id sits beside its chore.
-    await expect(rows.nth(9).getByText('finding', { exact: true })).toBeVisible()
+    await expect(rows.nth(10).getByText('finding', { exact: true })).toBeVisible()
     // An item about a ticket names it by its title too; a repository's has none to name.
     await expect(rows.first()).toContainText('Fix the flaky checkout test')
-    await expect(rows.nth(6).getByText('untitled')).toHaveCount(0)
+    await expect(rows.nth(7).getByText('untitled')).toHaveCount(0)
 
     await expect(rows.first()).toHaveAttribute('aria-current', 'page')
     const detail = page.getByTestId('attention-detail')
@@ -263,26 +264,26 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
     await expect(page.getByTestId('counter-running')).toContainText('3')
     await expect(page.getByTestId('counter-waiting')).toContainText('7')
     await expect(page.getByTestId('counter-waiting')).toContainText('oldest')
-    await expect(page.getByTestId('counter-attention')).toContainText('10')
+    await expect(page.getByTestId('counter-attention')).toContainText('11')
     // The split is the nav's, and what waits on you the counter's value: no line under them says either again.
-    await expect(page.getByTestId('counter-attention')).toHaveText('Attention10')
+    await expect(page.getByTestId('counter-attention')).toHaveText('Attention11')
     await expect(page.getByTestId('counter-running')).toHaveText('Running3')
     // Outside the rail and the nav, the page says it once: the counter's label.
     await expect(page.getByRole('main').getByText(/waiting on you/iu)).toHaveCount(1)
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Workspace' }).click()
     await expect(page.getByTestId('nav-attention-failed')).toHaveText('1')
-    await expect(page.getByTestId('nav-attention-waiting')).toHaveText('5')
+    await expect(page.getByTestId('nav-attention-waiting')).toHaveText('6')
     await expect(page.getByTestId('nav-attention-other')).toHaveText('4')
     // Told apart by color, so said in words too: on hover, and in the link's name.
     await expect(page.getByTestId('nav-attention-count')).toHaveAttribute(
         'title',
-        '1 broken, 5 waiting on you, 4 other',
+        '1 broken, 6 waiting on you, 4 other',
     )
     await expect(
         page
             .getByRole('navigation', { name: 'Main' })
-            .getByRole('link', { name: /1 broken, 5 waiting on you, 4 other/u }),
+            .getByRole('link', { name: /1 broken, 6 waiting on you, 4 other/u }),
     ).toHaveCount(1)
     await expect(page.getByTestId('counters')).toHaveCount(0)
 })
@@ -381,11 +382,11 @@ test('after a reply, the next item waiting on you is chosen, its row focused, an
     await box.fill('Blue, to match the toolbar.')
     await box.press('Enter')
 
-    // On from it, then from the top: the review the operator asked for, whose draft waits on them.
-    const next = list.getByRole('link').filter({ hasText: 'review waiting' })
+    // On from it: run 41's question, which waits on the operator's answer by letter.
+    const next = list.getByRole('link').filter({ hasText: 'run question' })
     await expect(next).toBeFocused()
     await expect(next).toHaveAttribute('aria-current', 'page')
-    await expect(page.getByTestId('attention-detail').getByTestId('attention-review')).toBeVisible()
+    await expect(page.getByTestId('attention-detail').getByTestId('attention-question')).toBeVisible()
     await expect(page.getByTestId('toast')).toContainText('Recorded message 12 on ABC-102, answering message 5.')
 })
 

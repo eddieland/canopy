@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
-import { axisNames, axisStep } from './chart'
+import { axisNames, axisStep, peakIndex } from './chart'
 
 function named(count: number, step: number): number[] {
     return Array.from({ length: count }, (_, i) => i).filter((i) => axisNames(i, count, step))
 }
 
 describe('chart', () => {
+    it('finds the peak, the latest of equals, so its value is said over its bar; none where all are 0', () => {
+        expect(peakIndex([2, 4.5, 1])).toBe(1)
+        expect(peakIndex([3, 3])).toBe(1)
+        expect(peakIndex([0, 0])).toBe(-1)
+        expect(peakIndex([])).toBe(-1)
+    })
+
     it('names every mark of a short axis, and every fifth of a long one back from the last', () => {
         expect(axisStep(7, 7)).toBe(1)
         expect(named(7, axisStep(7, 7))).toEqual([0, 1, 2, 3, 4, 5, 6])

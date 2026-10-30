@@ -19,6 +19,11 @@ finding the operator dismissed (`listed`). A one-off task whose run asked a ques
 gone once they reply or stop it (DESIGN §36); so is `task_ticket_unrecorded`, for tickets a task's run reported that
 canopy did not record.
 
+The web UI's list adds one more source (`shown`): a running run whose progress asks the operator a question they have
+not answered, read from the journal as it is listed, named `run:<id>` or `review:<id>` where a ticket key would be
+(DESIGN §41). It is the operator's to answer, by letter, so it stays out of what `listed` hands on: the overseer's state
+block, `attention.md`, and the notification sinks, which hear of what a run ends with.
+
 After every tick, `publish` rewrites `<state_dir>/attention.md` and hands the list to the notification sinks
 (`canopy.notify`), each told about each open item once however many ticks it lasts (DESIGN §20).
 """
@@ -32,7 +37,18 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
-from canopy.core import chore_result, chore_view, connector_runs, contract, conversation, db, kept_items, memory, sql
+from canopy.core import (
+    cards,
+    chore_result,
+    chore_view,
+    connector_runs,
+    contract,
+    conversation,
+    db,
+    kept_items,
+    memory,
+    sql,
+)
 from canopy.core.items import ACTION_PREFIX, Item, age, fingerprint, one_line, subject
 from canopy.core.vocab import Decider, RunKind, RunStatus, TickStatus
 from canopy.infra import logs
@@ -140,6 +156,7 @@ ALWAYS_HARNESS: frozenset[str] = frozenset(
         follow_ups.REASON,
         task_tickets.REASON,
         artifact_authority.REASON,
+        cards.REASON,
     },
 )
 #: What the harness records itself, so the overseer does not, and the state block does not list to it.
@@ -456,6 +473,16 @@ def listed(ctx: Context) -> list[Item]:
     waiting = [_task_item(w) for w in tasks.awaiting(ctx.conn)]
     unrecorded = [_unrecorded_item(u) for u in task_tickets.unrecorded(ctx.conn)]
     return _high_first(ctx.conn, items) + waiting + unrecorded + findings
+
+
+def shown(ctx: Context) -> list[Item]:
+    """Return the attention list as the web UI shows it: `listed`, then each running run's question unanswered.
+
+    A question is read from the journal as it is listed (`cards.questions`), so its item opens with the update that
+    asks it and goes once the operator answers, the agent asks none, or the run ends (DESIGN §41). Only the web UI
+    lists it: its run's progress is the operator's, never handed to an agent or a sink.
+    """
+    return [i for i in listed(ctx) if i.reason != cards.REASON] + cards.questions(ctx.conn)
 
 
 def _high_first(conn: sqlite3.Connection, items: Sequence[Item]) -> list[Item]:

@@ -142,6 +142,20 @@ export const GHOST_TIPS = {
         "Grimoire: tokens are like engrams. You don't notice them until they're on the bill.",
         "Dear Traveler, the bars went up again. I've seen Cabal walls go up slower.",
     ],
+    '/reports/checklist': [
+        'Eyes up, Guardian. The checklist. Like a raid briefing, except the workers actually listen.',
+        'Grimoire: an item always n/a guards a planet nobody visits. Reword it or let it go.',
+        'Scanning... held is a worker standing its ground. Titans do it too. With less paperwork.',
+        'Field report: unanswered means the worker went quiet on comms. The Vanguard frowns upon it.',
+        "Dear Traveler, nobody gives a Ghost a checklist. I check everything anyway. It's a lifestyle.",
+    ],
+    '/reports/health': [
+        "Eyes up, Guardian. Failures, by the day. I've seen worse raids.",
+        'Field report: a guard refused the overseer. Shaxx would call that discipline.',
+        "Scanning... a crashed run. No Light left in it. Can't revive that one.",
+        'Grimoire: a timeout is a run that waited out the Darkness. The Darkness won.',
+        "Dear Traveler, a worker that asked a question didn't fail. It just needed a Ghost.",
+    ],
     '/workspace/ticks/': [
         "Eyes up, Guardian. Between two ticks there's a tock. Nobody has survived seeing one.",
         'Grimoire: an idle tick is the overseer looking at everything and choosing a nap.',

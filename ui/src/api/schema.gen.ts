@@ -943,6 +943,49 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the checklist's counts
+         * @description How the worker runs that started in the window answered each item of their repositories' lists.
+         *
+         *     As `canopy checklist` counts them: per repository and item, the runs reminded, then each answer. A held item's
+         *     reason is the worker's text, and stays on its run.
+         */
+        get: operations["getChecklistCounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get how the last days' runs ended
+         * @description Each kind's runs by how they ended, the newest failures, what the guards refused, and each day's failures.
+         */
+        get: operations["getHealthReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/monthly": {
         parameters: {
             query?: never;
@@ -2561,6 +2604,16 @@ export type components = {
              */
             repo: string | null;
             /**
+             * Review
+             * @description The running review whose question it is, by its id (DESIGN §41): `run_question`.
+             */
+            review: number | null;
+            /**
+             * Run
+             * @description The running worker's or planner's run whose question it is, by its id (DESIGN §41): `run_question`.
+             */
+            run: number | null;
+            /**
              * Since
              * Format: date-time
              * @description When the unbroken run of ticks that recorded it began, or its cause did if that came first or no tick records
@@ -2569,7 +2622,7 @@ export type components = {
             since: string;
             /**
              * Subject
-             * @description How the CLI names it: `PROJ-1`, `api`, `PROJ-1 (api)`, `chore:deps`.
+             * @description How the CLI names it: `PROJ-1`, `api`, `PROJ-1 (api)`, `chore:deps`, `run:41`.
              */
             subject: string;
             /**
@@ -2580,7 +2633,8 @@ export type components = {
             task: number | null;
             /**
              * Ticket Key
-             * @description The ticket it is about, when it is about one; a chore's, a task's, and a repository's items have none.
+             * @description The ticket it is about, when it is about one; a chore's, a task's, and a repository's items have none. A run's
+             *     question is about its run's ticket, and a review's about the review's, when it has one.
              */
             ticket_key: string | null;
             /**
@@ -2641,6 +2695,90 @@ export type components = {
              * @description What was done.
              */
             step: string;
+        };
+        /**
+         * ChecklistCounts
+         * @description The answers of the worker runs that started in a window of whole local days, as `canopy checklist` counts them.
+         *
+         *     Today's so far included, by when each run started; a run still running has recorded no answers yet.
+         */
+        ChecklistCounts: {
+            /**
+             * Days
+             * @description How many days it spans.
+             */
+            days: number;
+            /**
+             * Items
+             * @description A row per repository and item a run of the window was given: by repository, then each item in its list's
+             *     order. Empty when no run of the window was given a list.
+             */
+            items: components["schemas"]["ChecklistItemCounts"][];
+            /**
+             * Repo
+             * @description The one repository counted; None for every one.
+             */
+            repo: string | null;
+            /**
+             * Since
+             * Format: date-time
+             * @description When the window starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: local midnight after today.
+             */
+            until: string;
+        };
+        /**
+         * ChecklistItemCounts
+         * @description How the worker runs of a window answered one item of one repository's checklist, by answer.
+         *
+         *     Counts only: a `held` answer's reason is the worker's text, which stays on its run.
+         */
+        ChecklistItemCounts: {
+            /**
+             * Fixed
+             * @description How many answered `fixed`: the diff did not, and the run committed the fix.
+             */
+            fixed: number;
+            /**
+             * Held
+             * @description How many answered `held`: the diff does not, and the run left it so, for a reason it gave.
+             */
+            held: number;
+            /**
+             * Item
+             * @description The item's id, as the operator's list names it: untrusted text, as every journal string is.
+             */
+            item: string;
+            /**
+             * Not Applicable
+             * @description How many answered `n/a`: the item is about nothing the diff changes.
+             */
+            not_applicable: number;
+            /**
+             * Passed
+             * @description How many answered `pass`: the diff held to the item as it was.
+             */
+            passed: number;
+            /**
+             * Reminded
+             * @description How many runs were given the item: each answered it, or is counted `unanswered`.
+             */
+            reminded: number;
+            /**
+             * Repo
+             * @description The repository whose list holds the item.
+             */
+            repo: string;
+            /**
+             * Unanswered
+             * @description How many said nothing of it in their result.
+             */
+            unanswered: number;
         };
         /**
          * ChoreDetail
@@ -3370,6 +3508,27 @@ export type components = {
              * @description The load averages over the last 1, 5, and 15 minutes; None where the operating system keeps none.
              */
             load: number[] | null;
+            /**
+             * @description Their time since the machine started, which two readings measure how busy they were between; None where only
+             *     Linux's `/proc/stat` says.
+             */
+            time: components["schemas"]["CpuTime"] | null;
+        };
+        /**
+         * CpuTime
+         * @description The time the machine's processors have spent since it started, summed over every core, in seconds.
+         */
+        CpuTime: {
+            /**
+             * Busy
+             * @description The time they spent on work: everything but idle and waiting on a disk.
+             */
+            busy: number;
+            /**
+             * Total
+             * @description All their time, busy or not.
+             */
+            total: number;
         };
         /**
          * Decision
@@ -4189,6 +4348,232 @@ export type components = {
             repo?: string | null;
         };
         /**
+         * HealthCounts
+         * @description A count of runs by kind, 0 for a kind with none.
+         */
+        HealthCounts: {
+            /**
+             * Chores
+             * @description Chore runs.
+             */
+            chores: number;
+            /**
+             * Overseer
+             * @description Ticks.
+             */
+            overseer: number;
+            /**
+             * Plans
+             * @description Plan runs, old triage runs before a plan among them.
+             */
+            plans: number;
+            /**
+             * Reviews
+             * @description Review runs.
+             */
+            reviews: number;
+            /**
+             * Tasks
+             * @description The operator's one-off tasks' runs.
+             */
+            tasks: number;
+            /**
+             * Workers
+             * @description Worker runs.
+             */
+            workers: number;
+        };
+        /**
+         * HealthDay
+         * @description One local day of the window: the runs that started in it and ended, and the failed among them.
+         */
+        HealthDay: {
+            /**
+             * Day
+             * @description The day, `YYYY-MM-DD`, in the local time of the machine canopy runs on.
+             */
+            day: string;
+            /** @description The runs that ended, by kind. */
+            ended: components["schemas"]["HealthCounts"];
+            /** @description The runs that ended in a failed status, by kind. */
+            failed: components["schemas"]["HealthCounts"];
+            /**
+             * Start
+             * Format: date-time
+             * @description When it starts: its local midnight, so a page can write it in its own zone.
+             */
+            start: string;
+        };
+        /**
+         * HealthFailure
+         * @description One run of the window that ended in a failed status, the newest first.
+         */
+        HealthFailure: {
+            /**
+             * Chore
+             * @description The chore a chore's run ran; None for the other kinds.
+             */
+            chore: string | null;
+            /**
+             * Cost Usd
+             * @description What it cost, in US dollars; None when it reported none.
+             */
+            cost_usd: number | null;
+            /**
+             * Id
+             * @description The tick's id for the overseer, and the run's otherwise: a chore's, a review's, or a task's run's own.
+             */
+            id: number;
+            /** @description The kind of run. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Note
+             * @description The tick's summary, or the run's harness note or else its summary, on one line and cut: an agent wrote some of
+             *     it, so it is text, never markup.
+             */
+            note: string;
+            /**
+             * Pr Url
+             * @description The PR a review read; None for the other kinds.
+             */
+            pr_url: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             * @description When it started.
+             */
+            started_at: string;
+            /**
+             * Status
+             * @description How it ended.
+             */
+            status: string;
+            /**
+             * Task Id
+             * @description The task a task's run was of; None for the other kinds.
+             */
+            task_id: number | null;
+            /**
+             * Ticket
+             * @description The ticket a worker's or a plan's run was on; None for the other kinds.
+             */
+            ticket: string | null;
+            /**
+             * What
+             * @description Its sort, as `HealthOutcome.what`.
+             */
+            what: string;
+        };
+        /**
+         * HealthOutcome
+         * @description How many of one kind's runs, of one sort, ended in one status in the window, and what they cost.
+         */
+        HealthOutcome: {
+            /**
+             * Cost Usd
+             * @description What they cost, in US dollars; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /**
+             * Failed
+             * @description Whether the status is one a run of the kind ends in when it did not do what it was started for.
+             */
+            failed: boolean;
+            /** @description The kind of run. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Runs
+             * @description How many ended so.
+             */
+            runs: number;
+            /**
+             * Status
+             * @description How they ended, as the journal records it.
+             */
+            status: string;
+            /**
+             * What
+             * @description Its sort: `live`, `dry run`, or `no overseer` for a tick, the run's kind for a worker or a plan, the chore's
+             *     name, `review`, or `task`.
+             */
+            what: string;
+        };
+        /**
+         * HealthRefusal
+         * @description How often a guard refused what a tick asked for in the window.
+         */
+        HealthRefusal: {
+            /**
+             * Decisions
+             * @description How many decisions it refused.
+             */
+            decisions: number;
+            /**
+             * Guard
+             * @description The guard, as the decision names it: `capacity`, `cooldown`.
+             */
+            guard: string;
+            /**
+             * Last Tick
+             * @description The latest of them.
+             */
+            last_tick: number;
+            /**
+             * Ticks
+             * @description In how many ticks.
+             */
+            ticks: number;
+        };
+        /**
+         * HealthReport
+         * @description How the last days' runs ended, the newest failures, what the guards refused, and each day's counts.
+         */
+        HealthReport: {
+            /**
+             * Days
+             * @description How many local days the window holds, today's so far included.
+             */
+            days: number;
+            /**
+             * Failures
+             * @description The newest first, at most twenty.
+             */
+            failures: components["schemas"]["HealthFailure"][];
+            /**
+             * Outcomes
+             * @description By kind in a fixed order, overseer, workers, plans, chores, reviews, tasks, then by sort and status.
+             */
+            outcomes: components["schemas"]["HealthOutcome"][];
+            /**
+             * Per Day
+             * @description Every day of the window, oldest first.
+             */
+            per_day: components["schemas"]["HealthDay"][];
+            /**
+             * Refusals
+             * @description The most frequent first.
+             */
+            refusals: components["schemas"]["HealthRefusal"][];
+            /**
+             * Since
+             * Format: date-time
+             * @description When the window starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Unpriced
+             * @description How many of each kind's ended runs reported no cost, as the spend page counts them: a tick that ran no overseer
+             *     cost nothing, and is never among them.
+             */
+            unpriced: components["schemas"]["SpendUnpriced"][];
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: local midnight after today.
+             */
+            until: string;
+        };
+        /**
          * HostHistory
          * @description The readings of the machine the server keeps in memory, from when it started: the last hour's at most.
          */
@@ -4326,6 +4711,8 @@ export type components = {
              * @description When these figures were read.
              */
             read_at: string;
+            /** @description How much processes waited for memory and on disks. */
+            stalled: components["schemas"]["Stalls"];
             /**
              * System
              * @description Its operating system and release, as `uname` names them, such as `Linux 6.8.0`.
@@ -4344,15 +4731,31 @@ export type components = {
              */
             at: string;
             /**
+             * Cpu Busy
+             * @description The share of the processors' time busy since the reading before, 1.0 every core the whole time; None at the
+             *     first reading, or where only Linux's `/proc/stat` says.
+             */
+            cpu_busy: number | null;
+            /**
              * Disks
              * @description Each disk read, in the order `HostResources.disks` has them.
              */
             disks: components["schemas"]["DiskSample"][];
             /**
+             * Io Stalled
+             * @description The share of the last ten seconds a process waited on a disk; None where `/proc/pressure` does not say.
+             */
+            io_stalled: number | null;
+            /**
              * Load
              * @description The load average over the last minute; None where the operating system keeps none.
              */
             load: number | null;
+            /**
+             * Memory Stalled
+             * @description The share of the last ten seconds a process waited for memory; None where `/proc/pressure` does not say.
+             */
+            memory_stalled: number | null;
             /**
              * Memory Used
              * @description The memory not available to a new process, in bytes; None where only Linux's `/proc/meminfo` says.
@@ -4363,6 +4766,11 @@ export type components = {
              * @description The memory the loop's process held, in bytes; None where only Linux's `/proc` says.
              */
             rss: number | null;
+            /**
+             * Swap Used
+             * @description The swap in use, in bytes; None where only Linux's `/proc/meminfo` says.
+             */
+            swap_used: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -7163,6 +7571,12 @@ export type components = {
          */
         ReviewSummary: {
             /**
+             * Asks You
+             * @description Whether it runs with a question in its progress that waits on the operator's answer (DESIGN §41).
+             * @default false
+             */
+            asks_you: boolean;
+            /**
              * Cost Usd
              * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
              */
@@ -8610,6 +9024,23 @@ export type components = {
              * @default 0
              */
             without_overseer: number;
+        };
+        /**
+         * Stalls
+         * @description How much of the last ten seconds at least one process waited, as a share of it: Linux's pressure stalls.
+         */
+        Stalls: {
+            /**
+             * Io
+             * @description Waiting on a disk; None where Linux's `/proc/pressure` does not say.
+             */
+            io: number | null;
+            /**
+             * Memory
+             * @description Waiting for memory to be freed; None where Linux's `/proc/pressure` does not say, as off Linux or on an older
+             *     kernel.
+             */
+            memory: number | null;
         };
         /**
          * Started
@@ -13516,6 +13947,162 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getChecklistCounts: {
+        parameters: {
+            query?: {
+                /** @description How many local days to read, today's so far included: 1 to 366. */
+                days?: number;
+                /** @description A repository's name: count only its list. */
+                repo?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChecklistCounts"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getHealthReport: {
+        parameters: {
+            query?: {
+                /** @description How many local days to read, today's so far included: 1 to 366. */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthReport"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */

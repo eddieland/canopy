@@ -92,10 +92,11 @@ Rules:
   pages open under a section, the first step of the page header's trail, and the header's aurora and name
   (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the
   accent.
-- **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the spend page's
-  charts and the legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
-  beside a swatch. Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on
-  `surface` in both themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
+- **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the report pages'
+  charts and their legends, and nowhere else: the spend page's, and the health page's failures by kind, so a kind is
+  one color across Reports. They are fills, never text, so the legend's words are `muted-foreground` beside a swatch.
+  Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both
+  themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
   with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
   legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
@@ -748,7 +749,8 @@ side.
   `panel-label` type, its figures right-aligned readouts. A row head that names something (a ticket, a tool) is its
   name in medium weight at the table's size, as `TicketTitle` sets a ticket's title, after its reference (a ticket's
   key, a PR) in its monospace link; a day or a group of ticks is in the table's own type. Its panel's header repeats
-  none of its rows.
+  none of its rows. Rows in groups (the checklist page's items, by repository) stay one table, so their columns line
+  up: a `tbody` per group, headed by a row whose `rowgroup` cell names it in the table's own type, medium weight.
 - **Figures** (the Spend page's totals) are a window's sums, not a count of what is now, so they are not `Counter`s:
   each a `panel-label` over a `text-lg` readout, in a grid inside their panel, with what a label counts on its hover.
   A `Counter` stays the attention and worktrees pages' count of the present, with its state's color.
@@ -998,6 +1000,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   model (`?model=`), with the kind shown (`?kind=`, `RUNS_KIND`: a plan run is a worker run there); one the runs page
   lists no run of by model, the overseer's alone, is plain, why on hover. The runs page's model filter is always
   offered, a picker of one (`ModelFilter`, below).
+- **The failures chart** (the health page) is the spend chart's (`DayChart`), a bar per local day of the runs that
+  failed, stacked by kind in `HEALTH_SERIES` order in each kind's spend series fill, its peak's count over its bar. A
+  bar's hover says the day's failures out of its ended runs, and the table under it holds each kind's failures with
+  the day's failed and ended runs, since a failure's weight is its share. A window where nothing failed is one `Empty`
+  line. Its window, a week or 30 days, is the same segmented control as the spend page's (`WindowToggle`), in the
+  outcomes panel's header, kept in `?days=`.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
@@ -1068,7 +1076,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`; a feedback plan's,
   which shares the reason and is told apart by its detail or its ticket's `feedback_plan`, a line naming the plan, its
   PRs, its items, and whether it is stale, with an outline `Approve it on org/repo#N`, a router link to the PR's page at
-  `#feedback-plan`, where it is approved. Memory's items
+  `#feedback-plan`, where it is approved. A running run's question (`run_question`): its head names whose question
+  it is and when it was asked, `Waits on your answer to run:41's question, asked 3m ago`, and under it the question
+  as the run's page draws it (`ProgressQuestion`), each option a button that answers by letter; a toast says what the
+  answer did, since the item leaves with it, and a worker's ticket's conversation follows, as a plan's does. Memory's
+  items
   (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above).
   Replies a run drafted (`drafts_waiting`): an outline `Read the drafts on org/repo#N`, a router link to the PR's page,
   where they sit on their threads; for a ticket's own draft, which names no PR, its waiting drafts (`TicketDrafts`,

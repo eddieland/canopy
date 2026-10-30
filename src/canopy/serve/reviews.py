@@ -16,7 +16,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import contract, conversation, db, review_answers, review_diff, review_drafts, review_runs, run_models
+from canopy.core import (
+    cards,
+    contract,
+    conversation,
+    db,
+    review_answers,
+    review_diff,
+    review_drafts,
+    review_runs,
+    run_models,
+)
 from canopy.core import review_result as result
 from canopy.core.vocab import DismissalReason, ReviewRunStatus, SeenKind
 from canopy.reviews import review_requests
@@ -241,6 +251,7 @@ def summary(
         seen=seen,
         draft=cast("ReviewDraftStatusName", draft.status.value) if draft is not None else None,
         served=list(served),
+        asks_you=row.status is ReviewRunStatus.RUNNING and cards.waiting(cards.of(row)) is not None,
     )
 
 

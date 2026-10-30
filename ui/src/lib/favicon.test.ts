@@ -23,6 +23,11 @@ describe('faviconDot', () => {
         expect(faviconDot([OTHER])).toBe('other')
     })
 
+    it("wears the amber of what waits on you for a running run's question, as for any question", () => {
+        const asking: AttentionItem = { ...WAITING, id: 'a6', reason: 'run_question', run: 41 }
+        expect(faviconDot([OTHER, asking])).toBe('waiting')
+    })
+
     it('is null for what the tab does not count: a PR waiting on someone else, a finding', () => {
         expect(faviconDot([PARKED, FINDING])).toBeNull()
         expect(faviconDot([PARKED, OTHER])).toBe('other')

@@ -127,9 +127,11 @@ working right now; at the bottom, what the last 24 hours and the last 30 days co
 Those count every agent session on this machine, canopy's runs and the sessions outside canopy alike; hover one to
 see when the outside ones were last read. **Working** lists every
 agent on the clock: worker runs by their ticket, reviews by their PR, chore runs by their chore, and task runs as
-`task:N#M` over your text's first line, with the runs waiting on you after them. A worker run's row says what it's
-doing under its ticket's title: `planning`, `implementing`, `fixing CI`. While it works, that comes as a quip of the
-ticket's own, `appeasing CI`; hover it for the plain words, or turn the quips off in [Settings](settings). Each
+`task:N#M` over your text's first line, with the runs waiting on you after them. A run or a review whose progress
+asks you a question reads `asks you` in amber where its age would be, though it keeps working. A worker run's row says
+what it's doing under its ticket's title: `planning`, `implementing`, `fixing CI`. While it works, that comes as a
+quip of the ticket's own, `appeasing CI`; hover it for the plain words, or turn the quips off in [Settings](settings).
+Each
 row opens its run's page. It shows four rows at most, then `+N more`, which opens the page that lists the rest, and
 it dims while the loop isn't answering, since what it shows may have ended. The 24 hours open the spend page by the
 hour, and the 30 days by the day. A ticket you stopped drops out once its run ends; a question it left behind waits
@@ -168,12 +170,16 @@ five minutes, the memory in use, the free space on the fullest disk canopy write
 up. The load is the processes running or waiting for a core, averaged; it reads as a share of your cores, so 100% is
 every core busy and past it work queues, and the header's card says whether it's rising or falling.
 
-Under the counters, the last hour in graphs: the load over a minute as a share of your cores, the memory in use against
-all there is, the loop's own memory, and each disk's free space with the tick's floor drawn in. The server takes these
-readings itself, every ten seconds from the moment it starts, whether or not anyone is looking, and keeps them in
-memory only. A restart starts the graphs over, and a gap in a line is a stretch the server wasn't reading. Point at a
-line to read any moment of it; the number over the graph turns into that moment's. It's the quickest way to answer
-"was it the build at 14:05?" without a monitoring stack you'd have to babysit too.
+Under the counters, the last hour in graphs: the load over a minute as a share of your cores, how busy the cores were,
+the memory and swap in use against all there is, the stalls, the loop's own memory, and each disk's free space with the
+tick's floor drawn in. The load counts processes waiting on a disk as well as those waiting for a core, so a high load
+with idle cores is a machine stuck on I/O, not short of processors. The stalls say it outright: the share of each ten
+seconds some process waited for memory, or on a disk, which Linux 4.20 and later keep. The swap has no graph on a
+machine with none. The server takes these readings itself, every ten seconds from the moment it starts, whether or not
+anyone is looking, and keeps them in memory only. A restart starts the graphs over, and a gap in a line is a stretch
+the server wasn't reading. Point at a line to read any moment of it; the number over the graph turns into that
+moment's. It's the quickest way to answer "was it the build at 14:05?" without a monitoring stack you'd have to
+babysit too.
 
 Under the graphs, the processes, as a tree: each under the process that started it, the busiest first, so a compiler
 three levels under a run's agent shows up under that agent rather than as a stray `rustc`. Each row has the process's

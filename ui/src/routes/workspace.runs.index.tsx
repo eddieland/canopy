@@ -13,7 +13,7 @@ import { SubjectRunsTable } from '@/components/runs-table'
 import { RunDot } from '@/components/status'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { ranOn, runModelIds } from '@/lib/models'
-import { busy, RUN_WORD, RUNS_OF, RUNS_OF_WORD, runningTasks, runsListed, subjectRuns } from '@/lib/run-state'
+import { busy, inState, RUN_WORD, RUNS_OF, RUNS_OF_WORD, runningTasks, runsListed, subjectRuns } from '@/lib/run-state'
 import type { EveryRun, RunsOf } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
@@ -26,7 +26,8 @@ interface RunsSearch {
 /**
  * Every run of an agent, a row per subject by its latest run: a ticket's worker runs, a PR's reviews, a chore's runs, a
  * task's newest run. Running ones first, then the ones that ended last. `?state=` keeps the subjects whose latest run
- * is in that state, and `?kind=` those of one kind. `?model=`, which the spend page's By model links to, keeps the
+ * is in that state (`inState`: `blocked` keeps a running one that asks you a question too), and `?kind=` those of one
+ * kind. `?model=`, which the spend page's By model links to, keeps the
  * runs of every kind that model ran (`onModel`), each subject by its latest of them, its picker (`ModelFilter`)
  * offering each model the runs listed name. It is one of Workspace's pages, beside the overseer's ticks, at
  * `/workspace/ticks`, and the worktree pools, at `/workspace/worktrees`.
@@ -55,7 +56,7 @@ function RunsPage() {
     // Every model the runs listed name, and the one chosen, which a run older than the list may be all that ran.
     const models = every === undefined ? [] : modelsOf(every, model)
     const navigate = Route.useNavigate()
-    const shown = groups?.filter((g) => (state === undefined || g.latest.state === state) && (kind ?? g.of) === g.of)
+    const shown = groups?.filter((g) => (state === undefined || inState(g, state)) && (kind ?? g.of) === g.of)
     const order = useListOrder('runs')
     return (
         <>

@@ -33,6 +33,8 @@ const item = (id: string, reason: string, since: string, finding = false): Atten
     finding,
     pr: null,
     task: null,
+    run: null,
+    review: null,
 })
 
 describe('blocking', () => {
@@ -77,6 +79,7 @@ describe('severity', () => {
         expect(severity(item('a', 'review_unsettled', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'review_rebuttal', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'review_late', '2026-10-08T12:00:00Z'))).toBe('waiting')
+        expect(severity(item('a', 'run_question', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'needs_reviewer', '2026-10-08T12:00:00Z'))).toBe('other')
         expect(severity(item('a', 'repo_missing', '2026-10-08T12:00:00Z'))).toBe('other')
         // A finding's reason is the chore's own id, which may collide with a ticket reason: it is a finding first.
@@ -204,6 +207,21 @@ describe('ask', () => {
         }
         expect(ask(task)).toBe('task')
         expect(ask({ ...task, reason: 'task_ticket_unrecorded' })).toBe('task')
+    })
+
+    it("answers a running run's question here, by letter, about its ticket or none", () => {
+        const question = {
+            ...item('run:41', 'run_question', at),
+            ticket_key: 'ABC-101',
+            run: 41,
+            detail:
+                'run:41 (implement, ABC-101) asks you, recommends B: Keep it?; ' +
+                'answer with `canopy reply run:41 LETTER`',
+        }
+        expect(ask(question)).toBe('question')
+        expect(blocking(question)).toBe(true)
+        expect(shownDetail(question)).toBe('run:41 (implement, ABC-101) asks you, recommends B: Keep it?')
+        expect(ask({ ...question, ticket_key: null, run: null, review: 6 })).toBe('question')
     })
 })
 

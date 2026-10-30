@@ -201,6 +201,22 @@ export const TIPS = {
         'Haiku: a bar for each day / stacked by who spent what on what / none of it was me',
         'Fun fact: tokens are like leaves. You never notice them until they are on the bill.',
     ],
+    '/reports/checklist': [
+        "It looks like you're grading the workers' homework. I graded mine. I gave myself a leaf.",
+        'Fun fact: an item always n/a is a rule about code nobody touches. Like my leaf.',
+        'Hot take: held is a worker saying "no, and here is why". I say "no" and leave it there.',
+        'Haiku: pass, fixed, held, n/a / and the ones it did not say / I would have said them',
+        'Unhelpful tip: to get every item passed, write a list with no items. I tried. It passed.',
+        "Dear diary, a worker was asked about doc comments. It said fixed. I've never been asked anything.",
+    ],
+    '/reports/health': [
+        "It looks like you're reading about failures. I failed to find my hat. It was on my head.",
+        'Unhelpful tip: a run that never starts can never fail. I have never started anything.',
+        'Dear diary, a guard told the overseer no today. I told bedtime no. Only one of us won.',
+        'Hot take: a worker that asks you a question did not fail. It is being polite.',
+        'Haiku: red bars in a row / each one a run that tried hard / I tried too, then napped',
+        'Fun fact: a timeout is a run that waited for nothing, but very thoroughly.',
+    ],
     '/workspace/ticks/': [
         "It looks like you're counting ticks. I counted one, then lost my place.",
         'Unhelpful tip: every tick has an id. I have an id too. It is Sprig.',

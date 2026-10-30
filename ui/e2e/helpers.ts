@@ -46,6 +46,8 @@ export const ROUTES = [
     'workspace/ticks/2',
     'reports',
     'reports/spend',
+    'reports/checklist',
+    'reports/health',
     'settings',
     'settings/limits',
     'settings/skills',
