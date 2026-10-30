@@ -104,5 +104,10 @@ fix costs no CI run. The operator put the hold in canopy's own `pre-push` hook, 
 MEASUREMENTS "2026-10-30: where M66's checklist can hold a worker's push". Stage 1 started 2026-10-30 at the operator's
 ask, the list being theirs to write for their own repositories: `paths.checklists` is read, parsed, and handed to a
 worker run that may push, each repository's to its own file, and canopy's `pre-push` holds the worker's first push of a
-stretch in each slot for that slot's list, also with no mark to add; the prompts' sentence, the answers, and their
-counts are next.
+stretch in each slot for that slot's list, also with no mark to add. The answers are built too: a run given a list is
+told in its prompt that a held push is pushed again, unlike a rejected one, and answers each item in its result's
+`checklist`; `_run` holds the answers to the lists it wrote for the run, drops one to an item or a repository they do
+not hold, records a row for every item, `unanswered` for one the result left out, however the run ended, and `canopy
+show run:ID` prints them. Chosen conservatively, for the operator to change: a run that never pushed, and so was never
+held, still counts its items unanswered: `_run` does not read whether the hook held a push. The run's page,
+`canopy checklist`'s counts, and a task's run are next.

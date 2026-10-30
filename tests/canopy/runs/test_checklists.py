@@ -1,16 +1,23 @@
 """The lists a worker run that may push hears (DESIGN §42): its repositories', each written to its answers directory.
 
 A run in a repository without a list, or of a kind that pushes nothing, gets no file; a list canopy cannot use refuses
-the run, leasing no slot.
+the run, leasing no slot. What the run answered of each item is recorded with it, and `canopy show run:ID` shows it.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import cards, checklists
-from canopy.core.vocab import ResumeReason, RunKind
-from tests.canopy.helpers import agent_runs, checklists_dir, planner_does, pool_statuses, worker_does
+from canopy.core import cards, checklist_answers, checklists, contract, records
+from canopy.core.vocab import ItemAnswer, ResumeReason, RunKind, RunStatus
+from tests.canopy.helpers import (
+    agent_runs,
+    checklists_dir,
+    planner_does,
+    pool_statuses,
+    worker_does,
+    worker_result,
+)
 from tests.canopy.scenario_helpers import dispatches
 
 if TYPE_CHECKING:
@@ -78,3 +85,43 @@ def test_a_joint_run_hears_each_list_under_its_repository(ws_scenario: Scenario)
     (yours / "web.md").write_text("## web-rule\nThe web's rule.\n")
     ws_scenario.run(dispatches(repo=("api", "web")), worker=worker_does(SHOW))
     assert shown(ws_scenario.agent_log) == "## api-rule\nThe api's rule.\n## web-rule\nThe web's rule.\n"
+
+
+def test_a_runs_answers_are_recorded_and_shown(scenario: Scenario, git_pool: GitPool) -> None:
+    (checklists_dir(scenario.env) / "repo.md").write_text(f"{LIST}\n## newspaper\n\nPublic names first.\n")
+    held = {"answer": "held", "reason": "The helper\u202e stays where it is."}
+    answered = {"repo": {"general-types": "fixed", "newspaper": held, "made-up": "pass"}, "other": {"x": "pass"}}
+    run = scenario.run(worker=worker_does(result=worker_result(checklist=answered)))
+    # An answer to an item or a repository its lists do not hold is dropped, and the run's result kept.
+    assert run.status == RunStatus.DONE
+    assert checklist_answers.of_run(scenario.conn, run.id) == [
+        records.ChecklistAnswer(run.id, "repo", "general-types", ItemAnswer.FIXED, None),
+        records.ChecklistAnswer(run.id, "repo", "newspaper", ItemAnswer.HELD, "The helper\u202e stays where it is."),
+    ]
+    note = contract.stored_note(contract.stored_object(run.row["result_json"]))
+    assert note == "checklist answers dropped: 'other': no list of the run's; repo 'made-up': not an item of its list"
+    shown = scenario.operator("show", f"run:{run.id}").out
+    # The reason is the worker's text: printed under its item, made printable as a message is.
+    assert "\nChecklist:\n  repo  general-types  fixed\n  repo  newspaper  held\n    The helper  stays" in shown
+
+
+def test_the_prompt_says_a_push_may_be_held_only_with_a_list(scenario: Scenario, git_pool: GitPool) -> None:
+    run = scenario.run()
+    assert "Push held" not in run.prompt
+    (checklists_dir(scenario.env) / "repo.md").write_text(LIST)
+    run = scenario.run(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT]))
+    assert "The operator keeps a checklist for `repo`" in run.prompt
+    assert '"checklist":{"<repository>":' in run.prompt
+
+
+def test_a_run_that_answers_nothing_is_recorded_unanswered(scenario: Scenario, git_pool: GitPool) -> None:
+    (checklists_dir(scenario.env) / "repo.md").write_text(LIST)
+    run = scenario.run(worker=worker_does(result="not a result"))
+    # Its push, if it made one, is made: never refused for want of answers, and counted against the item.
+    assert [(a.item, a.answer) for a in checklist_answers.of_run(scenario.conn, run.id)] == [
+        ("general-types", ItemAnswer.UNANSWERED),
+    ]
+    # A run given no list records none.
+    (checklists_dir(scenario.env) / "repo.md").unlink()
+    run = scenario.run(worker=worker_does(result=worker_result(checklist={"repo": {"general-types": "pass"}})))
+    assert checklist_answers.of_run(scenario.conn, run.id) == []

@@ -412,6 +412,21 @@ class FindingAnswer(StrEnum):
     DECLINED = "declined"
 
 
+class ItemAnswer(StrEnum):
+    """What a worker answered of an item of its repository's checklist, `checklist_answers.answer` (DESIGN §42)."""
+
+    #: The diff holds to the item as it was.
+    PASSED = "pass"
+    #: The diff did not, and the run committed the fix.
+    FIXED = "fixed"
+    #: The diff does not, and the run left it so, for a reason the worker gives, which the PR's reviewer reads.
+    HELD = "held"
+    #: The item is not about anything the diff changes.
+    NOT_APPLICABLE = "n/a"
+    #: The run was given the item and its result said nothing of it: recorded by the harness, never the worker's word.
+    UNANSWERED = "unanswered"
+
+
 class HoldKind(StrEnum):
     """Why the harness holds a review's finding for the operator, `review_holds.kind` (DESIGN §21)."""
 

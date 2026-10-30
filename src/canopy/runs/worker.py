@@ -33,6 +33,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, S
 from canopy.core import (
     agent_models,
     cards,
+    checklist_answers,
     checklists,
     commit_hooks,
     contract,
@@ -208,6 +209,8 @@ class Outcome:
     answers: review_answers.Checked | None = None
     #: Whether the worker left a failed check flaky, and the branches the harness kicked to rerun it (DESIGN §23).
     kicks: flaky_kick.Kicks = field(default_factory=flaky_kick.Kicks)
+    #: What the worker answered of each item of the lists it was given, checked (DESIGN §42); None when it got none.
+    checklist: checklist_answers.Checked | None = None
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11).
@@ -332,11 +335,13 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     That is its memory (§28), drafts (§29), and the follow-ups it filed (§18), with the event that tells the sinks of
     them, and the event that tells them it left a check flaky (§23), so a run reconcile closed first writes none. So
     are its answers to review findings (§21), but only from a run that ended `done` or `blocked`: one that did not
-    finish its work cannot say what it fixed.
+    finish its work cannot say what it fixed. Its answers to its checklists are recorded however it ended (§42): an item
+    it was given and did not answer is counted unanswered.
     """
     run_id = int(run["id"])
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
     drafts.record_run(ctx.conn, run_id, outcome.drafts)
+    checklist_answers.record(ctx.conn, run_id, outcome.checklist)
     if outcome.status in (RunStatus.DONE, RunStatus.BLOCKED):
         review_answers.record(ctx.conn, run_id, outcome.answers)
     if outcome.follow_ups is not None and outcome.follow_ups.recorded:
@@ -861,9 +866,8 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     # So are the tickets it filed, recorded whatever its status, a timeout's included: they exist in the tracker, and
     # a side output must not cost the run its PRs (DESIGN §18).
     filed = _check_follow_ups(ctx, run, follow_ups.parse(text)) if parsed is not None else None
-    filed_note = filed.note() if filed is not None else ""
     answered = _check_answers(ctx, run, text) if parsed is not None else None
-    answered_note = answered.note() if answered is not None else ""
+    listed = _check_checklist(ctx, run, slots, text if parsed is not None else "")
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
@@ -880,7 +884,15 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         # A run that tampered with its slot records no follow-up: what it reported is named, and needs a label (§18).
         filed = filed.refusing("the run rewrote its slot's git") if filed is not None else None
         note = "; ".join(n for n in [*notes, filed.note() if filed is not None else ""] if n)
-        return Outcome(RunStatus.CRASHED, parsed, note, memory=remembered, drafts=drafted, follow_ups=filed)
+        return Outcome(
+            RunStatus.CRASHED,
+            parsed,
+            note,
+            memory=remembered,
+            drafts=drafted,
+            follow_ups=filed,
+            checklist=listed,
+        )
     objects = _objects(ctx, run)
     if tidy.used(objects):
         # A sandboxed worker's commits are only in the run's object directory (DESIGN §8).
@@ -912,7 +924,8 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     committed += kicks.notes
     _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
-    notes = "; ".join(n for n in [note, *committed, filed_note, answered_note] if n)
+    checked = [found.note() for found in (filed, answered, listed) if found is not None]
+    notes = "; ".join(n for n in [note, *committed, *checked] if n)
     return Outcome(
         status,
         parsed,
@@ -923,6 +936,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         follow_ups=filed,
         answers=answered,
         kicks=kicks,
+        checklist=listed,
     )
 
 
@@ -950,6 +964,27 @@ def _check_answers(ctx: Context, run: sqlite3.Row, text: str) -> review_answers.
     if run["kind"] != RunKind.RESUME:
         return None
     return review_answers.check(ctx.conn, review_answers.parse(text), key=str(run["ticket_key"]))
+
+
+def _check_checklist(
+    ctx: Context,
+    run: sqlite3.Row,
+    slots: Iterable[_Slot],
+    text: str,
+) -> checklist_answers.Checked | None:
+    """Check what a worker answered of the lists it was given, read back from its answers directory (DESIGN §42).
+
+    `text` is its output, or "" when its last line was no valid result, whose fields are not read.
+
+    Returns:
+        An answer for every item of every list it was given; None for a run given none.
+    """
+    if not checklists.reminded(run["kind"]):
+        return None
+    lists = checklists.given(_answers(ctx, run), [s.repo for s in slots])
+    if not lists:
+        return None
+    return checklist_answers.check(lists, checklist_answers.parse(text) if text else None)
 
 
 def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:
