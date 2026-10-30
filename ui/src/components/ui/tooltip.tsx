@@ -1,6 +1,7 @@
 // shadcn/ui Tooltip, Radix base, ported by hand; see button.tsx. Each tooltip brings its own provider, as shadcn's
 // does, so a component that shows one renders anywhere, a unit test included. Like the dropdown menu it sits on
-// `surface` with a hairline and no shadow, and does not animate; it has no arrow, which the hairline makes needless.
+// `surface` with its palette's edge and floating shadow, and does not animate; it has no arrow, which the edge makes
+// needless.
 import { Tooltip as TooltipPrimitive } from 'radix-ui'
 import type { ComponentProps } from 'react'
 
@@ -38,7 +39,8 @@ function TooltipContent({ className, sideOffset = 4, ...props }: ComponentProps<
                 sideOffset={sideOffset}
                 collisionPadding={8}
                 className={cn(
-                    'z-50 max-w-sm rounded-md border bg-surface px-2 py-1 text-xs text-foreground',
+                    'z-50 max-w-sm rounded-md border border-edge bg-surface px-2 py-1 text-xs text-foreground',
+                    'shadow-float',
                     'break-words whitespace-pre-line',
                     className,
                 )}

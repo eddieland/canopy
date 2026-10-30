@@ -143,7 +143,7 @@ function Form({
                 ))}
             </div>
             {/* Kept in view at the page's foot, so a change made far down the page is never left unsaved unseen. */}
-            <Panel className="sticky bottom-4 z-10 shadow-md" data-testid="config-save-bar">
+            <Panel className="sticky bottom-4 z-10 shadow-float" data-testid="config-save-bar">
                 <div className="flex items-center justify-between gap-4 p-3">
                     <div className="flex min-w-0 flex-col gap-1">
                         <p className="text-sm text-foreground" data-testid="config-pending">

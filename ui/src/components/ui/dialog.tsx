@@ -24,7 +24,7 @@ function DialogContent({ className, ...props }: ComponentProps<typeof DialogPrim
                 data-slot="dialog-content"
                 className={cn(
                     'fixed top-[16dvh] left-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2',
-                    'rounded-md border bg-surface outline-none',
+                    'rounded-md border border-edge bg-surface shadow-float outline-none',
                     className,
                 )}
                 {...props}

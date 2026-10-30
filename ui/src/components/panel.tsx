@@ -181,11 +181,16 @@ function GuideBook() {
 }
 
 /**
- * A bordered panel on the surface color. Give it a fixed or minimum height when its content is async. It is the
- * container its list's rows measure, so they show the columns its width has room for (`rowLayout`).
+ * A panel on the surface color, in its palette's edge and lift. Give it a fixed or minimum height when its content is
+ * async. It is the container its list's rows measure, so they show the columns its width has room for (`rowLayout`).
  */
 export function Panel({ className, ...props }: ComponentProps<'section'>) {
-    return <section className={cn('@container rounded-md border bg-surface', className)} {...props} />
+    return (
+        <section
+            className={cn('@container rounded-md border border-edge bg-surface shadow-panel', className)}
+            {...props}
+        />
+    )
 }
 
 /**

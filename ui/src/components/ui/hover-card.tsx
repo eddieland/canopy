@@ -1,6 +1,6 @@
 // shadcn/ui Hover Card, Radix base, ported by hand; see button.tsx. As the tooltip and the popover, it sits on
-// `surface` with a hairline and no shadow, and does not animate (ui/DESIGN.md). A card says more than a tooltip can,
-// for what a link opens: its trigger is the link, so a click still goes there.
+// `surface` with its palette's edge and floating shadow, and does not animate (ui/DESIGN.md). A card says more than a
+// tooltip can, for what a link opens: its trigger is the link, so a click still goes there.
 import { HoverCard as HoverCardPrimitive } from 'radix-ui'
 import type { ComponentProps } from 'react'
 
@@ -43,8 +43,8 @@ function HoverCardContent({
                 sideOffset={sideOffset}
                 collisionPadding={8}
                 className={cn(
-                    'z-50 w-96 origin-(--radix-hover-card-content-transform-origin) rounded-md border bg-surface',
-                    'p-3 text-foreground outline-hidden',
+                    'z-50 w-96 origin-(--radix-hover-card-content-transform-origin)',
+                    'rounded-md border border-edge bg-surface p-3 text-foreground shadow-float outline-hidden',
                     className,
                 )}
                 {...props}
