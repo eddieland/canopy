@@ -112,7 +112,7 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
   couldn't record, opens the task too: a reply or a stop clears it.
 - **A model that's gone** (`model missing`, `model list failed`): the ticket's models, the same menus its page
   shows ([Choosing a model](tickets#choosing-a-model)). The runtime's list is read afresh as the item opens, not the
-  one canopy kept, so the agent whose model dropped off it is already amber: pick one it lists, or clear the override.
+  one canopy kept, so the agent whose model dropped off it is already red: pick one it lists, or clear the override.
   When the list itself can't be read, the menu says why and offers **Read again**, and the fix is the runtime, not the
   ticket. Replying won't help either way. Nothing runs on a model nobody chose in the meantime, which is the point.
 - **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.

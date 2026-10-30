@@ -596,7 +596,7 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
     // Below the list, whatever is typed in it.
     await page.getByRole('button', { name: 'Clear the override' }).click()
     await expect(worker.getByRole('status')).toHaveText(
-        "saved: ABC-104's worker runs use the runtime's default from their next run: nothing sets one.",
+        "cleared: ABC-104's worker runs use the runtime's default from their next run: nothing sets one.",
     )
     await expect(models.getByRole('button', { name: 'worker model: runtime default' })).toBeVisible()
 })

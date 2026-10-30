@@ -517,13 +517,14 @@ export const personasQuery = queryOptions({
 
 /**
  * The models the runtime lists, as `canopy models` prints them: what a ticket's agent's model may be chosen from. Not
- * on the stream, since a read can start the runtime: read when a Model menu opens, and again when one opens later,
- * which the server answers from the list it read in the last few minutes, or until the loop reads its config again.
+ * on the stream, since a read can start the runtime: read as a ticket's models show one that may be gone, or a Model
+ * menu opens, and again once the list is a minute old, which the server answers from the list it read in the last few
+ * minutes, or until the loop reads its config again.
  */
 export const modelsQuery = queryOptions({
     queryKey: keys.models,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/models', { signal })),
-    staleTime: 0,
+    staleTime: 60_000,
 })
 
 /**

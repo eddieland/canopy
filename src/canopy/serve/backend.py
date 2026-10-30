@@ -153,7 +153,7 @@ class Backend:
     # A repository's pool's slots, for the worktrees page: its `status`. Called on a thread per pool, each with a
     # Context of its own from `open`.
     slots: Callable[[Context, str], Sequence[pools.Slot]] = field(default=_status)
-    # The models the runtime lists to run an agent on, and each one's variants, for the ticket page's Model panel to
+    # The models the runtime lists to run an agent on, and each one's variants, for a ticket's model menus to
     # choose from and for a choice of one to be looked up in: what `canopy models` prints.
     models: Callable[[Context], ModelList] = field(default=_models)
     #: Every skill the runtime finds where canopy's agents start, each with its file and text, for the skills page:

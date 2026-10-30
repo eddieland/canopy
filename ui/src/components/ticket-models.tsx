@@ -1,10 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { noop, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { chooseTicketModel } from '@/api/mutations'
-import { keys, modelsQuery } from '@/api/queries'
+import { freshModelsQuery, keys, modelsQuery } from '@/api/queries'
 import type { AgentModel } from '@/api/types'
 import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
@@ -12,7 +12,8 @@ import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { sameModel } from '@/lib/models'
-import { failedText, MODEL_SOURCES, modelName, modelText } from '@/lib/outcomes'
+import { MODEL_SOURCES, modelName, modelText } from '@/lib/outcomes'
+import { whyReadFailed } from '@/lib/read-failure'
 import { cn } from '@/lib/utils'
 
 /** A choice the menu made, while it saves: a model, or null to clear the ticket's override. */
@@ -29,6 +30,8 @@ interface Said {
     seen: string
     /** Whether the ticket's models have caught up with the choice: any change after that ends the confirmation. */
     settled: boolean
+    /** Whether the choice cleared the override rather than set one, which the confirmation says. */
+    cleared: boolean
 }
 
 /** Why a model the menu shows cannot be chosen: the runtime no longer lists it, so its agent's next run is refused. */
@@ -39,15 +42,19 @@ const VARIANT_GONE = 'variant no longer listed; its next run is refused'
 /**
  * The model each of a ticket's agents runs on at its next run (DESIGN §13), and where that comes from: a row for its
  * workers, its planner, and its reviewer, each a `ModelChoice`, as an attention item shows them. The ticket's page lays
- * them out beside the personas instead (`TicketAgents`).
+ * them out beside the personas instead (`TicketAgents`). `fresh` reads the runtime's list from the runtime itself, not
+ * the one the server kept, as an item about a run refused its model does: that run has just found a model gone, which
+ * a list read minutes ago may still name.
  */
 export function TicketModels({
     ticketKey,
     models,
+    fresh = false,
     className,
 }: {
     ticketKey: string
     models: readonly AgentModel[]
+    fresh?: boolean
     className?: string
 }) {
     if (models.length === 0) {
@@ -58,7 +65,7 @@ export function TicketModels({
             <Fields className="pb-1.5">
                 {models.map((m) => (
                     <Field key={m.agent} label={`${m.agent} model`}>
-                        <ModelChoice ticketKey={ticketKey} current={m} models={models} />
+                        <ModelChoice ticketKey={ticketKey} current={m} models={models} fresh={fresh} />
                     </Field>
                 ))}
             </Fields>
@@ -68,22 +75,25 @@ export function TicketModels({
 
 /**
  * One agent's model at its next run: a menu that sets the ticket's override to one of the models the runtime lists,
- * read when the menu opens, or clears it, as `canopy model KEY MODEL --agent AGENT` and `--clear` do, each model at its
- * default or at one of the variants the runtime lists for it, then where the model comes from. The runtime's default
- * names no model, so a row on it names the one that served the agent's latest run once its session is read, as does a
- * row whose runs went to another. A choice saved is confirmed in place of where the model comes from, so nothing
- * moves, until the ticket's `models` change again, saying so when it sets aside
- * config's variant; a choice refused says why under the row. A model or variant the runtime no longer lists refuses
- * the agent's next run rather than run it on another: its menu's trigger is in the blocked color once the list says so.
+ * or clears it, as `canopy model KEY MODEL --agent AGENT` and `--clear` do, each model at its default or at one of the
+ * variants the runtime lists for it, then where the model comes from. The runtime's default names no model, so a row on
+ * it names the one that served the agent's latest run once its session is read, as does a row whose runs went to
+ * another. A choice saved is confirmed in place of where the model comes from, so nothing moves, until the ticket's
+ * `models` change again: `saved`, saying so when it sets aside config's variant, or `cleared`; a choice refused says
+ * why under the row. A model or variant the runtime no longer lists refuses the agent's next run rather than run it on
+ * another: its menu's trigger is in the failure color, as its attention item is, once the list says so, which a row
+ * that names a model reads as it shows (`fresh`, as `TicketModels` says).
  */
 export function ModelChoice({
     ticketKey,
     current,
     models,
+    fresh = false,
 }: {
     ticketKey: string
     current: AgentModel
     models: readonly AgentModel[]
+    fresh?: boolean
 }) {
     const client = useQueryClient()
     const seen = seenOf(models)
@@ -97,8 +107,8 @@ export function ModelChoice({
     const choose = useMutation({
         mutationFn: (model: string | null) => chooseTicketModel(ticketKey, current.agent, model),
         onMutate: () => setSaid(null),
-        onSuccess: (now) => {
-            setSaid({ now, seen, settled: false })
+        onSuccess: (now, model) => {
+            setSaid({ now, seen, settled: false, cleared: model === null })
             void client.invalidateQueries({ queryKey: keys.ticket(ticketKey) })
         },
     })
@@ -114,6 +124,7 @@ export function ModelChoice({
             <span className="flex flex-wrap items-baseline gap-x-2" data-testid="ticket-model">
                 <ModelPicker
                     current={row}
+                    fresh={fresh}
                     // The choice being saved, while the server reads the runtime's list again to check it, for up to
                     // 30 seconds.
                     saving={choose.isPending ? { model: choose.variables ?? null } : undefined}
@@ -128,7 +139,7 @@ export function ModelChoice({
                     // In place of where the model comes from, which the sentence a screen reader is told says.
                     <output className="inline-flex items-baseline gap-1 text-xs text-status-done">
                         <Check aria-hidden className="size-3 self-center" />
-                        saved
+                        {said.cleared ? 'cleared' : 'saved'}
                         <span className="sr-only">: {modelText(ticketKey, said.now)}</span>
                         {/* What the sentence before says, to the eye, as the CLI puts it. */}
                         {said.now.dropped_variant !== null && (
@@ -151,31 +162,41 @@ export function ModelChoice({
 }
 
 /**
- * The picker for one agent's model: the trigger names the model its next run goes to, its variant set apart, and
- * opens a list of the models the runtime lists under a field that narrows it, grouped by provider, each model's
- * variants under it in the runtime's order, with the model chosen now pinned at the top and checked wherever it is,
- * whatever sets it. What is typed finds each row by its own id alone, the pinned one set aside, so a variant typed
- * and Enter picks the first model at that variant. Picking one sets the ticket's override and closes the list;
- * `Clear the override`, below the list rather than in it, so a long list never scrolls it away, clears it. The trigger
- * ends a long id in an ellipsis, the whole of it on hover, and stays in the keyboard's reach while a choice saves, so
- * the focus comes back to it once the list closes; it opens nothing until the save is done.
+ * The picker for one agent's model: the trigger names the model its next run goes to, its variant set apart, in the
+ * failure color while the runtime's list no longer has it, and opens a list of the models the runtime lists under a
+ * field that narrows it, grouped by provider, each model's variants under it in the runtime's order, with the model
+ * chosen now pinned at the top and checked wherever it is, whatever sets it. What is typed finds each row by its own
+ * id alone, the pinned one set aside, so a variant typed and Enter picks the first model at that variant. Picking one
+ * sets the ticket's override and closes the list; `Clear the override`, below the list rather than in it, so a long
+ * list never scrolls it away, clears it. The trigger ends a long id in an ellipsis, the whole of it on hover, and
+ * stays in the keyboard's reach while a choice saves, so the focus comes back to it once the list closes; it opens
+ * nothing until the save is done.
  */
 function ModelPicker({
     current,
+    fresh,
     saving,
     onChoose,
 }: {
     current: AgentModel
+    fresh: boolean
     saving: Choice | undefined
     onChoose: (model: string | null) => void
 }) {
+    const client = useQueryClient()
     const [open, setOpen] = useState(false)
     // What is typed in the field, which a variant's row reads to name its model when the model's own row is hidden.
     const [search, setSearch] = useState('')
-    // Read when the list opens, not before: each read starts the runtime.
-    const listed = useQuery({ ...modelsQuery, enabled: open })
+    // Read as the row shows, not when its list opens, so a model gone is marked before anyone goes looking: the server
+    // keeps the list it read for minutes, so a read seldom starts the runtime. The runtime's default names no model to
+    // lose, so its row reads when its list opens. Each row's read is the others', under one key.
+    const listed = useQuery({
+        ...(fresh ? freshModelsQuery : modelsQuery),
+        enabled: fresh || open || current.model !== null,
+    })
     const reading = listed.isPending || listed.isFetching
-    const why = listed.data?.error ?? (listed.isError ? failedText(listed.error) : null)
+    // A read that failed did nothing, so it says so in a read's words, not a write's.
+    const why = listed.data?.error ?? (listed.isError ? whyReadFailed(listed.error) : null)
     // What the runtime lists, once read; undefined while unread or unreadable, when no model is known to be gone.
     const models = why === null ? listed.data?.models : undefined
     const variants = listed.data?.variants ?? {}
@@ -183,6 +204,7 @@ function ModelPicker({
     // Why the model chosen now would be refused as a choice, and refuses its agent's next run: shown, checked, never
     // offered. Null while the list is unread, or nothing is chosen.
     const refusal = models === undefined || id === null ? null : refusalOf(id, current.variant, models, variants)
+    const refusalId = useId()
     const shown = saving === undefined ? modelName(current.model) : `${saving.model ?? 'clearing the override'}…`
     // A model's id is data, in monospace; the runtime's default names none, so it is muted prose.
     const named = (saving === undefined ? current.model : saving.model) !== null
@@ -199,6 +221,11 @@ function ModelPicker({
         setOpen(now)
         // Each opening starts from the whole list, as cmdk's own field does.
         setSearch('')
+        if (now) {
+            // On a page left open, a list older than a minute is read again as the menu opens, the server's kept one;
+            // a read that fails says so in the list, from the query's own state.
+            client.query(modelsQuery).catch(noop)
+        }
     }
 
     return (
@@ -216,7 +243,8 @@ function ModelPicker({
                         'max-w-full aria-disabled:opacity-50',
                         // The `xs` button is monospace of its own, as an id is.
                         !named && 'font-sans text-muted-foreground',
-                        refusal !== null && 'border-status-blocked/40 text-status-blocked',
+                        // It refuses the agent's next run, so it is broken, as its attention item says.
+                        refusal !== null && 'border-status-failed/40 text-status-failed',
                     )}
                 >
                     <span className="truncate">
@@ -242,10 +270,10 @@ function ModelPicker({
                     <CommandInput placeholder="Find a model" value={search} onValueChange={setSearch} />
                     <CommandList label="Models">
                         {models !== undefined && <CommandEmpty>no model has that name</CommandEmpty>}
-                        {/* Pinned, so a long list keeps it in reach: the id, then where it comes from, or why it
-                            cannot be chosen again. The runtime's default is a state, not a choice. Set aside while
-                            something is typed, which finds the model chosen in its provider's group, so Enter takes
-                            what was typed for. */}
+                        {/* Pinned, so a long list keeps it in reach: the id, then where it comes from, or, under it and
+                            out of its disabled look, in the failure color, why it cannot be chosen again. The
+                            runtime's default is a state, not a choice. Set aside while something is typed, which finds
+                            the model chosen in its provider's group, so Enter takes what was typed for. */}
                         {search.trim() === '' && (
                             <CommandGroup heading="Chosen now">
                                 <ModelItem
@@ -253,7 +281,8 @@ function ModelPicker({
                                     checked={current.model !== null}
                                     disabled={current.model === null || refusal !== null}
                                     title={refusal ?? modelName(current.model)}
-                                    note={refusal ?? sourceOf(current.source)}
+                                    note={refusal === null ? sourceOf(current.source) : undefined}
+                                    describedBy={refusal === null ? undefined : refusalId}
                                     // An override chosen again is the same override: nothing to save.
                                     onSelect={() =>
                                         current.source === 'ticket' ? setOpen(false) : choose(current.model)
@@ -263,6 +292,11 @@ function ModelPicker({
                                         {modelName(current.model)}
                                     </span>
                                 </ModelItem>
+                                {refusal !== null && (
+                                    <p id={refusalId} className="pb-1.5 pl-8 text-xs text-status-failed">
+                                        {refusal}
+                                    </p>
+                                )}
                             </CommandGroup>
                         )}
                         {reading && (
@@ -345,7 +379,8 @@ function ModelPicker({
 
 /**
  * A model in the picker's list, with a check at its left while it is the one chosen now: its id, ending in an ellipsis
- * when it is too long for the list, then a muted `note` after it, or under it when the two do not fit on a line.
+ * when it is too long for the list, then a muted `note` after it, or under it when the two do not fit on a line;
+ * `describedBy` names what says more of it outside it.
  */
 function ModelItem({
     value,
@@ -355,6 +390,7 @@ function ModelItem({
     onSelect,
     label,
     note,
+    describedBy,
     className,
     children,
 }: {
@@ -365,6 +401,7 @@ function ModelItem({
     onSelect: () => void
     label?: string
     note?: string
+    describedBy?: string
     className?: string
     children: ReactNode
 }) {
@@ -377,6 +414,7 @@ function ModelItem({
             onSelect={onSelect}
             aria-checked={checked}
             aria-label={label}
+            aria-describedby={describedBy}
             className={cn('font-mono text-xs', className)}
         >
             <span className="flex size-4 items-center justify-center">
