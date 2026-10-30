@@ -394,6 +394,104 @@
     }
 }
 
+/*
+ * What floats over the page (a dialog, a popover, a menu, a tooltip, a hover card) fades in growing a little from
+ * where it opens, its trigger's side for one anchored to a trigger, and fades out quicker. A tooltip that opens at
+ * once, as the pointer moves along a row of them, appears in place. The scrim under a dialog fades with it, and a
+ * sheet slides in from its edge. Each exit fills forwards, as a toast's does: Radix unmounts the box once it ends. A
+ * menu only floats in (`animate-float-in`) and goes at once: it closes on a choice, and the focus the choice moves,
+ * into the plan editor for one, must not wait on a menu still in the page.
+ */
+@keyframes float-in {
+    from {
+        opacity: 0;
+        transform: translate(var(--float-x, 0), var(--float-y, 0)) scale(0.96);
+    }
+}
+
+@keyframes float-out {
+    to {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+}
+
+@keyframes scrim-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes scrim-out {
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes sheet-in {
+    from {
+        transform: translateX(-100%);
+    }
+}
+
+@keyframes sheet-out {
+    to {
+        transform: translateX(-100%);
+    }
+}
+
+@utility animate-float-in {
+    @media (prefers-reduced-motion: no-preference) {
+        &[data-side='bottom'] {
+            --float-y: -4px;
+        }
+        &[data-side='top'] {
+            --float-y: 4px;
+        }
+        &[data-side='left'] {
+            --float-x: 4px;
+        }
+        &[data-side='right'] {
+            --float-x: -4px;
+        }
+        &[data-state='open'],
+        &[data-state='delayed-open'] {
+            animation: float-in 160ms cubic-bezier(0.2, 0, 0, 1) backwards;
+        }
+    }
+}
+
+@utility animate-float {
+    @apply animate-float-in;
+    @media (prefers-reduced-motion: no-preference) {
+        &[data-state='closed'] {
+            animation: float-out 120ms cubic-bezier(0.2, 0, 0, 1) forwards;
+        }
+    }
+}
+
+@utility animate-scrim {
+    @media (prefers-reduced-motion: no-preference) {
+        &[data-state='open'] {
+            animation: scrim-in 160ms cubic-bezier(0.2, 0, 0, 1) backwards;
+        }
+        &[data-state='closed'] {
+            animation: scrim-out 120ms cubic-bezier(0.2, 0, 0, 1) forwards;
+        }
+    }
+}
+
+@utility animate-sheet {
+    @media (prefers-reduced-motion: no-preference) {
+        &[data-state='open'] {
+            animation: sheet-in 240ms cubic-bezier(0.2, 0, 0, 1) backwards;
+        }
+        &[data-state='closed'] {
+            animation: sheet-out 160ms cubic-bezier(0.2, 0, 0, 1) forwards;
+        }
+    }
+}
+
 @utility animate-ripple {
     opacity: 0;
     @media (prefers-reduced-motion: no-preference) {

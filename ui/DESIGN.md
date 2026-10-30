@@ -575,6 +575,10 @@ a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.
 - Fun moves as its code says, within these rules. A cleared item's fold is the one animation that fills forwards:
   the row is let go once it has played.
 - A toast rises in from below and fades out.
+- What floats over the page fades in, growing a little from where it opens (`animate-float`): a dialog over its
+  fading scrim, a popover, a hover card, or a tooltip from its trigger's side, and fades out quicker. A sheet slides
+  in from its edge. A menu only floats in (`animate-float-in`): it goes at once on a choice, so the focus the choice
+  moves is not left waiting on it.
 - Only `running` runs pulse.
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
