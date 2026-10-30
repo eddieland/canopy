@@ -102,4 +102,6 @@ Made a list per repository 2026-10-30, at the operator's ask, and the reminder h
 fix costs no CI run. The operator put the hold in canopy's own `pre-push` hook, not the plugin, the same day, on
 MEASUREMENTS "2026-10-30: where M66's checklist can hold a worker's push". Stage 1 started 2026-10-30 at the operator's
 ask, the list being theirs to write for their own repositories: `paths.checklists` is read, parsed, and handed to a
-worker run that may push; the hold, the answers, and their counts are next.
+worker run that may push, each repository's to its own file, and canopy's `pre-push` holds the worker's first push of a
+stretch in each slot for that slot's list, also with no mark to add; the prompts' sentence, the answers, and their
+counts are next.

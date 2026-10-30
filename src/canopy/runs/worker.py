@@ -293,9 +293,9 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
 
 
 def _write_checklists(ctx: Context, run: sqlite3.Row, kind: RunKind, slots: Iterable[_Slot]) -> None:
-    """Write the lists of the run's repositories to its answers directory, for canopy's plugin to hand on (§42).
+    """Write the lists of the run's repositories to its answers directory, where canopy's `pre-push` reads them (§42).
 
-    A run that pushes nothing, or none of whose repositories has a list, gets no file and is never reminded.
+    A run that pushes nothing, or none of whose repositories has a list, gets no file and is never held.
 
     Raises:
         SetupError: a list cannot be used or written: dispatch read it, so it changed since, and the run never runs
@@ -559,7 +559,7 @@ def _run_agent(
     if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
         served[git_tools.SERVER] = git_tools.command({s.repo: s.path for s in slots})
     env |= servers.env(served, version=ctx.config.runtime.version, cwd=ctx.workspace.root.absolute())
-    env |= commit_hooks.env(snapshot, marks, os.environ)
+    env |= commit_hooks.env(snapshot, marks, os.environ, _held_for(_answers(ctx, run), slots))
     with run_offers.probing(
         ctx.conn,
         "runs",
@@ -598,6 +598,15 @@ def _run_agent(
         spent = output.usage.spent() if output.usage else {}
         log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
     return result, output.text
+
+
+def _held_for(answers: Path, slots: Iterable[_Slot]) -> dict[Path, Path]:
+    """Return the list, in the answers directory at `answers`, that each slot's push is held for (DESIGN §42).
+
+    Returns:
+        Each slot's path, to the file of its repository's list; none for a slot whose repository has no list.
+    """
+    return {s.path: listed for s in slots if (listed := checklists.file_of(answers, s.repo)).is_file()}
 
 
 class _Progress:

@@ -7,8 +7,9 @@ only the checklist review reads. A list is instructions in every run it reaches,
 characters a persona may not (DESIGN §31), and it is parsed here, so a run's answers can be held to its ids. A list
 canopy cannot use refuses the run (`bad_prompt`), never runs it without the list.
 
-Before a worker run that may push starts, the lists of its repositories are written to its answers directory (§41), for
-canopy's plugin to hand the worker once its push goes through.
+Before a worker run that may push starts, the list of each of its repositories is written to its answers directory
+(§41), a file to a repository, where canopy's `pre-push` hook in that repository's slot finds it, to hold the worker's
+push and print it (`commit_hooks`).
 """
 
 from __future__ import annotations
@@ -31,8 +32,8 @@ if TYPE_CHECKING:
 SUFFIX = ".md"
 #: The most bytes a list's file may hold: it reaches every worker run in its repository that pushes.
 MAX_BYTES = 16 * 1024
-#: The file in a run's answers directory that holds the lists of its repositories, for canopy's plugin to read.
-FILE = "checklist.md"
+#: The directory in a run's answers directory that holds its repositories' lists, `<repo>.md` each, for canopy's hook.
+DIR = "checklists"
 #: How much an item that fails weighs in the checklist review, as a review's finding does.
 Severity = Literal["blocking", "major", "minor"]
 #: Every severity an item may name, gravest first.
@@ -150,19 +151,23 @@ def parse(where: str, text: str) -> tuple[list[Item], str]:
     return items, text.strip()
 
 
-def render(lists: Sequence[Checklist]) -> str:
-    """Return the lists as a run hears them: each under its repository's name, in order."""
-    return "\n\n".join(f"# {found.repo}\n\n{found.text}" for found in lists) + "\n"
+def file_of(answers: Path, repo: str) -> Path:
+    """Return where the answers directory at `answers` holds `repo`'s list, if the run has one."""
+    return answers / DIR / f"{repo}{SUFFIX}"
 
 
-def write(answers: Path, lists: Sequence[Checklist]) -> None:
-    """Write `lists` to the answers directory at `answers`, for canopy's plugin; nothing when there are none.
+def write(answers: Path, lists: Iterable[Checklist]) -> None:
+    """Write each of `lists` to the answers directory at `answers`, for canopy's hook; nothing when there are none.
+
+    Each file holds the list's text, which its bound holds to `MAX_BYTES` and a line feed.
 
     Raises:
-        OSError: the file cannot be written.
+        OSError: a file cannot be written.
     """
-    if lists:
-        logs.write_private(answers / FILE, render(lists))
+    for found in lists:
+        target = file_of(answers, found.repo)
+        target.parent.mkdir(mode=0o700, exist_ok=True)
+        logs.write_private(target, f"{found.text}\n")
 
 
 def _read(repo: str, path: Path) -> str:

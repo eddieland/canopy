@@ -1,4 +1,4 @@
-"""The lists a worker run that may push hears (DESIGN §42): its repositories', written to its answers directory.
+"""The lists a worker run that may push hears (DESIGN §42): its repositories', each written to its answers directory.
 
 A run in a repository without a list, or of a kind that pushes nothing, gets no file; a list canopy cannot use refuses
 the run, leasing no slot.
@@ -19,8 +19,8 @@ if TYPE_CHECKING:
     from tests.canopy.scenario_helpers import Scenario
     from tests.conftest import GitPool
 
-#: What the fake agent runs to show the lists it was handed, as canopy's plugin reads them.
-SHOW = ["sh", "-c", f'cat "${cards.ANSWERS_ENV}/{checklists.FILE}"']
+#: What the fake agent runs to show the lists it was handed, as canopy's hook reads them, each repository's in turn.
+SHOW = ["sh", "-c", f'cat "${cards.ANSWERS_ENV}/{checklists.DIR}"/*{checklists.SUFFIX}']
 #: A list of one item.
 LIST = "## general-types\npaths: src/\n\nA parameter takes the most general type its body needs.\n"
 
@@ -36,7 +36,7 @@ def shown(agent_log: Path, agent: str = "canopy-worker") -> str | None:
 def test_a_worker_run_hears_its_repositorys_list(scenario: Scenario, git_pool: GitPool) -> None:
     (checklists_dir(scenario.env) / "repo.md").write_text(f"\n{LIST}\n")
     run = scenario.run(worker=worker_does(SHOW))
-    assert shown(scenario.agent_log) == f"# repo\n\n{LIST}"
+    assert shown(scenario.agent_log) == LIST
     # The file goes with the run's answers directory.
     assert not cards.answers_dir(scenario.env.state_dir, str(run.id)).exists()
 
@@ -69,7 +69,7 @@ def test_a_run_whose_list_canopy_cannot_use_is_refused(
     assert pool_statuses(treehouse_state) == ["available", "available"]
     path.write_text(LIST)
     scenario.run(worker=worker_does(SHOW))
-    assert shown(scenario.agent_log) == f"# repo\n\n{LIST}"
+    assert shown(scenario.agent_log) == LIST
 
 
 def test_a_joint_run_hears_each_list_under_its_repository(ws_scenario: Scenario) -> None:
@@ -77,7 +77,4 @@ def test_a_joint_run_hears_each_list_under_its_repository(ws_scenario: Scenario)
     (yours / "api.md").write_text("## api-rule\nThe api's rule.\n")
     (yours / "web.md").write_text("## web-rule\nThe web's rule.\n")
     ws_scenario.run(dispatches(repo=("api", "web")), worker=worker_does(SHOW))
-    assert (
-        shown(ws_scenario.agent_log)
-        == "# api\n\n## api-rule\nThe api's rule.\n\n# web\n\n## web-rule\nThe web's rule.\n"
-    )
+    assert shown(ws_scenario.agent_log) == "## api-rule\nThe api's rule.\n## web-rule\nThe web's rule.\n"

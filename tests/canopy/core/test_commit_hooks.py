@@ -1,7 +1,8 @@
 """What canopy hands a worker's environment so that git puts its marks on its commits (TRUST_MODEL T5).
 
-That is an entry for git's hooks directory after any the operator's environment holds, and the trailers and prefix,
-unless there is nothing to add; the prefix names the run's ticket, and a task, which has none, gets none that names it.
+That is an entry for git's hooks directory after any the operator's environment holds, the trailers and prefix, and
+the checklists its `pre-push` holds a push for, unless there is nothing to add or hold; the prefix names the run's
+ticket, and a task, which has none, gets none that names it.
 """
 
 from pathlib import Path
@@ -37,6 +38,28 @@ def test_a_count_git_would_refuse_is_replaced() -> None:
 
 def test_with_nothing_to_add_git_is_left_as_it_was() -> None:
     assert commit_hooks.env(Path("/snap"), commit_hooks.NONE, {"GIT_CONFIG_COUNT": "1"}) == {}
+    assert commit_hooks.env(Path("/snap"), commit_hooks.NONE, {}, {}) == {}
+
+
+def test_a_run_with_a_list_and_no_mark_still_gets_the_hooks(tmp_path: Path) -> None:
+    """The hooks' `pre-push` holds a push for the checklist (DESIGN §42), so git is pointed at them with no mark."""
+    real = tmp_path / "pool" / "1" / "api"
+    real.mkdir(parents=True)
+    (tmp_path / "linked").symlink_to(real)
+    answers = Path("/state/runs/7.answers/checklists")
+    lists = {
+        # The hook finds its slot by `pwd -P`, so the slot's path is resolved.
+        tmp_path / "linked": answers / "api.md",
+        Path("/pool/web"): answers / "web.md",
+        # A path no line can hold is held by nothing.
+        Path("/pool/a\tb"): answers / "ab.md",
+    }
+    assert commit_hooks.env(Path("/snap"), commit_hooks.NONE, {}, lists) == {
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "core.hooksPath",
+        "GIT_CONFIG_VALUE_0": "/snap/git-hooks",
+        "CANOPY_CHECKLISTS": f"{real.resolve()}\t{answers}/api.md\n/pool/web\t{answers}/web.md",
+    }
 
 
 def test_the_trailers_are_the_prompts_and_none_while_canopys_is_off(canopy_env: CanopyEnv) -> None:

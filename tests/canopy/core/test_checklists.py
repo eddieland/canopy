@@ -12,6 +12,8 @@ from canopy.core.vocab import RunKind
 from tests.canopy.helpers import checklists_dir
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from tests.conftest import CanopyEnv
 
 #: A list of three items: one with both fields, one with neither, and one whose rule holds a heading of its own.
@@ -73,12 +75,15 @@ def test_the_lists_are_written_each_under_its_repository(canopy_env: CanopyEnv) 
     answers = canopy_env.root / "answers"
     answers.mkdir()
     checklists.write(answers, checklists.for_repos(cfg, ["web", "api"]))
-    assert (answers / checklists.FILE).read_text() == "# web\n\n## two\nRule two.\n\n# api\n\n## one\nRule one.\n"
-    assert (answers / checklists.FILE).stat().st_mode & 0o077 == 0
-    # No list, no file.
-    (answers / checklists.FILE).unlink()
-    checklists.write(answers, [])
-    assert not (answers / checklists.FILE).exists()
+    assert checklists.file_of(answers, "web").read_text() == "## two\nRule two.\n"
+    assert checklists.file_of(answers, "api").read_text() == "## one\nRule one.\n"
+    assert checklists.file_of(answers, "api").stat().st_mode & 0o077 == 0
+    assert (answers / checklists.DIR).stat().st_mode & 0o077 == 0
+
+
+def test_no_list_writes_no_file(tmp_path: Path) -> None:
+    checklists.write(tmp_path, [])
+    assert list(tmp_path.iterdir()) == []
 
 
 @pytest.mark.parametrize(
