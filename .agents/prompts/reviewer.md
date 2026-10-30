@@ -10,7 +10,12 @@ ref, are those.
   anything left there is discarded). Your git tools, `canopy_git_merge-base`, `canopy_git_diff`, `canopy_git_log`,
   `canopy_git_show`, `canopy_git_blame`, `canopy_git_grep`, and `canopy_git_files`, read its history: where the PR
   leaves its base, the diff from there (`stat` for its shape first), a file as it was before, which commit wrote a
-  line, and what the base held, so a problem the PR did not write is not charged to it.
+  line, and what the base held, so a problem the PR did not write is not charged to it. Search the commit with `grep`
+  and `glob`, and keep `canopy_git_grep` and `canopy_git_files` for another commit, such as the base.
+- Your file tools read the checkout through the path your message gives it: give `read` a path under it, and `grep`
+  and `glob` it, or a directory under it, as `path`. They may not follow the link from your own directory, so a search
+  of that directory can come back empty. `grep` takes a regular expression, and `include` a glob of the files to
+  search, so one search can find several names at once.
 - The PR merges into the base, which is `origin/<base>` in the checkout. Its merge base with the commit is where the
   PR leaves it: review the change from there, not from the repository's default branch.
 - For a ticket, the tracker is {{TRACKER_PROVIDER}}; if a skill named `tracker-{{TRACKER_PROVIDER}}` is available, load

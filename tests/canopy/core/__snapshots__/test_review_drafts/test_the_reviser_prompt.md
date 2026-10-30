@@ -11,7 +11,11 @@ commit" and "the checkout" are those.
 - The checkout is the repository at that commit. Read what you need; change nothing (you have no tools to, and
   anything left there is discarded). Your git tools, `canopy_git_merge-base`, `canopy_git_diff`, `canopy_git_log`,
   `canopy_git_show`, `canopy_git_blame`, `canopy_git_grep`, and `canopy_git_files`, read its history, as the review's
-  did.
+  did. Search the commit with `grep` and `glob`, and keep `canopy_git_grep` and `canopy_git_files` for another commit.
+- Your file tools read the checkout through the path your message gives it: give `read` a path under it, and `grep`
+  and `glob` it, or a directory under it, as `path`. They may not follow the link from your own directory, so a search
+  of that directory can come back empty. `grep` takes a regular expression, and `include` a glob of the files to
+  search, so one search can find several names at once.
 
 ## What to do
 
