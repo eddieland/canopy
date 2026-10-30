@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query'
-import { cleanup, screen, within } from '@testing-library/react'
+import { act, cleanup, screen, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -157,6 +157,17 @@ describe('Conversation', () => {
         expect(within(item(4)).getByText('seen')).toBeDefined()
         expect(within(item(4)).queryByText('waiting for the next tick')).toBeNull()
         expect(within(item(5)).queryByText('seen')).toBeNull()
+    })
+
+    it("turns a reply's chip to seen in place as a tick reads it", async () => {
+        const client = knowing(3)
+        await renderRouted(<Conversation messages={[QUESTION, REPLY]} />, { client })
+        expect(within(item(4)).getByText('waiting for the next tick')).toBeDefined()
+        act(() => {
+            client.setQueryData(keys.tick, { tick: null, acknowledged: 4 })
+        })
+        expect(await within(item(4)).findByText('seen')).toBeDefined()
+        expect(within(item(4)).queryByText('waiting for the next tick')).toBeNull()
     })
 
     it("says what a chore's notes wait for instead, when told", async () => {
