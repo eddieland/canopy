@@ -102,9 +102,10 @@ test('Enter sends a reply and Shift+Enter starts a new line', async ({ page }) =
     await box.press('Enter')
     await expect(form.getByRole('status')).toContainText('Recorded message')
     await expect(box).toHaveValue('')
-    // toContainText collapses whitespace, so read the text itself: the line break must arrive as one.
+    // toContainText collapses whitespace, so read the text as drawn: the line break must arrive as one.
     const mine = page.getByTestId('conversation').locator('[data-source=operator]').filter({ hasText: 'Second line.' })
-    await expect.poll(() => mine.textContent()).toContain('First line.\nSecond line.')
+    // oxlint-disable-next-line unicorn/prefer-dom-node-text-content -- the text as drawn is the point: a <br> is a line
+    await expect.poll(() => mine.innerText()).toContain('First line.\nSecond line.')
 })
 
 // One story, so no other test in this file sees the finding gone from the list while it is dismissed.

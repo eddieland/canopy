@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from 'react'
 import { tickQuery } from '@/api/queries'
 import type { Message } from '@/api/types'
 import { Age } from '@/components/age'
-import { LinkedText } from '@/components/linked-text'
+import { RichText } from '@/components/rich-text'
 import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import { TaskRunLink } from '@/components/task-link'
@@ -63,13 +63,14 @@ export interface Instruction {
 
 /**
  * A ticket's conversation, a task's, or a chore's notes, in the order given: oldest first unless flipped (DESIGN §22).
- * Every body is untrusted text, a tracker comment's or an agent's included: it is rendered as React text, which escapes
- * it, never as HTML. Bubbles pop in from their own side, one after another, and a new one when it arrives. The
- * operator's own messages that no `ok` tick has read yet say so: the loop acts on them, and the attention list catches
- * up, at the next tick. Once one has, they say `seen`, so the operator knows they landed. A chore's notes say instead
- * which its next run reads (`pending`), and say nothing once read. A task's conversation is headed by its
- * `instruction`, the operator's text, at its oldest end (the last, `newestFirst`), and names each message's run within
- * the `task`; no tick reads a task's conversation, only its next run does, so its replies carry no tick's chip.
+ * Every body is untrusted text, a tracker comment's or an agent's included: `RichText` lays out the few Markdown forms
+ * agents write, its line breaks kept, as React text, which escapes it, never as HTML. Bubbles pop in from their
+ * own side, one after another, and a new one when it arrives. The operator's own messages that no `ok` tick has read
+ * yet say so: the loop acts on them, and the attention list catches up, at the next tick. Once one has, they say
+ * `seen`, so the operator knows they landed. A chore's notes say instead which its next run reads (`pending`), and say
+ * nothing once read. A task's conversation is headed by its `instruction`, the operator's text, at its oldest end (the
+ * last, `newestFirst`), and names each message's run within the `task`; no tick reads a task's conversation, only its
+ * next run does, so its replies carry no tick's chip.
  */
 export function Conversation({
     messages,
@@ -194,15 +195,15 @@ function Bubble({
             )}
         >
             {head}
-            <p
+            <div
                 className={cn(
-                    'w-fit max-w-full rounded-md px-3 py-2 text-sm break-words whitespace-pre-wrap',
+                    'w-fit max-w-full rounded-md px-3 py-2',
                     operator ? 'rounded-tr-xs' : 'rounded-tl-xs',
                     tone,
                 )}
             >
-                <LinkedText text={body} pullRequests />
-            </p>
+                <RichText text={body} pullRequests raised className="leading-6" />
+            </div>
         </li>
     )
 }
