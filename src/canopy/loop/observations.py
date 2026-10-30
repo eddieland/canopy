@@ -271,16 +271,19 @@ def section(
     return found
 
 
-def rendered(found: ObservationsState) -> dict[str, object]:
-    """`found` as the state block renders it: each observed PR without its URL, which the block says already.
+def rendered(found: ObservationsState, titles: Mapping[str, str | None] | None = None) -> dict[str, object]:
+    """`found` as the state block renders it: without the PR URLs and the titles the block says already.
 
     A unit's PR is the `pr_url` of its unit in `tickets`, and a PR a review asks about has its `url` beside its `pr`.
-    The claims and the harness read `found` itself, with the URLs.
+    `titles` are the titles of the tickets the block lists in `tickets`, by key: a candidate's observed title that
+    equals its ticket's is left out, and one that differs stays, since the difference is news. The claims and the
+    harness read `found` itself, whole.
 
     Returns:
-        A copy of `found` without those URLs.
+        A copy of `found` without those URLs and titles.
     """
-    tickets = [{**t, "units": [_without_url(u) for u in t["units"]]} if "units" in t else t for t in found["tickets"]]
+    listed = titles or {}
+    tickets = [_said_once(t, listed) for t in found["tickets"]]
     shown: dict[str, object] = {**found, "tickets": tickets}
     if "review_prs" in found:
         shown["review_prs"] = [_without_url(p) for p in found["review_prs"]]
@@ -631,6 +634,16 @@ def _pr(url: str, pr: records.ObservedPr) -> PrObservation:
         "mergeable_state": pr.mergeable_state,
         "author": pr.author,
     }
+
+
+def _said_once(ticket: TicketObservation, titles: Mapping[str, str | None]) -> dict[str, object]:
+    shown: dict[str, object] = dict(ticket)
+    if "units" in ticket:
+        shown["units"] = [_without_url(u) for u in ticket["units"]]
+    key = ticket["key"]
+    if "title" in ticket and key in titles and ticket["title"] == titles[key]:
+        del shown["title"]
+    return shown
 
 
 def _without_url(entry: UnitObservation | ReviewPrObservation) -> dict[str, object]:

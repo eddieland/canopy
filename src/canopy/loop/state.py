@@ -342,6 +342,8 @@ def state_block(
 
     listed = [ticket_summary(t) for t in tickets]
     shown = _notices(notices, now, listed, observations)
+    # A listed ticket's title, which its observation then leaves out where the tracker's is the same.
+    titles = {t["key"]: t["title"] for t in listed}
     state: OverseerState = {
         "repository": str(repo_root),
         "workspace": {
@@ -441,7 +443,7 @@ def state_block(
                     "tickets": _compact(state["tickets"]),
                     **({"chores": _compact(state["chores"])} if "chores" in state else {}),
                     **({"reviews": _by_unit(state["reviews"], state["tickets"])} if "reviews" in state else {}),
-                    "observations": rendered_observations(state["observations"]),
+                    "observations": rendered_observations(state["observations"], titles),
                 },
                 separators=(",", ":"),
             ),
