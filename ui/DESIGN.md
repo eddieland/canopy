@@ -148,7 +148,8 @@ Rules:
   A palette may set interface text in Plex Mono too (Palettes, under Tokens), so no third face is ever loaded.
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
-- `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.
+- `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value. A label that is
+  an id the operator types, a config key or a chore's `chore:build-health`, keeps its case (`normal-case`).
 - Sizes: `text-xl` page titles and the spend's totals, `text-sm` body, `text-xs` secondary and data-dense rows, and
   `text-2xs` (11px, defined in `tokens.css`) for the smallest print: a chip, the stream's state, the rail's labels and
   spend windows, and a `panel-label`. A document, long-form prose (a guide page, a plan), has one step of its own,

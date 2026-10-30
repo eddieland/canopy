@@ -110,6 +110,7 @@ export function ModelChoice({
         onSuccess: (now, model) => {
             setSaid({ now, seen, settled: false, cleared: model === null })
             void client.invalidateQueries({ queryKey: keys.ticket(ticketKey) })
+            void client.invalidateQueries({ queryKey: keys.modelOverrides })
         },
     })
     // Until the ticket is read again, the row shows what the server answered rather than what it had.

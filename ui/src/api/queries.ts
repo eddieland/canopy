@@ -85,6 +85,7 @@ export const keys = {
     // Under the config's key, so what marks the config stale, a save that reloads the loop, marks it stale too.
     configModels: ['config', 'models'] as const,
     models: ['models'] as const,
+    modelOverrides: ['model-overrides'] as const,
     skills: ['skills'] as const,
 }
 
@@ -525,6 +526,16 @@ export const modelsQuery = queryOptions({
     queryKey: keys.models,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/models', { signal })),
     staleTime: 60_000,
+})
+
+/**
+ * Every ticket's model override, by ticket, then agent: what the settings page lists, since one outlasts `canopy
+ * forget`. Read from the journal alone. Not on the stream: read when the settings page opens, and marked stale by a
+ * choice made on a ticket's page.
+ */
+export const modelOverridesQuery = queryOptions({
+    queryKey: keys.modelOverrides,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/models/overrides', { signal })),
 })
 
 /**

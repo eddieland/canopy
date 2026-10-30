@@ -511,6 +511,41 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
     assert refused(choose({"model": "acme/fake-model-1"})).startswith("model_list_failed: ")
 
 
+def test_the_settings_page_lists_every_tickets_model_override_by_ticket_then_agent(
+    ctx: Context,
+    opencode_state: Path,
+) -> None:
+    """An override outlasts `canopy forget`, so the settings page lists each one, read from the journal alone."""
+    opencode_state.write_text(
+        json.dumps({"models": ["acme/fake-model-1"], "variants": {"acme/fake-model-1": ["high"]}}),
+    )
+    c, headers = signed_in_client(ctx)
+    assert c.get("/api/models/overrides").json() == []
+    for ticket, agent, model in (
+        ("PROJ-9", "reviewer", "acme/fake-model-1"),
+        (KEY, "reviewer", "acme/fake-model-1@high"),
+        (KEY, "worker", "acme/fake-model-1"),
+    ):
+        body = {"agent": agent, "model": model}
+        assert c.post(f"/api/tickets/{ticket}/models", json=body, headers=headers).status_code == 200
+
+    got = c.get("/api/models/overrides").json()
+
+    assert [{k: v for k, v in o.items() if k != "set_at"} for o in got] == [
+        {"ticket": KEY, "agent": "worker", "model": "acme/fake-model-1", "variant": None},
+        {"ticket": KEY, "agent": "reviewer", "model": "acme/fake-model-1", "variant": "high"},
+        {"ticket": "PROJ-9", "agent": "reviewer", "model": "acme/fake-model-1", "variant": None},
+    ]
+    assert all(o["set_at"] for o in got)
+    # Cleared, it is gone; a persona's override is never among them.
+    c.post(f"/api/tickets/{KEY}/models", json={"agent": "worker"}, headers=headers)
+    c.post(f"/api/tickets/{KEY}/personas", json={"agent": "worker", "persona": "skeptic"}, headers=headers)
+    assert [(o["ticket"], o["agent"]) for o in c.get("/api/models/overrides").json()] == [
+        (KEY, "reviewer"),
+        ("PROJ-9", "reviewer"),
+    ]
+
+
 def test_the_settings_page_reads_each_agents_and_chores_model_as_the_loop_runs_on_it(
     ctx: Context,
     canopy_env: CanopyEnv,
@@ -568,6 +603,13 @@ def test_the_mocks_settings_page_names_a_model_for_the_overseer_and_the_chores(b
         ("deps", "anthropic/claude-haiku-4-5", "high", "chore"),
     ]
     assert got["models_file"] == got["chores_file"] == str(backend.user_file)
+
+
+def test_the_mocks_settings_page_lists_a_tickets_model_override(backend: Backend) -> None:
+    got = client(None, backend).get("/api/models/overrides").json()
+    assert [(o["ticket"], o["agent"], o["model"], o["variant"]) for o in got] == [
+        ("ABC-100", "worker", "anthropic/claude-opus-4-1", "high"),
+    ]
 
 
 def test_a_configured_model_with_a_variant_is_sent_with_it_and_an_override_naming_none_says_it_drops_it(
