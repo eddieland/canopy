@@ -145,7 +145,7 @@ test("the foot's buttons stay inside the rail in a palette that sets every line 
 test("the foot's buttons sit side by side in the default palette", async ({ page }) => {
     await page.goto('attention')
     await settled(page)
-    const top = async (testId: string): Promise<number> =>
+    const top = (testId: string): Promise<number> =>
         page.getByTestId(testId).evaluate((el) => el.getBoundingClientRect().top)
     expect(await top('rail-settings')).toBe(await top('rail-guide'))
 })
