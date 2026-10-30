@@ -21,7 +21,7 @@ const buttonVariants = cva(
     {
         variants: {
             variant: {
-                default: 'bg-accent text-accent-foreground hover:bg-accent/85',
+                default: 'bg-accent text-accent-foreground shadow-action hover:bg-accent/85',
                 outline: [
                     'border-border bg-surface-raised hover:bg-surface hover:text-foreground',
                     'aria-expanded:bg-surface aria-expanded:text-foreground',

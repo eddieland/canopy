@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from canopy.core import db, review_drafts, sql
+from canopy.core import db, records, review_drafts
 from canopy.core.context import Context
 from canopy.core.items import Item
 from canopy.loop import attention
@@ -104,7 +104,7 @@ def test_a_requested_review_of_a_pr_a_ticket_holds_or_seen_merged_waits_on_nobod
         db.set_unit(conn, "PROJ-2", str(scenario.env.root), "repo", pr_url=THEIRS)
     else:
         merged = {"repository": "acme/api", "number": 8, "base_ref": "main", "state": "merged", "draft": 0}
-        sql.execute(conn, sql.insert("observed_prs", url=THEIRS, observed_at=db.now(), **merged))
+        records.insert(records.ObservedPr, url=THEIRS, observed_at=db.now(), **merged).run(conn)
     assert waiting.items(conn) == []
 
 

@@ -7,6 +7,7 @@ These tests check what the wrapper asks of the sandbox, not that the sandbox hol
 import contextlib
 import json
 import os
+import shlex
 import shutil
 import signal
 import sqlite3
@@ -25,14 +26,19 @@ from canopy.cli.main import main
 from canopy.core import config, context, db, review_runs
 from canopy.infra import lock, logs, procs
 from canopy.infra.procs import SubprocessRunner
+from canopy.loop import mcp
 from canopy.runs import task_starts, tasks
 from tests.canopy.helpers import (
     DEAD_PID,
     InlineRunner,
+    answered_lines,
+    decides,
     decisions,
     in_tick,
     inline_context,
+    mcp_lines,
     operator,
+    overseer_calls,
     pool,
     present,
     private_worker_does,
@@ -42,6 +48,7 @@ from tests.canopy.helpers import (
     worker_does,
 )
 from tests.canopy.review_helpers import CLEAN, PR, reviewer_reports, run_inline
+from tests.canopy.scenario_helpers import dispatches
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, executable, git, user_toml
 
 # The command the install puts beside python, which is how canopy runs it: never `python -m`, which would put the
@@ -773,19 +780,23 @@ def test_canopy_runs_in_the_overseers_sandbox_and_records_in_the_journal(
 ) -> None:
     """`canopy --version`, which the tick checks before the overseer starts, and a decision that lands in the journal.
 
-    The fake srt sandboxes nothing: the canary checks the same under the real one.
+    The decision is a call of the overseer's tool, made through its server, which the runtime starts inside the
+    overseer's sandbox. The fake srt sandboxes nothing: the canary checks the same under the real one.
     """
     canopy = str(Path(sys.executable).parent / "canopy")
     conn = state_as_a_tick_leaves_it(canopy_env)
+    lines = mcp_lines(decides("PROJ-1", rationale="its PR is in review"))
     with in_tick(conn) as tick_id:
         version = wrap("overseer", "--", canopy, "--version", cwd=canopy_env.root)
-        wait = ["decide", "PROJ-1", "wait", "--rationale", "its PR is in review"]
-        decided = wrap("overseer", "--", canopy, *wait, cwd=canopy_env.root)
+        serves = f"printf '%s\\n' \"$@\" | {shlex.join(mcp.COMMAND)}"
+        decided = wrap("overseer", "--", "sh", "-c", serves, "sh", *lines, cwd=canopy_env.root)
         recorded = decisions(conn, tick_id)
 
     assert version.ok, version.stderr
     assert version.stdout.startswith("canopy ")
     assert decided.ok, decided.stderr
+    [said] = answered_lines(decided.stdout)
+    assert not said.error, said.text
     assert recorded == [("wait", "its PR is in review")]
 
 
@@ -1066,8 +1077,7 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
         runner = InlineRunner()
         tracker_holds(conn)
         with in_tick(conn, ends_ok=True):
-            args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-            assert main([*args, "--slug", "work"], runner=runner) == 0
+            assert not overseer_calls(dispatches(slug="work"), runner=runner).error
             tick_starts(runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
@@ -1102,7 +1112,7 @@ def test_canopys_sandboxed_reviewer_reads_the_checkout_through_the_wrapper(
     sha = git("rev-parse", "main", cwd=git_pool.origin)
 
     with reviewer_reports(CLEAN, ["git", "-C", "checkout", "rev-parse", "HEAD"]):
-        run_id = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
+        run_id = run_inline(conn, sha=sha, ticket="PROJ-1")
 
     row = present(review_runs.get_review_run(conn, run_id))
     assert row.status == "done", Path(row.log_path).read_text()
@@ -1136,8 +1146,7 @@ def test_a_sandboxed_repositorys_worker_and_setup_run_in_the_wrapper_canopy_adds
         runner = InlineRunner()
         tracker_holds(conn)
         with in_tick(conn, ends_ok=True):
-            args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-            assert main([*args, "--slug", "work"], runner=runner) == 0
+            assert not overseer_calls(dispatches(slug="work"), runner=runner).error
             tick_starts(runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
@@ -1167,8 +1176,7 @@ def test_a_repository_sandbox_repos_does_not_name_runs_unwrapped(
         runner = InlineRunner()
         tracker_holds(conn)
         with in_tick(conn, ends_ok=True):
-            args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-            assert main([*args, "--slug", "work"], runner=runner) == 0
+            assert not overseer_calls(dispatches(slug="work"), runner=runner).error
             tick_starts(runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
@@ -1198,7 +1206,7 @@ def test_a_sandboxed_repositorys_review_runs_in_the_wrapper_canopy_adds(
     sha = git("rev-parse", "main", cwd=git_pool.origin)
 
     with reviewer_reports(CLEAN, ["git", "-C", "checkout", "rev-parse", "HEAD"]):
-        run_id = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
+        run_id = run_inline(conn, sha=sha, ticket="PROJ-1")
 
     row = present(review_runs.get_review_run(conn, run_id))
     assert row.status == "done", Path(row.log_path).read_text()

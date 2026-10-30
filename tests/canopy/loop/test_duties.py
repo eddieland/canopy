@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 
 from canopy.core import db
-from canopy.core.vocab import TickStatus
+from canopy.core.vocab import Phase, TickStatus
 from canopy.loop import attention, duties
-from tests.canopy.helpers import LABEL, canopy, chore_toml, in_tick, seen, waits
-from tests.canopy.scenario_helpers import Scenario, raises
+from tests.canopy.helpers import LABEL, calls, chore_toml, chore_waits, decides, in_tick, raises, seen, waits
+from tests.canopy.scenario_helpers import Scenario, sets_phase
 from tests.conftest import TRACKER_SOURCE, CanopyEnv
 
 #: A `tracker` source the fake connector plays, so the query is read by a source (DESIGN §30).
@@ -109,10 +109,11 @@ def test_a_query_read_longer_ago_than_its_age_is_not_run(scenario: Scenario, tra
 
 def test_the_overseer_records_no_query_and_skips_no_tick(scenario: Scenario) -> None:
     """It reads no tracker nor GitHub, which the sources read (DESIGN §39): the query is canopy's, no outage its own."""
+    skipped = calls("canopy_decide", decisions=[{"action": "skip", "rationale": "mcp_unavailable: github"}])
     with scenario.ticking() as tick_id:
-        refused = scenario.overseer("decide", "skip", "--rationale", "mcp_unavailable: github", code=2)
-        assert "expected KEY ACTION for each of 1 --rationale; got 1 arguments" in refused.err
-        assert "No such command 'queried'" in scenario.overseer("queried", "PROJ-1", code=2).err
+        assert scenario.overseer(skipped, error=True).text == "decisions.0.key: Field required"
+        queried = scenario.overseer(decides("PROJ-1", "queried"), error=True)
+        assert queried.text == "decisions.0.action: Input should be 'wait', 'skip' or 'done'"
     assert db.decisions_for_tick(scenario.conn, tick_id) == []
 
 
@@ -126,7 +127,7 @@ def test_a_query_not_due_is_not_recorded_though_a_source_read_it(scenario: Scena
 def test_a_ticket_left_out_fails_the_tick_and_keeps_its_attention_item(scenario: Scenario) -> None:
     scenario.tick(raises("PROJ-1", "needs_author", "https://example.test/pr/1"), *waits("PROJ-2"))
     # A phase is not a decision, and PROJ-2 gets none at all.
-    failed = scenario.tick(canopy("ticket", "set", "PROJ-1", "--phase", "approved"), code=1)
+    failed = scenario.tick(sets_phase("PROJ-1", Phase.APPROVED), code=1)
     assert failed.tick.status == "overseer_failed"
     assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-1, PROJ-2"
     # The items of the tickets it left out are not taken as resolved.
@@ -193,7 +194,7 @@ def test_a_due_chore_left_undecided_fails_the_tick(scenario: Scenario, canopy_en
     canopy_env.append_user(chore_toml(extra='when = "Weekdays only."\n'))
     failed = scenario.tick(code=1)
     assert failed.tick.summary == "overseer left duties undone: no run or wait for chore build-health"
-    scenario.tick(canopy("chore", "wait", "build-health", "--rationale", "not now"))
+    scenario.tick(chore_waits("build-health"))
 
 
 def test_decisions_before_the_overseer_ran_are_the_harnesss(canopy_env: CanopyEnv) -> None:

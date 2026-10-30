@@ -403,39 +403,60 @@
 
 /*
  * The aurora along the header's foot: the nav's section colors, in the nav's order (`SECTIONS` in `lib/sections.ts`),
- * so the header reads as the rail turned on its side. Settings, out of the nav, is out of it too.
+ * so the header reads as the rail turned on its side. Settings, out of the nav, is out of it too. A palette may give it
+ * a form of its own (`tokens.css`): another image (`--aurora-image`), another height (`--aurora-height`), and a bloom,
+ * a blurred copy of it over it (`--aurora-bloom`).
  */
 @utility aurora {
-    background-image: linear-gradient(
-        90deg,
-        var(--section-attention),
-        var(--section-tickets),
-        var(--section-tasks),
-        var(--section-pull-requests),
-        var(--section-runs),
-        var(--section-chores),
-        var(--section-reports),
-        var(--section-memory)
+    height: var(--aurora-height, 0.125rem);
+    background-image: var(
+        --aurora-image,
+        linear-gradient(
+            90deg,
+            var(--section-attention),
+            var(--section-tickets),
+            var(--section-tasks),
+            var(--section-pull-requests),
+            var(--section-runs),
+            var(--section-chores),
+            var(--section-reports),
+            var(--section-memory)
+        )
     );
+    &::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: inherit;
+        filter: var(--aurora-bloom, none);
+        opacity: var(--aurora-bloom-opacity, 0);
+    }
 }
 
 /*
  * The header's name, in the aurora's colors: from the logo's accent through the header's foot to its end. The
  * gradient runs twice the name's width and back, so a period of `flow` ends where it began. Printed, where a
- * background may not be, it is plain text.
+ * background may not be, it is plain text. A palette may give it a form of its own (`tokens.css`): another image
+ * (`--wordmark-image`) painted behind the letters (`--wordmark-clip`) in an ink of their own (`--wordmark-ink`), a
+ * frame around it drawn as a shadow, so it takes no room (`--wordmark-frame`), and a glow (`--wordmark-glow`).
  */
 @utility wordmark {
-    background-image: linear-gradient(
-        90deg,
-        var(--accent),
-        var(--section-pull-requests) 25%,
-        var(--section-tickets) 50%,
-        var(--section-pull-requests) 75%,
-        var(--accent)
+    background-image: var(
+        --wordmark-image,
+        linear-gradient(
+            90deg,
+            var(--accent),
+            var(--section-pull-requests) 25%,
+            var(--section-tickets) 50%,
+            var(--section-pull-requests) 75%,
+            var(--accent)
+        )
     );
     background-size: 200% 100%;
-    background-clip: text;
-    color: transparent;
+    background-clip: var(--wordmark-clip, text);
+    color: var(--wordmark-ink, transparent);
+    box-shadow: var(--wordmark-frame, none);
+    filter: var(--wordmark-glow, none);
     /* It has no capitals or ascenders, so centered on its line its letters sit low: trimmed to its x-height, the row
     centers what shows, beside the logo's dot and the pills' capitals. The gradient paints only the box, so a padding
     as deep as the descenders takes it under them, and a margin as deep takes the padding back out of the layout. */
@@ -445,6 +466,8 @@
     @media print {
         background: none;
         color: inherit;
+        box-shadow: none;
+        filter: none;
     }
 }
 

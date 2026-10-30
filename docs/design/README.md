@@ -193,7 +193,7 @@ canopy (harness, Python)
   __main__.py  python -m canopy, how dispatch starts _run from the same installation
   cli/         the command line; only cli imports click, and only __main__ imports cli
   loop/        the tick (§6) and canopy loop, which drive the features below; the state block; the attention list;
-               the overseer's verbs, which its commands and its MCP server share (§27)
+               the overseer's verbs, which its MCP server serves as tools (§27)
   serve/       the web UI's server (§22, D079), above the features it shows; the only package that imports fastapi,
                starlette, uvicorn, or anyio
   runs/        worker runs on tickets (§8) and the operator's tasks (§36): guards, leases, the detached _run and
@@ -245,9 +245,9 @@ Roles:
 - **Harness**: schedules, locks, guards, journals, renders. Runs the overseer on a tick that leaves it something to
   judge (§6), and workers on demand.
 - **Overseer**: an agent run with `overseer_cmd`. Reads the world from the state block's observations alone (§30),
-  decides one next action per ticket, and acts only through `canopy dispatch`, `canopy decide`, `canopy attention`,
-  `canopy chore run`, `canopy chore wait` (§19), `canopy review run`, and `canopy review wait` (§21). Read-only
-  everywhere else. What it owes every tick is checked when it ends (§6 step 5).
+  decides one next action per ticket, and acts only through canopy's tools (§27): `dispatch`, `decide`, `attention`,
+  `ticket-set`, `chore-run` and `chore-wait` (§19), and `review-run`, `review-wait`, `review-end`, and `review-revise`
+  (§21, §34). Read-only everywhere else. What it owes every tick is checked when it ends (§6 step 5).
 - **Worker**: an agent run with `worker_cmd` in a leased worktree with a task prompt. Writes code, pushes a branch,
   opens or updates a PR, comments on the ticket, prints a result line, exits. Never merges, approves, or moves a ticket
   to Done. A private ticket's worker runs with `private_worker_cmd` and writes nothing to the ticket (§22).

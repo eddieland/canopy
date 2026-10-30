@@ -657,6 +657,10 @@ class TickDetail(Model):
     """The tick after it, dry runs included, or None on the newest, until the next one starts."""
     models: ModelsServed
     """Which models served its overseer."""
+    model: str | None = None
+    """The model canopy asked the runtime for, for its overseer (DESIGN §13, Each agent's model), as
+    `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a tick whose
+    overseer did not run or from before canopy recorded it."""
 
 
 class LastTick(Model):

@@ -59,7 +59,7 @@ def test_the_shipped_plan_prompt_renders_completely(canopy_env: CanopyEnv, *, pr
     cfg = load(canopy_env.root, canopy_env.user_file)
     values = {
         **PROMPT_VALUES,
-        "AUTHORIZATION": prompts.plan_authorization("PROJ-1", ["agent-ready-alice"], private=private),
+        "AUTHORIZATION": prompts.plan_authorization(["agent-ready-alice"], private=private),
         "PLAN_FILE": ".canopy-plan.md",
         "PLAN_OUT": ".canopy-new-plan.md",
         "MAX_PLAN_CHARS": "100,000",
@@ -68,10 +68,13 @@ def test_the_shipped_plan_prompt_renders_completely(canopy_env: CanopyEnv, *, pr
     text = prompts.render_worker(cfg, "plan", values, private=private)
     assert text.startswith("# canopy worker: plan\n")
     assert "{{" not in text
-    assert "If `/ws/desks/PROJ-1/.canopy-plan.md` exists, it is the plan this one replaces." in text
-    assert "as markdown to `/ws/desks/PROJ-1/.canopy-new-plan.md`" in text
+    assert "If `.canopy-plan.md` exists in your directory, it is the plan this one replaces." in text
+    assert "as markdown to `.canopy-new-plan.md` in your directory" in text
+    assert "You are planning ticket PROJ-1, attempt 1 of 2, in /ws/desks/PROJ-1." in text
     assert "at most 100,000 characters, a limit" in text
-    assert text.rstrip().endswith(
+    body = prompts.split(text).body
+    assert body is not None
+    assert body.rstrip().endswith(
         '{"status":"done|blocked|failed","summary":"<your report, line breaks sparingly>",'
         '"question":"<only when blocked>","effort":"small|medium|large"}',
     )
@@ -92,6 +95,16 @@ def test_a_plan_prompt_needs_its_authorization_and_the_operators_messages(canopy
     values = {**PROMPT_VALUES, "AUTHORIZATION": "check", "PLAN_OUT": ".canopy-new-plan.md"}
     with pytest.raises(prompts.PromptError, match=rf"missing required placeholder \{{\{{{missing}\}}\}}"):
         prompts.render_worker(cfg, "plan", values)
+
+
+def test_a_prompt_splits_at_its_first_run_marker_line_into_body_and_message() -> None:
+    marker = prompts.RUN_MARKER
+    parts = prompts.split(f"# fixed\n\nWork.\n\n{marker}\n\n## Run\n\nPROJ-1\n{marker}\n")
+    assert parts == prompts.Split("# fixed\n\nWork.\n", f"## Run\n\nPROJ-1\n{marker}\n")
+    assert parts.whole == f"# fixed\n\nWork.\n\n## Run\n\nPROJ-1\n{marker}\n"
+    # A marker inside a line is no marker, and a prompt without one is all message.
+    assert prompts.split(f"Work. {marker}\n") == prompts.Split(None, f"Work. {marker}\n")
+    assert prompts.split("Work.\n").whole == "Work.\n"
 
 
 def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:
@@ -314,7 +327,7 @@ def test_open_pr_names_the_mcp_or_only_the_skill() -> None:
 
 @pytest.mark.parametrize(
     ("kind", "before"),
-    [("implement", "Never target another branch."), ("resume", "with the ticket key in the\ntitle.")],
+    [("implement", "Never target another branch."), ("resume", "with the ticket key\nin the title.")],
 )
 def test_shipped_prompts_that_open_prs_say_how(canopy_env: CanopyEnv, kind: str, before: str) -> None:
     text = prompts.render_worker(
@@ -512,7 +525,7 @@ def test_shipped_prompts_that_commit_say_how_to_bring_a_base_in(
     with_rebase(canopy_env)
     text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
     assert "rebase onto `origin/<base>`, and never merge it in" in text
-    assert "`git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-work`" in text
+    assert "`git push --force-with-lease origin HEAD:refs/heads/<branch>`" in text
     assert "Never rebase" not in text
 
 
@@ -590,10 +603,10 @@ def test_every_run_kind_has_a_worker_prompt_and_every_kind_but_plan_a_private_on
 def test_a_resume_names_each_of_its_reasons_in_the_vocabularys_order() -> None:
     note = prompts.reasons_note(["review", "ci"], private=False)
     assert note.splitlines() == [
-        '- `ci`: checks failed on the PR: fix them, as "Failed checks" below says.',
+        '- `ci`: checks failed on the PR: fix them, as "Failed checks" says.',
         (
             "- `review`: review comments, or canopy's review findings, to address, as \"canopy's review\" and "
-            '"Reviewers" below say.'
+            '"Reviewers" say.'
         ),
     ]
     # A private ticket's reply is the operator's, in its conversation; every reason has its line.

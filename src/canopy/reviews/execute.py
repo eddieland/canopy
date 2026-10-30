@@ -44,7 +44,6 @@ from canopy.core import (
     run_models,
     run_offers,
     sandboxing,
-    ticket_models,
 )
 from canopy.core import review_result as result
 from canopy.core.config import render_command
@@ -297,8 +296,10 @@ def reviewer(
     Returns:
         Its argv behind the sandbox, if `repo` is sandboxed, its stdin, its environment, and its definitions.
     """
-    snapshot = definitions.ensure(ctx.state_dir, ctx.config, models)
-    command = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, title)
+    # The prompt's fixed instructions are the reviewer's body, in a snapshot every review shares (DESIGN §13).
+    bodies, message = definitions.run_prompt(prompt, ctx.config.runtime.review_cmd)
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config, models, bodies)
+    command = render_command(ctx.config.runtime.review_cmd, message, snapshot, title)
     argv = sandboxing.wrap(ctx.config.runtime, [repo], "review", command.argv, snapshot)
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). The reviewer reads its checkout's history
     # through canopy's read-only git tools, over that checkout alone, named as its link is (DESIGN §27), and says
@@ -427,18 +428,15 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     return outcome
 
 
-def _models(ctx: Context, run: records.ReviewRun) -> dict[str, Model] | None:
-    """Each agent's model by its name for `run`, when its ticket's override chooses the reviewer's (DESIGN §13).
+def _models(ctx: Context, run: records.ReviewRun) -> dict[str, Model]:
+    """Each agent's model by its name for `run`: config's, but the reviewer's, the one the run recorded (DESIGN §13).
+
+    The run recorded its ticket's override for the reviewer, else config's, so what is recorded is what runs.
 
     Returns:
-        `runtime.models`' with the reviewer's override in its place, or None for config's alone.
+        Each agent with a model, by its name, for the runtime to write into the run's definitions.
     """
-    if run.ticket_key is None:
-        return None
-    chosen = ticket_models.override(ctx.conn, run.ticket_key, "reviewer")
-    if chosen is None:
-        return None
-    return agent_models.of_run(ctx.config, ctx.config.runtime.review_cmd, chosen)
+    return agent_models.of_run(ctx.config, ctx.config.runtime.review_cmd, run.model)
 
 
 def _check_out(runner: procs.Runner, slot: Path, sha: str) -> None:

@@ -44,8 +44,8 @@ def record(
     Returns:
         The recorded run's id.
     """
-    insert = sql.insert(
-        "recorded_runs",
+    insert = records.insert(
+        records.RecordedRun,
         tick_id=tick_id,
         kind=kind,
         request=json.dumps(request, sort_keys=True),
@@ -55,7 +55,7 @@ def record(
         chore=chore,
         recorded_at=db.now(),
     )
-    return db.rowid(sql.execute(conn, insert))
+    return db.rowid(insert.run(conn))
 
 
 def holding(conn: sqlite3.Connection, *, but: int | None = None) -> list[records.RecordedRun]:
@@ -112,11 +112,11 @@ def close(conn: sqlite3.Connection, recorded_id: int, status: RecordedStatus, *,
         True if this call closed it.
     """
     update = (
-        sql.update("recorded_runs")
+        records.update(records.RecordedRun)
         .set(status=status, run_id=run_id, closed_at=db.now())
         .where("id = ? AND status = ?", recorded_id, RecordedStatus.RECORDED)
     )
-    return sql.execute(conn, update).rowcount == 1
+    return update.run(conn).rowcount == 1
 
 
 def close_unstarted(conn: sqlite3.Connection, *, tick_id: int | None = None) -> int:
@@ -128,10 +128,10 @@ def close_unstarted(conn: sqlite3.Connection, *, tick_id: int | None = None) -> 
         How many it closed.
     """
     update = (
-        sql.update("recorded_runs")
+        records.update(records.RecordedRun)
         .set(status=RecordedStatus.UNSTARTED, closed_at=db.now())
         .where("status = ?", RecordedStatus.RECORDED)
     )
     if tick_id is not None:
         update = update.where("tick_id = ?", tick_id)
-    return sql.execute(conn, update).rowcount
+    return update.run(conn).rowcount

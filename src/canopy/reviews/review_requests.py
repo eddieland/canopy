@@ -5,7 +5,7 @@ ended. It authorizes one review of its PR at its head, as `review.query` would, 
 chose for it, so only the operator makes or stops one: every channel (`canopy start URL --review`, `canopy stop URL`,
 and the web UI) calls the functions here, and each refuses inside canopy's own ticks and runs. The overseer names the
 PR's repository when it runs the review, as it does for `review.query`'s matches. The harness ends a request when a
-review of its PR ends `done`, in each of its personas if it has any (`db.finish_run`), or when `canopy review run`
+review of its PR ends `done`, in each of its personas if it has any (`db.finish_run`), or when the `review-run` tool
 refuses `reviewed` for it (`answered`); the overseer ends one whose PR merged or closed first, or is in none of the
 workspace's repositories (`end`). At most one request per PR is open. A request may carry the operator's notes, which
 the reviewer's prompt carries (`reviews.start`), and the personas it is reviewed in, in place of `[personas] reviewer`'s
@@ -36,7 +36,7 @@ MERGED = "merged"
 CLOSED = "closed"
 UNKNOWN_REPO = "unknown_repo"
 STOPPED = "stopped"
-# The reasons the overseer may give `canopy review end`: what it read on the PR, never the operator's own.
+# The reasons the overseer may give the `review-end` tool: what it read on the PR, never the operator's own.
 OVERSEER_REASONS = (MERGED, CLOSED, UNKNOWN_REPO)
 #: The most characters a request's notes may hold, after stripping: the operator's bound on what they write (§22).
 MAX_NOTES = conversation.MAX_OPERATOR
@@ -181,13 +181,13 @@ def request(
     with db.transaction(conn):
         found = open_request(conn, url)
         if found is not None and said is not None:
-            sql.execute(conn, sql.update("review_requests").set(notes=said).where("id = ?", found.id))
+            records.update(records.ReviewRequest).set(notes=said).where("id = ?", found.id).run(conn)
             found = open_request(conn, url)
         if found is not None:
             if names:
                 _set_personas(conn, found.id, names)
             return Requested(request=found, already=True)
-        sql.execute(conn, sql.insert("review_requests", pr_url=url, created_at=db.now(), channel=channel, notes=said))
+        records.insert(records.ReviewRequest, pr_url=url, created_at=db.now(), channel=channel, notes=said).run(conn)
         made = open_request(conn, url)
         if made is not None and names:
             _set_personas(conn, made.id, names)
@@ -284,7 +284,7 @@ def end(conn: sqlite3.Connection, pr_url: str, reason: str, *, dry_run: bool = F
             PR with no open request.
     """
     if reason not in OVERSEER_REASONS:
-        raise conversation.Refused("bad_reason", f"reason (--reason) must be one of {', '.join(OVERSEER_REASONS)}")
+        raise conversation.Refused("bad_reason", f"reason must be one of {', '.join(OVERSEER_REASONS)}")
     with db.transaction(conn):
         found = open_request(conn, pr_url)
         if found is None:
@@ -297,18 +297,18 @@ def end(conn: sqlite3.Connection, pr_url: str, reason: str, *, dry_run: bool = F
 def answered(conn: sqlite3.Connection, pr_url: str) -> bool:
     """End the PR's open request as `reviewed`: a `done` review of the head the overseer read already exists.
 
-    `canopy review run` calls it when it refuses `reviewed`, so a request made after its PR's head was reviewed, which
+    The `review-run` tool calls it when it refuses `reviewed`, so a request made after its PR's head was reviewed, which
     no new review will end, ends with the review that answers it.
 
     Returns:
         True if this call ended a request.
     """
     with db.transaction(conn):
-        cur = sql.execute(
-            conn,
-            sql.update("review_requests")
+        cur = (
+            records.update(records.ReviewRequest)
             .set(ended_at=db.now(), end_reason=REVIEWED)
-            .where("pr_url = ? AND ended_at IS NULL", pr_url),
+            .where("pr_url = ? AND ended_at IS NULL", pr_url)
+            .run(conn)
         )
     return cur.rowcount == 1
 
@@ -329,17 +329,17 @@ def has_news(run: records.ReviewRun, found: ReviewResult | None) -> bool:
 
 def _set_personas(conn: sqlite3.Connection, request_id: int, names: Iterable[str]) -> None:
     # In place of the request's own, in the order given, inside the caller's transaction.
-    sql.execute(conn, sql.delete("review_request_personas").where("request_id = ?", request_id))
+    records.delete(records.ReviewRequestPersona).where("request_id = ?", request_id).run(conn)
     for name in names:
-        sql.execute(conn, sql.insert("review_request_personas", request_id=request_id, persona=name))
+        records.insert(records.ReviewRequestPersona, request_id=request_id, persona=name).run(conn)
 
 
 def _end(conn: sqlite3.Connection, request_id: int, reason: str) -> None:
-    sql.execute(
-        conn,
-        sql.update("review_requests")
+    (
+        records.update(records.ReviewRequest)
         .set(ended_at=db.now(), end_reason=reason)
-        .where("id = ? AND ended_at IS NULL", request_id),
+        .where("id = ? AND ended_at IS NULL", request_id)
+        .run(conn)
     )
 
 

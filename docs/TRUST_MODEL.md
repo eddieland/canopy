@@ -95,11 +95,11 @@ Controls:
   not in code from its observed labels and state, a non-candidate by key and why with none of its text, and a
   candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a trusted
   reviewer, a worker). By prompt, the overseer decides from them alone, and a subject no source can read gets its
-  `wait`. The text stays data, cut and marked. `canopy dispatch` checks the overseer's claims against them in code
+  `wait`. The text stays data, cut and marked. The `dispatch` tool checks the overseer's claims against them in code
   (DESIGN §7), before its other guards: the label must be one observed on the ticket, a `resume` for `reply` must cover
   a new comment by an authorized replier that is not a worker's or a new operator message, a `resume` for `review` must
   cover a trusted reviewer's item, or anyone else's only with an operator message after it (`unauthorized`), and each
-  cursor, a tick's `canopy ticket set` included, must name an item observed and shown (`unobserved`). A `resume`'s
+  cursor, a tick's `ticket-set` included, must name an item observed and shown (`unobserved`). A `resume`'s
   cursors the overseer leaves out default in code to the newest items shown that these checks let it cover (DESIGN §37).
   A dispatch resting on a public ticket or a PR observed longer ago than `connect.max_age_minutes` is refused `stale`. A
   private ticket and a subject no source covers keep their claims, checked by the worker as before. Config requires a
@@ -129,16 +129,16 @@ Controls:
   `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
   each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
   these, none stale. Such a ticket's text reaches no overseer that tick, and whatever the overseer records about it, a
-  decision, dispatch, attention item, or `ticket set`, is refused `decided`, through a tool and its command alike, so
-  a steered overseer cannot overrule the harness; an item the overseer raised on it stands until the overseer is given
-  the ticket again, or it is done or stopped. Residual: the harness reads the absence of every other row from the
+  decision, dispatch, attention item, or `ticket-set`, is refused `decided`, so a steered overseer cannot overrule the
+  harness; an item the overseer raised on it stands until the overseer is given the ticket again, or it is done or
+  stopped. Residual: the harness reads the absence of every other row from the
   derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
-  model-written context: today it starts only a due chore with no `when`, whose `chore run` and `chore wait` the
+  model-written context: today it starts only a due chore with no `when`, whose `chore-run` and `chore-wait` the
   overseer is refused `decided`, and no ticket's run, since each rests on an observation.
 - The attention items that need no judgment (`needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
   `review_failed`, `review_limit`, `plan_review`, `plan_changed`) are the harness's, raised from the journal and the
   observations in its own words, and kept while an observation they rest on is stale (DESIGN §14). The overseer is
-  refused recording one (`raised`), through a tool and its command alike, so a steered overseer can neither drop such
+  refused recording one (`raised`), so a steered overseer can neither drop such
   an item nor raise a false one; a guard that refuses it a run past a limit still records the item. Residual: a
   derivation's mistake raises or ends an item wrongly until a fresh read corrects it.
 - The overseer's own three items (`needs_author`, `multi_repo`, `notice_rerun`) are recorded once and held by the harness

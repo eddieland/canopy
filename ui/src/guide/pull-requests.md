@@ -343,7 +343,9 @@ The results are the page you read; how the reviewer got there is a page of its o
 **transcript and log**. It's the review in the trail, then **Run**, and holds what [a run's page](runs#a-runs-page)
 does, [Context](runs#context) included: what a failed review ended on, the harness's note, when it ran, what it spent
 and on which model, and where its log is; then the reviewer's transcript, every file it read and command it ran, the
-prompt canopy handed it, and the log's end as written, each folded until you open it.
+prompt canopy handed it, and the log's end as written, each folded until you open it. Its **model** names the model
+canopy asked for from the moment the review starts, the ticket's reviewer override or `runtime.models.reviewer`, so an
+override you just picked is checkable before the review's session is even read, let alone before the next tick.
 
 Open it when a verdict surprises you, or when a review failed and you want to know whether to blame the reviewer, the
 PR, or the runtime. While it works, the transcript grows as the reviewer goes, as a worker's does, and what it has spent

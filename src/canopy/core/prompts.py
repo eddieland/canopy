@@ -4,6 +4,10 @@ A prompt named `overseer.md` is read from `paths.prompt_overrides` if a file of 
 prompts canopy ships. The overseer's goes into its agent definition (`canopy.runtime.definitions`, DESIGN §13), not a
 tick's message, and its only placeholders are for its standing instructions. Worker prompts name their inputs as
 `{{NAME}}` placeholders.
+
+A run's prompt may hold `RUN_MARKER`, on a line of its own, after its fixed instructions (DESIGN §13). canopy renders
+the prompt whole, and keeps it so; the run splits it there (`split`): its agent's definition takes what is above as
+its body, the system prompt the provider caches, so runs of one kind share it, and the run's message is what is below.
 """
 
 from __future__ import annotations
@@ -11,7 +15,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, assert_never
+from typing import TYPE_CHECKING, Literal, NamedTuple, assert_never
 
 from canopy.core import personas
 from canopy.core.config import (
@@ -28,6 +32,10 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 OVERSEER = "overseer.md"
+#: The line of a run's prompt between its fixed instructions and the run's own values (DESIGN §13). Nothing above it
+#: may change from one run of the prompt's kind to the next, under one config, or runs of the kind share no cached
+#: prefix: the run's ticket, slot, branch, and attempt, and every section that applies to some runs alone, go below it.
+RUN_MARKER = "<!-- canopy: run -->"
 WORKER: dict[str, str] = {
     RunKind.IMPLEMENT: "worker-implement.md",
     RunKind.RESUME: "worker-resume.md",
@@ -50,22 +58,23 @@ REQUIRED_FEEDBACK_PLAN = ("REPOSITORIES", "AUTHORIZATION", "OPERATOR_MESSAGES", 
 # read by nothing, so while one exists every `resume` refuses to render (`retired_overrides`) rather than drop the
 # operator's CI instructions silently.
 RETIRED_WORKER = ("worker-fix-ci.md", "worker-fix-ci-private.md")
-# What each reason a `resume` runs for asks of its worker, for `{{REASONS}}` (DESIGN §8). A private ticket's reply is
-# the operator's, in its conversation.
+# What each reason a `resume` runs for asks of its worker, for `{{REASONS}}` (DESIGN §8), by the sections of the prompt
+# that say how, which may sit above or below it (`RUN_MARKER`). A private ticket's reply is the operator's, in its
+# conversation.
 _REASON_TEXT: dict[ResumeReason, str] = {
-    ResumeReason.CI: 'checks failed on the PR: fix them, as "Failed checks" below says.',
+    ResumeReason.CI: 'checks failed on the PR: fix them, as "Failed checks" says.',
     ResumeReason.REVIEW: (
-        'review comments, or canopy\'s review findings, to address, as "canopy\'s review" and "Reviewers" below say.'
+        'review comments, or canopy\'s review findings, to address, as "canopy\'s review" and "Reviewers" say.'
     ),
     ResumeReason.REPLY: (
         "an authorized human's reply to a question asked earlier, by comment id or link on the ticket, or the "
         "operator's message above, possibly about review comments to address."
     ),
-    ResumeReason.CONFLICT: 'the PR conflicts with its base branch: bring that base in, as "Repositories" above says.',
-    ResumeReason.NO_PR: 'the branch is pushed and has no PR: open it, as "Obligations" below says.',
+    ResumeReason.CONFLICT: 'the PR conflicts with its base branch: bring that base in, as "Base branches" says.',
+    ResumeReason.NO_PR: 'the branch is pushed and has no PR: open it, as "Obligations" says.',
     ResumeReason.RETARGET: (
         "the PR this ticket was stacked on has merged: retarget this ticket's PR to its repository's base branch, as "
-        '"Repositories" above says.'
+        '"Base branches" says.'
     ),
 }
 # A planner's `{{PLAN_REVIEW}}` (`plan_review`), in parts: what saying so does, when to at the operator's level, what
@@ -277,27 +286,27 @@ def worker_comment(prefix: str, suffix: str) -> str:
     return f"{' and '.join(marks)} outside any quote"
 
 
-def plan_authorization(key: str, labels: Sequence[str], *, private: bool) -> str:
+def plan_authorization(labels: Sequence[str], *, private: bool) -> str:
     """Return the planner's `{{AUTHORIZATION}}`: the label check on a public ticket, or why a private one has none.
 
     The planner writes nothing anywhere, so a plan it should not have written costs only its spend; the check keeps the
-    rule every worker follows (D051). A private ticket's start record was checked by the harness (DESIGN §22).
+    rule every worker follows (D051). A private ticket's start record was checked by the harness (DESIGN §22). It names
+    the ticket by no key, so that it is the same for every run (`RUN_MARKER`).
     """
     if private:
         return (
-            f"The operator started {key} in canopy, which authorized this run; there is no label to check. Its "
+            "The operator started your ticket in canopy, which authorized this run; there is no label to check. Its "
             "conversation stays with the operator."
         )
     named = ", ".join(f"`{label}`" for label in labels)
     return (
-        f"Before any other work, read {key} through the tracker. If it is closed, or carries none of the labels "
+        "Before any other work, read your ticket through the tracker. If it is closed, or carries none of the labels "
         f"{named}, the overseer should not have dispatched you: write no plan, and report `failed` with a summary that "
         "starts `not authorized:` and says which it was."
     )
 
 
 def follow_ups(
-    key: str,
     limit: int,
     repos: Sequence[str],
     *,
@@ -310,7 +319,8 @@ def follow_ups(
     A follow-up is a request: it authorizes nothing, and canopy works it only once the operator labels or starts it. A
     request to split the ticket is the one time its own work is filed as follow-ups (M46). A private ticket's worker
     files them too, the one thing it writes to the tracker: its version says that a follow-up is public all the same,
-    and that it lists them in its summary, since it comments nowhere.
+    and that it lists them in its summary, since it comments nowhere. It names the ticket by no key, so that it is the
+    same for every run (`RUN_MARKER`).
 
     Returns:
         The instructions, the bound, the repositories a follow-up may name, and the result field that reports them.
@@ -320,26 +330,26 @@ def follow_ups(
     asker = "the operator" if private else "an authorized replier or the operator"
     if private:
         listed = (
-            "Creating them is the one thing you write to the tracker: no comment on any ticket, and no edit to "
-            f"{key} or to any other ticket, though the tool that creates tickets may be able to. A follow-up is read "
-            f"by everyone who reads the tracker, while {key}'s conversation stays private: its title and body describe "
-            "the work in your own words, and carry nothing from the operator's messages, the conversation, or the "
-            "plan. Your summary lists the follow-ups you filed."
+            "Creating them is the one thing you write to the tracker: no comment on any ticket, and no edit to this "
+            "ticket or to any other, though the tool that creates tickets may be able to. A follow-up is read by "
+            "everyone who reads the tracker, while this ticket's conversation stays private: its title and body "
+            "describe the work in your own words, and carry nothing from the operator's messages, the conversation, "
+            "or the plan. Your summary lists the follow-ups you filed."
         )
     else:
-        listed = f"Your comment on {key} lists the follow-ups you filed."
+        listed = "Your comment on this ticket lists the follow-ups you filed."
     return (
         "You may file follow-up tickets: work outside this ticket that you found while doing it, such as a TODO your "
         "change leaves, a fix you saw and did not make, or a next step the change makes possible. Do this ticket's "
-        f"own work yourself, never as a follow-up, unless {asker} asked for {key} to be split into separate tickets: "
-        "then file each part the request names as a follow-up, and do only what it leaves to this ticket, if "
+        f"own work yourself, never as a follow-up, unless {asker} asked for this ticket to be split into separate "
+        "tickets: then file each part the request names as a follow-up, and do only what it leaves to this ticket, if "
         f"anything. File at most {limit}, and none for work that is already a ticket."
         "\n\n"
-        f"Create each in {key}'s project through the tracker, linked to {key} as its parent the way the tracker skill "
-        f"says, with no assignee and no labels: never one of {queue}, and never `{needs_human}`. Its body says what it "
-        "covers, as a description of the work rather than instructions to an agent, and, when one repository "
-        f"applies, names it on a line of its own, `canopy-repo: <name>`, one of {names}. A follow-up that must land "
-        f"after another ticket, this one included, gets the tracker's blocker relation. {listed}\n\n"
+        "Create each in this ticket's project through the tracker, linked to this ticket as its parent the way the "
+        f"tracker skill says, with no assignee and no labels: never one of {queue}, and never `{needs_human}`. Its "
+        "body says what it covers, as a description of the work rather than instructions to an agent, and, when one "
+        f"repository applies, names it on a line of its own, `canopy-repo: <name>`, one of {names}. A follow-up that "
+        f"must land after another ticket, this one included, gets the tracker's blocker relation. {listed}\n\n"
         "A follow-up is a request, not work you start: canopy asks the operator about each one, and works it only once "
         "they label it or start it, as any ticket. Name every ticket you created in your result line's object, also "
         'when you report `blocked` or `failed`: `"created":{"<key>":"<repository or null>"}`, each with the repository '
@@ -355,11 +365,12 @@ def no_follow_ups(why: str) -> str:
     )
 
 
-def task_tickets(project: str, limit: int, *, branch: str, needs_human: str, labels: Sequence[str]) -> str:
+def task_tickets(project: str, limit: int, *, needs_human: str, labels: Sequence[str]) -> str:
     """Return a task's `{{TICKETS}}` when it may file tickets (DESIGN §36): only in `project`, and how.
 
     A task's ticket is a request, as a follow-up is (§18): it authorizes nothing, and canopy works it only once the
-    operator labels or starts it. The task stays private, so its tickets carry nothing of its conversation.
+    operator labels or starts it. The task stays private, so its tickets carry nothing of its conversation. It names
+    the task's branch by no name, so that it is the same for every task in `project` (`RUN_MARKER`).
 
     Returns:
         The instructions, the bound, and the result field that reports them.
@@ -370,7 +381,7 @@ def task_tickets(project: str, limit: int, *, branch: str, needs_human: str, lab
         f"to, when its text asks for them. File at most {limit}, and none for work that is already a ticket. Create "
         f"each through the tracker the way the tracker skill says, with no assignee and no labels: never one of "
         f"{queue}, and never `{needs_human}`. Its body says what it covers, as a description of the work rather than "
-        f"instructions to an agent, and may name `{branch}` and its commits where the code it builds on is. A ticket "
+        "instructions to an agent, and may name your branch and its commits where the code it builds on is. A ticket "
         "is read by everyone who reads the tracker, while this task stays private: its title and body describe the "
         "work in your own words, and quote nothing from the task's text, the conversation, or your report.\n\n"
         "Creating them is the one thing you write to the tracker: no comment on any ticket, and no edit to any "
@@ -717,8 +728,11 @@ def commit_attribution(
     )
 
 
-def branch_update(config: Config, branch: str) -> str:
-    """Return how a worker brings a base branch into `branch`: by merging, or with `trust.rebase`, by rebasing."""
+def branch_update(config: Config) -> str:
+    """Return how a worker brings a base branch into its own: by merging, or with `trust.rebase`, by rebasing.
+
+    It names the branch `<branch>`, as the prompts' push command does, so that it is the same for every run.
+    """
     if not config.trust.rebase:
         return (
             "To bring a base branch into yours, merge `origin/<base>` into it. Never rebase or otherwise rewrite a "
@@ -728,7 +742,7 @@ def branch_update(config: Config, branch: str) -> str:
         "To bring a base branch into yours, rebase onto `origin/<base>`, and never merge it in: the operator's "
         "repositories refuse merge commits. If this ticket was stacked on a PR that has since merged, rebase only this "
         "ticket's own commits, with `git rebase --onto origin/<base> <the last commit of the branch it was stacked "
-        f"on>`. Push a rebased branch with `git push --force-with-lease origin HEAD:refs/heads/{branch}` in "
+        "on>`. Push a rebased branch with `git push --force-with-lease origin HEAD:refs/heads/<branch>` in "
         "place of the plain push. That is the only force you may use, and a rebase the only reason to use it."
     )
 
@@ -917,7 +931,7 @@ def render_worker(
         "NOTICE": notice,
         "COMMIT_ATTRIBUTION": commit_attribution(config, model, planner_model, prefix),
         "COMMIT_TRAILER": commit_trailer(config, model),
-        "BRANCH_UPDATE": branch_update(config, values.get("BRANCH") or ""),
+        "BRANCH_UPDATE": branch_update(config),
     }
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
     rebase = REQUIRED_REBASE if config.trust.rebase and kind in COMMITS else ()
@@ -1066,6 +1080,33 @@ def render(
     if missing:
         raise PromptError(f"{path}: missing required placeholder {', '.join(missing)}")
     return rendered
+
+
+class Split(NamedTuple):
+    """A rendered prompt as its run is sent it: its agent's body, and its message (DESIGN §13)."""
+
+    #: The fixed instructions above `RUN_MARKER`, for the agent's definition; None for a prompt without the marker.
+    body: str | None
+    #: What the run is started with: what is below the marker, or the whole prompt without one.
+    message: str
+
+    @property
+    def whole(self) -> str:
+        """The prompt in one message, the fixed instructions first: for an agent that takes no body."""
+        return self.message if self.body is None else f"{self.body}\n{self.message}"
+
+
+def split(prompt: str) -> Split:
+    """Split a rendered prompt at its `RUN_MARKER` line, the first one, into its fixed instructions and the rest.
+
+    Returns:
+        The body, ending with one line break, and the message, starting at its first line that is not blank; or no
+        body and the whole prompt, when the prompt has no such line.
+    """
+    head, marker, tail = prompt.partition(f"\n{RUN_MARKER}\n")
+    if not marker:
+        return Split(None, prompt)
+    return Split(head.rstrip("\n") + "\n", tail.lstrip("\n"))
 
 
 def _sections(path: Path, text: str, values: Mapping[str, str | None]) -> tuple[str, set[str]]:

@@ -225,7 +225,7 @@ worker, and plan) from one key, so a sandbox wrapper (§24) cannot miss one; the
 overseer's, a chore's, and a review's templates are not wrapped: each takes a different sandbox role, or none.
 
 **Prompt overrides** in `paths.prompt_overrides` replace files of the same name in `prompts/`. An override must keep
-what the guards rely on: an overseer override passes `--label` on every `canopy dispatch`, and a worker override
+what the guards rely on: an overseer override passes `label` on every `dispatch`, and a worker override
 includes `{{LABELS}}` and the authorization check that uses it, or the dispatch is refused as `bad_prompt` (§8, D051).
 In the user file, `paths.*` values must be absolute or start with `~`, since a relative path would let a shared
 workspace supply them; in the private file a relative value resolves against the state directory, never the workspace
@@ -316,7 +316,8 @@ canopy snapshots its bundled agents, skills, and plugin into the state directory
 and the templates point the runtime at it (§12). The snapshot is written whole, never changed, unwritable once written
 (§33), and readable only by the operator, so overlapping runs never load a partial set; one that is a symlink, someone
 else's, or open to others is refused, failing the tick or making the run `crashed` (D040). Definitions are rendered
-from config, so a change to their inputs makes a new snapshot. OpenCode 2 reads the snapshot in place of the
+from config, and a run's from its prompt's fixed instructions (below), so a change to their inputs makes a new
+snapshot. OpenCode 2 reads the snapshot in place of the
 operator's own config directory, where 1 reads both, so its snapshot links to each config file of theirs, which stays
 theirs: their MCP servers, providers, and rules reach every run, as they would their own sessions. Among them:
 
@@ -325,6 +326,12 @@ theirs: their MCP servers, providers, and rules reach every run, as they would t
   tracker's, no server and no skill, its skill tool denied, since it reads no tracker (§30). The body is the system
   prompt the provider caches across ticks; a tick's message is its state block alone (§6). An override canopy cannot
   read fails the tick and every run started from it, rather than running without the prompt.
+- `canopy-worker`, `canopy-worker-private`, `canopy-planner`, and `canopy-reviewer` get, as their body, the fixed
+  instructions of the prompt their run starts with: what is above its run marker, which holds nothing of one run's
+  own, no ticket, slot, branch, or attempt. So every run of a kind under one config shares a body, a snapshot, and the
+  prefix the provider caches, as the overseer's ticks do (§33, The split). The run's message is the rest: `## Run`,
+  with its values, then the sections only some runs get. A prompt without the marker, an older override's, or a
+  template that runs an agent canopy does not ship, is sent whole as the message, and the definition keeps its stub.
 - Every definition gets the artifact store's MCP server denied whole, and an agent `artifacts.publish_roles` names its
   tools by exact name and its skill (§38).
 
@@ -351,7 +358,7 @@ Built: each agent's default in `[runtime.models]`, a chore's own model, variants
 `canopy model` or the ticket's page, the check of a model and its variant before every run the loop starts and a
 tick's overseer, and recording what served (REQUIREMENTS R23).
 
-The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
+The operator wants to override one ticket's model, running its workers on another and comparing what they did and cost,
 and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design
 promises:
 
@@ -380,7 +387,7 @@ promises:
   and its variant against the model's, since OpenCode drops an unlisted variant without a word. An unlisted model or
   variant, or a list that cannot be read, refuses the run with an attention item, spending no attempt and leasing no
   slot, so the work resumes once the model is back: a task waits, and a tick closes without its overseer (§6 step 5).
-  It never falls back to the default, since a canary's run on a model nobody chose would read as the canary's.
+  It never falls back to the default, since a run on a model nobody chose would read as the one the operator chose.
 
 The PR that builds the choosing proposes T1, T5, T7, and T8 to match. Rejected: a model chosen by the overseer or
 ticket labels (T1); a list of models shipped with canopy; one override for all of a ticket's agents; recording only the

@@ -14,8 +14,8 @@ from canopy.core import db, review_runs
 from canopy.core.config import ConfigError, load
 from canopy.core.vocab import Decider, ReviewRunStatus
 from canopy.loop import attention
-from tests.canopy.helpers import KEY, context, in_tick, messages, operator, seen, waits
-from tests.canopy.scenario_helpers import Scenario, raises
+from tests.canopy.helpers import KEY, Called, context, in_tick, messages, operator, raises, seen, waits
+from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
@@ -51,7 +51,7 @@ def test_render_empty() -> None:
     assert attention.render([], NOW) == "# canopy attention\n\nNothing needs you. Updated 2026-09-24 12:00 UTC.\n"
 
 
-def recorded(*items: tuple[str, str]) -> list[list[str]]:
+def recorded(*items: tuple[str, str]) -> list[Called]:
     """The overseer records each (key, reason) as needing attention, its detail `<key> detail`."""
     return list(starmap(raises, items))
 

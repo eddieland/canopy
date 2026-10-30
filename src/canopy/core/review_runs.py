@@ -38,6 +38,7 @@ def insert_review_run(
     persona_digest: str | None = None,
     persona_text: str | None = None,
     revises: tuple[int, int] | None = None,
+    model: str | None = None,
 ) -> int:
     """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
 
@@ -45,14 +46,14 @@ def insert_review_run(
     asked for, `query` for a `review.query` match. `persona` and `persona_digest` are the name and text digest of the
     persona its prompt carries (DESIGN §31), and `persona_text` that text, kept once per digest
     (`db.record_persona_text`). `revises` makes it a revision (§34): the draft it revises, by its id, and the version of
-    it the revision reads.
+    it the revision reads. `model` is the one its reviewer asks for (DESIGN §13), None for the runtime's default.
 
     Returns:
         The new review run's id.
     """
     with db.transaction(conn):
-        run = sql.insert(
-            "review_runs",
+        run = records.insert(
+            records.ReviewRun,
             tick_id=tick_id,
             pr_url=pr_url,
             sha=sha,
@@ -65,17 +66,18 @@ def insert_review_run(
             persona_digest=persona_digest,
             revises=revises[0] if revises is not None else None,
             revises_version=revises[1] if revises is not None else None,
+            model=model,
         )
-        run_id = db.rowid(sql.execute(conn, run))
+        run_id = db.rowid(run.run(conn))
         db.record_persona_text(conn, persona_digest, persona_text)
         log_path = str(logs_dir / f"{run_id}.log")
-        sql.execute(conn, sql.update("review_runs").set(log_path=log_path).where("id = ?", run_id))
+        records.update(records.ReviewRun).set(log_path=log_path).where("id = ?", run_id).run(conn)
     return run_id
 
 
 def delete_review_run(conn: sqlite3.Connection, run_id: int) -> None:
     """Forget a review run that never started: no slot, or no prompt. It counts toward no limit."""
-    sql.execute(conn, sql.delete("review_runs").where("id = ? AND pid IS NULL", run_id))
+    records.delete(records.ReviewRun).where("id = ? AND pid IS NULL", run_id).run(conn)
 
 
 def review_dismissals(conn: sqlite3.Connection, run_id: int) -> dict[int, DismissalReason | None]:
@@ -97,20 +99,17 @@ def set_review_dismissal(
     channel: str,
 ) -> None:
     """Record that the operator dismissed review run `run_id`'s finding number `finding` now, for `reason`."""
-    sql.execute(
-        conn,
-        sql.insert(
-            "review_dismissals",
-            review_run_id=run_id,
-            finding=finding,
-            dismissed_at=db.now(),
-            channel=channel,
-            reason=reason,
-        ).on_conflict(
-            "(review_run_id, finding) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel, "
-            "reason = excluded.reason",
-        ),
-    )
+    records.insert(
+        records.ReviewDismissal,
+        review_run_id=run_id,
+        finding=finding,
+        dismissed_at=db.now(),
+        channel=channel,
+        reason=reason,
+    ).on_conflict(
+        "(review_run_id, finding) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel, "
+        "reason = excluded.reason",
+    ).run(conn)
 
 
 def held(conn: sqlite3.Connection, run_id: int, *, released: bool = False) -> dict[int, records.ReviewHold]:
@@ -147,27 +146,25 @@ def hold(conn: sqlite3.Connection, run_id: int, finding: int, *, rebuts: tuple[i
     `rebuts` is the earlier review run, and its finding, that the worker declined; None holds the finding as `late`, on
     code unchanged since the PR's first reviewed commit. A finding already held keeps its first hold.
     """
-    sql.execute(
-        conn,
-        sql.insert(
-            "review_holds",
-            review_run_id=run_id,
-            finding=finding,
-            kind=HoldKind.LATE if rebuts is None else HoldKind.REBUTTAL,
-            rebuts_run_id=rebuts[0] if rebuts is not None else None,
-            rebuts_finding=rebuts[1] if rebuts is not None else None,
-            held_at=db.now(),
-        ).on_conflict("(review_run_id, finding) DO NOTHING"),
-    )
+    records.insert(
+        records.ReviewHold,
+        review_run_id=run_id,
+        finding=finding,
+        kind=HoldKind.LATE if rebuts is None else HoldKind.REBUTTAL,
+        rebuts_run_id=rebuts[0] if rebuts is not None else None,
+        rebuts_finding=rebuts[1] if rebuts is not None else None,
+        held_at=db.now(),
+    ).on_conflict("(review_run_id, finding) DO NOTHING").run(conn)
 
 
 def release_holds(conn: sqlite3.Connection, run_id: int, findings: Iterable[int], *, channel: str) -> None:
     """Release the operator's hold on review run `run_id`'s `findings`: they reach a worker as any other finding."""
     sql.execute_many(
         conn,
-        sql.update("review_holds")
+        records.update(records.ReviewHold)
         .set(released_at=db.now(), released_channel=channel)
-        .where("review_run_id = ? AND finding = ? AND released_at IS NULL", run_id, sql.ROW),
+        .where("review_run_id = ? AND finding = ? AND released_at IS NULL", run_id, sql.ROW)
+        .statement,
         [(f,) for f in findings],
     )
 
@@ -178,8 +175,8 @@ def delete_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int)
     Returns:
         Whether there was one to take back.
     """
-    taken = sql.delete("review_dismissals").where("review_run_id = ? AND finding = ?", run_id, finding)
-    return sql.execute(conn, taken).rowcount > 0
+    taken = records.delete(records.ReviewDismissal).where("review_run_id = ? AND finding = ?", run_id, finding)
+    return taken.run(conn).rowcount > 0
 
 
 def set_review_slot(
@@ -193,14 +190,14 @@ def set_review_slot(
     pool: PoolKind,
 ) -> None:
     """Record the slot a review run leased, the base branch it was leased on, and the pool that made the lease."""
-    lease = sql.update("review_runs").set(
+    lease = records.update(records.ReviewRun).set(
         slot_path=str(slot),
         lease_id=lease_id,
         lease_holder=lease_holder,
         base_branch=base_branch,
         pool=pool,
     )
-    sql.execute(conn, lease.where("id = ?", run_id))
+    lease.where("id = ?", run_id).run(conn)
 
 
 def get_review_run(conn: sqlite3.Connection, run_id: int) -> records.ReviewRun | None:
@@ -257,10 +254,10 @@ def see_review_head(conn: sqlite3.Connection, pr_url: str, sha: str, at: str) ->
     Returns:
         Since when `sha` has been the head: `at`, or the time it was first seen if it still was the head.
     """
-    seen = sql.insert("review_heads", pr_url=pr_url, sha=sha, seen_at=at).on_conflict(
+    seen = records.insert(records.ReviewHead, pr_url=pr_url, sha=sha, seen_at=at).on_conflict(
         "(pr_url) DO UPDATE SET sha = excluded.sha, seen_at = excluded.seen_at WHERE review_heads.sha != excluded.sha",
     )
-    sql.execute(conn, seen)
+    seen.run(conn)
     return review_head_seen_at(conn, pr_url, sha) or at
 
 

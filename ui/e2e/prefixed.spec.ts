@@ -284,7 +284,7 @@ test('forget asks for the key typed out, then forgets the branch and PR', async 
     await expect(thread.getByTestId('forgotten')).toContainText('dropped branch agent/ABC-103-billing-v2, acme/web#91')
     await expect(thread.getByRole('link', { name: 'acme/web#91', exact: true })).toBeVisible()
     await expect(earlier).toHaveCount(0)
-    await thread.getByRole('button', { name: 'Show 3 earlier messages' }).click()
+    await thread.getByRole('button', { name: 'Show 6 earlier messages' }).click()
     await expect(earlier).toBeVisible()
 })
 
@@ -539,7 +539,7 @@ test('a ticket at its attempt limit is granted one more run from its page, as ca
 
 test("a ticket's worker persona is chosen from its page and cleared, as canopy persona does", async ({ page }) => {
     await page.goto('tickets/ABC-104')
-    const personas = page.getByTestId('ticket-personas')
+    const personas = page.getByTestId('ticket-agents')
     await expect(personas).toContainText("canopy's default")
     await personas.getByRole('button', { name: 'worker persona: canopy' }).click()
     await page.getByRole('menuitemradio', { name: 'minimalist' }).click()
@@ -560,7 +560,7 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
     page,
 }) => {
     await page.goto('tickets/ABC-104')
-    const models = page.getByTestId('ticket-models')
+    const models = page.getByTestId('ticket-agents')
     const worker = models.getByTestId('ticket-model').first()
     await models.getByRole('button', { name: 'worker model: runtime default' }).click()
     // The mock's runtime lists the models its runs' sessions name, under their providers; the default is pinned
@@ -947,7 +947,8 @@ test("a ticket's note is promoted from its page for one repository, and the less
     await expect(forget).toBeDisabled()
     await challenge.getByLabel(`Type memory:${id} to confirm`).fill(`memory:${id}`)
     await forget.click()
-    await expect(page.getByTestId('memory-lessons').getByRole('status')).toHaveText(
+    // The mock journal changes as the forget checkpoints, so the status may add that a reader held the log open.
+    await expect(page.getByTestId('memory-lessons').getByRole('status')).toContainText(
         `Memory ${id} (lesson export-encoding) is forgotten: its text is deleted.`,
     )
     await expect(lesson).toHaveCount(0)
@@ -989,7 +990,7 @@ test('a lesson is edited from the memory page, and its versions keep the old wor
     const challenge = old.getByRole('form', { name: 'Forget memory:8' })
     await challenge.getByLabel('Type memory:8 to confirm').fill('memory:8')
     await challenge.getByRole('button', { name: 'Forget memory:8' }).click()
-    await expect(said).toHaveText('Memory 8 (lesson billing-client) is forgotten: its text is deleted.')
+    await expect(said).toContainText('Memory 8 (lesson billing-client) is forgotten: its text is deleted.')
     await expect(old).toContainText('text deleted')
     await expect(edited).toContainText('Billing goes through src/billing/client.ts, v2 included.')
 })

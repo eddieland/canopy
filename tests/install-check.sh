@@ -122,7 +122,10 @@ TOML
 
 export FAKE_TREEHOUSE_STATE="$work/treehouse.json"
 export FAKE_AGENT_RESULT="CANOPY_TICK_DONE"
-export FAKE_AGENT_COMMANDS='[["canopy", "decide", "GH-1", "wait", "--rationale", "install check"]]'
+# The overseer decides through its tool, as it does with no shell (DESIGN §27): the fake agent calls it through the
+# server the tick names in its inline config, which runs the installed canopy.
+decision='{"key": "GH-1", "action": "wait", "rationale": "install check"}'
+export FAKE_AGENT_TOOLS="[[\"canopy_decide\", {\"decisions\": [$decision]}]]"
 # The first tick records the query's GH-1, which the source reads on the next, so its overseer is given GH-1.
 canopy tick --dry-run
 canopy tick --dry-run

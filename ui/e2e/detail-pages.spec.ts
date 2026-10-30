@@ -37,7 +37,7 @@ test("a run's and a review's pages show the persona each wrote in, with the star
     await page.goto('tickets/ABC-099')
     await settled(page)
     await expect(page.getByRole('button', { name: 'reviewer persona: skeptic' })).toBeVisible()
-    await expect(page.getByTestId('ticket-personas')).toContainText("this ticket's override")
+    await expect(page.getByTestId('ticket-agents')).toContainText("this ticket's override")
 })
 
 test("a chore run's chore is the trail's link alone, and a tick's output path the Output panel's", async ({ page }) => {

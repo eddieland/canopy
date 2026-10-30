@@ -1,4 +1,4 @@
-"""Blockers and stacking: `canopy dispatch --base` and a stacked run's branch and PR base (DESIGN §10)."""
+"""Blockers and stacking: a dispatch's `base`, and a stacked run's branch and PR base (DESIGN §10)."""
 
 import json
 from pathlib import Path
@@ -119,7 +119,7 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: S
     assert "This ticket is not stacked on another ticket's branch." in text
     assert ": branch `agent/PROJ-2-second` from `main`; PR: " in text
     assert "- `retarget`: the PR this ticket was stacked on has merged" in text
-    assert "change this ticket's PR to target its repository's base branch listed above" in text
+    assert "change this ticket's PR to target its repository's base branch as `## Run` lists it" in text
     assert subjects(git_pool, "agent/PROJ-2-second")[:2] == ["PROJ-2: conflict fix", "PROJ-2: stacked"]
 
     # Retargeted, it is stacked no more, and its latest run shows no base.
@@ -162,7 +162,7 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
-BAD_BASE = "base (--base) must be another ticket's branch, agent/<KEY>-<slug>"
+BAD_BASE = "base must be another ticket's branch, agent/<KEY>-<slug>"
 
 
 @pytest.mark.parametrize(

@@ -431,6 +431,10 @@ class ReviewDetail(Model):
     """The sha256 of the persona's text as its prompt carried it, in hex."""
     models: ModelsServed
     """Which models served it."""
+    model: str | None = None
+    """The model canopy asked the runtime for, for its reviewer (DESIGN §13, Each agent's model), as
+    `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a run from
+    before canopy recorded it."""
     card: RunCard | None = None
     """Its reviewer's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none."""
 

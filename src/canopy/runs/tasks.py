@@ -91,8 +91,8 @@ def submit(
     name = _repository(workspace, repo)
     if project is not None and not (len(project) <= MAX_PROJECT and PROJECT_RE.fullmatch(project)):
         raise Refused("bad_project", f"--project must match {PROJECT_RE.pattern}, at most {MAX_PROJECT} characters")
-    insert = sql.insert("tasks", text=body, repo=name, project=project, channel=channel, submitted_at=db.now())
-    task_id = sql.execute(conn, insert).lastrowid
+    insert = records.insert(records.Task, text=body, repo=name, project=project, channel=channel, submitted_at=db.now())
+    task_id = insert.run(conn).lastrowid
     found = get(conn, int(task_id or 0))
     if found is None:
         raise sqlite3.DatabaseError("the task's row was not recorded")
@@ -291,7 +291,7 @@ def stop(conn: sqlite3.Connection, task_id: int) -> Stopped:
         runs = runs_of(conn, task_id)
         waiting = any(t.id == task_id for t in queued(conn))
         if task.stopped_at is None:
-            sql.execute(conn, sql.update("tasks").set(stopped_at=db.now()).where("id = ?", task_id))
+            records.update(records.Task).set(stopped_at=db.now()).where("id = ?", task_id).run(conn)
     return Stopped(
         already=task.stopped_at is not None,
         dropped=waiting,
@@ -338,8 +338,11 @@ def insert_run(
     lease: pools.Lease,
     pool: PoolKind,
     logs_dir: Path,
+    model: str | None = None,
 ) -> int | None:
     """Record task `task`'s run in the slot `lease` holds, logging to `<logs_dir>/<id>.log`, if the task still waits.
+
+    `model` is the one its private worker asks for (DESIGN §13), None for the runtime's default.
 
     Checked in the transaction that inserts it, so a `stop` that commits first starts nothing, and so does a run
     another tick already started.
@@ -355,8 +358,8 @@ def insert_run(
             .from_("messages")
             .where("subject_kind = ? AND subject_id = ?", conversation.TASK, str(task.id))
         )
-        run = sql.insert(
-            "task_runs",
+        run = records.insert(
+            records.TaskRun,
             task_id=task.id,
             tick_id=tick_id,
             branch=branch_name,
@@ -369,16 +372,17 @@ def insert_run(
             started_at=db.now(),
             log_path="",
             message_id=sql.execute(conn, newest).fetchone()[0],
+            model=model,
         )
-        run_id = int(sql.execute(conn, run).lastrowid or 0)
+        run_id = int(run.run(conn).lastrowid or 0)
         log_path = str(logs_dir / f"{run_id}.log")
-        sql.execute(conn, sql.update("task_runs").set(log_path=log_path).where("id = ?", run_id))
+        records.update(records.TaskRun).set(log_path=log_path).where("id = ?", run_id).run(conn)
     return run_id
 
 
 def set_git_link(conn: sqlite3.Connection, run_id: int, link: bytes | None) -> None:
     """Record what the slot's `.git` file held when task run `run_id` started, before any git step (DESIGN §8)."""
-    sql.execute(conn, sql.update("task_runs").set(git_link=link).where("id = ?", run_id))
+    records.update(records.TaskRun).set(git_link=link).where("id = ?", run_id).run(conn)
 
 
 def report_path(state_dir: Path, task_id: int, run_id: int) -> Path:
@@ -423,7 +427,7 @@ def latest_report(conn: sqlite3.Connection, state_dir: Path, task_id: int) -> tu
 
 def set_report(conn: sqlite3.Connection, run_id: int, sha256: str) -> None:
     """Record the hash of the report task run `run_id` left, as `_task` kept it in the state directory (DESIGN §36)."""
-    sql.execute(conn, sql.update("task_runs").set(report_sha256=sha256).where("id = ?", run_id))
+    records.update(records.TaskRun).set(report_sha256=sha256).where("id = ?", run_id).run(conn)
 
 
 def close_run(
@@ -449,12 +453,12 @@ def close_run(
         DatabaseError: the run's row is gone, which nothing but a broken journal does.
     """
     close = (
-        sql.update("task_runs")
+        records.update(records.TaskRun)
         .set(ended_at=db.now(), status=str(status), result_json=result_json, head=head)
         .where("id = ? AND status = 'running'", run_id)
     )
     with db.transaction(conn):
-        if sql.execute(conn, close).rowcount != 1:
+        if close.run(conn).rowcount != 1:
             return False
         run = get_run(conn, run_id)
         if run is None:
