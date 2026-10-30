@@ -9200,6 +9200,11 @@ export type components = {
          */
         Tick: {
             /**
+             * @description While it runs, its overseer's latest tool call; None before the first, for a template that prints no events, and
+             *     once it ends.
+             */
+            activity: components["schemas"]["RunActivity"] | null;
+            /**
              * Canopy Version
              * @description The version of canopy that ran it, and so recorded its decisions; None on a tick from before that was kept.
              */

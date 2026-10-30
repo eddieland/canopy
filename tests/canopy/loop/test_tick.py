@@ -137,6 +137,14 @@ def _acted_through_its_tools(run: Mapping[str, object]) -> None:
     assert made[-1]["text"].startswith("decisions.0.key: invalid ticket key 'PROJ-4;rm'")
 
 
+def test_a_tick_records_its_overseers_latest_tool_call_from_the_events_it_prints(scenario: Scenario) -> None:
+    """Its decision, the call it made last, is on the tick, read as it printed it (DESIGN §8)."""
+    with_events(scenario.env, "canopy-overseer")
+    tick_id = scenario.tick(*waits(KEY)).tick.id
+    row = present(db.get_tick(scenario.conn, tick_id))
+    assert (row.activity_tool, row.activity_at is not None) == ("canopy_decide", True)
+
+
 @pytest.mark.parametrize(
     ("woken_by", "tickets", "running", "open_items", "title"),
     [

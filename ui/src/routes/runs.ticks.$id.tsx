@@ -11,6 +11,7 @@ import { ModelsField } from '@/components/models-field'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
+import { RunDoing } from '@/components/run-doing'
 import { Chip } from '@/components/status'
 import { PromptPanel } from '@/components/prompt-panel'
 import { TickOutputPanel } from '@/components/raw-output'
@@ -24,7 +25,7 @@ import { tickId } from '@/lib/ticks'
 import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 import { None } from '@/components/none'
 
-/** One tick: the decisions it recorded, the overseer's transcript, and its output as written. */
+/** One tick: what its overseer did last while it runs, the decisions it recorded, its transcript, and its output. */
 export const Route = createFileRoute('/runs/ticks/$id')({
     component: TickPage,
 })
@@ -99,6 +100,11 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                     <PanelHeader label="Tick" />
                     <Fields>
                         <Field label="summary">{tick.summary ? <RichText text={tick.summary} /> : <None />}</Field>
+                        {tick.activity && (
+                            <Field label="last call">
+                                <RunDoing activity={tick.activity} />
+                            </Field>
+                        )}
                         <WhenField started={tick.started_at} ended={tick.ended_at} />
                         <Field label="spent" mono>
                             <Cost usd={tick.cost_usd} />

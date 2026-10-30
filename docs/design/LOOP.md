@@ -47,11 +47,13 @@ in order:
    or wait on (§21), runs none: it checks the disk, since the harness's dispatches fill one too, skips the other two
    checks, owes no duty, makes the harness's dispatches, and closes `ok` with the attention list as it stands (§37).
 
-   Then run `overseer_cmd` in the workspace root (§18), with `CANOPY_TICK_ID` set and its tools named in its
-   environment alone (§27); they refuse unless it names a running tick (D020). Its output goes to a log only the
-   operator can read, never to the journal. It succeeded if it exited 0 and a line of its final message (§13) is
-   exactly `CANOPY_TICK_DONE`, which catches a run that exits 0 short of the last step; otherwise the tick closes
-   `overseer_failed`. Every decision is about a ticket: with no server to read (§13), it has no outage to skip over.
+   Then run `overseer_cmd` in the workspace root (§18), with `CANOPY_TICK_ID` set and its tools named in its environment
+   alone (§27); they refuse unless it names a running tick (D020). Its output goes to a log only the operator can read,
+   never to the journal, but for what a run's events give its row (§8): its session, its spend, and its latest tool
+   call, which `canopy status` and the tick's page show while it runs. It succeeded if it exited 0 and a line of its
+   final message (§13) is exactly `CANOPY_TICK_DONE`, which catches a run that exits 0 short of the last step; otherwise
+   the tick closes `overseer_failed`. Every decision is about a ticket: with no server to read (§13), it has no outage
+   to skip over.
 
    Once its run ends, whatever it ended as, the tick starts every run it asked for, each recorded at the ask and none
    in its process tree, with the harness's own, in §7's order, each under its guards again (§8, §40). One the tick

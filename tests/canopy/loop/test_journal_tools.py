@@ -214,6 +214,17 @@ def test_decisions_prints_a_ticks_plan(scenario: Scenario) -> None:
     assert "no tick 9" in scenario.operator("decisions", "9", code=1).err
 
 
+def test_status_prints_what_a_running_ticks_overseer_did_last(scenario: Scenario) -> None:
+    """Its latest tool call while it runs, as a running run's (DESIGN §8), and nothing once the tick ends."""
+    conn = scenario.conn
+    tick_id = db.start_tick(conn, dry_run=False)
+    assert "  overseer  last" not in scenario.operator("status").out
+    db.set_progress(conn, "ticks", tick_id, "ses_o1", did=("canopy_decide", "decide 2 tickets"))
+    assert "\n  overseer  last canopy_decide: decide 2 tickets 0s ago\n" in scenario.operator("status").out
+    db.finish_tick(conn, tick_id, TickStatus.OK, "2 decisions")
+    assert "  overseer  last" not in scenario.operator("status").out
+
+
 def test_decisions_and_status_print_what_a_tick_cost(scenario: Scenario) -> None:
     conn = scenario.conn
     tick_id = db.start_tick(conn, dry_run=False)

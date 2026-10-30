@@ -170,6 +170,11 @@ class Tick(Row):
     #: The model canopy chose for its overseer, from `runtime.models` (DESIGN §13), as it asked the runtime for it;
     #: None when it chose none, when the overseer did not run, and on a tick from before canopy recorded it.
     model: str | None
+    #: Its overseer's latest tool call: the tool, what it did on one line, and when canopy read it (DESIGN §8); None
+    #: before the first, for a template that prints no events, and on a tick from before canopy kept it.
+    activity_tool: str | None
+    activity: str | None
+    activity_at: str | None
 
 
 @dataclass(frozen=True)
