@@ -114,10 +114,12 @@ Rules:
   every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
   A palette sets its character too, beyond color, from a few closed choices, in the same rule, so a component still
   never knows which it is on: its corners (`--radius`: crisp, the default, or soft), its `edge` (a hairline, or none,
-  where panels stand apart by their lightness alone), and its depth (a soft shadow in the canvas's hue, a hard one with
-  no blur, or, on black, where a shadow does nothing, the accent's glow). Spacing, sizes, and layout never change
-  with a palette, and neither do the status colors. The defaults take the soft shadow, Gruvbox's dark the crisp
-  corners and hard shadow of an editor of the nineties, and black no edges, soft corners, and the glow.
+  where panels stand apart by their lightness alone), its depth (a soft shadow in the canvas's hue, a hard one with
+  no blur, or, on black, where a shadow does nothing, the accent's glow), and its face (`--face`: interface text in
+  Plex Sans, or in Plex Mono, as an editor sets it). Spacing, sizes, and layout never change with a palette, and
+  neither do the status colors; only the mono face reflows text, since it runs wider. The defaults take the soft
+  shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the nineties, and black no
+  edges, soft corners, and the glow.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a hairline, a solid block with the active item inked in the canvas's
@@ -142,6 +144,7 @@ Rules:
   two sit together on a line. Self-hosted from `@fontsource-variable/ibm-plex-sans` and `@fontsource/ibm-plex-mono`
   (Plex Mono has no variable build); the latin subsets are preloaded, so text never paints in a fallback face. A
   heavier mono weight needs its own import in `src/index.css` and a place in `PRELOAD_FONTS` in `vite.config.ts`.
+  A palette may set interface text in Plex Mono too (Palettes, under Tokens), so no third face is ever loaded.
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
 - `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.
@@ -689,7 +692,7 @@ side.
   or a table of models names it whole, as a gateway (`github-copilot/`) can serve its maker's models under the same
   name. No model is muted sans, never monospace, since it is no id: `runtime default` (`RUNTIME_DEFAULT`) where nothing
   sets one; `unread` (`UNREAD`) for a run whose session canopy has not read, why in its tip; and `None` with why for one
-  read that named none. A model takes no status color, but one the runtime no longer lists, `status-blocked`, since it
+  read that named none. A model takes no status color, but one the runtime no longer lists, `status-failed`, since it
   refuses the next run.
 - **`Input`**, **`Textarea`**, and **`SearchField`** (`src/components/input.tsx`): every text field, on
   `surface-raised` with a hairline and the accent's focus ring. An `Input` is one height everywhere, `h-9`, a form's,
@@ -1053,7 +1056,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   a question's head as a ticket's, then an outline `Answer on task:N` (`Open` for the other), a router link to the
   task's page, which holds its question and its answer, never the `canopy` commands its detail names. A ticket's run
   refused its model (`model_missing`, `model_list_failed`): the ticket's models (`TicketModels`), as its page shows
-  them, the runtime's list read as the item opens rather than when a menu does, so the model it no longer lists is
+  them, the runtime's list read fresh from the runtime as the item opens, so the model it no longer lists is
   marked already. An item about nothing the page shows whose detail names a `canopy` command to run (`repo_missing`),
   or the overseer's or a chore's run refused its model, `canopy models`: the command, `Copyable`, and nothing to
   answer. A broken run's item shows any limit it is stuck at (below) under its run, as
@@ -1568,7 +1571,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
   to the config: `Clear the override`, or `Use the default`.
 - **A choice of model** (`src/components/ticket-models.tsx`) is the same menu over the models the runtime lists, read
-  when it opens: the button, then where it comes from in muted `text-xs`. On a ticket's page it shares one grid with
+  as a row naming a model shows, so one gone is marked before the menu opens, else when it opens: the button, then
+  where it comes from in muted `text-xs`. On a ticket's page it shares one grid with
   the persona (`src/components/ticket-agents.tsx`): a row per agent, its name, its persona, then its model, under a
   muted `persona` and `model` heading, so the conversation under the panel stays in reach; a Work panel narrower than
   `@lg` puts each model under its persona. The persona's column is as wide as its widest, up to 45%, and the model
@@ -1580,14 +1584,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   muted `(default)`. The field finds each item by its own id alone, and sets the pinned item aside while it holds
   anything, so Enter takes the first id found; a variant whose model is hidden shows its model's id before it, muted.
   `Clear the override` is a ghost button under the list, out of its scroll. A choice saved is confirmed in its row, a
-  `saved` in `status-done` in place of where the model comes from, so nothing below moves, until the ticket's models
-  change after it; one that sets aside config's variant says so after it in muted text. The menu offers only what the
-  server would take: the model chosen now, when it is not one, is a disabled item with why in muted text after it
-  (`no longer listed; its next run is refused`, `variant no longer listed; its next run is refused`), and a model or
-  variant gone from the list marks its trigger in `status-blocked`. A list that cannot be read says why in
-  `status-failed`, offers no model, and has a `Read again` item. While a choice saves, its trigger names it with a
-  trailing `…` and is `aria-busy` and `aria-disabled`, never `disabled`, so the focus the list hands back stays on it;
-  a refusal's `Notice` is in its agent's row.
+  `saved`, or `cleared` for a clear, in `status-done` in place of where the model comes from, so nothing below moves,
+  until the ticket's models change after it; one that sets aside config's variant says so after it in muted text. The
+  menu offers only what the server would take: the model chosen now, when it is not one, is a disabled item with why
+  under it, out of its disabled look, in `status-failed` `text-xs` (`no longer listed; its next run is refused`,
+  `variant no longer listed; its next run is refused`), and a model or variant gone from the list marks its trigger in
+  `status-failed`, as its attention item's chip is. A list that cannot be read says why in `status-failed`, in a
+  read's words (`whyReadFailed`), offers no model, and has a `Read again` item. While a choice saves, its trigger
+  names it with a trailing `…` and is `aria-busy` and `aria-disabled`, never `disabled`, so the focus the list hands
+  back stays on it; a refusal's `Notice` is in its agent's row.
 - **Attachments** (`src/components/attachments.tsx`, DESIGN §22) are a section with a `panel-label` heading, under the
   verbs at the foot of a ticket's or a task's conversation, beside the reply that says what to do with them: each file a
   row of its name in monospace, its size muted, and a ghost `icon-xs` ✕ named `Remove NAME`; an outline `xs` **Attach a

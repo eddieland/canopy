@@ -25,10 +25,11 @@ def model_list(
 ) -> ModelList:
     """Every model the runtime lists, with each one's variants, read from it in the workspace root, or why not.
 
-    Read when the operator opens a ticket's Model panel, not on the stream: a read starts the runtime, for up to 30
-    seconds, so the server serves the list it read for 5 minutes, or until the loop reads its config again. A list
-    that could not be read is never served again. A model on the list can still fail when called, since the runtime
-    reads it from its cache or its catalog, and a run's model is checked against a list read for it as it starts.
+    Read when a ticket's page shows a model its agents run on, or a Model menu opens, not on the stream: a read starts
+    the runtime, for up to 30 seconds, so the server serves the list it read for 5 minutes, or until the loop reads its
+    config again. A list that could not be read is never served again. A model on the list can still fail when called,
+    since the runtime reads it from its cache or its catalog, and a run's model is checked against a list read for it
+    as it starts.
     """
     with backend.open() as ctx:
         found = backend.model_list(ctx, refresh=refresh)
