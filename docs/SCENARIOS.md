@@ -231,6 +231,10 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   Once M48 gives the overseer `canopy _mcp`, expect its eleven tools, about 2.3k tokens (F55), and `bash` gone if its
   rules deny it whole. Then let `canopy loop` run a week and expect no run or tick whose transcript shows a
   call to a tool it was not offered (`tool not found`).
+- **S69. The overseer reads the journal, measured** (M37). After a day of `canopy loop` against the real queue,
+  re-measure with MEASUREMENTS' prompt (Re-measuring). Expect tool-result tokens per tick at a tenth of the first day's
+  median (about 14k), and no action missed over the day, checked against the derivation as M36's agreement counts are.
+  Record the numbers in `MEASUREMENTS.md`.
 
 ## Retired
 
