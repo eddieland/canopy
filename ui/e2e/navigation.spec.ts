@@ -42,17 +42,21 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
     await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('data-status', 'active')
 
-    // The worktrees and the ticks are under Runs: its page links them, and Runs stays current on theirs.
+    // The worktrees and the ticks are under Runs: its page links them, and the nav opens them under it while Runs is
+    // shown, marking the one shown rather than Runs.
     await page.getByTestId('runs-worktrees-link').click()
     await expect(page).toHaveURL(/\/runs\/worktrees$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Worktrees')
-    await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('data-status', 'active')
-    await nav.getByRole('link', { name: 'Runs' }).click()
-    await page.getByTestId('runs-ticks-link').click()
+    await expect(nav.getByRole('link', { name: 'Worktrees' })).toHaveAttribute('data-status', 'active')
+    await expect(nav.getByRole('link', { name: 'Runs' })).not.toHaveAttribute('data-status', 'active')
+    await nav.getByRole('link', { name: 'Ticks' }).click()
     await expect(page).toHaveURL(/\/runs\/ticks$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Ticks')
+    await expect(nav.getByRole('link', { name: 'Ticks' })).toHaveAttribute('data-status', 'active')
 
     await nav.getByRole('link', { name: 'Tickets' }).click()
+    // Out of Runs, its pages fold away again.
+    await expect(nav.getByRole('link', { name: 'Ticks' })).toHaveCount(0)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tickets')
     // A ticket the overseer named shows its title beside its key (DESIGN §7).
     await expect(page.getByTestId('ticket-ABC-102')).toContainText('Export reports as CSV')
@@ -616,7 +620,8 @@ test("the header's tick opens its decisions, each about its subject, the oversee
     await page.getByTestId('last-tick').click()
     await expect(page).toHaveURL(/\/runs\/ticks\/2$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick:2')
-    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' })).toHaveAttribute(
+    // A tick's page is under Ticks, under Runs: the nav marks Ticks.
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Ticks' })).toHaveAttribute(
         'data-status',
         'active',
     )

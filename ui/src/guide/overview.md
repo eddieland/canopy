@@ -52,6 +52,11 @@ The nav on the left lists them, most used first. If you learn only one, learn At
 - [Memory](/memory): what workers remember, the ticket notes and the lessons, and which runs read them. The header's
   `memory:` readout opens it too.
 
+While you're in Runs, Pull requests, or Reports, the nav opens the pages under that section beneath its name: Ticks and
+Worktrees, Reviews, and Spend. The one you're on is lit, and so is the one your page sits under: a tick's page lights
+Ticks, so the nav says where you are instead of leaving you to work it out from the URL. Everywhere else they fold
+away, and the nav stays eight rows.
+
 [System resources](#system-resources), the machine the loop runs on, is in no nav at all: the header's `host`
 readout opens it.
 

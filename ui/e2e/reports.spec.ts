@@ -64,7 +64,7 @@ test('the spend page sits under Reports, and its old address still opens it', as
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Spend')
     const trail = page.getByRole('navigation', { name: 'Breadcrumb' })
     await expect(trail.getByRole('link', { name: 'Reports' })).toBeVisible()
-    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Reports' })).toHaveAttribute(
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Spend' })).toHaveAttribute(
         'data-status',
         'active',
     )

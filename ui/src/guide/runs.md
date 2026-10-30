@@ -10,7 +10,7 @@ per subject, by its latest run: a ticket's, a PR's, a chore's, a task's. The run
 that ended most recently. A subject with earlier runs shows **Show N earlier runs** under it, so a PR reviewed at
 every push is one row and not a wall of them. The overseer's ticks are not among them: the **Ticks** link in the
 page's description opens [their page](ticks#the-ticks-page), also under Runs, and **Worktrees** beside it opens the
-[pools](#worktrees) the runs work in.
+[pools](#worktrees) the runs work in. The nav opens both under **Runs** while you're here, too.
 
 Each row has the run's state, its id, what it works for, its kind, what it cost, and how long it ran or how long since
 it ended:

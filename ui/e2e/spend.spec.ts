@@ -137,7 +137,7 @@ test('a window the page does not offer reads as the week', async ({ page }) => {
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
 })
 
-test("Reports opens the spend page on the week, Reports' item marked", async ({ page }) => {
+test("Reports opens the spend page on the week, Spend's item marked under it", async ({ page }) => {
     await page.goto('attention')
     await settled(page)
     const nav = page.getByRole('navigation', { name: 'Main' })
@@ -145,7 +145,9 @@ test("Reports opens the spend page on the week, Reports' item marked", async ({ 
     await page.getByTestId('reports-spend-link').click()
     await expect(page).toHaveURL(/\/reports\/spend$/u)
     await expect(page.getByTestId('spend-window-7')).toHaveAttribute('data-state', 'on')
-    await expect(nav.getByRole('link', { name: 'Reports' })).toHaveAttribute('data-status', 'active')
+    await expect(nav.getByRole('link', { name: 'Spend' })).toHaveAttribute('data-status', 'active')
+    await expect(nav.getByRole('link', { name: 'Reports' })).not.toHaveAttribute('data-status', 'active')
+    // The highlight on a page under Reports is in Reports' color.
     await expect(page.getByTestId('nav-highlight')).toHaveClass(/\bbg-section-reports\/24\b/u)
 })
 

@@ -14,11 +14,12 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await page.getByTestId('pull-requests-reviews-link').click()
     await expect(page).toHaveURL(/\/pull-requests\/reviews$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Reviews')
-    // The reviews are under Pull requests: the trail leads back there, and the nav keeps Pull requests current.
+    // The reviews are under Pull requests: the trail leads back there, and the nav opens Reviews under it, current.
     await expect(
         page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Pull requests' }),
     ).toBeVisible()
-    await expect(nav.getByRole('link', { name: /^Pull requests/u })).toHaveAttribute('aria-current', 'page')
+    await expect(nav.getByRole('link', { name: 'Reviews' })).toHaveAttribute('aria-current', 'page')
+    await expect(nav.getByRole('link', { name: /^Pull requests/u })).not.toHaveAttribute('aria-current', 'page')
     // The operator's own PR, matched by review.query, has no ticket: canopy only reviews it.
     await expect(page.getByTestId('review-2').getByTitle('none: canopy only reviews it')).toHaveText('none')
     // A review of a PR the loop does not own says where its draft stands, after its verdict; the loop's own have none.
@@ -35,7 +36,7 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
         'review:4 acme/web#88 ABC-099: debounce the search box by 250 ms',
     )
-    await expect(nav.getByRole('link', { name: /^Pull requests/u })).toHaveAttribute('data-status', 'active')
+    await expect(nav.getByRole('link', { name: 'Reviews' })).toHaveAttribute('data-status', 'active')
     await expect(
         page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'Reviews' }),
     ).toHaveAttribute('href', /\/pull-requests\/reviews$/u)
