@@ -72,6 +72,11 @@ any OpenCode upgrade, and before relying on a permission they check.
   the body is its kind's fixed instructions, 1.6k to 2.4k tokens more than the stub it was: expect the pair's first
   system block to hold them, and the second run's first call to write only its environment and its `## Run` message.
   A snapshot is now a kind's and no longer one for every run, so compare each kind's first calls on its own.
+- **S70. Sandboxed runs keep you logged in** (M26). Confirmed in OpenCode's source (1.19.3), not in a run. With
+  every agent command sandboxed (`docs/SANDBOX.md`) and an OAuth login in your OpenCode, a provider's and a remote
+  MCP server's, run the loop past the login's expiry. Expect a run's log to say `canopy-sandbox: copied back the
+  refreshed tokens of ...`, and your own OpenCode, and the overseer's, still logged in after. After an OpenCode
+  upgrade, check that `auth.json` and `mcp-auth.json` still have the shapes `canopy_sandbox/credentials.py` names.
 
 ## Before a release
 

@@ -598,10 +598,13 @@ Controls now:
   and canopy starts their worker runs, setup, and reviews in the wrapper itself, by its absolute path, refusing a joint
   run whose repositories disagree. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
-  files: not `~/.ssh`, other repositories, `~/.config/canopy`, or the workspace's `.canopy/`. It writes only its
-  worktrees, its slot's own HEAD, index, and reflog, a per-run object directory and temp directory, and the runtime's
-  data: no ref another slot shares, and no hook, git config, `.git` link, or `commondir` that git on the host later
-  reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
+  files: not `~/.ssh`, other repositories, `~/.config/canopy`, the workspace's `.canopy/`, or the operator's OpenCode
+  data. It writes only its worktrees, its slot's own HEAD, index, and reflog, a per-run object directory and temp
+  directory, and its role's own cache and data directories: no ref another slot shares, no hook, git config, `.git`
+  link, or `commondir` that git on the host later reads, and none of the operator's caches or OpenCode data, which the
+  host's OpenCode, the overseer's included, acts on. Its OpenCode starts with a copy of the operator's logins, and only
+  a refreshed token of a login the operator has is copied back (DESIGN §24). A review writes none of its
+  checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
   permissions stay as defense in depth.
 - The overseer has a role of its own, `overseer`, for `overseer_cmd` and the server of canopy's tools its runtime
   starts inside the same sandbox (DESIGN §24, §27). Every run the overseer asks for starts outside that sandbox,
@@ -631,7 +634,9 @@ give the snapshot its write permission back, as it could do anything else the op
 shares the kernel, so code written to escape it is not contained. `notify.cmd` and the harness's own git and treehouse
 calls run outside it. A sandboxed overseer writes the journal itself, not only through canopy's commands, so a
 steered one can write any row there, as an unsandboxed one can (T5). Every process `srt` sandboxes can write
-`/tmp/claude`, so two runs can pass files through it. A filter
+`/tmp/claude`, so two runs can pass files through it. A run can hand back, as a refresh, a token of another account
+for a login the operator has, or a bad one, so that the operator's OpenCode works as that account or fails until they
+log in again; it runs no code on the host. A filter
 driver the operator's own git config defines still runs on whatever a branch's `.gitattributes` selects, on a slot's
 return as on any checkout. A template the operator edits can allow anything; canopy checks only that it denies some
 reads and lists an allowlist.

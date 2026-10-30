@@ -60,6 +60,22 @@ SRT_PACKAGE = "@anthropic-ai/sandbox-runtime"
 # Quotes, a line break, and what a shell would expand: the command must receive it as it was given (§5 item 3).
 PROMPT = 'it\'s "quoted"\n$(touch pwned) `id` $HOME \\ ; | & *'
 PRINT_ARG = ["sh", "-c", 'printf %s "$1"', "sh"]
+# The operator's OpenCode logins, as OpenCode 1.19.3 writes them: a provider's OAuth login, whose `expires` is in
+# milliseconds, and a remote MCP server's, whose `expiresAt` is in seconds.
+OAUTH = {
+    "type": "oauth",
+    "refresh": "refresh-1",
+    "access": "access-1",
+    "expires": 1_000,
+    "accountId": "mine",
+    "enterpriseUrl": "https://ghe.example.com",
+}
+API = {"type": "api", "key": "key-mine"}
+MCP = {
+    "tokens": {"accessToken": "mcp-1", "refreshToken": "mcp-refresh-1", "expiresAt": 100.5, "scope": "read"},
+    "clientInfo": {"clientId": "mine"},
+    "serverUrl": "https://mcp.example.com/mcp",
+}
 
 
 @dataclass(frozen=True)
@@ -67,13 +83,14 @@ class Sandbox:
     """What a test of the wrapper reads and writes.
 
     The fake srt's log, the templates the wrapper reads, the temp directory it makes its run directories in, and the
-    operator's XDG_CACHE_HOME.
+    operator's XDG_CACHE_HOME and XDG_DATA_HOME.
     """
 
     log: Path
     templates: Path
     tmp: Path
     cache_home: Path
+    data_home: Path
 
     def only_call(self) -> dict[str, Any]:
         """What srt was given, for the one run of it there was."""
@@ -87,13 +104,21 @@ class Sandbox:
         """The directory that holds each role's cache directory."""
         return self.cache_home / "canopy" / "sandbox"
 
+    def datas(self) -> Path:
+        """The directory that holds each role's data directory."""
+        return self.data_home / "canopy" / "sandbox"
+
+    def operators(self) -> Path:
+        """The operator's own OpenCode data directory."""
+        return self.data_home / "opencode"
+
 
 @pytest.fixture
 def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Iterator[Sandbox]:
     """The shipped templates where the wrapper reads them, the fake srt on PATH, and a temp directory of the test's.
 
-    XDG_CACHE_HOME is in the test's HOME. The temp directory is under /tmp, not tmp_path, whose path is too long for the
-    sockets srt would make in it, which the wrapper refuses.
+    XDG_CACHE_HOME is in the test's HOME, as XDG_DATA_HOME is already. The temp directory is under /tmp, not
+    tmp_path, whose path is too long for the sockets srt would make in it, which the wrapper refuses.
     """
     templates = canopy_env.home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
@@ -106,11 +131,27 @@ def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Itera
         tempfile.TemporaryDirectory(prefix="sandbox.", dir="/tmp") as tmp,
         mock.patch.dict(os.environ, {**variables, "TMPDIR": tmp}),
     ):
-        yield Sandbox(log, templates, Path(tmp), cache_home)
+        # The operator's own, which the wrapper keeps: CI's runners set one.
+        for name in ("UV_PYTHON_INSTALL_DIR", "UV_TOOL_DIR"):
+            os.environ.pop(name, None)
+        yield Sandbox(log, templates, Path(tmp), cache_home, Path(os.environ["XDG_DATA_HOME"]))
 
 
 def wrap(*args: str, cwd: Path, env: Mapping[str, str] | None = None) -> procs.Result:
-    return SubprocessRunner().run([str(WRAPPER), *args], cwd=cwd, env=env)
+    return SubprocessRunner().run([str(WRAPPER), *args], cwd=cwd, env=env, timeout=60)
+
+
+def logins(sandbox: Sandbox, auth: Mapping[str, object], mcp: Mapping[str, object] | None = None) -> None:
+    """Give the operator these OpenCode logins, in their own data directory, as OpenCode keeps them."""
+    sandbox.operators().mkdir(parents=True, exist_ok=True)
+    for name, content in (("auth.json", auth), ("mcp-auth.json", mcp)):
+        if content is not None:
+            (sandbox.operators() / name).write_text(json.dumps(content, indent=2))
+            (sandbox.operators() / name).chmod(0o600)
+
+
+def operators(sandbox: Sandbox, name: str = "auth.json") -> object:
+    return json.loads((sandbox.operators() / name).read_text())
 
 
 def wrap_here(*args: str, cwd: Path, ipv6: bool) -> int:
@@ -165,6 +206,18 @@ def caching(cache: Path) -> dict[str, str]:
     }
 
 
+def storing(data: Path, data_home: Path) -> dict[str, str]:
+    """The data variables the wrapper sets for a run whose role's data directory is `data`.
+
+    The operator's is `data_home`.
+    """
+    return {
+        "XDG_DATA_HOME": str(data),
+        "UV_PYTHON_INSTALL_DIR": str(data_home / "uv" / "python"),
+        "UV_TOOL_DIR": str(data_home / "uv" / "tools"),
+    }
+
+
 def review_dir(parent: Path, checkout: Path) -> Path:
     """A reviewer's directory as `_review` makes it, `<parent>/reviews/3/`, with its one link, to the checkout."""
     cwd = parent / "reviews" / "3"
@@ -190,15 +243,15 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
     assert call["argv"] == ["--settings", settings, "--", *PRINT_ARG, PROMPT]
     own, shared = primary / ".git" / "worktrees" / "slot", primary / ".git"
     filesystem = call["settings"]["filesystem"]
-    # No run reads another's temp directory, or another role's cache.
-    assert filesystem["denyRead"] == ["~", str(sandbox.runs_root()), str(sandbox.caches())]
+    # No run reads another's temp directory, or another role's cache or data.
+    assert filesystem["denyRead"] == ["~", str(sandbox.runs_root()), str(sandbox.caches()), str(sandbox.datas())]
     # The shared directory entry by entry, so that its read-only binds leave this slot's own directory writable.
     entries = [*sorted(p for p in shared.iterdir() if p.name != "worktrees"), shared / "worktrees" / "other"]
     paths = [str(p) for p in (slot, own, *entries, objects)]
     assert filesystem["allowRead"][: len(paths) + 2] == [*paths, tmp, str(definitions)]
     assert str(shared) not in filesystem["allowRead"]
     assert filesystem["allowWrite"][:4] == [str(slot), str(own), str(objects), tmp]
-    protected = [slot / ".git", own / "config.worktree", own / "commondir", own / "gitdir"]
+    protected = [slot / ".git", own / "config.worktree", own / "commondir", own / "gitdir", sandbox.operators()]
     assert filesystem["denyWrite"] == [str(p) for p in protected]
     assert "#" not in json.dumps(call["settings"])
     assert call["settings"]["network"]["allowedDomains"][0] == "api.anthropic.com"
@@ -216,6 +269,7 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
         "CLAUDE_CODE_TMPDIR": tmp,
         "TMPDIR": tmp,
         **caching(cache),
+        **storing(sandbox.datas() / "worker", sandbox.data_home),
     }
     assert Path(tmp).parent.parent == sandbox.runs_root()
     assert list(sandbox.runs_root().iterdir()) == []  # the policy and the temp directory are gone
@@ -410,6 +464,176 @@ def test_a_cache_directory_that_is_a_link_runs_nothing(sandbox: Sandbox, tmp_pat
     assert not sandbox.log.exists()
 
 
+@pytest.mark.parametrize("role", ROLES)
+def test_each_role_starts_with_the_operators_logins_in_a_data_directory_of_its_own(
+    canopy_env: CanopyEnv,
+    sandbox: Sandbox,
+    tmp_path: Path,
+    role: str,
+) -> None:
+    """OpenCode's data directory is the role's, and the wrapper copies the operator's logins into it.
+
+    The operator's OpenCode runs code its own names, so no run writes it, whatever the template says. Setup shares the
+    worker's; uv, which the templates let a run read, still finds its own where the operator keeps it.
+    """
+    _, slot = linked_worktree(tmp_path, "repo")
+    logins(sandbox, {"anthropic": OAUTH, "openai": API}, {"jira": MCP})
+    if role == "overseer":
+        state_as_a_tick_leaves_it(canopy_env)
+    places = {
+        "worker": slot,
+        "setup": slot,
+        "chore": chore_dir(tmp_path),
+        "review": review_dir(tmp_path, slot),
+        "overseer": canopy_env.root,
+    }
+    objects = {"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path))} if role in {"worker", "setup"} else {}
+    read = 'cat "$XDG_DATA_HOME/opencode/auth.json" "$XDG_DATA_HOME/opencode/mcp-auth.json"'
+
+    done = wrap(role, "sh", "-c", read, cwd=places[role], env={**objects, "UV_TOOL_DIR": "/opt/uv-tools"})
+
+    assert done.ok, done.stderr
+    assert done.stdout == "".join((sandbox.operators() / n).read_text() for n in ("auth.json", "mcp-auth.json"))
+    call = sandbox.only_call()
+    data = sandbox.datas() / ("worker" if role == "setup" else role)
+    assert call["env"]["XDG_DATA_HOME"] == str(data)
+    assert call["env"]["UV_TOOL_DIR"] == "/opt/uv-tools"
+    assert call["env"]["UV_PYTHON_INSTALL_DIR"] == str(sandbox.data_home / "uv" / "python")
+    filesystem = call["settings"]["filesystem"]
+    assert str(sandbox.datas()) in filesystem["denyRead"]
+    assert str(sandbox.operators()) in filesystem["denyWrite"]
+    assert not [p for p in [*filesystem["allowRead"], *filesystem["allowWrite"]] if "share/opencode" in p]
+    if role != "setup":  # setup runs no OpenCode
+        assert str(data) in filesystem["allowRead"]
+        assert str(data) in filesystem["allowWrite"]
+    assert data.stat().st_mode & 0o777 == 0o700
+    assert (data / "opencode" / "auth.json").stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize("place", ["missing", "link"])
+def test_the_operators_opencode_data_is_denied_writing_wherever_it_leads(
+    sandbox: Sandbox,
+    tmp_path: Path,
+    place: str,
+) -> None:
+    """Missing, it is made, as OpenCode would at its first start, so that it is denied before a run could make it.
+
+    A link, as a dotfile manager makes, is denied with where it leads.
+    """
+    target = tmp_path / "dotfiles" / "opencode"
+    if place == "link":
+        target.mkdir(parents=True)
+        sandbox.data_home.mkdir(parents=True, exist_ok=True)
+        sandbox.operators().symlink_to(target, target_is_directory=True)
+
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path)).ok
+
+    deny_write = sandbox.only_call()["settings"]["filesystem"]["denyWrite"]
+    assert sandbox.operators().is_dir()
+    assert deny_write == [str(sandbox.operators()), *([str(target)] if place == "link" else [])]
+
+
+def test_a_refreshed_token_is_copied_back_and_nothing_else(sandbox: Sandbox, tmp_path: Path) -> None:
+    """Only the tokens and expiry of a login the operator has, of the same kind, and later.
+
+    Never a new login, a `wellknown` one, an API key, where a token is sent, or whose account it is.
+    """
+    logins(sandbox, {"anthropic": OAUTH, "openai": API, "github-copilot": OAUTH}, {"jira": MCP, "linear": MCP})
+    refreshed = {"refresh": "refresh-2", "access": "access-2", "expires": 2_000}
+    theirs = {
+        "anthropic": {**OAUTH, **refreshed, "accountId": "theirs", "enterpriseUrl": "https://evil.example.com"},
+        "openai": {**API, "key": "key-theirs"},
+        "github-copilot": {**OAUTH, "refresh": "refresh-older", "expires": 999},
+        "planted": {"type": "wellknown", "key": "https://evil.example.com", "token": "t"},
+    }
+    tokens = {"accessToken": "mcp-2", "expiresAt": 200, "scope": "write"}
+    theirs_mcp = {
+        "jira": {**MCP, "tokens": tokens, "clientInfo": {"clientId": "theirs"}},
+        "linear": {**MCP, "tokens": tokens, "serverUrl": "https://evil.example.com/mcp"},
+        "planted": MCP,
+    }
+    write = 'cd "$XDG_DATA_HOME/opencode" && printf %s "$1" > auth.json && printf %s "$2" > mcp-auth.json'
+
+    done = wrap("chore", "sh", "-c", write, "sh", json.dumps(theirs), json.dumps(theirs_mcp), cwd=chore_dir(tmp_path))
+
+    assert done.ok, done.stderr
+    assert operators(sandbox) == {"anthropic": {**OAUTH, **refreshed}, "openai": API, "github-copilot": OAUTH}
+    jira = {**MCP, "tokens": {**tokens, "refreshToken": "mcp-refresh-1"}}  # a refresh that sends none keeps it
+    assert operators(sandbox, "mcp-auth.json") == {"jira": jira, "linear": MCP}
+    assert "copied back the refreshed tokens of auth.json: anthropic, mcp-auth.json: jira" in done.stderr
+    assert (sandbox.operators() / "auth.json").stat().st_mode & 0o777 == 0o600
+
+
+def test_a_killed_runs_refreshed_token_is_copied_back_by_its_roles_next_run(sandbox: Sandbox, tmp_path: Path) -> None:
+    """The next run of a killed run's role takes back what it left, then starts from the operator's logins.
+
+    canopy kills a timed-out run, wrapper and all, so the killed run's own wrapper never copies back.
+    """
+    logins(sandbox, {"anthropic": OAUTH})
+    left = sandbox.datas() / "chore" / "opencode" / "auth.json"
+    left.parent.mkdir(parents=True)
+    refreshed = {**OAUTH, "refresh": "refresh-2", "access": "access-2", "expires": 2_000}
+    left.write_text(json.dumps({"anthropic": refreshed, "planted": {"type": "wellknown", "key": "k", "token": "t"}}))
+
+    done = wrap("chore", "cat", str(left), cwd=chore_dir(tmp_path))
+
+    assert done.ok, done.stderr
+    assert operators(sandbox) == {"anthropic": refreshed}
+    assert json.loads(done.stdout) == {"anthropic": refreshed}
+
+
+def test_a_login_the_operator_no_longer_has_is_gone_from_the_roles(sandbox: Sandbox, tmp_path: Path) -> None:
+    logins(sandbox, {"anthropic": OAUTH})
+    left = sandbox.datas() / "chore" / "opencode" / "mcp-auth.json"
+    left.parent.mkdir(parents=True)
+    left.write_text(json.dumps({"jira": MCP}))
+
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path)).ok
+
+    assert not left.exists()
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        pytest.param('rm -r "$XDG_DATA_HOME/opencode" && ln -s "$1" "$XDG_DATA_HOME/opencode"', id="runtime-link"),
+        pytest.param('ln -sf "$1/auth.json" "$XDG_DATA_HOME/opencode/auth.json"', id="file-link"),
+        pytest.param('rm "$XDG_DATA_HOME/opencode/auth.json" && mkfifo "$XDG_DATA_HOME/opencode/auth.json"', id="fifo"),
+        pytest.param(
+            'rm "$XDG_DATA_HOME/opencode/auth.json" && cp -r "$1" "$XDG_DATA_HOME/opencode/auth.json"',
+            id="dir",
+        ),
+        pytest.param('cp "$1/big.json" "$XDG_DATA_HOME/opencode/auth.json"', id="too-big"),
+    ],
+)
+def test_what_a_run_leaves_in_place_of_its_logins_is_never_followed(
+    sandbox: Sandbox,
+    tmp_path: Path,
+    script: str,
+) -> None:
+    """What a run left in its data directory is read without following a link, hanging on a fifo, or reading a lot.
+
+    A file bigger than any login file is not read. The next run of the role starts from the operator's logins all the
+    same.
+    """
+    logins(sandbox, {"anthropic": OAUTH})
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    refreshed = {"anthropic": {**OAUTH, "refresh": "refresh-2", "access": "access-2", "expires": 2_000}}
+    (elsewhere / "auth.json").write_text(json.dumps(refreshed))
+    (elsewhere / "big.json").write_text(json.dumps({**refreshed, "padding": "x" * (1 << 20)}))
+    before = {p.name: p.read_bytes() for p in elsewhere.iterdir()}
+
+    done = wrap("chore", "sh", "-c", script, "sh", str(elsewhere), cwd=chore_dir(tmp_path))
+    again = wrap("chore", "cat", str(sandbox.datas() / "chore" / "opencode" / "auth.json"), cwd=chore_dir(tmp_path))
+
+    assert done.ok, done.stderr
+    assert again.ok, again.stderr
+    assert operators(sandbox) == {"anthropic": OAUTH}
+    assert json.loads(again.stdout) == {"anthropic": OAUTH}
+    assert {p.name: p.read_bytes() for p in elsewhere.iterdir()} == before
+
+
 def test_a_run_that_locks_its_temp_directory_still_has_it_removed(sandbox: Sandbox, tmp_path: Path) -> None:
     lock = 'mkdir -p "$TMPDIR/a/b" && chmod 000 "$TMPDIR/a" "$TMPDIR"'
 
@@ -443,7 +667,7 @@ def test_a_chore_reads_its_cwd_and_gets_no_git(sandbox: Sandbox, tmp_path: Path)
     tmp = call["env"]["TMPDIR"]
     assert filesystem["allowRead"][:3] == [str(cwd.resolve()), tmp, "/defs"]
     assert str(cwd.resolve()) not in filesystem["allowWrite"]
-    assert filesystem["denyWrite"] == []
+    assert filesystem["denyWrite"] == [str(sandbox.operators())]
     assert "GIT_OBJECT_DIRECTORY" not in call["env"]
 
 
@@ -468,12 +692,18 @@ def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp
     entries = sorted(p for p in shared.iterdir() if p.name != "worktrees")
     paths = [str(p) for p in (cwd.resolve(), slot, own, *entries)]
     assert filesystem["allowRead"][: len(paths) + 2] == [*paths, tmp, "/defs"]
-    cache = sandbox.caches() / "review"
-    assert [p for p in filesystem["allowWrite"] if p.startswith(str(tmp_path))] == [str(cache)]
+    cache, data = sandbox.caches() / "review", sandbox.datas() / "review"
+    assert [p for p in filesystem["allowWrite"] if p.startswith(str(tmp_path))] == [str(data), str(cache)]
     assert filesystem["allowWrite"][0] == tmp
-    assert filesystem["denyWrite"] == []
+    assert filesystem["denyWrite"] == [str(sandbox.operators())]
     assert "github.com" not in call["settings"]["network"]["allowedDomains"]  # it pushes and fetches nothing
-    assert call["env"] == {"CLAUDE_CODE_TMPDIR": tmp, "PATH": os.environ["PATH"], "TMPDIR": tmp, **caching(cache)}
+    assert call["env"] == {
+        "CLAUDE_CODE_TMPDIR": tmp,
+        "PATH": os.environ["PATH"],
+        "TMPDIR": tmp,
+        **caching(cache),
+        **storing(data, sandbox.data_home),
+    }
 
 
 def state_as_a_tick_leaves_it(canopy_env: CanopyEnv) -> sqlite3.Connection:
@@ -513,8 +743,8 @@ def test_the_overseer_reads_its_workspace_and_writes_only_the_journal(
     filesystem = call["settings"]["filesystem"]
     state, tmp = canopy_env.state_dir, call["env"]["TMPDIR"]
     journal = [str(state / name) for name in canopy_sandbox.JOURNAL]
-    cache = sandbox.caches() / "overseer"
-    assert filesystem["allowWrite"] == [*journal, tmp, "~/.local/share/opencode", "~/.local/state/opencode", str(cache)]
+    cache, data = sandbox.caches() / "overseer", sandbox.datas() / "overseer"
+    assert filesystem["allowWrite"] == [*journal, tmp, str(data), "~/.local/state/opencode", str(cache)]
     # The wrapper made the locks the overseer may take, as canopy would: the operator's alone.
     assert all((state / name).stat().st_mode & 0o777 == 0o600 for name in canopy_sandbox.LOCKS)
     # Entry by entry, so that no read-only bind of a directory covers the journal's files.
@@ -527,14 +757,21 @@ def test_the_overseer_reads_its_workspace_and_writes_only_the_journal(
     assert "~/.config/canopy/config.toml" in filesystem["allowRead"]
     assert not [p for p in filesystem["allowRead"] if p.startswith(("~/.ssh", "~/.config/canopy/listener"))]
     assert "~/.config/canopy" not in filesystem["allowRead"]
-    assert filesystem["denyRead"] == ["~", str(sandbox.runs_root()), str(sandbox.caches())]
+    assert filesystem["denyRead"] == ["~", str(sandbox.runs_root()), str(sandbox.caches()), str(sandbox.datas())]
+    assert filesystem["denyWrite"] == [str(sandbox.operators())]
     assert call["settings"]["network"]["allowedDomains"] == [
         "api.anthropic.com",
         "api.github.com",
         "api.githubcopilot.com",
     ]
     call["env"].pop(canopy_sandbox.SOCAT_LISTEN, None)  # as this host has IPv6 or not
-    assert call["env"] == {"CLAUDE_CODE_TMPDIR": tmp, "PATH": os.environ["PATH"], "TMPDIR": tmp, **caching(cache)}
+    assert call["env"] == {
+        "CLAUDE_CODE_TMPDIR": tmp,
+        "PATH": os.environ["PATH"],
+        "TMPDIR": tmp,
+        **caching(cache),
+        **storing(data, sandbox.data_home),
+    }
 
 
 def test_canopy_runs_in_the_overseers_sandbox_and_records_in_the_journal(
