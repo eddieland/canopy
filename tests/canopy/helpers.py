@@ -813,6 +813,18 @@ def personas_dir(env: CanopyEnv) -> Path:
     return path
 
 
+def checklists_dir(env: CanopyEnv) -> Path:
+    """The operator's checklists directory (DESIGN §42), made, and set as `paths.checklists` in the user file.
+
+    Returns:
+        The directory, where a test writes a repository's list, `<repo>.md`.
+    """
+    path = env.user_file.parent / "checklists"
+    path.mkdir(parents=True, exist_ok=True)
+    env.configure(env.user_file, {"paths": {"checklists": str(path)}})
+    return path
+
+
 def approve_policy(env: CanopyEnv) -> None:
     """Have the workspace's policy ask for a plan the operator approves before any `implement` (DESIGN §25)."""
     env.append_shared('\n[policy]\nplan = "approve"\n')

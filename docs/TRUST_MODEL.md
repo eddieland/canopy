@@ -311,6 +311,12 @@ Controls:
   characters that hide text from a person who reads it, as a lesson does. A run whose persona's file is gone or past
   its bounds is refused, never run in canopy's voice instead, and a prompt override without `{{PERSONA}}` serves only
   a run in canopy's own voice.
+- The checklists (DESIGN §42, ROADMAP M66) are operator text too: a list per repository, `<repo>.md` in
+  `paths.checklists`, private (T7), never read from a repository's checkout, which a PR could rewrite. Before a worker
+  run that may push starts, the harness writes its repositories' lists to the run's answers directory, which only the
+  operator's side writes (§41). A list is bounded at 16 KiB and refuses the characters that hide text, as a persona
+  does, and one canopy cannot use refuses the run, never runs it without the list. A list asks a worker to hold its
+  own diff to rules; it changes no guard, extends no run, and holds no slot (T3).
 - Each agent's model (DESIGN §13, M58), and the variant it runs at, is the operator's choice alone: `runtime.models`
   and a chore's `model`, both private (T7), which canopy writes into the agent's definition, or for one ticket's worker,
   planner, or reviewer an override of the model, at one of its variants or none, set with `canopy model` or the
@@ -883,8 +889,8 @@ carries their version. Unlike build scripts a worker runs (T4), this file is rea
 worktree and before any agent starts. If it could set the runtime commands, the overseer's bash allows,
 `notify.cmd`, chores, the review query, the connectors and how old an observation may be before a dispatch on it is
 refused, prompt paths, capacity, queue labels, authorized repliers, agent memory's tiers, the agents' personas or
-models, or which agents publish artifacts and whose comments on them count, one commit would be enough to run
-commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers their
+models, the checklists, or which agents publish artifacts and whose comments on them count, one commit would be enough
+to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers their
 workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
