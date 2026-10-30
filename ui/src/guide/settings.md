@@ -25,16 +25,17 @@ will notice the bases and accents sit a shade off the spec, so everything stays 
 Nord's dark side didn't make it: moved far enough for that, it was Indigo with a different name. Rosé Pine's and
 Dracula's dark sides missed out the same way.
 
-A few palettes bring more than color. Dark **Gruvbox** has the crisp corners of an editor from the nineties, and
-menus and cards cast a hard shadow with no blur. **Black** drops the panels' outlines, since a step of lightness does
-the job on an OLED screen, rounds its corners, and lights what floats with its ultraviolet, because a shadow on black
-is a shadow nobody sees. The rest cast a soft shadow under what floats. Gruvbox turns the strip under the header into
-a stepped status bar and sets the name on a yellow block, and its section colors fade to Gruvbox's own; Black makes it
-glow like a neon sign, and turns its section colors all the way up. The others have a little of the same: Gruvbox's
-light side matches its dark one, Solarized is crisp and flat, Monokai crisp with a neon glow, Nord's light side a calm
-fade through its blues, Grey one steel-blue rule, Off-white panels lying on the page like paper, and Sage, Rosé Pine,
-Forest, and Plum round their corners, Plum most of all. Layout and sizes never change with a palette, so nothing
-moves when you switch.
+A few palettes bring more than color. Dark **Gruvbox** has the crisp corners of an editor from the nineties, sets every
+line in monospace as one would, and menus and cards cast a hard shadow with no blur. **Black** drops the panels'
+outlines, since a step of lightness does the job on an OLED screen, rounds its corners, and lights what floats with its
+ultraviolet, because a shadow on black is a shadow nobody sees. The rest cast a soft shadow under what floats. Gruvbox
+turns the strip under the header into a stepped status bar and sets the name on a yellow block, and its section colors
+fade to Gruvbox's own; Black makes it glow like a neon sign, and turns its section colors all the way up. The others
+have a little of the same: Gruvbox's light side matches its dark one, Solarized is crisp and flat, Monokai crisp with a
+neon glow, Nord's light side a calm fade through its blues, Grey one steel-blue rule, Off-white panels lying on the page
+like paper, and Sage, Rosé Pine, Forest, and Plum round their corners, Plum most of all. Layout and sizes never change
+with a palette, so nothing moves when you switch, except under dark Gruvbox, where monospace runs wider and a long line
+wraps a little sooner.
 
 ## Time
 

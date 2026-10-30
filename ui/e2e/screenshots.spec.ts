@@ -122,8 +122,8 @@ for (const theme of THEMES) {
     })
 }
 
-// Every palette but a theme's default sets the neutrals, the accent, and its corners, edges, and depth, all of which
-// one page's panels show: its main pane alone, so a change to the header or the rail rewrites none of these.
+// Every palette but a theme's default sets the neutrals, the accent, and its corners, edges, depth, and face, all of
+// which one page's panels show: its main pane alone, so a change to the header or the rail rewrites none of these.
 for (const theme of THEMES) {
     for (const palette of OTHER_PALETTES[theme]) {
         test(`attention in ${palette} ${theme}`, async ({ page }) => {
