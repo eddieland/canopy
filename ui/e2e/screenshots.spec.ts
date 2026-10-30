@@ -230,16 +230,17 @@ test('the review dialog in dark', async ({ page }) => {
     await page.keyboard.press('r')
     const dialog = page.getByTestId('review-dialog')
     await expect(dialog.getByLabel('Notes for the reviewer (optional)')).toBeFocused()
-    await expect(dialog.getByTestId('review-request-chosen')).toHaveText('in canopy, the default')
+    await expect(dialog.getByTestId('review-request-ref')).toHaveText('acme/web#88')
+    await expect(dialog.getByRole('button', { name: 'Persona: canopy (default)' })).toBeEnabled()
+    await expect(dialog.getByTestId('review-model-default')).toBeVisible()
     await expect(dialog).toHaveScreenshot('review-dialog-dark.png')
 })
 
-// The review dialog's reviewer opened, a model picked for this request alone, which its menu then names.
+// The review dialog with a model picked for this request alone, which its menu then names.
 test('the review dialog with a model chosen in dark', async ({ page }) => {
     await openInDark(page, `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
     await page.keyboard.press('r')
     const dialog = page.getByTestId('review-dialog')
-    await dialog.getByRole('button', { name: 'Show reviewer' }).click()
     await dialog.getByRole('button', { name: 'Model: default' }).click()
     await page.getByRole('option', { name: 'anthropic/claude-opus-4-1@max' }).click()
     await expect(dialog.getByRole('button', { name: 'Model: anthropic/claude-opus-4-1@max' })).toBeVisible()

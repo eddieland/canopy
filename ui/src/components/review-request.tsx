@@ -7,16 +7,14 @@ import { refreshReviewRequests, requestReview, stopReview } from '@/api/mutation
 import { personasQuery } from '@/api/queries'
 import type { ReviewRequest } from '@/api/types'
 import { Age } from '@/components/age'
-import { Disclosure } from '@/components/disclosure'
 import { Input, Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { PersonasMenu } from '@/components/personas-menu'
 import { ReviewModelMenu } from '@/components/review-model'
 import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { reviewPersonasText, reviewRequestedText, reviewStoppedText } from '@/lib/outcomes'
-import { pullRequestUrl } from '@/lib/pull-request-label'
+import { pullRequestReference, pullRequestUrl } from '@/lib/pull-request-label'
 import { EMPTY_DRAFT } from '@/lib/review-request-draft'
 import type { ReviewRequestDraft } from '@/lib/review-request-draft'
 import { usablePersonas, useReviewPersonas } from '@/lib/review-personas'
@@ -31,17 +29,21 @@ const ONCE = 'canopy reviews its head once, in the repository it is in, and the 
 const SEVERAL =
     'canopy reviews its head once in each persona, in the repository it is in, and the request ends once each has.'
 
+// A field's label in the form, the same for each: sentence case, no louder than what is written in the field.
+const FIELD_LABEL = 'text-xs font-medium'
+
 /**
- * `canopy start URL --review --notes TEXT --persona NAME --model M` from the reviews page (DESIGN §13, §21, §22, §31),
- * compact as a ticket's `StartTicket` is: a PR the loop does not own, by its URL, an outline `Review`, and what its
- * reviewer should know, always open since the operator writes notes often; the personas to review it in, one review
- * each, or none for `[personas] reviewer`'s, and the model its reviews run on, config's by default, are under
- * `Show reviewer`. The personas start as those the operator prefers in Settings, which the disclosure's line names
- * while it is closed, with the model when one is picked. canopy reviews it once, at its head, in whichever of the
- * workspace's repositories it is in, and the form opens the PR's page, where the request stands. Its review becomes a
- * draft the operator may publish as their own; nothing posts until they do, and nothing is reviewed now: the next tick
- * does it. The reviews page and the Review a PR dialog (`ReviewDialog`), which `R` opens from anywhere, both render it,
- * so the two cannot drift.
+ * `canopy start URL --review --notes TEXT --persona NAME --model M` from the reviews page (DESIGN §13, §21, §22, §31):
+ * one column, every part on its left edge and to its width (ui/DESIGN.md, "A review request"). A PR the loop does not
+ * own, by its URL, with the PR's reference under it once canopy would take it, or a line saying it would not; then what
+ * its reviewer should know; then who reviews it, on one row: the personas to review it in, one review each, or none
+ * for `[personas] reviewer`'s, and the model its reviews run on, config's by default; and at the row's end `Review`,
+ * the form's primary. The personas start as those the operator prefers in Settings, which the row says. canopy reviews
+ * it once, at its head, in whichever of the workspace's repositories it is in, and the form opens the PR's page, where
+ * the request stands. Its review becomes a draft the operator may publish as their own; nothing posts until they do,
+ * and nothing is reviewed now: the next tick does it. The reviews page and the Review a PR dialog (`ReviewDialog`),
+ * which `R` opens from anywhere, both render it, so the two cannot drift; the dialog's says so on a quiet line, since
+ * the reviews page's description already does.
  */
 export function ReviewRequestForm({
     className,
@@ -49,6 +51,7 @@ export function ReviewRequestForm({
     onDraft,
     onRequested,
     focus = false,
+    notice = false,
 }: {
     /** Classes for the form. */
     className?: string
@@ -60,6 +63,8 @@ export function ReviewRequestForm({
     onRequested?: () => void
     /** Whether the form takes the focus as it mounts: the URL field, or the notes once a URL is filled in. */
     focus?: boolean
+    /** Whether a quiet line under the form says its review is a draft: the dialog's, where nothing else says so. */
+    notice?: boolean
 }) {
     const client = useQueryClient()
     const navigate = useNavigate()
@@ -67,7 +72,6 @@ export function ReviewRequestForm({
     const sendKeys = useSendKeys()
     const [url, setUrl] = useState(draft.url)
     const [notes, setNotes] = useState(draft.notes)
-    const [more, setMore] = useState(false)
     // The personas picked for this request alone, or null for the operator's preferred ones, as Settings has them now.
     const [picked, setPicked] = useState<readonly string[] | null>(draft.picked)
     // The model picked for this request alone, or null for config's.
@@ -94,7 +98,7 @@ export function ReviewRequestForm({
     const ready = url.trim() !== '' && !request.isPending
     return (
         <form
-            className={cn('flex flex-col gap-2 p-3', className)}
+            className={cn('flex max-w-3xl flex-col gap-3 p-3', className)}
             aria-label="Review a PR"
             aria-keyshortcuts="R"
             data-testid="review-request-form"
@@ -105,14 +109,15 @@ export function ReviewRequestForm({
                 }
             }}
         >
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-col gap-1.5">
                 <Input
                     // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
                     autoFocus={focused === 'url'}
                     aria-label="PR URL"
+                    aria-describedby={`${id}-ref`}
                     placeholder="https://github.com/org/repo/pull/123"
                     title="R opens this form from any page, and so does pasting a PR's URL"
-                    className="max-w-lg min-w-64 flex-1 font-mono text-xs"
+                    className="font-mono text-xs"
                     value={url}
                     onChange={(event) => {
                         setUrl(event.target.value)
@@ -120,22 +125,11 @@ export function ReviewRequestForm({
                     }}
                     data-testid="review-request-url"
                 />
-                <Button
-                    type="submit"
-                    variant="outline"
-                    disabled={!ready}
-                    title="canopy start URL --review"
-                    aria-keyshortcuts={sendKeys.shortcut}
-                    data-testid="review-request-submit"
-                >
-                    <ScanSearch />
-                    Review
-                    <SendKeycap keys={sendKeys.shortcut} />
-                </Button>
+                <PullRequestReference id={`${id}-ref`} url={url.trim()} />
             </div>
             <div className="flex flex-col gap-1.5">
-                <label className="panel-label" htmlFor={`${id}-notes`}>
-                    Notes for the reviewer (optional)
+                <label className={FIELD_LABEL} htmlFor={`${id}-notes`}>
+                    Notes for the reviewer <span className="font-normal text-muted-foreground">(optional)</span>
                 </label>
                 <Textarea
                     // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
@@ -153,68 +147,74 @@ export function ReviewRequestForm({
                     data-testid="review-request-notes"
                 />
             </div>
-            <Collapsible open={more} onOpenChange={setMore} className="flex flex-col gap-2">
-                <span className="flex flex-wrap items-center gap-x-2">
-                    <Disclosure open={more} what="reviewer" className="-ml-2" />
-                    {!more && (
-                        <span className="text-xs text-muted-foreground" data-testid="review-request-chosen">
-                            {chosenText(chosen, picked === null, personas?.reviewer)}
-                            {model !== null && (
-                                <>
-                                    , on <span className="font-mono">{model}</span>
-                                </>
-                            )}
-                        </span>
-                    )}
-                </span>
-                <CollapsibleContent className="flex flex-col gap-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span className="panel-label" aria-hidden>
-                            Persona
-                        </span>
-                        <PersonasMenu
-                            personas={personas}
-                            chosen={chosen}
-                            disabled={request.isPending}
-                            onChange={(next) => {
-                                setPicked(next)
-                                change({ picked: next })
-                            }}
-                            title="canopy start URL --review --persona NAME"
-                            testId="review-request-personas"
-                        />
-                        {picked === null && chosen.length > 0 && (
-                            <span className="text-xs text-muted-foreground">as Settings prefers</span>
-                        )}
-                        {chosen.length > 1 && (
-                            <span className="text-xs text-muted-foreground">one review in each, side by side</span>
-                        )}
-                    </div>
-                    <ReviewModelMenu
-                        model={model}
+            {/* Who reviews it, then the primary at the row's end, on the fields' right edge. */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="review-request-reviewer">
+                <span className="flex flex-wrap items-center gap-2">
+                    <span className={FIELD_LABEL} aria-hidden>
+                        Persona
+                    </span>
+                    <PersonasMenu
+                        personas={personas}
+                        chosen={chosen}
                         disabled={request.isPending}
                         onChange={(next) => {
-                            setModel(next)
-                            change({ model: next })
+                            setPicked(next)
+                            change({ picked: next })
                         }}
-                        testId="review-request-model"
+                        title="canopy start URL --review --persona NAME"
+                        testId="review-request-personas"
                     />
-                </CollapsibleContent>
-            </Collapsible>
+                    {picked === null && chosen.length > 0 && (
+                        <span className="text-xs text-muted-foreground">as Settings prefers</span>
+                    )}
+                    {chosen.length > 1 && (
+                        <span className="text-xs text-muted-foreground">one review in each, side by side</span>
+                    )}
+                </span>
+                <ReviewModelMenu
+                    model={model}
+                    disabled={request.isPending}
+                    onChange={(next) => {
+                        setModel(next)
+                        change({ model: next })
+                    }}
+                    testId="review-request-model"
+                    labelClassName={FIELD_LABEL}
+                />
+                <Button
+                    type="submit"
+                    className="ml-auto"
+                    disabled={!ready}
+                    title="canopy start URL --review"
+                    aria-keyshortcuts={sendKeys.shortcut}
+                    data-testid="review-request-submit"
+                >
+                    <ScanSearch />
+                    Review
+                    <SendKeycap keys={sendKeys.shortcut} />
+                </Button>
+            </div>
             <Notice error={request.error}>
-                For a PR the loop does not own, such as a coworker&apos;s. Its review is a draft you may publish, word
-                for word, as your own; nothing posts until you do.
+                {notice && 'For a PR the loop does not own. Nothing posts until you publish its draft.'}
             </Notice>
         </form>
     )
 }
 
-// What a closed form reviews in: the personas chosen, those Settings prefers, or the config's reviewer's.
-function chosenText(chosen: readonly string[], preferred: boolean, reviewer: string | undefined): string {
-    if (chosen.length === 0) {
-        return `in ${reviewer ?? 'canopy'}, the default`
-    }
-    return `in ${chosen.join(', ')}${preferred ? ', as Settings prefers' : ''}`
+/**
+ * What the URL field names, on the line under it, which it always holds so the notes never move as it changes: the
+ * PR's reference once canopy would take it, `acme/web#88` as the reviews list writes it, or that it is not a PR's URL,
+ * which canopy would refuse, before it is sent; with nothing written, that a link into a PR names it too.
+ */
+function PullRequestReference({ id, url }: { id: string; url: string }) {
+    const reference = url === '' ? null : pullRequestReference(url)
+    return (
+        <p id={id} className="min-h-4 text-xs text-muted-foreground" data-testid="review-request-ref">
+            {url === '' && 'A link into the PR, such as one of its threads, names it too.'}
+            {reference !== null && <span className="font-mono text-foreground">{reference}</span>}
+            {url !== '' && reference === null && "Not a PR's URL, so canopy would refuse it."}
+        </p>
+    )
 }
 
 /**

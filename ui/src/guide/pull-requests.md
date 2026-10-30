@@ -219,7 +219,9 @@ one: the reviewer is wrong often enough that you'll want to read a few before it
 
 To have canopy review a PR the loop doesn't own, such as a coworker's, paste its URL into **Review a PR** on the
 [reviews page](#the-reviews-page) and press **Review**. This is `canopy start URL --review`. A link to one of its
-threads or its files tab works too: the page trims it back to the PR, so you needn't. The page then opens the PR's
+threads or its files tab works too: the page trims it back to the PR, so you needn't. The line under the field names
+the PR as you type, `acme/web#88`, so you can see which one you're about to send; anything that isn't a PR's URL,
+such as an issue's, it calls out before you press anything, since canopy would refuse it. The page then opens the PR's
 own page, where the request now stands. The next tick reviews the PR once, at its latest commit, in whichever of your
 repositories holds it, and the request ends with that review. Until then it's a `requested` row at the head of the
 reviews list, so you can see it landed, and it waits on the [pull requests page](#the-pull-requests-page) wearing
@@ -233,7 +235,7 @@ URL anywhere outside a field and the form opens with it filled in, the focus wai
 else does nothing, so a stray paste of your shopping list stays between you and your clipboard. Escape or a click
 outside closes the form without losing what you wrote; it's still there when you open it again in the same tab, and
 it clears once the request goes through. A refusal, such as one of the loop's own PRs (`loop_pr`), keeps it open and
-says why.
+says why, in place of the line at its foot reminding you that nothing posts until you publish the draft.
 
 Already on the PR's page? Its **Pull request** panel asks for you: **Review this PR** on one canopy has never
 reviewed, and **Review again** once it has, or once your request has ended, say after the author pushed a fix. It's the
@@ -248,10 +250,10 @@ narrow the review: it still reads the whole change. The PR's page shows the note
 a PR that's already waiting, with new notes, replaces the old ones; a review already running keeps the notes it
 started with.
 
-**Show reviewer**, under the notes, opens the **Persona** menu, which picks the voice the review is written in, as
-`--persona` does. Left alone, it reads `(default)` beside `[personas] reviewer`'s, which is usually `canopy`; folded,
-the form says which it will use. Each persona in the menu
-says what it is under its name, in its own words. Check one persona, say `skeptic`, and the review is
+Under the notes, one row says who reviews it, and ends on **Review**. Its **Persona** menu picks the voice the review
+is written in, as `--persona` does. Left alone, it reads `(default)` beside `[personas] reviewer`'s, which is usually
+`canopy`. Each persona in the menu says what it is under its name, in its own words. Check one persona, say
+`skeptic`, and the review is
 written in it; check several, up to ten, and canopy reviews the PR once in each, side by side, which is the cheapest
 way to learn which reviewer you actually like. Each is a run of its own, billed as one. A persona canopy would refuse
 to run, such as a file past its size limit, is greyed out, and hovering it says why. Asking again for a PR that's
@@ -262,7 +264,7 @@ If you always reach for the same reviewer, pick it once in [Settings](settings#r
 saying `as Settings prefers`, and so does a PR's **Review this PR**. You can still check others for one request; the
 next one starts from your preference again. **Use the default** is still `[personas] reviewer`'s.
 
-Beside the persona, **Model** picks what the reviewer runs on, as `--model` does. Left alone it reads `default`, and
+Beside it in the row, **Model** picks what the reviewer runs on, as `--model` does. Left alone it reads `default`, and
 names config's reviewer's model after it, so you know what you're getting before you change it. Pick another, say a
 bigger model for the PR that touches billing, or a variant of one at a higher effort, and every review that request
 makes runs on it, in each persona; it's the request's alone, and the next one starts from config's again. A model on a

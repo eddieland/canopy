@@ -112,11 +112,6 @@ function notesField(): HTMLTextAreaElement {
     return screen.getByRole('textbox', { name: 'Notes for the reviewer (optional)' })
 }
 
-// Opens what the form keeps folded: its personas and its model.
-function showPersona() {
-    fireEvent.click(screen.getByRole('button', { name: 'Show reviewer' }))
-}
-
 // Opens the model menu its trigger names, and returns the list of models once the runtime's are read.
 async function openModels(name: string) {
     const trigger = await screen.findByRole('button', { name })
@@ -134,20 +129,44 @@ async function openPersonas(name = 'Persona: canopy (default)') {
 }
 
 describe('ReviewRequestForm', () => {
-    it('is a URL, its notes, and an outline Review, saying its review is a draft, its persona folded', async () => {
+    it('is a URL, its notes, who reviews it, and Review, with nothing folded and nothing the page says', async () => {
         await renderRouted(<ReviewRequestForm />)
-        expect(screen.getByRole('status').textContent).toBe(
-            "For a PR the loop does not own, such as a coworker's. " +
-                'Its review is a draft you may publish, word for word, as your own; nothing posts until you do.',
-        )
         // The notes are always open, so the form sends from them.
         expect(notesField()).toBeTruthy()
         expect(screen.getByRole('button', { name: /^Review/u }).getAttribute('aria-keyshortcuts')).toBe('Enter')
-        expect(screen.queryByRole('button', { name: 'Persona: canopy (default)' })).toBeNull()
-        // Closed, it names what the review is written in.
-        expect(await screen.findByText('in canopy, the default')).toBeTruthy()
-        showPersona()
-        expect(screen.getByRole('button', { name: 'Persona: canopy (default)' })).toBeTruthy()
+        // Who reviews it is always in view: the persona and the model, each a menu, with no disclosure before them.
+        expect(await screen.findByRole('button', { name: 'Persona: canopy (default)' })).toBeTruthy()
+        expect(await screen.findByRole('button', { name: 'Model: default' })).toBeTruthy()
+        expect(screen.queryByRole('button', { name: 'Show reviewer' })).toBeNull()
+        // The reviews page's description says its review is a draft, so the form does not.
+        expect(screen.queryByRole('status')).toBeNull()
+    })
+
+    it('says on a quiet line that its review is a draft, where it is asked to, as the dialog does', async () => {
+        await renderRouted(<ReviewRequestForm notice />)
+        expect(screen.getByRole('status').textContent).toBe(
+            'For a PR the loop does not own. Nothing posts until you publish its draft.',
+        )
+    })
+
+    it('names the PR a URL is under its field, as the reviews list does, or says canopy would refuse it', async () => {
+        await renderRouted(<ReviewRequestForm />)
+        const reference = screen.getByTestId('review-request-ref')
+        // With nothing written, it says a link into a PR will do.
+        expect(field()).toBe(
+            screen.getByRole('textbox', {
+                description: 'A link into the PR, such as one of its threads, names it too.',
+            }),
+        )
+        fireEvent.change(field(), { target: { value: `${PR}#discussion_r123` } })
+        expect(screen.getByRole('textbox', { name: 'PR URL', description: 'acme/web#88' })).toBe(field())
+        // Another host's PR, which canopy takes as written.
+        fireEvent.change(field(), { target: { value: 'https://git.example/acme/web/pull/7' } })
+        expect(reference.textContent).toBe('git.example/acme/web/pull/7')
+        // Anything else is said before it is sent, though the server is still the one that refuses it.
+        fireEvent.change(field(), { target: { value: 'https://github.com/acme/web/issues/88' } })
+        expect(reference.textContent).toBe("Not a PR's URL, so canopy would refuse it.")
+        expect(screen.getByRole<HTMLButtonElement>('button', { name: /^Review/u }).disabled).toBe(false)
     })
 
     it('asks for review only once a URL is written, by its button or by Enter', async () => {
@@ -224,7 +243,6 @@ describe('ReviewRequestForm', () => {
     it('reviews in each persona checked, each described, and Use the default goes back', async () => {
         await renderRouted(<ReviewRequestForm />)
         fireEvent.change(field(), { target: { value: PR } })
-        showPersona()
         const menu = await openPersonas()
         const items = within(menu).getAllByRole('menuitemcheckbox')
         expect(items).toEqual(
@@ -256,7 +274,6 @@ describe('ReviewRequestForm', () => {
 
     it('unchecks a persona, and Use the default clears them all', async () => {
         await renderRouted(<ReviewRequestForm />)
-        showPersona()
         let menu = await openPersonas()
         expect(within(menu).getByRole('menuitem', { name: 'Use the default' }).getAttribute('aria-disabled')).toBe(
             'true',
@@ -270,11 +287,9 @@ describe('ReviewRequestForm', () => {
         expect(await screen.findByRole('button', { name: 'Persona: canopy (default)' })).toBeTruthy()
     })
 
-    it('starts from the personas Settings prefers, and says so while folded', async () => {
+    it('starts from the personas Settings prefers, and says so beside its menu', async () => {
         setReviewPersonas(['skeptic', 'canopy'])
         await renderRouted(<ReviewRequestForm />)
-        expect(await screen.findByText('in skeptic, canopy, as Settings prefers')).toBeTruthy()
-        showPersona()
         expect(await screen.findByRole('button', { name: 'Persona: skeptic, canopy' })).toBeTruthy()
         expect(screen.getByText('as Settings prefers')).toBeTruthy()
 
@@ -296,7 +311,6 @@ describe('ReviewRequestForm', () => {
         setReviewPersonas(['gone', 'removed', 'skeptic'])
         await renderRouted(<ReviewRequestForm />)
         fireEvent.change(field(), { target: { value: PR } })
-        showPersona()
         const menu = await openPersonas('Persona: skeptic')
         fireEvent.click(within(menu).getByRole('menuitem', { name: 'Use the default' }))
         fireEvent.click(await screen.findByRole('button', { name: /^Review/u }))
@@ -312,7 +326,6 @@ describe('ReviewRequestForm', () => {
             personas: names.map((name) => ({ name, yours: true, defaults: [], error: null, description: null })),
         }
         await renderRouted(<ReviewRequestForm />)
-        showPersona()
         const menu = await openPersonas()
         for (const name of names.slice(0, 10)) {
             fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name }))
@@ -326,7 +339,6 @@ describe('ReviewRequestForm', () => {
         const drafts: unknown[] = []
         await renderRouted(<ReviewRequestForm onDraft={(draft) => void drafts.push(draft)} />)
         fireEvent.change(field(), { target: { value: PR } })
-        showPersona()
         const trigger = await screen.findByRole('button', { name: 'Model: default' })
         expect(trigger.title).toBe('canopy start URL --review --model M')
         expect((await screen.findByTestId('review-model-default')).textContent).toBe("config's acme/fast-1")
@@ -340,13 +352,6 @@ describe('ReviewRequestForm', () => {
         expect(picked.title).toBe('canopy start URL --review --model acme/deep-2@high')
         expect(screen.queryByTestId('review-model-default')).toBeNull()
         expect(drafts.at(-1)).toEqual({ url: PR, notes: '', picked: null, model: 'acme/deep-2@high' })
-        // Folded, the form says which model it will use.
-        fireEvent.click(screen.getByRole('button', { name: 'Hide reviewer' }))
-        expect(screen.getByTestId('review-request-chosen').textContent).toBe(
-            'in canopy, the default, on acme/deep-2@high',
-        )
-
-        showPersona()
         list = await openModels('Model: acme/deep-2@high')
         fireEvent.click(screen.getByRole('button', { name: 'Use the default' }))
         expect(await screen.findByRole('button', { name: 'Model: default' })).toBeTruthy()
@@ -363,8 +368,6 @@ describe('ReviewRequestForm', () => {
 
     it('marks a model a draft kept before its menu opens, once the runtime no longer lists it', async () => {
         await renderRouted(<ReviewRequestForm draft={{ url: PR, notes: '', picked: null, model: 'acme/gone-1' }} />)
-        expect(screen.getByTestId('review-request-chosen').textContent).toBe('in canopy, the default, on acme/gone-1')
-        showPersona()
         // A model picked reads the runtime's list as its menu shows, so it is marked without opening it.
         const gone = 'Model: acme/gone-1, no longer listed; its next run is refused'
         const list = await openModels(gone)
@@ -378,7 +381,6 @@ describe('ReviewRequestForm', () => {
 
     it("reads the runtime's models only once its menu opens while config's is the default", async () => {
         await renderRouted(<ReviewRequestForm />)
-        showPersona()
         await screen.findByTestId('review-model-default')
         expect(modelReads).toBe(0)
         await openModels('Model: default')
@@ -390,7 +392,7 @@ describe('ReviewRequestForm', () => {
             { detail: { guard: 'unknown_repo', reason: 'acme/web is in no repository' } },
             { status: 409 },
         )
-        const { router } = await renderRouted(<ReviewRequestForm />, { at: '/pull-requests/reviews' })
+        const { router } = await renderRouted(<ReviewRequestForm notice />, { at: '/pull-requests/reviews' })
         fireEvent.change(field(), { target: { value: PR } })
         fireEvent.click(screen.getByRole('button', { name: 'Review' }))
         expect((await screen.findByRole('alert')).textContent).toBe(

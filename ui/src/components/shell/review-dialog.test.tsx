@@ -4,7 +4,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
-import type { PersonaList } from '@/api/types'
+import type { ConfigModels, PersonaList } from '@/api/types'
 import { setReviewPersonas } from '@/lib/review-personas'
 import { readReviewRequestDraft } from '@/lib/review-request-draft'
 import { renderRouted } from '@/test-utils'
@@ -13,6 +13,14 @@ import { ReviewDialog } from './review-dialog'
 
 const PR = 'https://github.com/acme/web/pull/88'
 const PERSONAS: PersonaList = { reviewer: 'canopy', personas: [] }
+const CONFIG: ConfigModels = {
+    agents: [],
+    chores: [],
+    models_file: null,
+    chores_file: null,
+    user_file: '/home/me/.config/canopy/config.toml',
+    private_file: '/home/me/.config/canopy/private.toml',
+}
 
 // Every review requested, by the PR it names, and what the server stand-in answers it.
 let sent: (string | null)[] = []
@@ -23,6 +31,10 @@ const server: Middleware = {
         const url = new URL(request.url)
         if (url.pathname === '/api/personas') {
             return Response.json(PERSONAS)
+        }
+        // And config's models, which the model menu, always in view, reads.
+        if (url.pathname === '/api/config/models') {
+            return Response.json(CONFIG)
         }
         sent.push(url.searchParams.get('url'))
         return (
@@ -94,6 +106,10 @@ describe('ReviewDialog', () => {
         press('r')
         expect(dialog()).toBeTruthy()
         expect(screen.getByRole('form', { name: 'Review a PR' })).toBeTruthy()
+        // Nothing else in the dialog says what becomes of the review, so its one quiet line does.
+        expect(screen.getByRole('status').textContent).toBe(
+            'For a PR the loop does not own. Nothing posts until you publish its draft.',
+        )
         expect(urlField().value).toBe('')
         expect(document.activeElement).toBe(urlField())
 
