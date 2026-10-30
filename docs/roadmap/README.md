@@ -61,7 +61,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M22. Trusted reviewers](M22-trusted-reviewers.md): done 2026-10-13.
 - [M23. Chores in the web UI](M23-chores-in-the-web-ui.md): done 2026-10-13.
 - [M24. Ticks in the web UI](M24-ticks-in-the-web-ui.md): done 2026-10-13.
-- [M25. Workers report flaky CI](M25-workers-report-flaky-ci.md): in progress.
+- [M25. Workers report flaky CI](M25-workers-report-flaky-ci.md): done 2026-10-30.
 - [M26. Sandboxed workers, opt-in](M26-sandboxed-workers-opt-in.md): in progress.
 - [M27. Session transcripts in the web UI](M27-session-transcripts-in-the-web-ui.md): done 2026-10-13.
 - [M28. Overseer reliability from the first live session](M28-overseer-reliability.md): done 2026-10-14.
