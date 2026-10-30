@@ -1,5 +1,5 @@
 // The reports page: what each local calendar month cost, in dollars and tokens, and what it got done. The numbers are
-// the server's (`canopy.core.monthly`); this lays them out.
+// the server's (`canopy.serve.monthly`); this lays them out.
 
 import type { ReportMonth, ReportTokens } from '@/api/types'
 import type { Clock } from '@/lib/clock'

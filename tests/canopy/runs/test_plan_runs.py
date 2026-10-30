@@ -1,4 +1,4 @@
-"""Plan runs (DESIGN §25, ROADMAP M44): `canopy dispatch --kind plan`, the planner in its desk, and its plan."""
+"""Plan runs (DESIGN §25, ROADMAP M44): a dispatch of kind plan, the planner in its desk, and its plan."""
 
 import hashlib
 import json
@@ -10,7 +10,6 @@ from pathlib import Path
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from canopy.cli.main import main
 from canopy.core import conversation, db, plans
 from canopy.core.vocab import PlanEffort, PlanStatus, RunKind, RunStatus
 from canopy.notify import message
@@ -19,6 +18,7 @@ from tests.canopy.helpers import (
     KEY,
     LABEL,
     QUESTION,
+    Called,
     InlineRunner,
     agent_runs,
     calls,
@@ -27,10 +27,12 @@ from tests.canopy.helpers import (
     has_deadline,
     in_tick,
     logged,
+    overseer_calls,
     plan_file,
     planner_does,
     pool,
     present,
+    tracker_holds,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool
@@ -206,24 +208,28 @@ def test_a_name_already_taken_is_never_overwritten(scenario: Scenario, git_pool:
 
 
 @pytest.mark.parametrize(
-    ("args", "guard", "reason"),
+    ("move", "guard", "reason"),
     [
-        (["--slug", "work"], "bad_slug", "a plan writes down the work and names no branch; leave out slug (--slug)"),
         (
-            ["--base", "agent/PROJ-2-work"],
+            dispatches(kind=RunKind.PLAN, slug="work"),
+            "bad_slug",
+            "a plan writes down the work and names no branch; leave out slug",
+        ),
+        (
+            dispatches(kind=RunKind.PLAN, base="agent/PROJ-2-work"),
             "bad_base",
-            "a plan writes down the work and starts from no branch; leave out base (--base)",
+            "a plan writes down the work and starts from no branch; leave out base",
         ),
     ],
 )
 def test_a_plan_takes_no_slug_or_base(
     scenario: Scenario,
     treehouse_state: Path,
-    args: list[str],
+    move: Called,
     guard: str,
     reason: str,
 ) -> None:
-    assert scenario.refuses([*PLAN, *args]) == [(f"refused:{guard}", reason)]
+    assert scenario.refuses(move) == [(f"refused:{guard}", reason)]
 
 
 def test_a_started_ticket_is_not_planned(scenario: Scenario, treehouse_state: Path) -> None:
@@ -256,9 +262,11 @@ def test_plan_attempts_are_the_tickets_and_limited(scenario: Scenario, git_pool:
 
 
 def test_a_dry_run_plans_nothing(canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection) -> None:
+    tracker_holds(conn)
     with in_tick(conn, dry_run=True) as tick_id:
         runner = InlineRunner()
-        assert main(PLAN[1:], runner=runner) == 0
+        said = overseer_calls(PLAN, runner=runner)
+        assert not said.error, said.text
         assert runner.spawned == []
         assert decisions(conn, tick_id) == [
             ("dispatch:plan", f"dry run: not dispatched; would plan {KEY} over repo; label {LABEL}"),

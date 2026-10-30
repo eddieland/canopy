@@ -24,9 +24,10 @@ The prefix runs `canopy-sandbox`, a program canopy installs beside itself, not h
 that picks the operator's policy template. The prefix is private config (§12, T7), so no repository can remove it, and
 the sandbox denies writes to canopy's config, so no worker can; nothing canopy runs writes it. The wrapper strips the
 environment that would point git elsewhere or run a startup file; refuses a run outside the place its role starts in,
-and a template with no read denials or no network allowlist; and gives each run a policy, a private temp directory,
-the role's cache, and, for a worker or setup, its own `git`. The prompt passes through `srt`'s quoted shell string byte
-for byte (D023's revisit clause). Timeouts end everything; on macOS a process that calls `setsid` escapes.
+and a template with no read denials, no network allowlist, or an allowance over what it denies every run; and gives
+each run a policy, a private temp directory, the role's cache, and, for a worker or setup, its own `git`. The prompt
+passes through `srt`'s quoted shell string byte for byte (D023's revisit clause). Timeouts end everything; on macOS
+a process that calls `setsid` escapes.
 
 ### What is wrapped
 
@@ -34,8 +35,7 @@ The `worker` role wraps `worker_cmd`, `private_worker_cmd`, and `plan_cmd`; `set
 runs the branch's code just before the worker (§9); `chore` wraps `runtime.chore_cmd` and a chore's `cmd` (§19);
 `review` wraps `review_cmd`, which reads the most hostile text the loop meets (T1). `overseer` wraps `overseer_cmd` and
 the tools' server its runtime starts (§27); the runs it asks for start outside it, from the tick (§40), so none
-inherits its sandbox or ends with it. Unwrapped: the harness's own
-`notify.cmd`, `git`, and `treehouse`.
+inherits its sandbox or ends with it. Unwrapped: the harness's own `notify.cmd`, `git`, and `treehouse`.
 
 `runtime.sandbox_repos` sandboxes some repositories and not others: canopy starts a worker run, `setup_cmd`, and a
 review in one of them in the wrapper, with the role above, by its absolute path beside canopy's interpreter, so no
@@ -55,6 +55,7 @@ a deny list of secret paths, which always misses one.
 | The git common dir, except this slot's own directory | yes | no | Shared by every slot (Git state). |
 | This slot's own directory, except `config.worktree`, `commondir`, `gitdir` | yes | yes | Its HEAD, index, reflog. |
 | The run's object directory, its temp directory, the role's cache | yes | yes | Commits (§8), scratch, caches. |
+| A worker's or a review's answers directory | yes | no | The operator's answer to the question it asks (§41). |
 | The runtime's data and state | yes | yes | Sessions and tokens (Open). |
 | Toolchains, the runtime's config, canopy's agent definitions | yes | no | Tests; a worker must not rewrite its permissions (D040). |
 | The operator's own caches | no | no | The host runs what is in them. |

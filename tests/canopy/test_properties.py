@@ -11,24 +11,19 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from pydantic import ValidationError
 
-from canopy.cli.params import (
-    CURSOR_VALUE_RE,
-    KEY_RE,
-    MAX_TEXT,
-    REASON,
-    REASON_RE,
-    SLUG,
-    TICKET_KEY,
-    CursorType,
-    TextType,
-    valid_key,
-)
+from canopy.cli.params import TICKET_KEY
 from canopy.core import bash_allows, config
 from canopy.infra.procs import SubprocessRunner
+from canopy.loop import tools
+from canopy.loop.tools import KEY_RE, MAX_TEXT, REASON_RE, valid_key
 from canopy.runs import dispatch
 from canopy.runtime.definitions import BASH_ALLOW_RE
 from canopy.setup import init
+from tests.conftest import TRACKER_TOML
 
+#: What a cursor's id may be: a number, a journal number or a message's id (DESIGN §35), as long as `CURSOR_VALUE_RE`
+#: lets one be.
+CURSOR_NUMBER_RE = re.compile(r"[0-9]{1,200}")
 # Characters that mean something to a shell, a path, a glob, or a git ref.
 UNSAFE = set(" \t\n\r\x0b\x0c/\\;$`&|<>()'\"*?#~!{}[]=:^@,.%+")
 fixtures = [HealthCheck.function_scoped_fixture]
@@ -74,16 +69,24 @@ def accepts_ticket_key(value: str) -> bool:
     return _converts(TICKET_KEY, value)
 
 
+def _validates(request: type[tools.Request], **fields: object) -> bool:
+    try:
+        request.model_validate(fields)
+    except ValidationError:
+        return False
+    return True
+
+
 def accepts_reason(value: str) -> bool:
-    return _converts(REASON, value)
+    return _validates(tools.Attention, key="PROJ-1", reason=value, detail="why")
 
 
 def accepts_cursor_id(value: str) -> bool:
-    return _converts(CursorType(), f"comment={value}")
+    return _validates(tools.TicketSets, tickets=[{"key": "PROJ-1", "cursors": {"comment": value}}])
 
 
 def accepts_slug(value: str) -> bool:
-    return _converts(SLUG, value)
+    return _validates(tools.Dispatch, key="PROJ-1", kind="implement", repos=["repo"], slug=value)
 
 
 def accepts_branch_prefix(value: str) -> bool:
@@ -94,14 +97,15 @@ def accepts_branch_prefix(value: str) -> bool:
     return True
 
 
-# Each validator the CLI and init actually call, with the pattern it is meant to enforce on the whole string.
+# Each validator the CLI, the overseer's tools, and init actually call, with the pattern it is meant to enforce on the
+# whole string.
 VALIDATORS = [
     pytest.param(KEY_RE, accepts_ticket_key, id="ticket-key-type"),
     pytest.param(KEY_RE, valid_key, id="decide-key"),
-    pytest.param(REASON_RE, accepts_reason, id="reason-type"),
-    pytest.param(CURSOR_VALUE_RE, accepts_cursor_id, id="cursor-type"),
+    pytest.param(REASON_RE, accepts_reason, id="attention-reason"),
+    pytest.param(CURSOR_NUMBER_RE, accepts_cursor_id, id="ticket-set-cursor"),
     pytest.param(init.PROVIDER_RE, init.valid_provider, id="provider"),
-    pytest.param(dispatch.SLUG_RE, accepts_slug, id="slug-type"),
+    pytest.param(dispatch.SLUG_RE, accepts_slug, id="dispatch-request-slug"),
     pytest.param(dispatch.SLUG_RE, dispatch.valid_slug, id="dispatch-slug"),
     pytest.param(config.BRANCH_PREFIX_RE, accepts_branch_prefix, id="branch-prefix"),
 ]
@@ -124,8 +128,8 @@ def test_validators_accept_the_whole_pattern_and_nothing_around_it(
 @given(st.text())
 def test_accepted_cursor_ids_are_short_and_unbroken(value: str) -> None:
     try:
-        name, cursor_id = CursorType().convert(f"comment={value}", None, None)
-    except click.BadParameter:
+        name, cursor_id = tools.cursor("comment", value)
+    except ValueError:
         return
     assert name == "comment"
     assert cursor_id == value
@@ -136,8 +140,8 @@ def test_accepted_cursor_ids_are_short_and_unbroken(value: str) -> None:
 @given(st.text())
 def test_text_is_stripped_non_empty_and_bounded(value: str) -> None:
     try:
-        text = TextType().convert(value, None, None)
-    except click.BadParameter:
+        text = tools.clean_text(value)
+    except ValueError:
         assert not value.strip()
         return
     assert text == text.strip() or text.endswith("...")
@@ -174,7 +178,7 @@ def test_workspace_policy_never_loosens_the_defaults(tmp_path: Path, attempts: i
         f"max_implement_attempts = {attempts}\n",
     )
     user = tmp_path / "config.toml"
-    user.write_text('[tracker]\nlabels = ["mine"]\n')
+    user.write_text('[tracker]\nlabels = ["mine"]\n\n' + TRACKER_TOML)
     policy = config.load(tmp_path, user).policy
     assert policy.max_resume_attempts == min(attempts, 6)
     assert policy.max_implement_attempts == min(attempts, 2)
@@ -231,7 +235,7 @@ def test_workspace_file_cannot_set_private_keys(tmp_path: Path, name: str) -> No
         extra = f'{key} = "x"\n' if section == "tracker" else f'[{section}]\n{key} = "x"\n'
     (tmp_path / config.WORKSPACE_FILE_NAME).write_text(f'[tracker]\nprovider = "jira"\nquery = "q"\n{extra}')
     user = tmp_path / "config.toml"
-    user.write_text('[tracker]\nlabels = ["mine"]\n')
+    user.write_text('[tracker]\nlabels = ["mine"]\n\n' + TRACKER_TOML)
     with pytest.raises(config.ConfigError, match="is private"):
         config.load(tmp_path, user)
 

@@ -18,15 +18,18 @@ from canopy.infra import lock, procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
     DEAD_PID,
+    READ_PR,
+    WORKER_DONE,
     agent_runs,
-    canopy,
     commit_and_push,
     in_tick,
     last_tick,
+    overseer_calls,
     overseer_does,
     pool,
     present,
     tick_starts,
+    tracker_holds,
     wait_for_run,
     waits,
     worker_does,
@@ -93,8 +96,9 @@ def test_a_run_whose_process_died_is_crashed_its_worker_killed_and_its_slot_retu
     dies.dies()
     assert procs.alive(left_behind)  # the worker leads its own group, so it outlives the run's process
 
-    ticked = scenario.tick(*waits("PROJ-1", "PROJ-2"))
-    assert ticked.actions == ["attention:crashed", "queried", "wait", "wait"]
+    # The harness waits on PROJ-2 for the worker still running it (DESIGN §37); the overseer, on PROJ-1.
+    ticked = scenario.tick(*waits("PROJ-1"))
+    assert ticked.actions == ["attention:crashed", "wait", "queried", "wait"]
     crashed = dies.row
     assert crashed["status"] == "crashed"
     assert json.loads(crashed["result_json"]) == {"harness": "the worker process is gone"}
@@ -280,10 +284,14 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """M2 acceptance, against the fakes: label to pushed branch, slot returned, a correct `runs` row."""
-    dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
+    tracker_holds(conn)
     with (
-        overseer_does(canopy(*dispatch, "--slug", "add-login")),
-        worker_does(*commit_and_push("agent/PROJ-1-add-login")),
+        overseer_does(dispatches(slug="add-login")),
+        # A PR the `vcs` source reads, so the next tick lists the ticket to the overseer (DESIGN §39).
+        worker_does(
+            *commit_and_push("agent/PROJ-1-add-login"),
+            result=json.dumps(json.loads(WORKER_DONE) | {"pr": READ_PR}),
+        ),
     ):
         assert main(["tick"]) == 0
     assert capsys.readouterr().out.startswith("tick 1: ok: 2 decisions: dispatch:implement=1, queried=1")
@@ -294,7 +302,7 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     assert run["branch"] == "agent/PROJ-1-add-login"
     assert run["pid"] is not None
     assert run["ended_at"] is not None
-    assert json.loads(run["result_json"])["pr"] == "https://example.test/pr/1"
+    assert json.loads(run["result_json"])["pr"] == READ_PR
     assert git_pool.remote_head("agent/PROJ-1-add-login") is not None
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
@@ -316,12 +324,13 @@ def test_killed_worker_is_detected_on_the_next_tick(
     conn: sqlite3.Connection,
 ) -> None:
     """M2 acceptance, against the fakes: a killed worker is found by the next tick and its slot returned."""
+    tracker_holds(conn)
     with (
         worker_does(sleep=60),
         in_tick(conn, ends_ok=True),
     ):
-        dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-        assert main(dispatch) == 0
+        said = overseer_calls(dispatches())
+        assert not said.error, said.text
         tick_starts()
 
     # Wait for both, in either order. `_run` records the worker's pid only after starting it, so the agent log can come

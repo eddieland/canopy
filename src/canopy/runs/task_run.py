@@ -24,27 +24,23 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import (
     agent_models,
-    attachments,
     commit_hooks,
     contract,
     conversation,
     db,
     definitions,
-    follow_ups,
     hostgit,
     plans,
     pools,
     progress,
     run_models,
     sandboxing,
-    task_tickets,
-    tasks,
 )
 from canopy.core.config import render_command
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, procs, stopping
-from canopy.runs import checkpoint, tidy
-from canopy.runs import tasks as starts
+from canopy.runs import attachments, checkpoint, follow_ups, task_tickets, tasks, tidy
+from canopy.runs import task_starts as starts
 from canopy.runs.checkpoint import SetupError
 from canopy.runtime import project_config, stdout
 
@@ -425,9 +421,11 @@ def _run_agent(
     if refused is not None:
         raise SetupError(refused)
     prompt = starts.prompt_file(Path(run.log_path)).read_text(encoding="utf-8")
-    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     runtime = ctx.config.runtime
-    command = render_command(runtime.worker_template(runtime.private_worker_cmd), prompt, snapshot, f"task:{task.id}")
+    # The prompt's fixed instructions are its agent's body, in a snapshot every task's run shares (DESIGN §13).
+    bodies, message = definitions.run_prompt(prompt, runtime.private_worker_cmd)
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config, bodies=bodies)
+    command = render_command(runtime.worker_template(runtime.private_worker_cmd), message, snapshot, f"task:{task.id}")
     argv = sandboxing.wrap(runtime, [run.repo], "worker", command.argv, snapshot)
     timeout_minutes = runtime.worker_timeout_minutes
     log.info(

@@ -1,6 +1,6 @@
 """Review replies (DESIGN §29): a PR's threads on its diff, and editing, dropping, sending, and staging its drafts.
 
-The verbs are `canopy draft`'s, through `canopy.core.drafts_manage`, so with its refusals. A send posts the text the
+The verbs are `canopy draft`'s, through `canopy.runs.drafts_manage`, so with its refusals. A send posts the text the
 page showed, named by its hash, as the operator's own words: the drafts for one PR as one comment review. A stage puts
 the same text in a pending review instead, which the operator submits on GitHub. A PR is named by its URL, an opaque
 string with slashes in it, so it is a query parameter, never a path.
@@ -12,9 +12,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Path, Query
 
-from canopy.core import contract, conversation, drafts_manage
+from canopy.core import contract, conversation
 from canopy.core.vocab import Reaction
 from canopy.infra import logs
+from canopy.runs import drafts_manage
 from canopy.serve import threads
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, RunId, not_found

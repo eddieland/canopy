@@ -34,6 +34,54 @@ test('the nav highlight slides to the item a navigation lands on', async ({ page
     await covers(highlight, nav.getByRole('link', { name: 'Tickets' }))
 })
 
+/** The names of the animations running on `locator`'s element. */
+function animations(locator: Locator): Promise<string[]> {
+    return locator.evaluate((element) =>
+        element.getAnimations().map((animation) => (animation as CSSAnimation).animationName),
+    )
+}
+
+/** Plays `locator`'s element's animations to their end. */
+async function finish(locator: Locator): Promise<void> {
+    await locator.evaluate((element) => {
+        for (const animation of element.getAnimations()) {
+            animation.finish()
+        }
+    })
+}
+
+test('a dialog floats in and out again, and under reduced motion only appears and goes', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const palette = page.getByRole('dialog', { name: 'Jump to a ticket' })
+    // Each float is held at its first frame, so the check sees an animation that would end before it looked.
+    await page.evaluate(() => {
+        document.addEventListener('animationstart', (event) => {
+            if (event.animationName.startsWith('float-')) {
+                for (const animation of (event.target as Element).getAnimations()) {
+                    animation.pause()
+                }
+            }
+        })
+    })
+
+    await page.keyboard.press('Control+k')
+    await expect.poll(() => animations(palette)).toContain('float-in')
+    await finish(palette)
+    await page.keyboard.press('Escape')
+    // A closing dialog stays in the page while it floats out.
+    await expect.poll(() => animations(palette)).toContain('float-out')
+    await finish(palette)
+    await expect(palette).toBeHidden()
+
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.keyboard.press('Control+k')
+    await expect(palette).toBeVisible()
+    expect(await animations(palette)).toEqual([])
+    await page.keyboard.press('Escape')
+    await expect(palette).toBeHidden()
+})
+
 test('under reduced motion, counters read their values and nothing waits on an animation', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('attention')

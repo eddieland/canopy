@@ -1,12 +1,8 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { ChevronDown } from 'lucide-react'
-import { useState } from 'react'
 
-import { chooseTicketPersona } from '@/api/mutations'
-import { keys, personasQuery } from '@/api/queries'
+import { personasQuery } from '@/api/queries'
 import type { AgentPersona } from '@/api/types'
-import { Field, Fields } from '@/components/fields'
-import { Notice } from '@/components/notice'
 import { PersonaRadioItem } from '@/components/personas-menu'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,81 +13,50 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { PERSONA_SOURCES, personaText } from '@/lib/outcomes'
-
-/** A choice the menu makes: a persona's name, or null to clear the ticket's override. */
-interface Choice {
-    /** The agent the choice is for. */
-    agent: AgentPersona['agent']
-    /** The persona's name, or null to clear the override. */
-    persona: string | null
-}
+import type { PersonaChoices } from '@/hooks/use-persona-choices'
+import { PERSONA_SOURCES } from '@/lib/outcomes'
 
 /**
- * The persona each of a ticket's agents writes in at its next run (DESIGN §31), and where that comes from: a row for
- * its workers, its planner, and its reviewer, each a menu that sets the ticket's override to one of `names`, or clears
- * it, as `canopy persona KEY NAME --agent AGENT` and `--clear` do. A persona the operator chose for the agent's next
- * run alone, with `--next`, is named under it, and so are the reviewer's personas when `[personas] reviewers` has a
- * review in each. Each menu lists every persona with its description, as the review request's does (`PersonasMenu`).
+ * The persona one of a ticket's agents writes in at its next run, and where that comes from: a menu that sets the
+ * ticket's override to one of `names`, or clears it, through `choices`. A persona the operator chose for the agent's
+ * next run alone, with `--next`, is named under it, and so are the reviewer's personas when `[personas] reviewers` has
+ * a review in each. The menu lists every persona with its description, as the review request's does (`PersonasMenu`).
  * A run whose persona's file has gone is refused, not run in another voice: its row says why, in the failure color.
  */
-export function TicketPersonas({
-    ticketKey,
-    personas,
+export function PersonaChoice({
+    current,
     names,
-    className,
+    choices,
 }: {
-    ticketKey: string
-    personas: readonly AgentPersona[]
+    current: AgentPersona
     names: readonly string[]
-    className?: string
+    choices: PersonaChoices
 }) {
-    const client = useQueryClient()
-    const [said, setSaid] = useState<string | null>(null)
-    const choose = useMutation({
-        mutationFn: ({ agent, persona }: Choice) => chooseTicketPersona(ticketKey, agent, persona),
-        onSuccess: (now) => {
-            setSaid(personaText(ticketKey, now))
-            void client.invalidateQueries({ queryKey: keys.ticket(ticketKey) })
-        },
-    })
-    if (personas.length === 0) {
-        return null
-    }
     return (
-        <div className={className} data-testid="ticket-personas">
-            <Fields className="pb-1.5">
-                {personas.map((p) => (
-                    <Field key={p.agent} label={`${p.agent} persona`}>
-                        <span className="flex flex-wrap items-baseline gap-x-2">
-                            <PersonaMenu
-                                current={p}
-                                names={names}
-                                disabled={choose.isPending}
-                                onChoose={(persona) => choose.mutate({ agent: p.agent, persona })}
-                            />
-                            <span className="text-xs text-muted-foreground">{PERSONA_SOURCES[p.source]}</span>
-                        </span>
-                        {p.several.length > 0 && (
-                            <span className="block text-xs text-muted-foreground">
-                                One review each in: <span className="font-mono">{p.several.join(', ')}</span>
-                            </span>
-                        )}
-                        {p.once !== null && (
-                            <span className="block text-xs text-muted-foreground">
-                                Its next run alone: <span className="font-mono">{p.once}</span>
-                            </span>
-                        )}
-                        {p.error !== null && (
-                            <span className="block text-xs text-status-failed">Its next run is refused: {p.error}</span>
-                        )}
-                    </Field>
-                ))}
-            </Fields>
-            <Notice error={choose.error} className="px-3 pb-3">
-                {said}
-            </Notice>
-        </div>
+        <>
+            <span className="flex flex-wrap items-baseline gap-x-2">
+                <PersonaMenu
+                    current={current}
+                    names={names}
+                    disabled={choices.pending}
+                    onChoose={(persona) => choices.choose(current.agent, persona)}
+                />
+                <span className="text-xs text-muted-foreground">{PERSONA_SOURCES[current.source]}</span>
+            </span>
+            {current.several.length > 0 && (
+                <span className="block text-xs text-muted-foreground">
+                    One review each in: <span className="font-mono">{current.several.join(', ')}</span>
+                </span>
+            )}
+            {current.once !== null && (
+                <span className="block text-xs text-muted-foreground">
+                    Its next run alone: <span className="font-mono">{current.once}</span>
+                </span>
+            )}
+            {current.error !== null && (
+                <span className="block text-xs text-status-failed">Its next run is refused: {current.error}</span>
+            )}
+        </>
     )
 }
 

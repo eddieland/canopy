@@ -16,11 +16,18 @@ from tests.canopy.helpers import (
     KEY,
     LABEL,
     QUESTION,
+    READ_PR,
     planner_does,
     present,
+    raises,
     waits,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, raises, sets_phase
+from tests.canopy.scenario_helpers import (
+    Scenario,
+    dispatches,
+    pushes,
+    sets_phase,
+)
 from tests.conftest import GitPool
 
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
@@ -37,14 +44,8 @@ def test_under_approve_a_dry_run_tick_dispatches_a_plan_for_a_ready_ticket(scena
     scenario.configures("workspace", policy={"plan": "approve"})
     scenario.seen()
     ticked = scenario.tick(PLAN, sets_phase(KEY, Phase.READY), dry_run=True)
-    assert plan_of(scenario) == {
-        "needed": True,
-        "attempts": 0,
-        "limit": 3,
-        "newest": None,
-        "changes_asked": False,
-        "blocked": False,
-    }
+    # No plan yet: the block leaves out its null `newest`.
+    assert plan_of(scenario) == {"needed": True, "attempts": 0, "limit": 3, "changes_asked": False, "blocked": False}
     assert [(d.action, d.rationale) for d in ticked.decisions[1:]] == [
         ("dispatch:plan", f"dry run: not dispatched; would plan {KEY} over repo; label {LABEL}"),
     ]
@@ -52,6 +53,14 @@ def test_under_approve_a_dry_run_tick_dispatches_a_plan_for_a_ready_ticket(scena
 
 def test_a_ticket_plans_do_not_touch_has_no_plan_in_the_state_block(scenario: Scenario) -> None:
     scenario.seen()
+    scenario.tick(*waits(KEY), dry_run=True)
+    assert "plan" not in scenario.ticket_state()
+
+
+def test_a_ticket_with_a_branch_has_no_plan_in_the_state_block(scenario: Scenario, git_pool: GitPool) -> None:
+    # Started before plans were wanted: a started ticket is never planned, so its plan decides nothing.
+    scenario.run(dispatches(), worker=pushes(prs={"repo": READ_PR}))
+    scenario.configures("workspace", policy={"plan": "approve"})
     scenario.tick(*waits(KEY), dry_run=True)
     assert "plan" not in scenario.ticket_state()
 

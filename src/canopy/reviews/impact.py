@@ -9,7 +9,8 @@ commit has a `high` review comes first.
 
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable
+import fnmatch
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -75,16 +76,19 @@ def paths_for(repo: Repo | None) -> tuple[str, ...]:
 def matched(entries: Iterable[str], changed: Iterable[str]) -> Match | None:
     """The first of `changed`, in order, that one of `entries` covers.
 
-    An entry covers the path it names and everything under it, compared by whole components: `.agents/` and `.agents`
-    both cover `.agents/x.md`, and neither `.agentsrc`. There are no globs.
+    An entry covers the paths it matches and everything under them, compared by whole components: `.agents/` and
+    `.agents` both cover `.agents/x.md`, and neither `.agentsrc`. Within a component `*` matches any run of characters
+    and `?` one; a component `**` matches any number of components, none included, so `**/OWNERS` covers `OWNERS` and
+    `services/billing/OWNERS`, and `services/*/migrations/` covers `services/billing/migrations/0001.py`.
 
     Returns:
         The path and the entry that covers it, or None when no entry covers any of `changed`.
     """
-    bases = [(entry, entry.removesuffix("/")) for entry in entries]
+    patterns = [(entry, entry.removesuffix("/").split("/")) for entry in entries]
     for path in sorted(changed):
-        for entry, base in bases:
-            if path == base or path.startswith(f"{base}/"):
+        components = path.split("/")
+        for entry, parts in patterns:
+            if _covers(parts, components):
                 return Match(path, entry)
     return None
 
@@ -103,12 +107,11 @@ def high(conn: sqlite3.Connection, tickets: Collection[str], prs: Collection[str
     runs: dict[int, records.ReviewRun] = {}
     for named in (sql.in_("ticket_key", tickets), sql.in_("pr_url", prs)):
         query = (
-            sql.select("*")
-            .from_("review_runs")
+            records.select(records.ReviewRun)
             .where("{}", named)
             .where("revises IS NULL AND status = ?", ReviewRunStatus.DONE)
         )
-        runs.update((run.id, run) for run in records.fetch_all(conn, records.ReviewRun, query))
+        runs.update((run.id, run) for run in query.all(conn))
     latest: dict[str, str] = {}
     found_prs: set[str] = set()
     found_tickets: set[str] = set()
@@ -122,3 +125,18 @@ def high(conn: sqlite3.Connection, tickets: Collection[str], prs: Collection[str
         if run.ticket_key is not None and run.ticket_key in tickets:
             found_tickets.add(run.ticket_key)
     return High(frozenset(found_prs), frozenset(found_tickets))
+
+
+def _covers(parts: Sequence[str], components: Sequence[str]) -> bool:
+    # Walks the parts once, keeping every count of components they can have matched so far, so a pattern with many
+    # wildcards costs parts times components, never the backtracking of one regular expression over the whole path.
+    # Any count left at the end is a prefix the pattern matches, and an entry covers everything under what it matches.
+    reached = {0}
+    for part in parts:
+        if part == "**":
+            reached = set(range(min(reached), len(components) + 1))
+        else:
+            reached = {n + 1 for n in reached if n < len(components) and fnmatch.fnmatchcase(components[n], part)}
+        if not reached:
+            return False
+    return True

@@ -10,12 +10,12 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import gc_passes, run_models
+from canopy.core import cards, gc_passes, run_models
 from canopy.core.run_models import Due
 from canopy.core.vocab import ModelsRead
 from canopy.runtime import transcript
 from canopy.serve.backend import Backend
-from tests.canopy.web_helpers import client
+from tests.canopy.web_helpers import client, signed_in
 
 
 def test_a_run_page_is_the_run_as_the_runs_list_shows_it(backend: Backend) -> None:
@@ -86,6 +86,18 @@ def test_a_running_run_shows_its_latest_tool_call(backend: Backend) -> None:
     runs = {r["id"]: r for r in client(None, backend).get("/api/runs").json()}
     assert runs[41]["activity"] == {"tool": "bash", "did": "npm test -- login", "at": "2026-10-08T12:27:00Z"}
     assert runs[39]["activity"] is None  # ended: its result says what it did
+
+
+def test_a_running_run_shows_its_card_whether_stale_by_its_calls_and_when_it_goes_stale_by_time(
+    backend: Backend,
+) -> None:
+    runs = {r["id"]: r for r in client(None, backend).get("/api/runs").json()}
+    fresh, stale = runs[41]["card"], runs[43]["card"]
+    assert (fresh["now"], fresh["at"], fresh["calls_since"]) == ("running the login tests", "2026-10-08T12:24:00Z", 3)
+    assert fresh["done"] == [{"step": "add the SSO callback", "proof": "tests pass: 12/12"}]
+    assert (fresh["stale"], fresh["stale_at"]) == (False, "2026-10-08T12:34:00Z")
+    assert (stale["stale"], stale["calls_since"]) == (True, 26)  # past `cards.STALE_CALLS`
+    assert runs[39]["card"] is None  # it kept none
 
 
 def test_only_the_recorded_sessions_events_are_shown(backend: Backend) -> None:
@@ -359,3 +371,30 @@ def test_a_file_retention_removed_says_after_how_many_days(backend: Backend) -> 
     with backend.open() as ctx:
         ctx.conn.execute("DELETE FROM gc_passes")
     assert c.get("/api/runs/39/transcript").json()["removed_after_days"] is None
+
+
+def test_a_running_runs_card_asks_its_question_and_the_operator_answers_it_by_letter(backend: Backend) -> None:
+    c = client(None, backend)
+    question = c.get("/api/runs/41").json()["card"]["question"]
+    assert question["options"][1] == "hide the form behind a link"
+    assert (question["recommend"], question["asked_at"], question["answer"]) == ("B", "2026-10-08T12:24:00Z", None)
+    asked = question["asked_at"]
+    headers = signed_in(c)
+
+    refused = c.post("/api/runs/41/answers", json={"letter": "D", "asked_at": asked}, headers=headers)
+    assert (refused.status_code, refused.json()["detail"]["guard"]) == (409, "bad_answer")
+    moved = c.post("/api/runs/41/answers", json={"letter": "A", "asked_at": "2026-10-08T12:00:00Z"}, headers=headers)
+    assert moved.json()["detail"]["guard"] == "moved_on"  # the page showed another question
+
+    answered = c.post("/api/runs/41/answers", json={"letter": "b", "asked_at": asked}, headers=headers).json()
+    assert answered == {"letter": "B", "option": "hide the form behind a link", "already": False, "heard": False}
+    assert c.get("/api/runs/41").json()["card"]["question"]["answer"] == "B"
+    # Once its answers directory is there, as while its agent runs, the answer is written where the agent hears it.
+    with backend.open() as ctx:
+        answers = cards.answers_dir(ctx.state_dir, "41")
+    cards.make_answers(answers)
+    again = c.post("/api/runs/41/answers", json={"letter": "B", "asked_at": asked}, headers=headers).json()
+    assert (again["already"], again["heard"]) == (True, True)
+    assert json.loads((answers / cards.ANSWER_FILE).read_text())["letter"] == "B"
+    ended = c.post("/api/runs/39/answers", json={"letter": "A", "asked_at": asked}, headers=headers)
+    assert ended.json()["detail"]["guard"] == "ended"

@@ -11,7 +11,7 @@ from unittest import mock
 import pytest
 
 from canopy.infra import procs
-from canopy.runtime.agents import AgentOffer, ServerOffer
+from canopy.runtime.agents import AgentOffer, ServerOffer, SkillFile
 from canopy.runtime.opencode2 import offerings
 from canopy.runtime.opencode2.offerings import matches
 
@@ -197,6 +197,26 @@ def test_each_agent_is_offered_what_its_merged_rules_leave_it() -> None:
     asked = [argv[-1] for argv, _, _ in serve.ran[1:]]
     assert asked == ["agent.list"] * 3 + ["skill.list", "config.get"]
     assert all(e == env for _, _, e in serve.ran)
+
+
+def test_the_skills_are_listed_as_the_server_read_them_once_canopy_s_agents_load() -> None:
+    files = [
+        {"id": "terse", "name": "terse", "path": "/ws/.opencode/skills/terse/SKILL.md", "content": "Be brief.\n"},
+        {
+            "id": "audit",
+            "name": "audit",
+            "description": "Check the books.",
+            "path": "/defs/skills/a/SKILL.md",
+            "content": "x",
+        },
+    ]
+    serve = Serve({"canopy-worker": []}, skills=files, loading=2)
+    found = offerings.skills(serve, cwd=Path("/ws"), definitions_dir=Path("/defs"), agents=["canopy-worker"])
+    assert found.files == (
+        SkillFile("audit", "Check the books.", "/defs/skills/a/SKILL.md", "x"),
+        SkillFile("terse", None, "/ws/.opencode/skills/terse/SKILL.md", "Be brief.\n"),
+    )
+    assert serve.loading == 0  # asked only once the agents had loaded
 
 
 def test_what_opencode_prints_past_a_pipes_buffer_is_read() -> None:

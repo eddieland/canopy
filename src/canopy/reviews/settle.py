@@ -1,6 +1,6 @@
 """When a PR's head commit may be reviewed: once it has been seen for `review.settle_minutes` (DESIGN §21, Settling).
 
-The clock starts the first time the overseer asks `canopy review run` for a head, which it does once the head's checks
+The clock starts the first time the overseer asks the `review-run` tool for a head, which it does once the head's checks
 pass. A push is a new head and starts over, so a PR pushed to again and again is reviewed once it goes quiet, not at
 every commit. A dry run reads the clock but never starts it (D036).
 """

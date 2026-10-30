@@ -14,7 +14,7 @@ from typing import override
 
 import click
 
-from canopy.cli.common import Group, Obj
+from canopy.cli.common import Obj
 from canopy.core import config, db
 from canopy.infra import procs
 
@@ -57,14 +57,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "memory": ("memory", "memory_group"),
     "config": ("settings", "config_group"),
     "draft": ("drafts", "draft_group"),
-    "dispatch": ("runs", "cmd_dispatch"),
     "_run": ("runs", "cmd_run"),
     "task": ("tasks", "task_group"),
     "_task": ("runs", "cmd_task"),
-    "decide": ("journal", "cmd_decide"),
-    "queried": ("journal", "cmd_queried"),
-    "attention": ("journal", "cmd_attention"),
-    "ticket": ("journal", "ticket_group"),
     "workspace": ("workspace", "workspace_group"),
     "chore": ("chores", "chore_group"),
     "_chore": ("chores", "cmd_chore_process"),
@@ -75,7 +70,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
 }
 
 
-class LazyGroup(Group):
+class LazyGroup(click.Group):
     """The root group: it lists every command in COMMANDS and imports one's module when click first looks it up.
 
     `--help` and shell completion look up every command, so they import them all; running one imports only its own.

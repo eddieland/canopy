@@ -56,11 +56,13 @@ under it splits the month into canopy's runs and the sessions outside canopy, th
 `canopy loop` last read the runtime's record. It reads it between ticks, so with the loop stopped your own sessions
 wait to be counted, and the month can look thriftier than it is. The bar fills with the budget spent, and the mark
 across it is how far through the month you are, so a bar past its mark is spending faster than the budget allows. It
-reads **On budget**, then **Headed over** once the pace passes the budget, then **Over budget**. The pace waits for the
-month's first day to end, since one morning's runs would otherwise forecast something dramatic. Nothing stops at the
-budget: it's a number to watch, not a brake. A [sink](slack#choosing-what-it-hears) that takes `loop` events hears
-once when the month reaches it, and again only if you raise the budget and the month reaches that too. The message
-splits the month the same way, canopy's runs and outside canopy, and says when your own sessions were last read.
+reads **On budget**, then **Headed over** once the pace passes the budget, then **Over budget**, and the wallet in the
+[header](overview#the-header) wears the same in its color on every page, so you needn't come here to check. The pace
+waits for the month's first day to end, since one morning's runs would otherwise forecast something dramatic. Nothing
+stops at the budget: it's a number to watch, not a brake. A [sink](slack#choosing-what-it-hears) that takes `loop`
+events hears once when the month reaches it, and again only if you raise the budget and the month reaches that too. The
+message splits the month the same way, canopy's runs and outside canopy, and says when your own sessions were last
+read.
 
 Want a heads-up before the bill, not after? Add alerts at other percentages of the budget, `50, 80` say, or `150` for
 when the month really gets away from you. Each is sent once a month, as the spend reaches it, and the ones short of the
@@ -101,12 +103,23 @@ rail's. Then:
   hasn't read yet sit last as **none**, with what they reported costing, and the header says how much of the table
   that is (`43% not yet attributed`), since a big **none** quietly flatters every model above it. Each run's session
   is read as it ends, and the loop reads the stragglers while it waits between ticks, so **none** is mostly runs from
-  before canopy read models, and it shrinks while the loop idles. Click a model to see
-  [its runs](runs#the-runs-page). This is the table to read before and after you canary a model.
+  before canopy read models, and it shrinks while the loop idles. Click a model to see [its runs](runs#the-runs-page),
+  of the kind the table shows, or of every kind under **all**. The overseer's models aren't links: the runs page lists
+  ticks apart, under Ticks, and not by model. This is the table to read before and after you change a model in your
+  config.
 - **By tool**: which tools put the most into the runs' context, by the characters their calls returned, every kind
   summed or one kind's, with the same filter. Every later model call of the run reads those again, so a chatty tool
   costs more than once. The filters stay put when you switch the window, so you can watch the workers' `bash` habit
   across a month without picking it again.
+- **First calls by week**: how much of each kind's first model call the cache served, a bar per week, Monday to
+  Sunday on canopy's clock. That first call carries the prefix every run of the kind starts with, so a warm cache
+  makes it cheap, and a bar that drops is a prefix the cache no longer recognizes. The usual suspects get a rule
+  before their week and a line under the chart: a runtime version, or a definitions snapshot (canopy's prompts and
+  agent definitions, as a run loaded them), that the week's runs used and the week before's did not. A dip with no
+  rule beside it is your cue to look elsewhere. Pick the kind in the header, then **all runs**, one chore, or one
+  model under it; runs that more than one model served stay in **all runs**. The table holds each week's runs and
+  median first call. The 7 days hold one or two weeks, which is not much of a trend, so pick **30 days**; it's what
+  `canopy spend --days 30` prints, by week.
 - **Every session**: every session the runtime keeps that started in the window, in any directory: **canopy's
   runs**, a subagent's counted with the session it ran for, and **outside canopy**, then where those ran, the
   costliest directory first. Another workspace's canopy counts as outside, since its runs are in another journal. The

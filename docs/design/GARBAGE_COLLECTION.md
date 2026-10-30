@@ -6,31 +6,29 @@ keeps. Sections are numbered across the whole design; the [README](README.md) ha
 
 ## 26. Garbage collection
 
-Built: `canopy gc --dry-run`, `[retention]`, the loop's pass over files and the journal, with `canopy.log`'s rotation,
-`canopy gc --vacuum`, `canopy gc --git`, and `canopy gc --caches`. Until the rest lands, canopy removes only what the
-table's third column says, and §6, §11, §12, §18, and §22 describe canopy as it is; this section says what changes.
+All of it is built but one row: the pass removes no memory text yet, though `canopy gc --dry-run` counts it (§28).
 
 ### What grows
 
-| What | Grows by | Removed today | Removed by M47 |
-| --- | --- | --- | --- |
-| `runs/<id>.log`, `.prompt`, and `<id>.<repo>.diff`, `.head` under `approve` (§29) | one set per worker run | after `run_files_days`; a plan run's prompt never | unchanged |
-| `ticks/<id>.log`, `.prompt` | one pair per tick | after `tick_files_days` (a tick not `ok`: `run_files_days`) | unchanged |
-| `chore-runs/<name>/<id>.log`, `.prompt` | one pair per chore run | after `run_files_days` | unchanged |
-| `reviews/<id>.log`, `.prompt`, `.diff` | one set per review run | after `run_files_days` | unchanged |
-| Any of those with no journal row | a review run that never started | after an hour | unchanged |
-| `canopy.log` | every log line of every canopy process | rotated past `log_max_mib` | unchanged |
-| Attention items the harness raised | each open item, every tick | outside the window (below) | unchanged |
-| Connector runs and derivations (§30) | each tick, and each of M39's polls | outside the window (below) | unchanged |
-| Check runs a `vcs` source keeps (§7) | each completed check run of a PR | once off its PR's head (below) | unchanged |
-| Free pages and the WAL in the journal | deletes, and checkpoints held back by readers | checkpointed each pass; `canopy gc --vacuum` | unchanged |
-| Loose objects and packs in a primary clone | every worker's fetches and commits | never (`gc.auto=0`) | `canopy gc --git` (below) |
-| `$XDG_CACHE_HOME/canopy/sandbox/<role>/` | every sandboxed run's tool caches | never | `canopy gc --caches` |
-| A run's lock, object directory, desk, and review checkout | one per run | when the run ends, or by reconcile | unchanged |
-| `runtime/<digest>/` | one per definitions change | by reconcile when no run is live (§13) | unchanged |
-| `plan-exports/<digest>.json`, what an export last found as it stands (§25) | a line per plan, per destination | never | unchanged |
-| Notification events | each event | after 7 days once every sink has passed them (§20) | unchanged |
-| Agent memory's notes and proposals no longer in force (§28) | each one replaced, dropped, or retired | never; `canopy memory forget` and `purge` delete its text | text deleted after `memory_days`, the row kept |
+| What | Grows by | Removed |
+| --- | --- | --- |
+| `runs/<id>.log`, `.prompt`, and `<id>.<repo>.diff`, `.head` under `approve` (§29) | one set per worker run | after `run_files_days`; a plan run's prompt never |
+| `ticks/<id>.log`, `.prompt` | one pair per tick | after `tick_files_days` (a tick not `ok`: `run_files_days`) |
+| `chore-runs/<name>/<id>.log`, `.prompt` | one pair per chore run | after `run_files_days` |
+| `reviews/<id>.log`, `.prompt`, `.diff` | one set per review run | after `run_files_days` |
+| Any of those with no journal row | a review run that never started | after an hour |
+| `canopy.log` | every log line of every canopy process | rotated past `log_max_mib` |
+| Attention items the harness raised | each open item, every tick | outside the window (below) |
+| Connector runs and derivations (§30) | each tick, and each of the loop's polls (§6) | outside the window (below) |
+| Check runs a `vcs` source keeps (§7) | each completed check run of a PR | once off its PR's head (below) |
+| Free pages and the WAL in the journal | deletes, and checkpoints held back by readers | checkpointed each pass; `canopy gc --vacuum` |
+| Loose objects and packs in a primary clone | every worker's fetches and commits | by hand, `canopy gc --git` (below) |
+| `$XDG_CACHE_HOME/canopy/sandbox/<role>/` | every sandboxed run's tool caches | by hand, `canopy gc --caches` |
+| A run's lock, object directory, desk, and review checkout | one per run | when the run ends, or by reconcile |
+| `runtime/<digest>/` | one per definitions change | by reconcile when no run is live (§13) |
+| `plan-exports/<digest>.json`, what an export last found as it stands (§25) | a line per plan, per destination | never |
+| Notification events | each event | after 7 days once every sink has passed them (§20) |
+| Agent memory's notes and proposals no longer in force (§28) | each one replaced, dropped, or retired | text after `memory_days`, the row kept (not yet built); `canopy memory forget` and `purge` delete it |
 
 ### What it never removes
 

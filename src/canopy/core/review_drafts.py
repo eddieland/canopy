@@ -41,7 +41,7 @@ MAX_COMMENTS = MAX_DRAFTS
 HASH_CHARS = 12
 #: The purpose of a review of one of the loop's own PRs (DESIGN §21), which has no draft.
 OWN = "own"
-_DRAFTS = sql.select("*").from_("review_drafts")
+_DRAFTS = records.select(records.ReviewDraft)
 
 
 @dataclass(frozen=True)
@@ -122,18 +122,18 @@ def draftable(conn: sqlite3.Connection, run: records.ReviewRun) -> bool:
 
 def of_review(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | None:
     """Return review run `run_id`'s draft, or None."""
-    return records.fetch_one(conn, records.ReviewDraft, _DRAFTS.where("review_run_id = ?", run_id))
+    return _DRAFTS.where("review_run_id = ?", run_id).one(conn)
 
 
 def of_reviews(conn: sqlite3.Connection, run_ids: Collection[int]) -> dict[int, records.ReviewDraft]:
     """Return the drafts of those of review runs `run_ids` that have one, by run id."""
-    found = records.fetch_all(conn, records.ReviewDraft, _DRAFTS.where_in("review_run_id", run_ids))
+    found = _DRAFTS.where_in("review_run_id", run_ids).all(conn)
     return {draft.review_run_id: draft for draft in found}
 
 
 def get(conn: sqlite3.Connection, draft_id: int) -> records.ReviewDraft | None:
     """Return draft `draft_id`, or None."""
-    return records.fetch_one(conn, records.ReviewDraft, _DRAFTS.where("id = ?", draft_id))
+    return _DRAFTS.where("id = ?", draft_id).one(conn)
 
 
 def newest(conn: sqlite3.Connection, draft_id: int) -> Version:
@@ -145,14 +145,12 @@ def newest(conn: sqlite3.Connection, draft_id: int) -> Version:
     Raises:
         LookupError: The draft has no version, which `make` never leaves.
     """
-    found = records.fetch_one(
-        conn,
-        records.ReviewDraftVersion,
-        sql.select("*")
-        .from_("review_draft_versions")
+    found = (
+        records.select(records.ReviewDraftVersion)
         .where("draft_id = ?", draft_id)
         .order_by("version DESC")
-        .limit(1),
+        .limit(1)
+        .one(conn)
     )
     if found is None:
         raise LookupError(f"review draft {draft_id} has no version")
@@ -167,11 +165,10 @@ def versions(conn: sqlite3.Connection, draft_id: int) -> list[Version]:
     """
     return [
         _version(v)
-        for v in records.fetch_all(
-            conn,
-            records.ReviewDraftVersion,
-            sql.select("*").from_("review_draft_versions").where("draft_id = ?", draft_id).order_by("version"),
-        )
+        for v in records.select(records.ReviewDraftVersion)
+        .where("draft_id = ?", draft_id)
+        .order_by("version")
+        .all(conn)
     ]
 
 
@@ -328,17 +325,14 @@ def _make(conn: sqlite3.Connection, run_id: int) -> records.ReviewDraft | None:
     stored = review_result.stored(run.result_json)
     if stored is None:
         return None
-    cursor = sql.execute(
-        conn,
-        sql.insert(
-            "review_drafts",
-            review_run_id=run.id,
-            pr_url=run.pr_url,
-            sha=run.sha,
-            status=ReviewDraftStatus.WAITING,
-            created_at=db.now(),
-        ),
-    )
+    cursor = records.insert(
+        records.ReviewDraft,
+        review_run_id=run.id,
+        pr_url=run.pr_url,
+        sha=run.sha,
+        status=ReviewDraftStatus.WAITING,
+        created_at=db.now(),
+    ).run(conn)
     draft_id = int(cursor.lastrowid or 0)
     body, comments, refused = _first(stored, review_runs.review_dismissals(conn, run.id), diff_of(run))
     change = f"made from review run {run.id}'s body and findings"
@@ -454,21 +448,18 @@ def _insert_version(
     refused: Sequence[str],
 ) -> None:
     stored = [{**c.posted(), **({"finding": c.finding} if c.finding is not None else {})} for c in comments]
-    sql.execute(
-        conn,
-        sql.insert(
-            "review_draft_versions",
-            draft_id=draft_id,
-            version=number,
-            body=body,
-            comments=json.dumps(stored),
-            author=author,
-            channel=channel,
-            change=change,
-            refused=json.dumps(list(refused)),
-            created_at=db.now(),
-        ),
-    )
+    records.insert(
+        records.ReviewDraftVersion,
+        draft_id=draft_id,
+        version=number,
+        body=body,
+        comments=json.dumps(stored),
+        author=author,
+        channel=channel,
+        change=change,
+        refused=json.dumps(list(refused)),
+        created_at=db.now(),
+    ).run(conn)
 
 
 def _version(row: records.ReviewDraftVersion) -> Version:

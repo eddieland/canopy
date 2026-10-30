@@ -364,8 +364,9 @@ export function startOf(entries: TranscriptEntry[]): string | null {
 
 /**
  * What a tool call did, on one line: a shell call's command, since its title is only what the agent said it was
- * for; else a `decide` call's decisions, each its ticket and action (`ABC-1 wait, ABC-2 done`); else the runtime's
- * title; else its input's short values as `key=value`, as `{"repo": "web", "pullNumber": 88}` reads
+ * for; else a `decide` call's decisions, each its ticket and action (`ABC-1 wait, ABC-2 done`); else a `ticket-set`
+ * call's settings, each its ticket and what it sets (`ABC-1 approved, ABC-2 (web) merged done, ABC-3 cursors`); else
+ * the runtime's title; else its input's short values as `key=value`, as `{"repo": "web", "pullNumber": 88}` reads
  * `repo=web pullNumber=88`. Empty when the input has none, or was cut and no longer parses.
  */
 export function summary(entry: TranscriptTool): string {
@@ -378,6 +379,13 @@ export function summary(entry: TranscriptTool): string {
     if (decisions !== null) {
         return decisions
             .map((d) => `${d.key ?? THIS_TICK} ${d.action}`)
+            .join(', ')
+            .slice(0, MAX_LINE)
+    }
+    const settings = settingsIn(input)
+    if (settings !== null) {
+        return settings
+            .map((s) => `${settingSubject(s)} ${settingSets(s).join(' ')}`)
             .join(', ')
             .slice(0, MAX_LINE)
     }
@@ -447,6 +455,101 @@ function decisionsIn(input: Record<string, unknown> | null): CallDecision[] | nu
         })
     }
     return decisions
+}
+
+/** One ticket's, or unit's, setting a call to canopy's `ticket-set` tool records, as its input names it. */
+export interface CallSetting {
+    /** The ticket. */
+    key: string
+    /** The unit's repository, or null for the ticket, or its one unit. */
+    repo: string | null
+    /** The phase set, or null for none. */
+    phase: string | null
+    /** The cursors advanced, each its name and the newest item handled, in the order given. */
+    cursors: readonly (readonly [string, string])[]
+    /** Whether it marks the ticket done. */
+    done: boolean
+    /** The ticket's short name, or null for none. */
+    title: string | null
+}
+
+/** What a setting is about, as canopy names a unit: `ABC-1`, or `ABC-1 (web)`. */
+export function settingSubject(setting: CallSetting): string {
+    return setting.repo === null ? setting.key : `${setting.key} (${setting.repo})`
+}
+
+/** What a setting sets, each a word: its phase, `done`, `cursors`, `title`; `nothing` when it sets none of them. */
+export function settingSets(setting: CallSetting): string[] {
+    const sets = [
+        ...(setting.phase === null ? [] : [setting.phase]),
+        ...(setting.done ? ['done'] : []),
+        ...(setting.cursors.length > 0 ? ['cursors'] : []),
+        ...(setting.title === null ? [] : ['title']),
+    ]
+    return sets.length > 0 ? sets : ['nothing']
+}
+
+/**
+ * The settings a call to canopy's `ticket-set` tool records, read from its input, in the order given: one, or several
+ * recorded together. Null for any other call, or an input cut short that no longer parses. The CLI's
+ * `canopy ticket set` is a shell call, whose command says them.
+ */
+export function settingsOf(entry: TranscriptTool): CallSetting[] | null {
+    return settingsIn(parsed(entry.input))
+}
+
+// The fields a `ticket-set` setting may hold; an item with any other is some other tool's.
+const SETTING_FIELDS = new Set(['key', 'repo', 'phase', 'cursors', 'done', 'title'])
+
+// An input's `tickets`, when it is a list of objects each naming its ticket and holding only a setting's fields, as
+// only `ticket-set`'s is. A field left out may be null, as the tool takes it.
+function settingsIn(input: Record<string, unknown> | null): CallSetting[] | null {
+    const items = input?.['tickets']
+    if (!Array.isArray(items) || items.length === 0) {
+        return null
+    }
+    const settings: CallSetting[] = []
+    for (const item of items as unknown[]) {
+        if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+            return null
+        }
+        const fields = item as Record<string, unknown>
+        if (!Object.keys(fields).every((name) => SETTING_FIELDS.has(name))) {
+            return null
+        }
+        const { key, repo, phase, cursors, done, title } = fields
+        const pairs = cursorsIn(cursors)
+        if (typeof key !== 'string' || pairs === null) {
+            return null
+        }
+        settings.push({
+            key,
+            repo: typeof repo === 'string' && repo !== '' ? repo : null,
+            phase: typeof phase === 'string' && phase !== '' ? phase : null,
+            cursors: pairs,
+            done: done === true,
+            title: typeof title === 'string' ? title : null,
+        })
+    }
+    return settings
+}
+
+// A setting's cursors as pairs, in the order given: none when left out, or null when they are not names to strings.
+function cursorsIn(cursors: unknown): [string, string][] | null {
+    if (cursors === undefined || cursors === null) {
+        return []
+    }
+    if (typeof cursors !== 'object' || Array.isArray(cursors)) {
+        return null
+    }
+    const pairs: [string, string][] = []
+    for (const [name, value] of Object.entries(cursors)) {
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            return null
+        }
+        pairs.push([name, String(value)])
+    }
+    return pairs
 }
 
 /** How a tool call ended: `refused` and `failed` say why, from the harness's own words when it was a canopy command. */

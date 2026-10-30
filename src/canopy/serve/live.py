@@ -27,8 +27,9 @@ from contextlib import ExitStack, contextmanager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import sql, tasks
+from canopy.core import sql
 from canopy.infra import logs
+from canopy.runs import tasks
 from canopy.serve import chore_views, reviews, spend_views, task_views, tick_views, views
 from canopy.serve.schema.event import (
     AttentionUpdated,
@@ -297,5 +298,8 @@ def _snapshot(ctx: Context) -> Iterator[None]:
     sql.execute(ctx.conn, sql.frag("COMMIT"))
 
 
-def _costs(spend: Spend) -> tuple[float | None, float | None, float | None]:
-    return spend.day.cost_usd, spend.month.cost_usd, spend.total_usd
+# The month's budget and alerts count too, so a budget set or changed reaches the header before the next cost does.
+def _costs(spend: Spend) -> tuple[object, ...]:
+    budget = spend.budget
+    month = None if budget is None else (budget.month, budget.budget_usd, budget.spent_usd, tuple(budget.alerts))
+    return spend.day.cost_usd, spend.month.cost_usd, spend.total_usd, month

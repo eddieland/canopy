@@ -10,8 +10,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 
-from canopy.core import contract, conversation, review_requests
+from canopy.core import contract, conversation
 from canopy.infra import logs
+from canopy.reviews import review_requests
 from canopy.serve import pull_requests
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, not_found
@@ -114,26 +115,45 @@ def grant(url: PrUrl, backend: BackendDep) -> Granted:
     responses={**REFUSED, **_BAD_URL},
 )
 def start(url: PrUrl, backend: BackendDep, body: ReviewRequestBody | None = None) -> ReviewRequested:
-    """`canopy start URL --review --notes TEXT --persona NAME`: review a PR the loop does not own, once, at its head.
+    """`canopy start URL --review --notes TEXT --persona NAME --model M`: review a PR the loop does not own, once.
 
-    It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in, its reviewer
-    given the notes, once in each persona chosen (DESIGN §21, §31). Notes or personas on a PR already requested replace
-    its request's. Refused as the CLI refuses it: `reviews_off`, `bad_notes`, `unknown_persona`, `bad_persona`,
-    `bad_pr`, and `loop_pr`.
+    It reviews nothing now: the next tick does, at the PR's head, in whichever of the workspace's repositories the PR
+    is in, its reviewer given the notes, once in each persona chosen, on the model chosen (DESIGN §13, §21, §31). Notes,
+    personas, or a model on a PR already requested replace its request's. Refused as the CLI refuses it:
+    `reviews_off`, `bad_notes`, `unknown_persona`, `bad_persona`, `bad_pr`, `loop_pr`, `no_reviewer`,
+    `unknown_model`, and `model_list_failed`.
     """
     ref = _pr_ref(url, "start")
     notes = body.notes if body is not None else None
     chosen = body.personas if body is not None else []
+    model = body.model if body is not None else None
     with backend.open() as ctx:
         try:
-            requested = review_requests.request(ctx.conn, ctx.config, ref, channel=WEB, notes=notes, chosen=chosen)
+            requested = review_requests.request(
+                ctx.conn,
+                ctx.config,
+                ref,
+                channel=WEB,
+                notes=notes,
+                chosen=chosen,
+                model=model,
+                # The backend's list carries the variants whether or not the model names one.
+                listing=lambda _variants: backend.model_list_for(ctx, model),
+            )
         except conversation.Refused as r:
             raise RefusedError(r) from None
         shown = pull_requests.review_request(ctx.conn, requested.request)
     noted = requested.request.notes is not None
     _log.info(
         "review requested",
-        extra={"pr": ref.id, "already": requested.already, "notes": noted, "personas": chosen, "channel": WEB},
+        extra={
+            "pr": ref.id,
+            "already": requested.already,
+            "notes": noted,
+            "personas": chosen,
+            "model": model,
+            "channel": WEB,
+        },
     )
     return ReviewRequested(request=shown, already=requested.already)
 

@@ -102,9 +102,10 @@ test('Enter sends a reply and Shift+Enter starts a new line', async ({ page }) =
     await box.press('Enter')
     await expect(form.getByRole('status')).toContainText('Recorded message')
     await expect(box).toHaveValue('')
-    // toContainText collapses whitespace, so read the text itself: the line break must arrive as one.
+    // toContainText collapses whitespace, so read the text as drawn: the line break must arrive as one.
     const mine = page.getByTestId('conversation').locator('[data-source=operator]').filter({ hasText: 'Second line.' })
-    await expect.poll(() => mine.textContent()).toContain('First line.\nSecond line.')
+    // oxlint-disable-next-line unicorn/prefer-dom-node-text-content -- the text as drawn is the point: a <br> is a line
+    await expect.poll(() => mine.innerText()).toContain('First line.\nSecond line.')
 })
 
 // One story, so no other test in this file sees the finding gone from the list while it is dismissed.
@@ -193,6 +194,13 @@ test('the settings page saves a limit and drops a trusted reviewer, but raises n
     await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
     await form.getByTestId('config-discard').click()
     await expect(workers).toHaveValue(before)
+    // A choice moves only toward stricter: one looser than the value in force is not offered, and picking the value
+    // back leaves nothing to save.
+    await expect(form.getByTestId('policy.planner_may_approve-lenient')).toBeDisabled()
+    await form.getByTestId('policy.plan-approve').click()
+    await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
+    await form.getByTestId('policy.plan-off').click()
+    await expect(form.getByTestId('config-pending')).toHaveText('No unsaved changes')
     await workers.fill('many')
     await expect(form.getByRole('alert')).toHaveText('capacity.max_workers: a whole number')
     await expect(form.getByTestId('config-save')).toBeDisabled()
@@ -277,7 +285,7 @@ test('forget asks for the key typed out, then forgets the branch and PR', async 
     await expect(thread.getByTestId('forgotten')).toContainText('dropped branch agent/ABC-103-billing-v2, acme/web#91')
     await expect(thread.getByRole('link', { name: 'acme/web#91', exact: true })).toBeVisible()
     await expect(earlier).toHaveCount(0)
-    await thread.getByRole('button', { name: 'Show 3 earlier messages' }).click()
+    await thread.getByRole('button', { name: 'Show 6 earlier messages' }).click()
     await expect(earlier).toBeVisible()
 })
 
@@ -532,7 +540,7 @@ test('a ticket at its attempt limit is granted one more run from its page, as ca
 
 test("a ticket's worker persona is chosen from its page and cleared, as canopy persona does", async ({ page }) => {
     await page.goto('tickets/ABC-104')
-    const personas = page.getByTestId('ticket-personas')
+    const personas = page.getByTestId('ticket-agents')
     await expect(personas).toContainText("canopy's default")
     await personas.getByRole('button', { name: 'worker persona: canopy' }).click()
     await page.getByRole('menuitemradio', { name: 'minimalist' }).click()
@@ -553,15 +561,16 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
     page,
 }) => {
     await page.goto('tickets/ABC-104')
-    const models = page.getByTestId('ticket-models')
+    const models = page.getByTestId('ticket-agents')
     const worker = models.getByTestId('ticket-model').first()
     await models.getByRole('button', { name: 'worker model: runtime default' }).click()
     // The mock's runtime lists the models its runs' sessions name, under their providers; the default is pinned
     // above them as a state, not a choice.
     const list = page.getByRole('listbox', { name: 'Models' })
     await expect(list.getByRole('option', { name: 'runtime default nothing sets one' })).toBeDisabled()
-    const first = list.getByRole('option', { name: /^[\w.-]+\/[\w.:@/+-]+$/u }).first()
-    const model = (await first.textContent()) ?? ''
+    // A model with variants is named at its default; the mock's every model has some.
+    const first = list.getByRole('option', { name: /^[\w.-]+\/[\w.:/+-]+ \(default\)$/u }).first()
+    const model = ((await first.getAttribute('aria-label')) ?? '').replace(/ \(default\)$/u, '')
     await first.click()
     // Confirmed in the worker's row, in place.
     await expect(worker.getByRole('status')).toHaveText(
@@ -584,9 +593,10 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
     await models.getByRole('button', { name: `worker model: ${model}@high` }).click()
     await page.getByRole('combobox', { name: 'Find a model for the worker' }).fill('no such model')
     await expect(list.getByText('no model has that name')).toBeVisible()
-    await page.getByRole('option', { name: 'Clear the override' }).click()
+    // Below the list, whatever is typed in it.
+    await page.getByRole('button', { name: 'Clear the override' }).click()
     await expect(worker.getByRole('status')).toHaveText(
-        "saved: ABC-104's worker runs use the runtime's default from their next run: nothing sets one.",
+        "cleared: ABC-104's worker runs use the runtime's default from their next run: nothing sets one.",
     )
     await expect(models.getByRole('button', { name: 'worker model: runtime default' })).toBeVisible()
 })
@@ -714,6 +724,34 @@ test('a long conversation scrolled away from its end stays put as a message arri
     // The reply's `ticket.changed` refetches the ticket, which can still be in the handler when the page closes and
     // disposes its response: drop it, since it comes after everything this test checks.
     await page.unrouteAll({ behavior: 'ignoreErrors' })
+})
+
+test("R opens Review a PR from any page, which requests a review and lands on the PR's page", async ({ page }) => {
+    const pr = 'https://github.com/acme/web/pull/121'
+    await page.goto('runs')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
+    await page.keyboard.press('r')
+    const dialog = page.getByRole('dialog', { name: 'Review a PR' })
+    await expect(dialog.getByLabel('PR URL')).toBeFocused()
+    await page.keyboard.type(pr)
+    await dialog.getByLabel('Notes for the reviewer (optional)').fill('The retry loop is the part that worries me')
+    await dialog.getByLabel('Notes for the reviewer (optional)').press('Enter')
+    await expect(dialog).toBeHidden()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#121')
+    const request = page.getByTestId('review-request')
+    await expect(request.getByTestId('review-request-notes')).toContainText('The retry loop')
+
+    // On the PR's page, R fills in its URL. One of the loop's own PRs is refused, and the dialog stays open.
+    await page.keyboard.press('r')
+    await expect(dialog.getByLabel('PR URL')).toHaveValue(pr)
+    await dialog.getByLabel('PR URL').fill('https://github.com/acme/web/pull/88')
+    await dialog.getByTestId('review-request-submit').click()
+    await expect(dialog.getByRole('alert')).toContainText('refused (loop_pr)')
+    await page.keyboard.press('Escape')
+    await expect(dialog).toBeHidden()
+    // Stopped, so a run of this test again starts from no open request.
+    await request.getByTestId('review-request-stop').click()
+    await expect(request).toContainText('Your review request ended')
 })
 
 test("a coworker's PR is requested from the reviews page and stopped from its own, as the CLI does", async ({
@@ -910,7 +948,8 @@ test("a ticket's note is promoted from its page for one repository, and the less
     await expect(forget).toBeDisabled()
     await challenge.getByLabel(`Type memory:${id} to confirm`).fill(`memory:${id}`)
     await forget.click()
-    await expect(page.getByTestId('memory-lessons').getByRole('status')).toHaveText(
+    // The mock journal changes as the forget checkpoints, so the status may add that a reader held the log open.
+    await expect(page.getByTestId('memory-lessons').getByRole('status')).toContainText(
         `Memory ${id} (lesson export-encoding) is forgotten: its text is deleted.`,
     )
     await expect(lesson).toHaveCount(0)
@@ -952,7 +991,7 @@ test('a lesson is edited from the memory page, and its versions keep the old wor
     const challenge = old.getByRole('form', { name: 'Forget memory:8' })
     await challenge.getByLabel('Type memory:8 to confirm').fill('memory:8')
     await challenge.getByRole('button', { name: 'Forget memory:8' }).click()
-    await expect(said).toHaveText('Memory 8 (lesson billing-client) is forgotten: its text is deleted.')
+    await expect(said).toContainText('Memory 8 (lesson billing-client) is forgotten: its text is deleted.')
     await expect(old).toContainText('text deleted')
     await expect(edited).toContainText('Billing goes through src/billing/client.ts, v2 included.')
 })

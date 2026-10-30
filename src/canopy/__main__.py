@@ -1,4 +1,4 @@
-"""`python -m canopy`: how `canopy dispatch` starts `canopy _run` without depending on PATH."""
+"""`python -m canopy`: how a tick starts `canopy _run`, and the runtime `canopy _mcp`, without depending on PATH."""
 
 import sys
 

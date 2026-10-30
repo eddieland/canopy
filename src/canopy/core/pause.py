@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import db, sql
+from canopy.core import db, records, sql
 
 if TYPE_CHECKING:
     import sqlite3
@@ -44,9 +44,12 @@ def pause(conn: sqlite3.Connection, *, channel: str) -> bool:
     Returns:
         Whether it was already paused, which keeps the first pause's time and channel.
     """
-    cur = sql.execute(
-        conn,
-        sql.insert("pause", id=sql.frag("1"), paused_at=db.now(), channel=channel).on_conflict("(id) DO NOTHING"),
+    cur = (
+        records.insert(records.Pause, id=sql.frag("1"), paused_at=db.now(), channel=channel)
+        .on_conflict(
+            "(id) DO NOTHING",
+        )
+        .run(conn)
     )
     return cur.rowcount == 0
 
@@ -57,4 +60,4 @@ def resume(conn: sqlite3.Connection) -> bool:
     Returns:
         Whether the loop was already running.
     """
-    return sql.execute(conn, sql.delete("pause").where("id = 1")).rowcount == 0
+    return records.delete(records.Pause).where("id = 1").run(conn).rowcount == 0

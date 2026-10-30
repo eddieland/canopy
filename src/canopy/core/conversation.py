@@ -16,6 +16,7 @@ agent writes and no agent's prompt carries.
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import hashlib
 import os
 import re
@@ -25,6 +26,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 from canopy.core import (
+    cards,
     chore_runs,
     chore_view,
     contract,
@@ -44,6 +46,7 @@ from canopy.infra import lock
 from canopy.infra.text import printable, quoted
 
 if TYPE_CHECKING:
+    from datetime import datetime
     from pathlib import Path
 
     from canopy.core.config import Chore, Config
@@ -104,7 +107,7 @@ _REASONS = ", ".join(f"`{r}`" for r in DismissalReason)
 #: A one-off task the operator submitted (DESIGN §36), `task:N`.
 TASK = "task"
 # The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review`, `stop`, and
-# `persona` (a review request and its persona, `core/review_requests.py`), and `show`; working one is PR-scoped work
+# `persona` (a review request and its persona, `reviews/review_requests.py`), and `show`; working one is PR-scoped work
 # (ROADMAP M14).
 VERBS: Mapping[str, tuple[str, ...]] = {
     TICKET: (
@@ -122,13 +125,14 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     ),
     PR: ("grant", "start", "stop", "show", "persona"),
     CHORE: ("reply", "dismiss", "show"),
-    RUN: ("show",),
+    # A running run's reply answers the question it asks you (DESIGN §41).
+    RUN: ("show", "reply"),
     # `canopy review show ID` shows one; a reference to it serves to dismiss its findings, or send some to a worker
     # (DESIGN §21), to mark it seen, as that show and its page do (§22), and to note what a revision of its draft should
     # change, or grant its draft more revisions (§34).
     REVIEW: ("dismiss", "send", "seen", "reply", "grant"),
     # Submitted with `canopy task submit`; a reply queues its next run, and stopping one ends it, and drops it while it
-    # waits (DESIGN §36). A ticket's or a task's attachments are text its runs read (§22, `core/attachments.py`).
+    # waits (DESIGN §36). A ticket's or a task's attachments are text its runs read (§22, `runs/attachments.py`).
     TASK: ("stop", "reply", "show", "attach", "detach"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
@@ -209,6 +213,17 @@ def check_verb(ref: Ref, verb: str) -> None:
     if ref.kind == PR:
         raise Refused("unsupported", _PR_WORK.format(ref=ref))
     raise Refused("unsupported", f"{ref} is a {ref.kind}, which takes only {', '.join(verbs)}")
+
+
+def is_operator(environ: Mapping[str, str] | None = None) -> bool:
+    """Whether this runs outside canopy's own ticks and runs, as the operator's commands do (`check_operator`).
+
+    Returns:
+        False when CANOPY_TICK_ID or CANOPY_RUN_ID is set in `environ`, or in the process's environment when `environ`
+        is None; else True.
+    """
+    env = os.environ if environ is None else environ
+    return not any(env.get(name) for name in (TICK_ID_ENV, RUN_ID_ENV))
 
 
 def check_operator(environ: Mapping[str, str] | None = None) -> None:
@@ -397,6 +412,9 @@ def reply(
     if ref.kind == REVIEW:
         # A reply on a review is a note on its draft, a journal fact of the draft's (`review_drafts_manage.note`).
         raise Refused("unsupported", f"a note on {ref}'s draft is recorded with the draft, not as a message")
+    if ref.kind == RUN:
+        # A reply on a running run answers the question it asks (`answer`), a fact of the run's, not a message.
+        raise Refused("unsupported", f"a reply on {ref} answers the question it asks you, and is recorded on the run")
     if ref.kind == TASK:
         # A task's guards are in core, as its submission's are: a reply authorizes its next run (TRUST_MODEL T1).
         check_operator()
@@ -416,6 +434,64 @@ def reply(
         if built is not None:
             db.record_event(conn, built)
         return replied
+
+
+def answer(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    body: str,
+    *,
+    state_dir: Path,
+    asked_at: datetime | None = None,
+) -> cards.Answered:
+    """Record the operator's answer to the question a running run asks, and pass it to the agent (DESIGN §41).
+
+    `ref` names a worker's or a planner's run, `run:ID`, or a review's, `review:ID`; `body` is the letter of one of the
+    question's options, in either case. With `asked_at`, when the question the operator was shown was asked, an
+    update that asks another since is refused. Once recorded, the answer is written to the run's answers directory in
+    `state_dir`, where canopy's plugin tells the agent on its next tool call, in the same transaction, so the answer
+    it hears last is the one recorded last; again for an answer already recorded, in case the first write found the
+    directory gone.
+
+    Returns:
+        What was answered, whether the question already had this answer, and whether the agent can hear it.
+
+    Raises:
+        Refused: `unsupported` for a subject that is neither, `unknown` for a run canopy has no record of, `ended` for
+            one no longer running, `no_question` for one that asks none, `moved_on` for one that asks another
+            question than the one asked at `asked_at`, `bad_answer` for a body that is not the letter of one of
+            its options.
+    """
+    if ref.kind not in (RUN, REVIEW):
+        raise Refused("unsupported", f"{ref} is a {ref.kind}; a question is asked by a run, run:ID or review:ID")
+    check_operator()
+    table: cards.CardTable = "runs" if ref.kind == RUN else "review_runs"
+    run_id = int(ref.id)
+    with db.transaction(conn):
+        row = records.select(records.Run if ref.kind == RUN else records.ReviewRun).where("id = ?", run_id).one(conn)
+        if row is None:
+            raise Refused("unknown", f"canopy has no record of {ref}")
+        if row.status not in (RunStatus.RUNNING, ReviewRunStatus.RUNNING):
+            raise Refused("ended", f"{ref} has ended ({row.status}); its agent can no longer hear an answer")
+        standing = cards.of(row)
+        question = standing.card.question if standing.card is not None else None
+        if question is None or standing.asked_at is None:
+            raise Refused("no_question", f"{ref} asks you no question")
+        if asked_at is not None and asked_at != standing.asked_at:
+            raise Refused("moved_on", f"{ref} asks you another question now: read it again before you answer")
+        letters = cards.LETTERS[: len(question.options)]
+        letter = next((x for x in letters if x == body.strip().upper()), None)
+        option = question.option(letter) if letter is not None else None
+        if letter is None or option is None:
+            raise Refused("bad_answer", f"answer {ref} with one of {', '.join(letters)}: the options it gives")
+        already = standing.answer == letter
+        if not already and not cards.record_answer(conn, table, run_id, letter, standing.asked_at):
+            raise Refused("no_question", f"{ref} asks you no question")
+        answered = cards.Answered(question, standing.asked_at, letter, option, already=already, heard=False)
+        run = f"review-{run_id}" if ref.kind == REVIEW else str(run_id)
+        # Delivered while the transaction holds the journal's write lock, so two answers at once reach the agent in the
+        # order they were recorded, and the one it hears last is the one the journal keeps.
+        return dataclasses.replace(answered, heard=cards.deliver(cards.answers_dir(state_dir, run), answered))
 
 
 def write_reply(
@@ -845,15 +921,13 @@ def latest_question(conn: sqlite3.Connection, key: str) -> records.Message | Non
 
     A question asked before the operator forgot the ticket's work waits on nothing.
     """
-    row = records.fetch_one(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    row = (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ?", TICKET, key)
         .where("kind = 'question' AND id > ?", db.forgotten_message_id(conn, key))
         .order_by("id DESC")
-        .limit(1),
+        .limit(1)
+        .one(conn)
     )
     if row is None or any(answers_questions(m) for m in operator_messages_after(conn, key, row.id)):
         return None
@@ -871,14 +945,12 @@ def answers_questions(message: records.Message) -> bool:
 
 def task_question(conn: sqlite3.Connection, task_id: int) -> records.Message | None:
     """Return task `task_id`'s latest question if no operator message came after it, else None (DESIGN §36)."""
-    row = records.fetch_one(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    row = (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND kind = 'question'", TASK, str(task_id))
         .order_by("id DESC")
-        .limit(1),
+        .limit(1)
+        .one(conn)
     )
     if row is None:
         return None
@@ -933,13 +1005,11 @@ def stopped(conn: sqlite3.Connection) -> list[str]:
 
 def operator_messages_after(conn: sqlite3.Connection, key: str, after: int) -> list[records.Message]:
     """Return a ticket's operator messages newer than message id `after`, oldest first."""
-    return records.fetch_all(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    return (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?", TICKET, key, after)
-        .order_by("id"),
+        .order_by("id")
+        .all(conn)
     )
 
 
@@ -1087,15 +1157,13 @@ def prompt_operator_messages(
     comments = {m.id: m for m in authorized if m.id > forgotten}
     if not has_operator_messages(conn, key) and not comments:
         return None
-    rows = records.fetch_all(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    rows = (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, forgotten)
         .where("source = 'operator' OR kind = 'question'")
         .order_by("id DESC")
-        .limit(PROMPT_MESSAGES),
+        .limit(PROMPT_MESSAGES)
+        .all(conn)
     )
     latest = sorted({**{m.id: m for m in rows}, **comments}.values(), key=lambda m: m.id)[-PROMPT_MESSAGES:]
     return _bounded([_prompt_message(m, authority=m.id in comments) for m in latest])
@@ -1111,16 +1179,14 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str | None:
     Returns:
         The messages; None, which leaves the prompt's section out, when there are none.
     """
-    rows = records.fetch_all(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    rows = (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND id > ?", TICKET, key, db.forgotten_message_id(conn, key))
         .where("source != ?", CANOPY)
         .where("run_id IS NULL OR run_id NOT IN (SELECT id FROM runs WHERE kind = ?)", RunKind.NEEDS_PLAN)
         .order_by("id DESC")
-        .limit(PROMPT_MESSAGES),
+        .limit(PROMPT_MESSAGES)
+        .all(conn)
     )
     return _bounded([_prompt_message(m) for m in reversed(rows)])
 
@@ -1166,14 +1232,12 @@ def prompt_task_conversation(conn: sqlite3.Connection, task_id: int, up_to: int 
     """
     if up_to is None:
         return None
-    rows = records.fetch_all(
-        conn,
-        records.Message,
-        sql.select("*")
-        .from_("messages")
+    rows = (
+        records.select(records.Message)
         .where("subject_kind = ? AND subject_id = ? AND id <= ?", TASK, str(task_id), up_to)
         .order_by("id DESC")
-        .limit(PROMPT_MESSAGES),
+        .limit(PROMPT_MESSAGES)
+        .all(conn)
     )
     return _bounded([_prompt_message(m) for m in reversed(rows)])
 

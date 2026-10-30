@@ -20,6 +20,8 @@ import {
     pretty,
     runTokens,
     sentTokens,
+    settingSets,
+    settingsOf,
     shownOutput,
     signed,
     startOf,
@@ -189,6 +191,20 @@ describe('summary', () => {
         expect(summary(tool('completed', { input: tickWide }))).toBe('this tick skip')
     })
 
+    it("is a ticket-set call's settings, each its ticket or unit and what it sets, over any title", () => {
+        const tickets = [
+            { key: 'ABC-1', phase: 'approved' },
+            { key: 'ABC-2', repo: 'web', phase: 'merged', done: true },
+            { key: 'ABC-3', cursors: { comment: '12' }, title: 'Fix login' },
+        ]
+        const call = tool('completed', {
+            tool: 'canopy_ticket-set',
+            title: 'ticket-set',
+            input: JSON.stringify({ tickets }),
+        })
+        expect(summary(call)).toBe('ABC-1 approved, ABC-2 (web) merged done, ABC-3 cursors title')
+    })
+
     it('is empty for an input with nothing short, or one cut short', () => {
         expect(summary(tool('completed', { input: '{"fields": []}' }))).toBe('')
         expect(summary(tool('completed', { input: '{"command": "np' }))).toBe('')
@@ -219,6 +235,56 @@ describe('decisionsOf', () => {
         expect(decisionsOf(tool('completed', { input: '{"decisions": ["ABC-1 wait"]}' }))).toBeNull()
         expect(decisionsOf(tool('completed', { input: '{"decisions": [{"key": "ABC-1"}]}' }))).toBeNull()
         expect(decisionsOf(tool('completed', { input: '{"decisions": [{"key": "ABC-1", "act' }))).toBeNull()
+    })
+})
+
+describe('settingsOf', () => {
+    it("reads a ticket-set call's settings in order, a field left out or null as none", () => {
+        const input = JSON.stringify({
+            tickets: [
+                { key: 'ABC-2', repo: 'web', phase: 'merged', cursors: { review: '4', ci: '9' }, done: true },
+                { key: 'ABC-1', repo: null, phase: null, cursors: null, done: null, title: 'Fix login' },
+            ],
+        })
+        expect(settingsOf(tool('completed', { input }))).toEqual([
+            {
+                key: 'ABC-2',
+                repo: 'web',
+                phase: 'merged',
+                cursors: [
+                    ['review', '4'],
+                    ['ci', '9'],
+                ],
+                done: true,
+                title: null,
+            },
+            { key: 'ABC-1', repo: null, phase: null, cursors: [], done: false, title: 'Fix login' },
+        ])
+    })
+
+    it('is null for any other call, a list that is not settings, or an input cut short', () => {
+        expect(settingsOf(shell('canopy ticket set ABC-1 --phase approved', 'updated ABC-1'))).toBeNull()
+        expect(settingsOf(tool('completed', { input: '{"tickets": []}' }))).toBeNull()
+        expect(settingsOf(tool('completed', { input: '{"tickets": ["ABC-1"]}' }))).toBeNull()
+        expect(settingsOf(tool('completed', { input: '{"tickets": [{"phase": "approved"}]}' }))).toBeNull()
+        expect(settingsOf(tool('completed', { input: '{"tickets": [{"key": "ABC-1", "summary": "x"}]}' }))).toBeNull()
+        expect(
+            settingsOf(tool('completed', { input: '{"tickets": [{"key": "ABC-1", "cursors": ["ci"]}]}' })),
+        ).toBeNull()
+        expect(settingsOf(tool('completed', { input: '{"tickets": [{"key": "ABC-1", "pha' }))).toBeNull()
+    })
+})
+
+describe('settingSets', () => {
+    it('names what a setting sets, or nothing', () => {
+        const none = { key: 'ABC-1', repo: null, phase: null, cursors: [], done: false, title: null }
+        expect(settingSets(none)).toEqual(['nothing'])
+        expect(settingSets({ ...none, phase: 'merged', done: true, cursors: [['ci', '9']], title: 'x' })).toEqual([
+            'merged',
+            'done',
+            'cursors',
+            'title',
+        ])
     })
 })
 

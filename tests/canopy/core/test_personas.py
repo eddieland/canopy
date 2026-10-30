@@ -30,7 +30,7 @@ AGENTS = ["plan", "reviewer", "implement", "implement-private", "resume", "resum
 PERSONA = "## Persona\n\n"
 #: The values a plan's prompt needs beyond a worker's.
 PLAN_VALUES = {
-    "AUTHORIZATION": prompts.plan_authorization("PROJ-1", ["agent-ready-alice"], private=False),
+    "AUTHORIZATION": prompts.plan_authorization(["agent-ready-alice"], private=False),
     "PLAN_FILE": ".canopy-plan.md",
     "PLAN_OUT": ".canopy-new-plan.md",
     "MAX_PLAN_CHARS": "100,000",

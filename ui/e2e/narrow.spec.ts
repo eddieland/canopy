@@ -261,3 +261,85 @@ function sideways(page: Page): Promise<{ window: number; page: number }> {
         }
     })
 }
+
+// A model id as long as a gateway in front of a provider makes one, at a variant.
+const LONG = 'openrouter/anthropic/claude-opus-4.1-20250805-preview'
+
+for (const width of [1720, 1280]) {
+    test(`a ticket's long model ids are cut to their rows at ${width}px, and its picker scrolls nothing`, async ({
+        page,
+    }) => {
+        await page.setViewportSize({ width, height: 1000 })
+        const served = await longModels(page)
+        await page.goto('tickets/ABC-102')
+        await settled(page)
+        const agents = page.getByTestId('ticket-agents')
+        const worker = agents.getByRole('button', { name: `worker model: ${LONG}@high` })
+        // The whole id on hover, which the ellipsis hides.
+        await expect(worker).toHaveAttribute('title', `${LONG}@high`)
+        // Nothing reaches past the grid's edge but what an ellipsis cuts.
+        expect(await agents.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0)
+        // Each agent's model level with its persona, in one grid, once the rows have taken their places.
+        const persona = agents.getByRole('button', { name: /^worker persona: /u })
+        await expect
+            .poll(async () =>
+                Math.abs(((await persona.boundingBox())?.y ?? 0) - ((await worker.boundingBox())?.y ?? 0)),
+            )
+            .toBeLessThan(1)
+
+        await worker.click()
+        const list = page.getByRole('listbox', { name: 'Models' })
+        await expect(list.getByRole('option', { name: `${LONG}@high` })).toHaveCount(2)
+        expect(await sideways(page)).toEqual({ window: 0, page: 0 })
+
+        // A choice saved is said in its row, in place, so the panel under it stays where it was.
+        const runs = page.getByTestId('ticket-runs')
+        const before = (await runs.boundingBox())?.y
+        await list.getByRole('option', { name: `${LONG} (default)` }).click()
+        await expect(agents.getByRole('status')).toContainText(`saved: ABC-102's worker runs use ${LONG}`)
+        expect(served.chosen).toBe(LONG)
+        expect((await runs.boundingBox())?.y).toBe(before)
+        // And the focus is back on the trigger the choice was made from.
+        await expect(agents.getByRole('button', { name: `worker model: ${LONG}` })).toBeFocused()
+        await page.unrouteAll({ behavior: 'ignoreErrors' })
+    })
+}
+
+/**
+ * Serves ABC-102 with its worker and planner on `LONG`, the worker at `@high`, which served them last, and a runtime
+ * that lists it; a choice of the worker's model is answered as saved, and the ticket read after it says so. Gives the
+ * model chosen last.
+ */
+async function longModels(page: Page): Promise<{ chosen: string | null }> {
+    const served: { chosen: string | null } = { chosen: null }
+    await page.route('**/api/models', (route) =>
+        route.fulfill({ json: { models: [LONG], variants: { [LONG]: ['high'] }, error: null } }),
+    )
+    await page.route('**/api/tickets/ABC-102/models', async (route) => {
+        served.chosen = (route.request().postDataJSON() as { model: string | null }).model
+        await route.fulfill({ json: agentModel('worker', served.chosen) })
+    })
+    await page.route('**/api/tickets/ABC-102', async (route) => {
+        const response = await route.fetch()
+        const detail = (await response.json()) as Record<string, unknown>
+        const models = [
+            agentModel('worker', served.chosen ?? `${LONG}@high`),
+            agentModel('planner', LONG),
+            agentModel('reviewer', null),
+        ]
+        await route.fulfill({ response, json: { ...detail, models } })
+    })
+    return served
+}
+
+/** An agent's model as the server sends it: an override when it names one, which `LONG` served last. */
+function agentModel(agent: string, model: string | null) {
+    return {
+        agent,
+        model,
+        source: model === null ? 'default' : 'ticket',
+        variant: model?.endsWith('@high') === true ? 'high' : null,
+        dropped_variant: null,
+        last_served: LONG,
+    }
+}

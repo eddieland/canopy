@@ -19,7 +19,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db, definitions, run_models, workspace
+from canopy.core import cards, config, db, definitions, prompts, run_models, workspace
 from canopy.core.vocab import RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
@@ -29,11 +29,13 @@ from tests.canopy.helpers import (
     agent_runs,
     commit_and_push,
     has_deadline,
+    inline_servers,
     pool,
     present,
     private_worker_does,
     scripted,
     slot_of,
+    ticket_sets,
     tools_of,
     tools_printed,
     unit_of,
@@ -65,14 +67,22 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     assert w["cwd"] == slot_of(scenario.conn, run.id).slot_path
     # No CANOPY_TICK_ID: a worker cannot act as the overseer.
     # CANOPY_RUN_ID: the operator's commands refuse inside the run (DESIGN §22).
-    snapshot = definitions.ensure(scenario.env.state_dir, config.load(scenario.env.root))
+    # The snapshot made for the config and the prompt's fixed instructions (DESIGN §13).
+    cfg = config.load(scenario.env.root)
+    bodies, _ = definitions.run_prompt(run.prompt, cfg.runtime.worker_cmd)
+    snapshot = definitions.ensure(scenario.env.state_dir, cfg, bodies=bodies)
     # CANOPY_GIT_OBJECTS: the run's object directory, for a sandbox wrapper (DESIGN §8).
     objects = scenario.env.state_dir / "runs" / f"{run.id}.objects"
     # CANOPY_DEADLINE: the moment its timeout fires, for the clock in the snapshot (DESIGN §33).
     assert has_deadline(w, 45, before=before, after=after)
+    # canopy's `status` server, the one server of canopy's a worker is given (DESIGN §41).
+    assert inline_servers(w) == {cards.SERVER: [*cards.SERVER_COMMAND]}
     assert w["env"] == {
+        **{name: w["env"][name] for name in servers.VARIABLES},
         "CANOPY_RUN_ID": str(run.id),
         "CANOPY_GIT_OBJECTS": str(objects),
+        # Where the operator's answer to a question its card asks reaches it (DESIGN §41).
+        "CANOPY_ANSWERS": str(scenario.env.state_dir / "runs" / f"{run.id}.answers"),
         "CANOPY_DEADLINE": w["env"]["CANOPY_DEADLINE"],
         "OPENCODE_CONFIG_DIR": str(snapshot),
         # The trailers canopy's git hooks add to its commits (TRUST_MODEL T5).
@@ -82,7 +92,7 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     argv = w["argv"]
     assert isinstance(argv, list)
     assert argv[:4] == ["run", "--agent", "canopy-worker", "--title=PROJ-1 implement"]
-    assert argv[4] == run.prompt
+    assert argv[4] == prompts.split(run.prompt).message
 
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
     # Detached: the worker pushed HEAD to the branch, which started from origin/main.
@@ -101,7 +111,7 @@ def test_a_worker_inherits_no_server_its_process_was_given(scenario: Scenario) -
     with mock.patch.dict(os.environ, given):
         scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)
-    assert not set(given) & set(w["env"])
+    assert inline_servers(w).keys() == {cards.SERVER}
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -154,7 +164,7 @@ def test_the_session_title_names_the_ticket_and_its_title(
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker --title={title} {prompt}"
     scenario.configures(runtime={"worker_cmd": template})
     if title is not None:
-        scenario.overseer("ticket", "set", "PROJ-1", "--title", title)
+        scenario.overseer(ticket_sets("PROJ-1", title=title))
     scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)
     argv = w["argv"]
@@ -174,7 +184,7 @@ def test_a_worker_template_that_places_no_prompt_gets_it_on_stdin(scenario: Scen
     assert run.status == "done"
     [w] = agent_runs(scenario.agent_log)
     assert w["argv"] == ["run", "--agent", "canopy-worker", "--log-level", "INFO"]
-    assert w["stdin"] == run.prompt
+    assert w["stdin"] == prompts.split(run.prompt).message
 
 
 def test_the_worker_runs_between_the_prefix_and_the_suffix(scenario: Scenario, git_pool: GitPool) -> None:

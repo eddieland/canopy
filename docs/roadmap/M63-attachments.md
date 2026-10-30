@@ -17,7 +17,7 @@ only, on tasks and on every ticket, public ones too, with the limits as config k
   plan's copy is. TRUST_MODEL T6: on a public ticket, keeping an attachment's text off the tracker is the prompt's
   rule, as for the operator's messages.
 - **Stage 3, the web UI.** Attach and remove on a task's page and a ticket's, one file per request within the server's
-  body bound, written through `core/attachments.py`; the three limits on Settings' Limits and trust page, within
+  body bound, written through `runs/attachments.py`; the three limits on Settings' Limits and trust page, within
   their ceilings (TRUST_MODEL T8).
 - Tests with the fakes: an attachment kept operator-only and shown; each limit, a name taken, text that is not
   UTF-8, holds a NUL, or is blank, a stopped task, and an unknown ticket refused; a removed file deleted and its row

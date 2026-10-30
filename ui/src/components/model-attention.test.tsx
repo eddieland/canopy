@@ -64,7 +64,7 @@ describe('ModelAttention', () => {
         const gone = await screen.findByRole('button', {
             name: 'worker model: acme/gone-1, no longer listed; its next run is refused',
         })
-        expect(gone.title).toBe('no longer listed; its next run is refused')
+        expect(gone.title).toBe('acme/gone-1: no longer listed; its next run is refused')
         expect(screen.getByRole('button', { name: 'planner model: acme/fast-1' })).toBeTruthy()
         // Fresh from the runtime, not the list the server kept, which may still name the model gone.
         expect(read).toEqual(['/api/models?refresh=true'])

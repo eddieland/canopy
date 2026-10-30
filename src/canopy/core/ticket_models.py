@@ -5,9 +5,9 @@ An agent's next run for a ticket runs on the ticket's override for that agent, e
 `canopy model` and the ticket's page both call, refuses inside one of canopy's ticks or runs, and refuses a model the
 runtime does not list, or a variant the model does not. It is a `ticket_overrides` row of kind `model`, spelled as
 config spells a model, `provider/model` or `provider/model@variant`, which may be set before canopy has seen the
-ticket and outlasts `canopy forget`, and covers every run of its agent for the ticket until it is cleared, so a canary
-ticket stays on one model. It takes the place of config's whole model, its variant too: one naming none runs at the
-model's default. The overseer and chores work on no one ticket, so only their default reaches them.
+ticket and outlasts `canopy forget`, and covers every run of its agent for the ticket until it is cleared, so the
+ticket stays on the model it names. It takes the place of config's whole model, its variant too: one naming none
+runs at the model's default. The overseer and chores work on no one ticket, so only their default reaches them.
 """
 
 from __future__ import annotations
@@ -62,12 +62,10 @@ def agent_of(kind: str) -> Agent:
 
 def override(conn: sqlite3.Connection, ticket: str, agent: Agent) -> str | None:
     """Return the model the operator chose for `ticket`'s `agent`, or None when they chose none."""
-    found = records.fetch_one(
-        conn,
-        records.TicketOverride,
-        sql.select("*")
-        .from_("ticket_overrides")
-        .where("ticket_key = ? AND agent = ? AND kind = ?", ticket, agent, OverrideKind.MODEL),
+    found = (
+        records.select(records.TicketOverride)
+        .where("ticket_key = ? AND agent = ? AND kind = ?", ticket, agent, OverrideKind.MODEL)
+        .one(conn)
     )
     return found.value if found is not None else None
 
@@ -172,20 +170,17 @@ def choose(
         check(model, listing(agent_models.parse(model).variant is not None))
     where = "ticket_key = ? AND agent = ? AND kind = ?"
     with db.transaction(conn):
-        sql.execute(conn, sql.delete("ticket_overrides").where(where, ticket, agent, OverrideKind.MODEL))
+        records.delete(records.TicketOverride).where(where, ticket, agent, OverrideKind.MODEL).run(conn)
         if model is not None:
-            sql.execute(
-                conn,
-                sql.insert(
-                    "ticket_overrides",
-                    ticket_key=ticket,
-                    agent=agent,
-                    kind=OverrideKind.MODEL,
-                    value=model,
-                    channel=channel,
-                    set_at=db.now(),
-                ),
-            )
+            records.insert(
+                records.TicketOverride,
+                ticket_key=ticket,
+                agent=agent,
+                kind=OverrideKind.MODEL,
+                value=model,
+                channel=channel,
+                set_at=db.now(),
+            ).run(conn)
     return next(n for n in next_for(conn, config, ticket) if n.agent == agent)
 
 

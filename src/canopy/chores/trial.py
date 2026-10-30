@@ -110,7 +110,13 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
         if running is not None:
             raise RunningError(f"chore run {running['id']} of {name} is running")
         state = view.state_of(ctx.conn, name, prepared.chore)
-        run_id = chore_runs.insert_chore_run(ctx.conn, tick_id=None, chore=name, logs_dir=start.runs_dir(ctx, name))
+        run_id = chore_runs.insert_chore_run(
+            ctx.conn,
+            tick_id=None,
+            chore=name,
+            logs_dir=start.runs_dir(ctx, name),
+            model=start.asked_model(ctx.config, prepared.chore),
+        )
         run = chore_runs.get_chore_run(ctx.conn, run_id)
         if run is None:
             raise TrialError(f"chore run {run_id} vanished")

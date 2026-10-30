@@ -110,6 +110,27 @@ class CiFlaky(TypedDict):
     note: str | None
 
 
+class CiKicked(TypedDict):
+    """A `ci.kicked` event's fields: canopy force-pushed one PR's branch to rerun a check left as flaky (DESIGN §23).
+
+    It is in the `loop` group, which sinks take by default, so the operator hears of every forced push canopy makes.
+    """
+
+    ticket: str
+    run: int
+    repo: str
+    branch: str
+    #: The PR the run's result named for `repo`, or None.
+    pr: str | None
+    #: The head the kick replaced, as origin had it.
+    from_head: str
+    #: The head the kick pushed, with a lease on `from_head`.
+    to_head: str
+    #: Which of the head's kicks this was, from 1, and `trust.max_flaky_kicks`.
+    kick: int
+    limit: int
+
+
 class ChoreEnded(TypedDict):
     """A `chore.ended` event's fields."""
 
@@ -389,6 +410,40 @@ def ci_flaky(
         "note": cut(note, DETAIL_LIMIT) if note else None,
     }
     return Event(RUNS, "ci.flaky", fields)
+
+
+def ci_kicked(
+    config: Config,
+    *,
+    key: str,
+    run_id: int,
+    repo: str,
+    branch: str,
+    pr: str | None,
+    from_head: str,
+    to_head: str,
+    kick: int,
+    limit: int,
+) -> Event | None:
+    """Return the `ci.kicked` event for a forced push run `run_id` of `key` made to `branch` in `repo`, once it is made.
+
+    Returns:
+        The event, or None if no sink takes the loop's events.
+    """
+    if not config.notify.takes(LOOP):
+        return None
+    fields: CiKicked = {
+        "ticket": key,
+        "run": run_id,
+        "repo": repo,
+        "branch": branch,
+        "pr": cut(pr, DETAIL_LIMIT) if pr else None,
+        "from_head": from_head,
+        "to_head": to_head,
+        "kick": kick,
+        "limit": limit,
+    }
+    return Event(LOOP, "ci.kicked", fields)
 
 
 def chore_ended(

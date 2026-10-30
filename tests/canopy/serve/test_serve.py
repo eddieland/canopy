@@ -27,9 +27,10 @@ import uvicorn
 from pydantic import ValidationError
 from starlette.types import Message, Receive, Scope, Send
 
-from canopy.core import conversation, db, review_runs, tasks
+from canopy.core import conversation, db, review_runs
 from canopy.core.context import Context, db_path
 from canopy.infra import logs
+from canopy.runs import tasks
 from canopy.serve import live, secret, server, views
 from canopy.serve import mock as serve_mock
 from canopy.serve import options as serve_options
@@ -708,6 +709,19 @@ def test_a_review_of_a_requested_pr_starting_takes_it_off_the_requests_waiting(
     assert requested.requests == []
 
 
+def test_a_budget_changed_sends_the_spend_again_though_no_cost_did(backend: Backend) -> None:
+    with backend.open() as ctx:
+        sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
+        sent.changes(backend, ctx)
+        # Read again on the same journal, no cost has moved: nothing about the spend is sent.
+        assert not any(isinstance(e.root, SpendUpdated) for e in sent.changes(backend, ctx))
+        raised = ctx.config.model_copy(update={"spend": ctx.config.spend.model_copy(update={"monthly_budget_usd": 80})})
+        events = [e.root for e in sent.changes(backend, dataclasses.replace(ctx, config=raised))]
+    [spent] = [e for e in events if isinstance(e, SpendUpdated)]
+    assert spent.spend.budget is not None
+    assert spent.spend.budget.budget_usd == 80
+
+
 def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(backend: Backend) -> None:
     async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
         with closing(live.Stream(backend)) as opened:
@@ -1047,7 +1061,7 @@ def test_the_mock_journal_covers_every_run_state_and_message_source(ui: Path, ba
         for key in ("ABC-101", "ABC-102", "ABC-103")
         for m in c.get(f"/api/tickets/{key}").json()["messages"]
     }
-    assert sources == {"worker", "operator", "tracker"}
+    assert sources == {"worker", "operator", "tracker", "canopy"}
 
 
 def test_the_development_server_serves_mock_data_only() -> None:
@@ -1109,6 +1123,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/runs/{run_id}",
         "/api/runs/{run_id}/transcript",
         "/api/runs/{run_id}/output",
+        "/api/runs/{run_id}/answers",
         "/api/runs/{run_id}/memory",
         "/api/memory",
         "/api/memory/search",
@@ -1163,6 +1178,9 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/ticks/{tick_id}/transcript",
         "/api/ticks/{tick_id}/output",
         "/api/worktrees",
+        "/api/host",
+        "/api/host/samples",
+        "/api/host/processes",
         "/api/search",
         "/api/events",
         "/api/loop",
@@ -1171,6 +1189,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/reviews/{run_id}",
         "/api/reviews/{run_id}/transcript",
         "/api/reviews/{run_id}/output",
+        "/api/reviews/{run_id}/answers",
         "/api/reviews/{run_id}/dismissals",
         "/api/reviews/{run_id}/sends",
         "/api/reviews/{run_id}/draft/body",
@@ -1189,6 +1208,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/pull-request/threads",
         "/api/personas",
         "/api/models",
+        "/api/skills",
         "/api/runs/{run_id}/drafts/{number}/edit",
         "/api/runs/{run_id}/drafts/{number}/drop",
         "/api/drafts/send",

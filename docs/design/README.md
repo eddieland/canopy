@@ -113,12 +113,18 @@ not go in the middle of the sequence.
   - [37. The harness decides what needs no judgment](HARNESS_DECIDES.md#37-the-harness-decides-what-needs-no-judgment)
 - [Artifacts](ARTIFACTS.md): pages workers publish, the comments people leave on them, and how those come back.
   - [38. Artifacts and Louvre](ARTIFACTS.md#38-artifacts-and-louvre)
-- [A tick without the overseer](WITHOUT_THE_OVERSEER.md): the tick that runs no overseer when nothing is left to
-  judge, and the loop that ticks when the connectors see a change.
+- [A tick without the overseer](WITHOUT_THE_OVERSEER.md): what is still open of the tick that runs no overseer when
+  nothing is left to judge.
   - [39. A tick without the overseer](WITHOUT_THE_OVERSEER.md#39-a-tick-without-the-overseer)
 - [The overseer per decision](OVERSEER_PER_DECISION.md): one overseer run for each subject left to judgment, and the
   runs it asks for, which the tick starts outside its process tree.
   - [40. The overseer per decision](OVERSEER_PER_DECISION.md#40-the-overseer-per-decision)
+- [Where a running agent stands](PROGRESS.md): the progress a running worker, planner, or reviewer keeps of where its
+  work stands, for the operator.
+  - [41. Where a running agent stands](PROGRESS.md#41-where-a-running-agent-stands)
+- [The operator's checklist](CHECKLIST.md): the operator's rules no linter checks, asked of a worker's diff before
+  it finishes, and of a PR by a second review when that is not enough.
+  - [42. The operator's checklist](CHECKLIST.md#42-the-operators-checklist)
 
 ## 1. Problem
 
@@ -144,8 +150,9 @@ cannot reach internal systems and require handing a vendor write access.
 - A hosted service, a service installed with the OS, or a workflow DSL. `canopy loop` (§6) runs where the operator
   started it, in the foreground or detached by `canopy daemon`, and nothing restarts it. A listener is allowed only on
   loopback or the operator's private network, behind the operator's secret (TRUST_MODEL T8, D055); none is built yet.
-- Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
-  provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
+- Tracker-specific code. Any issue tracker with an MCP server and a connector works (§30), canopy shipping Jira's
+  and GitHub Issues'; provider differences live in config and optional provider skills (§17). A second VCS host is
+  likewise a prompt and config concern, not code.
 - A sandbox the harness knows about. Sandboxing is an opt-in prefix on the command templates (§24), which canopy adds
   itself only for the repositories the operator lists; beyond that, the harness never learns whether a run is
   sandboxed (D118).
@@ -156,7 +163,7 @@ cannot reach internal systems and require handing a vendor write access.
    treehouse owns worktrees and leases. The SQLite journal owns facts about the loop: what it saw, decided,
    dispatched, and what came back. What it saw is an observation, a dated copy of a world fact (§30), never the fact
    itself: an action that matters rests on one observed within `connect.max_age_minutes`, or no dispatch (§7), and a
-   subject no source observes is re-read live. Drift is then a stale cache, not a correctness bug.
+   stale one waits for the next whole read (§37). Drift is then a stale cache, not a correctness bug.
 2. **Policy in prompts, guards in code.** What to do about a ticket is decided
    by the overseer prompt. What the loop may never do (exceed capacity, run two
    workers on one ticket, merge, retry forever) is enforced by the harness.
@@ -166,8 +173,9 @@ cannot reach internal systems and require handing a vendor write access.
 4. **Deterministic core, judgment at the edges.** Python never calls an LLM.
    The overseer and workers are agent processes the harness runs and observes.
 5. **Connectivity through the agent runtime.** The tracker (Jira, GitHub Issues, Linear, anything with an MCP server)
-   and GitHub are reached via the runtime's MCP servers. The harness contains no tracker or VCS host code and never
-   handles their credentials. It knows the tracker only as the strings in `[tracker]`.
+   and GitHub are reached via the runtime's MCP servers, and read into the journal by connectors, separate programs
+   (§30). The harness contains no tracker or VCS host code and never handles their credentials. It knows the tracker
+   only as the strings in `[tracker]`.
 6. **Smallest surface that works.** Five install steps. Coworkers' daily surface is labels, ticket comments, and PR
    review. The operator's is the web UI `canopy loop` serves (§22): one attention list, the runs, and every ticket's
    conversation, with the CLI's verbs for the same.
@@ -175,23 +183,25 @@ cannot reach internal systems and require handing a vendor write access.
 ## 5. Components
 
 The harness is one Python package, `canopy`, in layered subpackages (D041). Top to bottom: `__main__`; `cli`; `loop`;
-the features, `runs`, `setup`, `chores`, `notify`, `reviews`, `memory`, and `serve`; `core`; `runtime`; `infra`. A
+`serve`; the features, `runs`, `setup`, `chores`, `notify`, `reviews`, and `memory`; `core`; `runtime`; `infra`. A
 module imports from its own package and lower layers only. Features never import each other; what two share moves down
-a layer. `tests/canopy/test_layers.py` enforces this and fails on a module outside the packages it lists.
+to `core`, and what only `cli`, `loop`, or `serve` read of a feature stays in it. `tests/canopy/test_layers.py`
+enforces this and fails on a module outside the packages it lists.
 
 ```text
 canopy (harness, Python)
   __main__.py  python -m canopy, how dispatch starts _run from the same installation
   cli/         the command line; only cli imports click, and only __main__ imports cli
   loop/        the tick (§6) and canopy loop, which drive the features below; the state block; the attention list;
-               the overseer's verbs, which its commands and its MCP server share (§27)
+               the overseer's verbs, which its MCP server serves as tools (§27)
+  serve/       the web UI's server (§22, D079), above the features it shows; the only package that imports fastapi,
+               starlette, uvicorn, or anyio
   runs/        worker runs on tickets (§8) and the operator's tasks (§36): guards, leases, the detached _run and
                _task, reconcile
   chores/      the operator's recurring chores (§19)
   notify/      notification sinks (§20)
   reviews/     adversarial reviews of PRs (§21)
   memory/      agent memory's feature (§28): proposals' expiry and its attention items
-  serve/       the web UI's server (§22, D079); the only package that imports fastapi, starlette, uvicorn, or anyio
   setup/       canopy init, the sandbox's setup, and workspace sync (§18, §24)
   core/        what every feature shares: config, the Context, the journal and its typed rows, vocabularies, contracts,
                conversations, pools
@@ -208,8 +218,9 @@ skills/          tracker-<provider>/: optional per-tracker guides (§17)
 operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessions (§13); agent runs never load it
 migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands, such as the Slack sink
-                 (§20) and the sandbox wrapper (§24); canopy-http, the HTTP client those programs share (D130); and
-                 the review bench, a dev tool canopy neither ships nor runs
+                 (§20) and the sandbox wrapper (§24); canopy-http, the HTTP client those programs share (D130);
+                 canopy-mcp, the MCP protocol canopy's servers share (D124); and the review bench, a dev tool canopy
+                 neither ships nor runs
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 ```
 
@@ -231,12 +242,12 @@ Where later work goes:
 
 Roles:
 
-- **Harness**: schedules, locks, guards, journals, renders. Runs the overseer once per tick and workers on demand.
-- **Overseer**: an agent run with `overseer_cmd`. Reads the world from the state block's observations, and through MCP
-  only about a subject they leave stale or unobserved (§30), decides one next action per ticket, and acts only through
-  `canopy dispatch`, `canopy decide`, `canopy queried`, `canopy attention`, `canopy chore run`, `canopy chore wait`
-  (§19), `canopy review run`, and `canopy review wait` (§21). Read-only everywhere else. What it owes every tick is
-  checked when it ends (§6 step 5).
+- **Harness**: schedules, locks, guards, journals, renders. Runs the overseer on a tick that leaves it something to
+  judge (§6), and workers on demand.
+- **Overseer**: an agent run with `overseer_cmd`. Reads the world from the state block's observations alone (§30),
+  decides one next action per ticket, and acts only through canopy's tools (§27): `dispatch`, `decide`, `attention`,
+  `ticket-set`, `chore-run` and `chore-wait` (§19), and `review-run`, `review-wait`, `review-end`, and `review-revise`
+  (§21, §34). Read-only everywhere else. What it owes every tick is checked when it ends (§6 step 5).
 - **Worker**: an agent run with `worker_cmd` in a leased worktree with a task prompt. Writes code, pushes a branch,
   opens or updates a PR, comments on the ticket, prints a result line, exits. Never merges, approves, or moves a ticket
   to Done. A private ticket's worker runs with `private_worker_cmd` and writes nothing to the ticket (§22).

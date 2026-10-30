@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, personas, plan_threads, plans, records, sql
+from canopy.core import db, personas, plan_threads, plans, records
 from canopy.core.vocab import PlanStatus, RunKind
 from canopy.serve.schema.persona import RunPersona
 from canopy.serve.schema.plan import PlanFile, PlanReplyView, PlanSummary, PlanThreadView, TicketPlans
@@ -75,7 +75,7 @@ def run_persona(ctx: Context, run_id: int) -> RunPersona | None:
     Returns:
         The persona, or None for a run from before canopy recorded one.
     """
-    run = records.fetch_one(ctx.conn, records.Run, sql.select("*").from_("runs").where("id = ?", run_id))
+    run = records.select(records.Run).where("id = ?", run_id).one(ctx.conn)
     if run is None or run.persona is None or run.persona_digest is None:
         return None
     kept = db.persona_text(ctx.conn, run.persona_digest)

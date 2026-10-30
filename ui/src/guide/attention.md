@@ -17,9 +17,11 @@ stopped at lunch is a timestamp, not a verdict.
 The loop rebuilds the list at the end of every tick, so an item leaves when its cause is gone: the question answered,
 the PR merged, the failed ticket granted another run and dispatched. An item about a PR waiting on its reviewer or a
 plan waiting on you leaves only when a fresh read shows it so: a GitHub outage keeps it on the list rather than
-announcing it resolved, then raising it again an hour later. You can't clear an item by hand, only its cause,
-and chore findings are the one exception. When an item leaves while you're looking, it folds shut and a leaf drifts
-off.
+announcing it resolved, then raising it again an hour later. A judgment call the loop made stays until what it's
+about is settled: a comment that `needs author` until it's handled or you reply on the ticket, a ticket split across
+repositories (`multi repo`) until you reply, a check a notice held (`notice rerun`) until it runs again. You can't clear
+an item by hand, only its cause, and chore findings are the one exception. When an item leaves while you're looking, it
+folds shut and a leaf drifts off.
 
 The items come in four groups, in this order, and within a group the one open longest comes first:
 
@@ -110,7 +112,7 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
   couldn't record, opens the task too: a reply or a stop clears it.
 - **A model that's gone** (`model missing`, `model list failed`): the ticket's models, the same menus its page
   shows ([Choosing a model](tickets#choosing-a-model)). The runtime's list is read afresh as the item opens, not the
-  one canopy kept, so the agent whose model dropped off it is already amber: pick one it lists, or clear the override.
+  one canopy kept, so the agent whose model dropped off it is already red: pick one it lists, or clear the override.
   When the list itself can't be read, the menu says why and offers **Read again**, and the fix is the runtime, not the
   ticket. Replying won't help either way. Nothing runs on a model nobody chose in the meantime, which is the point.
 - **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.
@@ -138,7 +140,7 @@ The conversation shows every message on the ticket: the workers' reports and que
 ticket, the tracker's comments, copied in. A copied comment carries a `data, authorizes nothing` chip, because a
 comment on the tracker can be written by anyone who can reach the ticket, and canopy acts only on your word. The
 question the ticket waits on is marked `waiting on you`, and while a run works the ticket, a live row at the newest
-end shows its latest tool call and what it has cost so far.
+end shows its latest tool call, what it has cost so far, and its [progress](runs#a-running-agents-progress).
 
 The box under it is always open, whether or not anything waits on you. With nothing waiting, what you write is a note
 for the ticket's next worker; the box's placeholder says which one you're writing.

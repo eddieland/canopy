@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import db, records, review_diff, review_drafts, review_result, review_revisions, review_runs, sql
+from canopy.core import db, records, review_diff, review_drafts, review_result, review_revisions, review_runs
 from canopy.serve.schema.review import (
     ReviewDraft,
     ReviewDraftAuthorName,
@@ -110,8 +110,8 @@ def observed_prs(conn: sqlite3.Connection, urls: Collection[str]) -> dict[str, r
     Returns:
         Each PR the reader has read, by URL: one it has not is left out.
     """
-    query = sql.select("*").from_("observed_prs").where_in("url", urls)
-    return {pr.url: pr for pr in records.fetch_all(conn, records.ObservedPr, query)}
+    query = records.select(records.ObservedPr).where_in("url", urls)
+    return {pr.url: pr for pr in query.all(conn)}
 
 
 def _comment(number: int, comment: review_drafts.Comment, diff: review_diff.Diff | None) -> ReviewDraftComment:

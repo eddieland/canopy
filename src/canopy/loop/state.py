@@ -7,12 +7,13 @@ import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, NotRequired, TypedDict
+from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
 
-from canopy.core import contract, conversation, db, feedback_plans, item_numbers, plans, pools, tasks
+from canopy.core import contract, conversation, db, item_numbers, plans, pools
 from canopy.core.vocab import ResumeReason
+from canopy.loop.observations import rendered as rendered_observations
 from canopy.reviews import view as review_view
-from canopy.runs import policy
+from canopy.runs import feedback_plans, policy, tasks
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
     from canopy.loop.attention import OpenItem
     from canopy.loop.harness import Decided
     from canopy.loop.harness_dispatches import ToCome
-    from canopy.loop.observations import ObservationsState
+    from canopy.loop.observations import ObservationsState, UnitObservation
     from canopy.reviews.view import ReviewsSection
     from canopy.runs.reconcile import Capacity
 
@@ -34,7 +35,8 @@ class OverseerState(TypedDict):
     It has `chores` only when chores are configured, `reviews` only when reviews are on, `notices` only when the
     operator set a notice lately, `harness` only when the harness decided a ticket this tick, and `dispatches_to_come`
     only when it dispatches after the overseer (DESIGN §37).
-    `observations` is the world as the connectors last read it (DESIGN §35).
+    `observations` is the world as the connectors last read it (DESIGN §35). As rendered, `tickets` leave out every
+    key, at any depth, whose value is null or an empty list or object, as the overseer's prompt says once.
     """
 
     repository: str
@@ -55,7 +57,6 @@ class OverseerState(TypedDict):
     observations: ObservationsState
     capacity: CapacityState
     running_workers: list[RunningWorker]
-    query_due: bool
     tick_id: int
     now: str
     dry_run: bool
@@ -70,6 +71,7 @@ class TicketState(TypedDict):
     key: str
     title: str | None
     phase: str | None
+    #: The ticket's branch only when none of its units carries it: a unit's `branch` says it once.
     branch: str | None
     cursors: dict[str, str | int | None]
     cursor_items: NotRequired[dict[str, str]]
@@ -109,7 +111,10 @@ class SentState(TypedDict):
 
 
 class RunState(TypedDict):
-    """A ticket's latest run. `reasons` only for a `resume` that named them (DESIGN §8)."""
+    """A ticket's latest run. `reasons` only for a `resume` that named them (DESIGN §8).
+
+    Its branch is the ticket's, on its units, and when it started is not read: neither is repeated here.
+    """
 
     run_id: int
     kind: str
@@ -121,9 +126,9 @@ class RunState(TypedDict):
     #: Present only when the harness pushed the branch again to rerun the checks the worker left as flaky (DESIGN §23):
     #: the repositories it pushed, whose checks run again on the new head. A unit not named was not kicked.
     kicked: NotRequired[list[str]]
-    branch: str | None
-    repos: list[RunRepo]
-    started_at: str
+    #: Present only when the run was stacked, some repository's base another ticket's branch (DESIGN §10): the base
+    #: each repository started from. An unstacked run's base is its repository's own, which no decision reads.
+    repos: NotRequired[list[RunRepo]]
     ended_at: str | None
 
 
@@ -249,7 +254,6 @@ def state_block(
     planned: Mapping[str, plans.PlanState] | None = None,
     feedback_planned: Mapping[str, feedback_plans.FeedbackPlanState] | None = None,
     attention: list[OpenItem] | None = None,
-    query_due: bool,
     operator_sent: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
     observations: ObservationsState,
     numbered: Mapping[int, records.ItemNumber] | None = None,
@@ -267,19 +271,19 @@ def state_block(
     in a unit's `resume` attempts, and its kind is in none; an old `split` run counts nowhere. `chores` are the
     configured chores with a `when` (DESIGN §19, §37); with none, the block has no `chores` key, exactly as before
     chores existed. `notices` are the operator's notices in force or ended lately (`notice.recent`), newest
-    first; with none, the block has no `notices` key. `private` holds each private ticket's conversation state, by
+    first; the block keeps an ended one only while a check it may hold could stand (`_notices`), and with none, has no
+    `notices` key. `private` holds each private ticket's conversation state, by
     key (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages
     newer than its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `planned`
     holds a ticket's plan, by key: whether it needs one, its plan attempts and limit, and its newest plan's id,
     status, and time, never its text (DESIGN §25); a ticket plans do not touch has no `plan` key. `feedback_planned`
     holds a ticket's feedback plan, by key, likewise; a ticket feedback plans do not touch has no `feedback_plan` key
     (DESIGN §32). `attention` is the open items the overseer recorded (`attention.for_overseer`), so it sees what
-    leaving one out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this tick or
-    works the tickets the block lists alone (DESIGN §7, Spacing the query). `operator_sent` holds, by PR, the comments
+    leaving one out drops (ROADMAP M28). `operator_sent` holds, by PR, the comments
     and reviews the operator sent through canopy (`drafts.sent_by_pr`); a unit whose PR has none has no
     `operator_sent` key (DESIGN §29). `observations` is what the connectors last read of every ticket the block lists
     or the query returned, each subject fresh, stale, or unobserved (`observations.section`, DESIGN §35). `numbered`
-    holds the items the cursors name, by journal number, so a live read of a stale subject can tell what they passed.
+    holds the items the cursors name, by journal number.
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -291,7 +295,6 @@ def state_block(
     run_reasons = run_reasons or {}
     operator_sent = operator_sent or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
-    tracked = config.connect.observes_tickets()
 
     def unit_summary(key: str, u: records.TicketUnit) -> UnitState:
         name = str(u.repo)
@@ -314,16 +317,17 @@ def state_block(
 
     def ticket_summary(t: records.Ticket) -> TicketState:
         key = t.key
+        its_units = units.get(key, [])
         summary: TicketState = {
             "key": key,
             "title": t.title,
             "phase": t.phase,
-            "branch": t.branch,
-            "cursors": {name: getattr(t, db.ticket_cursor(name, tracked=tracked)) for name in db.TICKET_CURSORS},
-            "units": [unit_summary(key, u) for u in units.get(key, [])],
+            "branch": None if any(u.branch == t.branch for u in its_units) else t.branch,
+            "cursors": {name: getattr(t, column) for name, column in db.TICKET_CURSORS.items()},
+            "units": [unit_summary(key, u) for u in its_units],
             "needs_human_since": t.needs_human_since,
             "last_seen_at": t.last_seen_at,
-            "last_run": _run_summary(last_runs.get(key), run_slots, run_reasons),
+            "last_run": _run_summary(last_runs.get(key), run_slots, run_reasons, config.trust.branch_prefix),
         }
         # A private ticket's conversation state, or a public one's new operator messages, each only when it has one.
         if key in private:
@@ -337,6 +341,7 @@ def state_block(
         return summary
 
     listed = [ticket_summary(t) for t in tickets]
+    shown = _notices(notices, now, observations)
     state: OverseerState = {
         "repository": str(repo_root),
         "workspace": {
@@ -380,7 +385,7 @@ def state_block(
             }
             for r in workspace.repos
         ],
-        "tickets": _name_cursors(listed, numbered or {}, tracked=tracked),
+        "tickets": _name_cursors(listed, numbered or {}),
         # Tickets the operator stopped: not candidates, whatever their labels, and owed no decision (DESIGN §22).
         "stopped": list(stopped),
         # Tickets marked done lately that the query still finds: owed no decision while the tracker shows them open
@@ -395,7 +400,7 @@ def state_block(
         **({"reviews": _scoped(reviews, listed, observations)} if reviews is not None else {}),
         # The operator's notices, in force or lately ended: a failed check that ran while one was in force, and that it
         # explains, is held, not fixed (DESIGN §7).
-        **({"notices": [_notice(n, now) for n in notices]} if notices else {}),
+        **({"notices": shown} if shown else {}),
         # What the overseer keeps on the attention list by recording it again: leaving one out resolves it (§14).
         "attention": attention or [],
         # What changes every tick comes last, after what changes rarely, for a runtime that caches part of a message
@@ -407,8 +412,6 @@ def state_block(
             "available": capacity.available,
         },
         "running_workers": [_running_summary(r, run_slots, run_reasons) for r in running],
-        # Whether this tick runs the tracker query, or works the tickets above alone (DESIGN §7, Spacing the query).
-        "query_due": query_due,
         "tick_id": tick_id,
         "now": db.format_time(now),
         "dry_run": dry_run,
@@ -432,24 +435,25 @@ def state_block(
             "",
             "```json",
             # Compact: every step of the tick re-reads the block, and it is about 29% fewer tokens than indented.
-            json.dumps(state, separators=(",", ":")),
+            json.dumps(
+                {
+                    **state,
+                    "tickets": _compact(state["tickets"]),
+                    **({"reviews": _by_unit(state["reviews"], state["tickets"])} if "reviews" in state else {}),
+                    "observations": rendered_observations(state["observations"]),
+                },
+                separators=(",", ":"),
+            ),
             "```",
             "",
         ],
     )
 
 
-def _name_cursors(
-    tickets: list[TicketState],
-    numbered: Mapping[int, records.ItemNumber],
-    *,
-    tracked: bool,
-) -> list[TicketState]:
+def _name_cursors(tickets: list[TicketState], numbered: Mapping[int, records.ItemNumber]) -> list[TicketState]:
     """Say, in each ticket's and unit's `cursor_items`, what each of its cursors that is a journal number names.
 
-    A live read of a stale subject has no numbers, so it compares what it reads with these (DESIGN §35). The message
-    cursor is a message's id, whose message the conversation holds, and the comment cursor of a ticket no tracker source
-    observes the tracker's own id.
+    The message cursor is a message's id, whose message the conversation holds, so it is not named (DESIGN §35).
 
     Returns:
         `tickets`, each given its key only where a cursor names an item.
@@ -460,7 +464,7 @@ def _name_cursors(
         return {name: item_numbers.describe(item) for name, item in found.items() if item is not None}
 
     for ticket in tickets:
-        if named := items(ticket["cursors"], ["comment"] if tracked else []):
+        if named := items(ticket["cursors"], ["comment"]):
             ticket["cursor_items"] = named
         for unit in ticket["units"]:
             if named := items(unit["cursors"], db.UNIT_CURSORS):
@@ -472,18 +476,15 @@ def _run_summary(
     run: records.Run | None,
     run_slots: Mapping[int, Sequence[records.RunSlot]],
     run_reasons: Mapping[int, Sequence[str]],
+    branch_prefix: str,
 ) -> RunState | None:
     if run is None:
         return None
-    summary: RunState = {
-        "run_id": run.id,
-        "kind": run.kind,
-        "status": run.status,
-        "branch": run.branch,
-        "repos": [{"repo": s.repo, "base": s.base_branch} for s in run_slots.get(run.id, [])],
-        "started_at": run.started_at,
-        "ended_at": run.ended_at,
-    }
+    summary: RunState = {"run_id": run.id, "kind": run.kind, "status": run.status, "ended_at": run.ended_at}
+    slots = run_slots.get(run.id, [])
+    # A stacked base is always under the prefix, as the dispatch guard checks (DESIGN §10); a repository's own is not.
+    if any(_under(branch_prefix, s.base_branch) for s in slots):
+        summary["repos"] = [{"repo": s.repo, "base": s.base_branch} for s in slots]
     if run.id in run_reasons:
         summary["reasons"] = list(run_reasons[run.id])
     # Only a `resume` for `ci` is asked whether a failure was the change's: from any other run the bit means nothing.
@@ -495,6 +496,10 @@ def _run_summary(
         if isinstance(kicked, list) and kicked:
             summary["kicked"] = [str(repo) for repo in kicked]
     return summary
+
+
+def _under(prefix: str, branch: str | None) -> bool:
+    return branch is not None and branch.removeprefix(prefix) != branch
 
 
 def _running_summary(
@@ -515,25 +520,80 @@ def _running_summary(
     return summary
 
 
-# The reviews of the PRs the overseer may act on this tick: its listed tickets' and the review query's (DESIGN §21).
+# The reviews of the PRs the overseer may act on this tick: its listed tickets' and the review query's (DESIGN §21). A
+# query not read fresh finds none: the overseer reads no GitHub (§39), so it waits for the `vcs` source's next read.
 def _scoped(reviews: ReviewsSection, listed: Sequence[TicketState], observations: ObservationsState) -> ReviewsSection:
     query = observations.get("review_query")
-    if query is None:
-        found: frozenset[str] | None = frozenset()  # no review query: a PR of no ticket was an operator's request
-    elif query["observed"] == "fresh":
-        found = frozenset(query.get("result", []))
-    else:
-        found = None  # the overseer runs the query itself, and may find any PR reviewed lately
+    fresh = query is not None and query["observed"] == "fresh"
     return review_view.scoped(
         reviews,
         tickets={t["key"] for t in listed},
         prs={u["pr_url"] for t in listed for u in t["units"] if u["pr_url"] is not None},
-        found=found,
+        found=frozenset(query.get("result", [])) if query is not None and fresh else frozenset(),
     )
+
+
+def _by_unit(reviews: ReviewsSection, tickets: Sequence[TicketState]) -> object:
+    """`reviews` as the state block renders them: empty values left out, as in `tickets`, and each URL said once.
+
+    A reviewed PR of a listed ticket's unit is named by its `ticket` and `repo`, its URL being that unit's `pr_url`;
+    any other keeps its `url`.
+
+    Returns:
+        A copy of `reviews` so cut.
+    """
+    repos = {(t["key"], u["pr_url"]): u["repo"] for t in tickets for u in t["units"] if u["pr_url"] is not None}
+    prs: list[object] = []
+    for pr in reviews["prs"]:
+        repo = repos.get((pr["ticket"], pr["url"])) if pr["ticket"] is not None else None
+        rest = {k: v for k, v in pr.items() if k not in {"url", "ticket"}}
+        prs.append(pr if repo is None else {"ticket": pr["ticket"], "repo": repo, **rest})
+    return _compact({**reviews, "prs": prs})
+
+
+def _notices(notices: Iterable[Notice], now: datetime, observations: ObservationsState) -> list[NoticeState]:
+    """The notices the overseer reads: each in force, and each ended while a check it may hold could stand.
+
+    A check a notice held stays held after the notice ends, until a newer run of it exists (DESIGN §8), so an ended
+    notice matters while some unit shows a failed check at its head, or is not observed fresh and so may have one.
+
+    Returns:
+        Those notices, newest first, as the state block carries them.
+    """
+    held = any(_may_hold(u) for t in observations["tickets"] for u in t.get("units", []))
+    return [_notice(n, now) for n in notices if held or n.in_force(now)]
+
+
+def _may_hold(unit: UnitObservation) -> bool:
+    checks = unit.get("checks")
+    return unit["observed"] != "fresh" or (checks is not None and bool(checks["failed"]))
 
 
 def _notice(held: Notice, now: datetime) -> NoticeState:
     return {"text": held.text, "set_at": held.set_at, "until": held.until, "in_force": held.in_force(now)}
+
+
+def _compact(value: object) -> object:
+    """`value` as the state block renders a ticket or `reviews`: every key, at any depth, left out whose value is empty.
+
+    Empty is null, or an empty list or object, so a cursor not yet set, a plan with no `newest`, and a private ticket's
+    `new_operator_messages` with none new are absent rather than spelled out. False and zero stay: a plan's and a
+    feedback plan's flags are read as false as often as true, and an attempt count is compared with its limit.
+
+    Returns:
+        A copy of `value` without those keys.
+    """
+    if isinstance(value, Mapping):
+        kept = {str(k): _compact(v) for k, v in cast("Mapping[object, object]", value).items()}
+        return {k: v for k, v in kept.items() if not _empty(v)}
+    if isinstance(value, list):
+        return [_compact(v) for v in cast("list[object]", value)]
+    return value
+
+
+def _empty(value: object) -> bool:
+    # Neither `False` nor `0` equals `[]` or `{}`, so both stay.
+    return value is None or value in ([], {})
 
 
 def _stamp(moment: datetime | None) -> str | None:

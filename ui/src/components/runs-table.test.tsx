@@ -107,21 +107,63 @@ describe('RunsTable', () => {
         expect(named).toEqual(['model openai/gpt-5', 'model azure/gpt-5', 'model claude-sonnet-4-5'])
     })
 
-    it('names the model canopy asked for until the session is read, else none, and why in its tip', async () => {
+    it('names the model canopy asked for until the session is read, else unread, and why in its tip', async () => {
         await renderRuns([RUNNING, run({ id: 43, model: 'anthropic/claude-opus-4-1', models: RUNNING.models })])
-        const none = within(screen.getByTestId('run-41')).getByTestId('run-model')
-        expect(none.textContent).toBe('model none')
-        expect(tipOf(none)).toBe('none: read from its session once it ends')
+        const unread = within(screen.getByTestId('run-41')).getByTestId('run-model')
+        expect(unread.textContent).toBe('model unread')
+        expect(tipOf(unread)).toBe('none: read from its session once it ends')
         const asked = within(screen.getByTestId('run-43')).getByTestId('run-model')
         expect(asked.textContent).toBe('asked claude-opus-4-1')
         expect(tipOf(asked)).toBe('asked anthropic/claude-opus-4-1, none served: read from its session once it ends')
     })
 
-    it('says what served and what canopy asked for, as needing a look, when they differ', async () => {
+    it.each([
+        ['unread', null, "none: not read yet: a tick reads a few ended runs' sessions"],
+        ['failed', 'timed out', 'none: its session could not be read, tried again later (timed out)'],
+    ] as const)('says a run whose session is %s is unread, why in its tip', async (status, error, why) => {
+        await renderRuns([run({ models: { status, models: [], error } })])
+        const model = screen.getByTestId('run-model')
+        expect(model.textContent).toBe('model unread')
+        expect(tipOf(model)).toBe(why)
+    })
+
+    it('names no model for a run with no session to read, which canopy asked none for', async () => {
+        await renderRuns([run({ models: { status: 'no_session', models: [], error: null } })])
+        expect(screen.queryByTestId('run-model')).toBeNull()
+    })
+
+    it('says what canopy asked for, then what served, when it served none of the replies', async () => {
         await renderRuns([run({ model: 'anthropic/claude-opus-4-1' })])
         const model = screen.getByTestId('run-model')
-        expect(model.textContent).toBe('model claude-sonnet-4-5, asked claude-opus-4-1')
-        expect(model.className).toContain('text-status-blocked')
+        expect(model.textContent).toBe('asked claude-opus-4-1 ≠ claude-sonnet-4-5')
+        // Worth knowing, not waiting on the operator: the model that served in the foreground, no status color.
+        expect(within(model).getByText('claude-sonnet-4-5').className).toContain('text-foreground')
+        expect(model.outerHTML).not.toContain('text-status-')
+    })
+
+    it('raises nothing for a model at its default variant, which its session names alone', async () => {
+        await renderRuns([run({ model: 'anthropic/claude-sonnet-4-5@high' })])
+        const model = screen.getByTestId('run-model')
+        expect(model.textContent).toBe('model claude-sonnet-4-5')
+        expect(model.outerHTML).not.toContain('text-foreground')
+    })
+
+    it('leads with the model asked for when it served, and marks only the others', async () => {
+        const HAIKU = { model: 'anthropic/claude-haiku-4-5', replies: 2, cost_usd: 0.9 }
+        const OPUS = { model: 'anthropic/claude-opus-4-1', replies: 23, cost_usd: 0.4 }
+        await renderRuns([
+            run({
+                model: 'anthropic/claude-opus-4-1',
+                models: { status: 'found', models: [HAIKU, OPUS], error: null },
+            }),
+        ])
+        const model = screen.getByTestId('run-model')
+        expect(model.textContent).toBe('model claude-opus-4-1 +1')
+        expect(within(model).getByText('+1', { exact: false }).className).toContain('text-foreground')
+        expect(tipOf(model)).toBe(
+            'anthropic/claude-haiku-4-5 $0.90, 2 replies\nanthropic/claude-opus-4-1 $0.40, 23 replies\n' +
+                'asked anthropic/claude-opus-4-1',
+        )
     })
 
     it('names no model where its page sends none and canopy asked for none', async () => {
@@ -154,7 +196,7 @@ describe('SubjectRunsTable', () => {
         // An earlier run says the first line of what it said; its page has the rest.
         expect(earlier.getByText('Asked about the color.')).toBeDefined()
         expect(screen.queryByText(/The rest of what it said/u)).toBeNull()
-        // Each names its model too, so a canary ticket's runs read down by model.
+        // Each names its model too, so the runs of a ticket with a model override read down by model.
         expect(earlier.getAllByTestId('run-model').map((model) => model.textContent)).toEqual([
             'model claude-sonnet-4-5',
             'model claude-sonnet-4-5',
