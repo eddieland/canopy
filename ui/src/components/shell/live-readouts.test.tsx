@@ -36,6 +36,7 @@ const TICK: Tick = {
     session_id: 'ses_tick12',
     woken_by: null,
     canopy_version: null,
+    activity: null,
 }
 
 const TIER: MemoryState['lessons'] = {

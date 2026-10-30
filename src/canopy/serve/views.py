@@ -385,7 +385,7 @@ def run(
         peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
         worktrees=worktrees or [],
         log_path=shown_path(str(row["log_path"]), root),
-        activity=_activity(row) if status == "running" else None,
+        activity=activity(row) if status == "running" else None,
         card=card(row, running=status == "running", timeout_minutes=timeout_minutes),
         persona=str(row["persona"]) if row["persona"] is not None else None,
         persona_digest=str(row["persona_digest"]) if row["persona_digest"] is not None else None,
@@ -487,14 +487,17 @@ def _served(
             assert_never(read.status)
 
 
-def _activity(row: sqlite3.Row) -> RunActivity | None:
-    if row["activity_tool"] is None or row["activity_at"] is None:
+def activity(row: sqlite3.Row | records.Tick) -> RunActivity | None:
+    """A run's or a tick's latest tool call, as the API sends it (DESIGN §8).
+
+    Returns:
+        The call; None before the first.
+    """
+    values = records.columns(row)
+    tool, at = values["activity_tool"], values["activity_at"]
+    if tool is None or at is None:
         return None
-    return RunActivity(
-        tool=str(row["activity_tool"]),
-        did=str(row["activity"] or ""),
-        at=db.parse_time(str(row["activity_at"])),
-    )
+    return RunActivity(tool=str(tool), did=str(values["activity"] or ""), at=db.parse_time(str(at)))
 
 
 def run_state(status: str) -> RunState:

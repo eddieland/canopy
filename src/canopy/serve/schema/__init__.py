@@ -639,6 +639,9 @@ class Tick(Model):
     web. None when `idle` is."""
     canopy_version: str | None = None
     """The version of canopy that ran it, and so recorded its decisions; None on a tick from before that was kept."""
+    activity: RunActivity | None = None
+    """While it runs, its overseer's latest tool call; None before the first, for a template that prints no events, and
+    once it ends."""
 
 
 class TickDetail(Model):

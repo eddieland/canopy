@@ -26,6 +26,7 @@ const TICK: Tick = {
     summary: null,
     woken_by: null,
     canopy_version: null,
+    activity: null,
 }
 
 function renderRow(tick: Partial<Tick> = {}) {

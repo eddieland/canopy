@@ -28,7 +28,7 @@ from canopy.core import (
     review_runs,
     run_models,
 )
-from canopy.core.vocab import ReplyMode
+from canopy.core.vocab import ReplyMode, TickStatus
 from canopy.infra import hangup, keys, lock
 from canopy.infra.text import one_line, printable
 from canopy.loop import attention, readback, repeat, reread, tick
@@ -147,6 +147,10 @@ def cmd_status(click_ctx: click.Context) -> int:
         click.echo(f"Last tick: {last.id} {last.status}{dry}, {started}{spent(last)}")
         if last.summary:
             click.echo(f"  {last.summary}")
+        # What its overseer is doing, while it runs (DESIGN §8): nothing until its first tool call.
+        doing = _doing(last) if last.status is TickStatus.RUNNING else ""
+        if doing:
+            click.echo(f"  overseer{doing}")
     held = pause.paused(ctx.conn)
     if held is not None:
         click.echo(f"Loop paused {attention.age(held.since)} ago ({held.channel}): no tick until `canopy resume`.")
@@ -308,16 +312,18 @@ def _print_card(run: sqlite3.Row | records.TaskRun, ref: str) -> None:
             click.echo(f"    {line}")
 
 
-def _doing(run: sqlite3.Row) -> str:
-    """A running run's latest tool call, as `  last bash: make check 12s ago`, or empty before its first.
+def _doing(run: sqlite3.Row | records.Tick) -> str:
+    """A running run's or tick's latest tool call, as `  last bash: make check 12s ago`, or empty before its first.
 
     Returns:
         The tool, what it did, and how long ago, fit for the end of a line; empty when no call is recorded.
     """
-    if run["activity_tool"] is None or run["activity_at"] is None:
+    values = records.columns(run)
+    tool, what, at = values["activity_tool"], values["activity"], values["activity_at"]
+    if tool is None or at is None:
         return ""
-    did = f"{run['activity_tool']}: {run['activity']}" if run["activity"] else str(run["activity_tool"])
-    return f"  last {one_line(did)} {attention.age(str(run['activity_at']))} ago"
+    did = f"{tool}: {what}" if what else str(tool)
+    return f"  last {one_line(did)} {attention.age(str(at))} ago"
 
 
 def _print_recent_runs(ctx: Context) -> None:

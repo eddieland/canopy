@@ -291,6 +291,7 @@ describe('applyStreamEvent', () => {
             idle: null,
             woken_by: null,
             canopy_version: null,
+            activity: null,
         }
         client.setQueryData(keys.tick, { tick: running, acknowledged: null })
         client.setQueryData(keys.tickTranscript(3), empty)

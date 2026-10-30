@@ -49,6 +49,55 @@ def test_each_line_reaches_the_log_and_a_ticks_session_and_spend_so_far_reach_th
     assert out.getvalue().count("step_finish") == 2
 
 
+def test_a_ticks_overseers_latest_tool_call_reaches_the_tick_and_a_chore_runs_calls_go_unrecorded(
+    conn: sqlite3.Connection,
+    tmp_path: Path,
+) -> None:
+    """A tick keeps its overseer's latest tool call, as a worker's run keeps its worker's (DESIGN §8)."""
+    decide = {"status": "completed", "input": {"key": "PROJ-1"}, "title": "decide 2 tickets"}
+    with in_tick(conn) as tick_id:
+        watch = progress.Progress(
+            conn,
+            "ticks",
+            tick_id,
+            io.StringIO(),
+            logs.for_tick(tick_id),
+            agent="overseer",
+            fields={},
+            version=Version.ONE,
+        )
+        watch(
+            event(
+                "tool_use",
+                {"type": "tool", "tool": "bash", "state": {"status": "completed", "input": {"command": "ls"}}},
+            ),
+        )
+        tick = present(db.get_tick(conn, tick_id))
+        assert (tick.session_id, tick.activity_tool, tick.activity) == ("ses_live", "bash", "ls")
+        watch(event("tool_use", {"type": "tool", "tool": "canopy_decide", "state": decide}))
+        tick = present(db.get_tick(conn, tick_id))
+        assert (tick.activity_tool, tick.activity, tick.activity_at is not None) == (
+            "canopy_decide",
+            "decide 2 tickets",
+            True,
+        )
+        # A chore run's agent's tool calls are its transcript's alone: its row, which has no column for one, keeps its
+        # session from the first event, as before, and nothing else.
+        run_id = chore_runs.insert_chore_run(conn, tick_id=tick_id, chore="build-health", logs_dir=tmp_path)
+        chore = progress.Progress(
+            conn,
+            "chore_runs",
+            run_id,
+            io.StringIO(),
+            logs.for_tick(tick_id),
+            agent="chore",
+            fields={},
+            version=Version.ONE,
+        )
+        chore(event("tool_use", {"type": "tool", "tool": "bash", "state": decide}))
+        assert present(chore_runs.get_chore_run(conn, run_id)).session_id == "ses_live"
+
+
 def test_a_chore_runs_spend_so_far_reaches_its_row_and_nothing_reaches_one_that_ended(
     conn: sqlite3.Connection,
     tmp_path: Path,
