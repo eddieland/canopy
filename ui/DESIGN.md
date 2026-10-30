@@ -33,6 +33,8 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `accent`, `accent-foreground` | The one accent: active nav item, links, primary buttons, focus, live. |
 | `ring` | Focus outlines (the accent, translucent). |
 | `scrollbar` | Every scrollbar's thumb, on a clear track: `muted-foreground`, translucent. Set once on the root. |
+| `edge` | A panel's and a float's outline: `border` by default, clear where a palette draws none. |
+| `depth-panel`, `-float`, `-action` | The palette's shadows, as `shadow-panel`, `shadow-float`, and `shadow-action`. |
 | `status-running` | A run working. Pulses. |
 | `status-blocked` | A run that asked a question, and anything else waiting on the operator. |
 | `status-stopped` | A run the operator stopped. |
@@ -110,6 +112,12 @@ Rules:
   colors, as Gruvbox wears its purple, not its orange, and a green canvas never takes a green accent. A scheme whose
   bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts` measures
   every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
+  A palette sets its character too, beyond color, from a few closed choices, in the same rule, so a component still
+  never knows which it is on: its corners (`--radius`: crisp, the default, or soft), its `edge` (a hairline, or none,
+  where panels stand apart by their lightness alone), and its depth (a soft shadow in the canvas's hue, a hard one with
+  no blur, or, on black, where a shadow does nothing, the accent's glow). Spacing, sizes, and layout never change
+  with a palette, and neither do the status colors. The defaults take the soft shadow, Gruvbox's dark the crisp
+  corners and hard shadow of an editor of the nineties, and black no edges, soft corners, and the glow.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
@@ -137,10 +145,17 @@ Rules:
 
 ## Shape and space
 
-- Hairlines: 1px `border` everywhere. No shadows except `shadow-xs` on a pressed segment.
+- Hairlines: 1px `border` everywhere inside a panel. A panel, and what floats over the page, draws its palette's
+  `edge` instead, a hairline but where the palette draws none.
+- Depth is used sparingly, in three places and nowhere else: a faint lift under a panel and a counter
+  (`shadow-panel`), a shadow under what floats over the page, a menu, a card, a tip, a dialog, a toast, the rail's
+  sheet, and the settings' save bar (`shadow-float`), and one under the primary action, the default button
+  (`shadow-action`). Each is the palette's (Palettes, under Tokens), so its form changes with it, and nothing inside
+  a panel casts one but a pressed segment's `shadow-xs`.
 - Radius: `rounded-md` (8px) for panels, buttons, and fields, `rounded-sm` (6px) for chips and nav items, `rounded-xs`
-  (4px) for a mark smaller than a line of text, a checkbox or a slot's square. The scale is in `tokens.css`; no
-  arbitrary radius (`rounded-[4px]`), which `npm run lint` refuses.
+  (4px) for a mark smaller than a line of text, a checkbox or a slot's square, at the default palettes' `--radius`. A
+  palette may set its own, and the scale follows it. The scale is in `tokens.css`; no arbitrary radius
+  (`rounded-[4px]`), which `npm run lint` refuses.
 - The shell: a 3rem header, a 13rem side nav, content capped at `max-w-[112rem]` with `p-6` and `gap-6` between
   blocks.
   The header stays put and only what is under it scrolls (`page-scroll`), so the header spans the window's width
@@ -771,7 +786,7 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **A link's page at a glance is a hover card** (`HoverCard` in `src/components/ui/hover-card.tsx`): more than a tip
   holds, a few rows of what the page it opens shows, as each header readout shows its page (`ReadoutCard`). It opens
   on hover after half a second, as a tip does, and on the keyboard's focus, and stays while the pointer moves onto
-  it; a tap follows the link. Like a tip it is on `surface` with a hairline, no shadow and no motion, its rows
+  it; a tap follows the link. Like a tip it is on `surface` with its edge and floating shadow and no motion, its rows
   `text-xs` under `panel-label`s. Nothing in it is found only there: it is a preview of the page, never a place to act.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): every list
   in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or

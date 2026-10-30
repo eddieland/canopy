@@ -105,6 +105,9 @@ for (const theme of THEMES) {
         await page.keyboard.press('Control+k')
         const palette = page.getByTestId('jump-palette')
         await expect(palette.getByRole('option')).toHaveCount(2)
+        // Each title fills in once the tickets load: under load, the box was taken with both still untitled.
+        await expect(palette.getByRole('option', { name: /Debounce search input/u })).toBeVisible()
+        await expect(palette.getByRole('option', { name: /Schedule report exports/u })).toBeVisible()
         await expect(palette).toHaveScreenshot(`jump-palette-${theme}.png`)
     })
 
@@ -119,8 +122,8 @@ for (const theme of THEMES) {
     })
 }
 
-// Every palette but a theme's default sets only the neutrals and the accent, so one page in each shows all it changes:
-// its main pane alone, so a change to the header or the rail rewrites none of these.
+// Every palette but a theme's default sets the neutrals, the accent, and its corners, edges, and depth, all of which
+// one page's panels show: its main pane alone, so a change to the header or the rail rewrites none of these.
 for (const theme of THEMES) {
     for (const palette of OTHER_PALETTES[theme]) {
         test(`attention in ${palette} ${theme}`, async ({ page }) => {

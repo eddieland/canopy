@@ -26,7 +26,8 @@ function SheetContent({ className, children, ...props }: ComponentProps<typeof S
             <SheetPrimitive.Content
                 data-slot="sheet-content"
                 className={cn(
-                    'fixed inset-y-0 left-0 z-50 flex h-full w-3/4 max-w-xs flex-col border-r bg-surface outline-none',
+                    'fixed inset-y-0 left-0 z-50 flex h-full w-3/4 max-w-xs flex-col border-r border-edge bg-surface',
+                    'shadow-float outline-none',
                     className,
                 )}
                 {...props}
