@@ -1,8 +1,11 @@
-"""Plans archived to a clone of the operator's each live tick (DESIGN §25).
+"""Plans archived to a clone of the operator's on a live tick (DESIGN §25).
 
-They are exported, committed, and pushed, and an item is raised while the archive is not on its upstream.
+They are exported, committed, and pushed, at most once each `paths.plan_archive_every_minutes`, and an item is raised
+while the archive is not on its upstream.
 """
 
+import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -26,12 +29,12 @@ def upstream(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def clone(scenario: Scenario, upstream: Path, tmp_path: Path) -> Path:
-    """A clone of `upstream`, set as the workspace's plan archive."""
+    """A clone of `upstream`, set as the workspace's plan archive, archived to every live tick."""
     path = tmp_path / "plans"
     git("clone", "--quiet", str(upstream), str(path), cwd=tmp_path)
     git("config", "user.email", "operator@example.com", cwd=path)
     git("config", "user.name", "Operator", cwd=path)
-    scenario.configures(paths={"plan_archive": str(path)})
+    scenario.configures(paths={"plan_archive": str(path), "plan_archive_every_minutes": 0})
     return path
 
 
@@ -39,6 +42,12 @@ def unpushed(scenario: Scenario) -> str | None:
     """The detail of the `archive_unpushed` item on the attention list, if it is there."""
     found = [i.detail for i in attention.current(scenario.conn) if i.reason == archive.REASON]
     return found[0] if found else None
+
+
+def committed_ago(hours: int) -> mock._patch_dict:
+    """Have git date each commit made inside the block `hours` before now, as one made then would be."""
+    when = datetime.now(UTC) - timedelta(hours=hours)
+    return mock.patch.dict(os.environ, {"GIT_COMMITTER_DATE": f"@{int(when.timestamp())} +0000"})
 
 
 def archived(scenario: Scenario, upstream: Path) -> list[str]:
@@ -100,6 +109,39 @@ def test_a_live_tick_pushes_every_plan_and_only_what_changed(scenario: Scenario,
     ]
     assert f"({KEY}/{run_id}-APPROVED.md)" in git("show", f"main:{name}/README.md", cwd=upstream)
     assert 'status: "approved"' in git("show", f"main:{name}/{KEY}/{run_id}-APPROVED.md", cwd=upstream)
+
+
+@pytest.mark.parametrize(("hours", "archives"), [(1, False), (7, True)])
+def test_a_tick_archives_once_the_interval_has_passed_since_the_last_commit(
+    scenario: Scenario,
+    clone: Path,
+    upstream: Path,
+    hours: int,
+    archives: bool,  # noqa: FBT001  (a parametrized argument)
+) -> None:
+    run_id = proposed(scenario.conn, scenario.env.state_dir)
+    name = workspace.find(scenario.env.root).name
+    scenario.configures(paths={"plan_archive_every_minutes": 360})
+    # The first archive is due whenever it comes: there is no commit of it to wait from.
+    with committed_ago(hours):
+        scenario.tick(*waits(KEY))
+    assert git("rev-list", "--count", "main", cwd=upstream) == "1"
+
+    plans.approve(
+        scenario.conn,
+        scenario.env.state_dir,
+        KEY,
+        channel="cli",
+        dispatch_lock=scenario.env.state_dir / DISPATCH_LOCK,
+    )
+    scenario.tick(*waits(KEY))
+
+    approved = f"{name}/{KEY}/{run_id}-APPROVED.md"
+    assert git("rev-list", "--count", "main", cwd=upstream) == ("2" if archives else "1")
+    assert (approved in archived(scenario, upstream)) is archives
+    # A tick that waits leaves the clone as it was, so nothing waits uncommitted there, and raises nothing.
+    assert git("status", "--porcelain", cwd=clone) == ""
+    assert unpushed(scenario) is None
 
 
 def test_a_commit_names_each_plan_it_archives(scenario: Scenario, clone: Path, upstream: Path) -> None:
@@ -284,6 +326,8 @@ def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Pa
     first = proposed(scenario.conn, scenario.env.state_dir)
     second = proposed(scenario.conn, scenario.env.state_dir, key="PROJ-2")
     name = workspace.find(scenario.env.root).name
+    # The rest waits for no interval: the item is open, so each tick archives.
+    scenario.configures(paths={"plan_archive_every_minutes": 360})
 
     with mock.patch.object(archive, "PER_TICK", 2):
         scenario.tick(*waits(KEY, "PROJ-2"))
@@ -315,6 +359,8 @@ def test_a_long_history_goes_in_over_several_ticks(scenario: Scenario, clone: Pa
 
 def test_a_failed_push_stays_an_item_until_a_tick_pushes(scenario: Scenario, clone: Path, upstream: Path) -> None:
     proposed(scenario.conn, scenario.env.state_dir)
+    # The retry waits for no interval: the item is open, so each tick archives.
+    scenario.configures(paths={"plan_archive_every_minutes": 360})
     gone = upstream.with_name("moved.git")
     upstream.rename(gone)
 
