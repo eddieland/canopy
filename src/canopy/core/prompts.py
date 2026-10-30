@@ -286,20 +286,21 @@ def worker_comment(prefix: str, suffix: str) -> str:
     return f"{' and '.join(marks)} outside any quote"
 
 
-def plan_authorization(key: str, labels: Sequence[str], *, private: bool) -> str:
+def plan_authorization(labels: Sequence[str], *, private: bool) -> str:
     """Return the planner's `{{AUTHORIZATION}}`: the label check on a public ticket, or why a private one has none.
 
     The planner writes nothing anywhere, so a plan it should not have written costs only its spend; the check keeps the
-    rule every worker follows (D051). A private ticket's start record was checked by the harness (DESIGN §22).
+    rule every worker follows (D051). A private ticket's start record was checked by the harness (DESIGN §22). It names
+    the ticket by no key, so that it is the same for every run (`RUN_MARKER`).
     """
     if private:
         return (
-            f"The operator started {key} in canopy, which authorized this run; there is no label to check. Its "
+            "The operator started your ticket in canopy, which authorized this run; there is no label to check. Its "
             "conversation stays with the operator."
         )
     named = ", ".join(f"`{label}`" for label in labels)
     return (
-        f"Before any other work, read {key} through the tracker. If it is closed, or carries none of the labels "
+        "Before any other work, read your ticket through the tracker. If it is closed, or carries none of the labels "
         f"{named}, the overseer should not have dispatched you: write no plan, and report `failed` with a summary that "
         "starts `not authorized:` and says which it was."
     )

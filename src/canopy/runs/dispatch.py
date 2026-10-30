@@ -1152,7 +1152,7 @@ def _spawn(
     if planning:
         # One prompt for public and private tickets: a private one's conversation holds the operator's messages, and
         # its start record, not a label, authorizes it (DESIGN §25).
-        values["AUTHORIZATION"] = prompts.plan_authorization(key, cfg.tracker.labels, private=plan.private)
+        values["AUTHORIZATION"] = prompts.plan_authorization(cfg.tracker.labels, private=plan.private)
         values["OPERATOR_MESSAGES"] = (
             conversation.prompt_conversation(ctx.conn, key)
             if plan.private
