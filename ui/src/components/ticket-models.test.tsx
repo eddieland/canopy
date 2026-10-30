@@ -146,7 +146,7 @@ function readOption(o: HTMLElement): [string | null, string | null, string | nul
 }
 
 describe('TicketModels', () => {
-    it('shows a row per agent: its next model, where it comes from, and what served it last, reading no list', () => {
+    it('shows a row per agent: its next model, where it comes from, and what served it last', async () => {
         renderModels()
         expect(screen.getAllByRole('term').map((label) => label.textContent)).toEqual([
             'worker model',
@@ -159,10 +159,19 @@ describe('TicketModels', () => {
             'acme/fast-1[runtime.models]last served acme/old-0',
             'runtime defaultlast served acme/fast-1',
         ])
-        expect(sent).toEqual([])
+        // The runtime's list, read once as the rows show for the models they name, whichever rows name one.
+        await waitFor(() => expect(sent).toEqual([{ method: 'GET', path: '/api/models', body: null }]))
     })
 
-    it('reads the models when a picker opens and sets the override, as canopy model KEY MODEL --agent', async () => {
+    it("reads no list while every agent is on the runtime's default, which no list can take away", async () => {
+        renderModels([{ ...WORKER, model: null, source: 'default' }])
+        expect(sent).toEqual([])
+        const list = openPicker('worker model: runtime default')
+        expect((await offered(list)).map((o) => o.textContent)).toEqual(LISTED)
+        expect(sent).toEqual([{ method: 'GET', path: '/api/models', body: null }])
+    })
+
+    it('offers the models the runtime lists and sets the override, as canopy model KEY MODEL --agent', async () => {
         renderModels()
         const list = openPicker('reviewer model: runtime default')
         // The field that narrows the list takes the focus, so the keys work from the trigger.
@@ -281,8 +290,9 @@ describe('TicketModels', () => {
 
         openPicker('worker model: acme/deep-2')
         fireEvent.click(clearButton())
+        // Said as a clear, not a choice, as canopy model --clear does.
         expect((await screen.findByRole('status')).textContent).toBe(
-            "saved: ABC-1's worker runs use the runtime's default from their next run: nothing sets one.",
+            "cleared: ABC-1's worker runs use the runtime's default from their next run: nothing sets one.",
         )
         expect(screen.getByRole('button', { name: 'worker model: runtime default' })).toBeDefined()
         expect(sent.at(-1)).toEqual({
@@ -308,6 +318,15 @@ describe('TicketModels', () => {
         expect(sent.map((s) => s.path)).toEqual(['/api/models', '/api/models'])
     })
 
+    it("says a read of the list that failed in a read's words, not a write's", async () => {
+        listed = Response.json({}, { status: 500 })
+        renderModels()
+        const list = openPicker('worker model: acme/deep-2')
+        expect(await within(list).findByText('Could not read its models: the server answered 500')).toBeDefined()
+        // No model is known gone while the list is unread.
+        expect(screen.getByRole('button', { name: 'worker model: acme/deep-2', hidden: true })).toBeDefined()
+    })
+
     it('shows a model the runtime no longer lists checked but not offered, its trigger marked', async () => {
         renderModels([
             {
@@ -319,25 +338,24 @@ describe('TicketModels', () => {
                 last_served: null,
             },
         ])
-        // Nothing is known gone until the list is read.
+        // Nothing is known gone until the list is read, which the row does as it shows, with no menu open.
         expect(screen.getByRole('button', { name: 'worker model: acme/gone-1' })).toBeDefined()
-        const list = openPicker('worker model: acme/gone-1')
+        const gone = 'worker model: acme/gone-1, no longer listed; its next run is refused'
+        await screen.findByRole('button', { name: gone })
+        const list = openPicker(gone)
         expect((await offered(list)).map((o) => readOption(o))).toEqual([
             ['acme/fast-1', 'false', 'false'],
             ['acme/deep-2', 'false', 'false'],
         ])
-        expect(readOption(pinned(list))).toEqual([
-            'acme/gone-1no longer listed; its next run is refused',
-            'true',
-            'true',
-        ])
-        // The list hides the rest of the page from a screen reader while it is open.
+        // Checked, never offered, and why said under it rather than in its disabled text.
+        expect(readOption(pinned(list))).toEqual(['acme/gone-1', 'true', 'true'])
         expect(
-            screen.getByRole('button', {
-                name: 'worker model: acme/gone-1, no longer listed; its next run is refused',
-                hidden: true,
+            within(list).getByRole('option', {
+                name: 'acme/gone-1',
+                description: 'no longer listed; its next run is refused',
             }),
-        ).toBeDefined()
+        ).toBe(pinned(list))
+        expect(sent).toEqual([{ method: 'GET', path: '/api/models', body: null }])
     })
 
     it("offers each model's variants under it, and sets the override to one, as canopy model does", async () => {
@@ -444,19 +462,12 @@ describe('TicketModels', () => {
     it('marks a variant the runtime no longer lists for its model, as a model no longer listed', async () => {
         listed = Response.json({ models: LISTED, variants: { 'acme/deep-2': ['low'] }, error: null })
         renderModels([AT_HIGH])
-        const list = openPicker('planner model: acme/deep-2@high')
+        const gone = 'planner model: acme/deep-2@high, variant no longer listed; its next run is refused'
+        await screen.findByRole('button', { name: gone })
+        const list = openPicker(gone)
         await offered(list)
-        expect(readOption(pinned(list))).toEqual([
-            'acme/deep-2@highvariant no longer listed; its next run is refused',
-            'true',
-            'true',
-        ])
-        expect(
-            screen.getByRole('button', {
-                name: 'planner model: acme/deep-2@high, variant no longer listed; its next run is refused',
-                hidden: true,
-            }),
-        ).toBeDefined()
+        expect(readOption(pinned(list))).toEqual(['acme/deep-2@high', 'true', 'true'])
+        expect(within(list).getByText('variant no longer listed; its next run is refused')).toBeDefined()
     })
 
     it('shows the model being saved on its button, marked pending, until the server answers', async () => {
