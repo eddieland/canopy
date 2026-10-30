@@ -645,7 +645,16 @@ def data_dir(role: str) -> Path:
     Returns:
         The directory, under the operator's XDG_DATA_HOME, with every link in its path resolved.
     """
-    return role_dir(data_home() / "canopy" / "sandbox" / CACHES[role], "data")
+    return role_dir(data_root() / CACHES[role], "data")
+
+
+def data_root() -> Path:
+    """The directory that holds each role's data directory, where canopy reads its runs' sessions.
+
+    Returns:
+        `canopy/sandbox` under the operator's XDG_DATA_HOME (`data_home`). It may not exist.
+    """
+    return data_home() / "canopy" / "sandbox"
 
 
 def data_home() -> Path:

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
@@ -14,10 +17,24 @@ from canopy.runtime.opencode2 import session_models
 from canopy.runtime.report import MAX_MODELS, OTHER_MODELS, ModelUse, SessionModels
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Iterator, Sequence
 
+#: The columns of OpenCode 2.1.4's tables that a sandbox role's database is read by.
+SCHEMA = """
+CREATE TABLE session_v2 (id text PRIMARY KEY, version text NOT NULL);
+CREATE TABLE session_message (
+    id text PRIMARY KEY, session_id text NOT NULL, type text NOT NULL, seq integer NOT NULL, data text NOT NULL
+);
+"""
 #: What OpenCode 2.1.2 exported, sanitized, of the recorded run in `recorded/run.jsonl`: five replies of one model.
 RECORDED = Path(__file__).parent / "recorded" / "export.json"
+
+
+@pytest.fixture(autouse=True)
+def data_home(tmp_path: Path) -> Iterator[Path]:
+    """The operator's `$XDG_DATA_HOME`, which holds the sandbox roles' databases: none but what a test writes."""
+    with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(tmp_path)}):
+        yield tmp_path
 
 
 def assistant(provider: str, model: str, cost: float, *, variant: str | None = None) -> dict[str, object]:
@@ -153,3 +170,37 @@ def test_a_session_id_opencode_would_read_as_an_option_is_never_passed() -> None
     export = runner(exported())
     assert read(export, "--help") == SessionModels("failed", error="not a session id OpenCode names")
     export.run.assert_not_called()
+
+
+def test_a_sandboxed_runs_session_is_read_from_its_roles_database(data_home: Path) -> None:
+    """The operator's OpenCode does not have it, and is never pointed at a role's data, which a run writes."""
+    path = data_home / "canopy" / "sandbox" / "review" / "opencode" / "opencode.db"
+    path.parent.mkdir(parents=True)
+    rows = [
+        ("msg_1", "user", {"text": "hi"}),
+        ("msg_2", "assistant", {k: v for k, v in assistant("anthropic", "claude-opus", 0.5).items() if k != "type"}),
+        ("msg_3", "assistant", "not json"),
+        ("msg_4", "assistant", {"model": {"providerID": "openai", "id": "gpt-5"}, "cost": 0.25, "type": "user"}),
+        # A reply's content, however long, is left in the database: only its model and cost are read.
+        (
+            "msg_5",
+            "assistant",
+            {"model": {"providerID": "openai", "id": "gpt-5"}, "cost": 0.25, "content": "x" * 10**6},
+        ),
+        ("msg_6", "assistant", {"model": {"providerID": "openai", "id": "x" * 2_000}, "cost": 1}),
+    ]
+    with contextlib.closing(sqlite3.connect(path)) as conn, conn:
+        conn.executescript(SCHEMA)
+        conn.execute("INSERT INTO session_v2 VALUES ('ses_1', '2.1.4')")
+        conn.executemany(
+            "INSERT INTO session_message VALUES (?, 'ses_1', ?, ?, ?)",
+            [(i, kind, n, d if isinstance(d, str) else json.dumps(d)) for n, (i, kind, d) in enumerate(rows)],
+        )
+
+    found = read(runner(code=1, stderr="Session not found: ses_1\n"))
+
+    assert found == SessionModels(
+        "found",
+        (ModelUse("anthropic/claude-opus", 1, 0.5), ModelUse("openai/gpt-5", 2, 0.5)),
+        runtime_version="2.1.4",
+    )

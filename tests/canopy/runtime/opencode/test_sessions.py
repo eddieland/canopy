@@ -230,3 +230,77 @@ def test_the_database_is_under_the_users_data_directory(tmp_path: Path) -> None:
         assert sessions.database() == tmp_path / ".local" / "share" / "opencode" / "opencode.db"
     with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(tmp_path / "data")}):
         assert sessions.database() == tmp_path / "data" / "opencode" / "opencode.db"
+
+
+def sandbox(tmp_path: Path, role: str) -> Path:
+    """An empty database where a sandbox role's OpenCode keeps it, `tmp_path` being the operator's `$XDG_DATA_HOME`."""
+    return database(tmp_path / "canopy" / "sandbox" / role)
+
+
+def endless(path: Path) -> Path:
+    """A database at `path` whose `session` is a view that never ends, as a run could write one."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with contextlib.closing(sqlite3.connect(path)) as conn:
+        conn.execute(
+            "CREATE VIEW session AS WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n)"
+            " SELECT 'ses_' || i AS id, NULL AS parent_id, '/d' AS directory, 1 AS time_created, i AS time_updated,"
+            " 0 AS cost, 0 AS tokens_input, 0 AS tokens_output, 0 AS tokens_reasoning, 0 AS tokens_cache_read,"
+            " 0 AS tokens_cache_write FROM n",
+        )
+    return path
+
+
+def test_each_sandbox_roles_sessions_are_read_with_the_operators_in_the_order_of_their_update(tmp_path: Path) -> None:
+    operators = database(tmp_path)
+    add_session(operators, "ses_a", updated=1_000)
+    add_session(operators, "ses_d", updated=4_000)
+    worker = sandbox(tmp_path, "worker")
+    add_session(worker, "ses_b", updated=2_000, cost=0.5)
+    add_message(worker, "msg_1", "ses_b", reply("anthropic", "claude-opus", 0.5))
+    add_session(sandbox(tmp_path, "review"), "ses_c", updated=3_000)
+
+    first = read(tmp_path, limit=2)
+    second = read(tmp_path, first.cursor, limit=2)
+
+    assert ([s.session_id for s in first.sessions], first.cursor) == (["ses_a", "ses_b"], (2_000, "ses_b"))
+    assert first.sessions[1].models == (ModelUse("anthropic/claude-opus", 1, 0.5),)
+    assert ([s.session_id for s in second.sessions], second.cursor) == (["ses_c", "ses_d"], (4_000, "ses_d"))
+
+
+def test_a_sandbox_roles_sessions_are_read_when_the_operator_has_no_database(tmp_path: Path) -> None:
+    add_session(sandbox(tmp_path, "chore"), "ses_1", updated=2_000)
+
+    assert [s.session_id for s in read(tmp_path).sessions] == ["ses_1"]
+
+
+def test_a_sandbox_roles_database_canopy_cannot_read_is_passed_over(tmp_path: Path) -> None:
+    """A run writes its role's database, so one it broke keeps only that role's sessions from being read."""
+    add_session(database(tmp_path), "ses_1", updated=2_000)
+    broken = tmp_path / "canopy" / "sandbox" / "review" / "opencode" / "opencode.db"
+    broken.parent.mkdir(parents=True)
+    broken.write_bytes(b"not a database")
+    endless(tmp_path / "canopy" / "sandbox" / "worker" / "opencode" / "opencode.db")
+
+    with mock.patch.object(sessions, "READ_SECONDS", 0.1):
+        page = read(tmp_path)
+
+    assert ([s.session_id for s in page.sessions], page.outcome) == (["ses_1"], "found")
+
+
+def test_a_read_that_runs_too_long_is_stopped(tmp_path: Path) -> None:
+    endless(tmp_path / "opencode" / "opencode.db")
+
+    with mock.patch.object(sessions, "READ_SECONDS", 0.1):
+        page = read(tmp_path)
+
+    assert page == SessionPage("failed", error="OpenCode's database could not be read: interrupted")
+
+
+def test_a_sandbox_roles_database_a_link_leads_out_of_its_directory_is_not_read(tmp_path: Path) -> None:
+    elsewhere = database(tmp_path / "elsewhere")
+    add_session(elsewhere, "ses_1", updated=2_000)
+    role = tmp_path / "canopy" / "sandbox" / "worker"
+    role.mkdir(parents=True)
+    (role / "opencode").symlink_to(elsewhere.parent)
+
+    assert read(tmp_path) == SessionPage("missing")

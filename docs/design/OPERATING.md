@@ -375,9 +375,10 @@ promises:
   records each model that wrote a run's replies, a variant other than its default named with it, and what they cost;
   for a run more than one model served, also which wrote each reply, keyed as the log's events key each call.
   `canopy spend` breaks each kind's cost down by model, and the web UI names each run's models on its page, and a
-  split run's on its transcript, at each call where the model changed. A read never fails a run or a tick; a session
-  the runtime no longer keeps leaves its run unattributed, or as a read before found it, and a failed read is tried
-  again later, a few times at most.
+  split run's on its transcript, at each call where the model changed. A sandboxed run's session is in its role's
+  own data (§24), where the host's runtime is never pointed, so canopy reads it there, as it reads every session's
+  spend. A read never fails a run or a tick; a session the runtime no longer keeps leaves its run unattributed, or as
+  a read before found it, and a failed read is tried again later, a few times at most.
 - **canopy's choice is the one made.** canopy writes the model, and its variant, into the agent's rendered
   definition, so each set of models gets its own snapshot (D040); a chore with a model of its own runs a copy of the
   chore's definition made for it. A template's model or variant option would override it unseen, so any `runtime`
@@ -397,13 +398,15 @@ model asked for, which leaves every run on the default unattributed and splits n
 
 The operator wants spend tracked in canopy and out of it: what canopy's runs cost beside what the same runtime cost in
 the operator's own sessions. While it waits between live ticks, `canopy loop` records every session the runtime keeps,
-in every directory, subagents' included, from the runtime's own record: read-only, a page at a time from where the last
-read stopped, so a session updated since is read again and its row replaced. Each keeps its cost and tokens, as the
-runtime summed them, each model's share, its directory, and the session it ran for. What the record holds is not
-canopy's to trust, since a run can write the runtime's data, so a session canopy cannot read is passed over and
-counted. `canopy spend` splits the window's sessions into canopy's, a session one of the journal's runs names or that
-ran in the workspace's state directory, where only canopy starts agents, and its subagents', and the rest, by
-directory; another workspace's runs are outside, since its journal is another; the spend page lists them so too.
+in every directory, subagents' included, from the runtime's own record, each sandbox role's included (§24): read-only,
+a page at a time from where the last read stopped, so a session updated since is read again and its row replaced.
+Each keeps its cost and tokens, as the runtime summed them, each model's share, its directory, and the session it ran
+for. What the record holds is not canopy's to trust, since a run can write the runtime's data, so a session canopy
+cannot read is passed over and counted, and a sandbox role's record canopy cannot read, or that takes too long, is
+passed over whole: a run can keep only its own role's sessions from being read. `canopy spend` splits the window's
+sessions into canopy's, a session one of the journal's runs names or that ran in the workspace's state directory,
+where only canopy starts agents, and its subagents', and the rest, by directory; another workspace's runs are
+outside, since its journal is another; the spend page lists them so too.
 The budget, the web UI's counters, and the spend breakdown's totals, the sessions outside canopy a series of their own,
 are all agent spend: canopy's runs and the sessions outside canopy, each canopy session counted once, as its run, and
 each says when the sessions were last read, since with the loop stopped none is. Rejected:

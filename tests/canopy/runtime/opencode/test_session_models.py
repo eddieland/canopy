@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
+from unittest import mock
 
 import pytest
 
@@ -14,7 +18,20 @@ from canopy.runtime.opencode import session_models
 from canopy.runtime.report import MAX_MODELS, MAX_REPLIES, OTHER_MODELS, ModelUse, SessionModels
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Iterator, Mapping, Sequence
+
+#: The columns of OpenCode 1.19.3's tables that a sandbox role's database is read by.
+SCHEMA = """
+CREATE TABLE session (id text PRIMARY KEY, version text NOT NULL);
+CREATE TABLE message (id text PRIMARY KEY, session_id text NOT NULL, time_created integer NOT NULL, data text NOT NULL);
+"""
+
+
+@pytest.fixture(autouse=True)
+def data_home(tmp_path: Path) -> Iterator[Path]:
+    """The operator's `$XDG_DATA_HOME`, which holds the sandbox roles' databases: none but what a test writes."""
+    with mock.patch.dict(os.environ, {"XDG_DATA_HOME": str(tmp_path)}):
+        yield tmp_path
 
 
 def assistant(
@@ -266,3 +283,70 @@ def test_a_session_id_opencode_would_read_as_an_option_is_never_passed() -> None
         error="not a session id OpenCode names",
     )
     assert export.ran == []
+
+
+def sandboxed(data_home: Path, *messages: tuple[str, object], role: str = "worker", session: str = "ses_1") -> Path:
+    """Session `session` in sandbox role `role`'s database, with each message's id and info, a string as written."""
+    path = data_home / "canopy" / "sandbox" / role / "opencode" / "opencode.db"
+    path.parent.mkdir(parents=True)
+    with contextlib.closing(sqlite3.connect(path)) as conn, conn:
+        conn.executescript(SCHEMA)
+        conn.execute("INSERT INTO session VALUES (?, '1.19.3')", (session,))
+        conn.executemany(
+            "INSERT INTO message VALUES (?, ?, ?, ?)",
+            [(i, session, n, d if isinstance(d, str) else json.dumps(d)) for n, (i, d) in enumerate(messages)],
+        )
+    return path
+
+
+NOT_FOUND = printing(code=1, stderr="Error: Session not found: ses_1\n")
+
+
+def test_a_sandboxed_runs_session_is_read_from_its_roles_database(data_home: Path) -> None:
+    """The operator's OpenCode does not have it, and is never pointed at a role's data, which a run writes."""
+    sandboxed(
+        data_home,
+        ("msg_1", USER["info"]),
+        ("msg_2", assistant("anthropic", "claude-opus", 0.5, variant="high")["info"]),
+        ("msg_3", assistant("openai", "gpt-5", 0.25)["info"]),
+    )
+
+    assert read(NOT_FOUND) == SessionModels(
+        "found",
+        (ModelUse("anthropic/claude-opus@high", 1, 0.5), ModelUse("openai/gpt-5", 1, 0.25)),
+        replies={"msg_2": "anthropic/claude-opus@high", "msg_3": "openai/gpt-5"},
+        runtime_version="1.19.3",
+    )
+
+
+def test_a_message_in_a_roles_database_canopy_cannot_read_is_left_out(data_home: Path) -> None:
+    sandboxed(
+        data_home,
+        ("msg_1", "not json"),
+        ("msg_2", ["a", "list"]),
+        ("msg_3", assistant("anthropic", "claude-opus", -1)["info"]),
+        ("msg_4", assistant("anthropic", "claude-sonnet", 0.25)["info"]),
+        ("msg_5", assistant("anthropic", "x" * 2_000, 0.25)["info"]),
+        # What canopy does not read of a message is left in the database, however long.
+        (
+            "msg_6",
+            {
+                "role": "assistant",
+                "providerID": "anthropic",
+                "modelID": "claude-sonnet",
+                "cost": 0.25,
+                "summary": "x" * 2_000_000,
+            },
+        ),
+    )
+
+    assert read(NOT_FOUND).models == (ModelUse("anthropic/claude-sonnet", 2, 0.5),)
+
+
+def test_a_session_no_roles_database_holds_is_missing(data_home: Path) -> None:
+    broken = data_home / "canopy" / "sandbox" / "review" / "opencode" / "opencode.db"
+    broken.parent.mkdir(parents=True)
+    broken.write_bytes(b"not a database")
+    sandboxed(data_home, ("msg_1", assistant("a", "x", 0.5)["info"]), session="ses_2")
+
+    assert read(NOT_FOUND) == SessionModels("missing")
