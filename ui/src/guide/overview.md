@@ -120,10 +120,10 @@ as `canopy notice` would, so a run already going keeps the words it started with
 
 ## The rail
 
-The strip beside the nav, on every page. From the top: a search box over the whole journal (below), everything working
-right now, and what the last 24 hours and the last 30 days cost, each a link to the spend page. Those count every
-agent session on this machine, canopy's runs and the sessions outside canopy alike; hover one to see when the outside
-ones were last read. **Working** lists every
+The strip beside the nav, on every page. At the top, a search box over the whole journal (below) and everything
+working right now; at the bottom, what the last 24 hours and the last 30 days cost, each a link to the spend page.
+Those count every agent session on this machine, canopy's runs and the sessions outside canopy alike; hover one to
+see when the outside ones were last read. **Working** lists every
 agent on the clock: worker runs by their ticket, reviews by their PR, chore runs by their chore, and task runs as
 `task:N#M` over your text's first line, with the runs waiting on you after them. A worker run's row says what it's
 doing under its ticket's title: `planning`, `implementing`, `fixing CI`. While it works, that comes as a quip of the
@@ -131,9 +131,9 @@ ticket's own, `appeasing CI`; hover it for the plain words, or turn the quips of
 row opens its run's page. It shows four rows at most, then `+N more`, which opens the page that lists the rest, and
 it dims while the loop isn't answering, since what it shows may have ended. The 24 hours open the spend page by the
 hour, and the 30 days by the day. A ticket you stopped drops out once its run ends; a question it left behind waits
-on nothing, so it is not listed either. Its foot names the version canopy is serving, which links to canopy's
-releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and **Settings**. On a narrow
-window the rail folds to icons; **Open the rail** brings it back.
+on nothing, so it is not listed either. Under the spend, the rail's foot names the version canopy is serving, which
+links to canopy's releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and **Settings**.
+On a narrow window the rail folds to icons; **Open the rail** brings it back.
 
 From the keyboard, the first Tab on any page lands on **Skip to content**, which hides until then. Press Enter and the
 next Tab is the page's own, not the rail's dozen or so stops. Your Tab key has better things to do.

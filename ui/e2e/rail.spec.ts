@@ -109,6 +109,28 @@ test("the rail's spend at an operator's figures: two rows, the costs right-align
     await expect(spend).toHaveScreenshot('rail-spend-dark.png')
 })
 
+test("the spend stands on the footer at the rail's foot, the room above it one gap", async ({ page }) => {
+    await page.setViewportSize({ width: 1720, height: 1440 })
+    await page.goto('attention')
+    await settled(page)
+    const rect = (testId: string): Promise<DOMRect> =>
+        page.getByTestId(testId).evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect)
+    const working = await rect('rail-working')
+    const spend = await rect('rail-spend')
+    const footer = await rect('rail-footer')
+    // The spend sits right on the footer's hairline, and the footer on the window's foot.
+    expect(Math.abs(footer.top - spend.bottom)).toBeLessThan(1)
+    expect(Math.round(footer.bottom)).toBe(1440)
+    // What the window leaves over is between what is working and the spend, not under the spend.
+    expect(spend.top - working.bottom).toBeGreaterThan(400)
+
+    // An 800px window still holds the rail whole: what is working ends above the foot, not cut off under it.
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await expect
+        .poll(async () => (await rect('rail-spend')).top - (await rect('rail-working')).bottom)
+        .toBeGreaterThan(0)
+})
+
 test('the version stays at the window foot on a page longer than the window', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 600 })
     await page.goto('settings')
@@ -130,7 +152,7 @@ for (const [theme, palette] of [
     ['dark', 'monokai'],
     ['light', 'gruvbox'],
 ] as const) {
-    test(`the foot's buttons sit side by side inside the rail in ${theme} ${palette}`, async ({ page }) => {
+    test(`the foot's buttons split the hairline's width in ${theme} ${palette}`, async ({ page }) => {
         await storeTheme(page, theme)
         await storePalette(page, theme, palette)
         await page.goto('attention')
@@ -141,8 +163,10 @@ for (const [theme, palette] of [
         const guide = await rect('rail-guide')
         const settings = await rect('rail-settings')
         expect(settings.top).toBe(guide.top)
-        expect(guide.left).toBeGreaterThanOrEqual(footer.left)
-        expect(settings.right).toBeLessThanOrEqual(footer.right)
+        // Edge to edge on the hairline, half each.
+        expect(Math.abs(guide.left - footer.left)).toBeLessThan(1)
+        expect(Math.abs(settings.right - footer.right)).toBeLessThan(1)
+        expect(Math.abs(settings.width - guide.width)).toBeLessThan(1)
         // Each label whole, not cut short.
         for (const testId of ['rail-guide', 'rail-settings']) {
             const button = page.getByTestId(testId)

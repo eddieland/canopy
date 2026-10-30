@@ -20,10 +20,13 @@ import type { FileRoutesById } from '@/routeTree.gen'
 const TIP_SECONDS = 20
 /** The shortest and longest Sprig waits, after a tip closes, before offering the next unasked: picked at random. */
 const WAIT_SECONDS = { least: 120, most: 360 }
-/** How far Sprig may stand over the foot of the rail's blocks, the spend, in a rail too short to hold it whole. */
+/**
+ * How far Sprig may stand over the foot of the rail's top, what is working, in a rail too short to hold it whole: the
+ * top's 12px of padding under its last block, then a little of that block's last row.
+ */
 const OVERLAP_PX = 40
 
-/** How Sprig fits its slot: with the room for its bubble too, or only for itself, standing over the spend a little. */
+/** How Sprig fits its slot: with the room for its bubble too, or only for itself, standing over what is working. */
 type Room = 'roomy' | 'tight'
 
 /** The tip Sprig last offered: who offered it, on which view, what it says, whether it is up, and if it was asked. */
@@ -56,12 +59,12 @@ interface Offer {
  * (`RAVE`): the lights going off offers a tip about them at once, a tip from before the rave is hidden, and so is a
  * rave tip once the lights come back on.
  *
- * It has a slot of its own in the rail's column, between what the rail holds and its footer: the slot is the room
- * left under the rail's blocks, and Sprig stands at its foot. A slot with room for Sprig and its bubble covers
- * nothing. A shorter one, as a laptop's window leaves, still shows Sprig if it can stand over the foot of the spend
- * by `OVERLAP_PX` or less, as the operator asked; there the bubble would cover the blocks above, so a tip shows only
- * when asked for, with a click, and Sprig lets the ones it would offer on its own pass. A slot shorter still leaves
- * Sprig out, rather than squeeze the blocks above.
+ * It has a slot of its own in the rail's column, between its top and its foot: the slot is the one gap left between
+ * what is working and the spend, and Sprig stands at its foot, on the spend's hairline. A slot with room for Sprig and
+ * its bubble covers nothing. A shorter one, as a laptop's window leaves, still shows Sprig if it can stand over the
+ * foot of what is working by `OVERLAP_PX` or less, as the operator asked; there the bubble would cover the blocks
+ * above, so a tip shows only when asked for, with a click, and Sprig lets the ones it would offer on its own pass. A
+ * slot shorter still leaves Sprig out, rather than squeeze the blocks above.
  *
  * Settings can put a Destiny Ghost in Sprig's place: it floats where Sprig stands, in a voice of its own
  * (src/lib/ghost.ts), and keeps every rule above. A tip one of them offered is never shown under the other's name.
