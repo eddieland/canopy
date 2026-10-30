@@ -279,9 +279,13 @@ for (const width of [1720, 1280]) {
         await expect(worker).toHaveAttribute('title', `${LONG}@high`)
         // Nothing reaches past the grid's edge but what an ellipsis cuts.
         expect(await agents.evaluate((el) => el.scrollWidth - el.clientWidth)).toBe(0)
-        // Each agent's model level with its persona, in one grid.
-        const persona = await agents.getByRole('button', { name: /^worker persona: /u }).boundingBox()
-        expect(Math.abs((persona?.y ?? 0) - ((await worker.boundingBox())?.y ?? 0))).toBeLessThan(1)
+        // Each agent's model level with its persona, in one grid, once the rows have taken their places.
+        const persona = agents.getByRole('button', { name: /^worker persona: /u })
+        await expect
+            .poll(async () =>
+                Math.abs(((await persona.boundingBox())?.y ?? 0) - ((await worker.boundingBox())?.y ?? 0)),
+            )
+            .toBeLessThan(1)
 
         await worker.click()
         const list = page.getByRole('listbox', { name: 'Models' })
