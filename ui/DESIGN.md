@@ -120,9 +120,10 @@ Rules:
   no blur, or, on black, where a shadow does nothing, the accent's glow), and its face (`--face`: interface text in
   Plex Sans, or in Plex Mono, as an editor sets it). Spacing, sizes, and layout never change with a palette, and
   neither do the status colors; only the mono face reflows text, since it runs wider, so it stays with the few palettes
-  that are an editor's own look: Gruvbox's sides and Monokai. The defaults take the soft shadow, Gruvbox's dark the
-  crisp corners, hard shadow, and mono face of an editor of the nineties, and black no edges, soft corners, and the
-  glow.
+  that are an editor's own look: Gruvbox's sides and Monokai. There it draws every line a step smaller, at 15/16 of
+  the size asked for, in the same line boxes, so the wider face crowds less and no line changes height. The defaults
+  take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the nineties, and
+  black no edges, soft corners, and the glow.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
@@ -147,7 +148,8 @@ Rules:
   two sit together on a line. Self-hosted from `@fontsource-variable/ibm-plex-sans` and `@fontsource/ibm-plex-mono`
   (Plex Mono has no variable build); the latin subsets are preloaded, so text never paints in a fallback face. A
   heavier mono weight needs its own import in `src/index.css` and a place in `PRELOAD_FONTS` in `vite.config.ts`.
-  A palette may set interface text in Plex Mono too (Palettes, under Tokens), so no third face is ever loaded.
+  A palette may set interface text in Plex Mono too (Palettes, under Tokens), a step smaller, from the same files
+  (`src/styles/mono-compact.css`), so no third face is ever loaded.
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
 - `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.
