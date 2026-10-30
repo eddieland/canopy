@@ -213,6 +213,11 @@ class SpendModel(Model):
     cost_usd: float | None = None
     """What the sessions priced those replies at, in US dollars; for the runs no session named a model for, what the
     runs reported, None when none did."""
+    workspace_runs: int | None = None
+    """For a row narrowed to a ticket, the workspace's runs of its kind on its model in the window, the ticket's among
+    them, to compare with; None for a row of the whole workspace."""
+    workspace_cost_usd: float | None = None
+    """What those runs spent on the model, as `cost_usd` counts it; None as `workspace_runs` is."""
 
 
 class SpendFirstCallWeek(Model):
@@ -359,7 +364,8 @@ class SpendBreakdown(Model):
     models: list[SpendModel] = []
     """What each kind spent on each model, a row per kind and model: the kinds in a fixed order, overseer, workers,
     plans, chores, reviews, tasks, each kind's models the most costly first, and its runs no session named a model for
-    last."""
+    last. Asked for a ticket, its runs alone, its workers', plans', and reviews', each row with the workspace's beside
+    it; every other figure is the workspace's still."""
     month: SpendMonth | None = None
     """The local calendar month so far against the operator's monthly budget, whatever the window; None when no budget
     is set."""

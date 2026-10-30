@@ -235,6 +235,29 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
     assert c.get("/api/spend/breakdown", params={"days": 367}).status_code == 422
 
 
+def test_a_tickets_spend_by_model_is_its_own_runs_beside_the_workspaces(backend: Backend) -> None:
+    """Spend's By model narrowed to a ticket, and the ticket page's worker models, are one read."""
+    c = client(None, backend)
+    workspace = c.get("/api/spend/breakdown", params={"days": 30}).json()
+    found = c.get("/api/spend/breakdown", params={"days": 30, "ticket": "ABC-099"}).json()
+    # Its workers' and reviews' runs alone, each beside the workspace's runs of its kind on its model.
+    assert [(m["kind"], m["model"], m["runs"], m["workspace_runs"]) for m in found["models"]] == [
+        ("workers", "anthropic/claude-opus-4-1", 1, 1),
+        ("workers", "anthropic/claude-sonnet-4-5", 1, 10),
+        ("workers", None, 2, 14),
+        ("reviews", "openai/gpt-5", 2, 4),
+    ]
+    assert (found["models"][1]["cost_usd"], found["models"][1]["workspace_cost_usd"]) == (0.66, pytest.approx(15.39))
+    # Every other figure is the workspace's still, and the workspace's own rows have nothing beside them.
+    assert (found["totals"], found["tickets"]) == (workspace["totals"], workspace["tickets"])
+    assert {m["workspace_runs"] for m in workspace["models"]} == {None}
+    # The ticket's page carries its workers' rows, as By model shows them for it at 30 days.
+    workers = [m for m in found["models"] if m["kind"] == "workers"]
+    assert c.get("/api/tickets/ABC-099").json()["worker_models"] == workers
+    assert c.get("/api/spend/breakdown", params={"ticket": "NOPE-1"}).json()["models"] == []
+    assert c.get("/api/spend/breakdown", params={"ticket": ""}).status_code == 422
+
+
 def test_the_spend_breakdown_carries_each_kinds_first_calls_by_week_with_what_changed(backend: Backend) -> None:
     c = client(None, backend)
     found = c.get("/api/spend/breakdown", params={"days": 30}).json()["first_call_weeks"]

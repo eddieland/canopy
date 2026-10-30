@@ -27,6 +27,12 @@ export const DEFAULT_WINDOW: SpendBreakdownRange = { days: 7 }
 /** The windows the page offers, shortest first. */
 export const SPEND_WINDOWS: readonly SpendBreakdownRange[] = [{ hours: 24 }, DEFAULT_WINDOW, { days: 30 }]
 
+/**
+ * The window a ticket's worker spend by model covers on its page, as the server reads it (`TICKET_MODEL_DAYS` in
+ * canopy.serve.views): the page's longest, which the ticket's line opens.
+ */
+export const TICKET_MODEL_WINDOW = { days: 30 } as const satisfies SpendBreakdownRange
+
 // What the server divides a tool's characters by to estimate its tokens (`CHARS_PER_TOKEN` in canopy.core.spend).
 const CHARS_PER_TOKEN = 4
 
@@ -258,6 +264,8 @@ export function modelRows(models: readonly SpendModel[], kind: SpendKind | undef
             seen.runs += m.runs
             seen.replies += m.replies
             seen.cost_usd = addCost(seen.cost_usd, m.cost_usd)
+            seen.workspace_runs = addCost(seen.workspace_runs, m.workspace_runs)
+            seen.workspace_cost_usd = addCost(seen.workspace_cost_usd, m.workspace_cost_usd)
         }
     }
     return [...summed.values()].toSorted((a, b) =>
@@ -290,6 +298,37 @@ export function listedModels(models: readonly SpendModel[]): ReadonlySet<string>
 /** What a By model row's runs spent each, on average: its cost over its runs; null when they reported none. */
 export function perRun(row: ModelRow): number | null {
     return row.cost_usd === null || row.runs === 0 ? null : row.cost_usd / row.runs
+}
+
+/**
+ * What the workspace's runs of a ticket's By model row's kind and model spent each, on average, the ticket's among
+ * them: what its own `perRun` reads against. Null for a row of the whole workspace, or when none reported a cost.
+ */
+export function workspacePerRun(row: Pick<ModelRow, 'workspace_runs' | 'workspace_cost_usd'>): number | null {
+    const runs = row.workspace_runs ?? 0
+    const cost = row.workspace_cost_usd ?? null
+    return cost === null || runs === 0 ? null : cost / runs
+}
+
+/**
+ * The kind By model shows: the one `chosen`, or, with none, a ticket's workers', the runs a model override moves, so
+ * the reviewer's model does not mix in; undefined for every kind, which `all` chooses while a ticket is set.
+ */
+export function modelKind(chosen: SpendKind | 'all' | undefined, ticket: string | undefined): SpendKind | undefined {
+    if (chosen === 'all') {
+        return undefined
+    }
+    return chosen ?? (ticket === undefined ? undefined : 'workers')
+}
+
+/**
+ * The models a ticket's page compares, from its worker runs' spend by model: those its sessions named, when more than
+ * one did, or one did and the ticket's `override` sets its workers' model. One model alone, on the model config
+ * gives every ticket, is the workspace's figure again; none when that is so.
+ */
+export function comparedModels(models: readonly SpendModel[], override: boolean): SpendModel[] {
+    const named = models.filter((m) => m.model !== null)
+    return named.length > 1 || (override && named.length > 0) ? named : []
 }
 
 /**

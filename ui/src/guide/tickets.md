@@ -180,10 +180,15 @@ from, so nothing below jumps, and the keyboard's focus is back on the button you
 ticket's models change again; a pick canopy refuses says why in that agent's row.
 The override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
 **Clear the override**, below the list, where no amount of scrolling hides it. One ticket can run on a different model
-from the rest, and [the spend page](reports#the-spend-page) splits what each cost by model once they ran. Each run
-names the model it asked for while it works, then the model that served it, and both when they differ, on its page and
-in the ticket's Runs panel, so a ticket with an override reads straight down the panel and you can check it really ran
-on what you picked.
+from the rest, which makes it a cheap canary, and the page keeps score. Once more than one model has served this
+ticket's workers in the last 30 days, or the workers' override is set, a line under the models gives each model its
+worker runs and what they cost each, beside what the whole workspace's worker runs on that model cost each:
+`gpt-5@high: 2 runs, $1.10/run · workspace $0.88/run`. Workers only, so the reviewer's model stays out of it, which the
+split under the total cost can't say. Two runs are an anecdote, not a benchmark, so weigh them as one. Its **worker
+spend, 30 days** label opens [By model](reports#the-spend-page) on the spend page narrowed to this ticket, for the
+replies and the rest of its runs. Each run names the model it asked for while it works, then the model that served
+it, and both when they differ, on its page and in the ticket's Runs panel, so a ticket with an override reads straight
+down the panel and you can check it really ran on what you picked.
 
 Under each model sit the variants the runtime lists for it, in the runtime's order, `@high` and the like for a reasoning
 effort; the model's own row, marked **(default)**, is the effort it runs at when no variant is named. So the override

@@ -51,9 +51,14 @@ export const keys = {
     hostSamples: ['host-samples'] as const,
     hostProcesses: ['host-processes'] as const,
     spend: ['spend'] as const,
-    // Under the spend's key, so the stream's `spend.updated` marks every window's breakdown stale.
-    spendBreakdown: (range: SpendBreakdownRange) =>
-        ['spend', 'breakdown', range.hours === undefined ? `${range.days}d` : `${range.hours}h`] as const,
+    // Under the spend's key, so the stream's `spend.updated` marks every window's breakdown stale, a ticket's too.
+    spendBreakdown: (range: SpendBreakdownRange, ticket?: string) =>
+        [
+            'spend',
+            'breakdown',
+            range.hours === undefined ? `${range.days}d` : `${range.hours}h`,
+            ticket ?? null,
+        ] as const,
     // Under the breakdowns' key too, so whatever marks them stale (a cost, a run's start or end, a tick's decisions)
     // marks the months stale with them.
     monthlyReport: (months: number) => ['spend', 'breakdown', 'months', months] as const,
@@ -204,13 +209,14 @@ export const spendQuery = queryOptions({
 
 /**
  * What the last `days` local days cost, by day and by what the ticks bought, as `canopy spend --days` prints it, or the
- * last `hours` clock hours, by the hour. The stream's `spend.updated` marks it stale.
+ * last `hours` clock hours, by the hour; with a `ticket`, its spend by model is that ticket's runs alone, each beside
+ * the workspace's. The stream's `spend.updated` marks it stale.
  */
-export function spendBreakdownQuery(range: SpendBreakdownRange) {
+export function spendBreakdownQuery(range: SpendBreakdownRange, ticket?: string) {
     return queryOptions({
-        queryKey: keys.spendBreakdown(range),
+        queryKey: keys.spendBreakdown(range, ticket),
         queryFn: async ({ signal }) =>
-            unwrap(await api.GET('/api/spend/breakdown', { params: { query: range }, signal })),
+            unwrap(await api.GET('/api/spend/breakdown', { params: { query: { ...range, ticket } }, signal })),
     })
 }
 

@@ -73,11 +73,27 @@ def spend_breakdown(
             ),
         ),
     ] = None,
+    ticket: Annotated[
+        str | None,
+        Query(
+            min_length=1,
+            max_length=200,
+            description=(
+                "A ticket's key: its spend by model is that ticket's runs alone, each beside the workspace's. Every "
+                "other figure is the workspace's still."
+            ),
+        ),
+    ] = None,
 ) -> SpendBreakdown:
     """What each day, or hour, of the window cost, by kind; the ticks by what they bought; and the newest idle ticks."""
     if days is not None and hours is not None:
         raise HTTPException(status_code=422, detail="give days or hours, not both")
     with backend.open() as ctx:
         if hours is not None:
-            return spend_views.spend_breakdown_hours(backend, ctx, hours)
-        return spend_views.spend_breakdown(backend, ctx, spending.DEFAULT_DAYS if days is None else days)
+            return spend_views.spend_breakdown_hours(backend, ctx, hours, ticket=ticket)
+        return spend_views.spend_breakdown(
+            backend,
+            ctx,
+            spending.DEFAULT_DAYS if days is None else days,
+            ticket=ticket,
+        )

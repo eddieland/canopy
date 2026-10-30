@@ -29,6 +29,7 @@ from canopy.core import (
     run_models,
     ticket_models,
 )
+from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunKind, RunStatus
 from canopy.runs import attachments
@@ -67,6 +68,7 @@ from canopy.serve.schema import (
 )
 from canopy.serve.schema.model import AgentModel
 from canopy.serve.schema.persona import AgentPersona, PersonaChoice
+from canopy.serve.schema.spend import SpendModel
 from canopy.serve.schema.ticket import TicketDetail, TicketForget, Unit
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
 
@@ -92,6 +94,8 @@ SUMMARY_LENGTH = 300
 # The windows the spend figures and a chore's spend cover: the last day and the last 30.
 SPEND_DAY_HOURS = 24
 SPEND_MONTH_HOURS = 30 * 24
+#: The local days a ticket's worker spend by model covers: the Spend page's longest window, which its line links to.
+TICKET_MODEL_DAYS = 30
 _CHORE = "chore:"
 _PR = "pr:"
 # A one-off task's item (DESIGN §36): no ticket, chore, or PR, but the task's own page.
@@ -672,6 +676,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         personas=[agent_persona(n) for n in personas.next_for(ctx.conn, ctx.config, key)],
         persona_names=[p.name for p in personas.listed(ctx.config)],
         models=[agent_model(n, served) for n in ticket_models.next_for(ctx.conn, ctx.config, key)],
+        worker_models=_worker_models(backend, ctx, key),
         attachments=attachments_of(ctx, conversation.Ref(conversation.TICKET, key)),
     )
 
@@ -782,6 +787,31 @@ def _ticket_cost(conn: sqlite3.Connection, key: str) -> CostTotal:
         cost_usd=float(cost) if cost is not None else None,
         models=[ModelCost(model=m.model, runs=m.runs, cost_usd=m.cost_usd) for m in run_models.of_ticket(conn, key)],
     )
+
+
+def spend_model(found: spending.ModelSpend) -> SpendModel:
+    """What one kind's runs spent on one model, as the API sends it.
+
+    Returns:
+        The row, with the workspace's beside it when it is a ticket's.
+    """
+    return SpendModel(
+        kind=found.kind,
+        model=found.model,
+        runs=found.runs,
+        replies=found.replies,
+        cost_usd=found.cost_usd,
+        workspace_runs=found.workspace_runs,
+        workspace_cost_usd=found.workspace_cost_usd,
+    )
+
+
+# A ticket's worker runs by model over the Spend page's longest window, by the backend's clock, as its By model reads
+# them for the ticket.
+def _worker_models(backend: Backend, ctx: Context, key: str) -> list[SpendModel]:
+    start, end = spending.window(backend.clock(), TICKET_MODEL_DAYS)
+    since, until = db.format_time(start), db.format_time(end)
+    return [spend_model(m) for m in spending.models(ctx.conn, since, until, ticket=key, kind="workers")]
 
 
 def limit(found: served.Limit, *, repo: str | None = None) -> Limit:

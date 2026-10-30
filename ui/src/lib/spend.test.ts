@@ -19,7 +19,9 @@ import {
     dearestDay,
     doneText,
     kindsOffered,
+    comparedModels,
     listedModels,
+    modelKind,
     modelRows,
     monthName,
     perRun,
@@ -32,10 +34,14 @@ import {
     unattributedShare,
     windowId,
     windowName,
+    workspacePerRun,
 } from './spend'
 
 const H24: Clock = { hours: '24', zone: false }
 const H12: Clock = { hours: '12', zone: false }
+
+// A By model row of the whole workspace, with no ticket's runs set beside the workspace's.
+const ALONE = { workspace_runs: null, workspace_cost_usd: null }
 
 const NONE: SpendCosts = {
     overseer: null,
@@ -191,16 +197,16 @@ describe('spend', () => {
 
     it("sums each model's runs over every kind, the costliest first and the unnamed last, or keeps one kind's", () => {
         const models: SpendModel[] = [
-            { kind: 'overseer', model: 'a/small', runs: 4, replies: 40, cost_usd: 1 },
-            { kind: 'overseer', model: null, runs: 2, replies: 0, cost_usd: null },
-            { kind: 'workers', model: 'a/big', runs: 1, replies: 9, cost_usd: 1.5 },
-            { kind: 'workers', model: 'a/small', runs: 2, replies: 6, cost_usd: 0.75 },
-            { kind: 'workers', model: null, runs: 3, replies: 0, cost_usd: 2 },
+            { kind: 'overseer', model: 'a/small', runs: 4, replies: 40, cost_usd: 1, ...ALONE },
+            { kind: 'overseer', model: null, runs: 2, replies: 0, cost_usd: null, ...ALONE },
+            { kind: 'workers', model: 'a/big', runs: 1, replies: 9, cost_usd: 1.5, ...ALONE },
+            { kind: 'workers', model: 'a/small', runs: 2, replies: 6, cost_usd: 0.75, ...ALONE },
+            { kind: 'workers', model: null, runs: 3, replies: 0, cost_usd: 2, ...ALONE },
         ]
         expect(modelRows(models, undefined)).toEqual([
-            { model: 'a/small', runs: 6, replies: 46, cost_usd: 1.75 },
-            { model: 'a/big', runs: 1, replies: 9, cost_usd: 1.5 },
-            { model: null, runs: 5, replies: 0, cost_usd: 2 },
+            { model: 'a/small', runs: 6, replies: 46, cost_usd: 1.75, ...ALONE },
+            { model: 'a/big', runs: 1, replies: 9, cost_usd: 1.5, ...ALONE },
+            { model: null, runs: 5, replies: 0, cost_usd: 2, ...ALONE },
         ])
         expect(modelRows(models, 'overseer').map((m) => m.model)).toEqual(['a/small', null])
         expect(modelRows(models, 'plans')).toEqual([])
@@ -208,15 +214,60 @@ describe('spend', () => {
 
     it("gives a model's spend per run, so two models' runs compare, and the share no session named a model for", () => {
         const rows = [
-            { model: 'a/small', runs: 6, replies: 46, cost_usd: 1.5 },
-            { model: 'a/big', runs: 1, replies: 9, cost_usd: 0.5 },
-            { model: null, runs: 5, replies: 0, cost_usd: 2 },
+            { model: 'a/small', runs: 6, replies: 46, cost_usd: 1.5, ...ALONE },
+            { model: 'a/big', runs: 1, replies: 9, cost_usd: 0.5, ...ALONE },
+            { model: null, runs: 5, replies: 0, cost_usd: 2, ...ALONE },
         ]
         expect(rows.map((row) => perRun(row))).toEqual([0.25, 0.5, 0.4])
-        expect(perRun({ model: null, runs: 2, replies: 0, cost_usd: null })).toBeNull()
+        expect(perRun({ model: null, runs: 2, replies: 0, cost_usd: null, ...ALONE })).toBeNull()
         expect(unattributedShare(rows)).toBe(0.5)
         expect(unattributedShare(rows.slice(0, 2))).toBeNull()
-        expect(unattributedShare([{ model: null, runs: 2, replies: 0, cost_usd: null }])).toBeNull()
+        expect(unattributedShare([{ model: null, runs: 2, replies: 0, cost_usd: null, ...ALONE }])).toBeNull()
+    })
+
+    it("sets a ticket's rows beside the workspace's per run, summed over every kind as their own are", () => {
+        const models: SpendModel[] = [
+            {
+                kind: 'workers',
+                model: 'a/big',
+                runs: 2,
+                replies: 9,
+                cost_usd: 2.2,
+                workspace_runs: 5,
+                workspace_cost_usd: 4.5,
+            },
+            {
+                kind: 'reviews',
+                model: 'a/big',
+                runs: 1,
+                replies: 1,
+                cost_usd: 0.3,
+                workspace_runs: 3,
+                workspace_cost_usd: 0.75,
+            },
+        ]
+        const [summed] = modelRows(models, undefined)
+        expect(summed).toMatchObject({ runs: 3, workspace_runs: 8, workspace_cost_usd: 5.25 })
+        expect(models.map((m) => workspacePerRun(m))).toEqual([0.9, 0.25])
+        expect(workspacePerRun({ ...ALONE })).toBeNull()
+        expect(workspacePerRun({ workspace_runs: 2, workspace_cost_usd: null })).toBeNull()
+    })
+
+    it("opens By model on a ticket's workers, which all widens again, and on every kind without one", () => {
+        expect(modelKind(undefined, 'ABC-1')).toBe('workers')
+        expect(modelKind('all', 'ABC-1')).toBeUndefined()
+        expect(modelKind('reviews', 'ABC-1')).toBe('reviews')
+        expect(modelKind(undefined, undefined)).toBeUndefined()
+        expect(modelKind('all', undefined)).toBeUndefined()
+    })
+
+    it('compares the models that served a ticket only when more than one did, or its override set one', () => {
+        const one = [modelRow('workers', 'a/big'), modelRow('workers', null)]
+        const two = [modelRow('workers', 'a/big'), modelRow('workers', 'a/small'), modelRow('workers', null)]
+        expect(comparedModels(one, false)).toEqual([])
+        expect(comparedModels(one, true).map((m) => m.model)).toEqual(['a/big'])
+        expect(comparedModels(two, false).map((m) => m.model)).toEqual(['a/big', 'a/small'])
+        expect(comparedModels([modelRow('workers', null)], true)).toEqual([])
     })
 
     it("sums each tool's calls over every kind, the most returned first, its tokens from the sum", () => {
@@ -314,7 +365,7 @@ describe('sessionsReadText', () => {
 
 // One kind's By model row for `model`, of one run.
 function modelRow(kind: SpendModel['kind'], model: string | null): SpendModel {
-    return { kind, model, runs: 1, replies: 1, cost_usd: 0.1 }
+    return { kind, model, runs: 1, replies: 1, cost_usd: 0.1, ...ALONE }
 }
 
 describe('listedModels', () => {

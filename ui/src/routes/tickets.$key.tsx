@@ -27,6 +27,7 @@ import { TicketAgents } from '@/components/ticket-agents'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
 import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLinks } from '@/components/ticket-links'
+import { TicketModelSpend } from '@/components/ticket-model-spend'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
@@ -186,6 +187,13 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         names={detail.persona_names}
                         models={detail.models}
                         className="border-t"
+                    />
+                    {/* What its workers' models cost each beside the workspace's, once there is a model to compare. */}
+                    <TicketModelSpend
+                        ticketKey={ticket.key}
+                        spend={detail.worker_models}
+                        models={detail.models}
+                        className="px-3 pb-3"
                     />
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the

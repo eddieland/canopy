@@ -968,6 +968,29 @@ def test_each_kind_s_spend_is_split_by_the_models_its_sessions_name(tmp_path: Pa
         ("workers", "openai/gpt-x", 2, 15, 3.0),
         ("workers", "anthropic/claude-sonnet", 1, 6, 2.0),
     ]
+    assert {(m.workspace_runs, m.workspace_cost_usd) for m in found} == {(None, None)}  # the workspace's own
+
+
+def test_a_ticket_s_spend_by_model_is_its_runs_beside_the_workspace_s(tmp_path: Path, journals: Journals) -> None:
+    """Narrowed to a ticket, a row counts its runs on a model, with the workspace's runs of its kind on it beside."""
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_models(conn, NOW)
+    ticket(conn, "PROJ-2")
+    later = tick(conn, earlier(NOW, 0, 1), 0.1)
+    run(conn, later, "PROJ-2", earlier(NOW, 0, 1), 4.0, None)
+    served(conn, "runs", 3, ("openai/gpt-x", 8, 4.0))
+    review(conn, later, "https://github.com/acme/api/pull/1", "PROJ-2", earlier(NOW, 0, 1), 0.5)  # not read yet
+    found = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR, ticket="PROJ-2")
+    # No overseer's row: a tick names no ticket. PROJ-1's runs are only among the workspace's.
+    assert [(m.kind, m.model, m.runs, m.cost_usd, m.workspace_runs, m.workspace_cost_usd) for m in found.models] == [
+        ("workers", "openai/gpt-x", 1, 4.0, 3, 7.0),
+        ("reviews", None, 1, 0.5, 1, 0.5),
+    ]
+    # Every other figure is the workspace's.
+    assert found.totals == spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR).totals
+    since, until = (db.format_time(t) for t in spend.window(NOW, 1))
+    assert [m.kind for m in spend.models(conn, since, until, ticket="PROJ-2", kind="workers")] == ["workers"]
+    assert [m.model for m in spend.models(conn, since, until, kind="overseer")] == ["anthropic/claude-haiku", None]
 
 
 def test_canopy_spend_prints_the_spend_by_model(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:

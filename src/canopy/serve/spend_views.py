@@ -20,7 +20,6 @@ from canopy.serve.schema.spend import (
     SpendDay,
     SpendDirectory,
     SpendFirstCallWeek,
-    SpendModel,
     SpendMonth,
     SpendPullRequest,
     SpendSessions,
@@ -33,7 +32,7 @@ from canopy.serve.schema.spend import (
     SpendWoken,
 )
 from canopy.serve.tick_views import tick_of
-from canopy.serve.views import SPEND_DAY_HOURS, SPEND_MONTH_HOURS
+from canopy.serve.views import SPEND_DAY_HOURS, SPEND_MONTH_HOURS, spend_model
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -70,24 +69,34 @@ def _spent(ctx: Context, now: datetime, hours: int) -> SpendWindow:
     return SpendWindow(since=since, hours=hours, cost_usd=spent)
 
 
-def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown:
+def spend_breakdown(backend: Backend, ctx: Context, days: int, *, ticket: str | None = None) -> SpendBreakdown:
     """What the last `days` local days cost, by the backend's clock, as `canopy spend --days` prints it.
 
-    Returns:
-        The breakdown, with the newest idle ticks in the window, and the month against its budget.
-    """
-    now = backend.clock()
-    return _spend_breakdown(ctx, spending.breakdown(ctx.conn, now, days, state_dir=ctx.state_dir), now)
-
-
-def spend_breakdown_hours(backend: Backend, ctx: Context, hours: int) -> SpendBreakdown:
-    """What the last `hours` clock hours cost, by the backend's clock, by the hour.
+    `ticket` narrows its spend by model to that ticket's runs, each beside the workspace's (`spend.models`).
 
     Returns:
         The breakdown, with the newest idle ticks in the window, and the month against its budget.
     """
     now = backend.clock()
-    return _spend_breakdown(ctx, spending.breakdown_hours(ctx.conn, now, hours, state_dir=ctx.state_dir), now)
+    found = spending.breakdown(ctx.conn, now, days, state_dir=ctx.state_dir, ticket=ticket)
+    return _spend_breakdown(ctx, found, now)
+
+
+def spend_breakdown_hours(
+    backend: Backend,
+    ctx: Context,
+    hours: int,
+    *,
+    ticket: str | None = None,
+) -> SpendBreakdown:
+    """What the last `hours` clock hours cost, by the backend's clock, by the hour, as `spend_breakdown` reads them.
+
+    Returns:
+        The breakdown, with the newest idle ticks in the window, and the month against its budget.
+    """
+    now = backend.clock()
+    found = spending.breakdown_hours(ctx.conn, now, hours, state_dir=ctx.state_dir, ticket=ticket)
+    return _spend_breakdown(ctx, found, now)
 
 
 def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> SpendBreakdown:
@@ -149,10 +158,7 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> 
             )
             for t in found.tools
         ],
-        models=[
-            SpendModel(kind=m.kind, model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd)
-            for m in found.models
-        ],
+        models=[spend_model(m) for m in found.models],
         month=_spend_month(month) if month is not None else None,
         sessions=_spend_sessions(found.sessions) if found.sessions is not None else None,
         first_call_weeks=[

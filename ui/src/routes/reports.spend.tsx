@@ -54,6 +54,7 @@ import {
     GROUP_LABEL,
     kindsOffered,
     listedModels,
+    modelKind,
     modelRows,
     monthName,
     perRun,
@@ -68,6 +69,7 @@ import {
     unattributedShare,
     windowId,
     windowName,
+    workspacePerRun,
 } from '@/lib/spend'
 import type { BudgetState, ModelRow, ToolRow } from '@/lib/spend'
 import { tokenCount } from '@/lib/transcript'
@@ -77,10 +79,12 @@ import { NO_TICKET } from '@/lib/words'
 interface SpendSearch {
     days?: number | undefined
     hours?: number | undefined
-    model_kind?: SpendKind | undefined
+    // `all` keeps every kind while a ticket is set, whose own default is its workers.
+    model_kind?: SpendKind | 'all' | undefined
     tool_kind?: SpendKind | undefined
     first_kind?: SpendKind | undefined
     first_series?: string | undefined
+    ticket?: string | undefined
 }
 
 // The search keys of the kind filters: By model's, By tool's, and First calls by week's.
@@ -113,6 +117,9 @@ const EST_TOKENS_HINT =
 // What a model's runs count, and why a kind's runs can have no model named, on hover.
 const MODEL_RUNS_HINT = 'The runs it wrote a reply of: a run on two models counts under each'
 const PER_RUN_HINT = 'What it spent over its runs: a run on two models counts its share of the cost under each'
+const WORKSPACE_HINT =
+    "What the workspace's runs of the kind spent on the model, over its runs: this ticket's among them, every other " +
+    "ticket's too"
 const UNLISTED_HINT = 'The runs page lists no overseer tick by model: Ticks, under Runs, lists them by tick'
 const NO_MODEL_HINT =
     "Runs whose sessions named no model: not read yet, as a tick reads a few ended runs' sessions; no longer kept by " +
@@ -183,6 +190,8 @@ const PEAK_JUSTIFY: Record<PeakAlign, string> = {
  * what it got done: the tickets marked done, and what each ticket's and PR's own runs cost. The window is `?hours=24`,
  * by the hour, or `?days=`, a week or 30 days; the nav opens the week, and the rail's Spent counters their own window.
  * `?model_kind=` and `?tool_kind=` keep one kind's rows of By model and By tool, which otherwise sum every kind's.
+ * `?ticket=` narrows By model to that ticket's runs, each beside the workspace's per run, and opens it on its workers'
+ * (`modelKind`), which `?model_kind=all` widens again; every other panel is the workspace's still.
  * `?first_kind=` picks the kind First calls by week draws, the first with a week otherwise, and `?first_series=` one
  * of its chores or models, `chore:deps` or `model:` and the model's id, in place of all its runs.
  */
@@ -194,11 +203,12 @@ export const Route = createFileRoute('/reports/spend')({
         return {
             days: picked?.days,
             hours: picked?.hours,
-            model_kind: SPEND_KINDS.find((k) => k === search['model_kind']),
+            model_kind: search['model_kind'] === 'all' ? 'all' : SPEND_KINDS.find((k) => k === search['model_kind']),
             tool_kind: SPEND_KINDS.find((k) => k === search['tool_kind']),
             first_kind: SPEND_KINDS.find((k) => k === search['first_kind']),
             // Any series is kept: one the window's weeks do not have reads as the kind's own.
             first_series: typeof search['first_series'] === 'string' ? search['first_series'] : undefined,
+            ticket: typeof search['ticket'] === 'string' && search['ticket'] !== '' ? search['ticket'] : undefined,
         }
     },
     component: SpendPage,
@@ -208,7 +218,9 @@ function SpendPage() {
     const search = Route.useSearch()
     const shown = rangeOf(search)
     const navigate = Route.useNavigate()
-    const query = useQuery(spendBreakdownQuery(shown))
+    const query = useQuery(spendBreakdownQuery(shown, search.ticket))
+    // By model's kind: the one chosen, or a ticket's workers'.
+    const modelsOf = modelKind(search.model_kind, search.ticket)
     const clock = useClock()
     // What the empty panels say they looked over: `these 24 hours`, `these 7 days`.
     const span = windowName(shown)
@@ -307,18 +319,17 @@ function SpendPage() {
                     <Panel data-testid="spend-models">
                         <PanelHeader label="By model">
                             <span className="flex flex-wrap items-center gap-x-3">
+                                {search.ticket !== undefined && <TicketScope ticket={search.ticket} />}
                                 <KindFilter
                                     name="model_kind"
-                                    kinds={kindsOffered(data?.models ?? [], search.model_kind)}
-                                    chosen={search.model_kind}
+                                    kinds={kindsOffered(data?.models ?? [], modelsOf)}
+                                    chosen={modelsOf}
                                 />
                                 {data !== undefined && (
-                                    <Unattributed
-                                        share={unattributedShare(modelRows(data.models, search.model_kind))}
-                                    />
+                                    <Unattributed share={unattributedShare(modelRows(data.models, modelsOf))} />
                                 )}
                                 <span className="readout text-xs text-muted-foreground" data-testid="spend-model-count">
-                                    {data === undefined ? '' : modelCount(modelRows(data.models, search.model_kind))}
+                                    {data === undefined ? '' : modelCount(modelRows(data.models, modelsOf))}
                                 </span>
                             </span>
                         </PanelHeader>
@@ -326,10 +337,11 @@ function SpendPage() {
                             <PanelSkeleton rows={4} className="min-h-32" />
                         ) : (
                             <Models
-                                models={modelRows(data.models, search.model_kind)}
-                                kind={search.model_kind}
+                                models={modelRows(data.models, modelsOf)}
+                                kind={modelsOf}
                                 listed={listedModels(data.models)}
                                 span={span}
+                                ticket={search.ticket}
                             />
                         )}
                     </Panel>
@@ -931,11 +943,38 @@ function KindLink({
     return (
         // Another kind of first calls has other chores and models: its series starts as all its runs.
         <FilterLink
-            search={(prev) => ({ ...prev, [name]: kind, ...(name === 'first_kind' && { first_series: undefined }) })}
+            search={(prev) => ({
+                ...prev,
+                [name]: kind ?? (name === 'model_kind' && prev.ticket !== undefined ? 'all' : undefined),
+                ...(name === 'first_kind' && { first_series: undefined }),
+            })}
             selected={selected}
         >
             {children}
         </FilterLink>
+    )
+}
+
+/**
+ * The ticket By model is narrowed to, in its header: its key, opening its page, then a chip that widens the table to
+ * every ticket's runs again, the kind chosen kept.
+ */
+function TicketScope({ ticket }: { ticket: string }) {
+    return (
+        <span className="flex items-center gap-1" data-testid="spend-model-ticket">
+            <span className="mr-1 font-mono text-xs text-muted-foreground">ticket</span>
+            <TicketLink ticketKey={ticket} />
+            <FilterLink
+                search={(prev) => ({
+                    ...prev,
+                    ticket: undefined,
+                    model_kind: prev.model_kind === 'all' ? undefined : prev.model_kind,
+                })}
+                selected={false}
+            >
+                every ticket
+            </FilterLink>
+        </span>
     )
 }
 
@@ -1042,11 +1081,13 @@ function Models({
     kind,
     listed,
     span,
+    ticket,
 }: {
     models: ModelRow[]
     kind: SpendKind | undefined
     listed: ReadonlySet<string>
     span: string
+    ticket: string | undefined
 }) {
     // The runs page's kind for the kind shown; undefined for every kind, and null for one it lists no run of by model.
     const of = kind === undefined ? undefined : RUNS_KIND[kind]
@@ -1054,7 +1095,7 @@ function Models({
     if (models.length === 0) {
         return (
             <Empty size="panel">
-                no {runs} started in these {span}
+                no {runs} {ticket === undefined ? '' : `of ${ticket} `}started in these {span}
             </Empty>
         )
     }
@@ -1079,6 +1120,14 @@ function Models({
                         <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap" title={PER_RUN_HINT}>
                             per run
                         </th>
+                        {ticket !== undefined && (
+                            <th
+                                className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap"
+                                title={WORKSPACE_HINT}
+                            >
+                                workspace per run
+                            </th>
+                        )}
                     </tr>
                 </thead>
                 <tbody className="font-mono text-xs">
@@ -1115,6 +1164,11 @@ function Models({
                             <td className="readout pl-3">
                                 <Cost usd={perRun(m)} />
                             </td>
+                            {ticket !== undefined && (
+                                <td className="readout pl-3 text-muted-foreground">
+                                    <Cost usd={workspacePerRun(m)} />
+                                </td>
+                            )}
                         </tr>
                     ))}
                 </tbody>
