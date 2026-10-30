@@ -66,13 +66,12 @@ missed. Three stages, in order, each in its own PRs; stage 3 waits on stage 2's 
   instructions, the diff is data, the definition writes nothing), T3 (one more run per reviewed commit under review
   capacity, `max_workers`, and the daily limit, not the per-PR limit, and not retried on a commit).
 - **Rejected:** the reminder after the push alone (the fix it asks for is a second CI run); after each commit (a diff
-  not yet whole, asked again and again); a git `pre-push` hook (`core.hooksPath` replaces the repository's own, and its
-  state would live in the checkout); the list as standing instructions (the operator's already emphasize these rules,
-  and workers miss them; no record per item); a persona (it cannot narrow, §31); the review first (a run, a slot, and a
-  `resume` per commit before the cheaper ask is measured); one review run per item (as many leases per commit); one list
-  for the workspace (another repository's items are `n/a` noise, and keeping them apart by `paths:` grows one list past
-  its bound); the list read from the repository's checkout, a file of its own included (T1, T7); a reminder to the
-  adversarial reviewer (its prompt already holds the repository's rules as one input; the list's place there is the
+  not yet whole, asked again and again); the list as standing instructions (the operator's already emphasize these
+  rules, and workers miss them; no record per item); a persona (it cannot narrow, §31); the review first (a run, a slot,
+  and a `resume` per commit before the cheaper ask is measured); one review run per item (as many leases per commit);
+  one list for the workspace (another repository's items are `n/a` noise, and keeping them apart by `paths:` grows one
+  list past its bound); the list read from the repository's checkout, a file of its own included (T1, T7); a reminder to
+  the adversarial reviewer (its prompt already holds the repository's rules as one input; the list's place there is the
   checklist review).
 - **TRUST_MODEL**, in the PR that builds stage 1: T1 (a forged `[canopy]` line can only ask the agent to check its own
   diff against a list it already holds); T4 (the plugin reads one more file in the answers directory and writes
@@ -101,4 +100,5 @@ line.
 Status: not started. Designed 2026-10-29 (DESIGN §42); the operator chose the reminder over the review as the first
 stage the same day, on the evidence that standing instructions already emphasize these rules and workers miss them.
 Made a list per repository 2026-10-30, at the operator's ask, and the reminder held before the push the same day, so a
-fix costs no CI run.
+fix costs no CI run. Where the hold lives, canopy's plugin or canopy's own `pre-push` hook, waits on the operator's call
+on the measurement of 2026-10-30 (MEASUREMENTS).

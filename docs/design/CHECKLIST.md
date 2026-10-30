@@ -82,8 +82,6 @@ review's, trusted under `canopy:review` (D089), a dismissal is counted per item,
 - The reminder after the push: the fix it asks for is a second push, and a second CI run, on most reminded runs.
 - The reminder after each commit: a worker commits many times before its diff is whole, so it is asked of half a change,
   and again and again.
-- A git `pre-push` hook: `core.hooksPath` would replace the repository's own hooks, and the hook keeps state in a
-  checkout a sandboxed run writes; the plugin already sees the call and the clock.
 - The list in `paths.worker_instructions` or `paths.reviewer_instructions`: the operator's already emphasize these
   rules, read once at the top of a long run and weighed against everything after; no record per item.
 - A persona: voice and emphasis, which cannot narrow a run or a review, and the prompt comes first (§31).
