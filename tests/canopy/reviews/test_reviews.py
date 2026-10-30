@@ -17,6 +17,7 @@ from canopy.core import (
     db,
     definitions,
     personas,
+    prompts,
     records,
     review_answers,
     review_diff,
@@ -52,6 +53,7 @@ from tests.canopy.helpers import (
     raises,
     tick_starts,
     ticket_sets,
+    told,
     tools_of,
     waits,
     with_events,
@@ -127,13 +129,15 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         assert rationale.startswith(f"review run 1: {sha} in ")
         assert rationale.endswith("; context=Start with src/retry.py")
 
-        prompt = reviewer["argv"][3]
+        # Its fixed instructions are its agent's body, which ends with the contract; it is sent the run's own.
+        prompt = told(reviewer)
         assert prompt.startswith("# canopy reviewer\n")
-        assert f"- Checkout: `{run_dir / 'checkout'}` is the repository at that commit." in prompt
+        assert reviewer["argv"][3].startswith("## Run\n\nThis is review 1 of at most ")
+        assert f"- Checkout: `{run_dir / 'checkout'}`" in reviewer["argv"][3]
         assert "Post nothing anywhere" in prompt
         assert "canopy-review" not in prompt
         assert "None: never report `low`." in prompt
-        assert prompt.rstrip().endswith(result.CONTRACT)
+        assert prompt.index(result.CONTRACT) < prompt.index("\n## Run\n")
 
 
 def test_a_review_hears_the_notice_in_force(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
@@ -194,6 +198,32 @@ def test_a_review_runs_in_the_reviewers_persona_and_records_it(
     c, _ = signed_in_client(ctx)
     got = c.get(f"/api/reviews/{reviewed.id}").json()
     assert (got["persona"], got["persona_digest"]) == ("skeptic", skeptic.digest)
+
+
+def test_reviews_share_their_reviewers_body_and_snapshot_and_are_sent_only_their_own(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    # DESIGN §13: the fixed instructions are the reviewer's body, the same for every review, whatever its commit,
+    # checkout, or round.
+    first = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    second = scenario.review(
+        reviews(feature_commit(git_pool, tmp_path), ticket="PROJ-1"),
+        reviewer=reviewer_reports(CLEAN),
+    )
+    runs = agent_runs(scenario.agent_log)
+    assert len(runs) == 2
+    assert runs[0]["env"]["OPENCODE_CONFIG_DIR"] == runs[1]["env"]["OPENCODE_CONFIG_DIR"]
+    bodies = {prompts.split(r.prompt).body for r in (first, second)}
+    assert len(bodies) == 1
+    [body] = bodies
+    assert body is not None
+    for reviewed, run in zip((first, second), runs, strict=True):
+        assert reviewed.row.sha not in body
+        assert run["argv"][3] == prompts.split(reviewed.prompt).message
+        assert f"- Commit: `{reviewed.row.sha}`" in run["argv"][3]
 
 
 def test_a_tickets_reviewer_override_reaches_its_reviews_alone(
@@ -922,7 +952,7 @@ def test_a_review_of_a_stacked_pr_runs_from_the_branch_it_merges_into(
     assert (reviewed.status, reviewed.row.base_branch) == ("done", "feature"), reviewed.printed.out
     [changed] = present(review_diff.read(review_diff.path_for(reviewed.row.log_path))).files
     assert changed.path == "backoff.py"
-    assert "- Base: the PR merges into `feature`, which is `origin/feature` in the checkout." in reviewed.prompt
+    assert "- Base: `feature`" in reviewed.prompt
     [reviewer] = agent_runs(scenario.agent_log)
     [fork] = reviewer["tools"]
     assert (fork["error"], fork["text"]) == (False, parent)
