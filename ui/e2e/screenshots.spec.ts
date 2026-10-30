@@ -139,6 +139,21 @@ for (const theme of THEMES) {
     }
 }
 
+// A palette that gives the shell a form of its own, its aurora, name, and nav highlight: the whole page, so the header
+// and the rail show.
+for (const palette of ['gruvbox', 'black'] as const) {
+    test(`the shell in ${palette} dark`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, 'dark')
+        await storePalette(page, 'dark', palette)
+        await signIn(page)
+        await page.goto('tickets/ABC-102')
+        await settled(page)
+        await expect(page.locator('html')).toHaveAttribute('data-dark-palette', palette)
+        await screenshotWhole(page, `shell-${palette}-dark.png`)
+    })
+}
+
 // A PR's feedback plan in each state it has, each on a PR of its own (canopy/serve/mock/feedback_plans.py): the panel
 // alone, so a change to it rewrites these small images rather than a PR's whole page.
 const FEEDBACK_PLANS = [

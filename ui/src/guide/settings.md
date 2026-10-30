@@ -28,8 +28,9 @@ Dracula's dark sides missed out the same way.
 A few palettes bring more than color. Dark **Gruvbox** has the crisp corners of an editor from the nineties, and
 menus and cards cast a hard shadow with no blur. **Black** drops the panels' outlines, since a step of lightness does
 the job on an OLED screen, rounds its corners, and lights what floats with its ultraviolet, because a shadow on black
-is a shadow nobody sees. The rest cast a soft shadow under what floats. Layout and sizes never change with a palette,
-so nothing moves when you switch.
+is a shadow nobody sees. The rest cast a soft shadow under what floats. Gruvbox turns the strip under the header into
+a stepped status bar and sets the name on a yellow block; Black makes it glow like a neon sign. Layout and sizes never
+change with a palette, so nothing moves when you switch.
 
 ## Time
 

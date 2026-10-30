@@ -130,7 +130,7 @@ export function AppShell() {
                         over its border. */}
                         <span
                             aria-hidden
-                            className="aurora pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90"
+                            className="aurora pointer-events-none absolute inset-x-0 -bottom-px opacity-90"
                         />
                         <div className="flex items-center gap-2.5">
                             <LiveMark stream={stream.status} />

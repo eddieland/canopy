@@ -380,6 +380,12 @@
      * lightness, and what floats and the primary action wear the accent's glow. Its corners are soft. */
     --radius: 0.75rem;
     --edge: transparent;
+    /* Its aurora blooms like neon, and its name glows; the nav's highlight is a tint with no hairline, its icon lit. */
+    --aurora-bloom: blur(6px);
+    --aurora-bloom-opacity: 1;
+    --wordmark-glow: drop-shadow(0 0 6px oklch(from var(--accent) l c h / 0.6));
+    --nav-hairline: 0;
+    --nav-on-glow: drop-shadow(0 0 6px currentColor);
     --depth-panel: none;
     --depth-float:
         0 0 0 1px oklch(from var(--accent) l c h / 0.45), 0 8px 32px -6px oklch(from var(--accent) l c h / 0.4);
@@ -426,6 +432,27 @@
     /* A code editor of the nineties: crisp corners, and a hard shadow with no blur under what floats and the primary
      * action. Panels sit flat on the canvas. */
     --radius: 0.1875rem;
+    /* Its aurora is a stepped bar of solid blocks, an editor's status line; its name sits on a block of its yellow; the
+     * nav's highlight is a solid block, the active item inked in the canvas's color, with no hairline. */
+    --aurora-height: 0.25rem;
+    --aurora-image: linear-gradient(
+        90deg,
+        var(--section-attention) 0 12.5%,
+        var(--section-tickets) 0 25%,
+        var(--section-tasks) 0 37.5%,
+        var(--section-pull-requests) 0 50%,
+        var(--section-runs) 0 62.5%,
+        var(--section-chores) 0 75%,
+        var(--section-reports) 0 87.5%,
+        var(--section-memory) 0
+    );
+    --wordmark-image: linear-gradient(var(--section-reports), var(--section-reports));
+    --wordmark-clip: border-box;
+    --wordmark-ink: var(--background);
+    --wordmark-frame: 0 0 0 0.25em var(--section-reports);
+    --nav-block: 1;
+    --nav-hairline: 0;
+    --nav-on-ink: var(--background);
     --depth-panel: none;
     --depth-float: 4px 4px 0 oklch(0.1 0 0);
     --depth-action: 3px 3px 0 oklch(0.1 0 0);
