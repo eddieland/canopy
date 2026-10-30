@@ -44,6 +44,7 @@ from tests.canopy.observation_helpers import (
     observe_pr,
     observe_ticket,
     review,
+    sent_draft,
 )
 from tests.canopy.scenario_helpers import dispatches, pushes
 
@@ -231,6 +232,23 @@ def test_untrusted_review_items_need_an_operator_message_after_them(observed: sq
     [message] = conversation.operator_messages_after(observed, KEY, 0)
     cursors = {**covered, "message": str(message.id)}
     found = dispatched(observed, kind="resume", label=LABEL, reasons=["review", "reply"], cursors=cursors)
+    assert found[0] == "dispatch:resume"
+
+
+def test_a_reply_the_operator_sent_is_no_feedback_on_a_pr_they_did_not_open(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    # Known by its id, not by its author: on someone else's PR the operator's login is no PR author's.
+    observed.execute("UPDATE observed_prs SET author = 'teammate'")
+    review(observed, 1, "octocat", "changes_requested", EARLIER, "Rename the helper.")
+    covered = {"review": str(review(observed, 2, "operator", None, LATER, "Renamed.", item="comment"))}
+    action, reason = dispatched(observed, kind="resume", label=LABEL, reasons=["review"], cursors=covered)
+    assert action == "refused:unauthorized"
+    assert reason.startswith(f"review comment 2 on {KEY} in repo is not a trusted reviewer's")
+    sent_draft(canopy_env, observed, comment_id=2, review_id=90)
+    observed.commit()
+    found = dispatched(observed, kind="resume", label=LABEL, reasons=["review"], cursors=covered)
     assert found[0] == "dispatch:resume"
 
 

@@ -21,7 +21,7 @@ from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import Decider, NumberedItem, Phase
 from canopy.loop import phases
 from tests.canopy.helpers import KEY, context, decides, in_tick, seen
-from tests.canopy.observation_helpers import artifact_comment, held
+from tests.canopy.observation_helpers import artifact_comment, held, sent_draft
 from tests.canopy.scenario_helpers import sets_phase
 
 if TYPE_CHECKING:
@@ -526,6 +526,20 @@ def test_an_untrusted_review_waits_on_an_operator_reply_and_no_verbs_instruction
     with db.transaction(observed):
         conversation.write_reply(observed, ticket, "Go ahead with the map.", channel="cli", submission=None)
     assert not any(phases.Phase.UNTRUSTED_REVIEW in d.phases for d in derived(canopy_env))
+
+
+def test_a_reply_the_operator_sent_is_no_feedback_on_a_pr_they_did_not_open(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    # Known by its id, not by its author: on someone else's PR the operator's login is no PR author's.
+    green(canopy_env, observed)
+    observed.execute("UPDATE observed_prs SET author = 'teammate'")
+    review(observed, "operator", "commented", body="Renamed.")
+    assert any(Phase.UNTRUSTED_REVIEW in d.phases for d in derived(canopy_env))
+    [(ident,)] = observed.execute("SELECT id FROM observed_reviews WHERE author = 'operator'").fetchall()
+    sent_draft(canopy_env, observed, comment_id=0, review_id=ident)
+    assert not any(Phase.UNTRUSTED_REVIEW in d.phases for d in derived(canopy_env))
 
 
 @pytest.mark.parametrize(

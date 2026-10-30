@@ -56,7 +56,9 @@ any OpenCode upgrade, and before relying on a permission they check.
   its last minute, after a built-in tool's output and first in an MCP tool's result, the longer wording once, and a push
   before the kill; and no `node_modules` or `package.json` written into the snapshot. Then run it in a repository with a
   `.opencode/` directory, sandboxed with the registry refused, and time the wait before the session starts. Record the
-  times in `MEASUREMENTS.md`.
+  times in `MEASUREMENTS.md`. Then count, by kind, the runs that ended `timeout` over a week of real use, and how many
+  pushed after canopy's line, against the same count for the runs on snapshots before the clock (M57's Stage 0), with
+  each one's transcript read for edits after its last commit, the work the slot took with it.
 - **S65. The split** (#923). Confirmed against OpenCode's source (1.19.3), not in a run: the plugin finds where the
   environment starts by the lines `session/system.ts` writes. With S40's recorder, unsandboxed, run two workers in two
   slots, then two reviews, each pair within five minutes. Expect two system blocks in every request, the first the
@@ -244,6 +246,10 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   overseer's `decisions` per row of §7's phase table, counted by distinct situation as well as by decision
   (2026-10-15 F26), each disagreement read and attributed (the rationale says which side was right), and what the
   connectors cost, in calls and seconds per tick, from `connector_runs`. M37 closes against it.
+- **S69. The overseer reads the journal, measured** (M37). After a day of `canopy loop` against the real queue,
+  re-measure with MEASUREMENTS' prompt (Re-measuring). Expect tool-result tokens per tick at a tenth of the first day's
+  median (about 14k), and no action missed over the day, checked against the derivation as M36's agreement counts are.
+  Record the numbers in `MEASUREMENTS.md`.
 
 ## Retired
 

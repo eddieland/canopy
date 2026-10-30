@@ -139,6 +139,7 @@ describe('applyStreamEvent', () => {
             note: null,
             findings: [],
             models: { status: 'unread', models: [], error: null },
+            model: null,
         }
         client.setQueryData(keys.choreRun(chore.name, run.id), detail)
         client.setQueryData(keys.choreRunTranscript(chore.name, run.id), { status: 'read', entries: [] })

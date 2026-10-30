@@ -398,6 +398,18 @@ def sent_by_pr(conn: sqlite3.Connection) -> dict[str, dict[str, list[int]]]:
     return found
 
 
+def was_sent(review: records.ObservedReview, sent: Mapping[str, Mapping[str, Sequence[int]]]) -> bool:
+    """Whether the operator sent a review or review comment through canopy, by its id among `sent_by_pr`'s.
+
+    Such an item is never feedback, whoever opened the PR (DESIGN §7, §29).
+
+    Returns:
+        True if they did.
+    """
+    mine = sent.get(review.pr_url, {})
+    return review.id in mine.get("comments" if review.item is ReviewItem.COMMENT else "reviews", ())
+
+
 def unchecked_prs(conn: sqlite3.Connection) -> list[str]:
     """Return the PRs with a draft that waits on a whole read, which each tick's reconcile reads again.
 

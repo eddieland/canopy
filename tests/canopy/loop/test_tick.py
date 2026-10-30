@@ -668,9 +668,12 @@ def test_an_overseers_model_the_runtime_does_not_list_closes_the_tick_without_it
 
     # Once the runtime lists it, the next tick runs the overseer, and the item is gone.
     listed(opencode_state, "acme/fake-model-2", model)
-    scenario.tick(*waits(KEY), dry_run=True)
+    ran = scenario.tick(*waits(KEY), dry_run=True)
     assert len(agent_runs(scenario.agent_log)) == 2
     assert scenario.attention() == []
+    # It records the model its overseer asked for; a tick that halted before its overseer, or chose none, records none.
+    assert ran.tick.model == model
+    assert [t.tick.model for t in (*halted, failed)] == [None] * 3
 
 
 def test_busy_lock_exits_zero_without_a_tick(

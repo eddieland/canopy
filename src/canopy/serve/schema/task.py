@@ -151,6 +151,10 @@ class TaskRunDetail(Model):
     """The tickets canopy recorded from its result."""
     models: ModelsServed
     """Which models served it."""
+    model: str | None = None
+    """The model canopy asked the runtime for, for its private worker (DESIGN §13, Each agent's model), as
+    `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a run from
+    before canopy recorded it."""
 
 
 class TaskReport(Model):
