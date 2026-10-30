@@ -123,8 +123,9 @@ Rules:
   or glowing), and the nav's highlight (a tint and a hairline, a solid block with the active item inked in the canvas's
   color, or a tint with the icon lit). Each form takes the room the default does, so a switch moves nothing; the
   defaults keep the first of each, Gruvbox's dark the second, and black the third.
-  A palette may tune its section colors too, never their hues, which say what each page is for: muted toward a
-  scheme's own set, or turned up. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
+  A palette may tune its section colors too, muted toward a scheme's own set or turned up, but each keeps its hue's
+  family, which says what its page is for: a rose stays a rose, a gold a gold, though a scheme's own shade of it may
+  sit a few degrees round the wheel. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
   from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage.
   Every other palette picks from the same choices, so each reads as its own place: Gruvbox's light side as its dark
   one, Solarized's sides crisp and flat, Monokai crisp with a neon aurora, Nord's light side soft under a fade
