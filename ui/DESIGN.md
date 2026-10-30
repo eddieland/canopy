@@ -1627,20 +1627,27 @@ sliver beside four others; and its axis names short call numbers without measuri
   something to type. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
-  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list, as compact as a ticket's
-  `Start privately` (`StartTicket`): the PR's URL in a monospace field and an outline `Review` beside it, the form's
-  submit, with the CLI's command on hover; under them the notes, always open since the operator often has some, then
-  `Show reviewer`, a `Disclosure`, beside a muted line naming the personas it will use, and the model once one is
-  picked, folding the personas menu and the model menu (A choice of model), and a `Notice` saying its
-  review is a draft the operator may publish as their own, which a refusal replaces. On success the form opens the
-  PR's page. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open request wears a
-  `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its Pull request
-  panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has. While none is
-  open on a PR the loop does not own (`loop_pr` false), the line's end holds the personas menu, the model menu, and
-  an outline `Review this PR`, `Review again` once the PR has a review or an ended request; the loop's own PR without
-  a request has no line. A request's personas and its model, open or ended, are a line under it. What either button
-  did goes under it (`Notice`). Until its review starts, the reviews list has a `requested` row for it, whose
-  ticket's place names the PR's author in muted monospace once canopy has read the PR, since it has no ticket.
+  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list, whose form is one
+  column capped at `max-w-3xl`, every part on its left edge and to its width: the PR's URL in a monospace field, and
+  under it a line it always holds, so nothing below moves as it changes: the PR's reference once canopy would take
+  the URL (`acme/web#88`, as the reviews list writes it), that it is not a PR's URL, which canopy would refuse, before
+  it is sent, or, empty, that a link into the PR will do. Then the notes, always open since the operator often has
+  some, under a sentence-case field label (`text-xs font-medium`, `(optional)` muted), never a `panel-label`. Then who
+  reviews it, one row with nothing folded: `Persona` and its menu, muted text after it saying `as Settings prefers`
+  when the choice is Settings', its trigger naming the config's `(default)`, then `Model` and its menu (A choice of
+  model), each label the same field label, and at the row's end `Review`, the form's primary (the default button),
+  with its keycap and the CLI's command on hover, its right edge on the fields'. The row wraps in a narrow box. The
+  dialog's form ends on one quiet line (`Notice`) saying its review is a draft that posts nothing until published,
+  which a refusal replaces; the reviews page's has only the refusal, since its description says the rest. On
+  success the form opens the PR's page. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with
+  an open request wears a `requested` chip after its review in the list. On a PR's page the request is a line in the
+  foot of its Pull request panel, since when, with an outline `Stop` at its end while it is open, or how it ended
+  once it has. While none is open on a PR the loop does not own (`loop_pr` false), the line's end holds the personas
+  menu, the model menu, and an outline `Review this PR`, `Review again` once the PR has a review or an ended request;
+  the loop's own PR without a request has no line. A request's personas and its model, open or ended, are a line
+  under it. What either button did goes under it (`Notice`). Until its review starts, the reviews list has a
+  `requested` row for it, whose ticket's place names the PR's author in muted monospace once canopy has read the PR,
+  since it has no ticket.
 - **A review** (`/pull-requests/reviews/$id`) is canopy's shadow PR review, kept in the journal (D114); on a PR the loop
   does not own it is also a draft the operator may publish, word for word, as their own (A review's draft). The page
   holds the review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Its
@@ -1846,7 +1853,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   `R`, with no modifier, from anywhere but a text field or the plan editor (the rule `/` follows), or a GitHub PR's URL
   pasted outside a field, which it fills in, opens it; on a PR's page, `R` fills in that PR's. It never opens over
   another dialog. It is a `Dialog` placed as the jump palette is, titled `Review a PR` in a panel's header, holding the
-  reviews page's form (`ReviewRequestForm`), one component for both so they cannot drift. The focus starts in the URL
+  reviews page's form (`ReviewRequestForm`), one component for both so they cannot drift: URL, notes, the reviewer
+  row ending on the primary `Review`, and one quiet line saying the review is a draft. The focus starts in the URL
   field, or in the notes once the URL is filled in. A request that goes through closes it and opens the PR's page; a
   refusal keeps it open, its `Notice` naming the guard. What is written outlives closing it, kept in the tab's
   `sessionStorage` (`src/lib/review-request-draft.ts`) until a request goes through or the operator signs out.

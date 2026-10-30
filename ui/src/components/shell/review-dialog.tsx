@@ -78,7 +78,8 @@ export function ReviewDialog() {
                     <DialogTitle className="panel-label font-medium text-foreground">Review a PR</DialogTitle>
                 </div>
                 <DialogDescription className="sr-only">
-                    Have canopy review a PR the loop does not own: its URL, notes for the reviewer, and its personas
+                    Have canopy review a PR the loop does not own: its URL, notes for the reviewer, and its personas and
+                    model
                 </DialogDescription>
                 {opened !== null && (
                     <ReviewRequestForm
@@ -89,6 +90,7 @@ export function ReviewDialog() {
                             setOpened(null)
                         }}
                         focus
+                        notice
                     />
                 )}
             </DialogContent>

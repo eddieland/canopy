@@ -765,10 +765,13 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
     await form.getByTestId('review-request-submit').click()
     await expect(form.getByRole('alert')).toContainText('refused (loop_pr)')
 
+    // Anything but a PR's URL is said to be one canopy would refuse before it is sent; a PR's names the PR.
+    await form.getByLabel('PR URL').fill('https://github.com/acme/web/issues/120')
+    await expect(form.getByLabel('PR URL')).toHaveAccessibleDescription("Not a PR's URL, so canopy would refuse it.")
     await form.getByLabel('PR URL').fill(pr)
+    await expect(form.getByLabel('PR URL')).toHaveAccessibleDescription('acme/web#120')
     await expect(form.getByTestId('review-request-submit')).toHaveAttribute('title', 'canopy start URL --review')
-    // Its review is written in skeptic, as `--persona skeptic` asks: the persona is folded under the notes.
-    await form.getByRole('button', { name: 'Show reviewer' }).click()
+    // Its review is written in skeptic, as `--persona skeptic` asks: the persona's menu is in the row under the notes.
     await form.getByRole('button', { name: 'Persona: canopy (default)' }).click()
     await expect(page.getByRole('menuitemcheckbox', { name: 'skeptic' })).toHaveAccessibleDescription(
         /^Plans and reviews by naming the input that would break each claim/u,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isPullRequest, pullRequestLabel, pullRequestUrl } from './pull-request-label'
+import { isPullRequest, pullRequestLabel, pullRequestReference, pullRequestUrl } from './pull-request-label'
 
 // Links into a PR that GitHub writes: a tab, a thread, a review, a comment, a query.
 const INTO = [
@@ -59,5 +59,24 @@ describe('pullRequestUrl', () => {
         for (const url of NOT) {
             expect(pullRequestUrl(url)).toBeNull()
         }
+    })
+})
+
+describe('pullRequestReference', () => {
+    it("names a GitHub PR, or a link into one, by its reference, and another host's PR by its address", () => {
+        for (const url of ['https://github.com/acme/web/pull/88', ...INTO]) {
+            expect(pullRequestReference(url)).toBe('acme/web#88')
+        }
+        expect(pullRequestReference('https://git.example/acme/web/pull/88')).toBe('git.example/acme/web/pull/88')
+    })
+
+    it('is null for anything canopy would not take as a PR', () => {
+        // Every address above that is not a GitHub PR's but the other host's PR, which canopy takes.
+        for (const url of NOT.slice(1)) {
+            expect(pullRequestReference(url)).toBeNull()
+        }
+        expect(pullRequestReference('ABC-102')).toBeNull()
+        expect(pullRequestReference('acme/web#88')).toBeNull()
+        expect(pullRequestReference('https://git.example/acme/web/pull/88/files')).toBeNull()
     })
 })
