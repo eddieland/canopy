@@ -21,10 +21,10 @@ from tests.canopy.helpers import (
     READ_PR,
     WORKER_DONE,
     agent_runs,
-    canopy,
     commit_and_push,
     in_tick,
     last_tick,
+    overseer_calls,
     overseer_does,
     pool,
     present,
@@ -284,10 +284,9 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """M2 acceptance, against the fakes: label to pushed branch, slot returned, a correct `runs` row."""
-    dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
     tracker_holds(conn)
     with (
-        overseer_does(canopy(*dispatch, "--slug", "add-login")),
+        overseer_does(dispatches(slug="add-login")),
         # A PR the `vcs` source reads, so the next tick lists the ticket to the overseer (DESIGN §39).
         worker_does(
             *commit_and_push("agent/PROJ-1-add-login"),
@@ -330,8 +329,8 @@ def test_killed_worker_is_detected_on_the_next_tick(
         worker_does(sleep=60),
         in_tick(conn, ends_ok=True),
     ):
-        dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-        assert main(dispatch) == 0
+        said = overseer_calls(dispatches())
+        assert not said.error, said.text
         tick_starts()
 
     # Wait for both, in either order. `_run` records the worker's pid only after starting it, so the agent log can come

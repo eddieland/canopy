@@ -20,8 +20,9 @@ from canopy.core import conversation, db, item_numbers, records, sql
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import Decider, NumberedItem, Phase
 from canopy.loop import phases
-from tests.canopy.helpers import KEY, canopy, context, in_tick, seen
+from tests.canopy.helpers import KEY, context, decides, in_tick, seen
 from tests.canopy.observation_helpers import artifact_comment, held, sent_draft
+from tests.canopy.scenario_helpers import sets_phase
 
 if TYPE_CHECKING:
     import sqlite3
@@ -712,10 +713,10 @@ def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
     ]
     connector_state.write_text(json.dumps({"jira": {"lines": lines, "query": ["PROJ-1", "PROJ-2"]}}))
     ticked = scenario.tick(
-        canopy("ticket", "set", "PROJ-1", "--phase", "needs_human"),
-        canopy("decide", "PROJ-1", "wait", "--rationale", "waits on a human"),
-        canopy("ticket", "set", "PROJ-2", "--phase", "needs_human"),
-        canopy("decide", "PROJ-2", "wait", "--rationale", "waits on a human"),
+        sets_phase("PROJ-1", Phase.NEEDS_HUMAN),
+        decides("PROJ-1", "wait", "waits on a human"),
+        sets_phase("PROJ-2", Phase.NEEDS_HUMAN),
+        decides("PROJ-2", "wait", "waits on a human"),
     )
     tick_id = ticked.tick.id
     rows = records.fetch_all(

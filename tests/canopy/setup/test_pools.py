@@ -16,7 +16,8 @@ from canopy.core import config, workspace
 from canopy.infra import lock
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools
-from tests.canopy.helpers import LABEL, InlineRunner, decisions, in_tick, tick_starts, tracker_holds
+from tests.canopy.helpers import InlineRunner, decisions, in_tick, overseer_calls, tick_starts, tracker_holds
+from tests.canopy.scenario_helpers import dispatches
 from tests.conftest import CanopyEnv, git, user_toml
 
 GIT_AUTHORS = ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL")
@@ -66,10 +67,6 @@ def calls(treehouse_state: Path) -> list[list[str]]:
     return found
 
 
-def dispatch(*repos: str) -> list[str]:
-    return ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "implement", *(a for r in repos for a in ("--repo", r))]
-
-
 # The declaration
 
 
@@ -108,7 +105,7 @@ def test_a_full_pool_refuses_a_dispatch_without_asking_treehouse_for_another_slo
     with in_tick(conn) as tick_id:
         runner = InlineRunner()
         # The slot is leased as the tick starts the run, after the overseer (DESIGN §40): refused then.
-        assert main(dispatch("api"), runner=runner) == 0
+        assert not overseer_calls(dispatches(repo="api"), runner=runner).error
         tick_starts(runner)
         assert decisions(conn, tick_id) == [
             ("refused:no_slot", "api: 1 of its slots are busy, and capacity declares 1 for this pool"),
@@ -129,7 +126,7 @@ def test_a_slot_treehouse_makes_past_the_declared_size_is_destroyed(
     conn = ws.journal()
     tracker_holds(conn)
     with in_tick(conn) as tick_id:
-        assert main(dispatch("api"), runner=InlineRunner()) == 0
+        assert not overseer_calls(dispatches(repo="api"), runner=InlineRunner()).error
         tick_starts(InlineRunner())
         [(action, err)] = decisions(conn, tick_id)
         assert action == "refused:no_slot"
@@ -151,9 +148,9 @@ def test_a_pool_declared_smaller_than_it_is_counts_its_busy_slots(
     conn = ws.journal()
     tracker_holds(conn)
     with in_tick(conn) as tick_id:
-        assert main(dispatch("api"), runner=InlineRunner()) == 0
+        assert not overseer_calls(dispatches(repo="api"), runner=InlineRunner()).error
         tick_starts(InlineRunner())
-        assert main(dispatch("web"), runner=InlineRunner()) == 0
+        assert not overseer_calls(dispatches(repo="web"), runner=InlineRunner()).error
         tick_starts(InlineRunner())
         assert decisions(conn, tick_id) == [
             ("refused:no_slot", "api: 0 of its slots are busy, and capacity declares 0 for this pool"),
@@ -173,7 +170,7 @@ def test_a_pool_below_its_size_grows_and_one_at_it_reuses_a_slot(
     conn = ws.journal()
     tracker_holds(conn)
     with in_tick(conn):
-        assert main(dispatch("api", "web"), runner=InlineRunner()) == 0
+        assert not overseer_calls(dispatches(repo=("api", "web")), runner=InlineRunner()).error
         tick_starts(InlineRunner())
         assert [s["status"] for s in slots_of(treehouse_state, ws, "api")] == ["leased", "leased"]
         assert [s["path"] for s in slots_of(treehouse_state, ws, "web")] == seed

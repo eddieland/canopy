@@ -1,108 +1,124 @@
-"""The subcommands the overseer calls during a tick, and `canopy status`."""
+"""The overseer's journal tools, and what the operator reads of what they recorded.
+
+The tools are `decide`, `attention`, and `ticket-set` (DESIGN §27); the operator reads them with `canopy decisions` and
+`canopy status`.
+"""
 
 import json
 import sqlite3
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable, Mapping
 from importlib.metadata import version
 from pathlib import Path
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.vocab import TickStatus
 from canopy.loop import attention
 from canopy.runtime.report import Usage
-from tests.canopy.helpers import agent_runs, canopy, in_tick, waits
+from tests.canopy.helpers import (
+    Called,
+    agent_runs,
+    calls,
+    decides,
+    in_tick,
+    overseer_calls,
+    raises,
+    ticket_sets,
+    tracker_holds,
+    waits,
+)
+from tests.canopy.observation_helpers import comment
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
-from tests.conftest import TRACKER_SOURCE, CanopyEnv, GitPool
+from tests.conftest import TRACKER_SOURCE, GitPool
 
 #: A review cursor as canopy keeps one: the newest handled item's journal number (DESIGN §35).
-REVIEWED = "review=4127"
+REVIEWED: Mapping[str, str] = {"review": "4127"}
 
 
-@pytest.mark.parametrize(
-    "argv",
-    [
-        ["dispatch", "{key}", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-        ["decide", "{key}", "wait", "--rationale", "r"],
-        ["attention", "{key}", "needs_author", "--detail", "d"],
-        ["ticket", "set", "{key}", "--repo", "repo", "--phase", "ready"],
-    ],
-)
+#: Each tool that takes a ticket's key, as a call of it that names the key given.
+KEYED: Mapping[str, Callable[[str], Called]] = {
+    "dispatch": dispatches,
+    "decide": lambda key: decides(key, "wait", "r"),
+    "attention": lambda key: raises(key, "needs_author", "d"),
+    "ticket-set": lambda key: ticket_sets(key, repo="repo", phase="ready"),
+}
+
+
+@pytest.mark.parametrize("move", list(KEYED.values()), ids=list(KEYED))
 @pytest.mark.parametrize("key", ["-rf", "PROJ 1", "PROJ-1;id", "../x", "#12", "", "_x"])
-def test_every_key_taking_command_rejects_bad_keys(
-    canopy_env: CanopyEnv,
-    capsys: pytest.CaptureFixture[str],
-    argv: list[str],
+def test_every_key_taking_tool_rejects_bad_keys(
+    conn: sqlite3.Connection,
+    move: Callable[[str], Called],
     key: str,
 ) -> None:
-    assert main([a.replace("{key}", key) for a in argv]) == 2
-    err = capsys.readouterr().err
-    assert "invalid ticket key" in err or (key.startswith("-") and "No such option" in err)
+    with in_tick(conn):
+        said = overseer_calls(move(key))
+    assert said.error
+    assert "invalid ticket key" in said.text
+    assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0
 
 
-def test_journal_commands_need_a_running_tick(
-    canopy_env: CanopyEnv,
-    conn: sqlite3.Connection,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    assert main(["decide", "PROJ-1", "wait", "--rationale", "r"]) == 1
-    assert "CANOPY_TICK_ID is not set" in capsys.readouterr().err
+def test_journal_tools_need_a_running_tick(conn: sqlite3.Connection) -> None:
+    outside = "CANOPY_TICK_ID is not set"
+    assert outside in overseer_calls(decides("PROJ-1", "wait", "r")).text
+    # ticket-set too: the operator has no command to set a ticket outside a tick, and the tool takes nothing there.
+    said = overseer_calls(ticket_sets("PROJ-1", repo="repo", cursors={"comment": "10001"}, done=True))
+    assert said.error
+    assert outside in said.text
     with in_tick(conn) as tick_id:
         db.finish_tick(conn, tick_id, TickStatus.OK, "done")
-        assert main(["attention", "PROJ-1", "needs_author", "--detail", "d"]) == 1
-        assert "does not name a running tick" in capsys.readouterr().err
+        said = overseer_calls(raises("PROJ-1", "needs_author", "d"))
+        assert said.error
+        assert "does not name a running tick" in said.text
         assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0
+    assert db.get_ticket(conn, "PROJ-1") is None
 
 
 def test_decide_records_and_touches_ticket(scenario: Scenario) -> None:
     conn = scenario.conn
     with scenario.ticking() as tick_id:
-        scenario.overseer("decide", "PROJ-1", "skip", "--rationale", "  blocked by PROJ-0  ")
+        scenario.overseer(decides("PROJ-1", "skip", "  blocked by PROJ-0  "))
     rows = [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
     assert rows == [("PROJ-1", "skip", "blocked by PROJ-0")]
     ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert ticket["repo"] == str(scenario.env.root)
 
 
-def test_decide_needs_a_key_except_for_skip(scenario: Scenario) -> None:
-    with scenario.ticking():
-        scenario.overseer("decide", "wait", "--rationale", "r", code=2)
-        scenario.overseer("decide", "PROJ-1", "dispatch:implement", "--rationale", "r", code=2)
-        scenario.overseer("decide", "PROJ-1", "wait", "--rationale", "   ", code=2)
-        scenario.overseer("decide", "PROJ-1", "wait", "extra", "--rationale", "r", code=2)
+def test_decide_needs_a_key_an_action_it_takes_and_a_rationale(scenario: Scenario) -> None:
+    with scenario.ticking() as tick_id:
+        refused = [
+            scenario.overseer(calls("canopy_decide", decisions=[{"action": "wait", "rationale": "r"}]), error=True),
+            scenario.overseer(decides("PROJ-1", "dispatch:implement", "r"), error=True),
+            scenario.overseer(decides("PROJ-1", "wait", "   "), error=True),
+        ]
+    assert [said.text.partition(":")[0] for said in refused] == [
+        "decisions.0.key",
+        "decisions.0.action",
+        "decisions.0.rationale",
+    ]
+    assert db.decisions_for_tick(scenario.conn, tick_id) == []
 
 
 def test_decide_records_several_in_one_call(scenario: Scenario) -> None:
+    def decide(*decisions: tuple[str, str, str]) -> Called:
+        return calls("canopy_decide", decisions=[{"key": k, "action": a, "rationale": r} for k, a, r in decisions])
+
     with scenario.ticking() as tick_id:
-        said = scenario.overseer(
-            "decide",
-            "PROJ-1",
-            "wait",
-            "--rationale",
-            "checks pending",
-            "PROJ-2",
-            "done",
-            "--rationale",
-            "merged",
-        )
-        assert said.out == "recorded wait for PROJ-1\nrecorded done for PROJ-2\n"
-        # Each KEY ACTION pair needs its own --rationale, and every decision names its ticket.
-        scenario.overseer("decide", "PROJ-3", "wait", "PROJ-4", "wait", "--rationale", "r", code=2)
-        scenario.overseer("decide", "PROJ-3", "wait", "--rationale", "r", "--rationale", "s", code=2)
+        said = scenario.overseer(decide(("PROJ-1", "wait", "checks pending"), ("PROJ-2", "done", "merged")))
+        assert said.text == "recorded wait for PROJ-1\nrecorded done for PROJ-2"
+        # Every decision names its ticket and an action decide takes, or the call records none of them.
         scenario.overseer(
-            "decide",
-            "PROJ-3",
-            "wait",
-            "--rationale",
-            "r",
-            "skip",
-            "--rationale",
-            "mcp_unavailable: x",
-            code=2,
+            calls(
+                "canopy_decide",
+                decisions=[
+                    {"key": "PROJ-3", "action": "wait", "rationale": "r"},
+                    {"action": "skip", "rationale": "mcp_unavailable: x"},
+                ],
+            ),
+            error=True,
         )
-        scenario.overseer("decide", "PROJ-3", "wait", "--rationale", "r", "PROJ-4", "later", "--rationale", "s", code=2)
+        scenario.overseer(decide(("PROJ-3", "wait", "r"), ("PROJ-4", "later", "s")), error=True)
     rows = [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(scenario.conn, tick_id)]
     assert rows == [("PROJ-1", "wait", "checks pending"), ("PROJ-2", "done", "merged")]
     assert {row["key"] for row in scenario.conn.execute("SELECT key FROM tickets")} == {"PROJ-1", "PROJ-2"}
@@ -111,22 +127,23 @@ def test_decide_records_several_in_one_call(scenario: Scenario) -> None:
 def test_every_skip_is_a_tickets_own(scenario: Scenario) -> None:
     """The overseer reads no tracker nor GitHub, which the sources read (DESIGN §39): no skip is the whole tick's."""
     with scenario.ticking() as tick_id:
-        refused = scenario.overseer("decide", "skip", "--rationale", "tracker_unsupported: labels", code=2)
-        assert "expected KEY ACTION for each of 1 --rationale" in refused.err
-        scenario.overseer("decide", "PROJ-1", "skip", "--rationale", "mcp_unavailable: github, for its PR")
+        whole = calls("canopy_decide", decisions=[{"action": "skip", "rationale": "tracker_unsupported: labels"}])
+        assert scenario.overseer(whole, error=True).text == "decisions.0.key: Field required"
+        scenario.overseer(decides("PROJ-1", "skip", "mcp_unavailable: github, for its PR"))
     rows = [(d.ticket_key, d.rationale) for d in db.decisions_for_tick(scenario.conn, tick_id)]
     assert rows == [("PROJ-1", "mcp_unavailable: github, for its PR")]
 
 
 def test_long_text_is_truncated(scenario: Scenario) -> None:
     with scenario.ticking() as tick_id:
-        scenario.overseer("decide", "PROJ-1", "wait", "--rationale", "x" * 5000)
+        scenario.overseer(decides("PROJ-1", "wait", "x" * 5000))
     [row] = db.decisions_for_tick(scenario.conn, tick_id)
     assert len(row.rationale) == 2000
 
 
 def test_attention_reason_format(scenario: Scenario) -> None:
-    scenario.overseer("attention", "PROJ-1", "Needs Reviewer", "--detail", "d", code=2)
+    said = scenario.overseer(raises("PROJ-1", "Needs Reviewer", "d"), error=True)
+    assert said.text.startswith("reason: invalid reason 'Needs Reviewer'")
 
 
 def test_dry_run_dispatch_records_branch_cursors_and_context(scenario: Scenario, connector_state: Path) -> None:
@@ -154,11 +171,14 @@ def test_dry_run_dispatch_records_branch_cursors_and_context(scenario: Scenario,
 
 def test_dry_run_ticket_set_records_the_phase_only(scenario: Scenario) -> None:
     conn = scenario.conn
-    sets = canopy("ticket", "set", "PROJ-1", "--repo", "repo", "--phase", "merged", "--cursor", REVIEWED, "--done")
+    sets = ticket_sets("PROJ-1", repo="repo", phase="merged", cursors=REVIEWED, done=True)
     scenario.tick(sets, *waits("PROJ-1"), dry_run=True)
-    # What the overseer read back from the command, in the dry tick it ran in.
-    [said] = [c["stdout"] for c in agent_runs(scenario.agent_log)[-1]["commands"] if c["argv"] == sets]
-    assert said == "updated PROJ-1 (repo); dry run, cursors not advanced and not marked done\n"
+    # What the overseer read back from the tool, in the dry tick it called it in.
+    [said] = [t for t in agent_runs(scenario.agent_log)[-1]["tools"] if t["name"] == sets.name]
+    assert (said["text"], said["error"]) == (
+        "updated PROJ-1 (repo); dry run, cursors not advanced and not marked done",
+        False,
+    )
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
     assert (row["phase"], row["done"]) == (None, 0)
     # A phase about the PR is the unit's, implied in a single repository; its review cursor was not advanced.
@@ -227,37 +247,33 @@ def test_decisions_filters_by_ticket_and_reports_no_match(scenario: Scenario) ->
     assert "none for ticket GH-2" in out
 
 
-def test_ticket_set_outside_a_tick_advances_cursors(scenario: Scenario) -> None:
+def test_ticket_set_advances_cursors_and_marks_done(scenario: Scenario) -> None:
     conn = scenario.conn
-    scenario.operator(
-        "ticket",
-        "set",
-        "PROJ-1",
-        "--repo",
-        "repo",
-        "--cursor",
-        "comment=10001",
-        "--cursor",
-        REVIEWED,
-        "--done",
-    )
     # A `tracker` source numbers the comments it observes, so the comment cursor is a journal number (DESIGN §35).
+    tracker_holds(conn)
+    seen = comment(conn, "c7", "acc-1", "2026-10-18T10:00:00.000Z", "See the login page.")
+    scenario.overseer(ticket_sets("PROJ-1", repo="repo", cursors={"comment": str(seen), **REVIEWED}, done=True))
     row = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-    assert (row["comment_cursor"], row["done"]) == (10001, 1)
+    assert (row["comment_cursor"], row["done"]) == (seen, 1)
     # In a single repository, the review cursor goes to the ticket's one unit without naming it.
     [unit] = db.units(conn, "PROJ-1")
     assert (unit.repo, unit.review_cursor) == ("repo", 4127)
 
 
-def test_ticket_set_sets_several_tickets_alike_but_one_tickets_cursor_or_title(scenario: Scenario) -> None:
+def test_ticket_set_sets_several_tickets_each_its_own_or_none(scenario: Scenario) -> None:
     conn = scenario.conn
-    updated = scenario.operator("ticket", "set", "PROJ-1", "PROJ-2", "--phase", "ready", "--done")
-    assert updated.out == "updated PROJ-1\nupdated PROJ-2\n"
+    updated = scenario.overseer(ticket_sets("PROJ-1", "PROJ-2", phase="ready", done=True))
+    assert updated.text == "updated PROJ-1\nupdated PROJ-2"
     rows = conn.execute("SELECT key, phase, done FROM tickets ORDER BY key").fetchall()
     assert [tuple(r) for r in rows] == [("PROJ-1", "ready", 1), ("PROJ-2", "ready", 1)]
-    for one_tickets in (("--cursor", "comment=10001"), ("--title", "Fix the login loop")):
-        refused = scenario.operator("ticket", "set", "PROJ-1", "PROJ-3", *one_tickets, code=2)
-        assert "--cursor and --title are one ticket's: name one KEY with them" in refused.err
+    titled = [{"key": "PROJ-1", "title": "Fix the login loop"}, {"key": "PROJ-2", "title": "Add the logout button"}]
+    scenario.overseer(calls("canopy_ticket-set", tickets=titled))
+    titles = conn.execute("SELECT key, title FROM tickets ORDER BY key").fetchall()
+    assert [tuple(r) for r in titles] == [("PROJ-1", "Fix the login loop"), ("PROJ-2", "Add the logout button")]
+    # A call one of whose tickets is refused records none of them.
+    refused = [{"key": "PROJ-3", "phase": "ready"}, {"key": "PROJ-1", "title": " \n "}]
+    said = scenario.overseer(calls("canopy_ticket-set", tickets=refused), error=True)
+    assert said.text == "tickets.1.title: must not be empty"
     assert db.get_ticket(conn, "PROJ-3") is None
 
 
@@ -265,14 +281,14 @@ def test_a_ticket_is_named_on_one_line_and_renamed(scenario: Scenario, git_pool:
     def title() -> object:
         return scenario.conn.execute("SELECT title FROM tickets WHERE key = 'PROJ-1'").fetchone()["title"]
 
-    scenario.operator("ticket", "set", "PROJ-1", "--title", "  Fix the\n\tlogin\x1b[2J loop ")
+    scenario.overseer(ticket_sets("PROJ-1", title="  Fix the\n\tlogin\x1b[2J loop "))
     assert title() == "Fix the login [2J loop"
-    scenario.operator("ticket", "set", "PROJ-1", "--title", "x" * 100)
+    scenario.overseer(ticket_sets("PROJ-1", title="x" * 100))
     assert title() == "x" * 77 + "..."
-    scenario.operator("ticket", "set", "PROJ-1", "--title", " \n ", code=2)
-    scenario.operator("ticket", "set", "PROJ-1", "--phase", "ready")
-    assert title() == "x" * 77 + "..."  # a set without --title keeps it
-    scenario.operator("ticket", "set", "PROJ-1", "--title", "Fix the login loop")
+    scenario.overseer(ticket_sets("PROJ-1", title=" \n "), error=True)
+    scenario.overseer(ticket_sets("PROJ-1", phase="ready"))
+    assert title() == "x" * 77 + "..."  # a set without a title keeps it
+    scenario.overseer(ticket_sets("PROJ-1", title="Fix the login loop"))
 
     run = scenario.run(dispatches(slug="login"), worker=pushes("agent/PROJ-1-login"))
     assert "\n  PROJ-1: Fix the login loop  implement  done  " in scenario.operator("status").out
@@ -282,11 +298,19 @@ def test_a_ticket_is_named_on_one_line_and_renamed(scenario: Scenario, git_pool:
 
 
 @pytest.mark.parametrize(
-    "value",
-    ["pr=1", "comment", "comment=", "comment=a b", "ci=$(id)", "review=2026-10-07T20:58:50+00:00"],
+    ("name", "value"),
+    [
+        ("pr", "1"),
+        ("comment", ""),
+        ("comment", "a b"),
+        ("ci", "$(id)"),
+        ("review", "2026-10-07T20:58:50+00:00"),
+    ],
 )
-def test_bad_cursors_are_rejected(canopy_env: CanopyEnv, value: str) -> None:
-    assert main(["ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", value]) == 2
+def test_bad_cursors_are_rejected(scenario: Scenario, name: str, value: str) -> None:
+    said = scenario.overseer(ticket_sets("PROJ-1", repo="repo", cursors={name: value}), error=True)
+    assert said.text.startswith("tickets.0.cursors")
+    assert db.get_ticket(scenario.conn, "PROJ-1") is None
 
 
 @pytest.mark.parametrize(
@@ -299,9 +323,9 @@ def test_bad_cursors_are_rejected(canopy_env: CanopyEnv, value: str) -> None:
     ],
 )
 def test_a_review_cursor_is_a_journal_number(scenario: Scenario, value: str) -> None:
-    refused = scenario.operator("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", f"review={value}", code=2)
-    assert "a review cursor is an item's journal number" in refused.err
-    scenario.operator("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", REVIEWED)
+    refused = scenario.overseer(ticket_sets("PROJ-1", repo="repo", cursors={"review": value}), error=True)
+    assert "a review cursor is an item's journal number" in refused.text
+    scenario.overseer(ticket_sets("PROJ-1", repo="repo", cursors=REVIEWED))
     [unit] = db.units(scenario.conn, "PROJ-1")
     assert unit.review_cursor == 4127
 
@@ -346,7 +370,7 @@ def test_status_and_attention_ages(scenario: Scenario) -> None:
 def test_trailing_line_breaks_are_not_part_of_a_valid_key(scenario: Scenario, key: str) -> None:
     # `$` in a Python regex also matches before a trailing newline; validation must use the whole string.
     with scenario.ticking():
-        scenario.overseer("decide", key, "wait", "--rationale", "r", code=2)
-        scenario.overseer("attention", "PROJ-1", "needs_author\n", "--detail", "d", code=2)
-        scenario.overseer("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", "comment=1\n", code=2)
+        scenario.overseer(decides(key, "wait", "r"), error=True)
+        scenario.overseer(raises("PROJ-1", "needs_author\n", "d"), error=True)
+        scenario.overseer(ticket_sets("PROJ-1", repo="repo", cursors={"comment": "1\n"}), error=True)
     assert scenario.conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0

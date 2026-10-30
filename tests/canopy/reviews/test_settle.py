@@ -54,7 +54,7 @@ def test_a_dry_run_reads_a_heads_settle_time_and_never_starts_it(reviewing: Cano
     scenario.refuses(reviews(sha))
     scenario.time_passes(minutes=31)
     with scenario.ticking(dry_run=True) as tick_id:
-        scenario.overseer(*reviews(sha)[1:])
+        scenario.overseer(reviews(sha))
     assert [d[2] for d in review_decisions(scenario.conn, tick_id)] == ["dispatch:review"]
 
 

@@ -21,24 +21,23 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import conversation, db
 from canopy.core.vocab import Decider, NumberedItem, Phase, ResumeReason, RunKind, TickStatus
-from canopy.infra import procs
-from canopy.loop import attention, harness, harness_cursors, harness_dispatches, mcp, phases
+from canopy.loop import attention, harness, harness_cursors, harness_dispatches, phases
 from tests.canopy.helpers import (
     KEY,
-    LABEL,
     InlineRunner,
     agent_runs,
-    canopy,
+    chore_runs,
     chore_toml,
+    chore_waits,
     context,
+    decides,
     decisions,
     in_tick,
     json_block,
     last_tick,
-    mcp_session,
     operator,
+    overseer_calls,
     overseer_does,
-    tool_call,
     tracker_holds,
     waits,
 )
@@ -100,7 +99,7 @@ def test_a_due_chore_with_no_when_is_run_by_the_harness_after_the_overseer(
     agent_log: Path,
 ) -> None:
     conn = canopy_env.journal()
-    with overseer_does(canopy("chore", "wait", THEIRS, "--rationale", "not a weekday")):
+    with overseer_does(chore_waits(THEIRS, "not a weekday")):
         assert main(["tick"], runner=InlineRunner()) == 0
     tick = last_tick(conn)
     assert tick.status == TickStatus.OK
@@ -128,7 +127,7 @@ def test_the_harness_runs_its_chore_after_a_failed_overseer_run_too(canopy_env: 
 @pytest.mark.usefixtures("two_chores")
 def test_a_dry_run_records_the_harnesss_chore_and_starts_none(canopy_env: CanopyEnv) -> None:
     conn = canopy_env.journal()
-    with overseer_does(canopy("chore", "wait", THEIRS, "--rationale", "not a weekday")):
+    with overseer_does(chore_waits(THEIRS, "not a weekday")):
         assert main(["tick", "--dry-run"], runner=InlineRunner()) == 0
     tick = last_tick(conn)
     assert [(d.chore, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick.id) if d.chore == MINE] == [
@@ -150,7 +149,7 @@ def test_the_harnesss_chore_on_a_model_it_cannot_look_up_is_refused_with_an_atte
         "ran on another model; the work resumes once the list can be read"
     )
     conn = canopy_env.journal()
-    with overseer_does(canopy("chore", "wait", THEIRS, "--rationale", "not a weekday")):
+    with overseer_does(chore_waits(THEIRS, "not a weekday")):
         assert main(["tick"], runner=InlineRunner()) == 0
     tick = last_tick(conn)
     assert [(d.action, d.rationale, d.decider) for d in db.decisions_for_tick(conn, tick.id) if d.chore == MINE] == [
@@ -176,20 +175,15 @@ def test_a_tick_halted_before_the_overseer_starts_none(canopy_env: CanopyEnv) ->
 
 @pytest.mark.usefixtures("two_chores")
 def test_the_overseers_verbs_about_the_harnesss_chore_are_refused(conn: sqlite3.Connection) -> None:
-    verbs = {
-        "chore-run": (["chore", "run", MINE], {"name": MINE}),
-        "chore-wait": (["chore", "wait", MINE, "--rationale", "r"], {"name": MINE, "rationale": "r"}),
-    }
-    for tool, (command, arguments) in verbs.items():
+    for move in (chore_runs(MINE), chore_waits(MINE, "r")):
         with in_tick(conn) as tick_id:
-            assert main(command, runner=InlineRunner()) == 1
-            said = mcp_session(tool_call(tool, **arguments)).said()
+            said = overseer_calls(move, runner=InlineRunner())
             assert said.error
             assert "refused (decided)" in said.text
-        assert [d.action for d in db.decisions_for_tick(conn, tick_id)] == ["refused:decided"] * 2
+        assert [d.action for d in db.decisions_for_tick(conn, tick_id)] == ["refused:decided"]
     # The overseer's own chore is its to decide still.
     with in_tick(conn) as tick_id:
-        assert main(["chore", "wait", THEIRS, "--rationale", "r"]) == 0
+        assert not overseer_calls(chore_waits(THEIRS, "r")).error
     assert started(conn) == []
 
 
@@ -286,11 +280,9 @@ def test_one_row_of_judgment_leaves_the_ticket_to_the_overseer(canopy_env: Canop
         assert harness_dispatches.tickets(context(canopy_env), tick_id) == frozenset()
 
 
-@pytest.mark.parametrize("through", ["command", "tool"])
 def test_a_ready_dispatch_into_the_harnesss_workers_is_refused_reserved_and_a_reply_is_not(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
-    through: str,
 ) -> None:
     # One worker, which the harness's conflict holds: new work may not take it, and a human waiting goes ahead.
     canopy_env.configure(canopy_env.user_file, {"capacity": {"max_workers": 1}})
@@ -303,31 +295,18 @@ def test_a_ready_dispatch_into_the_harnesss_workers_is_refused_reserved_and_a_re
     # The operator's answer, which authorizes the resume for reply.
     assert operator("reply", "PROJ-3", "Go ahead.") == 0
     [answer] = conversation.operator_messages_after(conn, "PROJ-3", 0)
-    ready = (
-        ["dispatch", "PROJ-2", "--repo", "repo", "--kind", "implement", "--label", LABEL],
-        {"key": "PROJ-2", "kind": "implement", "repos": ["repo"], "label": LABEL},
-    )
-    reply = (
-        [
-            *("dispatch", "PROJ-3", "--repo", "repo", "--kind", "resume", "--label", LABEL, "--reason", "reply"),
-            *("--cursor", f"message={answer.id}"),
-        ],
-        {
-            "key": "PROJ-3",
-            "kind": "resume",
-            "repos": ["repo"],
-            "label": LABEL,
-            "reasons": ["reply"],
-            "cursors": {"message": str(answer.id)},
-        },
+    ready = dispatches("PROJ-2")
+    reply = dispatches(
+        "PROJ-3",
+        RunKind.RESUME,
+        reasons=[ResumeReason.REPLY],
+        cursors={"message": str(answer.id)},
     )
     with enabled(), in_tick(conn, dry_run=True) as tick_id:
         phases.record(conn, tick_id, unit_at(KEY, Phase.CONFLICTED))
-        for (argv, arguments), refused in ((ready, True), (reply, False)):
-            if through == "command":
-                assert main(argv) == int(refused)
-            else:
-                assert refused_as_tool("dispatch", arguments) is refused
+        for move, refused in ((ready, True), (reply, False)):
+            # Served in this process, so a row enabled here holds.
+            assert overseer_calls(move).error is refused
         made = decisions(conn, tick_id)
     assert [action for action, _ in made] == ["refused:reserved", "dispatch:resume"]
     assert made[0][1].startswith("1 of 1 workers are free, and the harness's dispatches to come this tick that rank")
@@ -341,7 +320,7 @@ def test_what_the_overseer_records_about_a_ticket_the_harness_dispatches_is_refu
     conn.commit()
     with enabled(), in_tick(conn) as tick_id:
         phases.record(conn, tick_id, unit_at(KEY, Phase.CONFLICTED))
-        assert main(["decide", KEY, "wait", "--rationale", "r"]) == 1
+        assert overseer_calls(decides(KEY, "wait", "r")).error
         [(action, reason)] = decisions(conn, tick_id)
     assert action == "refused:decided"
     assert reason.startswith(f"the harness dispatches {KEY} this tick (the state block's `dispatches_to_come`)")
@@ -441,16 +420,6 @@ def unit_cursors(conn: sqlite3.Connection) -> tuple[int | None, int | None]:
     """KEY's unit's `review` and `ci` cursors."""
     [unit] = conn.execute("SELECT review_cursor, ci_cursor FROM ticket_units WHERE ticket_key = ?", (KEY,)).fetchall()
     return unit["review_cursor"], unit["ci_cursor"]
-
-
-def refused_as_tool(name: str, arguments: Mapping[str, object]) -> bool:
-    """Whether tool `name`, called with `arguments`, refused: served in this process, so a row enabled here holds."""
-    request = json.dumps({"jsonrpc": "2.0", "id": 1, **tool_call(name, **arguments)}).encode()
-    response = mcp.answer(request, lambda: mcp.opened(procs.SubprocessRunner(), Path.cwd()))
-    assert response is not None
-    result = response["result"]
-    assert isinstance(result, dict)
-    return result["isError"] is True
 
 
 def overseer_state(agent_log: Path) -> dict[str, Any]:

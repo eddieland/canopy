@@ -51,7 +51,7 @@ class Granted:
 def grant(conn: sqlite3.Connection, config: Config, ref: conversation.Ref, *, runs: int) -> Granted:
     """Grant the PR `ref` names `runs` more review runs than the policy allows (DESIGN §22). Operator only.
 
-    Every run still counts (D030): a grant raises the PR's limit, and the next `canopy review run` of it sees it.
+    Every run still counts (D030): a grant raises the PR's limit, and the next `review-run` of it sees it.
 
     Returns:
         The PR's review runs, and its limit for them with the grant counted.

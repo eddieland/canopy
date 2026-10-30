@@ -32,6 +32,7 @@ from tests.canopy.helpers import (
     only_tick,
     overseer_titles,
     present,
+    ticket_sets,
     titled_overseer,
     tools_of,
     tools_printed,
@@ -396,10 +397,11 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(scenario: Scenario, la
     assert tick.tokens_peak_context == 5500
     assert (tick.tokens_first_call, tick.tokens_first_cache_write, tick.tokens_first_cache_read) == (5500, 500, 4000)
     assert (scenario.env.state_dir / definitions.RUNTIME_DIR / present(tick.definitions_digest)).is_dir()
-    # The wait and the echo, each a `bash` call that returned its stdout.
-    [(tool, calls, _, _)] = tools_of(conn, "ticks", tick.id)
-    assert (tool, calls) == ("bash", 2)
-    assert tools_of(conn, "ticks", tick.id) == tools_printed(scenario.agent_log, "canopy-overseer")
+    # The wait, a call of canopy's `decide` tool, and the echo, a `bash` call that returned its stdout.
+    made = {row[0]: row for row in tools_of(conn, "ticks", tick.id)}
+    assert sorted(made) == ["bash", "canopy_decide"]
+    assert made["canopy_decide"][1:3] == (1, 0)
+    assert [made["bash"]] == tools_printed(scenario.agent_log, "canopy-overseer")
     assert ticked.printed.out.rstrip().endswith("(cost $0.25, 3.5k tokens, 5.5k peak context)")
 
 
@@ -414,7 +416,7 @@ def test_a_running_tick_shows_its_overseer_session_spend_and_output_so_far(scena
     [run] = agent_runs(scenario.agent_log)
     commands = run["commands"]
     assert isinstance(commands, list)
-    decisions, _ = commands
+    [decisions] = commands
     assert "Tick 1: running (dry run)" in decisions["stdout"]
     # The first of its two model calls has ended, before it ran its commands.
     assert "overseer session ses_o1  $0.12, 1.7k tokens, 5.5k peak context\n" in decisions["stdout"]
@@ -600,7 +602,7 @@ def test_a_server_that_cannot_start_closes_the_tick_without_the_overseer(
 
 def test_a_tick_that_runs_no_overseer_skips_the_server_check(scenario: Scenario, tmp_path: Path) -> None:
     # A ticket left to the overseer, which marks it done, so the next tick leaves it nothing (DESIGN §39).
-    scenario.tick(canopy("ticket", "set", KEY, "--done"), *waits(KEY))
+    scenario.tick(ticket_sets(KEY, done=True), *waits(KEY))
     with broken_server(tmp_path, "#!/bin/sh\nexit 1\n"):
         quiet = scenario.tick()
     assert (quiet.tick.status, quiet.tick.overseer_ran) == (TickStatus.OK, False)

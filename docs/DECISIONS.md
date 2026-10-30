@@ -149,8 +149,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D020. The overseer reaches the journal through canopy's tools, keyed by `CANOPY_TICK_ID`
 
 - Its verbs are MCP tools canopy serves its run alone (D124, DESIGN §27); it has no shell but the commands the
-  operator names in `runtime.allow_bash`, never canopy's own. They, and the commands that share their functions until
-  those go, refuse without a running tick, so the journal holds only what the loop did.
+  operator names in `runtime.allow_bash`, never canopy's own: `dispatch`, `decide`, `attention`, `ticket-set`,
+  `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and `chore-wait`, and no command of the CLI
+  does what one does. They refuse without a running tick, so the journal holds only what the loop did.
 - Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's, with the
   overseer's items held through a tick that did not give it their subject, and the three it keeps held from the one
   that recorded them until what they name ends them (`decisions.kept`, DESIGN §14, §37). No own table.
@@ -505,8 +506,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D124. canopy serves MCP itself, over stdio only, to the overseer, a chore, and the reviewer and planner
 
 - `canopy _mcp` is a child of the overseer's run and opens no socket, so it is no listener (TRUST_MODEL T8). It lists
-  no tool and refuses every call under `CANOPY_RUN_ID` or outside a running tick (D020). A tool and its command share
-  one request and one function (`loop/tools.py` and its siblings, `loop/*_tools.py`), so they cannot drift apart.
+  no tool and refuses every call under `CANOPY_RUN_ID` or outside a running tick (D020). A tool is one request and one
+  function (`loop/tools.py` and its siblings, `loop/*_tools.py`); a read a command also prints, a chore's history,
+  shares the command's, so they cannot drift apart.
 - With `--chore` it serves a chore's run one tool, its own chore's history, and nothing of the overseer's (DESIGN §27).
 - With `--reports` it serves a chore's run canopy's read-only reports, and nothing of the overseer's (DESIGN §27).
 - With `--git NAME=PATH` it serves a review's or a plan's run read-only git in the checkouts the harness names, alone.

@@ -16,9 +16,14 @@ import pytest
 from canopy.core import db
 from canopy.core.vocab import Decider, TickStatus
 from canopy.loop import pacing, tick
-from tests.canopy.helpers import KEY, agent_runs, context, in_tick, present, waits
+from tests.canopy.helpers import KEY, agent_runs, chore_waits, context, in_tick, present, raises, waits
 from tests.canopy.observation_helpers import branches_read
-from tests.canopy.scenario_helpers import chores_ended, dispatches, due_chore, loops, raises
+from tests.canopy.scenario_helpers import (
+    chores_ended,
+    dispatches,
+    due_chore,
+    loops,
+)
 
 if TYPE_CHECKING:
     import sqlite3
@@ -74,7 +79,7 @@ def test_a_tick_with_a_ticket_left_runs_the_overseer(quiet: Scenario) -> None:
 
 def test_a_tick_with_a_due_chore_with_a_when_runs_the_overseer(quiet: Scenario) -> None:
     due_chore(quiet, THEIRS, when="Weekdays only.")
-    ticked = quiet.tick(["canopy", "chore", "wait", THEIRS, "--rationale", "not a weekday"])
+    ticked = quiet.tick(chore_waits(THEIRS, "not a weekday"))
     assert ticked.tick.overseer_ran is True
 
 

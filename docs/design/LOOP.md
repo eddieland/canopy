@@ -212,7 +212,7 @@ a subject no source observes keep their claims, checked again by the worker (D05
   reviewer's item, nor the canopy review it names with `canopy:review` trusted, or covering anyone else's with no
   operator message after it. With feedback plans on, §32's approval is the gate instead.
 - `unobserved`: a cursor naming no item observed for its subject, or passing one the block left out for its bound. A
-  tick's `canopy ticket set` is checked so too, and moves no stale subject's cursor past what it already passed.
+  tick's `ticket-set` is checked so too, and moves no stale subject's cursor past what it already passed.
 - `stale`: the ticket, the PR of a unit a `resume` names, or a stacked dispatch's blocker's PR (§10), not observed
   within `connect.max_age_minutes`. One whose source keeps failing waits for it to recover (§30).
 - `handled`: a `resume` for CI alone whose every failure at the head is behind the `ci` cursor or repeats, at the same
@@ -225,7 +225,7 @@ cursor. Its PR phases are as above.
 Cursors (`comment`, `review`, `ci`, and a private ticket's `message`) hold the newest item of each kind the loop has
 handled; "newer than cursor" means not handled yet. The comment cursor is the ticket's; the review and ci cursors are
 each unit's, so a dispatch that carries one names exactly one repository. A dispatch carries the cursors of what it
-handles (§8), so they advance only if the worker starts; items handled otherwise advance with `canopy ticket set`, and
+handles (§8), so they advance only if the worker starts; items handled otherwise advance with `ticket-set`, and
 the harness passes those that need no handling directly after a cursor, a worker's comment and a reply the operator
 sent, as its own decision (§37). A `resume` moves each cursor of its reasons it leaves out to the newest item of that
 kind the block showed, short of the first the checks above would refuse it to cover, on a public ticket and from fresh
@@ -253,14 +253,14 @@ the done mark (§22).
 
 ## 8. Dispatch and the worker contract
 
-`canopy dispatch` starts a run of one kind, `implement`, `resume`, or `plan`, for a ticket, naming the queue
+The `dispatch` tool starts a run of one kind, `implement`, `resume`, or `plan`, for a ticket, naming the queue
 label the ticket was found by and one or more of its units, its work in one repository each (§18); several make a joint
 run. A `plan` writes the ticket's plan before its first `implement`, with guards of its own (§25).
 
 1. Check the guards, which are in code and not overridable from the prompt. A refusal is recorded as a decision naming
-   the guard and why, and the command exits 1; a dry run checks them and stops (§6, D036). The overseer's dispatch,
-   through its tool or its command, is then recorded, and counts as running until the tick starts it, after the
-   overseer's run, checking these guards again before step 2 (§40). Dispatch is refused when:
+   the guard and why, and the call is a tool error; a dry run checks them and stops (§6, D036). The overseer's
+   dispatch is then recorded, and counts as running until the tick starts it, after the overseer's run, checking
+   these guards again before step 2 (§40). Dispatch is refused when:
    - a claim rests on a stale observation or one that does not bear it out (`stale`, `unauthorized`, `unobserved`),
      or a `resume` for CI alone has only failures a worker already had at that head (`handled`), checked first (§7).
    - the label is not a queue label, or a started ticket's (§22) start record does not allow the run; the worker checks
@@ -405,7 +405,7 @@ reads either (HOST_ISOLATION §1).
   closed. Other relations are not blockers. A relation is data: it can delay work, never authorize it.
 - A ticket with an unresolved blocker and no branch of its own is `blocked`. The overseer records `wait` with rationale
   `blocked_by: <KEY>`, unless it stacks the ticket.
-- Stacking: `canopy dispatch <KEY> --label <label> --kind implement --base <blocker's branch>` starts the worker from
+- Stacking: a `dispatch` of `implement` with `base` set to the blocker's branch starts the worker from
   the blocker's branch, and its PR targets that branch, so it shows only this ticket's commits. The overseer stacks
   only on a ticket's single unresolved blocker whose PR is open and green, and reads the branch from that PR.
 - `policy.stacking` (§12) defaults to `"auto"`. Under `"never"`, a blocked ticket waits until its blocker has landed,

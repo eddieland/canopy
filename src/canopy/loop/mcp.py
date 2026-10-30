@@ -17,9 +17,9 @@ run's own (`core.git_tools`); it opens no workspace, and serves nothing else. A 
 CANOPY_RUN_ID names such a run: a call is validated and writes nothing, since the harness records the update from the
 call in the events the agent prints; it opens no workspace.
 
-An overseer's tool lists its result's schema as its output schema, and answers with the text the command prints and
+An overseer's tool lists its result's schema as its output schema, and answers with its text and
 the result as structured content; git's `log` does too, its text the result as JSON. A refusal or an invalid argument
-is a tool error, `isError`, with the text the command prints and no structured content, and the server goes on. It
+is a tool error, `isError`, with text that says why and no structured content, and the server goes on. It
 writes nothing to stderr, which the runtime never reads, and logs no argument's text.
 """
 
@@ -57,7 +57,7 @@ SERVER = "canopy"
 COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp")
 #: How a call opens the workspace: a context whose journal closes when the block ends.
 type Opener = Callable[[], AbstractContextManager[Context]]
-#: What a tool's call answers with: the text the command prints, with its result when it has one.
+#: What a tool's call answers with: its text, with its result when it has one.
 type Said = str | tools.Outcome[BaseModel]
 #: One of canopy's verbs, reports, or reads as a tool: called with how to open the workspace.
 type Tool = canopy_mcp.Tool[Opener, Said]
@@ -74,8 +74,7 @@ def tool[R: BaseModel, O: tools.Result](
 ) -> Tool:
     """Make verb `do` a tool, taking `request` as its arguments and answering with `result`, with `hints` for a client.
 
-    Every call is refused inside a run, and outside a running tick, `ticket-set` included, which the command takes
-    outside one.
+    Every call is refused inside a run, and outside a running tick.
 
     Returns:
         The tool.
@@ -608,7 +607,7 @@ def _server(opener: Opener, mode: Mode) -> canopy_mcp.Server[Opener, Said]:
 
 
 def _call(found: Tool, arguments: Mapping[str, object], opener: Opener) -> dict[str, object]:
-    """Call `found`: a refusal or an invalid argument is a tool error with the text the command prints.
+    """Call `found`: a refusal or an invalid argument is a tool error with text that says why.
 
     Returns:
         The `tools/call` result.

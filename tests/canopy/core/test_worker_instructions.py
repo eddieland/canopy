@@ -11,7 +11,8 @@ import pytest
 
 from canopy.core import prompts
 from canopy.core.config import load
-from tests.canopy.helpers import IMPLEMENT, PROMPT_VALUES, dispatch_in_tick
+from tests.canopy.helpers import PROMPT_VALUES, dispatch_in_tick
+from tests.canopy.scenario_helpers import dispatches
 from tests.conftest import CanopyEnv, GitPool, user_toml
 
 FIXUP = "Commit a change that corrects an earlier commit on the branch with `git commit --fixup=<sha>`."
@@ -45,8 +46,8 @@ def test_the_operators_standing_instructions_reach_the_worker(
     conn: sqlite3.Connection,
 ) -> None:
     instruct(canopy_env, f"\n{FIXUP}\n\n")
-    code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
-    assert code == 0, decisions
+    said, decisions = dispatch_in_tick(conn, dispatches())
+    assert not said.error, decisions
     assert section_of(canopy_env, conn) == FIXUP
 
 
@@ -55,8 +56,8 @@ def test_without_standing_instructions_there_is_no_section(
     git_pool: GitPool,
     conn: sqlite3.Connection,
 ) -> None:
-    code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
-    assert code == 0, decisions
+    said, decisions = dispatch_in_tick(conn, dispatches())
+    assert not said.error, decisions
     prompt = prompt_of(canopy_env, conn)
     assert SECTION not in prompt
     # With no notice in force either, the section before both runs straight into the obligations.
@@ -98,8 +99,8 @@ def test_instructions_that_cannot_be_used_refuse_the_dispatch(
     if text is None:
         path.unlink()
     # The prompt is rendered as the tick starts the run, after the overseer (DESIGN §40): it is refused then.
-    code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
-    assert code == 0
+    said, decisions = dispatch_in_tick(conn, dispatches())
+    assert not said.error
     [(action, rationale)] = decisions
     assert action == "refused:bad_prompt"
     assert error in rationale
@@ -119,11 +120,11 @@ def test_an_override_without_the_placeholder_fails_closed_once_instructions_are_
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir(parents=True)
     (overrides / "worker-implement.md").write_text("Implement {{KEY}} if it carries {{LABELS}}.\n{{DRAFTS}}\n")
-    code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
+    said, decisions = dispatch_in_tick(conn, dispatches())
     if not instructed:
-        assert code == 0, decisions
+        assert not said.error, decisions
         return
-    assert code == 0
+    assert not said.error
     [(action, rationale)] = decisions
     assert action == "refused:bad_prompt"
     assert "missing required placeholder {{STANDING_SECTION}} or {{STANDING_INSTRUCTIONS}}" in rationale

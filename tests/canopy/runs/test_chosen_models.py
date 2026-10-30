@@ -11,10 +11,13 @@ operator has not named the trailer themselves.
 import json
 from pathlib import Path
 
+import pytest
+
+from canopy.cli.main import main
 from canopy.core import definitions
 from canopy.core.config import load
 from canopy.core.vocab import ResumeReason, RunKind
-from tests.canopy.helpers import KEY, agent_runs, listed, planner_does, pool_statuses, trailers_on
+from tests.canopy.helpers import KEY, Called, agent_runs, in_tick, listed, planner_does, pool_statuses, trailers_on
 from tests.canopy.review_helpers import CLEAN, feature_commit, head, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool
@@ -238,6 +241,7 @@ def test_an_override_takes_the_place_of_the_agents_model_in_config(
 def test_canopy_model_refuses_a_model_not_listed_an_unknown_agent_and_inside_a_run(
     scenario: Scenario,
     opencode_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     listed(opencode_state, OTHER)
     err = scenario.operator("model", KEY, MODEL, code=1).err
@@ -257,11 +261,14 @@ def test_canopy_model_refuses_a_model_not_listed_an_unknown_agent_and_inside_a_r
     assert "model refused (unsupported)" in scenario.operator("model", "chore:deps", OTHER, code=1).err
     # No agent chooses a model, the overseer's own ticket's least of all (TRUST_MODEL T1), and the list is not read.
     before = calls(opencode_state)
-    err = scenario.overseer("model", KEY, OTHER, "--agent", "reviewer", code=1).err
-    assert "model refused (inside_run): CANOPY_TICK_ID is set" in err
+    with in_tick(scenario.conn, ends_ok=True):
+        assert main(["model", KEY, OTHER, "--agent", "reviewer"]) == 1
+    assert "model refused (inside_run): CANOPY_TICK_ID is set" in capsys.readouterr().err
     assert calls(opencode_state) == before
-    # Nor a dispatch: it has no model flag.
-    assert "No such option '--model'" in scenario.overseer(*dispatches()[1:], "--model", OTHER, code=2).err
+    # Nor a dispatch: it takes no model.
+    move = dispatches()
+    refused = scenario.overseer(Called(move.name, {**move.arguments, "model": OTHER}), error=True)
+    assert "model: Extra inputs are not permitted" in refused.text
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
     err = scenario.operator("model", KEY, OTHER, code=1).err
     assert err == (

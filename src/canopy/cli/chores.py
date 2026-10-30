@@ -1,4 +1,7 @@
-"""`canopy chore` for the overseer, the operator, and a chore's own runs, and the detached `_chore` (DESIGN §19)."""
+"""`canopy chore` for the operator and a chore's own runs, and the detached `_chore` (DESIGN §19).
+
+The overseer runs and waits on chores through its tools (`loop.chore_tools`, DESIGN §27).
+"""
 
 from __future__ import annotations
 
@@ -11,38 +14,15 @@ import click
 
 from canopy.chores import execute, history, install, trial
 from canopy.cli.common import CliError, leave_the_tick, open_context
-from canopy.cli.params import CHORE, EXAMPLE_CHORE, TextType, validated, verb
+from canopy.cli.params import CHORE, EXAMPLE_CHORE, TextType, validated
 from canopy.core import conversation, workspace
 from canopy.core.config import ConfigError
 from canopy.infra import logs, procs
-from canopy.loop import chore_tools
 
 
 @click.group("chore")
 def chore_group() -> None:
-    """Run or wait on the operator's chores (the overseer), or run one now by hand (the operator)."""
-
-
-@chore_group.command("run", hidden=True)
-@click.argument("name", type=CHORE)
-@click.option(
-    "--context",
-    type=TextType(),
-    help="What the chore should look at: a PR, a job name, a build number. Never quoted text.",
-)
-@click.pass_context
-def cmd_chore_run(click_ctx: click.Context, name: str, context: str | None) -> int:
-    """Start a run of chore NAME, if its guards allow one now."""
-    return verb(click_ctx, chore_tools.chore_run, chore_tools.ChoreRun, name=name, context=context)
-
-
-@chore_group.command("wait", hidden=True)
-@click.argument("name", type=CHORE)
-@click.option("--rationale", required=True, type=TextType(), help="Why it should not run now, in your own words.")
-@click.pass_context
-def cmd_chore_wait(click_ctx: click.Context, name: str, rationale: str) -> int:
-    """Record that chore NAME is due but should not run now, and why."""
-    return verb(click_ctx, chore_tools.chore_wait, chore_tools.ChoreWait, name=name, rationale=rationale)
+    """Try, install, or read the history of the operator's chores."""
 
 
 @chore_group.command("try")
@@ -166,7 +146,7 @@ def cmd_chore_history(click_ctx: click.Context, name: str, run_id: int | None, b
 @click.argument("run_id", type=click.IntRange(min=1))
 @click.pass_context
 def cmd_chore_process(click_ctx: click.Context, run_id: int) -> int:
-    """Do one chore run. Started by `canopy chore run`, detached; not for people or agents."""
+    """Do one chore run. Started by a tick, detached; not for people or agents."""
     leave_the_tick()
     ctx = open_context(click_ctx)
     try:

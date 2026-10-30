@@ -57,7 +57,7 @@ run (T3); the plugin reads one more file in a directory the harness made and wri
 
 Where the reminder is not enough, or for a PR no worker wrote, `checklist.review` turns on a checklist review: a commit
 of a repository with a list owes one wherever it owes an adversarial review, the loop's own PRs under
-`review.agent_prs`, `review.query`'s, and requests, and the same `canopy review run` starts each still owed, side by
+`review.agent_prs`, `review.query`'s, and requests, and the same `review-run` starts each still owed, side by
 side, as it starts a review in each persona (§31); the commit is reviewed once each has ended and the adversarial one is
 `done`. Every guard of a review holds (§21), but the per-PR limit, which bounds the rounds between a worker and the
 adversarial reviewer: the checklist review starts only on a commit that limit allows, and one that ends `failed` or

@@ -12,7 +12,7 @@ import pytest
 from canopy.core import conversation, db
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.loop.state import OverseerState, TicketState
-from tests.canopy.helpers import KEY, present, waits, worker_does
+from tests.canopy.helpers import KEY, present, ticket_sets, waits, worker_does
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import GitPool
 
@@ -56,7 +56,7 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     assert "operator" not in tickets["PROJ-2"]
 
     # Handled, the message moves the cursor past it, and the ticket has nothing new from the operator.
-    scenario.overseer("ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={message}")
+    scenario.overseer(ticket_sets(KEY, repo="repo", cursors={"message": str(message)}))
     ticket = present(db.get_ticket(conn, KEY))
     assert conversation.operator_section(conn, ticket, authorized=()) is None
 

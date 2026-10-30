@@ -29,16 +29,18 @@ from canopy.loop import loop_view, repeat, reread, tick_now
 from tests.canopy.helpers import (
     FakeKeys,
     FakeTime,
-    canopy,
     console,
     context,
+    decides,
     live_run,
     log_file,
     overseer_does,
     present,
+    raises,
     running_run,
     with_events,
 )
+from tests.canopy.scenario_helpers import dispatches
 from tests.conftest import CanopyEnv, user_toml
 
 
@@ -101,29 +103,18 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
 ) -> None:
     with (
         overseer_does(
-            canopy("decide", "PROJ-1", "wait", "--rationale", "checks pending"),
-            canopy(
-                "dispatch",
-                "PROJ-2",
-                "--repo",
-                "repo",
-                "--label",
-                "agent-ready-tester",
-                "--kind",
-                "implement",
-                "--slug",
-                "login",
-            ),
-            canopy("attention", "PROJ-3", "needs_author", "--detail", "https://example.test/pr/3"),
+            decides("PROJ-1", "wait", "checks pending"),
+            dispatches("PROJ-2", slug="login"),
+            raises("PROJ-3", "needs_author", "https://example.test/pr/3"),
         ),
         contextlib.ExitStack() as later,
     ):
         time = FakeTime()
         # Between the ticks, the reviewer approves PROJ-3: the second tick's overseer no longer lists it.
         second = (
-            canopy("decide", "PROJ-1", "wait", "--rationale", "checks pending"),
-            canopy("decide", "PROJ-2", "wait", "--rationale", "would be running"),
-            canopy("decide", "PROJ-3", "wait", "--rationale", "approved"),
+            decides("PROJ-1", "wait", "checks pending"),
+            decides("PROJ-2", "wait", "would be running"),
+            decides("PROJ-3", "wait", "approved"),
         )
         time.on_sleep = lambda: later.enter_context(overseer_does(*second)) if len(time.slept) == 1 else None
         term, out = console()
@@ -166,7 +157,7 @@ def test_each_tick_block_shows_what_its_overseer_cost(
 ) -> None:
     with_events(canopy_env, "canopy-overseer")
     # A ticket left to the overseer each tick, so each tick runs it.
-    waited = canopy("decide", "PROJ-1", "wait", "--rationale", "checks pending")
+    waited = decides("PROJ-1", "wait", "checks pending")
     with overseer_does(waited), contextlib.ExitStack() as later:
         # The second tick's overseer reports a cost that does not validate: it reports none, so there is none to show.
         time = FakeTime()
@@ -202,26 +193,15 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
     slug = "docs-readme-add-troubleshooting-section"
     with (
         overseer_does(
-            canopy(
-                "dispatch",
-                "PROJ-2",
-                "--repo",
-                "repo",
-                "--label",
-                "agent-ready-tester",
-                "--kind",
-                "implement",
-                "--slug",
-                slug,
-            ),
-            canopy("attention", "PROJ-3", "needs_author", "--detail", "https://example.test/pr/3/" + "x" * 80),
+            dispatches("PROJ-2", slug=slug),
+            raises("PROJ-3", "needs_author", "https://example.test/pr/3/" + "x" * 80),
         ),
         contextlib.ExitStack() as later,
     ):
         time = FakeTime()
         second = (
-            canopy("decide", "PROJ-2", "wait", "--rationale", "would be running"),
-            canopy("decide", "PROJ-3", "wait", "--rationale", "approved"),
+            decides("PROJ-2", "wait", "would be running"),
+            decides("PROJ-3", "wait", "approved"),
         )
         time.on_sleep = lambda: later.enter_context(overseer_does(*second)) if len(time.slept) == 1 else None
         term, out = console(width=80)
@@ -255,8 +235,8 @@ def test_output_to_a_file_is_a_logfmt_line_for_each_event(
 ) -> None:
     detail = "https://example.test/pr/3/" + "x" * 300
     with overseer_does(
-        canopy("dispatch", "PROJ-2", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"),
-        canopy("attention", "PROJ-3", "needs_author", "--detail", detail),
+        dispatches("PROJ-2"),
+        raises("PROJ-3", "needs_author", detail),
     ):
         term, out = log_file()
         repeat.run(context(canopy_env), dry_run=True, interval_minutes=1, max_ticks=1, console=term, stop=repeat.Stop())
@@ -297,7 +277,7 @@ def test_the_wait_runs_from_the_end_of_the_tick_not_the_end_of_its_report(
     treehouse_state: Path,
     agent_log: Path,
 ) -> None:
-    with overseer_does(canopy("attention", "PROJ-3", "needs_author", "--detail", "https://example.test/3")):
+    with overseer_does(raises("PROJ-3", "needs_author", "https://example.test/3")):
         time = FakeTime()
         out = SlowOutput(time=time)
         repeat.run(
@@ -346,8 +326,8 @@ def test_the_overseer_text_is_printed_as_text_not_rich_markup(
     agent_log: Path,
 ) -> None:
     with overseer_does(
-        canopy("decide", "PROJ-1", "done", "--rationale", "merged [/oops] [red]not red[/red] :fire:"),
-        canopy("attention", "PROJ-2", "needs_author", "--detail", "[link=https://evil.test]click[/link]"),
+        decides("PROJ-1", "done", "merged [/oops] [red]not red[/red] :fire:"),
+        raises("PROJ-2", "needs_author", "[link=https://evil.test]click[/link]"),
     ):
         term, out = console()
         repeat.run(context(canopy_env), dry_run=True, interval_minutes=1, max_ticks=1, console=term, stop=repeat.Stop())
@@ -423,7 +403,7 @@ def test_ctrl_c_during_a_tick_lets_it_finish_then_stops(
 ) -> None:
     with overseer_does(
         interrupt_me(),
-        canopy("decide", "PROJ-1", "done", "--rationale", "merged"),
+        decides("PROJ-1", "done", "merged"),
     ):
         time = FakeTime()
         term, _ = console()
@@ -462,7 +442,7 @@ def test_a_second_ctrl_c_aborts_the_tick_and_the_next_tick_closes_it(
     treehouse_state: Path,
     agent_log: Path,
 ) -> None:
-    with overseer_does(interrupt_me(), interrupt_me(), canopy("decide", "PROJ-1", "done", "--rationale", "x")):
+    with overseer_does(interrupt_me(), interrupt_me(), decides("PROJ-1", "done", "x")):
         term, _ = console()
         stop = repeat.Stop()
         clock = seconds_apart(repeat.SAME_SIGNAL_SECONDS + 0.5)
@@ -470,7 +450,7 @@ def test_a_second_ctrl_c_aborts_the_tick_and_the_next_tick_closes_it(
             repeat.run(context(canopy_env), dry_run=True, interval_minutes=15, max_ticks=None, console=term, stop=stop)
         assert tick_statuses(canopy_env) == ["running"]
 
-    with overseer_does(canopy("decide", "PROJ-1", "wait", "--rationale", "x")):
+    with overseer_does(decides("PROJ-1", "wait", "x")):
         assert main(["tick", "--dry-run"]) == 0  # both locks were released
         assert tick_statuses(canopy_env) == ["abandoned", "ok"]
 
@@ -481,7 +461,7 @@ def test_two_signals_from_one_ctrl_c_let_the_tick_finish(
     agent_log: Path,
 ) -> None:
     """Under `uv run`, one Ctrl-C reaches canopy twice: from the terminal, then forwarded by uv about 200 ms later."""
-    with overseer_does(interrupt_me(), interrupt_me(), canopy("decide", "PROJ-1", "done", "--rationale", "x")):
+    with overseer_does(interrupt_me(), interrupt_me(), decides("PROJ-1", "done", "x")):
         term, _ = console()
         stop = repeat.Stop()
         with repeat.signals(stop, clock=seconds_apart(0.2)):
@@ -520,7 +500,7 @@ def test_ctrl_c_waits_for_running_runs_to_end_before_the_loop_exits(
     treehouse_state: Path,
     agent_log: Path,
 ) -> None:
-    with overseer_does(canopy("decide", "PROJ-9", "wait", "--rationale", "running")):
+    with overseer_does(decides("PROJ-9", "wait", "running")):
         ctx = context(canopy_env)
         run_id = live_run(canopy_env, ctx, "PROJ-9")
         time = FakeTime()
@@ -560,7 +540,7 @@ def test_sigterm_stops_the_loop_without_waiting_for_runs(
     agent_log: Path,
 ) -> None:
     """`canopy daemon stop` sends SIGTERM and waits for the loop: it should not wait for every run as well."""
-    with overseer_does(canopy("decide", "PROJ-9", "wait", "--rationale", "running")):
+    with overseer_does(decides("PROJ-9", "wait", "running")):
         ctx = context(canopy_env)
         run_id = live_run(canopy_env, ctx, "PROJ-9")
         time = FakeTime(on_sleep=lambda: os.kill(os.getpid(), signal.SIGTERM))
@@ -587,7 +567,7 @@ def test_a_second_ctrl_c_stops_waiting_and_leaves_the_runs_running(
     treehouse_state: Path,
     agent_log: Path,
 ) -> None:
-    with overseer_does(canopy("decide", "PROJ-9", "wait", "--rationale", "running")):
+    with overseer_does(decides("PROJ-9", "wait", "running")):
         ctx = context(canopy_env)
         run_id = live_run(canopy_env, ctx, "PROJ-9")
         time = FakeTime(on_sleep=lambda: os.kill(os.getpid(), signal.SIGINT))
@@ -751,7 +731,7 @@ def test_an_operator_message_ends_a_deferred_start_after_a_minute(
     treehouse_state: Path,
     agent_log: Path,
 ) -> None:
-    with overseer_does(canopy("decide", "PROJ-1", "wait", "--rationale", "answered the operator")):
+    with overseer_does(decides("PROJ-1", "wait", "answered the operator")):
         ctx = context(canopy_env)
         db.migrate(ctx.conn, resources.migrations_dir())
         db.touch_ticket(ctx.conn, "PROJ-1", "/r")
@@ -1243,7 +1223,7 @@ def test_sighup_during_a_tick_lets_it_finish_on_the_config_it_started_with(
     paced(canopy_env, 10)
     ctx = context(canopy_env)
     paced(canopy_env, 4)  # changed after the loop read it, as an operator editing the file would
-    with overseer_does(hup_me(), canopy("decide", "PROJ-1", "done", "--rationale", "merged")):
+    with overseer_does(hup_me(), decides("PROJ-1", "done", "merged")):
         stop, reload = repeat.Stop(), Asked()
         time = FakeTime()
         term, out = console()

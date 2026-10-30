@@ -20,6 +20,7 @@ from tests.canopy.helpers import (
     in_tick,
     memories,
     present,
+    ticket_sets,
     with_memory,
     worker_does,
     worker_result,
@@ -233,7 +234,7 @@ def test_done_and_forget_invalidate_a_tickets_notes(scenario: Scenario, git_pool
     scenario.configures("private", memory=RECORDING)
     scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": NOTE}]))
     if how == "done":
-        scenario.overseer("ticket", "set", KEY, "--done")
+        scenario.overseer(ticket_sets(KEY, done=True))
         why = "ticket done"
     else:
         scenario.operator("forget", KEY)

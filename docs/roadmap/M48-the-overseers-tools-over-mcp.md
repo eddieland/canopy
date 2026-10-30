@@ -100,4 +100,7 @@ tools after and the reviewer's and the planner's their git tools (#1171), and th
 `initialize`. A read of OpenCode 1.19.3's build changed one thing: a tool call to a local server times out after a
 minute unless its entry sets `timeout`, so the overseer's entry sets its own; OpenCode 2's entry sets
 `timeout.execution` (2026-10-24). Stage 2's check, a day of the operator's loop held to Stage 0's baseline, which is
-still to be measured, is the operator's.
+still to be measured, is the operator's. Stage 3 is built (2026-10-30): the verbs left the CLI, and the tests that drove
+a command make its tool's call in this process, as `canopy _mcp` answers it. The guards' refusals name the field alone,
+and `ticket-set` refuses outside a tick as every other tool does. Its check passes: `make install-check`'s dry tick
+records its decision through `canopy_decide`. Structured results as JSON stay open (§27).

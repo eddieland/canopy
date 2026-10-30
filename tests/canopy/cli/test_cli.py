@@ -64,7 +64,7 @@ def test_help(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
         assert f"  {command} " in out
 
 
-@pytest.mark.parametrize("group", ["chore", "review", "ticket", "workspace", "notify", "sandbox"])
+@pytest.mark.parametrize("group", ["chore", "review", "workspace", "notify", "sandbox"])
 def test_a_group_without_a_command_prints_its_help(capsys: pytest.CaptureFixture[str], group: str) -> None:
     assert main([group]) == 0
     captured = capsys.readouterr()
@@ -81,9 +81,10 @@ def test_the_cli_starts_without_the_web_server() -> None:
     assert result.stdout.strip() == "[]"
 
 
-@pytest.mark.parametrize(("argv", "loads"), [(["--version"], set[str]()), (["decide", "--help"], {"journal"})])
+@pytest.mark.parametrize(("argv", "loads"), [(["--version"], set[str]()), (["_mcp", "--help"], {"mcp"})])
 def test_a_command_imports_only_its_own_module(argv: list[str], loads: set[str]) -> None:
-    # The overseer calls `canopy decide` and its kin many times a tick; each start-up pays for every module it imports.
+    # The runtime starts `canopy _mcp` for each run it gives canopy's tools; each start-up pays for every module it
+    # imports.
     code = f"import sys; from canopy.cli.main import main; main({argv!r}); print(*sys.modules, sep='\\n')"
     result = procs.SubprocessRunner().run([sys.executable, "-c", code])
     assert result.ok, result.stderr
@@ -208,9 +209,11 @@ def test_help_leaves_out_the_overseers_commands(capsys: pytest.CaptureFixture[st
     assert not {"run", "wait", "end", "revise"} & listed
 
 
-def test_an_overseers_command_still_prints_its_own_help(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["decide", "--help"]) == 0
-    assert "Record a decision" in capsys.readouterr().out
+@pytest.mark.parametrize("verb", ["dispatch", "decide", "attention", "ticket"])
+def test_the_overseers_verbs_are_no_commands(verb: str, capsys: pytest.CaptureFixture[str]) -> None:
+    # They are tools alone (DESIGN §27): the overseer has no shell to run canopy in.
+    assert main([verb, "--help"]) == 2
+    assert f"No such command '{verb}'" in capsys.readouterr().err
 
 
 def test_completion_completes_repository_names_from_the_workspace(
@@ -236,7 +239,7 @@ def test_completion_completes_chore_names_from_the_config(
         for name in ("queue-age", "build-health")
     )
     canopy_env.append_user(chores)
-    assert complete(capsys, "canopy chore run ") == ["plain,build-health", "plain,queue-age"]
+    assert complete(capsys, "canopy chore history ") == ["plain,build-health", "plain,queue-age"]
     assert complete(capsys, "canopy chore try q") == ["plain,queue-age"]
 
 
@@ -247,12 +250,12 @@ def test_completion_offers_no_names_where_the_config_does_not_load(
 ) -> None:
     canopy_env.write_shared("not toml [")
     assert complete(capsys, "canopy grant PROJ-1 implement --repo ") == []
-    assert complete(capsys, "canopy chore run ") == []
+    assert complete(capsys, "canopy chore history ") == []
     outside = tmp_path / "elsewhere"
     outside.mkdir()
     with contextlib.chdir(outside):
         assert complete(capsys, "canopy grant PROJ-1 implement --repo ") == []
-        assert complete(capsys, "canopy chore run ") == []
+        assert complete(capsys, "canopy chore history ") == []
 
 
 def complete(capsys: pytest.CaptureFixture[str], words: str) -> list[str]:

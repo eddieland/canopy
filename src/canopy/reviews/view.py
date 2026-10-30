@@ -111,7 +111,7 @@ class LatestRevision(TypedDict):
 class WantedRevision(TypedDict):
     """A review's draft the operator's note asks a revision of (DESIGN §34): never the note's or the draft's text."""
 
-    #: The review whose draft it is, which `canopy review revise --run` names.
+    #: The review whose draft it is, which the `review-revise` tool's `run` names.
     review_run: int
     pr: str
     #: The commit the review read, which the revision reads too.

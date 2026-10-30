@@ -225,7 +225,7 @@ worker, and plan) from one key, so a sandbox wrapper (§24) cannot miss one; the
 overseer's, a chore's, and a review's templates are not wrapped: each takes a different sandbox role, or none.
 
 **Prompt overrides** in `paths.prompt_overrides` replace files of the same name in `prompts/`. An override must keep
-what the guards rely on: an overseer override passes `--label` on every `canopy dispatch`, and a worker override
+what the guards rely on: an overseer override passes `label` on every `dispatch`, and a worker override
 includes `{{LABELS}}` and the authorization check that uses it, or the dispatch is refused as `bad_prompt` (§8, D051).
 In the user file, `paths.*` values must be absolute or start with `~`, since a relative path would let a shared
 workspace supply them; in the private file a relative value resolves against the state directory, never the workspace

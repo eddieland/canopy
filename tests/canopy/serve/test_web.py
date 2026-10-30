@@ -30,19 +30,24 @@ from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
     KEY,
     FakeTime,
-    canopy,
     console,
     context,
+    decides,
     in_run,
     messages,
     overseer_does,
     present,
+    raises,
     running_run,
     tracker_holds,
     waits,
     with_events,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, raises
+from tests.canopy.scenario_helpers import (
+    Scenario,
+    dispatches,
+    pushes,
+)
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, client, free_port, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, GitPool, user_toml
 
@@ -1012,7 +1017,7 @@ def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
 
     time_.on_sleep = reply_from_the_browser
     term, out = console()
-    with overseer_does(canopy("decide", KEY, "wait", "--rationale", "waiting on the operator")):
+    with overseer_does(decides(KEY, "wait", "waiting on the operator")):
         statuses = repeat.run(
             ctx,
             dry_run=True,
