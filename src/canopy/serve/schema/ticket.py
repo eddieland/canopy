@@ -14,6 +14,7 @@ from canopy.serve.schema import Attachments, CostTotal, Decision, Limit, Message
 from canopy.serve.schema.draft import Draft
 from canopy.serve.schema.model import AgentModel
 from canopy.serve.schema.persona import AgentPersona
+from canopy.serve.schema.spend import SpendModel
 
 type GrantKind = Annotated[
     Literal["implement", "resume"],
@@ -81,6 +82,9 @@ class TicketDetail(Model):
     models: list[AgentModel] = []
     """The model each of its agents runs on at its next run (DESIGN §13): its workers', its planner's, and its
     reviewer's, in that order. What the operator may choose from is `GET /models`', read when they ask."""
+    worker_models: list[SpendModel] = []
+    """What its worker runs that started in the last 30 local days spent on each model, each beside the workspace's
+    worker runs on the same model: Spend's By model for it, at 30 days, narrowed to workers."""
     attachments: Attachments
     """The files the operator attached to it, which its runs read (DESIGN §22)."""
 

@@ -324,6 +324,32 @@ test("under every kind, a model's row opens its runs of every kind, a review's a
     await expect(page.getByRole('link', { name: 'review:4' })).toBeVisible()
 })
 
+test("a ticket's worker models, beside the workspace's, open By model for the ticket", async ({ page }) => {
+    await page.goto('tickets/ABC-099')
+    // Opus and sonnet both served its workers; sonnet's other runs are the workspace's, the reviewer's gpt-5 is not.
+    const line = page.getByTestId('ticket-model-spend')
+    await expect(line).toContainText('claude-opus-4-1: 1 run, $1.65/run · workspace $1.65/run')
+    await expect(line).toContainText('claude-sonnet-4-5: 1 run, $0.66/run · workspace $1.54/run')
+    await expect(line).not.toContainText('gpt-5')
+    await line.getByRole('link', { name: 'worker spend, 30 days' }).click()
+    await expect(page).toHaveURL(/\/reports\/spend\?days=30&ticket=ABC-099$/u)
+    await settled(page)
+
+    const kinds = page.getByTestId('spend-model_kind')
+    await expect(kinds.getByRole('link', { name: 'workers' })).toHaveAttribute('data-selected', 'true')
+    const models = page.getByTestId('spend-model-table').getByTestId('spend-model')
+    await expect(models).toHaveCount(3)
+    await expect(models.nth(1).getByRole('rowheader')).toHaveText('anthropic/claude-sonnet-4-5')
+    await expect(models.nth(1).getByRole('cell')).toHaveText(['1', '41', '$0.66', '$0.66', '$1.54'])
+    // Every kind of its runs, the reviewer's among them, then every ticket's again, at the kind chosen.
+    await kinds.getByRole('link', { name: 'all' }).click()
+    await expect(page).toHaveURL(/model_kind=all/u)
+    await expect(models.getByRole('rowheader', { name: 'openai/gpt-5' })).toBeVisible()
+    await page.getByTestId('spend-model-ticket').getByRole('link', { name: 'every ticket' }).click()
+    await expect(page).toHaveURL(/\/reports\/spend\?days=30$/u)
+    await expect(page.getByTestId('spend-model-table').locator('thead th')).toHaveCount(5)
+})
+
 test("the overseer's models are not linked, as the runs page lists no tick by model", async ({ page }) => {
     await page.goto('reports/spend?model_kind=overseer')
     await settled(page)
