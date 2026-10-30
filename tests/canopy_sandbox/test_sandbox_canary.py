@@ -16,6 +16,7 @@ the run ends. The positive controls must succeed, so a sandbox that refuses ever
 
 import contextlib
 import os
+import shlex
 import shutil
 import socket  # noqa: TID251  (the host's side of the loopback the sandbox must not reach)
 import sqlite3
@@ -36,7 +37,23 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import InlineRunner, decisions, in_tick, pool, present, slot_of, tick_starts, worker_does
+from canopy.loop import mcp
+from tests.canopy.helpers import (
+    InlineRunner,
+    answered_lines,
+    decides,
+    decisions,
+    in_tick,
+    mcp_lines,
+    overseer_calls,
+    pool,
+    present,
+    slot_of,
+    tick_starts,
+    tracker_holds,
+    worker_does,
+)
+from tests.canopy.scenario_helpers import dispatches
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, git, user_toml
 
 pytestmark = pytest.mark.skipif(
@@ -337,18 +354,23 @@ def test_the_overseer_cannot_write_config_or_state_but_the_journal(canary: Canar
 
 
 def test_canopy_runs_in_the_overseers_sandbox_and_records_in_the_journal(canary: Canary) -> None:
-    """A positive control: `canopy --version`, which the tick checks, and a decision that lands in the journal."""
+    """A positive control: `canopy --version`, which the tick checks, and a decision that lands in the journal.
+
+    The decision is a call of the overseer's tool, through its server, which the runtime starts inside its sandbox.
+    """
     canopy = Path(sys.executable).parent / "canopy"
-    skip = '--rationale "mcp_unavailable: the tracker is down"'
+    serves = f"printf '%s\\n' \"$@\" | {shlex.join(mcp.COMMAND)}"
 
     with in_tick(canary.journal) as tick_id:
         version = canary.run(f'"{canopy}" --version', role=OVERSEER)
-        decided = canary.run(f'"{canopy}" decide skip {skip}', role=OVERSEER)
+        decided = canary.run(serves, *mcp_lines(decides("PROJ-1", rationale="checks pending")), role=OVERSEER)
 
     assert version.ok, version.stderr
     assert version.stdout.splitlines()[1].startswith("canopy ")
     assert decided.ok, decided.stderr
-    assert decisions(canary.journal, tick_id) == [("skip", "mcp_unavailable: the tracker is down")]
+    [said] = answered_lines(decided.stdout.split("\n", 1)[1])
+    assert not said.error, said.text
+    assert decisions(canary.journal, tick_id) == [("wait", "checks pending")]
 
 
 def test_a_dispatch_the_overseer_asks_for_is_recorded_and_started_by_no_process_in_its_sandbox(canary: Canary) -> None:
@@ -356,13 +378,17 @@ def test_a_dispatch_the_overseer_asks_for_is_recorded_and_started_by_no_process_
 
     Nothing in the sandbox starts it, so no run, its setup, or the harness's git inherits the sandbox, or ends with it.
     """
-    canopy = Path(sys.executable).parent / "canopy"
-    ask = "dispatch PROJ-1 --repo repo --label agent-ready-tester --kind implement --slug work"
+    serves = f"printf '%s\\n' \"$@\" | {shlex.join(mcp.COMMAND)}"
+    # The tracker holds the ticket, and the sources read it and the branches, as the tick does before its overseer.
+    with contextlib.chdir(canary.workspace):
+        tracker_holds(canary.journal)
 
     with in_tick(canary.journal) as tick_id:
-        done = canary.run(f'"{canopy}" {ask}', role=OVERSEER)
+        done = canary.run(serves, *mcp_lines(dispatches(slug="work")), role=OVERSEER)
 
     assert done.ok, done.stderr
+    [said] = answered_lines(done.stdout.split("\n", 1)[1])
+    assert not said.error, said.text
     recorded = canary.journal.execute("SELECT tick_id, kind, ticket_key, status FROM recorded_runs").fetchall()
     assert [tuple(row) for row in recorded] == [(tick_id, "dispatch", "PROJ-1", "recorded")]
     assert canary.journal.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
@@ -617,11 +643,11 @@ def test_canopys_sandboxed_worker_is_pushed(
     canopy_env.write_user(user_toml().replace("\nworker_cmd = 'env", f"\nworker_cmd = '{prefix}"))
     conn: sqlite3.Connection = canopy_env.journal()
     commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
+    tracker_holds(conn)
     with worker_does(commit):
         runner = InlineRunner()
         with in_tick(conn, ends_ok=True):
-            args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-            assert main([*args, "--slug", "work"], runner=runner) == 0
+            assert not overseer_calls(dispatches(slug="work"), runner=runner).error
             tick_starts(runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0

@@ -94,17 +94,20 @@ Controls:
 - The overseer's state block carries what canopy's connectors observed (DESIGN §30): each ticket marked a candidate or
   not in code from its observed labels and state, a non-candidate by key and why with none of its text, and a
   candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a trusted
-  reviewer, a worker). By prompt, the overseer decides a subject observed within `connect.max_age_minutes` from it, and
-  reads the tracker or GitHub only about one stale or unobserved. The text stays data, cut and marked. `canopy dispatch`
-  checks the overseer's claims against them in code (DESIGN §7), before its other guards: the label must be one observed
-  on the ticket, a `resume` for `reply` must cover a new comment by an authorized replier that is not a worker's or a
-  new operator message, a `resume` for `review` must cover a trusted reviewer's item, or anyone else's only with an
-  operator message after it (`unauthorized`), and each cursor, a tick's `canopy ticket set` included, must name an item
-  observed and shown (`unobserved`). A `resume`'s cursors the overseer leaves out default in code to the newest items
-  shown that these checks let it cover (DESIGN §37). A dispatch resting on a public ticket or a PR observed past that
-  age is refused `stale`. A private ticket and a subject no source covers keep their claims, checked by the worker as
-  before. Residual: the guards trust what a connector printed, and a label removed since its read authorizes until the
-  worker's check.
+  reviewer, a worker). By prompt, the overseer decides from them alone, and a subject no source can read gets its
+  `wait`. The text stays data, cut and marked. The `dispatch` tool checks the overseer's claims against them in code
+  (DESIGN §7), before its other guards: the label must be one observed on the ticket, a `resume` for `reply` must cover
+  a new comment by an authorized replier that is not a worker's or a new operator message, a `resume` for `review` must
+  cover a trusted reviewer's item, or anyone else's only with an operator message after it (`unauthorized`), and each
+  cursor, a tick's `ticket-set` included, must name an item observed and shown (`unobserved`). A `resume`'s
+  cursors the overseer leaves out default in code to the newest items shown that these checks let it cover (DESIGN §37).
+  A dispatch resting on a public ticket or a PR observed longer ago than `connect.max_age_minutes` is refused `stale`. A
+  private ticket and a subject no source covers keep their claims, checked by the worker as before. Config requires a
+  `tracker` source, and the `vcs` source always runs, so the overseer reads neither world live (DESIGN §37): a candidate
+  whose ticket, comments, PR, branches, or open blocker's PR a source left stale, or whose PR no source reads, is the
+  harness's `wait`, the PRs its reviews ask about are shown as the `vcs` source read them, and its definition denies
+  every MCP server's tools but canopy's, so it skips no tick over an outage. Residual: the guards trust what a connector
+  printed, and a label removed since its read authorizes until the worker's check.
 - An `artifacts` source (DESIGN §30, §38) records the comments on an artifact store's pages in tables of their own, cut
   as a tracker comment is, with the store's id for each author and whether the comment is an agent's or carries every
   comment mark. A comment on an artifact whose origin names a ticket the journal holds is also recorded once in that
@@ -126,18 +129,23 @@ Controls:
   `wait`, for a ticket whose worker is running and for a private ticket's question the operator has not answered,
   each read from the journal, and only when every row the derivation finds for the ticket and its units is one of
   these, none stale. Such a ticket's text reaches no overseer that tick, and whatever the overseer records about it, a
-  decision, dispatch, attention item, or `ticket set`, is refused `decided`, through a tool and its command alike, so
-  a steered overseer cannot overrule the harness; an item the overseer raised on it stands until the overseer is given
-  the ticket again, or it is done or stopped. Residual: the harness reads the absence of every other row from the
+  decision, dispatch, attention item, or `ticket-set`, is refused `decided`, so a steered overseer cannot overrule the
+  harness; an item the overseer raised on it stands until the overseer is given the ticket again, or it is done or
+  stopped. Residual: the harness reads the absence of every other row from the
   derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
-  model-written context: today it starts only a due chore with no `when`, whose `chore run` and `chore wait` the
+  model-written context: today it starts only a due chore with no `when`, whose `chore-run` and `chore-wait` the
   overseer is refused `decided`, and no ticket's run, since each rests on an observation.
 - The attention items that need no judgment (`needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
   `review_failed`, `review_limit`, `plan_review`, `plan_changed`) are the harness's, raised from the journal and the
   observations in its own words, and kept while an observation they rest on is stale (DESIGN §14). The overseer is
-  refused recording one (`raised`), through a tool and its command alike, so a steered overseer can neither drop such
+  refused recording one (`raised`), so a steered overseer can neither drop such
   an item nor raise a false one; a guard that refuses it a run past a limit still records the item. Residual: a
   derivation's mistake raises or ends an item wrongly until a fresh read corrects it.
+- The overseer's own three items (`needs_author`, `multi_repo`, `notice_rerun`) are recorded once and held by the harness
+  until what each names ends it, or its ticket is done or stopped (DESIGN §37): a steered overseer cannot drop one by
+  leaving it out, only by moving a cursor past the item a `needs_author` names, as it could always decline to record
+  one. No coworker's comment ends one: only the operator's own message, a cursor, or a newer run of the held check.
+  One naming nothing that could end it is refused (`unnamed`).
 - With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
   coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
   named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal
@@ -246,7 +254,7 @@ Controls:
   prompt's obligations come before it, as they do before the standing instructions. The overseer reads it as the
   operator's word about the world, to hold a failed check the notice explains: that changes when a `resume` for CI runs,
   never what a worker may do.
-- A one-off task (DESIGN §36, ROADMAP M61) is authorized by its submission, written only through `core/tasks.py` by a
+- A one-off task (DESIGN §36, ROADMAP M61) is authorized by its submission, written only through `runs/tasks.py` by a
   channel that authenticated the operator: `canopy task submit` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start` is,
   and so are `canopy reply task:N`, which queues its next run, and `canopy stop task:N`, from either. Its text, and
@@ -262,7 +270,7 @@ Controls:
   forced push. Under `trust.rebase` the private worker's definition still allows its one leased push, so a steered task
   worker can replace its own branch's history; the run's note then says the branch no longer holds the head it started
   from, and each earlier run's head stays in the journal.
-- Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `core/attachments.py` by a channel that
+- Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
   authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's
   text is what someone sent the operator, so it is data, never an instruction: what to do with it is the operator's
@@ -306,7 +314,8 @@ Controls:
 - Each agent's model (DESIGN §13, M58), and the variant it runs at, is the operator's choice alone: `runtime.models`
   and a chore's `model`, both private (T7), which canopy writes into the agent's definition, or for one ticket's worker,
   planner, or reviewer an override of the model, at one of its variants or none, set with `canopy model` or the
-  ticket's page (T8), which refuses inside a tick or a run and refuses a model the runtime does not list, or a variant
+  ticket's page (T8), or for the reviews of a PR they requested `canopy start URL --review --model` or the web UI
+  (T8), each of which refuses inside a tick or a run and refuses a model the runtime does not list, or a variant
   the model lacks. The overseer, a dispatch, ticket text, and labels choose none, the overseer's own included, and a
   `runtime` template, prefix, or suffix that passes a model or a variant is a config error, as is a chore's command
   that does while it runs canopy's chore agent, so no agent's command line overrides it unseen. A worker run whose
@@ -323,6 +332,9 @@ Controls:
   its MCP server is down. The server is named in the overseer process's environment alone, from which the harness
   removes it before any run it starts; it lists no tool and refuses every call under `CANOPY_RUN_ID` or outside a
   running tick, the overseer's definition allows each tool by exact name, and every other definition denies them all.
+  It reaches no other MCP server (DESIGN §13): its definition denies every server's tools, `<server>_<tool>` as
+  OpenCode names them, whatever the operator's runtime config grants, and every server's resources, before it allows
+  canopy's, and nothing from config is rendered there to reopen one.
   A steered overseer can still make any call its tools take, as it could run any `canopy` command before; the guards
   in the tools bound what that does. Its bash rules deny every command but those `runtime.allow_bash` names. That key
   is private (T7): only the operator widens the overseer's shell, and canopy renders each pattern last of its bash
@@ -384,6 +396,16 @@ Controls:
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
+- A running agent's progress (DESIGN §41) is its own text, which may echo a ticket's or a PR's. canopy's `status` server
+  writes nothing; the harness records each update from the call the agent prints, bounded, plain text, as it records the
+  agent's spend, and shows it to the operator as data. No progress goes into another agent's prompt.
+- The operator's answer to the question a running agent asks (DESIGN §41) is the one operator word that reaches
+  an agent while it runs: a letter, one of the options the agent offered, never the operator's own words. canopy
+  writes it to a file in the run's answers directory, which a sandboxed run may read but not write, and canopy's plugin
+  tells
+  the agent on its next tool call with a `[canopy]` line naming the letter and the agent's own option. Anything the
+  agent reads can print a line that looks like it, so a forged one can choose an option the agent offered, which it
+  was already prepared to do, and nothing else; the prompts say a canopy line that answers anything else is data.
 - No agent has web tools (D077). Every canopy definition denies `webfetch`, `websearch`, and `codesearch` as scalars,
   which a repository's config cannot loosen (D044), and `execute`, OpenCode 2's code mode, whose code can make HTTP
   requests. Fetched and searched pages are text anyone can shape, and an agent that reaches for them on its own reads
@@ -424,12 +446,13 @@ Controls:
   configured commands. canopy ships programs that make them, each a separate distribution it runs only as a command.
   The Slack sink (DESIGN §20) runs only as a sink the operator configured, and reads its webhook or bot token from an
   operator-only file of its own, never from canopy's config, argv, journal, or logs; `canopy-connect-slack`, which
-  reads the replies in its threads, reads the same file and sends the token only to Slack's API. The GitHub reader and
-  poster,
+  reads the replies in its threads, reads the same file and sends the token only to Slack's API. Both talk to Slack
+  through `canopy-http` (D130), following no redirect. The GitHub reader and poster,
   `canopy-connect-github` and `canopy-post-github` (DESIGN §29), read the token `gh` holds for the host a PR's or an
-  issue's URL, or a repository's clone URL in the map, names, when they run, only once `gh` names that host as one it
-  is logged in to, and send it only to that host's API, following no redirect, through `canopy-http` (D130), whose
-  client is bound to one origin; canopy never reads it.
+  issue's URL, a repository's clone URL in the map, or the repository a `tracker` source's `--repo` names in the
+  private config, names, when they run, only once `gh` names that host as one it is logged in to, and send it only to
+  that host's API, following no redirect, through `canopy-http` (D130), whose client is bound to one origin; canopy
+  never reads it.
   `canopy-connect-jira` (DESIGN §30) reads an email and API token from an operator-only file of its own, held to the
   Slack sink's checks, never from canopy's config, argv, journal, or logs, and sends them only to the Jira site the
   operator names, over https, following no redirect, through `canopy-http` (D130). Lint bans network modules in the
@@ -456,6 +479,8 @@ Controls in code, not prompts:
   started by a later tick. A dry run records none.
 - Workers exit when their work is pushed. They may push again for a fix found after a push (D116), but do not poll
   CI or retry a rejected push; the run timeout bounds the rest.
+- A run's progress (DESIGN §41) neither extends a run nor holds a slot: what an agent says of where it stands changes
+  no guard.
 - The clock (DESIGN §33) is advice, not a limit: near its timeout an agent hears the minutes left, from the same clock
   the harness kills it by, and nothing it does with them extends the run or holds off the kill.
 - A tick that cannot acquire the lock exits immediately.
@@ -476,10 +501,10 @@ Controls in code, not prompts:
   every limit, cooldown, and capacity, and none in a dry run. An overseer's dispatch that would leave fewer workers
   free than the harness's runs ranked above it in §7's order hold is refused `reserved`, so new work cannot take the
   capacity of work in flight.
-- A tick whose block leaves the overseer nothing to judge runs none and spends nothing (DESIGN §39): it makes only the
+- A tick whose block leaves the overseer nothing to judge runs none and spends nothing (DESIGN §6): it makes only the
   harness's dispatches, under the guards above, and the disk check still holds them. It is paced as any tick is, by
   `loop.min_gap_minutes` and every wake, and leaves idle pacing's count as it was.
-- The loop's polls (DESIGN §39): a poll ends the wait only when a tick would record or list what the latest tick did
+- The loop's polls (DESIGN §6): a poll ends the wait only when a tick would record or list what the latest tick did
   not, or once when a source fails, never again until a poll reads every source whole; the tick it wakes is held by
   `loop.min_gap_minutes`, as every wake is, so the polls cannot spin the loop.
 - Tracker comments: each body cut at 2000 characters where the tracker source records it (DESIGN §30).
@@ -532,13 +557,17 @@ Controls now:
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
 - canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose jobs are the
-  clock, the split, and, under OpenCode 2, holding a session's first prompt until its MCP tools are registered
-  (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is written, the
-  operator's included, so no run changes it through its permissions or its sandbox, and the runtime installs nothing
-  into it. The plugin reads one variable, `CANOPY_DEADLINE`, the clock, the system prompt the runtime hands it, which
-  it cuts in two without changing its text, and under OpenCode 2 the runtime's MCP servers' states and its tools'
-  names; it writes no file, refuses no call, grants no tool, and catches its own errors. A repository's own plugins
-  already load in the same process (T7).
+  clock, the split, the nudge for a stale update and the answer to its question (DESIGN §41), and, under OpenCode 2,
+  holding a session's first prompt until its MCP tools are registered (DESIGN §33), from the snapshot. canopy takes
+  the snapshot's write permission away once it is written, the operator's included, so no run changes it through its
+  permissions or its sandbox, and the runtime installs nothing into it. The plugin reads three variables,
+  `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, and `CANOPY_ANSWERS`, the clock, the system prompt the runtime hands it, which it
+  cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its session,
+  one file, the answer canopy writes in the run's answers directory, through the runtime's own `node:fs`, and under
+  OpenCode 2 the runtime's MCP servers' states and its tools' names; it writes no file, refuses no call, grants no
+  tool, and catches its own errors. A repository's own plugins already load in the same process (T7). The answers
+  directory is the run's own, in the state directory beside its other files, made before the agent starts and removed
+  once it ends; a sandboxed run may read it and nothing else of the state directory, and write none of it (§24).
 - `runtime.setup_cmd` (DESIGN §9) runs on the host in each slot of a worker run, after the run's branch is checked out
   and before the worker starts. It runs that branch's code, which a worker wrote (install scripts, generators), outside
   the agent runtime's permissions. It is private (T7), and the code is what the worker's own shell runs a moment
@@ -767,7 +796,7 @@ Controls:
   reviewer under the same definition, nothing outside the version it reports. Its definition denies commenting or
   replying anywhere, submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth;
   the operator's runtime need not grant it a write tool at all. Off a GitHub tracker, the tracker's server is denied
-  whole but its read tools, allowed by name, as for the overseer, so a write there no pattern names fails closed.
+  whole but its read tools, allowed by name, as for the planner, so a write there no pattern names fails closed.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, subagent, or shell tools,
   one tool of canopy's, `canopy_chore_history`, which reads its own chore's earlier runs and writes nothing, and denies
   MCP write tools by name. That tool's server is named in the chore run's environment alone (DESIGN §27), lists nothing
@@ -799,12 +828,14 @@ Residual: real. An unsandboxed run can send anything it reads to any host. A san
 reads, the worktree and whatever its template re-allows, to any allowed host, with the credentials it holds: with
 `github.com` allowed and a push credential in reach, it can push or post anywhere the operator can. A sandboxed
 overseer reads the workspace's whole state, private tickets' conversations and plans among it, and can send it to its
-model provider, its tracker, or GitHub's API with the tokens its MCP servers hold. Scoping those credentials is the
-next step (HOST_ISOLATION §8); until then this risk is accepted and documented. Behind a corporate proxy, which `srt`
-forwards through, `srt` makes no address checks and the proxy's rules are the only ones. A chore steered by what it
-read can put up to 20 findings of its choosing in front of the operator and into `notify.cmd`, wherever that sends
-them, and a finding's link can carry data in its URL. A steered agent likewise chooses up to 500 characters per
-attention item, and 300 per worker summary and question, that a sink puts in front of whoever reads its destination.
+model provider, or through a command `runtime.allow_bash` names, to its tracker or GitHub's API: its definition denies
+every MCP server but canopy's, though the runtime may still start the ones its config names, with their tokens. Scoping
+those credentials is the next step (HOST_ISOLATION §8); until then this risk is accepted and documented. Behind a
+corporate proxy, which `srt` forwards through, `srt` makes no address checks and the proxy's rules are the only ones. A
+chore steered by what it read can put up to 20 findings of its choosing in front of the operator and into `notify.cmd`,
+wherever that sends them, and a finding's link can carry data in its URL. A steered agent likewise chooses up to 500
+characters per attention item, and 300 per worker summary and question, that a sink puts in front of whoever reads its
+destination.
 A steered reviewer can put what it read into its findings, which reach the operator and, through `resume`, a worker on
 that ticket, who can push and comment; the worker reads them as data, as it reads any review comment. A write tool
 the operator's runtime grants anyway, on GitHub's server or another the tracker's rules do not cover, under a name the
@@ -907,16 +938,13 @@ Residual: the repository still chooses the tracker provider, the query, `needs_h
 and `tracker.ticket_url`. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled tickets,
 agent branches under an unexpected prefix, which branch protection (§7) still governs, or the web UI's ticket links
 leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
-nothing. The query can still widen what the overseer reads: without a `tracker` source, it reads every ticket a query
-returns, text and comments, before it checks for a label, so a widened query puts tickets nobody labeled, any the
-operator's tracker account can see, in front of the model, where their text can try to steer it (T1). It cannot make one
-a candidate. With a `tracker` source, a ticket observed fresh that is not a candidate reaches the overseer by key and
-why alone, and its prompt says not to read it (DESIGN §30); a stale one is the harness's `wait` and never reaches it,
-and its definition denies GitHub's issue reads and, wherever config or the provider names it, the tracker's server
-whole, and carries no skill for it, so its prompt reads no ticket live (DESIGN §39). Settled
-(2026-10-15, the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator
-who shares the workspace with people they do not trust overrides it in the private file. Requiring a `tracker` source
-would close what is left (DESIGN §35). The provider also picks the default tracker server and tools a private ticket's
+nothing. The query cannot widen what the overseer reads: config requires a `tracker` source, which reads the query,
+and a ticket observed fresh that is not a candidate reaches the overseer by key and why alone, and its prompt says not
+to read it (DESIGN §30); a stale one is the harness's `wait` and never reaches it, and its definition denies every MCP
+server but canopy's and carries no skill for the tracker, so it reads no ticket live (DESIGN §13). Settled (2026-10-15,
+the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator who shares
+the workspace with people they do not trust overrides it in the private file. The provider also picks the default
+tracker server and tools a private ticket's
 worker gets (T6): a repository that names another provider leaves the real tracker's server
 undenied in that definition. An operator who works private tickets in a repository they do not control sets
 `tracker.mcp_server` and `tracker.read_tools`, which are private, to pin them. Through the runtime's own config it can
@@ -996,6 +1024,10 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
   without following links, and rendered as text; it is never served as a file, and taking it runs no diff driver or
   textconv filter the commit names.
+- It serves the machine's processes on the system resources page: each one's name, account, use, and command line,
+  read from Linux's `/proc`, the kernel's threads left out. A command line holds whatever its program was given, an
+  argument that is a token included, and may belong to another account on the machine; `ps` shows the same to anyone
+  logged in there. It is read only while the page asks, from no path a request names, and rendered as text.
 - It serves the models the runtime lists (DESIGN §13), read when the operator opens a ticket's Model menu: it runs
   the runtime's list command, as `canopy models` does, through the process seam in the workspace root with a 30-second
   timeout, taking nothing from the request, and serves only the lines that are model ids. A choice of model is looked
@@ -1025,8 +1057,10 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   `canopy attach` and `canopy detach` do (DESIGN §22),
   edit a review's draft's body and comments, drop one, add one on a line of its kept diff, note what a revision of it
   should change as `canopy reply review:ID` does, publish or stage the version the page showed, named by its hash,
-  as `canopy review edit` and `publish` do, and discard a draft as `canopy review discard` does (DESIGN §34), ask the
-  loop to read its config files again as SIGHUP does, and ask it for a tick now as `t` at its terminal does.
+  as `canopy review edit` and `publish` do, and discard a draft as `canopy review discard` does (DESIGN §34), answer the
+  question a running agent asks with one of its letters, the one the page showed, as `canopy reply run:ID` and
+  `review:ID` do (DESIGN §41), ask the loop to read its config files again as SIGHUP does, and ask it for a tick now as
+  `t` at its terminal does.
   Beyond the CLI's verbs it writes what no command would, through a function of its own with the same guards: the
   marks of what the operator has seen (DESIGN §22), which authorize nothing and no agent reads, and two things that
   are the operator's own words on a plan (DESIGN §25): an edit of a
@@ -1043,14 +1077,16 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - Its config writes (DESIGN §12, §22, D128) are an allowlist in code, by key name, never a section's wildcard, so a key
   added later is not writable until it is named. Limits may be raised or lowered, but not past a bound in code (a
   count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt
-  limits, the attachment limits under their own ceilings, and the CI cooldown in `policy`, `loop.interval_minutes`
-  and `loop.idle_max_minutes`, and `spend.monthly_budget_usd`, which spends nothing but would silence the sink that
-  hears the month reached it. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100%
-  alert. Trust settings move only toward stricter: `policy.stacking` to `"never"`, an entry removed from
-  `trust.authorized_repliers` or `trust.trusted_reviewers` (never added), `trust.rebase` to false, and
-  `trust.commit_trailer` to true. Nothing that
-  runs a command, chooses a prompt, is read as words, or moves the listener: no `runtime.*`, `notify.*`, `chores`,
-  `paths.*`, `review.*`, `serve.*`, or `tracker.*`, and no comment mark or trailer name. A config write outlives the
+  and follow-up limits, the attachment limits under their own ceilings, and the CI cooldown and feedback quiet time
+  in `policy`, the paces and free-disk floor in `loop`, the worker's, reviewer's, and overseer's run timeouts in
+  `runtime`, and `spend.monthly_budget_usd`, which spends nothing but would silence the sink that hears the month
+  reached it. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100% alert. Trust
+  settings move only toward stricter: `policy.stacking` to `"never"`, `policy.plan` and `policy.feedback_plan` to
+  `"approve"`, `policy.planner_may_approve` toward `"off"`, an entry removed from `trust.authorized_repliers` or
+  `trust.trusted_reviewers` (never added), `trust.review_replies` to `"approve"`, `trust.rebase` to false,
+  `trust.max_flaky_kicks` lowered, and `trust.commit_trailer` to true. Nothing that runs a command, chooses a prompt,
+  is read as words, or moves the listener: no other `runtime.*`, no `notify.*`, `chores`, `paths.*`, `review.*`,
+  `serve.*`, or `tracker.*`, and no comment mark or trailer name. A config write outlives the
   secret, which is why trust only tightens: a replier added through a stolen session would go on steering workers after
   a new secret ended it. It writes the workspace's private file alone (M49), never the workspace file (T7) nor the user
   file, which serves every workspace: a key from the user file is written to the private file, where it shadows the user

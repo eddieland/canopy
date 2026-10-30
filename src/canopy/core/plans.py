@@ -232,23 +232,20 @@ def state_section(
     """Return a ticket's plan for the overseer's state block, or None when plans do not touch it.
 
     A ticket that needs no plan, has none, and had no plan run has no `plan` key, so with `policy.plan` off the block
-    is as it was before plans (DESIGN §25).
+    is as it was before plans (DESIGN §25). Nor has a ticket with a branch, which is never planned (`ask`): its plan,
+    approved or never wanted, decides nothing the overseer does.
     """
+    if ticket.branch:
+        return None
     key = ticket.key
     needed_now = needed(policy.plan, ticket.plan_setting)
-    newest = records.fetch_one(
-        conn,
-        records.Plan,
-        sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id DESC").limit(1),
-    )
-    run = records.fetch_one(
-        conn,
-        records.Run,
-        sql.select("*")
-        .from_("runs")
+    newest = records.select(records.Plan).where("ticket_key = ?", key).order_by("id DESC").limit(1).one(conn)
+    run = (
+        records.select(records.Run)
         .where("ticket_key = ? AND kind = ? AND id > ?", key, RunKind.PLAN, ticket.forgotten_run_id or 0)
         .order_by("id DESC")
-        .limit(1),
+        .limit(1)
+        .one(conn)
     )
     if not needed_now and newest is None and run is None and attempts == 0:
         return None
@@ -280,11 +277,7 @@ def waits(conn: sqlite3.Connection, ticket: records.Ticket) -> bool:
     Returns:
         True while the newest plan waits on the operator's word.
     """
-    newest = records.fetch_one(
-        conn,
-        records.Plan,
-        sql.select("*").from_("plans").where("ticket_key = ?", ticket.key).order_by("id DESC").limit(1),
-    )
+    newest = records.select(records.Plan).where("ticket_key = ?", ticket.key).order_by("id DESC").limit(1).one(conn)
     if newest is None or newest.status is not PlanStatus.PROPOSED:
         return False
     running = db.running_run_of(conn, ticket.key)
@@ -304,11 +297,7 @@ def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | Non
         The message's time as the journal holds it, or None.
     """
     key = ticket.key
-    newest = records.fetch_one(
-        conn,
-        records.Plan,
-        sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id DESC").limit(1),
-    )
+    newest = records.select(records.Plan).where("ticket_key = ?", key).order_by("id DESC").limit(1).one(conn)
     if newest is not None and newest.status is PlanStatus.APPROVED:
         return None
     latest_run = (
@@ -535,24 +524,20 @@ def record(
         supersede(conn, key)
         approved = reason is not None
         now = db.now()
-        [plan] = records.fetch_all(
-            conn,
+        [plan] = records.insert(
             records.Plan,
-            sql.insert(
-                "plans",
-                ticket_key=key,
-                run_id=run_id,
-                created_at=now,
-                status=PlanStatus.APPROVED if approved else PlanStatus.PROPOSED,
-                sha256=written.sha256,
-                size=written.size,
-                approved_sha256=written.sha256 if approved else None,
-                approved_at=now if approved else None,
-                approved_channel=PLANNER if approved else None,
-                approved_reason=reason,
-                effort=effort,
-            ).returning("*"),
-        )
+            ticket_key=key,
+            run_id=run_id,
+            created_at=now,
+            status=PlanStatus.APPROVED if approved else PlanStatus.PROPOSED,
+            sha256=written.sha256,
+            size=written.size,
+            approved_sha256=written.sha256 if approved else None,
+            approved_at=now if approved else None,
+            approved_channel=PLANNER if approved else None,
+            approved_reason=reason,
+            effort=effort,
+        ).returned(conn)
         built = event(plan.id, reason) if event is not None else None
         if built is not None:
             db.record_event(conn, built)
@@ -576,11 +561,7 @@ def current(conn: sqlite3.Connection, key: str) -> records.Plan | None:
     Returns:
         The plan's row, or None when the ticket has none.
     """
-    return records.fetch_one(
-        conn,
-        records.Plan,
-        sql.select("*").from_("plans").where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
-    )
+    return records.select(records.Plan).where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED).one(conn)
 
 
 def history(conn: sqlite3.Connection, key: str) -> list[records.Plan]:
@@ -589,11 +570,7 @@ def history(conn: sqlite3.Connection, key: str) -> list[records.Plan]:
     Returns:
         The plans' rows, oldest first.
     """
-    return records.fetch_all(
-        conn,
-        records.Plan,
-        sql.select("*").from_("plans").where("ticket_key = ?", key).order_by("id"),
-    )
+    return records.select(records.Plan).where("ticket_key = ?", key).order_by("id").all(conn)
 
 
 def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str, dispatch_lock: Path) -> records.Plan:
@@ -622,10 +599,8 @@ def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str
             raise Refused("bad_plan", f"plan {plan.id} of {key} is approved, and its file has not changed since")
         if reading.problem is not None:
             raise Refused("bad_plan", f"plan {plan.id}'s file {path} is {reading.problem}, so it cannot be approved")
-        [approved] = records.fetch_all(
-            conn,
-            records.Plan,
-            sql.update("plans")
+        [approved] = (
+            records.update(records.Plan)
             .set(
                 status=PlanStatus.APPROVED,
                 approved_sha256=reading.sha256,
@@ -634,7 +609,7 @@ def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str
                 approved_reason=None,
             )
             .where("id = ?", plan.id)
-            .returning("*"),
+            .returned(conn)
         )
     return approved
 
@@ -743,12 +718,12 @@ def supersede(conn: sqlite3.Connection, key: str) -> int | None:
         The superseded plan's id, or None when the ticket had no current plan.
     """
     superseding = (
-        sql.update("plans")
+        records.update(records.Plan)
         .set(status=PlanStatus.SUPERSEDED)
         .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED)
         .returning("id")
     )
-    row = sql.execute(conn, superseding).fetchone()
+    row = superseding.run(conn).fetchone()
     return int(row[0]) if row is not None else None
 
 

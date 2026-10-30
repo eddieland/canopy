@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query'
-import { cleanup, screen, within } from '@testing-library/react'
+import { act, cleanup, screen, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -90,7 +90,7 @@ describe('Conversation', () => {
         expect(within(item(6)).queryByText('waiting for the next tick')).toBeNull()
     })
 
-    it('marks a tracker comment as data that authorizes nothing, with its author and whether it was cut', async () => {
+    it('marks a tracker comment as data that authorizes nothing, by its author, and whether it was cut', async () => {
         const comment = message({
             id: 6,
             kind: 'comment',
@@ -98,9 +98,36 @@ describe('Conversation', () => {
             comment: { id: '10042', author: 'dana', at: '2026-10-08T10:00:00Z', truncated: true },
         })
         await renderRouted(<Conversation messages={[comment]} />, { client: knowing(5) })
-        expect(screen.getByText('tracker')).toBeDefined()
-        expect(screen.getByText(/^comment 10042 by dana, written /u).textContent).toMatch(/, truncated$/u)
+        expect(screen.getByText('dana')).toBeDefined()
+        const where = screen.getByText('on the tracker, truncated')
+        expect(where.getAttribute('title')).toMatch(/^comment 10042, written .*, truncated$/u)
         expect(screen.getByText('data, authorizes nothing')).toBeDefined()
+    })
+
+    it("stacks one speaker's lines in a turn under one head, but never a reply to a question", async () => {
+        const first = message({ id: 6, run_id: 41, body: 'Wired the button.' })
+        const second = message({ id: 7, run_id: 41, at: '2026-10-08T11:02:00Z', body: 'Tests pass.' })
+        const later = message({ id: 8, run_id: 41, at: '2026-10-08T11:30:00Z', body: 'Pushed.' })
+        await renderRouted(<Conversation messages={[first, second, later, QUESTION, REPLY]} />, {
+            client: knowing(5),
+        })
+        expect(within(item(6)).getByText('worker')).toBeDefined()
+        expect(within(item(7)).queryByText('worker')).toBeNull()
+        expect(within(item(7)).getByText('Tests pass.')).toBeDefined()
+        // Half an hour on, it is a turn of its own.
+        expect(within(item(8)).getByText('worker')).toBeDefined()
+        expect(within(item(4)).getByText('reply answering #3 via web')).toBeDefined()
+    })
+
+    it("starts a new turn for another run's message, and never stacks tracker comments", async () => {
+        const first = message({ id: 6, run_id: 41, body: 'Wired the button.' })
+        const other = message({ id: 7, run_id: 42, at: '2026-10-08T11:01:00Z', body: 'Started over.' })
+        const said = { author: 'dana', at: '2026-10-08T11:01:00Z', truncated: false }
+        const comment = message({ id: 8, kind: 'comment', source: 'tracker', comment: { id: '1', ...said } })
+        const again = message({ id: 9, kind: 'comment', source: 'tracker', comment: { id: '2', ...said } })
+        await renderRouted(<Conversation messages={[first, other, comment, again]} />, { client: knowing(5) })
+        expect(within(item(7)).getByText('worker')).toBeDefined()
+        expect(within(item(9)).getByText('dana')).toBeDefined()
     })
 
     it('says which message waits on you, and only that one', async () => {
@@ -132,6 +159,17 @@ describe('Conversation', () => {
         expect(within(item(5)).queryByText('seen')).toBeNull()
     })
 
+    it("turns a reply's chip to seen in place as a tick reads it", async () => {
+        const client = knowing(3)
+        await renderRouted(<Conversation messages={[QUESTION, REPLY]} />, { client })
+        expect(within(item(4)).getByText('waiting for the next tick')).toBeDefined()
+        act(() => {
+            client.setQueryData(keys.tick, { tick: null, acknowledged: 4 })
+        })
+        expect(await within(item(4)).findByText('seen')).toBeDefined()
+        expect(within(item(4)).queryByText('waiting for the next tick')).toBeNull()
+    })
+
     it("says what a chore's notes wait for instead, when told", async () => {
         const pending = {
             label: 'waiting for the next run',
@@ -143,6 +181,20 @@ describe('Conversation', () => {
         expect(within(item(5)).queryByText('waiting for the next run')).toBeNull()
         expect(screen.queryByText('waiting for the next tick')).toBeNull()
         expect(screen.queryByText('seen')).toBeNull()
+    })
+
+    it("lays out a body's Markdown, a labelled link showing its URL", async () => {
+        const body =
+            'Two things to settle:\n\n- the **color**\n- the `csv` header\n\nSee [the doc](https://example.test/d)'
+        await renderRouted(<Conversation messages={[message({ id: 7, body })]} />, { client: knowing(5) })
+        expect(screen.getByText('Two things to settle:')).toBeDefined()
+        expect(
+            within(item(7))
+                .getAllByRole('listitem')
+                .map((li) => li.textContent),
+        ).toEqual(['the color', 'the csv header'])
+        expect(within(item(7)).getByRole('code').textContent).toBe('csv')
+        expect(within(item(7)).getByRole('link').textContent).toBe('https://example.test/d')
     })
 
     it('shows every body as text, markup kept as its characters and only its web addresses linked', async () => {

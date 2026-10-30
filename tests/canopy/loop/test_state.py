@@ -20,7 +20,7 @@ from canopy.core.vocab import NumberedItem, Phase, ResumeReason, RunStatus, Star
 from canopy.infra import procs
 from canopy.loop import duties, harness, harness_dispatches, phases, tick
 from canopy.runs import policy, reconcile
-from tests.canopy.helpers import chore_toml
+from tests.canopy.helpers import chore_toml, in_tick
 
 if TYPE_CHECKING:
     import sqlite3
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
     from syrupy.assertion import SnapshotAssertion
 
+    from tests.canopy.scenario_helpers import Scenario
     from tests.conftest import CanopyEnv
 
 DAY = "2026-10-16"
@@ -43,7 +44,7 @@ def test_the_state_block_of_a_new_workspace(canopy_env: CanopyEnv, markdown_snap
     ctx = context(canopy_env)
     with clock("10:00"):
         tick_id = db.start_tick(ctx.conn, dry_run=False)
-    assert rendered(canopy_env, ctx, tick_id, dry_run=False, query_due=True, running=0, leased=[]) == markdown_snapshot
+    assert rendered(canopy_env, ctx, tick_id, dry_run=False, running=0, leased=[]) == markdown_snapshot
 
 
 def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
@@ -71,9 +72,8 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             root,
             title="Retry flaky uploads",
             phase=Phase.CI_RUNNING,
-            cursors={"comment": "10001"},
-            # No tracker source observes its tickets: its comment cursor is the tracker's id.
-            tracked=False,
+            # The tracker source numbers the comments it observes: its comment cursor is a journal number.
+            cursors={"comment": "3"},
         )
         implement = db.insert_run(
             conn,
@@ -108,9 +108,13 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
                 db.set_start(conn, conversation.TICKET, key, status=StartStatus.STARTED, channel="cli")
             db.set_start(conn, conversation.TICKET, "PROJ-3", status=StartStatus.STOPPED, channel="cli")
         db.set_ticket(conn, "PROJ-4", root, title="Tidy the CLI help")
-        conn.execute(
+        # The earlier notice lapsed, and is kept: PROJ-1's PR is not observed fresh, so it may show a check it holds.
+        conn.executemany(
             "INSERT INTO notices (body, set_at, channel, lapses_at) VALUES (?, ?, 'cli', ?)",
-            ("CI is down for maintenance until noon.", stamp("09:00"), stamp("12:00")),
+            [
+                ("The registry is down.", stamp("08:00"), stamp("08:30")),
+                ("CI is down for maintenance until noon.", stamp("09:00"), stamp("12:00")),
+            ],
         )
     with clock("09:20"):
         db.finish_run(conn, "runs", split, RunStatus.DONE, None)
@@ -148,7 +152,16 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             pr_url=PR,
             cursors={"ci": str(item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, 5551, at=db.now()))},
         )
-        decide(conn, earlier, "PROJ-1", "attention:needs_author", "a reviewer asks about intent", repo="repo")
+        # The overseer keeps it, naming the check run the notice held (DESIGN §37): the block lists it so.
+        decide(
+            conn,
+            earlier,
+            "PROJ-1",
+            "attention:notice_rerun",
+            "build failed during the notice; rerun it",
+            repo="repo",
+            item=item_numbers.take(conn, NumberedItem.CHECK_RUN, PR, 5551, at=db.now()),
+        )
         # The operator sent a run's reply to a review comment through canopy: the block names it by id (DESIGN §29).
         conn.execute(
             "INSERT INTO drafts (run_id, number, ticket_key, kind, repo, pr_url, comment_id, stance, status, basis, "
@@ -210,10 +223,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
         ),
     ]
     with mock.patch.object(harness_dispatches, "ROWS", {Phase.CONFLICTED: CONFLICTED}):
-        assert (
-            rendered(canopy_env, ctx, tick_id, dry_run=True, query_due=False, running=1, leased=leased)
-            == markdown_snapshot
-        )
+        assert rendered(canopy_env, ctx, tick_id, dry_run=True, running=1, leased=leased) == markdown_snapshot
 
 
 def prompts(env: CanopyEnv, *names: str) -> None:
@@ -222,6 +232,25 @@ def prompts(env: CanopyEnv, *names: str) -> None:
         prompt = env.home / "chores" / f"{name}.md"
         prompt.parent.mkdir(exist_ok=True)
         prompt.write_text(f"# {name}\n")
+
+
+def test_a_review_query_not_read_fresh_keeps_no_pr_of_no_ticket(scenario: Scenario, connector_state: Path) -> None:
+    """The overseer runs no query itself (DESIGN §39): nothing it might find is kept."""
+    vcs = {"kind": "vcs", "cmd": "connector github", "timeout_minutes": 1}
+    jira = {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}
+    scenario.configures("private", connect={"sources": {"github": vcs, "jira": jira}})
+    scenario.configures("private", review={"query": "is:pr review-requested:@me"})
+    with in_tick(scenario.conn, ends_ok=True) as tick_id:
+        scenario.conn.execute(
+            "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, ended_at, status, log_path) "
+            "VALUES (?, ?, 'abc1234', ?, ?, 'done', 'x')",
+            (tick_id, PR, db.now(), db.now()),
+        )
+    # The `vcs` source does not read the review query to its end.
+    connector_state.write_text(json.dumps({"github": {"end": {"repositories": ["repo"]}}}))
+    scenario.tick()
+    assert scenario.state()["observations"]["review_query"]["observed"] == "stale"
+    assert [pr["url"] for pr in scenario.state()["reviews"].get("prs", [])] == []
 
 
 def derive_conflicted(conn: sqlite3.Connection, tick_id: int, key: str) -> None:
@@ -272,9 +301,22 @@ def decide(
     repo: str | None = None,
     chore: str | None = None,
     pr: str | None = None,
+    item: int | None = None,
 ) -> None:
-    """Record a decision at the clock's time: the schema's default is the real one."""
-    decision = db.record_decision(conn, tick_id, key, action, rationale, repo=repo, chore=chore, pr=pr)
+    """Record a decision at the clock's time: the schema's default is the real one; with `item`, a kept item's."""
+    kept = item is not None
+    decision = db.record_decision(
+        conn,
+        tick_id,
+        key,
+        action,
+        rationale,
+        repo=repo,
+        chore=chore,
+        pr=pr,
+        kept=kept,
+        item=item,
+    )
     conn.execute("UPDATE decisions SET created_at = ? WHERE id = ?", (db.now(), decision))
 
 
@@ -294,7 +336,6 @@ def rendered(
     tick_id: int,
     *,
     dry_run: bool,
-    query_due: bool,
     running: int,
     leased: list[pools.Slot],
 ) -> str:
@@ -306,7 +347,6 @@ def rendered(
         dry_run=dry_run,
         now=NOW,
         reconciled=reconcile.Reconciled(capacity, {"repo": leased}),
-        query_due=query_due,
     )
     head, rest = block.split("```json\n", 1)
     compact, tail = rest.split("\n```", 1)

@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Literal
 import canopy_sandbox
 
 from canopy.chores import start as chore_start
-from canopy.core import db, hostgit, review_diff, sql
+from canopy.core import db, hostgit, records, review_diff, sql
 from canopy.core.context import db_path
 from canopy.core.vocab import Decider, MemoryScope, MemoryStatus, PrState, TickStatus
 from canopy.infra import lock, logs, procs
@@ -149,13 +149,13 @@ class RowKind:
         count, size, removable, removable_size = (int(v or 0) for v in found)
         return Kind(self.name, "rows", count, size, removable, removable_size, self.rule)
 
-    def delete(self) -> sql.Delete:
+    def delete(self) -> records.Delete[records.Row]:
         """The statement that deletes the rows the dry run counts as removable.
 
         Returns:
             The DELETE.
         """
-        return sql.delete(self.table).where("{}", self.rows).where("{}", self.removable)
+        return records.delete(records.of_table(self.table)).where("{}", self.rows).where("{}", self.removable)
 
 
 @dataclass(frozen=True)

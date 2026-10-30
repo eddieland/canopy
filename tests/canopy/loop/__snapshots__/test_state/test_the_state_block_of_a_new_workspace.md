@@ -51,8 +51,8 @@ This is a live tick.
     "max_age_minutes": 30,
     "max_new_items": 10,
     "query": {
-      "observed": "unobserved",
-      "why": "no tracker source observes tickets"
+      "observed": "stale",
+      "why": "never read to its end"
     },
     "tickets": []
   },
@@ -62,7 +62,6 @@ This is a live tick.
     "available": 2
   },
   "running_workers": [],
-  "query_due": true,
   "tick_id": 1,
   "now": "2026-10-16T10:00:00.000Z",
   "dry_run": false

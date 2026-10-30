@@ -34,6 +34,7 @@ import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
 import { setRave, useRave } from '@/lib/rave'
 import { dropDrafts } from '@/lib/reply-draft'
+import { dropReviewRequestDraft } from '@/lib/review-request-draft'
 import { setQuips, useQuips } from '@/lib/run-phase'
 import { setReviewPersonas, usablePersonas, useReviewPersonas } from '@/lib/review-personas'
 import { setSendKey, useSendKey } from '@/lib/send-key'
@@ -124,6 +125,7 @@ function SettingsPage() {
             <NoticePanel />
             <LimitsPanel />
             <ModelsPanel />
+            <SkillsPanel />
             <ConfigPanel />
             {/* Second to last: below what changes how canopy works, above signing out. */}
             <FunPanel />
@@ -159,12 +161,12 @@ function ThemePanel() {
                 </ToggleGroup>
             </div>
             <PaletteRow theme="light" value={palettes.light} options={LIGHT_PALETTES}>
-                The light theme&apos;s neutrals: lavender, which tints the canvas with the accent&apos;s hue, a warm
-                off-white, a soft sage, or an editor scheme&apos;s light tones.
+                The light theme&apos;s palette: lavender, which tints the canvas with the accent&apos;s hue, a warm
+                off-white, a soft sage, or an editor scheme&apos;s light tones, each with an accent of its own.
             </PaletteRow>
             <PaletteRow theme="dark" value={palettes.dark} options={DARK_PALETTES}>
                 The dark theme&apos;s: an indigo slate, a plain grey, a near black, a deep forest green, a plum, or a
-                scheme&apos;s dark tones.
+                scheme&apos;s dark tones, each with an accent of its own.
             </PaletteRow>
         </Panel>
     )
@@ -714,6 +716,27 @@ function LimitsPanel() {
     )
 }
 
+/** Where the skills the runtime offers canopy's agents are read: a page of their own, as each read asks the runtime. */
+function SkillsPanel() {
+    return (
+        <Panel>
+            <PanelHeader label="Skills" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p className="text-sm text-muted-foreground">
+                    Every skill the runtime finds for canopy&apos;s agents: where its file is, and what it says. Read
+                    from the runtime when the page opens.
+                </p>
+                <Button asChild variant="outline" data-testid="skills-open">
+                    <Link to="/settings/skills">
+                        Open
+                        <ChevronRight />
+                    </Link>
+                </Button>
+            </div>
+        </Panel>
+    )
+}
+
 /**
  * The model config chooses for each agent and each chore, read only: the operator chooses one in the file alone, and a
  * ticket's override on its own page.
@@ -837,6 +860,7 @@ function SessionPanel() {
         mutationFn: signOut,
         onSuccess: (session) => {
             dropDrafts()
+            dropReviewRequestDraft()
             client.setQueryData(keys.session, session)
             client.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' })
         },

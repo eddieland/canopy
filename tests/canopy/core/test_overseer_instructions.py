@@ -10,7 +10,7 @@ import pytest
 
 from canopy.core import config, definitions, prompts
 from canopy.core.vocab import TickStatus
-from tests.canopy.helpers import PROMPT_VALUES, agent_runs
+from tests.canopy.helpers import KEY, PROMPT_VALUES, agent_runs, waits
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
@@ -37,7 +37,7 @@ def definition_of(env: CanopyEnv) -> str:
 
 def test_the_operators_instructions_reach_the_overseer(scenario: Scenario) -> None:
     instruct(scenario, f"\n{URGENT}\n\n")
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     [run] = agent_runs(scenario.agent_log)
     env = run["env"]
     assert isinstance(env, dict)
@@ -86,7 +86,7 @@ def test_instructions_that_cannot_be_used_fail_the_tick(
     path = instruct(scenario, text if text is not None else "")
     if text is None:
         path.unlink()
-    ticked = scenario.tick(dry_run=True, code=1)
+    ticked = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert ticked.tick.status == TickStatus.OVERSEER_FAILED
     assert error in (ticked.tick.summary or "")
     assert agent_runs(scenario.agent_log) == []

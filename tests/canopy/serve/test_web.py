@@ -30,17 +30,24 @@ from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
     KEY,
     FakeTime,
-    canopy,
     console,
     context,
+    decides,
     in_run,
     messages,
     overseer_does,
     present,
+    raises,
     running_run,
+    tracker_holds,
+    waits,
     with_events,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, raises
+from tests.canopy.scenario_helpers import (
+    Scenario,
+    dispatches,
+    pushes,
+)
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, ORIGIN, client, free_port, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, GitPool, user_toml
 
@@ -163,13 +170,13 @@ def test_a_transcript_names_each_calls_model_once_canopy_reads_a_session_two_mod
     # The fake overseer's two calls write replies `msg_1` and `msg_2`, which the session's record names the models of.
     served = [["anthropic", "claude-x", 0.25], ["openai", "gpt-y", 0.5]]
     opencode_state.write_text(json.dumps({"sessions": {"ses_fake": served}}))
-    tick_id = scenario.tick().tick.id
+    tick_id = scenario.tick(*waits(KEY)).tick.id
     c, _ = signed_in_client(ctx)
     steps = [e for e in c.get(f"/api/ticks/{tick_id}/transcript").json()["entries"] if e["kind"] == "step"]
     assert [s["model"] for s in steps] == ["anthropic/claude-x", "openai/gpt-y"]
     # One model's session names none: the tick's models name it.
     opencode_state.write_text(json.dumps({"sessions": {"ses_fake": [served[0], served[0]]}}))
-    tick_id = scenario.tick().tick.id
+    tick_id = scenario.tick(*waits(KEY)).tick.id
     steps = [e for e in c.get(f"/api/ticks/{tick_id}/transcript").json()["entries"] if e["kind"] == "step"]
     assert [s["model"] for s in steps] == [None, None]
 
@@ -439,10 +446,10 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
         return c.post(f"/api/tickets/{KEY}/models", json=body, headers=headers)
 
     # The Model panel's choices, read from the runtime when it opens, in the workspace root, each model's variants
-    # with them.
+    # with them, in the runtime's order.
     assert c.get("/api/models").json() == {
         "models": ["acme/fake-model-1", "acme/fake-model-2"],
-        "variants": {"acme/fake-model-1": ["high", "low"]},
+        "variants": {"acme/fake-model-1": ["low", "high"]},
         "error": None,
     }
     # The CLI's guards hold, and a ticket canopy has not seen may have one.
@@ -1010,7 +1017,7 @@ def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
 
     time_.on_sleep = reply_from_the_browser
     term, out = console()
-    with overseer_does(canopy("decide", KEY, "wait", "--rationale", "waiting on the operator")):
+    with overseer_does(decides(KEY, "wait", "waiting on the operator")):
         statuses = repeat.run(
             ctx,
             dry_run=True,
@@ -1124,7 +1131,8 @@ def test_a_loop_that_serves_the_ui_links_its_notifications_to_it(
     serve_on(canopy_env, port, f"{moved}[notify.sinks.slack]\ncmd = '{sink_script} {out}'\n")
     secret.create(secret.path(), rotate=False)
     term, _ = console()
-    with overseer_does(raises(KEY, "needs_author")):
+    tracker_holds(canopy_env.journal())
+    with overseer_does(raises(KEY, "needs_author"), *waits(KEY)):
         statuses = repeat.run(
             context(canopy_env),
             dry_run=True,

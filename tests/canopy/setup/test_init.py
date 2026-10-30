@@ -11,7 +11,8 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, workspace
-from canopy.core.config import load
+from canopy.core.config import TRACKER_REQUIRED, load
+from canopy.setup import init
 from canopy.setup.init import is_ssh_url, sandbox_suggestion
 from tests.conftest import CanopyEnv
 
@@ -35,10 +36,13 @@ def test_init_in_an_empty_directory_makes_a_workspace_and_writes_nothing_else(
     out = capsys.readouterr().out
 
     assert "'agent-ready-tester'" in out
-    assert "Branch protection" in out
-    assert "does not load" not in out
+    # Config requires a tracker source, and only the operator knows their site or repository (DESIGN §30).
+    assert (
+        f"The config does not load yet; fix it before the first tick:\nconnect: Value error, {TRACKER_REQUIRED}" in out
+    )
     private_file = empty / ".canopy" / "config.toml"
     assert 'labels = ["agent-ready-tester"]' in private_file.read_text()
+    assert init.TRACKER_SOURCE_TABLE in private_file.read_text()
     assert private_file.stat().st_mode & 0o777 == 0o600
     assert not canopy_env.user_file.exists()
     assert 'provider = "github"' in (empty / config.WORKSPACE_FILE_NAME).read_text()
@@ -46,7 +50,16 @@ def test_init_in_an_empty_directory_makes_a_workspace_and_writes_nothing_else(
     assert sorted(p.name for p in empty.iterdir()) == [".canopy", ".gitignore", "MAP.md", config.WORKSPACE_FILE_NAME]
     assert [p.name for p in (empty / ".canopy").iterdir()] == ["config.toml"]
 
-    # What init wrote loads.
+    # What init wrote loads, its tracker source filled in.
+    text = private_file.read_text()
+    private_file.write_text(
+        text.replace("# [connect.sources.tracker]\n# kind", "[connect.sources.tracker]\nkind").replace(
+            '# cmd = "canopy-connect-github',
+            'cmd = "canopy-connect-github',
+        ),
+    )
+    assert main(["init"]) == 0
+    assert "Branch protection" in capsys.readouterr().out
     found = workspace.load(empty)
     assert (found.name, found.repos, found.state_dir) == ("new", (), empty / ".canopy")
     cfg = load(empty, canopy_env.user_file)

@@ -60,7 +60,7 @@ the overseer is given the server first. Nothing the overseer runs changes.
 - A run a tool starts is spawned by `canopy _mcp`'s own runner (`cli/mcp.py`), not `canopy dispatch`'s: the entry is
   removed in that runner's `unset` too.
 - The guards' refusals still name the CLI's flags and commands (`runs/dispatch.py`, `reviews/start.py`,
-  `core/review_requests.py`, `core/conversation.py`), as the decisions record them: each gets one wording that names
+  `reviews/review_requests.py`, `core/conversation.py`), as the decisions record them: each gets one wording that names
   the field, its flag in brackets, as `loop/tools.py`'s do (`repo is required (--repo): ...`).
 - The prompt names tools, not commands; a mirror's body is a field; the state block drops the heredoc delimiter.
 - TRUST_MODEL T1 and T7; DESIGN §6, §13, §22; D020 edited in place, D081 superseded.
@@ -73,9 +73,9 @@ the overseer is given the server first. Nothing the overseer runs changes.
 
 **Stage 3, MCP only.** The operator's end state (2026-10-16): the CLI keeps the verbs only while the tools settle.
 
-- The overseer's verbs leave the CLI (`dispatch`, `decide`, `queried`, `attention`, `ticket set`, `mirror` if M37 has
-  not retired it, `review run`, `review wait`, `review end`, `chore run`, `chore wait`), and `OverseerCommand` and its
-  completion filter with them. Tests that drove a command drive its tool. D020 names the tools alone.
+- The overseer's verbs leave the CLI (`dispatch`, `decide`, `attention`, `ticket set`, `mirror` if M37 has not
+  retired it, `review run`, `review wait`, `review end`, `chore run`, `chore wait`). Tests that drove a command drive
+  its tool. D020 names the tools alone.
 - Open: tool results as JSON rather than the CLI's text (§27, Open).
 - Check: `make install-check`'s dry tick passes against the fakes, its overseer acting through the tools.
 
@@ -100,4 +100,7 @@ tools after and the reviewer's and the planner's their git tools (#1171), and th
 `initialize`. A read of OpenCode 1.19.3's build changed one thing: a tool call to a local server times out after a
 minute unless its entry sets `timeout`, so the overseer's entry sets its own; OpenCode 2's entry sets
 `timeout.execution` (2026-10-24). Stage 2's check, a day of the operator's loop held to Stage 0's baseline, which is
-still to be measured, is the operator's.
+still to be measured, is the operator's. Stage 3 is built (2026-10-30): the verbs left the CLI, and the tests that drove
+a command make its tool's call in this process, as `canopy _mcp` answers it. The guards' refusals name the field alone,
+and `ticket-set` refuses outside a tick as every other tool does. Its check passes: `make install-check`'s dry tick
+records its decision through `canopy_decide`. Structured results as JSON stay open (§27).

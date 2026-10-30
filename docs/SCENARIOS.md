@@ -56,7 +56,9 @@ any OpenCode upgrade, and before relying on a permission they check.
   its last minute, after a built-in tool's output and first in an MCP tool's result, the longer wording once, and a push
   before the kill; and no `node_modules` or `package.json` written into the snapshot. Then run it in a repository with a
   `.opencode/` directory, sandboxed with the registry refused, and time the wait before the session starts. Record the
-  times in `MEASUREMENTS.md`.
+  times in `MEASUREMENTS.md`. Then count, by kind, the runs that ended `timeout` over a week of real use, and how many
+  pushed after canopy's line, against the same count for the runs on snapshots before the clock (M57's Stage 0), with
+  each one's transcript read for edits after its last commit, the work the slot took with it.
 - **S65. The split** (#923). Confirmed against OpenCode's source (1.19.3), not in a run: the plugin finds where the
   environment starts by the lines `session/system.ts` writes. With S40's recorder, unsandboxed, run two workers in two
   slots, then two reviews, each pair within five minutes. Expect two system blocks in every request, the first the
@@ -66,7 +68,10 @@ any OpenCode upgrade, and before relying on a permission they check.
   compare `canopy spend --json`'s first calls for the `workers`, `plans`, and `reviews` kinds on the snapshot with the
   split against the one before it: expect `cold_share` to fall where unsandboxed runs of one kind start within five
   minutes of each other, and no change otherwise, sandboxed runs' included. No fall at all means the split found no
-  boundary, or such runs are too rare for it to pay.
+  boundary, or such runs are too rare for it to pay. Since each run's prompt splits at its run marker (DESIGN §13),
+  the body is its kind's fixed instructions, 1.6k to 2.4k tokens more than the stub it was: expect the pair's first
+  system block to hold them, and the second run's first call to write only its environment and its `## Run` message.
+  A snapshot is now a kind's and no longer one for every run, so compare each kind's first calls on its own.
 
 ## Before a release
 
@@ -99,6 +104,14 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
 - **S12. Stacked tickets** (M4, M56). Two tickets, the second blocked by the first. Expect the second to wait, then be
   dispatched with `--base` on the first's branch once its PR is open and green. Then merge the first: expect a
   `resume (retarget)` for the second, without `--base`, that points its PR at the repository's base branch.
+- **S68. A follow-up, labeled and landed** (M46). With a sink configured, let a worker on a labeled ticket in the
+  toy workspace (TOY_REPOS) file a follow-up. Expect the sink to hear `follow_ups.filed` naming it once, and the
+  follow-up to sit undispatched with no labels. Label it: expect the overseer to dispatch it as any ticket, its PR to
+  land for review, and its worker to file no follow-up of its own.
+- **S69. A model dropped after it was set** (M58). Set one labeled ticket's worker model from its page to a model
+  `opencode models` lists, then take that model's provider out of OpenCode's config. Expect the ticket's next dispatch
+  refused `model_missing`, with its attention item, no slot leased and no attempt spent, and no run on the default.
+  Put the provider back: expect the next tick to dispatch it on the chosen model, and its session's record to agree.
 
 ### Several repositories
 
@@ -127,6 +140,11 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   on their threads and the comment as its body, which a coworker cannot see; add a comment of your own to it and
   submit it from the PR's files page. Expect the next tick to settle both drafts `sent`, to dispatch nothing for them,
   and the body you submitted to be the one canopy staged.
+- **S68. A reply drafted, not posted, and sent unmarked** (M53). Under `trust.review_replies = "approve"`, with a
+  coworker's review comments on one of the loop's PRs, let a `resume` run. Expect it to push, and its transcript to
+  show no comment posted, a GitHub reply tool or `gh pr comment` it tried refused by its definition. Edit one draft,
+  drop one, and send the rest from the PR's page: expect one review on GitHub under your login holding exactly the sent
+  text, with no `CANOPY:` mark, and the next tick to dispatch nothing for those replies.
 - **S58. The reviewer and the planner read git through canopy's tools** (#1130). Review a stacked PR, and plan a
   ticket over two repositories, once unsandboxed and once with `canopy-sandbox` around `plan_cmd` and `review_cmd`.
   Expect `canopy show` of each run to list `canopy_git_*` among its tools, the transcripts to show the reviewer finding
@@ -173,6 +191,23 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   where a PR has more; `observed_branches` the branch; the run's review query result the PRs GitHub's search shows;
   and the derivation no longer counting the PR-less ticket stale for its branches. Point the map at a repository on
   a host `gh` is not logged in to: expect a `partial` run naming it, and the other repositories still read.
+- **S67. GitHub Issues read by canopy's own reader** (M39). With `gh` logged in, in a workspace whose tracker is
+  GitHub Issues, add `[connect.sources.issues]` with `kind = "tracker"` and
+  `cmd = "canopy-connect-github --repo <owner>/<name>"`, and run `canopy tick --dry-run`. Expect `canopy status` to
+  name the source with an `ok` run; `observed_tickets` to hold every open issue the query returns, keyed `GH-<N>`,
+  and no PR it returns; each watched ticket's blockers, from GitHub's issue dependencies and a `Blocked by #N` line
+  alike; and a label's time from the issue's timeline; and `observed_comments` each watched ticket's comments, authors
+  as logins, a bot's ending `[bot]`. Make an open issue of another repository block a watched one: expect a `partial`
+  run naming it, and the ticket stale. Run it once on a GitHub Enterprise server too, `--repo <host>/<owner>/<name>`,
+  where an older server without issue dependencies fails every read, naming the field.
+
+### What canopy keeps
+
+- **S65. Git in the primary clones** (M47). Between ticks, with an idle slot holding a commit no remote has, run
+  `canopy gc --dry-run`, then `canopy gc --git`. Expect each clone `packed`, its loose objects gone from the next dry
+  run and its packs fewer or the same; the slot's commit still there (`git cat-file -t`); and the next run on that
+  repository leasing, committing, and pushing as before. With a run live, expect its repository `skipped` and the
+  others `packed`. Run it again after a git upgrade.
 
 ## Measurements
 
@@ -217,6 +252,31 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   Once M48 gives the overseer `canopy _mcp`, expect its eleven tools, about 2.3k tokens (F55), and `bash` gone if its
   rules deny it whole. Then let `canopy loop` run a week and expect no run or tick whose transcript shows a
   call to a tool it was not offered (`tool not found`).
+- **S59. What canopy keeps** (M47, closed on real use 2026-10-21). Run `canopy gc --dry-run --json` on the live
+  workspace and record each kind's count and bytes, and what a pass with §26's defaults removes, in `MEASUREMENTS.md`.
+  Expect the run, tick, and review files, `canopy.log`, and the harness's attention rows to hold most of it; set §26's
+  defaults from the numbers, or say why they stay. Run it again before a change to what a pass removes.
+- **S60. A week of passes** (M47). Let `canopy loop` run a week with the pass on, and each day run
+  `canopy gc --dry-run --json` shortly before the pass is due, a day after the last `gc_passes.started_at`. Expect one
+  `ok` row a day whose `removed` matches, kind by kind, the dry run's `removable` and `removable_size`, but for files
+  that crossed their retention in between, with `failures` 0; `canopy.log` rotated past `log_max_mib`, with no more
+  than `log_keep` rotated files; and every transcript, prompt, output, and diff the operator opens shown, or saying
+  "removed after N days", never failing. Record the rows and the dry runs in `MEASUREMENTS.md`.
+- **S62. The journal across a pass** (M47). On the live workspace, shortly before a pass is due, save `attention.md`,
+  `canopy status`, and `canopy gc --dry-run --json`; after the pass, expect the attention list, each item's age, and
+  `canopy status` unchanged, and the `gc_passes` row's `rows` for the harness's attention, connector runs, and
+  derivations equal to the dry run's `removable`. Then, between ticks, run `canopy gc --vacuum` and expect the journal
+  to shrink by about the dry run's free pages plus the rows' pages the pass freed, and the next tick to run normally.
+  Record the sizes and counts in `MEASUREMENTS.md`.
+- **S68. The derivation against the overseer** (M36, closed on real use 2026-10-29). Run `canopy loop` a day with
+  both connectors against the real queue. Record in `MEASUREMENTS.md` the agreement between `derivations` and the
+  overseer's `decisions` per row of §7's phase table, counted by distinct situation as well as by decision
+  (2026-10-15 F26), each disagreement read and attributed (the rationale says which side was right), and what the
+  connectors cost, in calls and seconds per tick, from `connector_runs`. M37 closes against it.
+- **S69. The overseer reads the journal, measured** (M37). After a day of `canopy loop` against the real queue,
+  re-measure with MEASUREMENTS' prompt (Re-measuring). Expect tool-result tokens per tick at a tenth of the first day's
+  median (about 14k), and no action missed over the day, checked against the derivation as M36's agreement counts are.
+  Record the numbers in `MEASUREMENTS.md`.
 
 ## Retired
 
@@ -265,7 +325,6 @@ with the fakes hold.
 Moved 2026-10-22 to the file of their open milestone, keeping their numbers.
 
 - **S45 to S53. Worktree pools** (M45). Stage 3's and stage 4's checks on the toy workspace.
-- **S59, S60, S62. What canopy keeps, and a week of passes** (M47). Stages 1 to 3's checks.
 
 Retired 2026-10-23. The overseer has no shell; it mirrors through a tool (M48).
 

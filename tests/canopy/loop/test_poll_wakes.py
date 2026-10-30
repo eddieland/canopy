@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.core.vocab import Decider, TickStatus
-from tests.canopy.helpers import KEY, LABEL, waits
-from tests.canopy.scenario_helpers import dispatches, loops
+from tests.canopy.helpers import DRAFTS_PR, KEY, LABEL, waits
+from tests.canopy.scenario_helpers import dispatches, loops, pushes
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -139,6 +139,19 @@ def test_a_poll_that_reads_only_what_the_latest_tick_saw_ends_no_wait(
     assert (looped.woken_by, looped.started) == (["start", "timer"], [0, 30])
 
 
+def test_a_tick_a_poll_woke_is_not_idle_so_the_wait_after_it_is_not_lengthened(
+    scenario: Scenario,
+    polled: Path,
+) -> None:
+    scenario.configures(loop={"idle_max_minutes": 120})
+    tracker_shows(polled, labeled())
+    looped = loops(scenario, *waits(KEY), ticks=3, at={0: lambda: tracker_shows(polled, labeled(), REPLY)})
+    # The comment wakes the loop at minute 5; the overseer's look at it is no second look, so the timer comes 30
+    # minutes on, not 60, and the tick it brings, which finds nothing new, is idle.
+    assert (looped.woken_by, looped.started) == (["start", "poll", "timer"], [0, 5, 35])
+    assert [t.idle for t in looped.ticks] == [False, False, True]
+
+
 def test_a_failed_poll_ends_the_wait_once_and_the_first_whole_read_ends_it_again(
     scenario: Scenario,
     polled: Path,
@@ -158,6 +171,37 @@ def test_a_failed_poll_ends_the_wait_once_and_the_first_whole_read_ends_it_again
         for t in looped.ticks
     ]
     assert ["attention:connector_failed" in actions for actions in raised] == [False, True, False]
+
+
+@pytest.mark.usefixtures("git_pool")
+@pytest.mark.parametrize(
+    ("passed", "woken_by", "started"),
+    [
+        pytest.param(31, ["start", "poll"], [0, 5], id="waited out"),
+        pytest.param(20, ["start", "timer"], [0, 30], id="still waiting"),
+    ],
+)
+def test_feedback_that_waited_out_its_time_on_pending_checks_ends_the_wait(
+    scenario: Scenario,
+    polled: Path,
+    passed: int,
+    woken_by: list[str],
+    started: list[int],
+) -> None:
+    """Its end drops `ci_running`, which adds no row, so it is news of its own (`policy.feedback_ci_wait_minutes`)."""
+    scenario.configures("private", trust={"trusted_reviewers": ["octocat"]})
+    tracker_shows(polled, labeled())
+    scenario.polls()
+    scenario.run(dispatches(slug="work"), worker=pushes(prs={"repo": DRAFTS_PR}))
+    pr = {"kind": "pr", "url": DRAFTS_PR, "repository": "acme/api", "number": 7, "head_sha": "abc1234"}
+    queued = {"kind": "check", "pr": DRAFTS_PR, "head_sha": "abc1234", "name": "build", "status": "queued"}
+    asked = {"kind": "review", "pr": DRAFTS_PR, "item": "review", "id": 901, "author": "octocat"}
+    github = [{**pr, "state": "open", "mergeable": "mergeable", "author": "me"}, queued]
+    github.append({**asked, "state": "changes_requested", "time": "2026-10-20T10:00Z", "body": "Rename it."})
+    polled.write_text(json.dumps({"jira": {"lines": [labeled()], "query": [KEY]}, "github": {"lines": github}}))
+    scenario.polls()
+    looped = loops(scenario, *waits(KEY), at={1: lambda: scenario.time_passes(minutes=passed)})
+    assert (looped.woken_by, looped.started) == (woken_by, started)
 
 
 def tracker_shows(state: Path, *lines: dict[str, object]) -> None:

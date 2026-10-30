@@ -154,44 +154,45 @@ def record(
             status = ModelsRead.FOUND
         if not kept:
             for table in ("run_models", "run_reply_models"):
-                sql.execute(conn, sql.delete(table).where("run_table = ? AND run_id = ?", run.run_table, run.run_id))
-            sql.execute_many(
+                records.delete(records.of_table(table)).where(
+                    "run_table = ? AND run_id = ?",
+                    run.run_table,
+                    run.run_id,
+                ).run(conn)
+            records.insert_rows(records.RunModel, ("run_table", "run_id", "model", "replies", "cost_usd")).many(
                 conn,
-                sql.insert_rows("run_models", ("run_table", "run_id", "model", "replies", "cost_usd")),
                 [(run.run_table, run.run_id, m.model, m.replies, m.cost_usd) for m in models],
             )
-            sql.execute_many(
+            records.insert_rows(records.RunReplyModel, ("run_table", "run_id", "message", "model")).many(
                 conn,
-                sql.insert_rows("run_reply_models", ("run_table", "run_id", "message", "model")),
                 [(run.run_table, run.run_id, message, model) for message, model in replies.items()],
             )
         if status is ModelsRead.FOUND and models:
             # A run whose events left its cost unread takes what its session's record priced its replies at: every
             # OpenCode 2 run's do, since its last call's cost is never printed. One its events priced keeps theirs.
             cost = sum(m.cost_usd for m in models)
-            filled = sql.update(run.run_table).set(cost_usd=cost).where("id = ? AND cost_usd IS NULL", run.run_id)
-            sql.execute(conn, filled)
-        sql.execute(
-            conn,
-            sql.insert(
-                "run_model_reads",
-                run_table=run.run_table,
-                run_id=run.run_id,
-                status=status,
-                error=error if status is ModelsRead.FAILED else None,
-                attempts=run.attempts + 1,
-                read_at=db.now(),
-                runtime_version=runtime_version,
-            ).or_replace(),
-        )
+            filled = (
+                records.update(records.of_table(run.run_table))
+                .set(cost_usd=cost)
+                .where("id = ? AND cost_usd IS NULL", run.run_id)
+            )
+            filled.run(conn)
+        records.insert(
+            records.RunModelRead,
+            run_table=run.run_table,
+            run_id=run.run_id,
+            status=status,
+            error=error if status is ModelsRead.FAILED else None,
+            attempts=run.attempts + 1,
+            read_at=db.now(),
+            runtime_version=runtime_version,
+        ).or_replace().run(conn)
 
 
 # The runtime's version a read before this one kept for `run`, or None.
 def _runtime_version(conn: sqlite3.Connection, run: Due) -> str | None:
-    before = records.fetch_one(
-        conn,
-        records.RunModelRead,
-        sql.select("*").from_("run_model_reads").where("run_table = ? AND run_id = ?", run.run_table, run.run_id),
+    before = (
+        records.select(records.RunModelRead).where("run_table = ? AND run_id = ?", run.run_table, run.run_id).one(conn)
     )
     return before.runtime_version if before is not None else None
 
@@ -215,15 +216,23 @@ def of_runs(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int])
     if not run_ids:
         return found
     query = (
-        sql.select("*")
-        .from_("run_models")
+        records.select(records.RunModel)
         .where("run_table = ?", table)
         .where_in("run_id", run_ids)
         .order_by("run_id, cost_usd DESC, model")
     )
-    for row in records.fetch_all(conn, records.RunModel, query):
+    for row in query.all(conn):
         found[row.run_id].append(row)
     return found
+
+
+def served_by(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int]) -> dict[int, list[str]]:
+    """The models each of a table's runs' sessions named, by id, as `of_runs` orders them, in one read.
+
+    Returns:
+        Each run's models, as `provider/model`, every one of `run_ids` included.
+    """
+    return {run_id: [m.model for m in models] for run_id, models in of_runs(conn, table, run_ids).items()}
 
 
 def replies_of(conn: sqlite3.Connection, table: RunTable, run_id: int) -> dict[str, str]:
@@ -232,8 +241,8 @@ def replies_of(conn: sqlite3.Connection, table: RunTable, run_id: int) -> dict[s
     Returns:
         Each reply's model; empty for a run one model served, and for one not read yet or read before canopy kept them.
     """
-    query = sql.select("*").from_("run_reply_models").where("run_table = ? AND run_id = ?", table, run_id)
-    return {row.message: row.model for row in records.fetch_all(conn, records.RunReplyModel, query)}
+    query = records.select(records.RunReplyModel).where("run_table = ? AND run_id = ?", table, run_id)
+    return {row.message: row.model for row in query.all(conn)}
 
 
 def reads_of(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int]) -> dict[int, records.RunModelRead]:
@@ -244,8 +253,8 @@ def reads_of(conn: sqlite3.Connection, table: RunTable, run_ids: Collection[int]
     """
     if not run_ids:
         return {}
-    query = sql.select("*").from_("run_model_reads").where("run_table = ?", table).where_in("run_id", run_ids)
-    return {row.run_id: row for row in records.fetch_all(conn, records.RunModelRead, query)}
+    query = records.select(records.RunModelRead).where("run_table = ?", table).where_in("run_id", run_ids)
+    return {row.run_id: row for row in query.all(conn)}
 
 
 def of_ticket(conn: sqlite3.Connection, key: str) -> list[ModelTotal]:

@@ -136,7 +136,8 @@ class AttentionItem(Model):
     detail: str
     """What the operator should know, in the CLI's words: untrusted text."""
     since: datetime
-    """When the unbroken run of ticks that recorded it began."""
+    """When the unbroken run of ticks that recorded it began, or its cause did if that came first or no tick records
+    it: a task's question, or the oldest of a unit's drafts waiting."""
     finding: bool = False
     """A chore's finding rather than a ticket's item."""
     pr: str | None = None
@@ -202,6 +203,103 @@ class FeedbackPlanWritten(Model):
     did, or superseded by a later plan or a request for one."""
 
 
+class CardStep(Model):
+    """A finished step in a running agent's progress, with what shows it is done."""
+
+    step: str
+    """What was done."""
+    proof: str
+    """What shows it: `tests pass: 42/42`, `pushed abc123`, `not pushed`."""
+
+
+class RunCardStep(Model):
+    """One step of a long job in a running agent's progress (DESIGN §41)."""
+
+    title: str
+    """The step, as the agent names it: its plan's, for a worker whose ticket has one."""
+    status: Literal["not_started", "working", "blocked", "done", "skipped"]
+    """Where it stands, as the agent says."""
+    stage: str | None = None
+    """The stage it belongs to; None when the agent named none."""
+    stuck_at: datetime | None = None
+    """While the run runs and the step is working, when it has worked longer than the run's last fifth, from which a
+    page shows it stuck; None otherwise."""
+
+
+class RunCardQuestion(Model):
+    """A decision a running agent asks the operator for in its progress, worked around meanwhile (DESIGN §41)."""
+
+    ask: str
+    """The question, in the agent's words."""
+    options: list[str]
+    """The choices, in order: the first is A, the next B, and so on."""
+    recommend: Literal["A", "B", "C", "D", "E"]
+    """The letter of the option the agent recommends, and works toward meanwhile."""
+    asked_at: datetime
+    """When canopy first recorded an update asking it."""
+    answer: Literal["A", "B", "C", "D", "E"] | None = None
+    """The letter the operator answered with; None while it waits on them."""
+    answered_at: datetime | None = None
+    """When they answered; None while it waits."""
+
+
+class AnswerRequest(Model):
+    """The operator's answer to a running run's question, as `canopy reply run:ID LETTER` takes it."""
+
+    letter: str
+    """The letter of one of the question's options, in either case."""
+    asked_at: datetime
+    """When the question the page showed was asked: an agent that asks another since is refused `moved_on`."""
+
+
+class Answered(Model):
+    """The operator's answer, as recorded: what `canopy reply run:ID LETTER` says."""
+
+    letter: Literal["A", "B", "C", "D", "E"]
+    """The letter."""
+    option: str
+    """The option it names."""
+    already: bool
+    """Whether the question already had this answer, so nothing new was recorded."""
+    heard: bool
+    """Whether it was written where the agent hears it on its next tool call: false once the agent has ended."""
+
+
+class RunCard(Model):
+    """Where a worker's, planner's, or reviewer's work stands, in its own words: its progress (DESIGN §41).
+
+    Each field is the agent's text, on one line: untrusted, rendered as text.
+    """
+
+    summary: str
+    """Where the work stands, in a sentence or two."""
+    now: str
+    """What the agent was doing when it wrote the update."""
+    done: list[CardStep] = []
+    """The steps it finished, in order, each with its proof."""
+    next: list[str] = []
+    """What it said was left, in order."""
+    stuck: str | None = None
+    """What it said is in its way and it works around; None when it said nothing."""
+    at: datetime
+    """When canopy recorded it."""
+    calls_since: int
+    """The tool calls the agent ended since: before the run ended, once it has."""
+    stale: bool
+    """Whether the run has gone 20 tool calls without an update to it while it runs; false once it ended."""
+    stale_at: datetime | None = None
+    """While the run runs, when the progress goes stale for want of an update by time, 10 minutes after `at`; None once
+    it ended. A page marks it stale from then, or when `stale` says so."""
+    steps: list[RunCardStep] = []
+    """For a long job, every step in order; empty when the agent named none."""
+    percent: int | None = None
+    """How much of its steps is done, of those not skipped, rounded down; None with no steps to count."""
+    stage: str | None = None
+    """The stage of its first working step; None when none names one."""
+    question: RunCardQuestion | None = None
+    """A question it asks the operator, with the answer they gave; None when it asks none."""
+
+
 class Run(Model):
     """One worker or split run (`run:ID`)."""
 
@@ -250,6 +348,8 @@ class Run(Model):
     activity: RunActivity | None = None
     """While it runs, its worker's latest tool call; None before the first, for a template that prints no events, and
     once it ends."""
+    card: RunCard | None = None
+    """Its agent's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none."""
     persona: str | None = None
     """The persona it ran in (DESIGN §31); None for a kind no persona reaches, or a run from before canopy recorded
     it."""
@@ -557,6 +657,10 @@ class TickDetail(Model):
     """The tick after it, dry runs included, or None on the newest, until the next one starts."""
     models: ModelsServed
     """Which models served its overseer."""
+    model: str | None = None
+    """The model canopy asked the runtime for, for its overseer (DESIGN §13, Each agent's model), as
+    `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a tick whose
+    overseer did not run or from before canopy recorded it."""
 
 
 class LastTick(Model):
@@ -723,12 +827,16 @@ class ConfigKey(Model):
     file, where it shadows the user file's for this workspace), the workspace file (a shared `policy.*` key), or
     none."""
     kind: Literal["limit", "stricter", "free"]
-    """`limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries). `free`:
-    set whole to anything the config loader takes (`spend.budget_alerts`, beside the 100% alert always sent)."""
+    """`limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries, a count
+    only goes down, a choice only moves later in `choices`). `free`: set whole to anything the config loader takes
+    (`spend.budget_alerts`, beside the 100% alert always sent)."""
     bound: int | None
-    """A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes. The file can set any."""
+    """A limit's loosest value from the page: a count's ceiling, or a pace's floor. The file can set any."""
     looser: Literal["higher", "lower"] | None
     """Which way loosens a limit: a count's higher, a pace's lower. None for a `stricter` key."""
+    choices: list[str]
+    """A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
+    key."""
 
 
 class ConfigSettings(Model):

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, personas, sql
+from canopy.core import db, personas, records
 from canopy.core.vocab import OverrideKind, RunKind
 
 if TYPE_CHECKING:
@@ -25,30 +25,29 @@ _SKEPTIC_DIGEST = "5e7a1c2b3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d
 
 def seed(conn: sqlite3.Connection, cfg: config.Config, at: Callable[[int], str]) -> None:
     """Set the persona each run and review wrote in, keep each digest's text, and record ABC-099's override."""
-    sql.execute(
-        conn,
-        sql.update("runs")
+    (
+        records.update(records.Run)
         .set(persona="canopy", persona_digest=_CANOPY_DIGEST)
-        .where_in("kind", [RunKind.IMPLEMENT, RunKind.RESUME, RunKind.PLAN]),
+        .where_in("kind", [RunKind.IMPLEMENT, RunKind.RESUME, RunKind.PLAN])
+        .run(conn)
     )
     canopy, skeptic = personas.load(cfg, personas.DEFAULT), personas.load(cfg, "skeptic")
-    sql.execute(conn, sql.update("runs").set(persona_digest=canopy.digest).where("id = 44"))
+    records.update(records.Run).set(persona_digest=canopy.digest).where("id = 44").run(conn)
     for digest, text in ((canopy.digest, canopy.text), (_CANOPY_DIGEST, canopy.text), (_SKEPTIC_DIGEST, skeptic.text)):
         db.record_persona_text(conn, digest, text)
-    sql.execute(conn, sql.update("review_runs").set(persona="canopy", persona_digest=_CANOPY_DIGEST).everything())
-    sql.execute(
-        conn,
-        sql.update("review_runs").set(persona="skeptic", persona_digest=_SKEPTIC_DIGEST).where_in("id", [4, 6]),
+    records.update(records.ReviewRun).set(persona="canopy", persona_digest=_CANOPY_DIGEST).everything().run(conn)
+    (
+        records.update(records.ReviewRun)
+        .set(persona="skeptic", persona_digest=_SKEPTIC_DIGEST)
+        .where_in("id", [4, 6])
+        .run(conn)
     )
-    sql.execute(
-        conn,
-        sql.insert(
-            "ticket_overrides",
-            ticket_key="ABC-099",
-            agent="reviewer",
-            kind=OverrideKind.PERSONA,
-            value="skeptic",
-            channel="web",
-            set_at=at(-60),
-        ),
-    )
+    records.insert(
+        records.TicketOverride,
+        ticket_key="ABC-099",
+        agent="reviewer",
+        kind=OverrideKind.PERSONA,
+        value="skeptic",
+        channel="web",
+        set_at=at(-60),
+    ).run(conn)

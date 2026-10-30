@@ -12,13 +12,13 @@ the tickets left (§6); the state block's `harness`, naming each ticket taken; a
 in §7. The rows enabled are those read from the journal alone: `wait` for `running`, and for a private ticket's
 `needs_human`; and `chore run` for a due chore with no `when` (§19). No ticket's dispatch is enabled: each rests on an
 observation. Of the attention list held in code, built: the items the harness raises from their causes, in §14, which
-the overseer is refused (`raised`); and the overseer's items held through a tick that does not give the overseer their
-subject, until one that does leaves them out or the ticket is done or stopped (§14), so a ticket with one is the
-harness's for a `wait`, though not for a run. Of the cursors, built: the harness's moves past what needs no handling,
-and a dispatch's default cursors, for a `resume` of a public ticket, read from fresh observations (What the overseer is
-left). The rest, from the overseer's three items on, is designed, not built. Until it is, §8, §21, and TRUST_MODEL
-describe canopy as it is; this section says what changes, and the PR that finishes it changes those sections and cuts
-this one to what is left.
+the overseer is refused (`raised`); the three the overseer keeps, below; and its other items held through a tick that
+does not give the overseer their subject, until one that does leaves them out or the ticket is done or stopped (§14),
+so a ticket with one is the harness's for a `wait`, though not for a run. Of the cursors, built: the harness's moves
+past what needs no handling, and a dispatch's default cursors, for a `resume` of a public ticket, read from fresh
+observations, the harness's own `resume` moving them as the overseer's does (What the overseer is left). The rest is
+designed, not built. Until it is, §8, §21, and TRUST_MODEL describe canopy as it is; this section says what changes,
+and the PR that finishes it changes those sections and cuts this one to what is left.
 
 Once the overseer reads the journal (§30), most of what it decides follows from the observations alone: applied by
 hand, §7's rows that are facts agreed with it on all but six of 943 decisions, and an overseer given only the tickets
@@ -84,18 +84,27 @@ rests on is stale (§14). No item hangs on the overseer recording it again: none
 go because a tick could not read its cause, and nothing needs to tell a partial tick from a whole one.
 
 The overseer keeps the three that are judgment: `needs_author`, `multi_repo`, and `notice_rerun` (§8). It records each
-once, naming what it is about, and the harness holds it until that is handled (the cursor passes the item it names, a
-newer run of the held check is observed, or a human answers after it), or the ticket is done or stopped. The block
-lists them with what each names, so none is recorded twice.
+once, about a ticket, naming what it is about, and the harness holds it whatever later ticks record, until the cursor
+passes the item a `needs_author` names, a newer run of the check a `notice_rerun` names is observed, the operator
+answers on the ticket after a `needs_author` or `multi_repo` (a tracker reply is not theirs), or the ticket is done or
+stopped. One naming nothing that could end it is refused (`unnamed`). The block lists them with what each names, so
+none is recorded twice; the overseer drops one only by moving a cursor past what it names.
 
 ### What the overseer is left
 
 The state block lists only the tickets left to the overseer, each with the rows that hold: `ready` (a repository, slug,
 title, and context to choose), `blocked` with a blocker to stack on, `changes_requested` and `review_findings` (to
-classify), `human_replied` (what the reply asks), a row not enabled, a plan's rows, a check held for a notice, a stale
-or unobserved subject (§30), and a ticket whose observations fit no row; and each due chore with a `when`. Of the rest
-it names only the harness's dispatches to come. Anything the overseer records about another ticket, a decision,
-dispatch, attention item, or change, is refused `decided`, and its duties (§6) are owed only for what it was listed.
+classify), `human_replied` (what the reply asks), a row not enabled, a plan's rows, a check held for a notice, and a
+ticket whose observations fit no row; and each due chore with a `when`. Of the rest it names only the harness's
+dispatches to come. Anything the overseer records about another ticket, a decision, dispatch, attention item, or
+change, is refused `decided`, and its duties (§6) are owed only for what it was listed.
+
+A candidate resting on a subject a source left stale, or that no source reads (§30), is the harness's `wait`, naming
+what is old, since the overseer reads the journal alone and could only guess. A stale one's source has raised
+`connector_failed`, and the ticket moves again once a read is whole. An unobserved one is a unit whose PR URL names no
+PR: no read will end that wait, so the harness raises `unobserved_pr` about the unit (§14), naming its URL, until the
+unit names a PR or the operator forgets the ticket's work. A dispatch resting on a stale subject is still refused
+`stale` (§7).
 
 A dispatch moves each cursor of its reasons, once the worker starts, to the newest item of that kind the block showed,
 short of the first it may not cover (§7); the overseer passes a cursor only to stop shorter. The harness moves the

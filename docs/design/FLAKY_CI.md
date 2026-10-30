@@ -25,7 +25,9 @@ below. The harness kicks, never a worker: the worker's definition gains no force
 `resume` the attempt limit counts.
 
 Kicked or not, the run's close tells the sinks (`ci.flaky`, §20): the PR, what was kicked or why not, and the worker's
-estimate of why the check is flaky, its summary cut to one line, as `run.ended` carries a summary.
+estimate of why the check is flaky, its summary cut to one line, as `run.ended` carries a summary. Each kick pushed
+also tells them at once (`ci.kicked`, in the `loop` group sinks take by default): the branch, the heads it replaced
+and pushed, and which of its kicks it was, so no forced push canopy makes goes unheard.
 
 Without a kick, while the same check run still fails, no newer than the `ci` cursor, the overseer records
 `flaky_rerun` (§14) naming the check, where it would otherwise wait for a newer run that no push will start. The

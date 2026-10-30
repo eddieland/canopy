@@ -37,6 +37,7 @@ const REVIEW: ReviewSummary = {
     news: true,
     seen: true,
     draft: null,
+    served: [],
 }
 
 describe('runDescription', () => {

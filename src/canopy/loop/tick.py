@@ -15,19 +15,17 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal, Protocol, assert_never
 
+import canopy_mcp
+
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
     agent_models,
-    artifact_authority,
     chore_view,
     commit_hooks,
     connector_runs,
     conversation,
     db,
     definitions,
-    drafts,
-    feedback_plans,
-    follow_ups,
     hostgit,
     item_numbers,
     notice,
@@ -64,8 +62,7 @@ from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
 from canopy.reviews import waiting as review_waiting
-from canopy.runs import drafted, policy, reconcile
-from canopy.runs import tasks as task_starts
+from canopy.runs import artifact_authority, drafted, drafts, feedback_plans, follow_ups, policy, reconcile, task_starts
 from canopy.runtime import project_config, servers, stdout
 
 if TYPE_CHECKING:
@@ -146,7 +143,6 @@ def state_block(
     dry_run: bool,
     now: datetime,
     reconciled: reconcile.Reconciled,
-    query_due: bool,
 ) -> str:
     """Read the journal for tick `tick_id` and render the overseer's state block from it (DESIGN §6 step 4).
 
@@ -155,7 +151,7 @@ def state_block(
     Returns:
         The `## State` section, the overseer's whole message.
     """
-    rendered = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
+    rendered = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled)
     return rendered.block
 
 
@@ -201,7 +197,6 @@ def _render(
     dry_run: bool,
     now: datetime,
     reconciled: reconcile.Reconciled,
-    query_due: bool,
     woken_by: WokenBy | None = None,
 ) -> _Rendered:
     """Render the state block, and read what it asks of the overseer from the same journal reads (DESIGN §6 step 5).
@@ -275,7 +270,6 @@ def _render(
         planned=planned,
         feedback_planned=_feedback_plans(ctx, tickets, now),
         attention=attention.for_overseer(ctx.conn, decided=decided),
-        query_due=query_due,
         operator_sent=drafts.sent_by_pr(ctx.conn),
         observations=observations.section(ctx, tick_id, now, tickets, decided=decided),
         numbered=item_numbers.named(ctx.conn, [c for c in cursors if c is not None]),
@@ -283,7 +277,6 @@ def _render(
     owed = duties.owed(
         ctx.conn,
         tick_id,
-        query_due=query_due,
         tickets=tickets,
         stopped=stopped,
         recently_done=recently_done,
@@ -322,8 +315,8 @@ def _left(
 ) -> list[str]:
     """What the state block leaves the overseer to judge, after the harness's decisions (DESIGN §37, §39).
 
-    Each duty it owes, which before it runs is each one there is: a ticket listed or the query found, a due chore with
-    a `when`, the query when no source read it. And the reviews it starts: the review query's, the operator's requests,
+    Each duty it owes, which before it runs is each one there is: a ticket listed or the query found, and a due chore
+    with a `when`. And the reviews it starts: the review query's, the operator's requests,
     and the revisions their notes ask for.
 
     Returns:
@@ -467,16 +460,8 @@ def _steps(
     _harness_decides(ctx, tick_id, derived or [], log)
 
     now = datetime.now(UTC)
-    query_due = _query(ctx, tick_id, now, log)
-    rendered = _render(
-        ctx,
-        tick_id=tick_id,
-        dry_run=dry_run,
-        now=now,
-        reconciled=reconciled,
-        query_due=query_due,
-        woken_by=woken_by,
-    )
+    _query(ctx, tick_id, now, log)
+    rendered = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, woken_by=woken_by)
     # With nothing left to judge, the overseer would be handed an empty block: the tick runs none, and owes nothing.
     # The disk check still holds the harness's dispatches, which fill a disk as the overseer's do (DESIGN §39).
     overseer = bool(rendered.left)
@@ -494,13 +479,8 @@ def _steps(
 
     decisions = db.decisions_for_tick(ctx.conn, tick_id)
     prefix = ("dry run; " if dry_run else "") + ("" if overseer else f"{NO_OVERSEER}; ")
-    # A tick-wide skip (mcp_unavailable, tracker_unsupported) means the overseer could not see the world. Closing it
-    # `ok` would make its empty list the attention list and notify every open item as resolved.
-    skips = [d.rationale for d in decisions if d.ticket_key is None and d.action == "skip"]
-    if skips:
-        return finish(TickStatus.SKIPPED, f"{prefix}overseer skipped the tick: {'; '.join(skips)}", usage)
     # A duty left undone fails the tick as a missing done line does: closing it `ok` would resolve the items of every
-    # ticket it left out and count a query it never ran (DESIGN §6 step 5).
+    # ticket it left out (DESIGN §6 step 5).
     undone = duties.undone(ctx.conn, tick_id, owed)
     if undone:
         log.error("overseer left duties undone", extra={"undone": undone, "dry_run": dry_run})
@@ -608,27 +588,19 @@ def _record_overseer(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
         log.exception("recording the overseer's phases raised", extra={"error": str(e)})
 
 
-def _query(ctx: Context, tick_id: int, now: datetime, log: logs.TickAdapter) -> bool:
-    """Record whether tick `tick_id` runs the tracker query, and, when it does and a source read it, the query itself.
+def _query(ctx: Context, tick_id: int, now: datetime, log: logs.TickAdapter) -> None:
+    """Record whether tick `tick_id` runs the tracker query, and, when it does, the query the `tracker` source read.
 
-    The harness records a query the state block shows `fresh` at `now`, before the overseer runs, as `canopy queried`
-    would, so what it records is what the overseer reads and the overseer owes no `canopy queried` (DESIGN §6 step 5).
-    With no `tracker` source, one read too long ago stays the overseer's to run. With one, the overseer reads no
-    tracker (§39): a query it did not read fresh does not run this tick, and a ticket it would find waits for the read
-    that finds it, the next tick's query due again.
-
-    Returns:
-        Whether the query runs this tick.
+    The harness records a query the state block shows `fresh` at `now`, before the overseer runs, so what it records
+    is what the overseer reads (DESIGN §6 step 5). The overseer reads no tracker (§39): a query no source read fresh
+    does not run this tick, and a ticket it would find waits for the read that finds it, the next tick's query due
+    again.
     """
-    due = _query_due(ctx, now)
-    found = observations.fresh_query(ctx, now) if due else None
-    if found is None and ctx.config.connect.observes_tickets():
-        due = False
-    db.set_tick_query(ctx.conn, tick_id, due=due)
+    found = observations.fresh_query(ctx, now) if _query_due(ctx, now) else None
+    db.set_tick_query(ctx.conn, tick_id, due=found is not None)
     if found is not None:
         named = duties.record_queried(ctx.conn, tick_id, ctx.repo, found)
         log.info("recorded the query a source read", extra={"tickets": named})
-    return due
 
 
 def _query_due(ctx: Context, now: datetime) -> bool:
@@ -638,7 +610,7 @@ def _query_due(ctx: Context, now: datetime) -> bool:
     newest live `ok` tick that ran it started, or when none has.
 
     Returns:
-        True if the overseer runs the query this tick.
+        True if the query is due this tick.
     """
     every = ctx.config.tracker.query_every_minutes
     if every == 0:
@@ -820,7 +792,7 @@ def _check_server(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | No
         "id": 0,
         "method": "initialize",
         "params": {
-            "protocolVersion": mcp.PROTOCOL_VERSIONS[0],
+            "protocolVersion": canopy_mcp.PROTOCOL_VERSIONS[0],
             "capabilities": {},
             "clientInfo": {"name": "canopy-tick", "version": db.CANOPY_VERSION},
         },
@@ -922,6 +894,9 @@ def _run_overseer(
         log.error("overseer not started", extra={"reason": str(e), "dry_run": dry_run})  # noqa: TRY400
         return str(e), None
     command = render_command(ctx.config.runtime.overseer_cmd, block, definitions_dir, title)
+    # What the definitions just rendered hold for it, as `_check_model` found it listed.
+    model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.overseer_cmd)
+    db.set_tick_model(ctx.conn, tick_id, model.name if model is not None else None)
     argv = command.argv
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     # Its tools, in its process's environment alone (DESIGN §27). A call may take as long as the overseer may: a

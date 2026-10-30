@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, ConfigDict
 
-from canopy.core import contract, records, review_runs, sql
+from canopy.core import contract, records, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import FindingAnswer, ReviewRunStatus
 
@@ -124,9 +124,8 @@ def record(conn: sqlite3.Connection, run_id: int, checked: Checked | None) -> No
     """Record the answers run `run_id` gave, in the transaction that closes it."""
     if checked is None or not checked.answers:
         return
-    sql.execute_many(
+    records.insert_rows(records.ReviewAnswer, ["run_id", "review_run_id", "finding", "answer", "reason"]).many(
         conn,
-        sql.insert_rows("review_answers", ["run_id", "review_run_id", "finding", "answer", "reason"]),
         [(run_id, a.review_run_id, a.finding, a.answer, a.reason) for a in checked.answers],
     )
 
@@ -140,9 +139,9 @@ def latest(conn: sqlite3.Connection, review_run_id: int) -> dict[int, records.Re
     Returns:
         Each answered finding's answer, by its number; empty when no run answered any.
     """
-    query = sql.select("*").from_("review_answers").where("review_run_id = ?", review_run_id).order_by("run_id")
+    query = records.select(records.ReviewAnswer).where("review_run_id = ?", review_run_id).order_by("run_id")
     # Read oldest first, so each finding keeps its newest answer.
-    return {a.finding: a for a in records.fetch_all(conn, records.ReviewAnswer, query)}
+    return {a.finding: a for a in query.all(conn)}
 
 
 def previous(

@@ -5,9 +5,9 @@ import json
 import os
 import re
 import threading
-from collections.abc import Callable, Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping
 from dataclasses import dataclass, field
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, ClassVar, override
 from unittest import mock
@@ -22,7 +22,8 @@ from canopy_github import repository as repository_module
 
 from canopy.core import config, observe, records, sql
 from canopy.core.vocab import CheckStatus, ConnectorRunStatus, MergeState
-from canopy.infra import logs, procs
+from canopy.infra import logs
+from tests.canopy_github.helpers import InProcess, serving
 from tests.conftest import CanopyEnv, executable, invoke
 
 PR = "https://github.com/acme/api/pull/7"
@@ -64,6 +65,7 @@ class Review:
     body: str = ""
     at: str | None = "2026-10-18T10:00:00Z"
     commit: str | None = None
+    bot: bool = False
 
 
 @dataclass
@@ -78,6 +80,8 @@ class Pull:
     state: str = "OPEN"
     merge_state: str = "CLEAN"
     title: str = "Retry the upstream on a 503"
+    author: str = "me"
+    bot: bool = False
 
 
 def run(name: str, status: str = "COMPLETED", conclusion: str | None = "SUCCESS", id_: int = 1) -> dict[str, Any]:
@@ -307,7 +311,7 @@ class Fake:
             "baseRefName": "main",
             "mergeable": "MERGEABLE",
             "mergeStateStatus": pull.merge_state,
-            "author": {"login": "me"},
+            "author": {"__typename": "Bot" if pull.bot else "User", "login": pull.author},
             # A page of labels holds 100, as the reader asks, so a PR with more has another page.
             "labels": {"nodes": labels[:100], "pageInfo": {"hasNextPage": len(labels) > 100, "endCursor": "100"}},
             "reviews": page(self.review_nodes(pull), None),
@@ -325,7 +329,7 @@ class Fake:
                 "createdAt": "2026-10-18T09:00:00Z",
                 "body": r.body,
                 "url": f"{PR}#pullrequestreview-{r.id}",
-                "author": {"__typename": "User", "login": r.author},
+                "author": {"__typename": "Bot" if r.bot else "User", "login": r.author},
             }
             for r in pull.reviews
         ]
@@ -447,20 +451,6 @@ class _Listener(BaseHTTPRequestHandler):
     @override
     def log_message(self, format: str, *args: Any) -> None:
         del format, args
-
-
-@contextlib.contextmanager
-def serving(handler: type[BaseHTTPRequestHandler]) -> Generator[str]:
-    """Serve `handler` on a local port until the block ends. Yields its URL."""
-    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
-    thread.start()
-    try:
-        yield f"http://127.0.0.1:{server.server_address[1]}/graphql"
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
 
 
 @contextlib.contextmanager
@@ -586,6 +576,31 @@ def test_the_reader_reads_every_page(github: tuple[Fake, str]) -> None:
     assert ids == [101, 102, 103, 501, 502, 503, 601, 602, 603]
     assert [line["name"] for line in lines if line["kind"] == "check"] == [f"job-{n}" for n in range(1, 6)]
     assert {"Reviews", "Threads", "ThreadComments", "Contexts"} <= set(fake.ops())
+
+
+def test_a_bots_login_ends_bot_as_githubs_rest_api_names_it(github: tuple[Fake, str]) -> None:
+    """A bot's review, review comment, and PR name it as `trust.trusted_reviewers` does, which GraphQL leaves off."""
+    fake, url = github
+    pull = fake.pulls["acme", "api", 7]
+    pull.author, pull.bot = "renovate", True
+    pull.reviews.append(Review(node="PRR_102", id=102, author="coderabbitai", state="COMMENTED", body="x", bot=True))
+    pull.threads[0].comments += [
+        Comment(id=504, body="Nit.", author="coderabbitai", bot=True),
+        # A login that already ends `[bot]` keeps one.
+        Comment(id=505, body="Nit.", author="coderabbitai[bot]", bot=True),
+    ]
+    _, lines, _ = read(url, {"prs": [PR]})
+    authors = {line.get("id"): line["author"] for line in lines if line["kind"] in {"pr", "review"}}
+    assert authors == {
+        None: "renovate[bot]",
+        101: "alice",
+        102: "coderabbitai[bot]",
+        501: "alice",
+        502: "alice",
+        503: "me",
+        504: "coderabbitai[bot]",
+        505: "coderabbitai[bot]",
+    }
 
 
 def test_a_prs_line_carries_its_labels_and_mergeable_state(github: tuple[Fake, str]) -> None:
@@ -1010,36 +1025,6 @@ def test_canopy_records_every_line_it_prints(github: tuple[Fake, str], canopy_en
     ]
     branches = records.fetch_all(conn, records.ObservedBranch, sql.select("*").from_("observed_branches"))
     assert sorted((b.repository, b.name) for b in branches) == [("api", "agent/PROJ-1"), ("api", "agent/PROJ-2")]
-
-
-@dataclass(frozen=True)
-class InProcess:
-    """A runner that runs the reader in this process against the stand-in at `url`, as canopy would run it."""
-
-    url: str
-
-    def run(
-        self,
-        args: Sequence[str],
-        *,
-        cwd: Path | None = None,
-        env: Mapping[str, str] | None = None,
-        stdin: str | None = None,
-        timeout: float | None = None,
-        on_start: Callable[[int], None] | None = None,
-        on_line: Callable[[str], None] | None = None,
-        stdout_to_file: bool = False,
-    ) -> procs.Result:
-        del cwd, env, timeout, on_start, stdout_to_file
-        assert args[0] == "canopy-connect-github"
-        result = invoke(connect.main, args[1:], stdin=stdin or "", obj=Hosts(lambda _: self.url, lambda _: "t"))
-        for line in result.stdout.splitlines(keepends=True):
-            if on_line is not None:
-                on_line(line)
-        return procs.Result(tuple(args), result.exit_code, result.stdout, result.stderr)
-
-    def spawn(self, args: Sequence[str], *, cwd: Path, log_path: Path) -> int:
-        raise AssertionError(f"a connector is run, never spawned: {args}, {cwd}, {log_path}")
 
 
 def test_endpoints_are_github_coms_api_host_or_the_servers_own() -> None:

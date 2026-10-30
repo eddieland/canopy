@@ -295,6 +295,75 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/host": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the host's resources
+         * @description The machine the loop runs on, read now.
+         *
+         *     Its processors and their load, its memory, the disks canopy writes to, and the loop's own process.
+         */
+        get: operations["getHost"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/host/processes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the host's processes
+         * @description The processes on the machine the loop runs on, read now, the kernel's own threads left out.
+         *
+         *     Each with the processors it kept busy since the read before, the last ask's while a page asks every few seconds,
+         *     or a second's after none for a while; its memory, its state, and its command line. Off Linux, none are read.
+         */
+        get: operations["getHostProcesses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/host/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the host's readings over the last hour
+         * @description The readings of the machine the server has kept since it started, the last hour's at most, oldest first.
+         *
+         *     Each is the load over a minute, the memory in use, the loop's own, and each disk's free space, read every
+         *     `every_seconds` whether or not a page is open. They are kept in memory alone, so a server that restarts starts
+         *     again with none.
+         */
+        get: operations["getHostSamples"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/loop": {
         parameters: {
             query?: never;
@@ -700,10 +769,11 @@ export type paths = {
          * List the models
          * @description Every model the runtime lists, with each one's variants, read from it in the workspace root, or why not.
          *
-         *     Read when the operator opens a ticket's Model panel, not on the stream: a read starts the runtime, for up to 30
-         *     seconds, so the server serves the list it read for 5 minutes, or until the loop reads its config again. A list
-         *     that could not be read is never served again. A model on the list can still fail when called, since the runtime
-         *     reads it from its cache or its catalog, and a run's model is checked against a list read for it as it starts.
+         *     Read when a ticket's page shows a model its agents run on, or a Model menu opens, not on the stream: a read starts
+         *     the runtime, for up to 30 seconds, so the server serves the list it read for 5 minutes, or until the loop reads its
+         *     config again. A list that could not be read is never served again. A model on the list can still fail when called,
+         *     since the runtime reads it from its cache or its catalog, and a run's model is checked against a list read for it
+         *     as it starts.
          */
         get: operations["listModels"];
         put?: never;
@@ -793,12 +863,13 @@ export type paths = {
         put?: never;
         /**
          * Ask for a PR to be reviewed
-         * @description `canopy start URL --review --notes TEXT --persona NAME`: review a PR the loop does not own, once, at its head.
+         * @description `canopy start URL --review --notes TEXT --persona NAME --model M`: review a PR the loop does not own, once.
          *
-         *     It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in, its reviewer
-         *     given the notes, once in each persona chosen (DESIGN §21, §31). Notes or personas on a PR already requested replace
-         *     its request's. Refused as the CLI refuses it: `reviews_off`, `bad_notes`, `unknown_persona`, `bad_persona`,
-         *     `bad_pr`, and `loop_pr`.
+         *     It reviews nothing now: the next tick does, at the PR's head, in whichever of the workspace's repositories the PR
+         *     is in, its reviewer given the notes, once in each persona chosen, on the model chosen (DESIGN §13, §21, §31). Notes,
+         *     personas, or a model on a PR already requested replace its request's. Refused as the CLI refuses it:
+         *     `reviews_off`, `bad_notes`, `unknown_persona`, `bad_persona`, `bad_pr`, `loop_pr`, `no_reviewer`,
+         *     `unknown_model`, and `model_list_failed`.
          */
         post: operations["startPullRequestReview"];
         delete?: never;
@@ -946,6 +1017,28 @@ export type paths = {
         get: operations["getReview"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reviews/{run_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer a running review's question
+         * @description `canopy reply review:ID LETTER` on a running review: the answer to the question its reviewer's card asks (§41).
+         *
+         *     Refused `moved_on` when its card asks another question than the one asked at `asked_at`, which the page showed.
+         */
+        post: operations["answerReview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1239,6 +1332,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Answer a run's question
+         * @description `canopy reply run:ID LETTER`: the operator's answer to the question the running run's card asks.
+         *
+         *     Refused `moved_on` when its card asks another question than the one asked at `asked_at`, which the page showed.
+         */
+        post: operations["answerRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/drafts/{number}/drop": {
         parameters: {
             query?: never;
@@ -1431,6 +1546,26 @@ export type paths = {
          * @description Clear the session cookie in this browser. Other browsers stay signed in until the secret changes.
          */
         delete: operations["signOut"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the skills
+         * @description Every skill the runtime finds in the workspace root, with where its file is and its text.
+         */
+        get: operations["listSkills"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2280,6 +2415,50 @@ export type components = {
             source: "ticket" | "config" | "default";
         };
         /**
+         * Answered
+         * @description The operator's answer, as recorded: what `canopy reply run:ID LETTER` says.
+         */
+        Answered: {
+            /**
+             * Already
+             * @description Whether the question already had this answer, so nothing new was recorded.
+             */
+            already: boolean;
+            /**
+             * Heard
+             * @description Whether it was written where the agent hears it on its next tool call: false once the agent has ended.
+             */
+            heard: boolean;
+            /**
+             * Letter
+             * @description The letter.
+             * @enum {string}
+             */
+            letter: "A" | "B" | "C" | "D" | "E";
+            /**
+             * Option
+             * @description The option it names.
+             */
+            option: string;
+        };
+        /**
+         * AnswerRequest
+         * @description The operator's answer to a running run's question, as `canopy reply run:ID LETTER` takes it.
+         */
+        AnswerRequest: {
+            /**
+             * Asked At
+             * Format: date-time
+             * @description When the question the page showed was asked: an agent that asks another since is refused `moved_on`.
+             */
+            asked_at: string;
+            /**
+             * Letter
+             * @description The letter of one of the question's options, in either case.
+             */
+            letter: string;
+        };
+        /**
          * Attached
          * @description What `canopy attach` recorded: the attachment, as its subject's page lists it.
          */
@@ -2384,7 +2563,8 @@ export type components = {
             /**
              * Since
              * Format: date-time
-             * @description When the unbroken run of ticks that recorded it began.
+             * @description When the unbroken run of ticks that recorded it began, or its cause did if that came first or no tick records
+             *     it: a task's question, or the oldest of a unit's drafts waiting.
              */
             since: string;
             /**
@@ -2445,6 +2625,22 @@ export type components = {
              * @description `max_workers`: worker runs and review runs together (DESIGN §21).
              */
             workers: number;
+        };
+        /**
+         * CardStep
+         * @description A finished step in a running agent's progress, with what shows it is done.
+         */
+        CardStep: {
+            /**
+             * Proof
+             * @description What shows it: `tests pass: 42/42`, `pushed abc123`, `not pushed`.
+             */
+            proof: string;
+            /**
+             * Step
+             * @description What was done.
+             */
+            step: string;
         };
         /**
          * ChoreDetail
@@ -2586,6 +2782,13 @@ export type components = {
              */
             peak_context: number | null;
             /**
+             * Served
+             * @description The models its session names as having served it, as `provider/model`, the most costly first; empty until
+             *     canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served.
+             * @default []
+             */
+            served: string[];
+            /**
              * Session Id
              * @description The runtime's session, for opening its transcript with the runtime's own tools.
              */
@@ -2625,6 +2828,13 @@ export type components = {
              * @default []
              */
             findings: components["schemas"]["ChoreRunFinding"][];
+            /**
+             * Model
+             * @description The model canopy asked the runtime for, for its agent (DESIGN §13, Each agent's model), as
+             *     `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, for a chore on an
+             *     agent of the operator's own, and for a run from before canopy recorded it.
+             */
+            model: string | null;
             /** @description Which models served it. */
             models: components["schemas"]["ModelsServed"];
             /**
@@ -2881,13 +3091,20 @@ export type components = {
         ConfigKey: {
             /**
              * Bound
-             * @description A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes. The file can set any.
+             * @description A limit's loosest value from the page: a count's ceiling, or a pace's floor. The file can set any.
              */
             bound: number | null;
             /**
+             * Choices
+             * @description A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
+             *     key.
+             */
+            choices: string[];
+            /**
              * Kind
-             * @description `limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries). `free`:
-             *     set whole to anything the config loader takes (`spend.budget_alerts`, beside the 100% alert always sent).
+             * @description `limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries, a count
+             *     only goes down, a choice only moves later in `choices`). `free`: set whole to anything the config loader takes
+             *     (`spend.budget_alerts`, beside the 100% alert always sent).
              * @enum {string}
              */
             kind: "limit" | "stricter" | "free";
@@ -3132,6 +3349,22 @@ export type components = {
             runs: number;
         };
         /**
+         * Cpu
+         * @description The machine's processors and how busy they are.
+         */
+        Cpu: {
+            /**
+             * Cores
+             * @description How many processors this process may run on; None when the operating system does not say.
+             */
+            cores: number | null;
+            /**
+             * Load
+             * @description The load averages over the last 1, 5, and 15 minutes; None where the operating system keeps none.
+             */
+            load: number[] | null;
+        };
+        /**
          * Decision
          * @description One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals.
          */
@@ -3278,6 +3511,59 @@ export type components = {
          * @enum {string}
          */
         DiffLineKind: "add" | "del" | "ctx";
+        /**
+         * Disk
+         * @description One filesystem canopy writes to, in bytes, with what it keeps there.
+         */
+        Disk: {
+            /**
+             * Floor
+             * @description The free space under which a tick runs no overseer, `loop.min_free_disk_mib` in bytes (DESIGN §6), on a disk
+             *     with the workspace or the journal; None on another, or while the check is off.
+             */
+            floor: number | null;
+            /**
+             * Free
+             * @description What a process that is not root may still write.
+             */
+            free: number;
+            /**
+             * Holds
+             * @description What canopy keeps on it, in the order the page names them; two uses on one filesystem share a disk.
+             */
+            holds: components["schemas"]["DiskUse"][];
+            /**
+             * Path
+             * @description The directory read for the first of `holds`.
+             */
+            path: string;
+            /**
+             * Total
+             * @description Its size.
+             */
+            total: number;
+        };
+        /**
+         * DiskSample
+         * @description One disk's free space at a reading.
+         */
+        DiskSample: {
+            /**
+             * Free
+             * @description What a process that is not root could still write, in bytes.
+             */
+            free: number;
+            /**
+             * Path
+             * @description The disk's directory, as `Disk.path` names it, so the page finds the disk the sample is of.
+             */
+            path: string;
+        };
+        /**
+         * @description What canopy keeps on a disk: `workspace` its repositories and worktrees, `journal` the journal and the runs' logs, `temp` the temporary directory its agents and their builds write to.
+         * @enum {string}
+         */
+        DiskUse: "workspace" | "journal" | "temp";
         /**
          * @description Why the operator dismissed a review's finding (DESIGN §21): `wrong`, it does not hold; `intentional`, it holds but the change means it; `not_worth_it`, it holds and is not worth the fix; `out_of_scope`, it holds and is worth fixing, but in another PR.
          * @enum {string}
@@ -3895,6 +4181,182 @@ export type components = {
              */
             repo?: string | null;
         };
+        /**
+         * HostHistory
+         * @description The readings of the machine the server keeps in memory, from when it started: the last hour's at most.
+         */
+        HostHistory: {
+            /**
+             * Every Seconds
+             * @description The seconds from one reading to the next.
+             */
+            every_seconds: number;
+            /**
+             * Kept
+             * @description How many readings it keeps at most; past that the oldest is dropped.
+             */
+            kept: number;
+            /**
+             * Samples
+             * @description The readings, oldest first. A gap longer than `every_seconds` is a time the server was not reading.
+             */
+            samples: components["schemas"]["HostSample"][];
+        };
+        /**
+         * HostProcess
+         * @description One process on the machine, as Linux's `/proc` describes it.
+         */
+        HostProcess: {
+            /**
+             * Command
+             * @description Its command line, its arguments joined by spaces, at most 400 characters; empty for a zombie, whose is gone.
+             */
+            command: string;
+            /**
+             * Cpu
+             * @description The processors it kept busy, on average since the last read: 1.0 is one core the whole time.
+             */
+            cpu: number;
+            /**
+             * Name
+             * @description Its name, as the kernel keeps it: at most 15 characters, often the program's file name.
+             */
+            name: string;
+            /**
+             * Parent
+             * @description Its parent's process id; 0 for the first process, which has none.
+             */
+            parent: number;
+            /**
+             * Pid
+             * @description Its process id.
+             */
+            pid: number;
+            /**
+             * Rss
+             * @description The memory it holds, in bytes.
+             */
+            rss: number;
+            /**
+             * Started At
+             * @description When it started; None when the machine's boot time could not be read.
+             */
+            started_at: string | null;
+            /** @description What it was doing when read. */
+            state: components["schemas"]["ProcessState"];
+            /**
+             * Threads
+             * @description How many threads it runs.
+             */
+            threads: number;
+            /**
+             * User
+             * @description The account it runs as, or its uid where the machine names no such account.
+             */
+            user: string;
+        };
+        /**
+         * HostProcesses
+         * @description The processes on the machine the loop runs on, as read when it was asked, the kernel's own threads left out.
+         */
+        HostProcesses: {
+            /**
+             * Over Seconds
+             * @description The seconds each process's `cpu` is averaged over: since the read before; None where they were not read.
+             */
+            over_seconds: number | null;
+            /**
+             * Processes
+             * @description Every process but the kernel's threads, by process id; None where only Linux's `/proc` says.
+             */
+            processes: components["schemas"]["HostProcess"][] | null;
+            /**
+             * Read At
+             * Format: date-time
+             * @description When they were read.
+             */
+            read_at: string;
+        };
+        /**
+         * HostResources
+         * @description The machine the loop runs on, as read when it was asked.
+         */
+        HostResources: {
+            /**
+             * Booted At
+             * @description When the machine started; None where only Linux's `/proc` says.
+             */
+            booted_at: string | null;
+            /** @description Its processors. */
+            cpu: components["schemas"]["Cpu"];
+            /**
+             * Disks
+             * @description Each filesystem canopy writes to, the workspace's first; one that could not be read is left out.
+             */
+            disks: components["schemas"]["Disk"][];
+            /**
+             * Hostname
+             * @description The machine's name.
+             */
+            hostname: string;
+            /**
+             * Machine
+             * @description Its processor architecture, such as `x86_64` or `arm64`.
+             */
+            machine: string;
+            /** @description Its memory. */
+            memory: components["schemas"]["Memory"];
+            /** @description The loop's own process. */
+            process: components["schemas"]["LoopProcess"];
+            /**
+             * Python
+             * @description The Python version canopy runs on.
+             */
+            python: string;
+            /**
+             * Read At
+             * Format: date-time
+             * @description When these figures were read.
+             */
+            read_at: string;
+            /**
+             * System
+             * @description Its operating system and release, as `uname` names them, such as `Linux 6.8.0`.
+             */
+            system: string;
+        };
+        /**
+         * HostSample
+         * @description What the system resources page's graphs draw of one reading of the machine.
+         */
+        HostSample: {
+            /**
+             * At
+             * Format: date-time
+             * @description When it was read.
+             */
+            at: string;
+            /**
+             * Disks
+             * @description Each disk read, in the order `HostResources.disks` has them.
+             */
+            disks: components["schemas"]["DiskSample"][];
+            /**
+             * Load
+             * @description The load average over the last minute; None where the operating system keeps none.
+             */
+            load: number | null;
+            /**
+             * Memory Used
+             * @description The memory not available to a new process, in bytes; None where only Linux's `/proc/meminfo` says.
+             */
+            memory_used: number | null;
+            /**
+             * Rss
+             * @description The memory the loop's process held, in bytes; None where only Linux's `/proc` says.
+             */
+            rss: number | null;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -3994,6 +4456,47 @@ export type components = {
          */
         LimitKind: "implement" | "resume" | "review";
         /**
+         * LoopProcess
+         * @description The process that serves the page, which in `canopy loop` is the loop itself.
+         */
+        LoopProcess: {
+            /**
+             * Max Open Files
+             * @description How many it may hold open at once, its soft limit; None when unlimited.
+             */
+            max_open_files: number | null;
+            /**
+             * Open Files
+             * @description How many files, sockets, and pipes it holds open; None where only Linux's `/proc` says.
+             */
+            open_files: number | null;
+            /**
+             * Peak Rss
+             * @description The most memory it has held at once, in bytes; None when the operating system does not say.
+             */
+            peak_rss: number | null;
+            /**
+             * Pid
+             * @description Its process id.
+             */
+            pid: number;
+            /**
+             * Rss
+             * @description The memory it holds now, in bytes; None where only Linux's `/proc` says.
+             */
+            rss: number | null;
+            /**
+             * Started At
+             * @description When it started; None where only Linux's `/proc` says.
+             */
+            started_at: string | null;
+            /**
+             * Threads
+             * @description How many threads it runs.
+             */
+            threads: number;
+        };
+        /**
          * LoopState
          * @description Whether the loop is paused, the notice to workers in force, agent memory's tiers, and what may run at once.
          *
@@ -4029,6 +4532,32 @@ export type components = {
              * @enum {string}
              */
             type: "loop.updated";
+        };
+        /**
+         * Memory
+         * @description The machine's memory and swap, in bytes.
+         */
+        Memory: {
+            /**
+             * Available
+             * @description What a new process could use without swapping; None where only Linux's `/proc/meminfo` says.
+             */
+            available: number | null;
+            /**
+             * Swap Free
+             * @description The swap not in use; None where only Linux's `/proc/meminfo` says.
+             */
+            swap_free: number | null;
+            /**
+             * Swap Total
+             * @description All of its swap; None where only Linux's `/proc/meminfo` says.
+             */
+            swap_total: number | null;
+            /**
+             * Total
+             * @description All of its memory; None when the operating system does not say.
+             */
+            total: number | null;
         };
         /**
          * MemoryDigest
@@ -5252,6 +5781,11 @@ export type components = {
             pid: number;
         };
         /**
+         * @description What a process was doing when read: `running` on a core or waiting for one, `disk` waiting on the disk or another device and not to be interrupted, `sleeping` waiting for something else, `idle` a kernel thread with nothing to do, `stopped` paused by a signal or a debugger, `zombie` ended and not yet reaped by its parent, `other` anything else. The load average counts the `running` and `disk` ones.
+         * @enum {string}
+         */
+        ProcessState: "running" | "disk" | "sleeping" | "idle" | "stopped" | "zombie" | "other";
+        /**
          * PromoteRequest
          * @description A promote, as `canopy memory promote ID [--text TEXT] [--repo NAME]` takes it (DESIGN §28).
          */
@@ -5851,6 +6385,8 @@ export type components = {
              * @description The branch the PR merges into.
              */
             base_branch: string | null;
+            /** @description Its reviewer's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none. */
+            card: components["schemas"]["RunCard"] | null;
             /**
              * @description None when there is no diff: a review from before diffs were kept, one whose base could not be read, or one
              *     retention removed.
@@ -5876,6 +6412,13 @@ export type components = {
              * @description Where its log is: from the workspace root when under it.
              */
             log_path: string;
+            /**
+             * Model
+             * @description The model canopy asked the runtime for, for its reviewer (DESIGN §13, Each agent's model), as
+             *     `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a run from
+             *     before canopy recorded it.
+             */
+            model: string | null;
             /** @description Which models served it. */
             models: components["schemas"]["ModelsServed"];
             /**
@@ -6468,6 +7011,11 @@ export type components = {
              */
             ended_at: string | null;
             /**
+             * Model
+             * @description The model its reviews run on, `provider/model[@variant]`; None for the reviewer's own.
+             */
+            model: string | null;
+            /**
              * Notes
              * @description The operator's notes for the reviewer, which its prompt carries; None when the request has none.
              */
@@ -6481,9 +7029,15 @@ export type components = {
         };
         /**
          * ReviewRequestBody
-         * @description A review request's notes and personas, as `canopy start URL --review --notes TEXT --persona NAME` gives them.
+         * @description A review request's notes, personas, and model, as `canopy start URL --review` gives them.
          */
         ReviewRequestBody: {
+            /**
+             * Model
+             * @description The model its reviews run on, as `provider/model`, one `GET /models` lists, or `provider/model@variant` at one
+             *     of its variants; None is the reviewer's own, and leaves an open request's model as it was.
+             */
+            model?: string | null;
             /**
              * Notes
              * @description What the reviewer should know or look at closely. Bounded again in code at 4000 characters, after stripping;
@@ -6654,6 +7208,13 @@ export type components = {
              */
             seen: boolean;
             /**
+             * Served
+             * @description The models its session names as having served it, as `provider/model`, the most costly first; empty until
+             *     canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served.
+             * @default []
+             */
+            served: string[];
+            /**
              * Sha
              * @description The commit it reviewed.
              */
@@ -6728,6 +7289,8 @@ export type components = {
              * @description The branch it works on.
              */
             branch: string | null;
+            /** @description Its agent's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none. */
+            card: components["schemas"]["RunCard"] | null;
             /**
              * Cost Usd
              * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
@@ -6878,6 +7441,147 @@ export type components = {
              * @description The tool's name, as the runtime names it: `bash`, `read`, an MCP server's tool.
              */
             tool: string;
+        };
+        /**
+         * RunCard
+         * @description Where a worker's, planner's, or reviewer's work stands, in its own words: its progress (DESIGN §41).
+         *
+         *     Each field is the agent's text, on one line: untrusted, rendered as text.
+         */
+        RunCard: {
+            /**
+             * At
+             * Format: date-time
+             * @description When canopy recorded it.
+             */
+            at: string;
+            /**
+             * Calls Since
+             * @description The tool calls the agent ended since: before the run ended, once it has.
+             */
+            calls_since: number;
+            /**
+             * Done
+             * @description The steps it finished, in order, each with its proof.
+             * @default []
+             */
+            done: components["schemas"]["CardStep"][];
+            /**
+             * Next
+             * @description What it said was left, in order.
+             * @default []
+             */
+            next: string[];
+            /**
+             * Now
+             * @description What the agent was doing when it wrote the update.
+             */
+            now: string;
+            /**
+             * Percent
+             * @description How much of its steps is done, of those not skipped, rounded down; None with no steps to count.
+             */
+            percent: number | null;
+            /** @description A question it asks the operator, with the answer they gave; None when it asks none. */
+            question: components["schemas"]["RunCardQuestion"] | null;
+            /**
+             * Stage
+             * @description The stage of its first working step; None when none names one.
+             */
+            stage: string | null;
+            /**
+             * Stale
+             * @description Whether the run has gone 20 tool calls without an update to it while it runs; false once it ended.
+             */
+            stale: boolean;
+            /**
+             * Stale At
+             * @description While the run runs, when the progress goes stale for want of an update by time, 10 minutes after `at`; None once
+             *     it ended. A page marks it stale from then, or when `stale` says so.
+             */
+            stale_at: string | null;
+            /**
+             * Steps
+             * @description For a long job, every step in order; empty when the agent named none.
+             * @default []
+             */
+            steps: components["schemas"]["RunCardStep"][];
+            /**
+             * Stuck
+             * @description What it said is in its way and it works around; None when it said nothing.
+             */
+            stuck: string | null;
+            /**
+             * Summary
+             * @description Where the work stands, in a sentence or two.
+             */
+            summary: string;
+        };
+        /**
+         * RunCardQuestion
+         * @description A decision a running agent asks the operator for in its progress, worked around meanwhile (DESIGN §41).
+         */
+        RunCardQuestion: {
+            /**
+             * Answer
+             * @description The letter the operator answered with; None while it waits on them.
+             */
+            answer: ("A" | "B" | "C" | "D" | "E") | null;
+            /**
+             * Answered At
+             * @description When they answered; None while it waits.
+             */
+            answered_at: string | null;
+            /**
+             * Ask
+             * @description The question, in the agent's words.
+             */
+            ask: string;
+            /**
+             * Asked At
+             * Format: date-time
+             * @description When canopy first recorded an update asking it.
+             */
+            asked_at: string;
+            /**
+             * Options
+             * @description The choices, in order: the first is A, the next B, and so on.
+             */
+            options: string[];
+            /**
+             * Recommend
+             * @description The letter of the option the agent recommends, and works toward meanwhile.
+             * @enum {string}
+             */
+            recommend: "A" | "B" | "C" | "D" | "E";
+        };
+        /**
+         * RunCardStep
+         * @description One step of a long job in a running agent's progress (DESIGN §41).
+         */
+        RunCardStep: {
+            /**
+             * Stage
+             * @description The stage it belongs to; None when the agent named none.
+             */
+            stage: string | null;
+            /**
+             * Status
+             * @description Where it stands, as the agent says.
+             * @enum {string}
+             */
+            status: "not_started" | "working" | "blocked" | "done" | "skipped";
+            /**
+             * Stuck At
+             * @description While the run runs and the step is working, when it has worked longer than the run's last fifth, from which a
+             *     page shows it stuck; None otherwise.
+             */
+            stuck_at: string | null;
+            /**
+             * Title
+             * @description The step, as the agent names it: its plan's, for a worker whose ticket has one.
+             */
+            title: string;
         };
         /**
          * RunMemory
@@ -7143,10 +7847,67 @@ export type components = {
             secret: string;
         };
         /**
+         * Skill
+         * @description A skill the runtime finds where the loop starts its agents: where its file is, and what it says.
+         */
+        Skill: {
+            /**
+             * Body
+             * @description Its instructions, the file after its front matter: untrusted text, rendered as text.
+             */
+            body: string;
+            /**
+             * Description
+             * @description What its front matter says it is for: what an agent reads to decide whether to load it; None when it says
+             *     nothing.
+             */
+            description: string | null;
+            /**
+             * Name
+             * @description The skill's name, as an agent loads it and the runtime's rules match it.
+             */
+            name: string;
+            /**
+             * Path
+             * @description Its file: under the workspace's root relative to it, under the operator's home from `~/`, and otherwise as the
+             *     runtime names it.
+             */
+            path: string;
+            /** @description Where its file is. */
+            source: components["schemas"]["SkillSource"];
+        };
+        /**
+         * SkillList
+         * @description Every skill the runtime finds, as `canopy agents` asks it, with each one's file and text.
+         */
+        SkillList: {
+            /**
+             * Error
+             * @description Why the runtime could not list its skills, in canopy's words; None when it did.
+             */
+            error: string | null;
+            /**
+             * Skills
+             * @description Each skill, by name; none when the runtime could not list them.
+             * @default []
+             */
+            skills: components["schemas"]["Skill"][];
+        };
+        /**
+         * @description Where a skill's file is (DESIGN §13): `canopy` for the skills canopy ships, in its definitions snapshot; `workspace` for one under the workspace's root; `home` for one under the operator's home; `built-in` for one the runtime carries itself; `other` for any other file.
+         * @enum {string}
+         */
+        SkillSource: "canopy" | "workspace" | "home" | "built-in" | "other";
+        /**
          * Spend
          * @description What the last day, 30 days, and all time cost, read together, so a month never shows less than its day.
          */
         Spend: {
+            /**
+             * @description The local calendar month so far against the operator's monthly budget, as the header shows it; None when no
+             *     budget is set.
+             */
+            budget: components["schemas"]["SpendMonth"] | null;
             /** @description The last 24 hours. */
             day: components["schemas"]["SpendWindow"];
             /** @description The last 30 days. */
@@ -7182,6 +7943,14 @@ export type components = {
              * @default 0
              */
             done: number;
+            /**
+             * First Call Weeks
+             * @description Each kind's first model calls by local ISO week: the kinds in a fixed order, overseer, workers, plans, chores,
+             *     reviews, tasks, each kind's series its own first, then its chores' and its models' by name, the runs no single
+             *     model served last, and each series' weeks oldest first.
+             * @default []
+             */
+            first_call_weeks: components["schemas"]["SpendFirstCallWeek"][];
             /**
              * Hours
              * @description How many hours it spans; None for a window in days.
@@ -7368,6 +8137,66 @@ export type components = {
              * @description How many started in the window.
              */
             sessions: number;
+        };
+        /**
+         * SpendFirstCallWeek
+         * @description The first model calls of one kind's runs that started in one local ISO week of the window (DESIGN §13).
+         *
+         *     One week of a series: with `by` `kind`, every run of the kind; `chore`, those of the chore `name`; `model`, those
+         *     the model `name` alone served. A fall in `hit_rate` from one week to the next is a prefix the runs share that their
+         *     first calls no longer read from the cache, as a change of the runtime or of canopy's definitions can make, which
+         *     the week's `new_runtime_versions` and `new_digests` name.
+         */
+        SpendFirstCallWeek: {
+            /**
+             * By
+             * @description Which runs of the kind the series follows: every one, one chore's, or one model's.
+             * @enum {string}
+             */
+            by: "kind" | "chore" | "model";
+            /**
+             * First Call
+             * @description The median of what their first calls were sent, in tokens, from the cache or not: the lower middle one of an
+             *     even count.
+             */
+            first_call: number;
+            /**
+             * Hit Rate
+             * @description What their first calls read from the cache over what they were sent, from 0 to 1, summed over the runs that
+             *     recorded both; None when none did.
+             */
+            hit_rate: number | null;
+            /** @description The kind of run; the overseer's include dry runs. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Name
+             * @description The chore or the model, as `provider/model`; None for the kind's series, and for the model series of the runs
+             *     no session was read for or more than one model served.
+             */
+            name: string | null;
+            /**
+             * New Digests
+             * @description The definitions snapshots their runs loaded that those of the series' week before did not, the same way.
+             * @default []
+             */
+            new_digests: string[];
+            /**
+             * New Runtime Versions
+             * @description The runtime's versions their sessions named that the runs of the series' week before did not, in the order the
+             *     runs first ran on each: the latest earlier week in the window with runs. The series' first week names none.
+             * @default []
+             */
+            new_runtime_versions: string[];
+            /**
+             * Runs
+             * @description How many of the series' runs that started in it reported a first call.
+             */
+            runs: number;
+            /**
+             * Week
+             * @description The ISO week, `2026-W41`, in the local time of the machine canopy runs on: Monday to Sunday.
+             */
+            week: string;
         };
         /**
          * @description What a tick that ended bought (DESIGN §6, Idle pacing; §11): `idle` and `busy` are the loop's word on an `ok` tick, `hand_run` an `ok` tick no loop ran, `not_ok` a live one that closed otherwise, and `dry_run` a dry run, whatever the loop said of it.
@@ -8011,6 +8840,13 @@ export type components = {
              */
             reported: boolean;
             /**
+             * Served
+             * @description The models its session names as having served it, as `provider/model`, the most costly first; empty until
+             *     canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served.
+             * @default []
+             */
+            served: string[];
+            /**
              * Session Id
              * @description The runtime's session, for opening its transcript with the runtime's own tools.
              */
@@ -8039,6 +8875,13 @@ export type components = {
          * @description One task run: its row as its task's page lists it, and the whole of what it reported (DESIGN §36).
          */
         TaskRunDetail: {
+            /**
+             * Model
+             * @description The model canopy asked the runtime for, for its private worker (DESIGN §13, Each agent's model), as
+             *     `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a run from
+             *     before canopy recorded it.
+             */
+            model: string | null;
             /** @description Which models served it. */
             models: components["schemas"]["ModelsServed"];
             /**
@@ -8450,6 +9293,13 @@ export type components = {
              * @description Its decisions, in the order they were recorded.
              */
             decisions: components["schemas"]["Decision"][];
+            /**
+             * Model
+             * @description The model canopy asked the runtime for, for its overseer (DESIGN §13, Each agent's model), as
+             *     `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a tick whose
+             *     overseer did not run or from before canopy recorded it.
+             */
+            model: string | null;
             /** @description Which models served its overseer. */
             models: components["schemas"]["ModelsServed"];
             /**
@@ -10378,6 +11228,201 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getHost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostResources"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getHostProcesses: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostProcesses"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getHostSamples: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostHistory"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -12725,6 +13770,96 @@ export interface operations {
             };
         };
     };
+    answerReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Answered"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     dismissReviewFinding: {
         parameters: {
             query?: never;
@@ -13854,6 +14989,96 @@ export interface operations {
             };
         };
     };
+    answerRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The run's id, as `run:ID` names it. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Answered"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     dropDraft: {
         parameters: {
             query?: never;
@@ -14691,6 +15916,71 @@ export interface operations {
             };
             /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listSkills: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillList"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

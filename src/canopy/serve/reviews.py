@@ -16,19 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import (
-    contract,
-    conversation,
-    db,
-    review_answers,
-    review_diff,
-    review_drafts,
-    review_requests,
-    review_runs,
-    run_models,
-)
+from canopy.core import contract, conversation, db, review_answers, review_diff, review_drafts, review_runs, run_models
 from canopy.core import review_result as result
 from canopy.core.vocab import DismissalReason, ReviewRunStatus, SeenKind
+from canopy.reviews import review_requests
 from canopy.serve import review_draft_views
 from canopy.serve.schema.review import (
     DiffFile,
@@ -45,7 +36,7 @@ from canopy.serve.schema.review import (
     ReviewSummary,
 )
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
-from canopy.serve.views import lines, models_served, new_tokens, review_state, shown_path, ticket_title
+from canopy.serve.views import card, lines, models_served, new_tokens, review_state, shown_path, ticket_title
 
 if TYPE_CHECKING:
     import sqlite3
@@ -133,6 +124,12 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
             ended=row.ended_at is not None,
             session_id=row.session_id or None,
         ),
+        model=row.model,
+        card=card(
+            row,
+            running=row.status is ReviewRunStatus.RUNNING,
+            timeout_minutes=ctx.config.runtime.review_timeout_minutes,
+        ),
     )
 
 
@@ -186,6 +183,7 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
     tickets = db.ticket_titles(conn, {row.ticket_key for row in rows if row.ticket_key})
     drafts = review_drafts.of_reviews(conn, [row.id for row in rows])
     asked = review_requests.answered_by(conn, rows)
+    served = run_models.served_by(conn, "review_runs", [row.id for row in rows])
     return [
         summary(
             row,
@@ -195,6 +193,7 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
             or ticket_title(tickets.get(row.ticket_key or "")),
             draft=drafts.get(row.id),
             request=asked.get(row.id),
+            served=served[row.id],
         )
         for row in rows
     ]
@@ -207,10 +206,12 @@ def summary(
     title: str | None,
     draft: records.ReviewDraft | None,
     request: int | None,
+    served: Sequence[str] = (),
 ) -> ReviewSummary:
     """One review run's row, as the reviews list shows it, `seen` when the operator has seen it, its PR's `title`.
 
-    `request` is the id of the operator's request it answers, which groups it with its reviews in other personas.
+    `request` is the id of the operator's request it answers, which groups it with its reviews in other personas, and
+    `served` the models its session named.
 
     Returns:
         The run's summary. Its verdict and impact are None, and its findings 0, when it has no valid result.
@@ -239,6 +240,7 @@ def summary(
         news=review_requests.has_news(row, stored),
         seen=seen,
         draft=cast("ReviewDraftStatusName", draft.status.value) if draft is not None else None,
+        served=list(served),
     )
 
 

@@ -1,4 +1,8 @@
-"""The runs (DESIGN §8), each one's session transcript, and its log's end. Reads only; both are untrusted text."""
+"""The runs (DESIGN §8), each one's session transcript and its log's end, and the answer to a running run's question.
+
+The transcript and the log are untrusted text. The answer is the operator's to the question a running run's card asks
+(§41), as `canopy reply run:ID LETTER` gives it.
+"""
 
 from __future__ import annotations
 
@@ -7,14 +11,17 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 
+from canopy.core import conversation
+from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import RunId, not_found
-from canopy.serve.schema import Run, RunsSince
+from canopy.serve.api.refs import REFUSED, WEB, RefusedError, RunId, not_found
+from canopy.serve.schema import Answered, AnswerRequest, Run, RunsSince
 from canopy.serve.schema.transcript import RawOutput, Transcript
 
 TAG = "runs"
 router = APIRouter(tags=[TAG])
+_log = logs.for_tick(None)
 
 
 @router.get("/runs", operation_id="listRuns", summary="List the runs")
@@ -75,3 +82,33 @@ def run_output(run_id: RunId, backend: BackendDep) -> RawOutput:
     if found is None:
         raise HTTPException(status_code=404, detail=f"no run {run_id}")
     return found
+
+
+@router.post("/runs/{run_id}/answers", operation_id="answerRun", summary="Answer a run's question", responses=REFUSED)
+def answer(run_id: RunId, body: AnswerRequest, backend: BackendDep) -> Answered:
+    """`canopy reply run:ID LETTER`: the operator's answer to the question the running run's card asks.
+
+    Refused `moved_on` when its card asks another question than the one asked at `asked_at`, which the page showed.
+    """
+    return answered(backend, conversation.Ref(conversation.RUN, str(run_id)), body)
+
+
+def answered(backend: BackendDep, ref: conversation.Ref, body: AnswerRequest) -> Answered:
+    """Record and pass on the operator's answer to the question run or review `ref`'s card asks, as the CLI does.
+
+    Returns:
+        What was answered.
+
+    Raises:
+        RefusedError: `conversation.answer` refused it.
+    """
+    with backend.open() as ctx:
+        try:
+            got = conversation.answer(ctx.conn, ref, body.letter, state_dir=ctx.state_dir, asked_at=body.asked_at)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info(
+        "question answered",
+        extra={"subject": str(ref), "answer": got.letter, "already": got.already, "channel": WEB},
+    )
+    return Answered(letter=got.letter, option=got.option, already=got.already, heard=got.heard)

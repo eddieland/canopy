@@ -1,19 +1,21 @@
-"""What every command shares: the object `main` passes down, refusals, and opening the journal."""
+"""What every command shares: the object `main` passes down, refusals, opening the journal, and waiting for a tick."""
 
 from __future__ import annotations
 
+import contextlib
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING
 
 import click
 
-from canopy.core import context, conversation
+from canopy.core import config, context, conversation, workspace
+from canopy.infra import lock
 from canopy.runtime import servers
 
 if TYPE_CHECKING:
-    from click.shell_completion import CompletionItem
+    from collections.abc import Iterator
 
     from canopy.core.context import Context
     from canopy.infra import procs
@@ -21,36 +23,6 @@ if TYPE_CHECKING:
 
 class CliError(click.ClickException):
     """A refusal or failure, reported on stderr, exit 1. Misuse is a click.UsageError instead, exit 2."""
-
-
-class OverseerCommand(click.Command):
-    """A command only the overseer runs, inside a tick: `--help` lists it, but Tab does not offer it (DESIGN §13)."""
-
-
-class Group(click.Group):
-    """A command group whose shell completion offers the operator's subcommands, and leaves out the overseer's.
-
-    A group counts as the overseer's when every subcommand in it is, so `canopy ticket` goes with `ticket set`.
-    """
-
-    @override
-    def shell_complete(self, ctx: click.Context, incomplete: str) -> list[CompletionItem]:
-        """Complete as click does, without the overseer's subcommands.
-
-        Returns:
-            The completions click offers, less each subcommand only the overseer runs.
-        """
-        return [
-            item
-            for item in super().shell_complete(ctx, incomplete)
-            if not _overseers(self.get_command(ctx, item.value))
-        ]
-
-
-def _overseers(command: click.Command | None) -> bool:
-    if isinstance(command, click.Group):
-        return bool(command.commands) and all(_overseers(sub) for sub in command.commands.values())
-    return isinstance(command, OverseerCommand)
 
 
 @dataclass(frozen=True)
@@ -68,6 +40,21 @@ def leave_the_tick() -> None:
     """
     for name in (conversation.TICK_ID_ENV, *servers.VARIABLES):
         os.environ.pop(name, None)
+
+
+def require_workspace() -> Path:
+    """Find the workspace the current directory is in.
+
+    Returns:
+        Its root.
+
+    Raises:
+        CliError: No workspace file is here or above.
+    """
+    root = workspace.find_root(Path.cwd())
+    if root is None:
+        raise CliError(f"no {config.WORKSPACE_FILE_NAME} here or above; run `canopy init` first")
+    return root
 
 
 def open_context(click_ctx: click.Context, *, migrate: bool = True, start: Path | None = None) -> Context:
@@ -98,3 +85,24 @@ def runner_of(click_ctx: click.Context) -> procs.Runner:
     if obj is None:
         raise RuntimeError("canopy commands run through canopy.cli.main")
     return obj.runner
+
+
+@contextlib.contextmanager
+def between_ticks(ctx: Context, doing: str, *, dispatches: bool = False) -> Iterator[None]:
+    """Hold the tick lock while the block changes the pools, waiting for a running tick to end, and saying so.
+
+    A tick leases slots and reads the pools, so what changes them by hand happens only between ticks. With
+    `dispatches`, the dispatch lock is held too, so no review or task is leasing a slot it has not recorded yet.
+
+    Yields:
+        Once the locks are held, until the block ends.
+    """
+    with contextlib.ExitStack() as stack:
+        try:
+            stack.enter_context(lock.hold(ctx.lock_path))
+        except lock.LockBusyError:
+            click.echo(f"A tick is running; {doing} starts when it ends.")
+            stack.enter_context(lock.hold(ctx.lock_path, wait=True))
+        if dispatches:
+            stack.enter_context(lock.hold(ctx.dispatch_lock_path, wait=True))
+        yield

@@ -6,16 +6,20 @@ its own (`decisions.decider`), and the phase that row names, and the state block
 ticket. One row it does not decide, anywhere on the ticket, leaves the ticket whole to the overseer, which reads the
 derivation's rows beside the observations. So does a ticket that is not a fresh, open candidate, but for one whose
 observation the `tracker` source left stale: the overseer reads no tracker where a source does (§39), so the harness
-records its `wait`, naming what is old. An item the overseer
-holds open on a ticket the harness takes stands while the overseer is not given the ticket (`attention.current`).
+records its `wait`, naming what is old. Where the `vcs` source runs beside it, the overseer reads no GitHub either, so a
+candidate with a PR, branches, or an open blocker's PR that source left stale is the harness's `wait` too, and so is one
+with a unit's PR no source reads at all, its URL naming no PR, until the operator forgets its work. So does one with a
+`merged` row while a `multi_repo` item is open on it: a repository's part may remain. An item the overseer holds
+open on a ticket the harness takes stands while the overseer is not given the ticket (`attention.current`).
 
 The rows it decides are `ROWS`: only those it reads from its own journal alone, which need no measurement (§37, The
 evidence gate). A row that rests on what a connector observed joins them only by a PR citing the measurement that shows
 the derivation right on it; no switch in config turns one on.
 
-Whatever the overseer records about a ticket the harness decided, through a tool or its command, is refused `decided`
-(`loop.tools`), and the duties check owes it nothing about one (§6). A cursor the harness moves past what needs no
-handling (`loop.harness_cursors`) is its decision too, `CURSOR_ACTION`, but decides nothing about the ticket.
+Whatever the overseer records about a ticket the harness decided, through any of its tools, is refused `decided`
+(`loop.tools`), and the duties check owes it nothing about one (§6). A cursor the harness moves, past what needs no
+handling or what its own run handles (`loop.harness_cursors`), is its decision too, `CURSOR_ACTION`, but decides
+nothing about the ticket.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import conversation, db, records, sql
+from canopy.core import conversation, db, kept_items, records
 from canopy.core.vocab import Decider, Phase
 from canopy.loop import attention
 
@@ -35,8 +39,8 @@ if TYPE_CHECKING:
     from canopy.loop.phases import Derived
 
 
-#: The decision a cursor the harness moved past what needs no handling is recorded as (`loop.harness_cursors`): its
-#: own, about the ticket, yet no decision of the ticket's, which stays the overseer's.
+#: The decision a cursor the harness moved is recorded as (`loop.harness_cursors`): its own, about the ticket, yet no
+#: decision of the ticket's.
 CURSOR_ACTION = "cursor"
 
 
@@ -44,7 +48,7 @@ CURSOR_ACTION = "cursor"
 class Row:
     """A row of §7 the harness decides: what it records for it, and on which tickets."""
 
-    #: What it records, as `canopy decide` would.
+    #: What it records, as the overseer's `decide` would.
     action: str
     #: Why, the decision's rationale.
     why: str
@@ -89,9 +93,16 @@ def decide(ctx: Context, derived: Iterable[Derived]) -> list[Decision]:
     by_ticket: dict[str, list[Derived]] = {}
     for d in derived:
         by_ticket.setdefault(d.ticket_key, []).append(d)
+    merged = any(Phase.MERGED in d.phases for subjects in by_ticket.values() for d in subjects)
+    apart = (
+        {i.ticket_key for i in attention.current(ctx.conn) if i.reason == kept_items.MULTI_REPO} if merged else set()
+    )
     found: list[Decision] = []
     for key in sorted(by_ticket):
-        decision = _decided(ctx.conn, key, by_ticket[key])
+        subjects = by_ticket[key]
+        if key in apart and any(Phase.MERGED in s.phases for s in subjects):
+            continue
+        decision = _decided(ctx.conn, key, subjects)
         if decision is not None:
             found.append(decision)
     return found
@@ -117,14 +128,12 @@ def recorded(conn: sqlite3.Connection, tick_id: int) -> list[records.Decision]:
     Returns:
         Them, in the order they were recorded.
     """
-    return records.fetch_all(
-        conn,
-        records.Decision,
-        sql.select("*")
-        .from_("decisions")
+    return (
+        records.select(records.Decision)
         .where("tick_id = ? AND decider = ? AND ticket_key IS NOT NULL", tick_id, Decider.HARNESS)
         .where("action NOT LIKE ? AND action != ?", f"{attention.ACTION_PREFIX}%", CURSOR_ACTION)
-        .order_by("id"),
+        .order_by("id")
+        .all(conn)
     )
 
 
@@ -153,14 +162,19 @@ def _decided(conn: sqlite3.Connection, key: str, subjects: Sequence[Derived]) ->
         The decision, or None when the ticket is left to the overseer.
     """
     own = subjects[0]
-    if own.repo is None and own.stale is not None and own.stale_tracker:
-        # The overseer reads no tracker where a source does (§39): the ticket waits for a read that is whole, and the
-        # source that left it stale has raised `connector_failed` (§30). One marked done, which the query still finds,
-        # is owed nothing (§7).
+    stale = _stale(subjects)
+    if stale is not None:
+        # The ticket waits for a read that is whole, and the source that left it stale has raised `connector_failed`
+        # (§30). One marked done, which the query still finds, is owed nothing (§7).
         ticket = db.get_ticket(conn, key)
         if ticket is not None and ticket.done:
             return None
-        return Decision(key, None, "wait", f"stale: {own.stale}; it waits for the tracker source to read it again")
+        what, source = stale
+        if source is None:
+            why = f"unobserved: {what}; no source reads it, so it waits until the operator forgets the ticket's work"
+        else:
+            why = f"stale: {what}; it waits for the {source} source to read it again"
+        return Decision(key, None, "wait", why)
     if own.repo is not None or own.stale is not None or own.closed or not own.candidate or not own.phases:
         return None
     private = conversation.is_started(conversation.start_of(conn, key))
@@ -169,6 +183,26 @@ def _decided(conn: sqlite3.Connection, key: str, subjects: Sequence[Derived]) ->
     phase = own.phases[0]
     row = ROWS[phase]
     return Decision(key, phase, row.action, f"{phase}: {row.why}")
+
+
+def _stale(subjects: Sequence[Derived]) -> tuple[str, str | None] | None:
+    """What a ticket's decision rests on that a source left stale, or none reads, where the overseer reads it no longer.
+
+    The overseer reads no tracker where a `tracker` source does, nor GitHub where the `vcs` source runs beside it
+    (§39). The ticket's own observation is the `tracker` source's; on a candidate fresh, or stale only by what the
+    `vcs` source reads, the first subject that source left stale, or that no source reads, is its. A closed or
+    unlabeled ticket is decided without its PRs.
+
+    Returns:
+        What is stale, and the kind of source that left it so, None for what no source reads; None when nothing is.
+    """
+    own = subjects[0]
+    if own.repo is None and own.stale is not None and own.stale_tracker:
+        return own.stale, "tracker"
+    if not (own.stale_vcs or (own.stale is None and own.candidate is True and not own.closed)):
+        return None
+    waited = (s for s in subjects if s.stale is not None and (s.stale_vcs or s.unobserved))
+    return next(((str(s.stale), None if s.unobserved else "vcs") for s in waited), None)
 
 
 def _takes(subject: Derived, *, private: bool) -> bool:

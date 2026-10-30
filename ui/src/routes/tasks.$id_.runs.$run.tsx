@@ -167,7 +167,7 @@ function RunPanel({
                     <Cost usd={run.cost_usd} />
                     <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
                 </Field>
-                <ModelsField models={detail.models} />
+                <ModelsField models={detail.models} asked={detail.model} />
                 <Field label="branch" mono>
                     <Copyable text={run.branch} label="branch" />
                 </Field>

@@ -38,6 +38,7 @@ export const REASON_MEANINGS: Readonly<Record<string, string>> = {
     lesson_review: 'Lessons are due for review: renew, graduate, or forget each.',
     lesson_wrong: 'A run reported a lesson wrong: renew or forget it.',
     connector_failed: 'A source read less than it was asked this tick, so what it observes may be stale.',
+    unobserved_pr: 'A unit’s PR URL names no PR, so no source reads it and the ticket waits: forget its work.',
     persona_missing: 'A run or a review was refused: the persona it names has no file.',
     bad_persona: 'A run or a review was refused: its persona’s file is one canopy will not put in a prompt.',
     model_missing: 'The runtime does not list the model chosen, so nothing runs on it: choose another, or fix it.',

@@ -10,6 +10,7 @@ import { Cost } from '@/components/cost'
 import { RunDot } from '@/components/status'
 import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ProgressMeter } from '@/components/run-progress'
 import { useLoopDown } from '@/hooks/use-loop-down'
 import { useClock } from '@/lib/clock'
 import type { Clock } from '@/lib/clock'
@@ -105,7 +106,8 @@ function itemKey(item: RailItem): string {
 /**
  * One row of what is working, opening its page: a dot in its state's color, what it works on (a ticket's key, a PR, a
  * chore, a task's run), how long it has run or `waiting on you`, and under it what it is: the ticket's title, the
- * review, the run, the task's first line. A worker run adds what it is doing, `planning`, on a line of its own; a
+ * review, the run, the task's first line. A worker run adds what it is doing, `planning`, on a line of its own, and
+ * while it runs, its steps' meter when its progress names any; a
  * task's run has no kind or reasons to name a phase by, and its first line is the operator's own words.
  */
 function WorkingRow({ item }: { item: RailItem }) {
@@ -123,6 +125,9 @@ function WorkingRow({ item }: { item: RailItem }) {
                     <RowHead state={run.state} subject={run.ticket_key} started={run.started_at} />
                     <TicketTitle title={run.ticket_title} className="pl-4 text-xs font-normal text-muted-foreground" />
                     <PhaseLine run={run} />
+                    {run.state === 'running' && run.card !== null && run.card.steps.length > 0 && (
+                        <ProgressMeter card={run.card} running className="mt-0.5 ml-4" />
+                    )}
                 </Link>
             )
         }
@@ -229,9 +234,10 @@ function Under({ children }: { children: string }) {
 }
 
 /**
- * Under what is working, on one line: what the last 24 hours and the last 30 days cost, each after its window's name,
- * which stands for the block's label. Either opens the spend page over its own window: the 24 hours by the hour, or
- * the 30 days by the day. A cost too long for both to share the line puts the 30 days under the 24 hours.
+ * Under what is working, in two rows: what the last 24 hours and then the last 30 days cost, each window's name on the
+ * left, standing for the block's label, and its cost on the right, so the figures line up however many digits they
+ * have. The 30 days, the figure the operator watches, is the larger. Either opens the spend page over its own window:
+ * the 24 hours by the hour, or the 30 days by the day.
  */
 export function RailSpend() {
     const spend = useQuery(spendQuery).data
@@ -239,7 +245,7 @@ export function RailSpend() {
     const outside = outsideHint(spend, clock)
     return (
         <section aria-label="Spent" className={SECTION} data-testid="rail-spend">
-            <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 px-2.5">
+            <div className="grid gap-y-0.5 px-2.5">
                 <Spent
                     window={spend?.day}
                     label="24h"
@@ -251,6 +257,7 @@ export function RailSpend() {
                     label="30d"
                     hint={`Spent in the last 30 days${outside}: the month by day`}
                     days={30}
+                    headline
                 />
             </div>
         </section>
@@ -374,8 +381,9 @@ function outsideHint(spend: Spend | undefined, clock: Clock): string {
 }
 
 /**
- * One window's name and its cost, a dash when nothing in it reported one, opening the spend page over `hours` or
- * `days`.
+ * One window's row: its name on the left and its cost on the right, a dash when nothing in it reported one, opening the
+ * spend page over `hours` or `days`. A `headline` cost is a step larger. The row keeps its height before the cost
+ * arrives.
  */
 function Spent({
     window,
@@ -383,27 +391,35 @@ function Spent({
     hint,
     hours,
     days,
+    headline = false,
 }: {
     window: SpendWindow | undefined
     label: string
     hint: string
     hours?: 24
     days?: 30
+    headline?: boolean
 }) {
     const cost = window?.cost_usd ?? null
     return (
         <Link
             to="/reports/spend"
             search={{ days, hours }}
-            className="-mx-1 flex items-baseline gap-1.5 rounded-sm px-1 hover:bg-surface-raised"
+            className={cn(
+                '-mx-1 flex items-baseline justify-between gap-3 rounded-sm px-1 hover:bg-surface-raised',
+                headline ? 'min-h-5' : 'min-h-4',
+            )}
             title={hint}
             data-testid={`rail-spend-link-${label}`}
         >
             <span className="panel-label">{label}</span>
             {window === undefined ? (
-                <Skeleton className="h-4 w-12 self-center" />
+                <Skeleton className="h-4 w-14 self-center" />
             ) : (
-                <span className="readout text-xs text-foreground" data-testid={`rail-spend-${label}`}>
+                <span
+                    className={cn('readout text-right text-foreground', headline ? 'text-sm font-medium' : 'text-xs')}
+                    data-testid={`rail-spend-${label}`}
+                >
                     <Cost usd={cost} />
                 </span>
             )}
