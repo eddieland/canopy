@@ -21,10 +21,12 @@ text: no commit's message, path, or line can pass for another record, or for a f
 
 from __future__ import annotations
 
+import codecs
 import fnmatch
 import re
 import sys
 from collections.abc import Mapping, Sequence
+from datetime import datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Annotated, Self
 
@@ -66,7 +68,7 @@ MAX_LIMIT = 100
 MAX_SEARCH_CHARS = 200
 #: The most lines one `blame` reads.
 MAX_BLAME_LINES = 400
-#: The longest line of a file `grep` returns; past it the line is cut, and the result says so.
+#: The longest line of a file `grep` and `blame` return; past it the line is cut, and the result says so.
 MAX_LINE_CHARS = 2000
 #: How long one git command may take.
 TIMEOUT_SECONDS = 60
@@ -80,6 +82,11 @@ LOG_FORMAT = "%H%x00%P%x00%an%x00%ae%x00%aI%x00%B"
 _LOG_FIELDS = 6
 #: A file's status as `--name-status` prints it: a letter, and for a rename or a copy how alike the two are.
 _STATUS_RE = re.compile(r"[A-Z][0-9]*")
+#: The line `blame --line-porcelain` starts each line's fields with: the commit's id, the line's number in that commit
+#: and in the file blamed, and, on the first of a run of lines from one commit, how many there are.
+_BLAME_HEADER_RE = re.compile(r"([0-9a-f]{40}|[0-9a-f]{64}) [0-9]+ ([0-9]+)(?: [0-9]+)?")
+#: The fields `blame --line-porcelain` gives each line that `blame` reads.
+_BLAME_FIELDS = frozenset({"author", "author-mail", "author-time", "author-tz", "summary", "filename"})
 #: A revision as the tools take one: a commit id, a ref, `HEAD~2`, `main^2`, `@{u}`. Never an option (no leading `-`),
 #: a range (`..`), a blob (`rev:path`), or anything a shell or a pathspec would read.
 REVISION_RE = re.compile(r"(?!.*\.\.)[A-Za-z0-9@][A-Za-z0-9_./~^@{}+-]{0,199}")
@@ -494,6 +501,56 @@ class Paths(Result):
     ]
 
 
+class Blamer(BaseModel):
+    """A commit `blame` names, as each of its lines refers to it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    #: Its author's name.
+    author: Annotated[StrictStr, Field(description="Its author's name.")]
+    #: Its author's email.
+    email: Annotated[StrictStr, Field(description="Its author's email.")]
+    #: When it was written.
+    date: Annotated[StrictStr, Field(description="When its author wrote it, in ISO 8601.")]
+    #: Its message's first line.
+    summary: Annotated[StrictStr, Field(description="Its message's first line; read the commit with log for the rest.")]
+
+
+class Blamed(BaseModel):
+    """One line of a file, as `blame` names the commit that last changed it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    #: Its number in the file.
+    line: Annotated[StrictInt, Field(description="Its number in the file, counting from 1.")]
+    #: The commit, by id.
+    commit: Annotated[StrictStr, Field(description="The commit that last changed it, a key of commits.")]
+    #: The file's path in that commit, if it differs.
+    path: Annotated[
+        StrictStr | None,
+        Field(description="The path the line had in that commit, if not the path asked for: renamed, or moved."),
+    ]
+    #: The line itself.
+    text: Annotated[StrictStr, Field(description=f"The line, cut at {MAX_LINE_CHARS} characters.")]
+
+
+class Attribution(Result):
+    """What `blame` returns: each line read, and the commits they name."""
+
+    #: The commits, by id.
+    commits: Annotated[
+        Mapping[str, Blamer],
+        Field(description="Each commit a line names, by its full id."),
+    ]
+    #: The lines.
+    lines: Annotated[Sequence[Blamed], Field(description="Each line read, in order.")]
+    #: What was left out to fit, if anything.
+    cut: Annotated[
+        StrictStr | None,
+        Field(description=f"What was left out or cut to fit {MAX_CHARS} characters; null when nothing was."),
+    ]
+
+
 def text(result: Result) -> str:
     """The text a git tool that reads records returns: `DATA_NOTE`, then `result` as JSON.
 
@@ -618,15 +675,15 @@ def show(runner: procs.Runner, checkouts: Mapping[str, Path], request: Show) -> 
             raise Refused(f"{request.path} is a {other} in {request.rev}, not a file or a directory")
 
 
-def blame(runner: procs.Runner, checkouts: Mapping[str, Path], request: Blame) -> str:
+def blame(runner: procs.Runner, checkouts: Mapping[str, Path], request: Blame) -> Attribution:
     """Name the commit that last changed each line from `request.start` to `request.end` of a file at `request.rev`.
 
     With `request.moves`, a line moved or copied names the commit that first wrote it; with `request.ignore_whitespace`,
     a change of whitespace alone is passed over.
 
     Returns:
-        Each line after its commit's full id, the path the file had there if it was renamed since, its author,
-        date, and line number.
+        Each line with its number, its commit's id, the path the file had there if it was renamed since, and its text;
+        each commit's author, date, and summary; every hidden character named but tabs.
 
     Raises:
         Refused: The checkout, the revision, or the file is unknown there, the file is shorter than `request.start`,
@@ -637,15 +694,28 @@ def blame(runner: procs.Runner, checkouts: Mapping[str, Path], request: Blame) -
     if not path:
         raise Refused("blame reads a file: name one, not the whole repository")
     commit = _commit(runner, where, request.rev)
-    # The repository's config may name a file of revisions to skip, anywhere on the host: none is read. Its blame.*
-    # display keys are overridden, so every call prints the same columns. git 2.43's blame takes no
-    # `--end-of-options`; the commit is a full id, never an option.
-    args = ("--no-textconv", "--no-ignore-revs-file", "--no-show-email", "--root", "-l", "--date=short")
+    # The repository's config may name a file of revisions to skip, anywhere on the host: none is read. Porcelain
+    # prints the same fields whatever its blame.* display keys say. git 2.43's blame takes no `--end-of-options`; the
+    # commit is a full id, never an option.
+    args = ("--no-textconv", "--no-ignore-revs-file", "--root", "--line-porcelain")
     # `-C` once looks for a line's origin in the files its commit changed, not every file in the repository, which
     # `-C -C` would: bounded by the change, not the tree.
     attribution = (*(("-M", "-C") if request.moves else ()), *(("-w",) if request.ignore_whitespace else ()))
     done = _git(runner, where, "blame", *args, *attribution, f"-L{request.start},{request.end}", commit, "--", path)
-    return _said(_out(done, "blame"))
+    lines, commits, long = _read_blame(_out(done, "blame"), path)
+    # git stops at the file's last line, past which a line that holds carriage returns could forge more: each line
+    # must be one the file has, in order.
+    last = min(request.end, _line_count(runner, where, commit, path))
+    if [line.line for line in lines] != list(range(request.start, last + 1)):
+        raise Refused("git blame printed what canopy cannot read")
+    kept = _fit(lines)
+    cut: list[str] = []
+    if len(kept) < len(lines):
+        cut.append(f"listed {len(kept)} of the {len(lines)} lines asked for: narrow start to end")
+    if long:
+        cut.append(f"lines past {MAX_LINE_CHARS} characters are cut")
+    named = {line.commit: commits[line.commit] for line in kept}
+    return Attribution(commits=named, lines=kept, cut="; ".join(cut) or None)
 
 
 def grep(runner: procs.Runner, checkouts: Mapping[str, Path], request: Grep) -> Matches:
@@ -843,6 +913,108 @@ def _read_grep(out: str, commit: str) -> tuple[list[Match], bool]:
         found.append(Match(path=path, line=int(number), text=_shown(line[:MAX_LINE_CHARS])))
         at = next_at
     return found, long
+
+
+def _read_blame(out: str, path: str) -> tuple[list[Blamed], dict[str, Blamer], bool]:
+    """Read what `blame --line-porcelain` printed of the file at `path`.
+
+    Each line is a header, its fields one a line, then its text after a tab. `procs` reads a lone carriage return as a
+    line break, so a line's text runs on to the next header, with each break put back as one.
+
+    Returns:
+        The lines, each cut at `MAX_LINE_CHARS`; the commits they name, by id; and whether any line was cut. Every
+        hidden character is named but tabs.
+
+    Raises:
+        Refused: git printed what is not in that form.
+    """
+    printed = out.split("\n")
+    if printed[-1:] == [""]:
+        printed.pop()
+    lines: list[Blamed] = []
+    commits: dict[str, Blamer] = {}
+    long = False
+    at = 0
+    while at < len(printed):
+        header = _BLAME_HEADER_RE.fullmatch(printed[at])
+        fields: dict[str, str] = {}
+        at += 1
+        while at < len(printed) and not printed[at].startswith("\t"):
+            key, _, value = printed[at].partition(" ")
+            fields[key] = value
+            at += 1
+        if header is None or at == len(printed) or not fields.keys() >= _BLAME_FIELDS:
+            raise Refused("git blame printed what canopy cannot read")
+        text = printed[at][1:]
+        at += 1
+        while at < len(printed) and not _BLAME_HEADER_RE.fullmatch(printed[at]):
+            text += "\r" + printed[at]
+            at += 1
+        long |= len(text) > MAX_LINE_CHARS
+        commit, number = header.group(1), int(header.group(2))
+        commits[commit] = commits.get(commit) or _blamer(fields)
+        named = _unquoted(fields["filename"])
+        lines.append(
+            Blamed(
+                line=number,
+                commit=commit,
+                path=visible(named) if named != path else None,
+                text=_shown(text[:MAX_LINE_CHARS]),
+            ),
+        )
+    return lines, commits, long
+
+
+def _blamer(fields: Mapping[str, str]) -> Blamer:
+    """The commit `blame --line-porcelain`'s fields of one line name.
+
+    Returns:
+        Its author, email, date, and summary, every hidden character named.
+
+    Raises:
+        Refused: Its time or time zone is not git's.
+    """
+    zone = re.fullmatch(r"([+-])([0-9]{2})([0-9]{2})", fields["author-tz"])
+    if zone is None or not fields["author-time"].isdecimal():
+        raise Refused("git blame printed what canopy cannot read")
+    sign = -1 if zone.group(1) == "-" else 1
+    offset = timezone(sign * timedelta(hours=int(zone.group(2)), minutes=int(zone.group(3))))
+    return Blamer(
+        author=visible(fields["author"]),
+        email=visible(fields["author-mail"].removeprefix("<").removesuffix(">")),
+        date=datetime.fromtimestamp(int(fields["author-time"]), offset).isoformat(),
+        summary=visible(fields["summary"]),
+    )
+
+
+def _unquoted(name: str) -> str:
+    """A path as git names it, unquoted: in double quotes, with C escapes, when it holds a character git quotes.
+
+    Returns:
+        The path.
+    """
+    if not (len(name) >= 2 and name.startswith('"') and name.endswith('"')):  # noqa: PLR2004  (the two quotes)
+        return name
+    return codecs.escape_decode(name[1:-1].encode())[0].decode(errors="replace")
+
+
+def _line_count(runner: procs.Runner, where: Path, commit: str, path: str) -> int:
+    """How many lines the file at `path` has at `commit`, as git counts them: by line feeds alone.
+
+    Returns:
+        The count; 0 for an empty file.
+
+    Raises:
+        Refused: git failed.
+    """
+    # Every line matches the empty text; `-a` counts a file git would call binary as text, as blame reads it.
+    done = _git(runner, where, "grep", "--count", "-a", "-z", "--no-textconv", "-e", "", commit, "--", path)
+    if done.returncode == 1 and not done.stdout:
+        return 0
+    count = _out(done, "grep").rstrip("\n").rpartition("\0")[2]
+    if not count.isdecimal():
+        raise Refused("git grep printed what canopy cannot read")
+    return int(count)
 
 
 def _checkout(checkouts: Mapping[str, Path], repo: str | None) -> Path:
