@@ -149,6 +149,16 @@ describe.each(Object.entries(THEMES))('%s theme', (_, colors) => {
     it('reads the accent foreground on the accent', () => {
         expect(contrast(token('accent-foreground'), token('accent'))).toBeGreaterThanOrEqual(AA)
     })
+
+    // The approved band, a live readout, and the newer-build notice set accent text on the accent's own 14%.
+    it('reads the accent on its own tint', () => {
+        const low = ['surface', 'surface-raised']
+            .map((base) =>
+                below(`accent on its 14% on ${base}`, token('accent'), over(token('accent'), 0.14, token(base))),
+            )
+            .filter((line) => line !== null)
+        expect(low).toEqual([])
+    })
 })
 
 /** The selector of the rule that sets `palette` over `mode`'s default. */

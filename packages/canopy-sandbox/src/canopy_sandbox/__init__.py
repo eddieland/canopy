@@ -26,8 +26,9 @@ In order, it:
    the run's temp directory beside it, which is `srt`'s own TMPDIR too, so what `srt` leaves there goes with it.
    Whatever the template says, the policy denies reading the directory that holds every run's, so no run reads
    another's temp directory, and, for every role but the overseer, the workspace's `.canopy/` when the run's
-   directories name it, in case the workspace is outside the HOME the template denies. It allows reading `srt`'s own
-   `vendor/` directory, whose seccomp helper runs inside the sandbox, wherever `srt` is installed.
+   directories name it, in case the workspace is outside the HOME the template denies. A template that allows reading
+   or writing one of these, or a directory that holds one, is refused, since `srt` would bind it back. It allows reading
+   `srt`'s own `vendor/` directory, whose seccomp helper runs inside the sandbox, wherever `srt` is installed.
 4. Points the command's caches at the role's own cache directory, `$XDG_CACHE_HOME/canopy/sandbox/ROLE/` (setup
    shares the worker's, which it warms): XDG_CACHE_HOME itself, and the variables of the tools whose caches do not
    follow it everywhere. Not the operator's: OpenCode imports packages and runs programs from its cache, the
@@ -39,7 +40,10 @@ In order, it:
    worktrees, and unchanged anywhere else. Exported to every process, git's variables would reach a repository a tool
    keeps in a cache, such as OpenCode's snapshots or Go's module sources, whose objects would then go when the run's
    directory does. A git run by its absolute path gets neither, and in a worktree cannot write objects at all.
-6. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
+6. For a worker or a review, allows reading, never writing, the run's answers directory, `CANOPY_ANSWERS`, where canopy
+   writes the operator's answer to the question the run asks (DESIGN §41), when canopy passes one: it is the
+   run's own, beside its other files in the workspace's `.canopy/`, which the policy denies.
+7. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
    The `srt` is the one `canopy sandbox setup` installed, pinned by `runtime/package-lock.json`, in
    `$XDG_DATA_HOME/canopy/sandbox-runtime/` (`~/.local/share/canopy/sandbox-runtime/` when that is unset), or else
    the first on `PATH`.
@@ -79,7 +83,9 @@ starts each once the overseer's run has ended (DESIGN §40), so none inherits th
 
 A key that starts with `#` is a comment, and is left out of the policy. The wrapper refuses a template with an unknown
 placeholder, a placeholder inside a longer string, no `filesystem.denyRead`, or no `network.allowedDomains`: `srt` runs
-a command with no restrictions outside any sandbox at all.
+a command with no restrictions outside any sandbox at all. It refuses one whose `allowRead` or `allowWrite`, once
+filled, names a directory the wrapper denies, or one that holds it, such as a chore's cwd above the role caches: `srt`
+would bind it back, and one run could read another's.
 
 The directory a run killed with SIGKILL leaves behind (canopy kills a timed-out run's whole process group) is removed
 by the next run, once the process that made it is gone.
@@ -116,6 +122,11 @@ COMMITTING = ("worker", "setup")
 TEMPLATES = Path(__file__).resolve().parent / "templates"
 RUNTIME_SPEC = Path(__file__).resolve().parent / "runtime"
 OBJECTS_ENV = "CANOPY_GIT_OBJECTS"
+#: The run's answers directory, which canopy passes a run that keeps its progress, and the roles that run one.
+ANSWERS_ENV = "CANOPY_ANSWERS"
+ANSWERING = ("worker", "review")
+#: An answers directory's name: `7.answers`, in `<state>/runs/` or `<state>/reviews/`.
+ANSWERS_NAME = re.compile(r"[0-9]{1,18}\.answers")
 # What canopy leaves in a joint run's desk (DESIGN §18); every other entry there links to a worktree.
 DESK_MARKER = ".canopy-desk"
 # The workspace's state directory, which holds the run directories canopy passes (D016), and the directories in it
@@ -274,6 +285,7 @@ def run(argv: list[str]) -> int:
     try:
         role, reads, command = parse(argv)
         objects = objects_dir(role)
+        answers = answers_dir(role)
         cwd = Path.cwd()
         trees = worktrees(role, cwd)
         state = workspace_state(role, cwd)
@@ -293,7 +305,11 @@ def run(argv: list[str]) -> int:
         bin_dir = git_shim(run_dir, trees, objects) if objects is not None else None
         values = placeholders(cwd, trees, objects, tmp, cache=cache, reads=reads, journal=journal, workspace=entries)
         policy = fill(template, values)
-        readable = [*vendor_dirs(srt), *([bin_dir] if bin_dir is not None else [])]
+        readable = [
+            *vendor_dirs(srt),
+            *([bin_dir] if bin_dir is not None else []),
+            *([answers] if answers is not None else []),
+        ]
         # The overseer's own state directory holds the journal it writes: a rule for this role alone.
         states = state_dirs(objects, cwd) if state is None else []
         check(policy, [run_dir.parent, cache.parent, *states], readable)
@@ -509,6 +525,29 @@ def objects_dir(role: str) -> Path | None:
     return path
 
 
+def answers_dir(role: str) -> Path | None:
+    """Return the run's answers directory, which canopy passes a worker's, a planner's, or a review's run.
+
+    Returns:
+        The directory, or None for another role, or a run canopy passes none, such as a one-off task's.
+
+    Raises:
+        SandboxError: it is not a run's answers directory in a workspace's `.canopy/`: an absolute path to a directory,
+            not a link, named `<id>.answers` in `runs/` or `reviews/` there.
+    """
+    if role not in ANSWERING:
+        return None
+    value = os.environ.get(ANSWERS_ENV, "")
+    if not value:
+        return None
+    path = Path(value)
+    placed = path.is_absolute() and path.parent.name in RUN_PARENTS and path.parent.parent.name == STATE_DIR
+    named = ANSWERS_NAME.fullmatch(path.name) is not None
+    if not (placed and named and path.is_dir() and not path.is_symlink()):
+        raise SandboxError(f"{ANSWERS_ENV} is not a run's answers directory in a workspace's {STATE_DIR}: {value!r}")
+    return path
+
+
 def load_template(role: str) -> object:
     """Read the policy template for `role`.
 
@@ -713,7 +752,7 @@ def fill(node: object, values: Mapping[str, Iterable[str]]) -> object:
     return node
 
 
-def check(policy: object, denied: Iterable[Path], readable: Iterable[Path]) -> None:
+def check(policy: object, denied: Collection[Path], readable: Iterable[Path]) -> None:
     """Refuse a policy `srt` would run without a sandbox, or with the network open; deny `denied`, allow `readable`.
 
     `denied` holds the directory of every run's directory: the system temp directory is outside HOME, so without it one
@@ -724,7 +763,8 @@ def check(policy: object, denied: Iterable[Path], readable: Iterable[Path]) -> N
     in the run's directory.
 
     Raises:
-        SandboxError: it denies no reads, has no network allowlist, or its allowRead is not a list.
+        SandboxError: it denies no reads, has no network allowlist, its allowRead or allowWrite is not a list, or one
+            of them names a directory in `denied`, or one that holds it, which `srt` would bind back.
     """
     sections: dict[object, object] = policy if isinstance(policy, dict) else {}
     filesystem = sections.get("filesystem")
@@ -737,10 +777,37 @@ def check(policy: object, denied: Iterable[Path], readable: Iterable[Path]) -> N
     if not isinstance(network, dict) or not isinstance(network.get("allowedDomains"), list):
         raise SandboxError("the policy template has no network.allowedDomains list")
     deny.extend(str(p) for p in denied if str(p) not in deny)
+    for key in ("allowWrite", "allowRead"):
+        entries: object = filesystem.get(key, [])
+        if not isinstance(entries, list):
+            raise SandboxError(f"the policy template's filesystem.{key} is not a list")
+        for entry in entries:
+            if isinstance(entry, str) and (held := _holds(entry, denied)) is not None:
+                raise SandboxError(
+                    f"the policy template's filesystem.{key} names {entry}, which holds {held}, denied to every "
+                    "run so none reads another's: name the directories the command needs instead",
+                )
     allow: object = filesystem.setdefault("allowRead", [])
     if not isinstance(allow, list):
         raise SandboxError("the policy template's filesystem.allowRead is not a list")
     allow.extend(str(p) for p in readable if str(p) not in allow)
+
+
+def _holds(entry: str, denied: Collection[Path]) -> Path | None:
+    """Return the directory of `denied` that `entry`, a path `srt` reads with `~` for HOME, is or holds, if any.
+
+    Raises:
+        SandboxError: `entry` is no path: it holds a NUL, or names the home of a user there is none of.
+    """
+    try:
+        place = Path(os.path.realpath(Path(entry).expanduser()))
+    except (RuntimeError, ValueError) as e:
+        raise SandboxError(f"the policy template names {entry!r}, which is not a path: {e}") from e
+    for directory in denied:
+        real = Path(os.path.realpath(directory))
+        if place == real or place in real.parents:
+            return directory
+    return None
 
 
 def state_dirs(objects: Path | None, cwd: Path) -> list[Path]:

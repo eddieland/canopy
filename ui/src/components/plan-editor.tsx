@@ -82,7 +82,7 @@ const BAR_CLEARANCE = 128
 // The shortcut that comments on the selection (`PlanHighlights`).
 const COMMENT_KEYS = 'Mod-Alt-m'
 // A comment floating under its passage, over the plan, while the comments sit under it.
-const FLOAT = 'absolute z-20 w-[min(24rem,100%)] overflow-hidden rounded-md border bg-surface'
+const FLOAT = 'absolute z-20 w-[min(24rem,100%)] overflow-hidden rounded-md border border-edge bg-surface shadow-float'
 // The plan's Markdown as a field, where the document would be: as wide as its text, and as tall as the Markdown.
 const SOURCE = [
     'block field-sizing-content min-h-72 w-full max-w-3xl resize-none bg-transparent outline-none',
@@ -528,7 +528,7 @@ export function PlanEditor({
                             // frame's place on the page, over the rail. Over the sticky header and foot, as a float is.
                             options={{ placement: 'top', strategy: 'fixed' }}
                             appendTo={() => document.body}
-                            className="z-20 rounded-md border bg-surface p-0.5"
+                            className="z-20 rounded-md border border-edge bg-surface p-0.5 shadow-float"
                             data-testid="plan-bubble"
                         >
                             <Button

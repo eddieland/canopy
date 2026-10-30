@@ -104,7 +104,7 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                             <Cost usd={tick.cost_usd} />
                             <span title={RUN_TOKENS_TITLE}>{runTokens(tick.new_tokens, tick.peak_context)}</span>
                         </Field>
-                        <ModelsField models={detail.models} />
+                        <ModelsField models={detail.models} asked={detail.model} />
                         <Field
                             label="canopy"
                             mono

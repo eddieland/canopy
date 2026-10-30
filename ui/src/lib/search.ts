@@ -1,6 +1,7 @@
 import type { SearchHit, SearchSource } from '@/api/types'
+import { isTextField } from '@/lib/shortcut'
 
-// The server's bounds on a query (core/search.py): it answers anything else with a 422, so the UI never sends it.
+// The server's bounds on a query (serve/search.py): it answers anything else with a 422, so the UI never sends it.
 /** The fewest characters a query may have. */
 export const SEARCH_MIN = 2
 /** The most characters a query may have. */
@@ -123,8 +124,5 @@ export function isSearchShortcut(
     if (event.key !== '/' || event.ctrlKey || event.metaKey || event.altKey) {
         return false
     }
-    if (!(target instanceof HTMLElement)) {
-        return true
-    }
-    return !(target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+    return !isTextField(target)
 }

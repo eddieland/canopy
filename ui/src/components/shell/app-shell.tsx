@@ -23,6 +23,7 @@ import { useTheme } from '@/theme/use-theme'
 
 import { Buddy } from './buddy'
 import { Favicon } from './favicon'
+import { Game2048 } from './game-2048'
 import { JumpPalette } from './jump-palette'
 import { LiveReadouts, StreamReadout } from './live-readouts'
 import { LoopDownBand } from './loop-down-band'
@@ -32,6 +33,7 @@ import { Nav } from './nav'
 import { NewerBuild } from './newer-build'
 import { RailFooter, RailSpend, RailWorking } from './rail'
 import { Rave } from './rave'
+import { ReviewDialog } from './review-dialog'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
 import { Ticker } from './ticker'
@@ -47,8 +49,9 @@ export const PAGE_SCROLLER = 'page'
 /**
  * The frame every page renders in: header (with its ticker), side rail (search, navigation, what is working now, the
  * spend, Sprig once Settings turns it on and the rail has room for it, and a footer), the routed page, and over it
- * all the jump palette while ⌘K has it open (`JumpPalette`) and the lightswitch rave while Settings' light switch is
- * on, and the tab's icon (`Favicon`). Coming back to the tab
+ * all the jump palette while ⌘K has it open (`JumpPalette`), the Review a PR dialog while `R` or a pasted PR's URL
+ * has it open (`ReviewDialog`), and the lightswitch rave while Settings' light switch is
+ * on, 2048 once it is typed away from a field (`Game2048`), and the tab's icon (`Favicon`). Coming back to the tab
  * after a while away, a note of what changed (`useAwayNote`). Signed out, the sign-in page instead, whatever the
  * route: every API route but the session's needs a session (DESIGN §22).
  *
@@ -118,16 +121,16 @@ export function AppShell() {
                 <div className="grid h-dvh grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
                     <header
                         data-testid="app-header"
-                        className="relative z-10 flex items-center justify-between gap-4 border-b bg-surface/85 px-4"
+                        className={cn(
+                            'relative z-10 flex items-center justify-between gap-4 border-b border-edge bg-surface/85',
+                            'px-4',
+                        )}
                     >
-                        {/* The aurora: a hairline through the sections' colors along the header's foot, over its
-                        border. */}
+                        {/* The aurora: a hairline through the nav's colors, in its order, along the header's foot,
+                        over its border. */}
                         <span
                             aria-hidden
-                            className={cn(
-                                'pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90',
-                                'bg-linear-to-r from-section-attention via-section-pull-requests to-section-tickets',
-                            )}
+                            className="aurora pointer-events-none absolute inset-x-0 -bottom-px opacity-90"
                         />
                         <div className="flex items-center gap-2.5">
                             <LiveMark stream={stream.status} />
@@ -157,7 +160,7 @@ export function AppShell() {
                         stays at the window's foot however long the page; the part above it scrolls on its own in a
                         window too short. The room left between them is Sprig's, when it is on. */}
                         {mode === 'full' && (
-                            <aside className="border-r bg-surface/60">
+                            <aside className="border-r border-edge bg-surface/60">
                                 <div
                                     className={cn(
                                         'sticky top-0 flex h-[calc(100dvh-3rem)] flex-col',
@@ -169,7 +172,7 @@ export function AppShell() {
                             </aside>
                         )}
                         {mode === 'strip' && (
-                            <aside className="border-r bg-surface/60" data-testid="rail-strip">
+                            <aside className="border-r border-edge bg-surface/60" data-testid="rail-strip">
                                 <div className="sticky top-0 flex flex-col items-center pt-2 print:static">
                                     <RailButton />
                                     <div className="w-full">
@@ -211,7 +214,9 @@ export function AppShell() {
                     </SheetContent>
                 )}
                 <JumpPalette open={jumpOpen} onOpenChange={jump} />
+                <ReviewDialog />
                 <Rave />
+                <Game2048 />
             </Sheet>
         </StreamContext>
     )

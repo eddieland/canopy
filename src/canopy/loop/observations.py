@@ -2,7 +2,7 @@
 
 Every ticket the block lists and every ticket the tracker query last returned is here, by key. Each is `fresh`, read
 whole within `connect.max_age_minutes`; `stale`, past it or never read, naming what; or `unobserved`, when no source
-covers it, as every ticket is without a `tracker` source. A fresh ticket is marked a candidate or not in code, from its
+can read it, as a unit whose PR is not a PR's URL. A fresh ticket is marked a candidate or not in code, from its
 observed labels and state (§17). One that is not is listed by key and why, with none of its text, so a widened query
 shows the overseer nothing of it (TRUST_MODEL T7). A fresh candidate carries its title, state, labels, and blockers, its
 body until its first unit, and its new comments, each marked in code: whether its author is an authorized replier, and
@@ -28,6 +28,7 @@ from canopy.core import conversation, db, item_numbers, observe, records, sql
 from canopy.core.vocab import CheckStatus, ReviewItem, ReviewState, SourceKind, TicketState
 from canopy.core.workspace import CheckRole
 from canopy.loop import phases
+from canopy.reviews import review_requests
 
 if TYPE_CHECKING:
     import sqlite3
@@ -40,8 +41,6 @@ if TYPE_CHECKING:
 #: operator to set from the measurement's ticks (ROADMAP M37, Open): ten comments at their bound are about
 #: 5,000 tokens, and a busier subject waits a tick rather than swelling every tick's block.
 MAX_NEW_ITEMS = 10
-#: Why a ticket's subject is unobserved when no source reads tickets.
-NO_TRACKER = "no tracker source observes tickets"
 #: How fresh a subject's observation is (DESIGN §35).
 type Freshness = Literal["fresh", "stale", "unobserved"]
 
@@ -49,20 +48,23 @@ type Freshness = Literal["fresh", "stale", "unobserved"]
 class ObservationsState(TypedDict):
     """The state block's `observations`: the world as the connectors last read it, each subject with its age.
 
-    `review_query` only when `review.query` is set.
+    `review_query` only when `review.query` is set, and `review_prs` only when reviews are on: the overseer reads no
+    GitHub itself (DESIGN §39).
     """
 
     max_age_minutes: int
     max_new_items: int
     query: QueryState
     review_query: NotRequired[QueryState]
+    #: Each PR an open review request names, then each the review query found fresh, as the `vcs` source read it.
+    review_prs: NotRequired[list[ReviewPrObservation]]
     tickets: list[TicketObservation]
 
 
 class QueryState(TypedDict):
     """A query's result as its source last read it to the end: tracker keys, or the review query's PR URLs.
 
-    `why` says what is stale or unobserved; `read_at` and `result` are there whenever a run read it.
+    `why` says what is stale; `read_at` and `result` are there whenever a run read it.
     """
 
     observed: Freshness
@@ -145,6 +147,21 @@ class UnitObservation(TypedDict):
     reviews: NotRequired[list[ReviewItemState]]
     more_reviews: NotRequired[int]
     derived: NotRequired[list[str]]
+
+
+class ReviewPrObservation(TypedDict):
+    """A PR a review asks about, as the `vcs` source last read it. Only `url`, `observed`, and `why` when not fresh.
+
+    Its `checks` are summed up as CI, every one: which of the workspace's repositories it is in is the overseer's to
+    match, so no repository's check roles are applied.
+    """
+
+    url: str
+    observed: Freshness
+    why: NotRequired[str]
+    observed_at: NotRequired[str]
+    pr: NotRequired[PrObservation]
+    checks: NotRequired[ChecksState]
 
 
 class PrObservation(TypedDict):
@@ -245,21 +262,42 @@ def section(
     }
     if ctx.config.review.query.strip():
         found["review_query"] = reader.query(SourceKind.VCS)
+    # The overseer reads no GitHub (§39): the PRs it reviews are read here for it.
+    if review_requests.reviews_on(ctx.conn, ctx.config):
+        query = found.get("review_query")
+        fresh = query.get("result", []) if query is not None and query["observed"] == "fresh" else []
+        urls = dict.fromkeys([*(r.pr_url for r in review_requests.open_requests(ctx.conn)), *fresh])
+        found["review_prs"] = [reader.review_pr(url) for url in urls]
     return found
+
+
+def rendered(found: ObservationsState) -> dict[str, object]:
+    """`found` as the state block renders it: each observed PR without its URL, which the block says already.
+
+    A unit's PR is the `pr_url` of its unit in `tickets`, and a PR a review asks about has its `url` beside its `pr`.
+    The claims and the harness read `found` itself, with the URLs.
+
+    Returns:
+        A copy of `found` without those URLs.
+    """
+    tickets = [{**t, "units": [_without_url(u) for u in t["units"]]} if "units" in t else t for t in found["tickets"]]
+    shown: dict[str, object] = {**found, "tickets": tickets}
+    if "review_prs" in found:
+        shown["review_prs"] = [_without_url(p) for p in found["review_prs"]]
+    return shown
 
 
 def fresh_query(ctx: Context, now: datetime) -> list[str] | None:
     """The tracker query's result when the block shows it `fresh` at `now`: a source read it whole within its age.
 
-    The harness then records it as `canopy queried` would, so the overseer neither runs nor records it (DESIGN §6).
+    The harness then records it, so the overseer neither runs nor records it (DESIGN §6).
 
     Returns:
         The keys, in the order the source read them; None when no source read the query within
-        `connect.max_age_minutes`, or none observes tickets.
+        `connect.max_age_minutes`.
     """
     run = _query_run(ctx.conn, SourceKind.TRACKER, "query_result")
-    tracked = ctx.config.connect.observes_tickets()
-    found = _query_state(run, SourceKind.TRACKER, tracked=tracked, cutoff=_cutoff(ctx, now))
+    found = _query_state(run, SourceKind.TRACKER, cutoff=_cutoff(ctx, now))
     return found.get("result") if found["observed"] == "fresh" else None
 
 
@@ -306,8 +344,6 @@ class Reader:
     #: The tick's derivation, by ticket and unit (None for the ticket's own).
     derived: Mapping[tuple[str, str | None], phases.Derived]
     runs: Mapping[SourceKind, records.ConnectorRun]
-    #: Whether a `tracker` source observes tickets at all.
-    tracked: bool
 
     @classmethod
     def read(
@@ -333,7 +369,7 @@ class Reader:
         tracker = runs.get(SourceKind.TRACKER)
         queried = [] if tracker is None else _result(tracker.query_result)
         keys: list[str] = sorted(set(listed) | (set(queried) - stopped - done))
-        journal = {t.key: t for t in records.fetch_all(conn, records.Ticket, sql.select("*").from_("tickets"))}
+        journal = {t.key: t for t in records.select(records.Ticket).all(conn)}
         comments: dict[str, list[records.ObservedComment]] = {}
         # In the order they were first observed, as their numbers say (DESIGN §35).
         query = (
@@ -345,30 +381,23 @@ class Reader:
         for c in records.fetch_all(conn, records.ObservedComment, query):
             comments.setdefault(c.ticket, []).append(c)
         checks: dict[str, list[records.ObservedCheck]] = {}
-        for c in records.fetch_all(
-            conn,
-            records.ObservedCheck,
-            sql.select("*").from_("observed_checks").order_by("name"),
-        ):
+        for c in records.select(records.ObservedCheck).order_by("name").all(conn):
             checks.setdefault(c.pr_url, []).append(c)
         reviews: dict[str, list[records.ObservedReview]] = {}
         query = sql.select("*").from_("observed_reviews").order_by("pr_url, created_at, id")
         for r in records.fetch_all(conn, records.ObservedReview, query):
             reviews.setdefault(r.pr_url, []).append(r)
         branches: dict[str, list[records.ObservedBranch]] = {}
-        for b in records.fetch_all(conn, records.ObservedBranch, sql.select("*").from_("observed_branches")):
+        for b in records.select(records.ObservedBranch).all(conn):
             branches.setdefault(b.repository, []).append(b)
         return cls(
             ctx=ctx,
             cutoff=cutoff,
             keys=keys,
             journal=journal,
-            observed={
-                t.key: t
-                for t in records.fetch_all(conn, records.ObservedTicket, sql.select("*").from_("observed_tickets"))
-            },
+            observed={t.key: t for t in records.select(records.ObservedTicket).all(conn)},
             comments=comments,
-            prs={p.url: p for p in records.fetch_all(conn, records.ObservedPr, sql.select("*").from_("observed_prs"))},
+            prs={p.url: p for p in records.select(records.ObservedPr).all(conn)},
             checks=checks,
             reviews=reviews,
             branches=branches,
@@ -376,7 +405,6 @@ class Reader:
             units_of=db.all_units(conn),
             derived={(d.ticket_key, d.repo): d for d in derived},
             runs=runs,
-            tracked=ctx.config.connect.observes_tickets(),
         )
 
     # The queries
@@ -387,7 +415,27 @@ class Reader:
         Returns:
             Its freshness, and the result when a run read it.
         """
-        return _query_state(self.runs.get(kind), kind, tracked=self.tracked, cutoff=self.cutoff)
+        return _query_state(self.runs.get(kind), kind, cutoff=self.cutoff)
+
+    def review_pr(self, url: str) -> ReviewPrObservation:
+        """A PR a review asks about: its state, head, and checks at its head, as last read whole.
+
+        Returns:
+            The PR's entry.
+        """
+        if not observe.is_pr_url(url):
+            return {"url": url, "observed": "unobserved", "why": f"{url} is not a PR's URL, so it is not observed"}
+        pr = self.prs.get(url)
+        why = self._age(url, pr)
+        if why is not None or pr is None:
+            return {"url": url, "observed": "stale", "why": why or f"{url} never observed"}
+        return {
+            "url": url,
+            "observed": "fresh",
+            "observed_at": pr.observed_at,
+            "pr": _pr(url, pr),
+            "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], {}),
+        }
 
     # A ticket
 
@@ -398,7 +446,7 @@ class Reader:
             The ticket's entry.
         """
         seen = self.observed.get(key)
-        why = NO_TRACKER if not self.tracked else self._age(key, seen)
+        why = self._age(key, seen)
         if why is None and seen is not None:
             labels = phases.labels_of(seen)
             private = conversation.is_started(conversation.start_of(self.ctx.conn, key))
@@ -413,7 +461,7 @@ class Reader:
                 return self._candidate(key, seen, labels)
         return {
             "key": key,
-            "observed": "unobserved" if why == NO_TRACKER else "stale",
+            "observed": "stale",
             "why": why or f"{key} never observed",
             "units": self.units(key),
         }
@@ -545,16 +593,7 @@ class Reader:
             "repo": repo,
             "observed": "fresh",
             "observed_at": pr.observed_at,
-            "pr": {
-                "url": url,
-                "state": pr.state,
-                "head": pr.head_sha,
-                "base": pr.base_ref,
-                "draft": pr.draft,
-                "mergeable": pr.mergeable,
-                "mergeable_state": pr.mergeable_state,
-                "author": pr.author,
-            },
+            "pr": _pr(url, pr),
             "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], roles),
             "verdicts": _verdicts(self.reviews.get(url, []), trusted),
             "reviews": [self._review(r, trusted) for r in new[:MAX_NEW_ITEMS]],
@@ -581,25 +620,37 @@ class Reader:
         return found
 
 
+def _pr(url: str, pr: records.ObservedPr) -> PrObservation:
+    return {
+        "url": url,
+        "state": pr.state,
+        "head": pr.head_sha,
+        "base": pr.base_ref,
+        "draft": pr.draft,
+        "mergeable": pr.mergeable,
+        "mergeable_state": pr.mergeable_state,
+        "author": pr.author,
+    }
+
+
+def _without_url(entry: UnitObservation | ReviewPrObservation) -> dict[str, object]:
+    pr = entry.get("pr")
+    if pr is None:
+        return dict(entry)
+    return {**entry, "pr": {k: v for k, v in pr.items() if k != "url"}}
+
+
 def _cutoff(ctx: Context, now: datetime) -> datetime:
     # Before this, an observation is stale.
     return now - timedelta(minutes=ctx.config.connect.max_age_minutes)
 
 
-def _query_state(
-    run: records.ConnectorRun | None,
-    kind: SourceKind,
-    *,
-    tracked: bool,
-    cutoff: datetime,
-) -> QueryState:
+def _query_state(run: records.ConnectorRun | None, kind: SourceKind, *, cutoff: datetime) -> QueryState:
     """A query's result as `run`, the newest run of `kind`'s source that read it to the end, left it.
 
     Returns:
         Its freshness, and the result when a run read it.
     """
-    if kind is SourceKind.TRACKER and not tracked:
-        return {"observed": "unobserved", "why": NO_TRACKER}
     if run is None:
         return {"observed": "stale", "why": "never read to its end"}
     found: QueryState = {"observed": "fresh", "read_at": run.ended_at, "result": _result(_query_of(run, kind))}
@@ -627,14 +678,12 @@ def _query_run(
     kind: SourceKind,
     column: Literal["query_result", "review_query_result"],
 ) -> records.ConnectorRun | None:
-    return records.fetch_one(
-        conn,
-        records.ConnectorRun,
-        sql.select("*")
-        .from_("connector_runs")
+    return (
+        records.select(records.ConnectorRun)
         .where("kind = ? AND {} IS NOT NULL", kind, sql.name(column))
         .order_by("id DESC")
-        .limit(1),
+        .limit(1)
+        .one(conn)
     )
 
 

@@ -233,6 +233,23 @@
     }
 }
 
+/* A barber pole's stripes move one tile along, left to right, so the loop is seamless (`animate-barber`). */
+@keyframes barber {
+    from {
+        background-position-x: 0;
+    }
+    to {
+        background-position-x: var(--barber-tile);
+    }
+}
+
+/* A fill wipes in from its left edge. */
+@keyframes wipe {
+    from {
+        clip-path: inset(0 100% 0 0);
+    }
+}
+
 @keyframes shimmer {
     from {
         background-position: 100% 0;
@@ -383,6 +400,104 @@
     }
 }
 
+/*
+ * What floats over the page (a dialog, a popover, a menu, a tooltip, a hover card) fades in growing a little from
+ * where it opens, its trigger's side for one anchored to a trigger, and fades out quicker. A tooltip that opens at
+ * once, as the pointer moves along a row of them, appears in place. The scrim under a dialog fades with it, and a
+ * sheet slides in from its edge. Each exit fills forwards, as a toast's does: Radix unmounts the box once it ends. A
+ * menu only floats in (`animate-float-in`) and goes at once: it closes on a choice, and the focus the choice moves,
+ * into the plan editor for one, must not wait on a menu still in the page.
+ */
+@keyframes float-in {
+    from {
+        opacity: 0;
+        transform: translate(var(--float-x, 0), var(--float-y, 0)) scale(0.96);
+    }
+}
+
+@keyframes float-out {
+    to {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+}
+
+@keyframes scrim-in {
+    from {
+        opacity: 0;
+    }
+}
+
+@keyframes scrim-out {
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes sheet-in {
+    from {
+        transform: translateX(-100%);
+    }
+}
+
+@keyframes sheet-out {
+    to {
+        transform: translateX(-100%);
+    }
+}
+
+@utility animate-float-in {
+    @media (prefers-reduced-motion: no-preference) {
+        &[data-side='bottom'] {
+            --float-y: -4px;
+        }
+        &[data-side='top'] {
+            --float-y: 4px;
+        }
+        &[data-side='left'] {
+            --float-x: 4px;
+        }
+        &[data-side='right'] {
+            --float-x: -4px;
+        }
+        &[data-state='open'],
+        &[data-state='delayed-open'] {
+            animation: float-in 160ms cubic-bezier(0.2, 0, 0, 1) backwards;
+        }
+    }
+}
+
+@utility animate-float {
+    @apply animate-float-in;
+    @media (prefers-reduced-motion: no-preference) {
+        &[data-state='closed'] {
+            animation: float-out 120ms cubic-bezier(0.2, 0, 0, 1) forwards;
+        }
+    }
+}
+
+@utility animate-scrim {
+    @media (prefers-reduced-motion: no-preference) {
+        &[data-state='open'] {
+            animation: scrim-in 160ms cubic-bezier(0.2, 0, 0, 1) backwards;
+        }
+        &[data-state='closed'] {
+            animation: scrim-out 120ms cubic-bezier(0.2, 0, 0, 1) forwards;
+        }
+    }
+}
+
+@utility animate-sheet {
+    @media (prefers-reduced-motion: no-preference) {
+        &[data-state='open'] {
+            animation: sheet-in 240ms cubic-bezier(0.2, 0, 0, 1) backwards;
+        }
+        &[data-state='closed'] {
+            animation: sheet-out 160ms cubic-bezier(0.2, 0, 0, 1) forwards;
+        }
+    }
+}
+
 @utility animate-ripple {
     opacity: 0;
     @media (prefers-reduced-motion: no-preference) {
@@ -402,22 +517,61 @@
 }
 
 /*
+ * The aurora along the header's foot: the nav's section colors, in the nav's order (`SECTIONS` in `lib/sections.ts`),
+ * so the header reads as the rail turned on its side. Settings, out of the nav, is out of it too. A palette may give it
+ * a form of its own (`tokens.css`): another image (`--aurora-image`), another height (`--aurora-height`), and a bloom,
+ * a blurred copy of it over it (`--aurora-bloom`).
+ */
+@utility aurora {
+    height: var(--aurora-height, 0.125rem);
+    background-image: var(
+        --aurora-image,
+        linear-gradient(
+            90deg,
+            var(--section-attention),
+            var(--section-tickets),
+            var(--section-tasks),
+            var(--section-pull-requests),
+            var(--section-runs),
+            var(--section-chores),
+            var(--section-reports),
+            var(--section-memory)
+        )
+    );
+    &::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: inherit;
+        filter: var(--aurora-bloom, none);
+        opacity: var(--aurora-bloom-opacity, 0);
+    }
+}
+
+/*
  * The header's name, in the aurora's colors: from the logo's accent through the header's foot to its end. The
  * gradient runs twice the name's width and back, so a period of `flow` ends where it began. Printed, where a
- * background may not be, it is plain text.
+ * background may not be, it is plain text. A palette may give it a form of its own (`tokens.css`): another image
+ * (`--wordmark-image`) painted behind the letters (`--wordmark-clip`) in an ink of their own (`--wordmark-ink`), a
+ * frame around it drawn as a shadow, so it takes no room (`--wordmark-frame`), and a glow (`--wordmark-glow`).
  */
 @utility wordmark {
-    background-image: linear-gradient(
-        90deg,
-        var(--accent),
-        var(--section-pull-requests) 25%,
-        var(--section-tickets) 50%,
-        var(--section-pull-requests) 75%,
-        var(--accent)
+    background-image: var(
+        --wordmark-image,
+        linear-gradient(
+            90deg,
+            var(--accent),
+            var(--section-pull-requests) 25%,
+            var(--section-tickets) 50%,
+            var(--section-pull-requests) 75%,
+            var(--accent)
+        )
     );
     background-size: 200% 100%;
-    background-clip: text;
-    color: transparent;
+    background-clip: var(--wordmark-clip, text);
+    color: var(--wordmark-ink, transparent);
+    box-shadow: var(--wordmark-frame, none);
+    filter: var(--wordmark-glow, none);
     /* It has no capitals or ascenders, so centered on its line its letters sit low: trimmed to its x-height, the row
     centers what shows, beside the logo's dot and the pills' capitals. The gradient paints only the box, so a padding
     as deep as the descenders takes it under them, and a margin as deep takes the padding back out of the layout. */
@@ -427,6 +581,8 @@
     @media print {
         background: none;
         color: inherit;
+        box-shadow: none;
+        filter: none;
     }
 }
 
@@ -1027,6 +1183,99 @@
 @utility rave-flick {
     @media (prefers-reduced-motion: no-preference) {
         animation: rave-flick 0.6s steps(1) infinite;
+    }
+}
+
+/*
+ * A tile of 2048 (src/components/shell/game-2048.tsx), an Easter egg, by its number (`data-tile`): a tint of a flair
+ * color over the raised surface, a new hue every two numbers and deeper within each, in the foreground's text, which
+ * the tints stay light enough to read. The goal is the accent, in the accent's own text. A tile just made, added or
+ * merged, pops.
+ */
+@utility game-tile {
+    --tile-hue: var(--surface-raised);
+    --tile-mix: 0%;
+    background-color: color-mix(in oklch, var(--tile-hue) var(--tile-mix), var(--surface-raised));
+    color: var(--foreground);
+    &[data-tile='4'] {
+        --tile-hue: var(--flair-cyan);
+        --tile-mix: 18%;
+    }
+    &[data-tile='8'] {
+        --tile-hue: var(--flair-cyan);
+        --tile-mix: 34%;
+    }
+    &[data-tile='16'] {
+        --tile-hue: var(--flair-green);
+        --tile-mix: 24%;
+    }
+    &[data-tile='32'] {
+        --tile-hue: var(--flair-green);
+        --tile-mix: 40%;
+    }
+    &[data-tile='64'] {
+        --tile-hue: var(--flair-yellow);
+        --tile-mix: 30%;
+    }
+    &[data-tile='128'] {
+        --tile-hue: var(--flair-yellow);
+        --tile-mix: 46%;
+    }
+    &[data-tile='256'] {
+        --tile-hue: var(--flair-red);
+        --tile-mix: 24%;
+    }
+    &[data-tile='512'] {
+        --tile-hue: var(--flair-red);
+        --tile-mix: 38%;
+    }
+    &[data-tile='1024'] {
+        --tile-hue: var(--flair-purple);
+        --tile-mix: 30%;
+    }
+    &[data-tile='2048'] {
+        background-color: var(--accent);
+        color: var(--accent-foreground);
+    }
+    &[data-tile='big'] {
+        --tile-hue: var(--flair-purple);
+        --tile-mix: 48%;
+    }
+    &[data-fresh] {
+        @media (prefers-reduced-motion: no-preference) {
+            animation: pop 160ms cubic-bezier(0.2, 0, 0, 1) backwards;
+        }
+    }
+}
+
+/*
+ * A working step's fill in a progress meter while its run runs: a barber pole, its diagonal stripes a veil of the
+ * page's background over the fill, so they read lighter in light and darker in dark, drifting toward the work still to
+ * do. It wipes in from the left as it first shows. At rest the stripes stand still where they start.
+ */
+@utility animate-barber {
+    --barber-tile: 8px;
+    @media (prefers-reduced-motion: no-preference) {
+        --barber-veil: color-mix(in oklch, var(--color-background) 38%, transparent);
+        background-image: linear-gradient(
+            -45deg,
+            var(--barber-veil) 25%,
+            transparent 25% 50%,
+            var(--barber-veil) 50% 75%,
+            transparent 75%
+        );
+        background-size: var(--barber-tile) var(--barber-tile);
+        animation:
+            wipe 600ms cubic-bezier(0.2, 0, 0, 1) backwards,
+            barber 900ms linear infinite;
+    }
+}
+
+/* A reply's `seen` as a tick reads it while the page shows it (src/components/conversation.tsx): it pops in once. */
+@utility animate-receipt {
+    display: inline-flex;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: pop 240ms cubic-bezier(0.2, 0, 0, 1) backwards;
     }
 }
 

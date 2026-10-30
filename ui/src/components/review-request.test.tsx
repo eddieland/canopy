@@ -17,6 +17,7 @@ const OPEN: ReviewRequest = {
     ended_at: null,
     end_reason: null,
     notes: null,
+    model: null,
     personas: [],
 }
 const ENDED: ReviewRequest = { ...OPEN, ended_at: '2026-10-08T12:00:00Z', end_reason: 'merged' }

@@ -14,9 +14,10 @@ from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, th, turn_off_auto_maintenance
 from tests.canopy.helpers import (
     LABEL,
+    Called,
     InlineRunner,
     agent_runs,
-    canopy,
+    calls,
     decisions,
     present,
     waits,
@@ -25,8 +26,9 @@ from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, git
 
 
-def dispatch(key: str, *args: str) -> list[str]:
-    return ["dispatch", key, "--label", LABEL, "--kind", "implement", *args]
+def dispatches_nowhere(key: str) -> Called:
+    """The overseer dispatches an `implement` of `key` naming no repository, which a workspace of several refuses."""
+    return calls("canopy_dispatch", key=key, kind=str(RunKind.IMPLEMENT), label=LABEL)
 
 
 def with_docs(ws: Ws) -> None:
@@ -108,7 +110,10 @@ def test_the_map_is_validated(ws: Ws, canopy_env: CanopyEnv, table: str, error: 
         load_both(ws.root, canopy_env.user_file)
 
 
-@pytest.mark.parametrize("entry", ["", "/etc/", "a/../b", "./a", "a//b", "a\nb"])
+@pytest.mark.parametrize(
+    "entry",
+    ["", "/etc/", "a/../b", "../x", "./a", "a//b", "a\nb", "a**/b", "**x", "a/***", "[ab]/x", "a\\*"],
+)
 def test_a_high_impact_path_is_a_path_from_the_repositorys_root(ws: Ws, entry: str) -> None:
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(
         map_text()
@@ -126,6 +131,16 @@ def test_a_repositorys_high_impact_paths_are_read_from_its_table(ws: Ws) -> None
     )
     found = {r.name: r.high_impact_paths for r in workspace.load(ws.root).repos}
     assert found == {"api": (".agents/", "docs/TRUST_MODEL.md"), "web": ()}
+
+
+def test_a_high_impact_path_may_be_a_pattern(ws: Ws) -> None:
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(
+        map_text()
+        + '\n[repos.api]\nurl = "https://x.test/a.git"\n'
+        + 'high_impact_paths = ["**/OWNERS", "services/*/migrations/", "v?/**"]\n',
+    )
+    (repo,) = workspace.load(ws.root).repos
+    assert repo.high_impact_paths == ("**/OWNERS", "services/*/migrations/", "v?/**")
 
 
 def test_a_repositorys_checks_have_the_roles_its_table_gives_them(ws: Ws) -> None:
@@ -239,7 +254,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
 ) -> None:
     with_docs(ws)
     (ws.root / "MAP.md").write_text("# map\n")
-    ticked = ws_scenario.tick(dispatches(repo="api"), canopy(*dispatch("PROJ-2")), dry_run=True)
+    ticked = ws_scenario.tick(dispatches(repo="api"), dispatches_nowhere("PROJ-2"), dry_run=True)
 
     [run] = agent_runs(agent_log)
     assert run["cwd"] == str(ws.root)
@@ -268,7 +283,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(
         ("dispatch:implement", f"dry run: not dispatched; would work on agent/PROJ-1-work in api; label {LABEL}"),
         (
             "refused:unknown_repo",
-            "repos is required (--repo): name the repositories for PROJ-2 (api, docs, web)",
+            "repos is required: name the repositories for PROJ-2 (api, docs, web)",
         ),
     ]
     [item] = attention.current(conn)
@@ -303,8 +318,8 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
 ) -> None:
     with_docs(ws)
     conn = ws_scenario.conn
-    assert ws_scenario.refuses(canopy(*dispatch("PROJ-1"))) == [
-        ("refused:unknown_repo", "repos is required (--repo): name the repositories for PROJ-1 (api, docs, web)"),
+    assert ws_scenario.refuses(dispatches_nowhere("PROJ-1")) == [
+        ("refused:unknown_repo", "repos is required: name the repositories for PROJ-1 (api, docs, web)"),
     ]
     assert ws_scenario.refuses(dispatches(repo="nope")) == [
         ("refused:unknown_repo", "'nope' is not a repository in this workspace (api, docs, web)"),
@@ -313,8 +328,8 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
     [(action, rationale)] = no_clone
     assert action == "refused:unknown_repo"
     assert rationale.startswith("docs has no clone at ")
-    assert "dispatch refused (unknown_repo)" in no_clone.printed.err
-    ws_scenario.overseer(*dispatch("PROJ-1", "--repo", "Bad"), code=2)  # not a name at all: a usage error
+    assert "dispatch refused (unknown_repo)" in no_clone.said.text
+    ws_scenario.overseer(dispatches(repo="Bad"), error=True)  # not a name at all: an invalid argument
 
     run = ws_scenario.run(dispatches(repo="api", slug="login"), worker=pushes("agent/PROJ-1-login"))
     [slot] = db.run_slots(conn, run.id)
@@ -337,13 +352,13 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
     ]
 
     # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
-    def resume(repo: str) -> list[str]:
+    def resume(repo: str) -> Called:
         return dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI], repo=repo)
 
     assert ws_scenario.refuses(resume("web")) == [
         (
             "refused:no_branch",
-            "PROJ-1 has no branch in web for resume to continue; dispatch implement with repos web (--repo web)",
+            "PROJ-1 has no branch in web for resume to continue; dispatch implement with repos web",
         ),
     ]
     assert ws_scenario.run(resume("api"), worker=pushes("agent/PROJ-1-login")).status == "done"

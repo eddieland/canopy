@@ -73,7 +73,7 @@ Built. Aggressive release (§9, D005): waiting holds no slot and no capacity.
 
 ### R4. Feedback routing: CI failures and review comments go back to the agent that owns the PR
 
-Built in code (M3, M56), live acceptance pending. A `resume` continues the ticket's branch and PR for whatever comes
+Built (M3, M56). A `resume` continues the ticket's branch and PR for whatever comes
 back to it, failed checks and review comments in one run, with cursors so each failure and comment is handled once (§7,
 §8), and one attempt limit and a CI cooldown in code (D030).
 
@@ -280,40 +280,40 @@ change in CI makes the plan stale, and canopy plans again, once the PR has gone 
 
 ### R22. Skip the plan for trivial work
 
-Deferred by the operator (M55, 2026-10-20): in use, triage judged too few tickets trivial for its runs to save what they
-cost, so it was removed, and every ticket `policy.plan` plans is planned, trivial or not; the operator still skips one
-ticket's plan with `canopy plan KEY --skip` (D126). The approval half is met another way (§25, 2026-10-20): under
-`policy.planner_may_approve` the planner may say its plan needs no review, so the plan run stays and the click goes.
+Built another way (M55, §25): under `policy.planner_may_approve` the planner may say its plan needs no review, so the
+plan run stays and the operator's click goes. The cheaper judge before the plan was built and removed: it judged too few
+tickets trivial for its runs to save what they cost, so every ticket `policy.plan` plans is planned, trivial or not; the
+operator still skips one ticket's plan with `canopy plan KEY --skip` (D126).
 Written down 2026-10-17. With plans on (R18, R21), an obvious change
 still costs a planner run and the operator's approval. As an option, a smaller, cheaper agent should judge a change
 trivial, without the operator having to say what that means (2026-10-19), and let it go ahead unplanned, without asking
 the operator first. When it is unsure, or fails, the work is planned as before. A waived change canopy's own reviewer
 judges high impact is called out to the operator; its size alone is not, since size says little about risk.
 
-### R23. Canary a model on one ticket
+### R23. Override a ticket's model
 
-Partial (M58, §13, Each agent's model): each agent's default model is set in `[runtime.models]`, a worker run records
-it and the models that served it, and a template's `--model` is refused, so a session runs the model asked for or
-fails before its first call. The per-ticket override, the canary itself, is still to come.
+Built (M58, §13, Each agent's model): each agent's default model is set in `[runtime.models]`, and the operator alone
+overrides it per ticket (`canopy model`, or the ticket's page), checked against the runtime's list. A run records the
+model it asked for and the models that served it, spend splits by model, and a template's `--model` is refused, so a
+session runs the model asked for or fails before its first call.
 Written down 2026-10-19, from issue #418. The operator wants to try a model change on one ticket before
 every worker takes it, by running that ticket's workers on another model and comparing the result. Today a worker's
 model is OpenCode's default unless the operator's command template names one, which then applies to every worker run,
 and the journal does not record which model a run used. canopy should choose the model itself: a default the operator
 sets, and an override per ticket that only the operator can set, never the overseer or a worker, checked against the
 models OpenCode has. Each run should record the model it was given, and the one that served it where OpenCode says so,
-and spend should split by model, so that the canary can be compared.
+and spend should split by model, so that a ticket's runs on its override can be compared.
 
 ### R24. Personas for planning, reviews, and implementation
 
-Partial (M60, §31): the default persona, the shipped ones, a persona per agent in private config, the override per
-ticket, and the operator's choice for one run or one review request are built; M60's live checks remain. Written down
-2026-10-19. The operator wants to give planning, reviews, or implementation a flair of its own by choosing a persona
-for the planner, the reviewer, or the workers: a short file of voice and
-emphasis, chosen by the operator alone, by default for each agent and per ticket. A default persona holds canopy's
-standard personality, taken out of the shipped prompts, so a chosen one replaces that voice rather than competing with
-it. A persona changes how an agent writes and what it weighs, never a guard, a contract, or a model. canopy ships a few,
-and the operator adds or shadows them in private config. Each run records which persona it had, so personas can be
-compared.
+Built (M60, §31): the default persona, the shipped ones, a persona per agent in private config, the override per ticket,
+and the operator's choice for one run or one review request. Written down 2026-10-19. The operator wants to give
+planning, reviews, or implementation a flair of its own by choosing a persona for the planner, the reviewer, or the
+workers: a short file of voice and emphasis, chosen by the operator alone, by default for each agent and per ticket. A
+default persona holds canopy's standard personality, taken out of the shipped prompts, so a chosen one replaces that
+voice rather than competing with it. A persona changes how an agent writes and what it weighs, never a guard, a
+contract, or a model. canopy ships a few, and the operator adds or shadows them in private config. Each run records
+which persona it had, so personas can be compared.
 
 ### R25. One-off private tasks, about no ticket
 
@@ -333,6 +333,17 @@ its next run as review feedback does, and the worker's revision should answer th
 hosted platform for the operator's organization that is its own program, not part of canopy; or, for the operator
 alone, a local store canopy ships that serves the same tools. canopy reaches Louvre through the agent runtime's MCP
 and a connector, with the operator's own token, and pulls comments rather than listening for them, so H1 holds.
+
+### R27. Rules no linter checks, asked before the push
+
+Gap (M66, §42). Written down 2026-10-29. The team has rules its architect keeps asking for that `AGENTS.md` states and
+no linter checks; the operator's standing worker instructions emphasize them, and workers still miss them, as
+reviewers do, canopy's adversarial one included, which is asked for defects and weighs a rule among the whole change.
+Asked one plain question of one diff, an agent answers it reliably. The operator wants that question asked at the
+moment it matters, once the worker has pushed and before it finishes, with its answer to each rule recorded, so the
+nits are fixed before a person reads the PR and the list earns its items; and, if that is not enough or for PRs
+workers did not write, a second review that asks the same list of a PR. The rules are a repository's: a workspace's
+repositories differ in language and team, so each has its own list (2026-10-30).
 
 ## Nice to have
 

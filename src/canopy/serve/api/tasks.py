@@ -13,9 +13,9 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 
 from canopy.core import conversation
-from canopy.core import tasks as task_rows
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
+from canopy.runs import tasks as task_rows
 from canopy.serve import task_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TaskId, TaskRunId, not_found

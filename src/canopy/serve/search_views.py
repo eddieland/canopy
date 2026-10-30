@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, search
+from canopy.core import db
+from canopy.serve import search
 from canopy.serve.schema.search import SearchHit, SearchResults
 
 if TYPE_CHECKING:

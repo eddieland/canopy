@@ -60,7 +60,13 @@ describe('TaskStory', () => {
         const instruction = screen.getByTestId('instruction')
         expect(instruction.textContent).toContain('task:4')
         expect(instruction.textContent).toContain('instruction via cli')
-        expect(instruction.textContent).toContain('Rename the `billing_v1` feature flag')
+        // Its words as written, its `code` set as code.
+        expect(instruction.textContent).toContain('Rename the billing_v1 feature flag')
+        expect(
+            within(instruction)
+                .getAllByRole('code')
+                .map((code) => code.textContent),
+        ).toEqual(['billing_v1', 'billing_legacy'])
         // Each message names the run that wrote it within its task, opening the run's page.
         const report = screen.getByTestId('message-12')
         expect(report.textContent).toContain('report (task:4#5)')

@@ -4,8 +4,9 @@ Only the keys `EDITABLE` names, never a section's wildcard: a key added to a sec
 is named here. A limit may be raised or lowered, but the page cannot loosen one past its bound, a count's ceiling or a
 pace's floor; the file can set any value, and the page may still tighten one the file set past its bound. A trust key
 moves only toward stricter: a config write outlives the listener secret, so a replier added through a stolen session
-would go on steering workers after a new secret ended it (TRUST_MODEL T8). The budget's alerts are set whole, to
-anything the loader takes: none of their values silences the 100% alert, which is always sent.
+would go on steering workers after a new secret ended it (TRUST_MODEL T8): a list only loses entries, a switch or a
+choice moves only to a stricter side, and a count only goes down. The budget's alerts are set whole, to anything the
+loader takes: none of their values silences the 100% alert, which is always sent.
 
 A save writes the workspace's private file only (M49), never the workspace file (TRUST_MODEL T7) nor the user file,
 which serves every workspace. A key whose value comes from the user file is written to the private file, where it
@@ -26,7 +27,7 @@ import stat
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING, Literal
 
 import tomlkit
 import tomlkit.exceptions
@@ -36,7 +37,7 @@ from canopy.core import config, conversation
 from canopy.infra import lock
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
 
     from canopy.core.config import Config
 
@@ -65,6 +66,8 @@ class Editable:
     bound: int | None = None
     # Which way loosens a limit: a count's higher spends more, a pace's lower does.
     looser: Literal["higher", "lower"] | None = None
+    #: A stricter choice's values, loosest first: the page may move it only later in the list.
+    choices: Sequence[str] = ()
 
 
 def _count(name: str, ceiling: int) -> Editable:
@@ -75,6 +78,10 @@ def _pace(name: str, floor: int) -> Editable:
     return Editable(name, "limit", floor, "lower")
 
 
+def _choice(name: str, *choices: str) -> Editable:
+    return Editable(name, "stricter", choices=choices)
+
+
 # In the order the page shows them. The bounds stop a stolen session from turning one operator's spend up without limit:
 # a raise within them outlives a new secret, a residual the page and the log show (TRUST_MODEL T8). They are set well
 # above what one machine runs today, so the page is for the operator's real changes and the file for the rest.
@@ -83,27 +90,46 @@ EDITABLE: tuple[Editable, ...] = (
     _count("capacity.max_chores", 16),
     _count("capacity.max_reviews", 16),
     _count("capacity.max_reviews_per_day", 500),
+    _count("capacity.max_tasks", 16),
+    # A floor, as a pace's: a lower one lets ticks dispatch on a fuller disk, and 0 turns the check off.
+    _pace("loop.min_free_disk_mib", 512),
     _count("capacity.slots_per_repo", 32),
     # Each repository's entry is bounded alike; the request names only the repositories whose count changes.
     _count("capacity.repo_slots", 32),
     _count("policy.max_implement_attempts", 10),
     _count("policy.max_resume_attempts", 10),
     _count("policy.max_reviews_per_pr", 25),
+    _count("policy.max_plan_attempts", 10),
+    _count("policy.max_feedback_plan_attempts", 20),
+    _count("policy.max_revisions_per_draft", 10),
+    _count("policy.max_follow_ups", 20),
     # The page's bound is the key's own ceiling: attachments cost a run reading them, never another run.
     _count("policy.max_attachments", config.ATTACHMENTS_CEILING),
     _count("policy.max_attachment_kib", config.ATTACHMENT_KIB_CEILING),
     _count("policy.max_attachments_total_kib", config.ATTACHMENTS_TOTAL_KIB_CEILING),
     _pace("policy.ci_cooldown_minutes", 5),
+    _pace("policy.feedback_quiet_minutes", 2),
     _pace("loop.interval_minutes", 2),
     _pace("loop.idle_max_minutes", 2),
+    _pace("loop.min_gap_minutes", 1),
+    # A longer run may spend more: bounded as a count is.
+    _count("runtime.worker_timeout_minutes", 240),
+    _count("runtime.review_timeout_minutes", 120),
+    _count("runtime.overseer_timeout_minutes", 60),
     # Spends nothing itself, but a raised budget keeps a sink from hearing the month reached it: bounded the same way.
     _count("spend.monthly_budget_usd", 10000),
     # Free: an alert dropped is a warning less, but the 100% alert is always sent, whatever the list holds.
     Editable("spend.budget_alerts", "free"),
-    Editable("policy.stacking", "stricter"),
+    _choice("policy.stacking", "auto", "never"),
+    _choice("policy.plan", "off", "approve"),
+    _choice("policy.feedback_plan", "off", "approve"),
+    _choice("policy.planner_may_approve", "lenient", "normal", "strict", "off"),
     Editable("trust.authorized_repliers", "stricter"),
     Editable("trust.trusted_reviewers", "stricter"),
+    _choice("trust.review_replies", "post", "approve"),
     Editable("trust.rebase", "stricter"),
+    # Each kick rebases a PR's branch and pushes it with a lease: only fewer from the page.
+    Editable("trust.max_flaky_kicks", "stricter"),
     Editable("trust.commit_trailer", "stricter"),
 )
 BY_NAME = {e.name: e for e in EDITABLE}
@@ -492,7 +518,8 @@ def _stricter(key: Editable, was: Value, now: Value) -> bool:
     """Whether `now` is `was` or stricter, for a key that may move only toward stricter.
 
     Returns:
-        True for the same value, a switch moved to its stricter side, a list that only lost entries, or a later choice.
+        True for the same value, a switch moved to its stricter side, a list that only lost entries, a later choice,
+        or a lower count.
     """
     if now == was:
         return True
@@ -500,6 +527,7 @@ def _stricter(key: Editable, was: Value, now: Value) -> bool:
         return now is _STRICTER_BOOL[key.name]
     if isinstance(was, tuple) and isinstance(now, tuple):
         return set(now) <= set(was)
-    # A choice listed loosest first, as `policy.stacking`'s.
-    choices = get_args(config.SPECS[key.name].field.annotation)
-    return was in choices and now in choices and choices.index(now) > choices.index(was)
+    if key.choices:
+        return was in key.choices and now in key.choices and key.choices.index(now) > key.choices.index(was)
+    # A count, as `trust.max_flaky_kicks`: fewer is stricter. A switch is never one, though Python counts it an int.
+    return type(was) is int and type(now) is int and now < was

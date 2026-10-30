@@ -11,8 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import drafts, drafts_manage, observe, review_drafts_manage, sql
+from canopy.core import observe, review_drafts_manage, sql
 from canopy.core.vocab import DraftStatus, PrState
+from canopy.runs import drafts, drafts_manage
 
 if TYPE_CHECKING:
     import sqlite3
@@ -70,7 +71,7 @@ WAITING_REASON = "drafts_waiting"
 
 @dataclass(frozen=True)
 class Item:
-    """One `drafts_waiting` item: its ticket, its unit's repository, how many drafts wait, and its detail.
+    """One `drafts_waiting` item: its ticket, its unit's repository, how many drafts wait, its detail, and since when.
 
     The repository is None for a ticket's own draft.
     """
@@ -79,6 +80,8 @@ class Item:
     repo: str | None
     count: int
     detail: str
+    #: When the oldest of the drafts that wait was drafted: what the item's age runs from before a tick records it.
+    since: str
 
 
 def waiting(conn: sqlite3.Connection) -> list[Item]:
@@ -94,7 +97,7 @@ def waiting(conn: sqlite3.Connection) -> list[Item]:
         conn,
         sql.select(
             "d.ticket_key, d.repo, d.pr_url, count(*) AS n, sum(d.status = ?) AS unchecked, "
-            "sum(d.status = ?) AS staged",
+            "sum(d.status = ?) AS staged, min(d.created_at) AS since",
             DraftStatus.UNCHECKED,
             DraftStatus.STAGED,
         )
@@ -110,12 +113,12 @@ def waiting(conn: sqlite3.Connection) -> list[Item]:
         n, unchecked, staged = int(r["n"]), int(r["unchecked"]), int(r["staged"])
         what = f"{n} drafts wait on you" if n > 1 else "1 draft waits on you"
         if r["pr_url"] is None:
-            found.append(Item(str(r["ticket_key"]), None, n, f"{what}, for the ticket"))
+            found.append(Item(str(r["ticket_key"]), None, n, f"{what}, for the ticket", str(r["since"])))
             continue
         detail = f"{what}, for {r['pr_url']}"
         if staged:
             detail += f"; {staged} in the review you staged there, for you to submit on GitHub"
         if unchecked:
             detail += f"; its threads could not be read yet, so {unchecked} cannot be sent until they are"
-        found.append(Item(str(r["ticket_key"]), str(r["repo"]), n, detail))
+        found.append(Item(str(r["ticket_key"]), str(r["repo"]), n, detail, str(r["since"])))
     return found

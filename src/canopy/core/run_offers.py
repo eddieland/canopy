@@ -12,7 +12,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Final
 
-from canopy.core import db, records, sql
+from canopy.core import db, records
 from canopy.runtime import offerings
 
 if TYPE_CHECKING:
@@ -81,41 +81,34 @@ def record(conn: sqlite3.Connection, table: RunTable, run_id: int, offer: AgentO
     offered = [s for s in offer.servers if s.reach != "none"]
     rules = [(table, run_id, s.server, i, rule) for s in offered for i, rule in enumerate(s.exceptions)]
     with db.transaction(conn):
-        sql.execute(conn, sql.delete("run_offered_servers").where(_RUN, table, run_id))
-        sql.execute(conn, sql.delete("run_offered_server_rules").where(_RUN, table, run_id))
-        sql.execute(conn, sql.delete("run_offered_skills").where(_RUN, table, run_id))
-        sql.execute(conn, sql.delete("run_offered_tools").where(_RUN, table, run_id))
-        sql.execute_many(
+        records.delete(records.RunOfferedServer).where(_RUN, table, run_id).run(conn)
+        records.delete(records.RunOfferedServerRule).where(_RUN, table, run_id).run(conn)
+        records.delete(records.RunOfferedSkill).where(_RUN, table, run_id).run(conn)
+        records.delete(records.RunOfferedTool).where(_RUN, table, run_id).run(conn)
+        records.insert_rows(records.RunOfferedServer, ("run_table", "run_id", "server", "reach")).many(
             conn,
-            sql.insert_rows("run_offered_servers", ("run_table", "run_id", "server", "reach")),
             [(table, run_id, s.server, s.reach) for s in offered],
         )
-        sql.execute_many(
+        records.insert_rows(records.RunOfferedServerRule, ("run_table", "run_id", "server", "position", "rule")).many(
             conn,
-            sql.insert_rows("run_offered_server_rules", ("run_table", "run_id", "server", "position", "rule")),
             rules,
         )
-        sql.execute_many(
+        records.insert_rows(records.RunOfferedTool, ("run_table", "run_id", "tool")).many(
             conn,
-            sql.insert_rows("run_offered_tools", ("run_table", "run_id", "tool")),
             [(table, run_id, tool) for tool in offer.tools],
         )
-        sql.execute_many(
+        records.insert_rows(records.RunOfferedSkill, ("run_table", "run_id", "skill")).many(
             conn,
-            sql.insert_rows("run_offered_skills", ("run_table", "run_id", "skill")),
             [(table, run_id, skill) for skill in offer.skills],
         )
-        sql.execute(
-            conn,
-            sql.insert(
-                "run_offers",
-                run_table=table,
-                run_id=run_id,
-                agent=offer.agent or None,
-                error=offer.error,
-                asked_at=db.now(),
-            ).or_replace(),
-        )
+        records.insert(
+            records.RunOffer,
+            run_table=table,
+            run_id=run_id,
+            agent=offer.agent or None,
+            error=offer.error,
+            asked_at=db.now(),
+        ).or_replace().run(conn)
 
 
 def of_run(conn: sqlite3.Connection, table: RunTable, run_id: int) -> Offered | None:
@@ -124,20 +117,20 @@ def of_run(conn: sqlite3.Connection, table: RunTable, run_id: int) -> Offered | 
     Returns:
         The ask and what it found; None for a run canopy never asked about.
     """
-    asked = records.fetch_one(conn, records.RunOffer, sql.select("*").from_("run_offers").where(_RUN, table, run_id))
+    asked = records.select(records.RunOffer).where(_RUN, table, run_id).one(conn)
     if asked is None:
         return None
-    servers = sql.select("*").from_("run_offered_servers").where(_RUN, table, run_id).order_by("server")
-    rules = sql.select("*").from_("run_offered_server_rules").where(_RUN, table, run_id).order_by("server, position")
-    skills = sql.select("*").from_("run_offered_skills").where(_RUN, table, run_id).order_by("skill")
-    tools = sql.select("*").from_("run_offered_tools").where(_RUN, table, run_id).order_by("tool")
+    servers = records.select(records.RunOfferedServer).where(_RUN, table, run_id).order_by("server")
+    rules = records.select(records.RunOfferedServerRule).where(_RUN, table, run_id).order_by("server, position")
+    skills = records.select(records.RunOfferedSkill).where(_RUN, table, run_id).order_by("skill")
+    tools = records.select(records.RunOfferedTool).where(_RUN, table, run_id).order_by("tool")
     server_rules: dict[str, list[str]] = {}
-    for rule in records.fetch_all(conn, records.RunOfferedServerRule, rules):
+    for rule in rules.all(conn):
         server_rules.setdefault(rule.server, []).append(rule.rule)
     return Offered(
         asked,
-        records.fetch_all(conn, records.RunOfferedServer, servers),
+        servers.all(conn),
         server_rules,
-        records.fetch_all(conn, records.RunOfferedSkill, skills),
-        records.fetch_all(conn, records.RunOfferedTool, tools),
+        skills.all(conn),
+        tools.all(conn),
     )

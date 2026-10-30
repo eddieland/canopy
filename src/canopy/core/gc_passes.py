@@ -56,8 +56,8 @@ def record(
     """
     status = GcPassStatus.OK if error is None else GcPassStatus.FAILED
     counted = {kind: {r.unit: r.count, "bytes": r.bytes} for kind, r in removed.items()}
-    statement = sql.insert(
-        "gc_passes",
+    statement = records.insert(
+        records.GcPass,
         tick_id=tick_id,
         started_at=db.format_time(started_at),
         ended_at=db.now(),
@@ -70,7 +70,7 @@ def record(
         failures=failures,
         error=error,
     ).returning("id")
-    return int(sql.execute(conn, statement).fetchone()[0])
+    return int(statement.run(conn).fetchone()[0])
 
 
 def latest(conn: sqlite3.Connection) -> records.GcPass | None:
@@ -79,7 +79,7 @@ def latest(conn: sqlite3.Connection) -> records.GcPass | None:
     Returns:
         The pass, or None before the first.
     """
-    return records.fetch_one(conn, records.GcPass, sql.select("*").from_("gc_passes").order_by("id DESC").limit(1))
+    return records.select(records.GcPass).order_by("id DESC").limit(1).one(conn)
 
 
 def removed_after(conn: sqlite3.Connection, ended_at: str | None, rule: Rule) -> int | None:

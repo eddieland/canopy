@@ -9,39 +9,44 @@ from pathlib import Path
 
 import pytest
 
-from canopy.cli.main import main
-from canopy.core import db, pr_list
-from canopy.core.vocab import Phase, ResumeReason, RunKind
+from canopy.core import db
+from canopy.core.vocab import NumberedItem, Phase, ResumeReason, RunKind
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runs import desks
 from canopy.runs.dispatch import DISPATCH_LOCK
+from canopy.serve import pr_list
 from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import (
     BRANCH,
     LABEL,
+    Called,
     InlineRunner,
+    Said,
     agent_runs,
     decisions,
     in_tick,
     last_tick,
+    overseer_calls,
     pool_statuses,
     present,
+    raises,
+    ticket_sets,
+    tracker_holds,
     waits,
     worker_does,
 )
+from tests.canopy.observation_helpers import FRESH, number_of
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, sets_phase
 from tests.conftest import executable, git
 
 #: The branch PROJ-1's first implement names, with its slug.
 LOGIN = "agent/PROJ-1-login"
 PRS = {"api": "https://x.test/api/pull/1", "web": "https://x.test/web/pull/2", "docs": "https://x.test/docs/pull/3"}
+#: PRs the tests' `vcs` source reads, where PRS name none it can.
+READ_PRS = {"api": "https://github.com/acme/api/pull/1", "web": "https://github.com/acme/web/pull/2"}
 # Each PR's own title as the worker reports it: web's spans lines, and docs is not one of the run's repositories.
 TITLES = {"api": "PROJ-1: add the endpoint", "web": "PROJ-1: call\n  the endpoint", "docs": "PROJ-1: document it"}
-
-
-def dispatch(key: str, *args: str, kind: str = "implement") -> list[str]:
-    return ["dispatch", key, "--label", LABEL, "--kind", kind, *args]
 
 
 def push_in(repo: str, message: str = "PROJ-1: the change") -> list[list[str]]:
@@ -95,13 +100,13 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
     # Each PR's own title is recorded by its URL, on one line; docs's is not.
     titles = {"api": TITLES["api"], "web": "PROJ-1: call the endpoint"}
     assert json.loads(run.row["result_json"])["pr_titles"] == titles
-    assert {r["url"]: r["pr_title"] for r in pr_list.pull_requests(conn, 10)} == {PRS[r]: t for r, t in titles.items()}
+    assert {r.url: r.pr_title for r in pr_list.pull_requests(conn, 10)} == {PRS[r]: t for r, t in titles.items()}
     [(action, rationale)] = decisions(conn, int(run.row["tick_id"]))
     assert action == "dispatch:implement"
     assert rationale == f"run 1: {BRANCH} in api at {slots['api']}, web at {slots['web']}; desk {desk}; label {LABEL}"
 
     prompt = run.prompt
-    assert f"ticket PROJ-1 in {desk}." in prompt
+    assert f"ticket PROJ-1 in {desk}, and your branch is " in prompt
     assert "This is a joint run over 2 repositories" in prompt
     assert f"- `api` at `{desk / 'api'}`: branch `{BRANCH}` from `main`; PR: not recorded;" in prompt
     assert f"- `web` at `{desk / 'web'}`: branch `{BRANCH}` from `main`; PR: not recorded;" in prompt
@@ -165,7 +170,7 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws_scenario: Scenari
     conn = ws_scenario.conn
     login = pushes(LOGIN)
 
-    def ci_fix(repo: str) -> list[str]:
+    def ci_fix(repo: str) -> Called:
         return dispatches(kind=RunKind.RESUME, repo=repo, reasons=[ResumeReason.CI])
 
     assert ws_scenario.run(dispatches(repo="api", slug="login"), worker=login).kind == RunKind.IMPLEMENT
@@ -173,7 +178,7 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws_scenario: Scenari
     assert ws_scenario.refuses(dispatches(repo="web", slug="other")) == [
         (
             "refused:bad_slug",
-            "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out slug (--slug)",
+            "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out slug",
         ),
     ]
     ws_scenario.run(dispatches(repo="web", slug="login"), worker=login)
@@ -209,11 +214,12 @@ def test_a_dispatch_reads_the_ticket_branch_under_the_dispatch_lock(ws: Ws, tree
     """A first implement that waited for the lock sees the branch another one named meanwhile, and may not rename it."""
     seed_pools(ws, treehouse_state)
     conn = ws.journal()
+    tracker_holds(conn)
     with in_tick(conn) as tick_id:
-        codes: list[int] = []
+        said: list[Said] = []
 
         def second() -> None:
-            codes.append(main(dispatch("PROJ-1", "--repo", "web", "--slug", "other"), runner=InlineRunner()))
+            said.append(overseer_calls(dispatches(repo="web", slug="other"), runner=InlineRunner()))
 
         with lock.hold(ws.state_dir / DISPATCH_LOCK, wait=True):
             waiting = threading.Thread(target=second)
@@ -223,83 +229,69 @@ def test_a_dispatch_reads_the_ticket_branch_under_the_dispatch_lock(ws: Ws, tree
             db.touch_ticket(conn, "PROJ-1", str(ws.root))
             conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", ("agent/PROJ-1-login", "PROJ-1"))
         waiting.join(timeout=30)
-        assert codes == [1]
+        assert [s.error for s in said] == [True]
         assert decisions(conn, tick_id) == [
             (
                 "refused:bad_slug",
-                "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out slug (--slug)",
+                "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out slug",
             ),
         ]
 
 
-def test_the_state_block_shows_each_unit(ws_scenario: Scenario) -> None:
+def test_the_state_block_shows_each_unit(ws_scenario: Scenario, github_state: Path) -> None:
+    # PRs the `vcs` source reads, so the ticket is listed to the overseer (DESIGN §39), web's with a failed check.
+    failed = {"name": "build", "status": "completed", "conclusion": "failure", "run_id": 9}
+    github_state.write_text(json.dumps({"prs": {READ_PRS["api"]: {}, READ_PRS["web"]: {"checks": [failed]}}}))
     ws_scenario.run(
         dispatches(repo=("api", "web")),
-        worker=worker_does(*push_in("api"), *push_in("web"), result=done(PRS)),
+        worker=worker_does(*push_in("api"), *push_in("web"), result=done(READ_PRS)),
     )
+    ci = number_of(ws_scenario.conn, NumberedItem.CHECK_RUN, 9, subject=READ_PRS["web"])
     # The overseer records web's phase and cursor, and the ticket's own; the next tick's state block shows them.
     ws_scenario.tick(
-        sets_phase("PROJ-1", Phase.CI_RED, repo="web", cursor="ci=9"),
-        sets_phase("PROJ-1", Phase.RUNNING, cursor="comment=c-1"),
+        sets_phase("PROJ-1", Phase.CI_RED, repo="web", cursor=f"ci={ci}"),
+        sets_phase("PROJ-1", Phase.RUNNING),
         *waits("PROJ-1"),
     )
     ws_scenario.tick(*waits("PROJ-1"), dry_run=True)
 
     [ticket] = ws_scenario.state()["tickets"]
-    assert (ticket["phase"], ticket["branch"], ticket["cursors"]) == (
-        "running",
-        BRANCH,
-        {"comment": "c-1", "message": None},
-    )
+    assert (ticket["phase"], ticket.get("cursors")) == ("running", None)
     no_limit = {"implement": 1, "resume": 0}
+    # What is null or empty, such as api's phase and cursors and either's cooldown, is left out, and the branch is
+    # said once, on the units.
+    assert "branch" not in ticket
     assert ticket["units"] == [
-        {
-            "repo": "api",
-            "branch": BRANCH,
-            "pr_url": PRS["api"],
-            "phase": None,
-            "cursors": {"review": None, "ci": None},
-            "attempts": no_limit,
-            "ci_cooldown_until": None,
-        },
+        {"repo": "api", "branch": BRANCH, "pr_url": READ_PRS["api"], "attempts": no_limit},
         {
             "repo": "web",
             "branch": BRANCH,
-            "pr_url": PRS["web"],
+            "pr_url": READ_PRS["web"],
             "phase": "ci_red",
-            "cursors": {"review": None, "ci": 9},
+            "cursors": {"ci": ci},
+            "cursor_items": {"ci": f"check run 9, first observed {FRESH}"},
             "attempts": no_limit,
-            "ci_cooldown_until": None,
         },
     ]
-    assert ticket["last_run"]["repos"] == [{"repo": "api", "base": "main"}, {"repo": "web", "base": "main"}]
+    # Unstacked, the run shows no base, and its branch is the units'.
+    assert sorted(ticket["last_run"]) == ["ended_at", "kind", "run_id", "status"]
 
 
 def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:
     conn = ws_scenario.conn
     with ws_scenario.ticking():
-        # A review or ci cursor is a unit's: of a ticket with no unit, in a workspace of several, it needs --repo.
+        # A review or ci cursor is a unit's: of a ticket with no unit, in a workspace of several, it needs a repo.
         reviewed = "4127"
-        refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--cursor", f"review={reviewed}", code=1)
-        assert refused.err == (
-            "Error: repo is required (--repo): a review cursor belongs to one unit, and PROJ-1 has no unit yet: name "
-            "one of api, web\n"
+        refused = ws_scenario.overseer(ticket_sets("PROJ-1", cursors={"review": reviewed}), error=True)
+        assert refused.text == (
+            "repo is required: a review cursor belongs to one unit, and PROJ-1 has no unit yet: name one of api, web"
         )
-        ws_scenario.overseer(*dispatch("PROJ-1", "--repo", "api", "--repo", "web", "--cursor", "ci=9"), code=2)
-        refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "nope", "--phase", "ci_red", code=1)
-        assert "'nope' is not a repository in this workspace (api, web)" in refused.err
-        updated = ws_scenario.overseer(
-            "ticket",
-            "set",
-            "PROJ-1",
-            "--repo",
-            "api",
-            "--cursor",
-            f"review={reviewed}",
-            "--phase",
-            "ci_red",
-        )
-        assert updated.out == "updated PROJ-1 (api)\n"
+        joint = ws_scenario.overseer(dispatches(repo=("api", "web"), cursors={"ci": "9"}), error=True)
+        assert "a ci cursor belongs to one unit, so repos names one" in joint.text
+        refused = ws_scenario.overseer(sets_phase("PROJ-1", Phase.CI_RED, repo="nope"), error=True)
+        assert "'nope' is not a repository in this workspace (api, web)" in refused.text
+        updated = ws_scenario.overseer(sets_phase("PROJ-1", Phase.CI_RED, repo="api", cursor=f"review={reviewed}"))
+        assert updated.text == "updated PROJ-1 (api)"
         [unit] = db.units(conn, "PROJ-1")
         assert (unit.repo, unit.phase, unit.review_cursor, unit.branch) == (
             "api",
@@ -309,25 +301,25 @@ def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:
         )
         ticket = present(db.get_ticket(conn, "PROJ-1"))
         assert ticket.phase is None  # a phase about the PR is the unit's
-        # The ticket's own phases are the ticket's, --repo or not.
-        ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "api", "--phase", "needs_human")
+        # The ticket's own phases are the ticket's, with a repo or not.
+        ws_scenario.overseer(sets_phase("PROJ-1", Phase.NEEDS_HUMAN, repo="api"))
         ticket = present(db.get_ticket(conn, "PROJ-1"))
         assert ticket.phase == "needs_human"
         assert [u.phase for u in db.units(conn, "PROJ-1")] == ["ci_red"]
-        # A phase about the PR with no --repo is its ticket's one unit's, and refused once the ticket has two.
-        updated = ws_scenario.overseer("ticket", "set", "PROJ-1", "--phase", "approved")
-        assert updated.out == "updated PROJ-1 (api)\n"
-        ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "web", "--phase", "ci_running")
-        refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--phase", "merged", code=1)
-        assert refused.err == (
-            "Error: repo is required (--repo): the merged phase belongs to one unit, and PROJ-1 has units in api, web\n"
+        # A phase about the PR with no repo is its ticket's one unit's, and refused once the ticket has two.
+        updated = ws_scenario.overseer(sets_phase("PROJ-1", Phase.APPROVED))
+        assert updated.text == "updated PROJ-1 (api)"
+        ws_scenario.overseer(sets_phase("PROJ-1", Phase.CI_RUNNING, repo="web"))
+        refused = ws_scenario.overseer(sets_phase("PROJ-1", Phase.MERGED), error=True)
+        assert refused.text == (
+            "repo is required: the merged phase belongs to one unit, and PROJ-1 has units in api, web"
         )
         assert [(u.repo, u.phase) for u in db.units(conn, "PROJ-1")] == [("api", "approved"), ("web", "ci_running")]
 
-        ws_scenario.overseer("attention", "PROJ-1", "needs_author", "--repo", "web", "--detail", PRS["web"])
-        ws_scenario.overseer("attention", "PROJ-1", "needs_author", "--repo", "api", "--detail", PRS["api"])
-        ws_scenario.overseer("attention", "PROJ-1", "multi_repo", "--detail", "api and web")
-        ws_scenario.overseer("attention", "PROJ-1", "needs_author", "--repo", "nope", "--detail", "x", code=1)
+        ws_scenario.overseer(raises("PROJ-1", "needs_author", PRS["web"], repo="web"))
+        ws_scenario.overseer(raises("PROJ-1", "needs_author", PRS["api"], repo="api"))
+        ws_scenario.overseer(raises("PROJ-1", "multi_repo", "api and web"))
+        ws_scenario.overseer(raises("PROJ-1", "needs_author", "x", repo="nope"), error=True)
     # Two units needing an author are two items: an item is its ticket, reason, and repository.
     assert [(i.subject, i.reason) for i in attention.current(conn)] == [
         ("PROJ-1", "multi_repo"),
@@ -339,9 +331,9 @@ def test_journal_commands_name_a_unit(ws_scenario: Scenario) -> None:
 def test_a_merge_conflict_is_a_units_phase(ws_scenario: Scenario) -> None:
     """A PR that conflicts with its base is `conflicted`, one unit's phase like the CI and review phases."""
     conn = ws_scenario.conn
-    refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--phase", "conflicted", code=1)
-    assert "repo is required (--repo): the conflicted phase belongs to one unit" in refused.err
-    ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "web", "--phase", "conflicted")
+    refused = ws_scenario.overseer(sets_phase("PROJ-1", Phase.CONFLICTED), error=True)
+    assert "repo is required: the conflicted phase belongs to one unit" in refused.text
+    ws_scenario.overseer(sets_phase("PROJ-1", Phase.CONFLICTED, repo="web"))
     [unit] = db.units(conn, "PROJ-1")
     assert (unit.repo, unit.phase) == ("web", "conflicted")
     ticket = present(db.get_ticket(conn, "PROJ-1"))
@@ -351,9 +343,9 @@ def test_a_merge_conflict_is_a_units_phase(ws_scenario: Scenario) -> None:
 def test_untrusted_review_is_a_units_phase(ws_scenario: Scenario) -> None:
     """Feedback on a PR from an untrusted reviewer is `untrusted_review`, the unit's phase like `changes_requested`."""
     conn = ws_scenario.conn
-    refused = ws_scenario.overseer("ticket", "set", "PROJ-1", "--phase", "untrusted_review", code=1)
-    assert "repo is required (--repo): the untrusted_review phase belongs to one unit" in refused.err
-    ws_scenario.overseer("ticket", "set", "PROJ-1", "--repo", "api", "--phase", "untrusted_review")
+    refused = ws_scenario.overseer(sets_phase("PROJ-1", Phase.UNTRUSTED_REVIEW), error=True)
+    assert "repo is required: the untrusted_review phase belongs to one unit" in refused.text
+    ws_scenario.overseer(sets_phase("PROJ-1", Phase.UNTRUSTED_REVIEW, repo="api"))
     [unit] = db.units(conn, "PROJ-1")
     assert (unit.repo, unit.phase) == ("api", "untrusted_review")
     ticket = present(db.get_ticket(conn, "PROJ-1"))
@@ -363,8 +355,8 @@ def test_untrusted_review_is_a_units_phase(ws_scenario: Scenario) -> None:
 def test_a_units_phase_and_cursor_need_no_repo_in_a_workspace_of_one(scenario: Scenario) -> None:
     """A unit's phase or cursor that names no repository is the workspace's one repository's, unit or not."""
     conn = scenario.conn
-    updated = scenario.overseer("ticket", "set", "PROJ-1", "--phase", "ci_red")
-    assert updated.out == "updated PROJ-1 (repo)\n"
+    updated = scenario.overseer(sets_phase("PROJ-1", Phase.CI_RED))
+    assert updated.text == "updated PROJ-1 (repo)"
     [unit] = db.units(conn, "PROJ-1")
     assert (unit.repo, unit.phase) == ("repo", "ci_red")
     assert present(db.get_ticket(conn, "PROJ-1")).phase is None

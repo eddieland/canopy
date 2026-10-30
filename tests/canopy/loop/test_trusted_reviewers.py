@@ -12,7 +12,7 @@ import pytest
 from canopy.core import conversation, db
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.loop.state import OverseerState, TicketState
-from tests.canopy.helpers import KEY, present, waits, worker_does
+from tests.canopy.helpers import KEY, present, ticket_sets, waits, worker_does
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import GitPool
 
@@ -51,12 +51,12 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     # A public ticket: no `private` key, and its operator messages under `operator`.
     assert "private" not in tickets[KEY]
     operator = tickets[KEY]["operator"]
-    assert operator["message_cursor"] is None
+    assert "message_cursor" not in operator  # null, so the block leaves it out
     assert [(m["id"], m["body"]) for m in operator["new_operator_messages"]] == [(message, GO_AHEAD)]
     assert "operator" not in tickets["PROJ-2"]
 
     # Handled, the message moves the cursor past it, and the ticket has nothing new from the operator.
-    scenario.overseer("ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={message}")
+    scenario.overseer(ticket_sets(KEY, repo="repo", cursors={"message": str(message)}))
     ticket = present(db.get_ticket(conn, KEY))
     assert conversation.operator_section(conn, ticket, authorized=()) is None
 
@@ -136,7 +136,10 @@ def test_every_public_worker_hears_the_operator_with_the_question_a_reply_answer
     asked = db.latest_message_id(scenario.conn)
     message = reply(scenario, "Keep it until the client migrates.")
     reasons = [ResumeReason.REPLY] if kind == RunKind.RESUME else []
-    run = scenario.run(dispatches(kind=kind, reasons=reasons, context=f"Operator message {message}"), worker=pushes())
+    # A resume for the reply names it as what authorizes it (DESIGN §35).
+    cursors = {"message": str(message)} if kind == RunKind.RESUME else None
+    command = dispatches(kind=kind, reasons=reasons, context=f"Operator message {message}", cursors=cursors)
+    run = scenario.run(command, worker=pushes())
     prompt = run.prompt
     assert prompt.startswith(f"# canopy worker: {kind}")
     section = prompt.split("## Messages from the operator\n\n", 1)[1].split("\n\nThe operator wrote these", 1)[0]

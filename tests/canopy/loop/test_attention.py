@@ -14,8 +14,8 @@ from canopy.core import db, review_runs
 from canopy.core.config import ConfigError, load
 from canopy.core.vocab import Decider, ReviewRunStatus
 from canopy.loop import attention
-from tests.canopy.helpers import KEY, context, in_tick, messages, operator, seen, waits
-from tests.canopy.scenario_helpers import Scenario, raises, skips_tick
+from tests.canopy.helpers import KEY, Called, context, in_tick, messages, operator, raises, seen, waits
+from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
@@ -51,7 +51,7 @@ def test_render_empty() -> None:
     assert attention.render([], NOW) == "# canopy attention\n\nNothing needs you. Updated 2026-09-24 12:00 UTC.\n"
 
 
-def recorded(*items: tuple[str, str]) -> list[list[str]]:
+def recorded(*items: tuple[str, str]) -> list[Called]:
     """The overseer records each (key, reason) as needing attention, its detail `<key> detail`."""
     return list(starmap(raises, items))
 
@@ -70,24 +70,25 @@ def test_every_tick_rewrites_attention_md(scenario: Scenario, canopy_env: Canopy
 
 def test_notify_gets_new_and_resolved_items_once(scenario: Scenario, canopy_env: CanopyEnv, notified: Path) -> None:
     listing = f"Full list: {canopy_env.state_dir / 'attention.md'}\n"
-    both = recorded(("PROJ-3", "needs_author"), ("PROJ-4", "multi_repo"))
+    # PROJ-3's is an item the overseer records every tick its cause holds; PROJ-4's one it keeps (DESIGN §37).
+    both = recorded(("PROJ-3", "flaky_rerun"), ("PROJ-4", "multi_repo"))
     scenario.tick(*both)
     assert messages(notified) == [
         "canopy attention: 2 new, 0 resolved\n"
-        "+ PROJ-3 needs_author: PROJ-3 detail\n"
+        "+ PROJ-3 flaky_rerun: PROJ-3 detail\n"
         "+ PROJ-4 multi_repo: PROJ-4 detail\n" + listing,
     ]
 
     # Still open, even with a reworded detail: nothing new to say.
-    scenario.tick(raises("PROJ-3", "needs_author", "reworded"), raises("PROJ-4", "multi_repo"))
+    scenario.tick(raises("PROJ-3", "flaky_rerun", "reworded"), *waits("PROJ-4"))
     assert len(messages(notified)) == 1
 
-    scenario.tick(*recorded(("PROJ-4", "multi_repo")), *waits("PROJ-3"))
-    assert messages(notified)[1] == "canopy attention: 0 new, 1 resolved\n- PROJ-3 needs_author\n" + listing
+    scenario.tick(*waits("PROJ-3", "PROJ-4"))
+    assert messages(notified)[1] == "canopy attention: 0 new, 1 resolved\n- PROJ-3 flaky_rerun\n" + listing
 
     # An item that comes back after going away is new again.
-    scenario.tick(*both)
-    assert messages(notified)[2].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-3 needs_author")
+    scenario.tick(*recorded(("PROJ-3", "flaky_rerun")), *waits("PROJ-4"))
+    assert messages(notified)[2].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-3 flaky_rerun")
     rows = scenario.conn.execute("SELECT ticket_key FROM notifications")
     assert sorted(str(r[0]) for r in rows) == ["PROJ-3", "PROJ-4"]
 
@@ -151,25 +152,6 @@ def test_a_failed_tick_leaves_the_list_and_notifies_nothing_new(
     scenario.tick(*recorded(("PROJ-3", "needs_author")))
     scenario.tick(result="gave up", code=1)
     assert "- PROJ-3, " in (canopy_env.state_dir / "attention.md").read_text()
-    assert len(messages(notified)) == 1
-
-
-def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
-    scenario: Scenario,
-    canopy_env: CanopyEnv,
-    notified: Path,
-) -> None:
-    scenario.tick(*recorded(("PROJ-3", "needs_author")), dry_run=True)
-    skipped = scenario.tick(skips_tick("mcp_unavailable: github"), dry_run=True, code=1)
-    assert skipped.printed.out == "tick 2: skipped: dry run; overseer skipped the tick: mcp_unavailable: github\n"
-
-    assert skipped.tick.status == "skipped"
-    assert scenario.attention() == [("PROJ-3", "needs_author")]
-    assert "- PROJ-3, " in (canopy_env.state_dir / "attention.md").read_text()
-    assert len(messages(notified)) == 1  # the first tick's; nothing resolved
-
-    # The overseer sees the world again and still records the item: it was never gone, so it is not new.
-    scenario.tick(*recorded(("PROJ-3", "needs_author")), dry_run=True)
     assert len(messages(notified)) == 1
 
 

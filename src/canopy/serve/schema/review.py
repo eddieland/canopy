@@ -12,7 +12,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from canopy.serve.schema import CostTotal, Decision, Limit, Model, ModelsServed, Run, RunState
+from canopy.serve.schema import CostTotal, Decision, Limit, Model, ModelsServed, Run, RunCard, RunState
 
 type ReviewVerdict = Annotated[Literal["clean", "findings"], Field(description="A review run's verdict (DESIGN §21).")]
 type ReviewImpact = Annotated[
@@ -103,6 +103,9 @@ class ReviewSummary(Model):
     that is not seen is new to them."""
     draft: ReviewDraftStatusName | None = None
     """Where its draft stands (DESIGN §34); None for a review that has none, such as one of the loop's own PRs."""
+    served: list[str] = []
+    """The models its session names as having served it, as `provider/model`, the most costly first; empty until
+    canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served."""
 
 
 class RequestedReview(Model):
@@ -428,6 +431,12 @@ class ReviewDetail(Model):
     """The sha256 of the persona's text as its prompt carried it, in hex."""
     models: ModelsServed
     """Which models served it."""
+    model: str | None = None
+    """The model canopy asked the runtime for, for its reviewer (DESIGN §13, Each agent's model), as
+    `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a run from
+    before canopy recorded it."""
+    card: RunCard | None = None
+    """Its reviewer's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none."""
 
 
 class ReviewRequest(Model):
@@ -446,10 +455,12 @@ class ReviewRequest(Model):
     """The operator's notes for the reviewer, which its prompt carries; None when the request has none."""
     personas: list[str] = []
     """The personas it is reviewed in, one review each, in the order chosen; none for `[personas] reviewer`'s."""
+    model: str | None = None
+    """The model its reviews run on, `provider/model[@variant]`; None for the reviewer's own."""
 
 
 class ReviewRequestBody(Model):
-    """A review request's notes and personas, as `canopy start URL --review --notes TEXT --persona NAME` gives them."""
+    """A review request's notes, personas, and model, as `canopy start URL --review` gives them."""
 
     notes: Annotated[str, Field(max_length=20_000)] = ""
     """What the reviewer should know or look at closely. Bounded again in code at 4000 characters, after stripping;
@@ -457,6 +468,9 @@ class ReviewRequestBody(Model):
     personas: Annotated[list[Annotated[str, Field(max_length=40)]], Field(max_length=10)] = []
     """The personas to review it in, one review each, side by side, each one `GET /personas` lists; none is
     `[personas] reviewer`'s, and leaves an open request's personas as they were."""
+    model: Annotated[str | None, Field(max_length=200)] = None
+    """The model its reviews run on, as `provider/model`, one `GET /models` lists, or `provider/model@variant` at one
+    of its variants; None is the reviewer's own, and leaves an open request's model as it was."""
 
 
 class ReviewRequested(Model):

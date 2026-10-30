@@ -29,7 +29,7 @@ def take(conn: sqlite3.Connection, kind: NumberedItem, subject: str, ident: str 
         Its number.
     """
     found = str(ident)
-    sql.execute(conn, sql.insert("item_numbers", kind=kind, subject=subject, id=found, numbered_at=at).or_ignore())
+    records.insert(records.ItemNumber, kind=kind, subject=subject, id=found, numbered_at=at).or_ignore().run(conn)
     row = sql.execute(
         conn,
         sql.select("number").from_("item_numbers").where("subject = ? AND kind = ? AND id = ?", subject, kind, found),
@@ -54,8 +54,8 @@ def named(conn: sqlite3.Connection, numbers: Collection[int]) -> dict[int, recor
     Returns:
         Each item numbered, by its number; a number that names none is left out.
     """
-    query = sql.select("*").from_("item_numbers").where_in("number", numbers)
-    return {n.number: n for n in records.fetch_all(conn, records.ItemNumber, query)}
+    query = records.select(records.ItemNumber).where_in("number", numbers)
+    return {n.number: n for n in query.all(conn)}
 
 
 def describe(item: records.ItemNumber) -> str:

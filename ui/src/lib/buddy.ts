@@ -249,6 +249,14 @@ export const TIPS = {
         'Hot take: comments in a config file are love letters. This page keeps every one.',
         'Did you know? A change here is for this workspace only. I am for every workspace.',
     ],
+    '/settings_/skills': [
+        "It looks like you're reading skills. Mine: photosynthesis. No SKILL.md needed.",
+        'Unhelpful tip: a skill nobody loads still costs every call. Like a hat nobody wears.',
+        'Did you know? A skill with no description never gets loaded. Ask me how I know.',
+        'Dear diary, I searched for a skill called "sprig". Nothing. I remain unteachable.',
+        'Fun fact: Read again starts the runtime. Patience is also a skill.',
+        'Hot take: the best skill is the one in your home. It goes everywhere you go.',
+    ],
     '/search': [
         "It looks like you're searching. I lost a leaf in 2024. Let me know if it turns up.",
         'Unhelpful tip: to find something, search for it. You are welcome.',
@@ -262,6 +270,13 @@ export const TIPS = {
         'Dear diary, a worker proposed a lesson today. I proposed a hat. Only one of us got promoted.',
         'Fun fact: recording is not using. I record everything and use none of it.',
         'Hot take: a note that says "it works on my machine" is a note about the machine.',
+    ],
+    '/system': [
+        "It looks like you're checking the machine. I run on no machine. I run on vibes.",
+        'Unhelpful tip: a full disk frees itself if you stare at it. It does not. Delete something.',
+        'Fun fact: the load average is how many things want a processor. I want a hat. Same energy.',
+        'Dear diary, the loop has been up for hours. I have been up forever. Nobody makes me a counter.',
+        'Hot take: swap is memory that went to live on a farm.',
     ],
     '/guide/$page': [
         "It looks like you're reading documentation. Would you like me to skim it for you, badly?",

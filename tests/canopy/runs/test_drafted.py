@@ -14,24 +14,27 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import drafts, observe, records, replies, review_diff, sql
+from canopy.core import observe, records, replies, review_diff, sql
 from canopy.core.config import load
 from canopy.core.vocab import DraftKind, DraftStatus, ResumeReason, ReviewItem, RunKind
 from canopy.infra import logs, procs
 from canopy.loop import attention
-from canopy.runs import drafted
+from canopy.runs import drafted, drafts
 from tests.canopy.helpers import (
     APPROVE,
     DRAFTS_PR,
     KEY,
+    TRACKER_POSTS,
     all_drafts,
     comment,
     context,
     github_has,
     present,
     reads,
+    sources,
     thread,
     tick_reads,
+    tracker_holds,
     waits,
 )
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
@@ -64,7 +67,8 @@ def test_after_a_run_its_pr_is_read_and_its_drafts_checked(scenario: Scenario, g
     assert (body.status, body.thread_id) == (DraftStatus.WAITING, None)
     found = present(replies.run_replies(conn, run.id))
     assert [(r.number, r.why) for r in drafts.refused_of(found)] == [(2, unknown.why)]
-    assert reads(github_state) == [{"prs": [PR]}]
+    # The first read is the sources' before the dispatch, of the branches; then the run's, of its PR.
+    assert reads(github_state)[1:] == [{"prs": [PR]}]
     observed = records.fetch_all(conn, records.ObservedReview, sql.frag("SELECT * FROM observed_reviews ORDER BY id"))
     assert [(o.item, o.id, o.thread_id, o.author) for o in observed] == [
         (ReviewItem.COMMENT, 501, "PRRT_1", "alice"),
@@ -80,6 +84,7 @@ def test_a_failed_read_keeps_the_drafts_unchecked_until_a_tick_reads_the_pr_whol
 ) -> None:
     conn = scenario.conn
     scenario.configures("private", trust=APPROVE)
+    tracker_holds(conn)
     github_has(github_state, comment(501), down=True)
     scenario.run(WORK, worker=sends_drafts([thread(501)]))
     [draft] = all_drafts(conn)
@@ -100,7 +105,8 @@ def test_a_failed_read_keeps_the_drafts_unchecked_until_a_tick_reads_the_pr_whol
     tick_reads(ctx)
     assert present(drafts.get(conn, draft.id)).status is DraftStatus.WAITING
     assert drafted.waiting(conn)[0].detail == f"1 draft waits on you, for {PR}"
-    assert [r["prs"] for r in reads(github_state)] == [[PR], [PR], [PR]]
+    # The first read is the sources' before the dispatch, when the ticket had no PR.
+    assert [r["prs"] for r in reads(github_state)] == [[], [PR], [PR], [PR]]
     tick_reads(ctx)
     # The PR is still read each tick, as its unit's (DESIGN §30), and a checked draft stays checked.
     assert present(drafts.get(conn, draft.id)).status is DraftStatus.WAITING
@@ -110,6 +116,8 @@ def test_a_failed_read_keeps_the_drafts_unchecked_until_a_tick_reads_the_pr_whol
 def test_a_stop_cuts_the_read_after_a_run_short(scenario: Scenario, github_state: Path, tmp_path: Path) -> None:
     scenario.configures("private", trust=APPROVE)
     reading = tmp_path / "reading"
+    # The sources read the world before GitHub hangs, so only the run's own read of it does.
+    tracker_holds(scenario.conn)
     github_has(github_state, comment(501), hang=str(reading))
     stopper = threading.Thread(target=stop_once_there, args=(reading,), daemon=True)
     stopper.start()
@@ -167,8 +175,7 @@ def test_a_run_drafts_once_for_a_thread(scenario: Scenario, github_state: Path) 
 @pytest.mark.usefixtures("git_pool")
 def test_a_ticket_draft_supersedes_the_ticket_draft_before_it(scenario: Scenario, github_state: Path) -> None:
     conn = scenario.conn
-    issues = {"kind": "tracker", "post_cmd": "canopy-post-github"}
-    scenario.configures("private", trust=APPROVE, connect={"sources": {"issues": issues}})
+    scenario.configures("private", trust=APPROVE, connect=TRACKER_POSTS)
     github_has(github_state)
     ticket = {"on": "ticket", "url": "https://github.com/acme/api/issues/1", "text": "Which base?"}
     scenario.run(WORK, worker=sends_drafts([ticket]))
@@ -208,6 +215,28 @@ def test_waiting_drafts_are_the_operators_item_alone(scenario: Scenario, github_
     ]
     assert "drafts_waiting" not in str(scenario.state())
     assert attention.for_overseer(scenario.conn) == []
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_drafts_are_on_the_attention_list_once_their_run_ends_not_from_the_next_tick(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    """A run's drafts are listed as soon as it ends, aged from the draft, and a tick recording them changes nothing."""
+    scenario.configures("private", trust={**APPROVE, "trusted_reviewers": ["alice"]})
+    github_has(github_state, comment(501))
+    scenario.run(WORK, worker=sends_drafts([thread(501)]))
+    ctx = context(scenario.env)
+    [draft] = all_drafts(scenario.conn)
+    [item] = [i for i in attention.listed(ctx) if i.reason == drafted.WAITING_REASON]
+    assert (item.ticket_key, item.repo, item.detail, item.since) == (
+        KEY,
+        "repo",
+        f"1 draft waits on you, for {PR}",
+        draft.created_at,
+    )
+    scenario.tick(*waits(KEY))
+    assert [i for i in attention.listed(ctx) if i.reason == drafted.WAITING_REASON] == [item]
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -254,7 +283,7 @@ def test_a_read_records_only_what_it_read_whole_and_a_line_it_cannot_use_leaves_
         "#!/bin/sh\ncat >/dev/null\ncat <<'EOF'\n" + "\n".join(map(json.dumps, lines)) + "\nnot json\nEOF\n",
     )
     reader.chmod(0o755)
-    canopy_env.write_private(f'[connect.sources.github]\nkind = "vcs"\ncmd = "{reader}"\n')
+    canopy_env.configure(canopy_env.private_file, {"connect": sources(github={"kind": "vcs", "cmd": str(reader)})})
     found = observe.read(
         conn,
         load(canopy_env.root, canopy_env.user_file),

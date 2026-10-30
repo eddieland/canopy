@@ -15,7 +15,7 @@ from canopy.core.context import Context
 from canopy.core.vocab import ModelsRead
 from canopy.infra import logs
 from canopy.loop import models, repeat
-from tests.canopy.helpers import FakeTime, console, context, overseer_does, with_events
+from tests.canopy.helpers import KEY, FakeTime, console, context, overseer_does, waits, with_events
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
@@ -61,14 +61,14 @@ def reads(conn: sqlite3.Connection) -> list[tuple[str, int, str, str | None, int
 def test_a_live_tick_reads_which_models_served_its_overseer_once(scenario: Scenario, opencode_state: Path) -> None:
     with_events(scenario.env, "canopy-overseer")
     sessions(opencode_state, **{SESSION: [("anthropic", "claude-x", 0.25), ("openai", "gpt-y", 0.5)] * 2})
-    first = scenario.tick()
+    first = scenario.tick(*waits(KEY))
     assert [(m.model, m.replies, m.cost_usd) for m in run_models.of_run(scenario.conn, "ticks", first.tick.id)] == [
         ("openai/gpt-y", 2, 1.0),
         ("anthropic/claude-x", 2, 0.5),
     ]
     # Read where the overseer runs, its text left out.
     assert exports(opencode_state) == [(["export", SESSION, "--sanitize"], str(scenario.env.root))]
-    second = scenario.tick()
+    second = scenario.tick(*waits(KEY))
     # Each tick reads its own overseer's session, and none read already.
     assert reads(scenario.conn) == [
         ("ticks", first.tick.id, "found", None, 1),
@@ -81,7 +81,7 @@ def test_opencode_2_is_asked_for_its_session_by_its_own_command(scenario: Scenar
     with_events(scenario.env, "canopy-overseer")
     scenario.configures(runtime={"version": 2})
     sessions(opencode_state, **{SESSION: [("anthropic", "claude-x", 0.25)]})
-    ticked = scenario.tick()
+    ticked = scenario.tick(*waits(KEY))
     assert [(m.model, m.replies) for m in run_models.of_run(scenario.conn, "ticks", ticked.tick.id)] == [
         ("anthropic/claude-x", 1),
     ]
@@ -98,7 +98,7 @@ def test_an_opencode_2_tick_its_events_left_unpriced_costs_what_its_session_says
     scenario.configures(runtime={"version": 2})
     sessions(opencode_state, **{SESSION: [("anthropic", "claude-x", 0.25), ("anthropic", "claude-x", 0.5)]})
     # As OpenCode 2 prints a run: its last call's cost never is, so its events leave it unpriced.
-    ticked = scenario.tick(step_cost='"lost"')
+    ticked = scenario.tick(*waits(KEY), step_cost='"lost"')
     assert scenario.conn.execute("SELECT cost_usd FROM ticks WHERE id = ?", (ticked.tick.id,)).fetchone()[0] == 0.75
 
 
@@ -113,7 +113,7 @@ def test_a_session_opencode_no_longer_has_is_missing_and_not_read_again(
     opencode_state: Path,
 ) -> None:
     with_events(scenario.env, "canopy-overseer")
-    first = scenario.tick()
+    first = scenario.tick(*waits(KEY))
     assert reads(scenario.conn) == [("ticks", first.tick.id, "missing", None, 1)]
     assert run_models.of_run(scenario.conn, "ticks", first.tick.id) == []
 
@@ -121,7 +121,7 @@ def test_a_session_opencode_no_longer_has_is_missing_and_not_read_again(
 def test_a_tick_reads_its_own_overseer_and_no_run_left_unread(scenario: Scenario, opencode_state: Path) -> None:
     ended_ticks(scenario.conn, 3)
     with_events(scenario.env, "canopy-overseer")
-    scenario.tick()
+    scenario.tick(*waits(KEY))
     # The wait after a tick reads the rest, not the tick.
     assert exported(opencode_state) == [SESSION]
 
@@ -129,7 +129,7 @@ def test_a_tick_reads_its_own_overseer_and_no_run_left_unread(scenario: Scenario
 def test_a_failing_opencode_never_fails_the_tick(scenario: Scenario, opencode_state: Path) -> None:
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: database is locked\n"}))
     with_events(scenario.env, "canopy-overseer")
-    ticked = scenario.tick()
+    ticked = scenario.tick(*waits(KEY))
     assert ticked.tick.status == "ok"
     # Failed in canopy's words, not OpenCode's, and read again later.
     assert reads(scenario.conn) == [

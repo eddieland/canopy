@@ -1,10 +1,11 @@
 """A journal seeded from fixtures, for the UI's development server and its end-to-end tests (`--mock`).
 
 The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, a
-reload, a tick asked for, the attempt and review limits and their grants, a chore's try, the pools' slots, and the
-models the runtime lists are stand-ins, since the first six belong to the loop, `runs`, `reviews`, and `chores`, and
-there is no treehouse or runtime to ask (backend.py): the models are those its runs' sessions name. A try records its
-run and starts nothing, so the run stays running.
+reload, a tick asked for, the attempt and review limits and their grants, a chore's try, the pools' slots, the models
+the runtime lists, and the skills it finds are stand-ins, since the first six belong to the loop, `runs`,
+`reviews`, and `chores`, and there is no treehouse or runtime to ask (backend.py): the models are those its runs'
+sessions name, and the skills five the `skills` module makes up. A try records its run and starts nothing, so the run
+stays running.
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19), `deps` and
 `build-health`, `deps` on a model of its own (§13). Two ticks recorded decisions about tickets, a unit, a repository,
@@ -12,10 +13,11 @@ a chore, and a PR (§6). The
 workspace's policy allows one resume and two reviews, so ABC-100 is at its resume limit in web, where its run 40, a
 `fix-ci` from before a resume fixed CI, counts as one (§8), and PR 88 at its review limit (§22's grants). Run 43,
 running, is a resume for a failed check and review feedback together. The running runs 41 and 43 have the latest tool
-call on each one's row (§8).
+call on each one's row (§8). Every run on T0's day that ended reported its first model call, on the definitions snapshot
+and the runtime's version the history's last week used, so the spend page's weekly hit rate goes on from it (§13).
 Each feature's fixtures are in a module of their own in this package, named for the feature, which `seed` calls: plans,
 memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, the runs'
-transcripts, and the months before T0, whose landed tickets the reports page shows.
+transcripts, the months before T0, whose landed tickets the reports page shows, and the machine (a fixed reading).
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -25,9 +27,21 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, LiteralString
 
-from canopy.core import chore_runs, chore_view, config, conversation, db, pools, records, review_runs, sql, workspace
+from canopy.core import (
+    cards,
+    chore_runs,
+    chore_view,
+    config,
+    conversation,
+    db,
+    pools,
+    records,
+    review_runs,
+    sql,
+    workspace,
+)
 from canopy.core.context import db_path
 from canopy.core.items import Item
 from canopy.core.vocab import RunKind, RunStatus
@@ -39,10 +53,12 @@ from canopy.serve.mock import (
     drafts,
     feedback_plans,
     history,
+    host,
     memory,
     personas,
     plans,
     reviews,
+    skills,
     tasks,
     transcripts,
 )
@@ -86,6 +102,12 @@ max_reviews_per_pr = 2
 _USER_TOML = """\
 [tracker]
 labels = ["agent-ready-mock"]
+
+# The tracker source config requires (DESIGN §30). The mock runs no tick, so it reads nothing, and `.example` names no
+# host anyway.
+[connect.sources.jira]
+kind = "tracker"
+cmd = "canopy-connect-jira --site jira.example"
 
 [capacity]
 slots_per_repo = 2
@@ -134,7 +156,7 @@ CHORE = "deps"
 # Each cloned repository's pool directory, as treehouse names it: the clone's name and a short hash of its remote.
 _POOLS = {"mobile": "mobile-8e41d0c7", "web": "web-3f9c2a1b"}
 # The variants the mock's runtime lists for each provider's models, which a ticket's page may choose one at.
-_VARIANTS = {"anthropic": frozenset({"high", "max"}), "openai": frozenset({"minimal", "low", "medium", "high"})}
+_VARIANTS = {"anthropic": ("high", "max"), "openai": ("minimal", "low", "medium", "high")}
 
 
 def at(minutes: int) -> str:
@@ -313,6 +335,12 @@ def seed(directory: Path) -> Backend:
         runner=lambda: drafts.GitHub(db_path(ws)),
         user_file=user_file,
         models=_models_listed,
+        skills=skills.listed,
+        # Read when the e2e tests' frozen clock says it is (`NOW` in ui/e2e/helpers.ts), so it reads as just now.
+        host=lambda _config, _workspace: host.machine(T0 + timedelta(minutes=30)),
+        samples=host.samples(T0 + timedelta(minutes=30)),
+        processes=lambda: host.processes(T0 + timedelta(minutes=30)),
+        sampling=False,
     )
     with backend.open() as ctx:
         db.migrate(ctx.conn, resources.migrations_dir())
@@ -326,8 +354,9 @@ def seed(directory: Path) -> Backend:
             feedback_plans.seed(ctx.conn, ws.state_dir, at, ctx.config.trust, slot_path(root, "web", 3))
             personas.seed(ctx.conn, ctx.config, at)
             tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
+            _first_calls(ctx.conn)
             _attachments(ctx.conn)
-            # Last, so the messages their approvals wrote take ids after every other fixture's.
+            # Last but `_every_kind`, so the messages their approvals wrote take ids after every other fixture's.
             feedback_plans.seed_states(
                 ctx.conn,
                 ws.state_dir,
@@ -336,9 +365,52 @@ def seed(directory: Path) -> Backend:
                 repo=str(root),
                 slot=slot_path(root, "mobile", 1),
             )
+            _every_kind(ctx.conn)
         reviews.drafts(ctx.conn, at)
     transcripts.write(ws.state_dir, T0)
     return backend
+
+
+def _every_kind(conn: sqlite3.Connection) -> None:
+    """Give ABC-103's conversation every kind a message can be, so its screenshot shows each bubble (DESIGN §22).
+
+    It already holds a question, the operator's reply a tick has read, and a report. This adds canopy's note on a tick,
+    a tracker comment, and a reply no tick has read yet: last of every fixture, so its id is past the latest tick's.
+    """
+    records.insert(
+        records.Message,
+        subject_kind="ticket",
+        subject_id="ABC-103",
+        at=at(-119),
+        source="canopy",
+        kind="note",
+        channel="tick",
+        body="Tick 1 read message 2 and decided nothing about ABC-103.",
+        answers=2,
+    ).run(conn)
+    records.insert(
+        records.Message,
+        subject_kind="ticket",
+        subject_id="ABC-103",
+        at=at(-100),
+        source="tracker",
+        kind="comment",
+        channel="tracker",
+        body="QA signed off on the v2 invoices in staging. Ship it once the PR is green.",
+        comment_id="10002",
+        author="557058:ann",
+        commented_at=at(-101),
+    ).run(conn)
+    records.insert(
+        records.Message,
+        subject_kind="ticket",
+        subject_id="ABC-103",
+        at=at(-30),
+        source="operator",
+        kind="reply",
+        channel="web",
+        body="Also drop the v1 webhook handler while you are in there.",
+    ).run(conn)
 
 
 def _attachments(conn: sqlite3.Connection) -> None:
@@ -347,8 +419,8 @@ def _attachments(conn: sqlite3.Connection) -> None:
         ("ticket", "ABC-102", "sso-design.md", 18_432, -300),
         ("task", "1", "importer-design-v2.md", 9_216, -420),
     ):
-        insert = sql.insert(
-            "attachments",
+        insert = records.insert(
+            records.Attachment,
             subject_kind=kind,
             subject_id=subject,
             name=name,
@@ -357,7 +429,7 @@ def _attachments(conn: sqlite3.Connection) -> None:
             channel="web",
             added_at=at(added),
         )
-        sql.execute(conn, insert)
+        insert.run(conn)
 
 
 def _attention(ctx: Context) -> list[Item]:
@@ -464,7 +536,7 @@ def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> 
                     "unknown",
                     f"canopy has not reviewed {ref}, so it has no review limit to grant",
                 )
-            sql.execute(ctx.conn, sql.insert("review_grants", pr_url=ref.id, runs=1, granted_at=db.format_time(T0)))
+            records.insert(records.ReviewGrant, pr_url=ref.id, runs=1, granted_at=db.format_time(T0)).run(ctx.conn)
             return Granted(repo=None, runs=reviewed.runs, limit=reviewed.limit + 1)
         units = {(found.repo, found.kind): found for found in _limits(ctx, ref.id)}
         repos = {r for r, _ in units}
@@ -473,17 +545,14 @@ def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> 
         current = units.get((repo, kind))
         if repo is None or current is None:
             raise conversation.Refused("unknown_repo", f"{ref} has had no runs in {repo or 'one repository only'}")
-        sql.execute(
-            ctx.conn,
-            sql.insert(
-                "attempt_grants",
-                ticket_key=ref.id,
-                repo=repo,
-                kind=kind,
-                runs=1,
-                granted_at=db.format_time(T0),
-            ),
-        )
+        records.insert(
+            records.AttemptGrant,
+            ticket_key=ref.id,
+            repo=repo,
+            kind=kind,
+            runs=1,
+            granted_at=db.format_time(T0),
+        ).run(ctx.conn)
         return Granted(repo=repo, runs=current.runs, limit=current.limit + 1)
 
 
@@ -495,9 +564,9 @@ def _models_listed(ctx: Context) -> ModelList:
     Returns:
         Each model a run's session names, once, with its variants.
     """
-    served = records.fetch_all(ctx.conn, records.RunModel, sql.select("*").from_("run_models"))
+    served = records.select(records.RunModel).all(ctx.conn)
     models = frozenset(m.model for m in served)
-    return ModelList(models, {m: _VARIANTS.get(m.partition("/")[0], frozenset()) for m in models})
+    return ModelList(models, {m: _VARIANTS.get(m.partition("/")[0], ()) for m in models})
 
 
 def _try_chore(ctx: Context, name: str) -> int:
@@ -518,7 +587,7 @@ def _try_chore(ctx: Context, name: str) -> int:
         chore=name,
         logs_dir=ctx.state_dir / "chore-runs" / name,
     )
-    sql.execute(ctx.conn, sql.update("chore_runs").set(started_at=db.format_time(T0)).where("id = ?", run_id))
+    records.update(records.ChoreRun).set(started_at=db.format_time(T0)).where("id = ?", run_id).run(ctx.conn)
     return run_id
 
 
@@ -534,12 +603,12 @@ async def changes(backend: Backend, seconds: float | None) -> None:
 
 def _add_a_cent(backend: Backend) -> None:
     with backend.open() as ctx:
-        sql.execute(
-            ctx.conn,
-            sql.update("runs")
+        (
+            records.update(records.Run)
             .set_to("cost_usd = round(cost_usd + 0.01, 2)")
             .where("id = ?", LIVE_RUN)
-            .where("status = 'running'"),
+            .where("status = 'running'")
+            .run(ctx.conn)
         )
 
 
@@ -564,32 +633,29 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         (2, at(-60), at(-59), "mock tick", 8, "ses_tick2", 0.31, 1, "timer"),
     )
     for tick_id, started, ended, summary, message_id, session, cost, idle, woken_by in ticks:
-        sql.execute(
-            conn,
-            sql.insert(
-                "ticks",
-                id=tick_id,
-                started_at=started,
-                ended_at=ended,
-                status="ok",
-                summary=summary,
-                message_id=message_id,
-                session_id=session,
-                cost_usd=cost,
-                idle=idle,
-                woken_by=woken_by,
-                canopy_version="0.3.1",
-            ),
-        )
+        records.insert(
+            records.Tick,
+            id=tick_id,
+            started_at=started,
+            ended_at=ended,
+            status="ok",
+            summary=summary,
+            message_id=message_id,
+            session_id=session,
+            cost_usd=cost,
+            idle=idle,
+            woken_by=woken_by,
+            canopy_version="0.3.1",
+        ).run(conn)
     # Their overseers' tokens, in the proportions the runs' are below.
-    sql.execute(
-        conn,
-        sql.update("ticks")
+    (
+        records.update(records.Tick)
         .set_to("tokens_input = CAST(cost_usd * 40000 AS INTEGER)")
         .set_to("tokens_output = CAST(cost_usd * 6000 AS INTEGER)")
         .set_to("tokens_cache_read = CAST(cost_usd * 400000 AS INTEGER)")
         .set_to("tokens_peak_context = CAST(cost_usd * 60000 AS INTEGER)")
-        .everything(),
+        .everything()
+        .run(conn)
     )
     tickets = (
         # key, title (None: not named yet), phase, branch, last seen
@@ -601,39 +667,32 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         ("ABC-104", None, "ci_red", "agent/ABC-104-retry-queue", 5),
     )
     for key, title, phase, branch, seen in tickets:
-        sql.execute(
-            conn,
-            sql.insert(
-                "tickets",
-                key=key,
-                repo=repo,
-                first_seen_at=at(-300),
-                last_seen_at=at(seen),
-                changed_at=at(seen),
-                title=title,
-                phase=phase,
-                branch=branch,
-            ),
-        )
+        records.insert(
+            records.Ticket,
+            key=key,
+            repo=repo,
+            first_seen_at=at(-300),
+            last_seen_at=at(seen),
+            changed_at=at(seen),
+            title=title,
+            phase=phase,
+            branch=branch,
+        ).run(conn)
     for key, branch, pr_url in (
         ("ABC-099", "agent/ABC-099-search", "https://github.com/acme/web/pull/88"),
         ("ABC-103", "agent/ABC-103-billing-v2", "https://github.com/acme/web/pull/91"),
     ):
-        sql.execute(
-            conn,
-            sql.insert(
-                "ticket_units",
-                ticket_key=key,
-                repo="web",
-                branch=branch,
-                pr_url=pr_url,
-                phase="review_pending",
-            ),
-        )
+        records.insert(
+            records.TicketUnit,
+            ticket_key=key,
+            repo="web",
+            branch=branch,
+            pr_url=pr_url,
+            phase="review_pending",
+        ).run(conn)
     # Each PR's own title, as its worker or its review reported it: not its ticket's, and #12 has no ticket at all.
-    sql.execute_many(
+    records.insert_rows(records.PrTitle, ("pr_url", "title", "updated_at")).many(
         conn,
-        sql.insert_rows("pr_titles", ("pr_url", "title", "updated_at")),
         [
             ("https://github.com/acme/web/pull/88", "ABC-099: debounce the search box by 250 ms", at(-59)),
             ("https://github.com/acme/web/pull/91", "ABC-103: move billing to v2 and drop the v1 client", at(-125)),
@@ -729,41 +788,88 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         (43, "ABC-104", "resume", "agent/ABC-104-retry-queue", 5, None, "running", None, 1, 0.12),
     )
     for run_id, key, kind, branch, started, ended, status, result, private, cost in runs:
-        sql.execute(
-            conn,
-            sql.insert(
-                "runs",
-                id=run_id,
-                tick_id=1,
-                ticket_key=key,
-                kind=kind,
-                branch=branch,
-                started_at=at(started),
-                ended_at=at(ended) if ended is not None else None,
-                status=status,
-                result_json=json.dumps(result) if result is not None else None,
-                log_path=str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "runs" / f"{run_id}.log"),
-                private=private,
-                session_id=f"ses_mock{run_id}",
-                cost_usd=cost,
-                tokens_input=int(cost * 40_000),
-                tokens_output=int(cost * 6_000),
-                tokens_cache_read=int(cost * 400_000),
-                tokens_peak_context=int(cost * 60_000),
-            ),
-        )
+        records.insert(
+            records.Run,
+            id=run_id,
+            tick_id=1,
+            ticket_key=key,
+            kind=kind,
+            branch=branch,
+            started_at=at(started),
+            ended_at=at(ended) if ended is not None else None,
+            status=status,
+            result_json=json.dumps(result) if result is not None else None,
+            log_path=str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "runs" / f"{run_id}.log"),
+            private=private,
+            session_id=f"ses_mock{run_id}",
+            cost_usd=cost,
+            tokens_input=int(cost * 40_000),
+            tokens_output=int(cost * 6_000),
+            tokens_cache_read=int(cost * 400_000),
+            tokens_peak_context=int(cost * 60_000),
+        ).run(conn)
     # What each running run's worker did last, as `_run` records it from the events its log holds (transcripts.py).
     activities = (
         (LIVE_RUN, "bash", "npm test -- login", 27),
         (43, "bash", "cat /home/op/acme/.treehouse/web-3f9c2a1b/2/web/.github/workflows/ci.yml", 29),
     )
     for run_id, tool, did, minutes in activities:
-        sql.execute(
-            conn,
-            sql.update("runs").set(activity_tool=tool, activity=did, activity_at=at(minutes)).where("id = ?", run_id),
+        (
+            records.update(records.Run)
+            .set(activity_tool=tool, activity=did, activity_at=at(minutes))
+            .where("id = ?", run_id)
+            .run(conn)
         )
+    # What each running run's agent says of where it stands, its card (DESIGN §41): 41's fresh, asking a question, 43's
+    # stale, gone more tool calls than `cards.STALE_CALLS` without an update.
+    said = (
+        (
+            LIVE_RUN,
+            cards.Card(
+                summary="The SSO callback is in and its tests pass; wiring the login button next.",
+                now="running the login tests",
+                done=(cards.Done(step="add the SSO callback", proof="tests pass: 12/12"),),
+                next=("wire the login button", "push", "open the PR"),
+                # The steps of ABC-101's approved plan, its sections their stages.
+                steps=(
+                    cards.Step(title="Add the SSO callback route", status="done", stage="API"),
+                    cards.Step(title="Wire the login button", status="working", stage="Web"),
+                    cards.Step(title="Remember the last provider", status="skipped", stage="Web"),
+                    cards.Step(title="Push and open the PR", status="not_started"),
+                ),
+                # A question it works around meanwhile, waiting on the operator.
+                question=cards.Question(
+                    ask="Keep the password form beside the SSO button, or hide it behind a link?",
+                    options=("keep both side by side", "hide the form behind a link", "drop the password form"),
+                    recommend="B",
+                ),
+            ),
+            24,
+            9,
+            3,
+        ),
+        (
+            43,
+            cards.Card(
+                summary="Reading the failed CI job; the queue's retry test is red on this branch alone.",
+                now="reading the CI workflow",
+                done=(cards.Done(step="read the failed job's log", proof="1 test red: test_retry_backoff"),),
+                next=("fix the backoff", "push"),
+                stuck="the CI log is cut short; reading the workflow for the step instead",
+            ),
+            12,
+            4,
+            26,
+        ),
+    )
+    for run_id, card, minutes, by_then, since in said:
+        recorded = records.update(records.Run).set(card_json=card.model_dump_json(), card_at=at(minutes))
+        recorded = recorded.set(card_calls=by_then, tool_calls=by_then + since).where("id = ?", run_id)
+        working = {s.title: at(minutes) for s in card.steps if s.status == "working"}
+        recorded = recorded.set(card_asked_at=at(minutes) if card.question is not None else None)
+        recorded.set(card_working_since=json.dumps(working) if working else None).run(conn)
     # Run 39's peak is the most one model call in its transcript was sent (transcripts.py), as its page's chart shows.
-    sql.execute(conn, sql.update("runs").set(tokens_peak_context=30200).where("id = 39"))
+    records.update(records.Run).set(tokens_peak_context=30200).where("id = 39").run(conn)
     run_slots = (
         # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile; 37 and 40 ended long ago
         (37, "web", 4, "lease-37", "canopy:ABC-100"),
@@ -773,44 +879,35 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         (43, "mobile", 1, "lease-3", "canopy:ABC-104"),
     )
     for run_id, name, slot, lease, holder in run_slots:
-        sql.execute(
-            conn,
-            sql.insert(
-                "run_slots",
-                run_id=run_id,
-                repo=name,
-                slot_path=slot_path(root, name, slot),
-                lease_id=lease,
-                lease_holder=holder,
-                base_branch="main",
-            ),
-        )
+        records.insert(
+            records.RunSlot,
+            run_id=run_id,
+            repo=name,
+            slot_path=slot_path(root, name, slot),
+            lease_id=lease,
+            lease_holder=holder,
+            base_branch="main",
+        ).run(conn)
     # Run 43 fixes a failed check and answers review feedback in one run (DESIGN §8).
-    sql.execute_many(conn, sql.insert_rows("run_reasons", ("run_id", "reason")), [(43, "ci"), (43, "review")])
+    records.insert_rows(records.RunReason, ("run_id", "reason")).many(conn, [(43, "ci"), (43, "review")])
     for key, started in (("ABC-102", -35), ("ABC-104", -20)):
-        sql.execute(
-            conn,
-            sql.insert(
-                "starts",
-                subject_kind="ticket",
-                subject_id=key,
-                status="started",
-                started_at=at(started),
-                channel="web",
-            ),
-        )
-    sql.execute(
-        conn,
-        sql.insert(
-            "starts",
+        records.insert(
+            records.Start,
             subject_kind="ticket",
-            subject_id="ABC-103",
-            status="stopped",
-            started_at=at(-160),
-            stopped_at=at(-100),
-            channel="cli",
-        ),
-    )
+            subject_id=key,
+            status="started",
+            started_at=at(started),
+            channel="web",
+        ).run(conn)
+    records.insert(
+        records.Start,
+        subject_kind="ticket",
+        subject_id="ABC-103",
+        status="stopped",
+        started_at=at(-160),
+        stopped_at=at(-100),
+        channel="cli",
+    ).run(conn)
     messages = (
         # id, ticket, at, source, kind, channel, run, body, answers
         (
@@ -871,39 +968,33 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         ),
     )
     for message_id, key, when, source, kind, channel, run_id, body, answers in messages:
-        sql.execute(
-            conn,
-            sql.insert(
-                "messages",
-                id=message_id,
-                subject_kind="ticket",
-                subject_id=key,
-                at=at(when),
-                source=source,
-                kind=kind,
-                channel=channel,
-                run_id=run_id,
-                body=body,
-                answers=answers,
-            ),
-        )
-    sql.execute(
-        conn,
-        sql.insert(
-            "messages",
-            id=6,
+        records.insert(
+            records.Message,
+            id=message_id,
             subject_kind="ticket",
-            subject_id="ABC-101",
-            at=at(-50),
-            source="tracker",
-            kind="comment",
-            channel="tracker",
-            body="Please keep the old login route working until the mobile app ships. <b>Thanks!</b>",
-            comment_id="10001",
-            author="557058:ann",
-            commented_at=at(-52),
-        ),
-    )
+            subject_id=key,
+            at=at(when),
+            source=source,
+            kind=kind,
+            channel=channel,
+            run_id=run_id,
+            body=body,
+            answers=answers,
+        ).run(conn)
+    records.insert(
+        records.Message,
+        id=6,
+        subject_kind="ticket",
+        subject_id="ABC-101",
+        at=at(-50),
+        source="tracker",
+        kind="comment",
+        channel="tracker",
+        body="Please keep the old login route working until the mobile app ships. <b>Thanks!</b>",
+        comment_id="10001",
+        author="557058:ann",
+        commented_at=at(-52),
+    ).run(conn)
     chores.seed(conn, root, at, CHORE)
     _decisions(conn)
     _tools(conn)
@@ -952,20 +1043,17 @@ def _decisions(conn: sqlite3.Connection) -> None:
         ),
     )
     for tick_id, when, key, repo, chore, pr, action, rationale in decisions:
-        sql.execute(
-            conn,
-            sql.insert(
-                "decisions",
-                tick_id=tick_id,
-                created_at=at(when),
-                ticket_key=key,
-                repo=repo,
-                chore=chore,
-                pr=pr,
-                action=action,
-                rationale=rationale,
-            ),
-        )
+        records.insert(
+            records.Decision,
+            tick_id=tick_id,
+            created_at=at(when),
+            ticket_key=key,
+            repo=repo,
+            chore=chore,
+            pr=pr,
+            action=action,
+            rationale=rationale,
+        ).run(conn)
 
 
 def _tools(conn: sqlite3.Connection) -> None:
@@ -998,9 +1086,8 @@ def _tools(conn: sqlite3.Connection) -> None:
         ("review_runs", 2, "read", 7, 0, 26_000),
         ("review_runs", 4, "bash", 5, 0, 8_800),
     )
-    sql.execute_many(
+    records.insert_rows(records.RunTool, ("run_table", "run_id", "tool", "calls", "errors", "result_chars")).many(
         conn,
-        sql.insert_rows("run_tools", ("run_table", "run_id", "tool", "calls", "errors", "result_chars")),
         calls,
     )
 
@@ -1027,9 +1114,8 @@ def _models(conn: sqlite3.Connection) -> None:
         ("review_runs", 3, "found", None),
         ("review_runs", 4, "found", None),
     )
-    sql.execute_many(
+    records.insert_rows(records.RunModelRead, ("run_table", "run_id", "status", "error", "attempts", "read_at")).many(
         conn,
-        sql.insert_rows("run_model_reads", ("run_table", "run_id", "status", "error", "attempts", "read_at")),
         [(table, run, status, error, 1, at(-58)) for table, run, status, error in reads],
     )
     served = (
@@ -1047,8 +1133,53 @@ def _models(conn: sqlite3.Connection) -> None:
         ("review_runs", 3, "openai/gpt-5", 1, 0.02),
         ("review_runs", 4, "openai/gpt-5", 11, 0.24),
     )
-    sql.execute_many(
-        conn,
-        sql.insert_rows("run_models", ("run_table", "run_id", "model", "replies", "cost_usd")),
-        served,
+    records.insert_rows(records.RunModel, ("run_table", "run_id", "model", "replies", "cost_usd")).many(conn, served)
+
+
+# What each kind's first model call was sent on T0's day, before the run's id adds a little, and the share of it read
+# from the cache. A table's name here is fixed, never input (D125).
+_FIRST_CALLS: tuple[tuple[LiteralString, int, float], ...] = (
+    # table, sent, share read from the cache
+    ("ticks", 31_800, 0.86),
+    ("runs", 22_400, 0.88),
+    ("chore_runs", 14_200, 0.74),
+    ("review_runs", 18_600, 0.81),
+    ("task_runs", 22_100, 0.69),
+)
+
+
+def _first_calls(conn: sqlite3.Connection) -> None:
+    """What the first model call of each run on T0's day that ended was sent, read, and wrote, and what it loaded (§13).
+
+    The definitions snapshot and the runtime's version are the history's last week's, so no week of a series on the
+    spend page names a change the fixtures made.
+    """
+    day = at(-12 * 60)
+    for table, sent, hit in _FIRST_CALLS:
+        ended = "started_at >= ? AND ended_at IS NOT NULL AND cost_usd IS NOT NULL"
+        (
+            records.update(records.of_table(table))
+            .set_to("tokens_first_call = ? + id * 97", sent)
+            .set(definitions_digest=history.SNAPSHOT)
+            .where(ended, day)
+            .run(conn)
+        )
+        (
+            records.update(records.of_table(table))
+            # A few points apart from run to run, so a chore's series is not its kind's.
+            .set_to("tokens_first_cache_read = CAST(tokens_first_call * (? - id % 3 * 0.03) AS INTEGER)", hit)
+            .where(ended, day)
+            .run(conn)
+        )
+        (
+            records.update(records.of_table(table))
+            .set_to("tokens_first_cache_write = tokens_first_call - tokens_first_cache_read")
+            .where(ended, day)
+            .run(conn)
+        )
+    (
+        records.update(records.RunModelRead)
+        .set(runtime_version=history.RUNTIME)
+        .where("status = ? AND runtime_version IS NULL", "found")
+        .run(conn)
     )

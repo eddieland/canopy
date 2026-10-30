@@ -100,6 +100,7 @@ def tick_detail(ctx: Context, tick_id: int) -> TickDetail | None:
         previous_id=previous_id,
         next_id=next_id,
         models=models_served(ctx.conn, "ticks", tick_id, ended=row.ended_at is not None, session_id=row.session_id),
+        model=row.model,
     )
 
 

@@ -3,6 +3,7 @@ name = "canopy-sandbox"
 # From the latest v* tag, as canopy's is (D085), so every package canopy ships carries its version.
 dynamic = ["version"]
 description = "canopy's sandbox wrapper: runs an agent command under srt with a policy made for the run."
+readme = "README.md"
 license = "MIT"
 authors = [{ name = "eddieland" }]
 keywords = ["canopy", "sandbox", "srt", "bubblewrap"]
