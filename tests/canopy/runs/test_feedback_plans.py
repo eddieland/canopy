@@ -33,6 +33,7 @@ from tests.canopy.helpers import (
     comment,
     context,
     github_has,
+    minute,
     personas_dir,
     plan_file,
     planner_does,
@@ -374,7 +375,7 @@ def test_the_state_block_carries_the_feedback_plan_only_while_feedback_plans_tou
         "newest": {
             "id": plan.id,
             "status": "proposed",
-            "created_at": plan.created_at,
+            "created_at": minute(plan.created_at),
             "repos": ["repo"],
             "spent": False,
             "stale": False,

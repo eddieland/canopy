@@ -29,6 +29,7 @@ from tests.canopy.helpers import (
     has_deadline,
     in_tick,
     listed,
+    minute,
     only_tick,
     overseer_titles,
     present,
@@ -767,8 +768,8 @@ def test_the_state_block_lists_the_overseers_open_attention_items(scenario: Scen
 
     scenario.tick(*waits(KEY), dry_run=True)
     assert scenario.state()["attention"] == [
-        {"ticket": "PROJ-1", "repo": "repo", "reason": "flaky_rerun", "since": since[0]},
-        {"pr": pr, "reason": "flaky_rerun", "since": since[1]},
+        {"ticket": "PROJ-1", "repo": "repo", "reason": "flaky_rerun", "since": minute(since[0])},
+        {"pr": pr, "reason": "flaky_rerun", "since": minute(since[1])},
     ]
 
 

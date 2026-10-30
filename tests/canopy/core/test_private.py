@@ -39,6 +39,7 @@ from tests.canopy.helpers import (
     dispatch_in_tick,
     journal_at,
     last_run,
+    minute,
     old_ticket,
     operator,
     overseer_does,
@@ -489,7 +490,8 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(s
     # A handled message moves the cursor past it.
     scenario.overseer(ticket_sets(KEY, repo="repo", cursors={"message": str(question + 1)}))
     ticket = present(db.get_ticket(conn, KEY))
-    assert conversation.state_section(conn, ticket) == {
+    section = present(conversation.state_section(conn, ticket))
+    assert {**section, "started_at": minute(section["started_at"])} == {
         "started_at": private["started_at"],
         "message_cursor": question + 1,
         "new_operator_messages": [],
