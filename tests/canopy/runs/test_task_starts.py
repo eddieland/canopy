@@ -42,6 +42,7 @@ from tests.canopy.helpers import (
     present,
     private_worker_does,
     running_run,
+    told,
     tools_of,
     trailers_on,
     waits,
@@ -249,11 +250,31 @@ def test_the_worker_is_the_private_one_and_its_prompt_carries_the_text(inline: C
     assert worker["argv"][:3] == ["run", "--agent", "canopy-worker-private"]
     # CANOPY_DEADLINE: the moment its timeout fires, for the clock in the snapshot (DESIGN §33).
     assert has_deadline(worker, inline.config.runtime.worker_timeout_minutes, before=before, after=after)
-    prompt = worker["argv"][-1]
+    prompt = told(worker)
     assert TEXT in prompt
-    assert f"Push only to `{BRANCH}`" in prompt
+    assert f"your branch is `{BRANCH}`" in prompt
+    assert "Push only to your branch" in prompt
     assert worker["env"]["CANOPY_RUN_ID"] == f"task-{started.run_id}"
     assert "`Co-authored-by: canopy worker <noreply@canopy.invalid>`" in prompt
+
+
+def test_two_tasks_in_one_project_share_their_workers_body_and_are_sent_only_their_own(
+    inline: Context,
+    agent_log: Path,
+) -> None:
+    for text in (TEXT, "Find the flaky test."):
+        submit(text, "--project", "PROJ")
+        [started] = start(inline)
+        with private_worker_does(result=DONE):
+            run_task(inline, started.run_id)
+    first, second = agent_runs(agent_log)
+    # One snapshot, whose definition holds the instructions: each worker is sent only its own run (DESIGN §13).
+    assert first["env"]["OPENCODE_CONFIG_DIR"] == second["env"]["OPENCODE_CONFIG_DIR"]
+    for worker, text in ((first, TEXT), (second, "Find the flaky test.")):
+        assert worker["argv"][-1].startswith("## Run\n\nYou are working on task ")
+        assert text in worker["argv"][-1]
+        assert "## Obligations" in told(worker)
+        assert "## Obligations" not in worker["argv"][-1]
 
 
 def test_the_commit_trailer_names_the_private_workers_chosen_model(
@@ -275,9 +296,11 @@ def test_the_commit_trailer_names_the_private_workers_chosen_model(
         run = run_task(ctx, started.run_id)
     [worker] = agent_runs(agent_log)
     trailer = "Co-authored-by: provider/model-a (canopy worker) <noreply@canopy.invalid>"
-    assert f"`{trailer}`" in worker["argv"][-1]
+    assert f"`{trailer}`" in told(worker)
     assert trailers_on(git_pool.origin, BRANCH) == [[trailer]]
     assert run.status == RunStatus.DONE
+    # The run records the model it asked for, as a worker run does.
+    assert run.model == "provider/model-a"
     assert "harness" not in json.loads(present(run.result_json))
 
 
@@ -543,7 +566,6 @@ def test_the_task_prompt(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAsser
     tickets = prompts.task_tickets(
         "PROJ",
         cfg.policy.max_follow_ups,
-        branch=BRANCH,
         needs_human=cfg.tracker.needs_human_label,
         labels=cfg.tracker.labels,
     )
@@ -663,8 +685,8 @@ def test_a_reply_starts_the_next_run_on_the_branch_with_the_conversation(
     # It built on what the first run pushed, and never with force.
     assert git("rev-parse", f"{run.head}^", cwd=git_pool.origin) == pushed
     first_worker, second_worker = agent_runs(agent_log)
-    assert "The conversation so far" not in first_worker["argv"][-1]
-    prompt = second_worker["argv"][-1]
+    assert "The conversation so far" not in told(first_worker)
+    prompt = told(second_worker)
     assert TEXT in prompt
     assert f"Message 1, an earlier worker's report, run {first.run_id}," in prompt
     assert "> two ways to fix it" in prompt
@@ -915,8 +937,8 @@ def test_created_keys_are_recorded_against_the_task_and_capped(
     assert "PROJ-9" not in item.detail
     # Its prompt let it file them in its project alone, at most the bound.
     [worker] = agent_runs(agent_log)
-    assert "You may file tickets in the tracker's project `PROJ`, and only there" in worker["argv"][-1]
-    assert "File at most 2" in worker["argv"][-1]
+    assert "You may file tickets in the tracker's project `PROJ`, and only there" in told(worker)
+    assert "File at most 2" in told(worker)
     assert operator("show", "task:1") == 0
     out = capsys.readouterr().out
     assert "Tickets (2), unlabeled" in out
@@ -954,10 +976,7 @@ def test_a_task_with_no_project_records_no_key_and_raises_its_item_until_stopped
         "PROJ-1: the task names no project, so it files no tickets" in json.loads(present(run.result_json))["harness"]
     )
     [worker] = agent_runs(agent_log)
-    assert (
-        "File no tickets in the tracker: the operator submitted this task with no tracker project"
-        in (worker["argv"][-1])
-    )
+    assert "File no tickets in the tracker: the operator submitted this task with no tracker project" in (told(worker))
     assert [i.ticket_key for i in unrecorded_items(inline)] == ["task:1"]
     assert operator("stop", "task:1") == 0
     assert unrecorded_items(inline) == []

@@ -2,16 +2,16 @@
 
 A request is a pydantic model (D026) that refuses an unknown field and is the verb's MCP schema. It validates what
 the overseer passes in, keys, reasons, phases, cursor ids, and free text, which later reach branch names, argv, and
-prompts, and the rules across its fields. The `canopy` commands and the MCP server (`loop.mcp`) both build a request
-and call its verb, so a tool and its command cannot drift apart.
+prompts, and the rules across its fields. The MCP server (`loop.mcp`) builds a request from a tool call's arguments and
+calls its verb.
 
-A verb returns an `Outcome`: the text its command prints, and a result, a model whose fields say what it did and whose
-schema is its tool's output schema. A request that does not validate is what the command calls misuse, exit 2; a
-guard's refusal, or a call outside a running tick, is `Refused`, exit 1. Either way the text is the same.
+A verb returns an `Outcome`: its tool's text, and a result, a model whose fields say what it did and whose schema is its
+tool's output schema. A request that does not validate, a guard's refusal, and a call outside a running tick, which is
+`Refused`, are each a tool error, its text saying why.
 
 This module holds what every verb shares, the bounds, the `Request` and `Result` bases, and the running tick, and the
 ticket's verbs:
-dispatch, decide, attention, and ticket set. A feature's own verbs are in a module of their own, the
+dispatch, decide, attention, and ticket-set. A feature's own verbs are in a module of their own, the
 reviews' in `loop.review_tools` and the chores' in `loop.chore_tools`.
 """
 
@@ -85,7 +85,7 @@ STARTS_AFTER = "it starts once your run ends, if its guards still allow it"
 
 
 class Refused(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
-    """A guard refused the call, or it came from outside a running tick. Its text is what the command prints."""
+    """A guard refused the call, or it came from outside a running tick. Its text is the tool error's."""
 
 
 # The bounds of what the overseer passes in, each as a check the click parameter types share.
@@ -243,7 +243,7 @@ def _known_kind(value: object) -> object:
 def required(*names: str) -> Callable[[JsonDict], None]:
     """List `names` in a request's schema as required, though the request takes them left out.
 
-    A field left out is a guard's refusal, which the decisions record as the command's is; the schema still tells the
+    A field left out is a guard's refusal, which the decisions record; the schema still tells the
     model to name it.
 
     Returns:
@@ -304,9 +304,9 @@ class Result(BaseModel):
 
 @dataclass(frozen=True)
 class Outcome[R: BaseModel]:
-    """What a verb did, as its command prints it and as its tool returns it."""
+    """What a verb did, as its tool returns it."""
 
-    #: What the command prints, and the tool's text.
+    #: The tool's text, what the model reads.
     text: str
     #: The same as fields: the tool's structured content.
     result: R
@@ -318,7 +318,7 @@ class Outcome[R: BaseModel]:
 class Dispatch(Request):
     """A worker started on a ticket."""
 
-    # `repos` left out is the dispatch guard's refusal, recorded as the command's is, so the request takes it.
+    # `repos` left out is the dispatch guard's refusal, which the decisions record, so the request takes it.
     model_config = ConfigDict(json_schema_extra=required("repos"))
 
     #: The ticket.
@@ -395,8 +395,8 @@ class Dispatch(Request):
         unit_cursors = [name for name in self.cursors if name in db.UNIT_CURSORS]
         if unit_cursors and len(set(self.repos)) > 1:
             raise ValueError(
-                f"cursors: a {unit_cursors[0]} cursor belongs to one unit, so repos (--repo) names one; advance it "
-                f"after with ticket-set and its repo (`canopy ticket set {self.key} --repo NAME`)",
+                f"cursors: a {unit_cursors[0]} cursor belongs to one unit, so repos names one; advance it "
+                "after with ticket-set and its repo",
             )
         return self
 
@@ -425,7 +425,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
     has ended (`spawn_dispatch`); until then it is the ticket's one run, and holds a worker.
 
     Returns:
-        What the command prints, the run recorded or what a dry run would have started, and the same as fields.
+        The tool's text, the run recorded or what a dry run would have started, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or a guard refused the dispatch, which is recorded.
@@ -713,7 +713,7 @@ def decide(ctx: Context, request: Decisions) -> Outcome[Decided]:
     """Record decisions, all of them or none.
 
     Returns:
-        What the command prints, and the same as fields.
+        The tool's text, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or about a ticket the harness decided this tick, whose refusal is recorded and
@@ -764,7 +764,7 @@ class Attention(Request):
     @model_validator(mode="after")
     def _about(self) -> Self:
         if self.key is None and self.pr is None:
-            raise ValueError("key or pr is required (KEY, or --pr): an item is about a ticket, or a PR with no ticket")
+            raise ValueError("key or pr is required: an item is about a ticket, or a PR with no ticket")
         if self.item is not None and self.reason not in kept_items.NAMING:
             raise ValueError("item is only for needs_author and notice_rerun: what one waits on, or the check it holds")
         return self
@@ -787,7 +787,7 @@ def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
     """Record an attention item.
 
     Returns:
-        What the command prints, and the same as fields.
+        The tool's text, and the same as fields.
 
     One the overseer keeps (`kept_items.KEPT`) is recorded once, naming what it is about, and held until that ends it
     (DESIGN §37).
@@ -909,11 +909,10 @@ def ticket_set(ctx: Context, request: TicketSets) -> Outcome[TicketsUpdated]:
 
     The comment cursor, the done flag, and the ticket's own phases are the ticket's. The review and ci cursors and the
     phases about a PR, `pushed_no_pr` to `merged`, are a unit's, one per repository the ticket has a PR in; a setting
-    that sets one and names no `repo` is about the ticket's one unit. It runs outside a tick too, where the operator
-    runs it and its cursors are not checked. Every setting is checked before any is recorded.
+    that sets one and names no `repo` is about the ticket's one unit. Every setting is checked before any is recorded.
 
     Returns:
-        What the command prints, a line for each setting, naming what a dry run did not do, and the same as fields.
+        The tool's text, a line for each setting, naming what a dry run did not do, and the same as fields.
 
     Raises:
         Refused: CANOPY_TICK_ID names no running tick, or a setting is refused: its `repo` is not a repository in this
@@ -921,7 +920,7 @@ def ticket_set(ctx: Context, request: TicketSets) -> Outcome[TicketsUpdated]:
             tick the harness decided the ticket in, or a cursor names no item observed or passes one the state block
             left out, each of which is recorded. Nothing else in the call is then recorded.
     """
-    current = current_tick(ctx)
+    current = running_tick(ctx)
     several = len(request.tickets) > 1
     checked: list[_Checked] = []
     refusals: list[str] = []
@@ -936,7 +935,7 @@ def ticket_set(ctx: Context, request: TicketSets) -> Outcome[TicketsUpdated]:
         raise Refused("\n".join(refusals) + rest)
     # A dry run must not advance cursors or mark a ticket done: the first live tick would then miss everything the dry
     # runs saw, or never see the ticket at all.
-    dry_run = current is not None and current.dry_run
+    dry_run = current.dry_run
     with db.transaction(ctx.conn):
         outcomes = [_record_setting(ctx, c, dry_run=dry_run) for c in checked]
     return Outcome(
@@ -957,7 +956,7 @@ class _Checked:
     unit_phase: str | None
 
 
-def _check_setting(ctx: Context, current: records.Tick | None, setting: TicketSet) -> _Checked:
+def _check_setting(ctx: Context, current: records.Tick, setting: TicketSet) -> _Checked:
     """Check one ticket's or unit's setting, recording nothing but a refusal.
 
     Returns:
@@ -973,10 +972,9 @@ def _check_setting(ctx: Context, current: records.Tick | None, setting: TicketSe
     unit = _unit(ctx, setting.repo)
     if unit is None and (unit_cursor is not None or unit_phase is not None):
         unit = _only_unit(ctx, key, f"a {unit_cursor} cursor" if unit_cursor else f"the {unit_phase} phase")
-    if current is not None:
-        _refuse_decided(ctx, current.id, key, "ticket set")
-        if cursors:
-            _check_cursors(ctx, current.id, key, unit, cursors)
+    _refuse_decided(ctx, current.id, key, "ticket-set")
+    if cursors:
+        _check_cursors(ctx, current.id, key, unit, cursors)
     return _Checked(setting, unit, unit_phase)
 
 
@@ -984,7 +982,7 @@ def _record_setting(ctx: Context, checked: _Checked, *, dry_run: bool) -> Outcom
     """Record one checked setting, inside the call's transaction.
 
     Returns:
-        What the command prints of it, and the same as fields.
+        The tool's text of it, and the same as fields.
     """
     setting, unit, unit_phase = checked.setting, checked.unit, checked.unit_phase
     key, phase, done = setting.key, setting.phase, setting.done
@@ -1024,7 +1022,7 @@ def _record_setting(ctx: Context, checked: _Checked, *, dry_run: bool) -> Outcom
 
 
 def _check_cursors(ctx: Context, tick_id: int, key: str, repo: str | None, cursors: Mapping[str, str]) -> None:
-    """Check a `ticket set`'s cursors against what the connectors observed, as a dispatch's are (DESIGN §35).
+    """Check a `ticket-set`'s cursors against what the connectors observed, as a dispatch's are (DESIGN §35).
 
     A dry run checks them too, so its plan holds the refusals a live tick would get (D036).
 
@@ -1036,11 +1034,11 @@ def _check_cursors(ctx: Context, tick_id: int, key: str, repo: str | None, curso
         claims.check_cursors(ctx, tick_id, datetime.now(UTC), key=key, repo=repo, cursors=cursors)
     except dispatch.Refusal as r:
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
-        logs.for_tick(tick_id).info("ticket set refused", extra={"ticket": key, "guard": r.guard, "reason": r.reason})
-        raise Refused(f"ticket set refused ({r.guard}): {r.reason}; the refusal was recorded") from None
+        logs.for_tick(tick_id).info("ticket-set refused", extra={"ticket": key, "guard": r.guard, "reason": r.reason})
+        raise Refused(f"ticket-set refused ({r.guard}): {r.reason}; the refusal was recorded") from None
 
 
-# The running tick, which every verb but `ticket set` needs (D020).
+# The running tick, which every verb needs (D020).
 
 
 def current_tick(ctx: Context) -> records.Tick | None:
@@ -1152,7 +1150,7 @@ def _refuse_unnamed(ctx: Context, tick_id: int, request: Attention, *, repo: str
 
 
 def _only_unit(ctx: Context, key: str, what: str) -> str:
-    """Return the unit a `ticket set` that names no repository is about: the ticket's one unit.
+    """Return the unit a `ticket-set` that names no repository is about: the ticket's one unit.
 
     A ticket with no unit yet has the workspace's one repository, if it has one.
 
@@ -1166,7 +1164,7 @@ def _only_unit(ctx: Context, key: str, what: str) -> str:
     has = (
         f"{key} has units in {', '.join(units)}" if units else f"{key} has no unit yet: name one of {', '.join(names)}"
     )
-    raise Refused(f"repo is required (--repo): {what} belongs to one unit, and {has}")
+    raise Refused(f"repo is required: {what} belongs to one unit, and {has}")
 
 
 def _unit(ctx: Context, repo: str | None) -> str | None:
@@ -1249,7 +1247,7 @@ def _review_findings(
     if kind != RunKind.RESUME:
         raise dispatch.Refusal(
             "bad_review",
-            "review_run (--review-run) names findings for a resume to address; it is for resume only",
+            "review_run names findings for a resume to address; it is for resume only",
         )
     try:
         return findings.for_worker(conn, run_id, key, repos)

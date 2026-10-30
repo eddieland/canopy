@@ -539,7 +539,7 @@ test('a ticket at its attempt limit is granted one more run from its page, as ca
 
 test("a ticket's worker persona is chosen from its page and cleared, as canopy persona does", async ({ page }) => {
     await page.goto('tickets/ABC-104')
-    const personas = page.getByTestId('ticket-personas')
+    const personas = page.getByTestId('ticket-agents')
     await expect(personas).toContainText("canopy's default")
     await personas.getByRole('button', { name: 'worker persona: canopy' }).click()
     await page.getByRole('menuitemradio', { name: 'minimalist' }).click()
@@ -560,7 +560,7 @@ test("a ticket's worker model is chosen from its page, among those the runtime l
     page,
 }) => {
     await page.goto('tickets/ABC-104')
-    const models = page.getByTestId('ticket-models')
+    const models = page.getByTestId('ticket-agents')
     const worker = models.getByTestId('ticket-model').first()
     await models.getByRole('button', { name: 'worker model: runtime default' }).click()
     // The mock's runtime lists the models its runs' sessions name, under their providers; the default is pinned

@@ -1,4 +1,4 @@
-"""`canopy dispatch` outside a dry run: guards, lease, and spawning `_run` (DESIGN §8)."""
+"""The `dispatch` tool outside a dry run: guards, lease, and spawning `_run` (DESIGN §8)."""
 
 import json
 import os
@@ -9,7 +9,6 @@ from unittest import mock
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.context import Context
 from canopy.core.vocab import ResumeReason, RunKind, RunStatus
@@ -17,10 +16,12 @@ from canopy.infra import procs
 from canopy.runs import dispatch
 from tests.canopy.helpers import (
     LABEL,
+    Called,
     InlineRunner,
     decisions,
     in_tick,
     lifelock_left,
+    overseer_calls,
     pool,
     present,
     slot_of,
@@ -40,24 +41,8 @@ def test_dispatch_leases_records_and_spawns(
     tracker_holds(conn)
     with in_tick(conn) as tick_id:
         runner = InlineRunner()
-        assert (
-            main(
-                [
-                    "dispatch",
-                    "PROJ-1",
-                    "--repo",
-                    "repo",
-                    "--label",
-                    "agent-ready-tester",
-                    "--kind",
-                    "implement",
-                    "--slug",
-                    "add-login",
-                ],
-                runner=runner,
-            )
-            == 0
-        )
+        said = overseer_calls(dispatches(slug="add-login"), runner=runner)
+        assert not said.error, said.text
         # Recorded, and started by the tick once its overseer's run ends (DESIGN §40).
         assert db.get_run(conn, 1) is None
         tick_starts(runner)
@@ -86,7 +71,7 @@ def test_dispatch_leases_records_and_spawns(
         text = prompt.read_text()
         assert text.startswith("# canopy worker: implement")
         assert "{{" not in text
-        assert f"ticket PROJ-1 in {leased.slot_path}." in text
+        assert f"ticket PROJ-1 in {leased.slot_path}, and your branch is `agent/PROJ-1-add-login`." in text
         assert "This run works in one repository:\n- `repo` at `" + str(leased.slot_path) in text
         assert ": branch `agent/PROJ-1-add-login` from `main`; PR: not recorded; look up the PR for " in text
         assert '"prs":{"repo":"<url or null>"}' in text
@@ -150,7 +135,7 @@ def test_capacity_guard(scenario: Scenario, git_pool: GitPool, treehouse_state: 
     scenario.starts()
     refused = scenario.refuses(dispatches("PROJ-2"))
     assert refused == [("refused:capacity", "1 of 1 workers are running")]
-    assert "dispatch refused (capacity): 1 of 1 workers are running" in refused.printed.err
+    assert "dispatch refused (capacity): 1 of 1 workers are running" in refused.said.text
     assert sum(s["status"] == "leased" for s in pool(treehouse_state)) == 1
     assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
 
@@ -161,8 +146,9 @@ def test_one_worker_per_ticket(scenario: Scenario, git_pool: GitPool) -> None:
 
 
 @pytest.mark.parametrize("slug", ["Add", "a_b", "-a", "a-", "a--b", "a" * 41, "a/b", "a\n"])
-def test_bad_slugs_are_usage_errors(scenario: Scenario, slug: str) -> None:
-    scenario.overseer(*dispatches(slug=slug)[1:], code=2)
+def test_bad_slugs_are_refused_by_the_tool(scenario: Scenario, slug: str) -> None:
+    said = scenario.overseer(dispatches(slug=slug), error=True)
+    assert "slug" in said.text
     assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
@@ -171,7 +157,7 @@ def test_bad_slugs_are_usage_errors(scenario: Scenario, slug: str) -> None:
 @pytest.mark.parametrize(
     ("label", "reason"),
     [
-        (None, "label is required (--label): name the queue label you read on PROJ-1"),
+        (None, "label is required: name the queue label you read on PROJ-1"),
         # The tracker source read the ticket, so the label is checked against what it observed (D051).
         (
             "agent-ready-someone-else",
@@ -205,7 +191,7 @@ def test_dispatch_without_a_configured_label_is_unauthorized(
 
 def test_unauthorized_is_checked_before_the_other_guards(scenario: Scenario, treehouse_state: Path) -> None:
     # No branch to continue, a slug a resume does not take, and a bad base: the missing label is still what is reported.
-    def resume(label: str | None) -> list[str]:
+    def resume(label: str | None) -> Called:
         return dispatches(kind=RunKind.RESUME, label=label, reasons=[ResumeReason.CI], slug="again", base="main")
 
     assert [action for action, _ in scenario.refuses(resume(None))] == ["refused:unauthorized"]
@@ -277,13 +263,8 @@ def test_spawn_failure_returns_the_slot_and_closes_the_run(
     tracker_holds(conn)
     with in_tick(conn) as tick_id:
         runner = InlineRunner(spawn_error=procs.ProcError("no processes left"))
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=runner,
-            )
-            == 0
-        )
+        said = overseer_calls(dispatches(), runner=runner)
+        assert not said.error, said.text
         tick_starts(runner)
         assert decisions(conn, tick_id) == [("refused:spawn_failed", "no processes left")]
         run = present(db.get_run(conn, 1))
@@ -296,13 +277,8 @@ def test_dry_run_still_starts_nothing(canopy_env: CanopyEnv, treehouse_state: Pa
     tracker_holds(conn)
     with in_tick(conn, dry_run=True):
         runner = InlineRunner()
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
-                runner=runner,
-            )
-            == 0
-        )
+        said = overseer_calls(dispatches(), runner=runner)
+        assert not said.error, said.text
         assert runner.spawned == []
         assert not treehouse_state.exists()
         assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
@@ -339,18 +315,18 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
     tracker_holds(conn, "LIMIT", "COOL", "BUSY", "NEW", "OTHER")
     with in_tick(conn, dry_run=True) as tick_id:
         runner = InlineRunner()
-        for args, code in [
-            (["LIMIT", "--label", "agent-ready-tester", "--kind", "implement"], 1),
-            (["COOL", "--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci"], 1),
-            (["BUSY", "--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci"], 1),
-            (["NEW", "--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci"], 1),
-            (["NEW", "--label", "agent-ready-tester", "--kind", "implement", "--base", "main"], 1),
+        for move, error in [
+            (dispatches("LIMIT"), True),
+            (dispatches("COOL", RunKind.RESUME, reasons=[ResumeReason.CI]), True),
+            (dispatches("BUSY", RunKind.RESUME, reasons=[ResumeReason.CI]), True),
+            (dispatches("NEW", RunKind.RESUME, reasons=[ResumeReason.CI]), True),
+            (dispatches("NEW", base="main"), True),
             # BUSY and this one fill max_workers = 2
-            (["NEW", "--label", "agent-ready-tester", "--kind", "implement"], 0),
-            (["NEW", "--label", "agent-ready-tester", "--kind", "implement"], 1),
-            (["OTHER", "--label", "agent-ready-tester", "--kind", "implement"], 1),
+            (dispatches("NEW"), False),
+            (dispatches("NEW"), True),
+            (dispatches("OTHER"), True),
         ]:
-            assert main(["dispatch", "--repo", "repo", *args], runner=runner) == code, args
+            assert overseer_calls(move, runner=runner).error == error, move
 
         assert [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, tick_id)] == [
             ("LIMIT", "refused:attempt_limit"),

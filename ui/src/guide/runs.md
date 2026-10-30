@@ -137,12 +137,14 @@ or OpenCode 2's `opencode session export ID`. A
 transcript with nothing to show is its header alone, saying why in a word or two (`log gone`, `no session`,
 `no events yet`); hover it for the whole reason.
 
-Under the transcript, **Prompt** is what canopy handed the worker to start its session, exactly as rendered: the
-ticket, the instructions for its kind of run, and whatever else canopy chose to tell it. It arrives folded, with its
-length; **Show prompt** opens it, and the copy button beside the length takes it whole, for trying it again by hand.
-When a worker did something baffling, start here: more often than not, it did what it was told. The agent's
-definition and the runtime's own system prompt come first and aren't in it, since no file records them. A prompt over
-1 MiB shows its first 1 MiB, marked `cut`, and a run whose prompt file is gone says `none kept`.
+Under the transcript, **Prompt** is what canopy handed the worker, exactly as rendered: the instructions for its kind
+of run, then the ticket and whatever else canopy chose to tell it. It arrives folded, with its length; **Show prompt**
+opens it, and the copy button beside the length takes it whole, for trying it again by hand. When a worker did
+something baffling, start here: more often than not, it did what it was told. The instructions above the
+`<!-- canopy: run -->` line went in as the agent's system prompt, the same for every run of its kind so the provider
+can serve them from its cache, and the `## Run` part below it was the session's first message. The rest of the
+agent's definition and the runtime's own system prompt aren't in it, since no file records them. A prompt over 1 MiB
+shows its first 1 MiB, marked `cut`, and a run whose prompt file is gone says `none kept`.
 
 Nothing here lasts forever. Once a day the loop removes the log, prompt, and diffs of runs that ended longer ago than
 your `[retention]` keeps them, 30 days unless you say otherwise, and an old run's page then says `removed after 30

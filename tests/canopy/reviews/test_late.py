@@ -7,7 +7,7 @@ import pytest
 from canopy.core import db, review_runs
 from canopy.core.vocab import HoldKind, ResumeReason, RunKind
 from canopy.reviews import waiting
-from tests.canopy.helpers import present, waits
+from tests.canopy.helpers import Called, present, waits
 from tests.canopy.review_helpers import CLEAN, FINDINGS, PR, THEIRS, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool, git
@@ -64,7 +64,7 @@ def two_commits(git_pool: GitPool, tmp_path: Path) -> tuple[str, str]:
     return shas[0], shas[1]
 
 
-def resume(review_run: int) -> list[str]:
+def resume(review_run: int) -> Called:
     """The overseer dispatches a `resume` of PROJ-1 for review run `review_run`'s findings."""
     return dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW], review_run=review_run)
 

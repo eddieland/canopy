@@ -2826,6 +2826,13 @@ export type components = {
              * @default []
              */
             findings: components["schemas"]["ChoreRunFinding"][];
+            /**
+             * Model
+             * @description The model canopy asked the runtime for, for its agent (DESIGN §13, Each agent's model), as
+             *     `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, for a chore on an
+             *     agent of the operator's own, and for a run from before canopy recorded it.
+             */
+            model: string | null;
             /** @description Which models served it. */
             models: components["schemas"]["ModelsServed"];
             /**
@@ -6403,6 +6410,13 @@ export type components = {
              * @description Where its log is: from the workspace root when under it.
              */
             log_path: string;
+            /**
+             * Model
+             * @description The model canopy asked the runtime for, for its reviewer (DESIGN §13, Each agent's model), as
+             *     `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a run from
+             *     before canopy recorded it.
+             */
+            model: string | null;
             /** @description Which models served it. */
             models: components["schemas"]["ModelsServed"];
             /**
@@ -8848,6 +8862,13 @@ export type components = {
          * @description One task run: its row as its task's page lists it, and the whole of what it reported (DESIGN §36).
          */
         TaskRunDetail: {
+            /**
+             * Model
+             * @description The model canopy asked the runtime for, for its private worker (DESIGN §13, Each agent's model), as
+             *     `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a run from
+             *     before canopy recorded it.
+             */
+            model: string | null;
             /** @description Which models served it. */
             models: components["schemas"]["ModelsServed"];
             /**
@@ -9259,6 +9280,13 @@ export type components = {
              * @description Its decisions, in the order they were recorded.
              */
             decisions: components["schemas"]["Decision"][];
+            /**
+             * Model
+             * @description The model canopy asked the runtime for, for its overseer (DESIGN §13, Each agent's model), as
+             *     `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a tick whose
+             *     overseer did not run or from before canopy recorded it.
+             */
+            model: string | null;
             /** @description Which models served its overseer. */
             models: components["schemas"]["ModelsServed"];
             /**

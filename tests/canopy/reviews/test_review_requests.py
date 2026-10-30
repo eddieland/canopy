@@ -13,9 +13,9 @@ from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.reviews import review_requests
-from tests.canopy.helpers import KEY, context, operator, personas_dir, waits
+from tests.canopy.helpers import KEY, context, operator, overseer_calls, personas_dir, waits
 from tests.canopy.review_helpers import CLEAN, FINDINGS, head, review_decisions, reviewer_reports
-from tests.canopy.scenario_helpers import Scenario, reviews
+from tests.canopy.scenario_helpers import Scenario, review_ends, reviews
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
@@ -150,6 +150,7 @@ def test_canopy_persona_chooses_or_clears_an_open_requests_persona(
 def test_a_requests_persona_is_refused_when_unknown_without_a_request_or_inside_a_run(
     requests_env: CanopyEnv,
     scenario: Scenario,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     err = scenario.operator("start", PR, "--review", "--persona", "lenient", code=1).err
     assert "start refused (unknown_persona): persona lenient has no file among canopy's own" in err
@@ -164,7 +165,9 @@ def test_a_requests_persona_is_refused_when_unknown_without_a_request_or_inside_
     assert "only its review's persona" in scenario.operator("persona", PR, "skeptic", "--agent", "worker", code=2).err
     assert "persona refused (unknown_persona)" in scenario.operator("persona", PR, "lenient", code=1).err
     # No agent chooses a persona, a PR's reviewer's least of all (TRUST_MODEL T1).
-    assert "persona refused (inside_run)" in scenario.overseer("persona", PR, "skeptic", code=1).err
+    with scenario.ticking():
+        assert main(["persona", PR, "skeptic"]) == 1
+    assert "persona refused (inside_run)" in capsys.readouterr().err
     assert "persona refused (bad_pr)" in scenario.operator("persona", "repo#12", "skeptic", code=1).err
     assert scenario.conn.execute("SELECT count(*) FROM review_request_personas").fetchone()[0] == 0
 
@@ -316,20 +319,23 @@ def test_review_end_ends_a_request_whose_pr_merged_first_and_needs_a_tick(
 ) -> None:
     conn = scenario.conn
     scenario.operator("start", PR, "--review")
-    assert "no tick is running" in scenario.operator("review", "end", "--pr", PR, "--reason", "closed", code=1).err
+    outside = overseer_calls(review_ends(PR, "closed"))
+    assert outside.error, outside.text
+    assert "no tick is running" in outside.text
     with scenario.ticking(dry_run=True) as tick_id:
-        scenario.overseer("review", "end", "--pr", PR, "--reason", "closed")
+        scenario.overseer(review_ends(PR, "closed"))
         assert [d[2:] for d in review_decisions(conn, tick_id)] == [("review:end", "dry run: not ended; closed")]
     assert requests_of(conn) == [(PR, "cli", None)]
     other = f"{PR}0"
     scenario.operator("start", other, "--review")
     # A PR in none of the workspace's repositories cannot be reviewed here.
-    scenario.overseer("review", "end", "--pr", other, "--reason", "unknown_repo")
+    scenario.overseer(review_ends(other, "unknown_repo"))
     with scenario.ticking() as tick_id:
-        scenario.overseer("review", "end", "--pr", PR, "--reason", "stopped", code=2)
-        scenario.overseer("review", "end", "--pr", PR, "--reason", "merged")
-        refused = scenario.overseer("review", "end", "--pr", PR, "--reason", "merged", code=1)
-        assert "review end refused (not_requested)" in refused.err
+        invalid = scenario.overseer(review_ends(PR, "stopped"), error=True)
+        assert "invalid reason 'stopped': choose from" in invalid.text
+        scenario.overseer(review_ends(PR, "merged"))
+        refused = scenario.overseer(review_ends(PR, "merged"), error=True)
+        assert "review end refused (not_requested)" in refused.text
         assert [d[2:] for d in review_decisions(conn, tick_id)] == [
             ("review:end", "merged"),
             ("refused:not_requested", f"{PR} has no open request"),

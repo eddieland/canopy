@@ -502,7 +502,7 @@ def test_a_note_starts_a_revision_on_the_next_tick_whose_result_is_the_new_versi
     # The state block names the draft, never the note's text or the draft's.
     assert NOTE not in json.dumps(asked)
     # A dry tick checks the guards and starts nothing.
-    said = scenario.overseer(*revises(reviewed)[1:], dry_run=True).out
+    said = scenario.overseer(revises(reviewed), dry_run=True).text
     assert said.startswith(f"dry run: recorded a revision of review run {reviewed}'s draft")
     assert review_runs.revision_runs_of(scenario.conn, draft_of(scenario, reviewed).id) == []
     revision = scenario.review(revises(reviewed), reviewer=reviewer_reports(REVISED))

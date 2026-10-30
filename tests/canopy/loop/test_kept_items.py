@@ -1,7 +1,7 @@
 """The attention items the overseer keeps: recorded once, naming what each is about, and held until that ends it.
 
 `needs_author`, `multi_repo`, and `notice_rerun` (DESIGN §14, §37, `core.kept_items`). The journals are written by
-hand: the overseer's record made through its command or its tool, the ticks around it closed as the case needs.
+hand: the overseer's record made through its tool, the ticks around it closed as the case needs.
 """
 
 from __future__ import annotations
@@ -11,13 +11,11 @@ from unittest import mock
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import conversation, db, kept_items
 from canopy.core.vocab import Phase, TickStatus
 from canopy.loop import attention, harness, phases
-from tests.canopy.helpers import KEY, decisions, in_tick, mcp_session, operator, tool_call, waits
+from tests.canopy.helpers import KEY, calls, decisions, in_tick, operator, overseer_calls, raises, waits
 from tests.canopy.observation_helpers import PR, check, comment, held, review
-from tests.canopy.scenario_helpers import raises
 
 if TYPE_CHECKING:
     import sqlite3
@@ -31,14 +29,15 @@ if TYPE_CHECKING:
 REPO = "repo"
 
 
-def records_item(conn: sqlite3.Connection, reason: str, *more: str, key: str = KEY) -> int:
-    """The overseer records `reason` about `key`, with `more` of the command's options, in an `ok` tick of its own.
+def records_item(conn: sqlite3.Connection, reason: str, *, key: str = KEY, **more: object) -> int:
+    """The overseer records `reason` about `key`, with `more` of its tool's fields, in an `ok` tick of its own.
 
     Returns:
         The tick's id.
     """
     with in_tick(conn, ends_ok=True) as tick_id:
-        assert main(["attention", key, reason, "--detail", f"{key} detail", *more]) == 0
+        said = overseer_calls(calls("canopy_attention", key=key, reason=reason, detail=f"{key} detail", **more))
+        assert not said.error, said.text
     return tick_id
 
 
@@ -84,7 +83,7 @@ def test_a_needs_author_naming_a_comment_is_held_until_the_comment_cursor_passes
 ) -> None:
     asks = comment(conn, "c1", "acc-1", "2026-10-20T11:00:00Z", "Should this be a new service?")
     later = comment(conn, "c2", "acc-1", "2026-10-20T11:30:00Z", "And what about the old one?")
-    recorded = records_item(conn, "needs_author", "--item", str(asks))
+    recorded = records_item(conn, "needs_author", item=asks)
     [decision] = db.decisions_for_tick(conn, recorded)
     assert (decision.kept, decision.item) == (True, asks)
     # Ticks that give the overseer the ticket and leave the item out, a skipped one, and one whose overseer failed.
@@ -106,7 +105,7 @@ def test_a_needs_author_naming_a_review_item_is_held_until_its_units_review_curs
     conn: sqlite3.Connection,
 ) -> None:
     pushback = review(conn, 41, "octocat", "commented", "2026-10-20T11:00:00Z", "Why not reuse the queue?")
-    records_item(conn, "needs_author", "--repo", REPO, "--item", str(pushback))
+    records_item(conn, "needs_author", repo=REPO, item=pushback)
     ticks(conn, TickStatus.OK, TickStatus.OK)
     # The ticket's comment cursor is not the cursor of this item's kind.
     db.set_ticket(conn, KEY, str(canopy_env.root), cursors={"comment": str(pushback)})
@@ -135,7 +134,7 @@ def test_a_notice_rerun_is_held_until_a_newer_run_of_its_check_is_observed(conn:
     check(conn, "build", "completed", "failure", run_id=11)
     check(conn, "lint", "completed", "failure", run_id=12)
     [held_run] = conn.execute("SELECT number FROM observed_check_runs WHERE run_id = 11").fetchone()
-    records_item(conn, "notice_rerun", "--repo", REPO, "--item", str(held_run))
+    records_item(conn, "notice_rerun", repo=REPO, item=held_run)
     ticks(conn, TickStatus.OK, TickStatus.SKIPPED, TickStatus.OVERSEER_FAILED, TickStatus.OK)
     answers(conn)  # the operator's answer reruns nothing
     check(conn, "lint", "completed", "success", run_id=13)  # another check's newer run
@@ -151,7 +150,7 @@ def test_each_kept_item_goes_once_its_ticket_is_done_or_stopped(conn: sqlite3.Co
     check(conn, "build", "completed", "failure", run_id=11)
     [held_run] = conn.execute("SELECT number FROM observed_check_runs").fetchone()
     records_item(conn, "multi_repo")
-    records_item(conn, "notice_rerun", "--repo", REPO, "--item", str(held_run))
+    records_item(conn, "notice_rerun", repo=REPO, item=held_run)
     records_item(conn, "needs_author")
     assert len(open_items(conn)) == 3
     if how == "done":
@@ -170,9 +169,9 @@ def test_two_records_of_one_item_hold_it_until_both_are_ended(
 ) -> None:
     first = comment(conn, "c1", "acc-1", "2026-10-20T11:00:00Z", "Is this in scope?")
     second = comment(conn, "c2", "acc-1", "2026-10-20T11:30:00Z", "Who owns the old path?")
-    records_item(conn, "needs_author", "--item", str(first))
+    records_item(conn, "needs_author", item=first)
     since = attention.current(conn)[0].since
-    records_item(conn, "needs_author", "--item", str(second))
+    records_item(conn, "needs_author", item=second)
     assert [(r.item, r.reason) for r in kept_items.held(conn)] == [(first, "needs_author"), (second, "needs_author")]
     db.set_ticket(conn, KEY, str(canopy_env.root), cursors={"comment": str(first)})
     [item] = attention.current(conn)
@@ -184,7 +183,7 @@ def test_two_records_of_one_item_hold_it_until_both_are_ended(
 @pytest.mark.usefixtures("unit")
 def test_a_dry_runs_record_counts_only_while_its_tick_is_the_latest(conn: sqlite3.Connection) -> None:
     with in_tick(conn, dry_run=True, ends_ok=True):
-        assert main(["attention", KEY, "multi_repo", "--detail", "api and web"]) == 0
+        assert not overseer_calls(raises(KEY, "multi_repo", "api and web")).error
     assert open_items(conn) == [(KEY, "multi_repo", None)]
     ticks(conn, TickStatus.OK)
     assert open_items(conn) == []
@@ -204,21 +203,18 @@ def test_an_item_recorded_every_tick_before_it_was_kept_is_read_as_then_and_not_
     assert open_items(conn) == [(KEY, "needs_author", None)]
 
 
-#: A record of each kept reason that names nothing that could end it, as the command and its tool take it, and why.
+#: A record of each kept reason that names nothing that could end it, as its tool takes it, and why.
 UNNAMED = {
     "no ticket": (
-        ["needs_author", "--pr", PR],
-        {"pr": PR, "reason": "needs_author"},
+        raises(None, "needs_author", "d", pr=PR),
         "needs_author is held until something about its ticket ends it: name the ticket",
     ),
     "no check run": (
-        [KEY, "notice_rerun", "--repo", REPO],
-        {"key": KEY, "reason": "notice_rerun", "repo": REPO},
+        raises(KEY, "notice_rerun", "d", repo=REPO),
         "notice_rerun is held until a newer run of its check is observed: name the check run's number",
     ),
     "nothing observed": (
-        [KEY, "needs_author", "--item", "999"],
-        {"key": KEY, "reason": "needs_author", "item": 999},
+        raises(KEY, "needs_author", "d", item=999),
         "item 999 names nothing the journal observed",
     ),
 }
@@ -227,16 +223,12 @@ UNNAMED = {
 @pytest.mark.usefixtures("unit")
 @pytest.mark.parametrize("case", UNNAMED, ids=list(UNNAMED))
 def test_a_kept_item_that_names_nothing_that_could_end_it_is_refused(conn: sqlite3.Connection, case: str) -> None:
-    command, arguments, why = UNNAMED[case]
-    for through in ("command", "tool"):
-        with in_tick(conn) as tick_id:
-            if through == "command":
-                assert main(["attention", *command, "--detail", "d"]) == 1
-            else:
-                said = mcp_session(tool_call("attention", **arguments, detail="d")).said()
-                assert said.error
-                assert "refused (unnamed)" in said.text
-            assert decisions(conn, tick_id) == [("refused:unnamed", why)]
+    move, why = UNNAMED[case]
+    with in_tick(conn) as tick_id:
+        said = overseer_calls(move)
+        assert said.error
+        assert "refused (unnamed)" in said.text
+        assert decisions(conn, tick_id) == [("refused:unnamed", why)]
     assert attention.current(conn) == []
 
 
@@ -248,12 +240,14 @@ def test_a_kept_item_naming_what_is_not_its_own_is_refused(conn: sqlite3.Connect
     [run] = conn.execute("SELECT number FROM observed_check_runs").fetchone()
     pushback = review(conn, 41, "octocat", "commented", "2026-10-20T11:00:00Z", "Why?")
     with in_tick(conn) as tick_id:
-        assert main(["attention", KEY, "needs_author", "--detail", "d", "--item", str(elsewhere)]) == 1
-        assert main(["attention", KEY, "needs_author", "--detail", "d", "--item", str(run)]) == 1
-        assert main(["attention", KEY, "notice_rerun", "--detail", "d", "--item", str(pushback)]) == 1
-        assert main(["attention", KEY, "notice_rerun", "--detail", "d", "--repo", "other", "--item", str(run)]) == 1
+        assert overseer_calls(raises(KEY, "needs_author", "d", item=elsewhere)).error
+        assert overseer_calls(raises(KEY, "needs_author", "d", item=run)).error
+        assert overseer_calls(raises(KEY, "notice_rerun", "d", item=pushback)).error
+        assert overseer_calls(raises(KEY, "notice_rerun", "d", repo="other", item=run)).error
         # Not a guard's refusal: `item` on a reason that names none is a field the tool cannot take.
-        assert main(["attention", KEY, "multi_repo", "--detail", "d", "--item", str(run)]) != 0
+        invalid = overseer_calls(raises(KEY, "multi_repo", "d", item=run))
+        assert invalid.error
+        assert "item is only for needs_author and notice_rerun" in invalid.text
     assert [why for _, why in decisions(conn, tick_id)] == [
         f"item {elsewhere} is a comment on another ticket",
         f"item {run} is a check_run, which no needs_author names",

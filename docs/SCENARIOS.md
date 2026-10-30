@@ -56,7 +56,9 @@ any OpenCode upgrade, and before relying on a permission they check.
   its last minute, after a built-in tool's output and first in an MCP tool's result, the longer wording once, and a push
   before the kill; and no `node_modules` or `package.json` written into the snapshot. Then run it in a repository with a
   `.opencode/` directory, sandboxed with the registry refused, and time the wait before the session starts. Record the
-  times in `MEASUREMENTS.md`.
+  times in `MEASUREMENTS.md`. Then count, by kind, the runs that ended `timeout` over a week of real use, and how many
+  pushed after canopy's line, against the same count for the runs on snapshots before the clock (M57's Stage 0), with
+  each one's transcript read for edits after its last commit, the work the slot took with it.
 - **S65. The split** (#923). Confirmed against OpenCode's source (1.19.3), not in a run: the plugin finds where the
   environment starts by the lines `session/system.ts` writes. With S40's recorder, unsandboxed, run two workers in two
   slots, then two reviews, each pair within five minutes. Expect two system blocks in every request, the first the
@@ -196,6 +198,14 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   run naming it, and the ticket stale. Run it once on a GitHub Enterprise server too, `--repo <host>/<owner>/<name>`,
   where an older server without issue dependencies fails every read, naming the field.
 
+### What canopy keeps
+
+- **S65. Git in the primary clones** (M47). Between ticks, with an idle slot holding a commit no remote has, run
+  `canopy gc --dry-run`, then `canopy gc --git`. Expect each clone `packed`, its loose objects gone from the next dry
+  run and its packs fewer or the same; the slot's commit still there (`git cat-file -t`); and the next run on that
+  repository leasing, committing, and pushing as before. With a run live, expect its repository `skipped` and the
+  others `packed`. Run it again after a git upgrade.
+
 ## Measurements
 
 Each records its numbers in `MEASUREMENTS.md`, as a dated section.
@@ -239,6 +249,22 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   Once M48 gives the overseer `canopy _mcp`, expect its eleven tools, about 2.3k tokens (F55), and `bash` gone if its
   rules deny it whole. Then let `canopy loop` run a week and expect no run or tick whose transcript shows a
   call to a tool it was not offered (`tool not found`).
+- **S59. What canopy keeps** (M47, closed on real use 2026-10-21). Run `canopy gc --dry-run --json` on the live
+  workspace and record each kind's count and bytes, and what a pass with §26's defaults removes, in `MEASUREMENTS.md`.
+  Expect the run, tick, and review files, `canopy.log`, and the harness's attention rows to hold most of it; set §26's
+  defaults from the numbers, or say why they stay. Run it again before a change to what a pass removes.
+- **S60. A week of passes** (M47). Let `canopy loop` run a week with the pass on, and each day run
+  `canopy gc --dry-run --json` shortly before the pass is due, a day after the last `gc_passes.started_at`. Expect one
+  `ok` row a day whose `removed` matches, kind by kind, the dry run's `removable` and `removable_size`, but for files
+  that crossed their retention in between, with `failures` 0; `canopy.log` rotated past `log_max_mib`, with no more
+  than `log_keep` rotated files; and every transcript, prompt, output, and diff the operator opens shown, or saying
+  "removed after N days", never failing. Record the rows and the dry runs in `MEASUREMENTS.md`.
+- **S62. The journal across a pass** (M47). On the live workspace, shortly before a pass is due, save `attention.md`,
+  `canopy status`, and `canopy gc --dry-run --json`; after the pass, expect the attention list, each item's age, and
+  `canopy status` unchanged, and the `gc_passes` row's `rows` for the harness's attention, connector runs, and
+  derivations equal to the dry run's `removable`. Then, between ticks, run `canopy gc --vacuum` and expect the journal
+  to shrink by about the dry run's free pages plus the rows' pages the pass freed, and the next tick to run normally.
+  Record the sizes and counts in `MEASUREMENTS.md`.
 - **S68. The derivation against the overseer** (M36, closed on real use 2026-10-29). Run `canopy loop` a day with
   both connectors against the real queue. Record in `MEASUREMENTS.md` the agreement between `derivations` and the
   overseer's `decisions` per row of §7's phase table, counted by distinct situation as well as by decision
@@ -296,7 +322,6 @@ with the fakes hold.
 Moved 2026-10-22 to the file of their open milestone, keeping their numbers.
 
 - **S45 to S53. Worktree pools** (M45). Stage 3's and stage 4's checks on the toy workspace.
-- **S59, S60, S62. What canopy keeps, and a week of passes** (M47). Stages 1 to 3's checks.
 
 Retired 2026-10-23. The overseer has no shell; it mirrors through a tool (M48).
 

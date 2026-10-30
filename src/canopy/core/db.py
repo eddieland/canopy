@@ -46,7 +46,7 @@ CLOSED_RATIONALE = "closed"
 # tick would name the new release on ticks the old code ran.
 CANOPY_VERSION = version("canopy")
 
-# `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
+# The cursors the `ticket-set` tool names, and the column each one updates. The comment cursor is the ticket's; the
 # review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a ticket's,
 # over journal message ids (DESIGN §22); the rest are journal numbers (§35).
 TICKET_CURSORS: Mapping[str, LiteralString] = {"comment": "comment_cursor", "message": "last_message_id"}
@@ -192,7 +192,7 @@ def transaction(conn: sqlite3.Connection) -> Generator[None]:
     """Run the block in a `BEGIN IMMEDIATE` transaction; roll back if it raises.
 
     Inside a transaction already, the block runs in that one, which commits or rolls back with it: so a call that
-    writes several records together, as a `ticket set` of several tickets does, can wrap writes that open their own.
+    writes several records together, as a `ticket-set` of several tickets does, can wrap writes that open their own.
     """
     if conn.in_transaction:
         yield
@@ -330,6 +330,11 @@ def start_tick(conn: sqlite3.Connection, *, dry_run: bool) -> int:
     """
     cur = records.insert(records.Tick, started_at=now(), dry_run=int(dry_run), canopy_version=CANOPY_VERSION).run(conn)
     return rowid(cur)
+
+
+def set_tick_model(conn: sqlite3.Connection, tick_id: int, model: str | None) -> None:
+    """Record the model tick `tick_id`'s overseer asks for as it starts (DESIGN §13); None for the runtime's default."""
+    records.update(records.Tick).set(model=model).where("id = ?", tick_id).run(conn)
 
 
 def finish_tick(conn: sqlite3.Connection, tick_id: int, status: TickStatus, summary: str) -> None:

@@ -573,7 +573,7 @@ def lines(text: str) -> str:
 
 
 def ticket_title(value: object) -> str | None:
-    """A ticket's title on one line. `canopy ticket set` stored it so; this keeps a page from relying on that.
+    """A ticket's title on one line. The `ticket-set` tool stored it so; this keeps a page from relying on that.
 
     Returns:
         The title, its whitespace collapsed and control characters dropped, or None when it is missing or empty.

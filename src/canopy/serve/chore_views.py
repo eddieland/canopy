@@ -250,6 +250,7 @@ def chore_run_detail(ctx: Context, name: str, run_id: int) -> ChoreRunDetail | N
             ended=row.ended_at is not None,
             session_id=row.session_id or None,
         ),
+        model=row.model,
     )
 
 
