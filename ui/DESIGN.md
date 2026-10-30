@@ -653,6 +653,14 @@ side.
   for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
   output that was never recorded is `none`; a PR canopy only reviews has as its ticket `none: canopy only reviews it`
   (`NO_TICKET` in `src/lib/words.ts`). A list with no rows is an `Empty`, not a `None`.
+- **A model** (`src/lib/models.ts`) is named one way on every page: its id, `provider/model@variant`, in monospace, a
+  variant after `@` (`withVariant`), never `at high`. A dense list, a runs list or a cost split, drops the provider
+  (`modelNames`), unless two of its models would then read alike, and gives the whole id in the tip; a picker, a field,
+  or a table of models names it whole, as a gateway (`github-copilot/`) can serve its maker's models under the same
+  name. No model is muted sans, never monospace, since it is no id: `runtime default` (`RUNTIME_DEFAULT`) where nothing
+  sets one; `unread` (`UNREAD`) for a run whose session canopy has not read, why in its tip; and `None` with why for one
+  read that named none. A model takes no status color, but one the runtime no longer lists, `status-blocked`, since it
+  refuses the next run.
 - **`Input`**, **`Textarea`**, and **`SearchField`** (`src/components/input.tsx`): every text field, on
   `surface-raised` with a hairline and the accent's focus ring. An `Input` is one height everywhere, `h-9`, a form's,
   beside its default buttons; a number is an `Input` too. A field to search or filter with is a `SearchField`: a
