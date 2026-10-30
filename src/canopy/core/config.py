@@ -1168,6 +1168,9 @@ class Paths(Section):
     #: The operator's personas, each `<name>.md`: one shadows a shipped persona of its name, any other adds to them
     #: (DESIGN §31).
     personas: Annotated[UserPath | None, Scope.PRIVATE] = None
+    #: The operator's checklists, each `<repo>.md` for the mapped repository of that name: the rules a worker run
+    #: that pushes there is asked to hold its diff to (DESIGN §42).
+    checklists: Annotated[UserPath | None, Scope.PRIVATE] = None
     #: A clone of the operator's own repository, at its top level: each live tick exports every plan of the workspace
     #: into `<it>/<workspace>/`, commits, and pushes to its upstream (DESIGN §25). Private, since it sends every plan's
     #: text where it points (TRUST_MODEL T6).

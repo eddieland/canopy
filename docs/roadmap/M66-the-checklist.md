@@ -85,6 +85,8 @@ again, and its run's page shows `fixed` on those and `pass` or `n/a` on the rest
 sandboxed worker the same; a worker in a repository without a list is not reminded; and two weeks of real use are in
 `MEASUREMENTS.md` as stage 2 says, with the operator's call on stage 3 recorded on the `Status:` line.
 
-Status: not started. Designed 2026-10-29 (DESIGN §42); the operator chose the reminder over the review as the first
+Status: in progress. Designed 2026-10-29 (DESIGN §42); the operator chose the reminder over the review as the first
 stage the same day, on the evidence that standing instructions already emphasize these rules and workers miss them.
-Made a list per repository 2026-10-30, at the operator's ask.
+Made a list per repository 2026-10-30, at the operator's ask. Stage 1 started 2026-10-30 at the operator's ask,
+the list being theirs to write for their own repositories: `paths.checklists` is read, parsed, and handed to a
+worker run that may push; the plugin's reminder, the answers, and their counts are next.
