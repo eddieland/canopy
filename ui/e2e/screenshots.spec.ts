@@ -54,7 +54,7 @@ for (const theme of THEMES) {
         await page.clock.setFixedTime(NOW)
         await storeTheme(page, theme)
         await signIn(page)
-        await page.goto('runs/39')
+        await page.goto('workspace/runs/39')
         await settled(page)
         const call = page.getByTestId('transcript-tool').filter({ hasText: 'jira_get_issue' }).first()
         await call.locator('summary').click()
@@ -66,7 +66,7 @@ for (const theme of THEMES) {
         await page.clock.setFixedTime(NOW)
         await storeTheme(page, theme)
         await signIn(page)
-        await page.goto('runs/39')
+        await page.goto('workspace/runs/39')
         await settled(page)
         const context = page.getByTestId('transcript-context')
         await context.getByRole('button', { name: 'Show chart' }).click()
@@ -78,7 +78,7 @@ for (const theme of THEMES) {
         await page.clock.setFixedTime(NOW)
         await storeTheme(page, theme)
         await signIn(page)
-        await page.goto('runs/ticks/2')
+        await page.goto('workspace/ticks/2')
         await settled(page)
         const output = page.getByTestId('tick-output')
         await output.getByRole('button', { name: 'Show output' }).click()
@@ -187,7 +187,7 @@ test("a tick's output shown in dark", async ({ page }) => {
     await page.clock.setFixedTime(NOW)
     await storeTheme(page, 'dark')
     await signIn(page)
-    await page.goto('runs/ticks/2')
+    await page.goto('workspace/ticks/2')
     await settled(page)
     const output = page.getByTestId('tick-output')
     await output.getByRole('button', { name: 'Show output' }).click()
@@ -268,7 +268,7 @@ test.describe('in a narrow window', () => {
         await screenshotWhole(page, 'tickets-ABC-102-narrow-dark.png')
     })
 
-    for (const route of ['tickets', 'pull-requests', 'pull-requests/reviews', 'runs/worktrees']) {
+    for (const route of ['tickets', 'pull-requests', 'pull-requests/reviews', 'workspace/worktrees']) {
         test(`${route} narrow`, async ({ page }) => {
             await openInDark(page, route)
             await screenshotMain(page, `${route.replaceAll('/', '-')}-narrow-dark.png`)

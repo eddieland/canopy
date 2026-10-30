@@ -308,7 +308,7 @@ export function modelKey(row: Pick<ModelRow, 'model' | 'unread'>): string {
 
 /**
  * The runs page's kind (`?kind=`) each kind of run is listed under, which By model's links carry: a plan run is a
- * worker run there. Null for the overseer's, whose ticks it lists apart, at `/runs/ticks`, and not by model.
+ * worker run there. Null for the overseer's, whose ticks it lists apart, at `/workspace/ticks`, and not by model.
  */
 export const RUNS_KIND: Record<SpendKind, RunsOf | null> = {
     overseer: null,

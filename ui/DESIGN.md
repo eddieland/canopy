@@ -79,7 +79,7 @@ Rules:
   - Tasks chartreuse, a new shoot: a task seeds the tickets that follow it, and a shoot is yellow-green before it
     is emerald, which is `status-running`'s hue and would read as a running task on its own page.
   - Pull requests violet, the purple a merged PR turns, where every PR is headed. The reviews are under it.
-  - Runs indigo, the night shift: workers carry on after the operator logs off.
+  - Workspace indigo, the night shift: its runs, ticks, and worktrees carry on after the operator logs off.
   - Chores orange, a hi-vis vest: scheduled maintenance.
   - Reports gold, coins: what canopy cost, by the month and, on the spend page under it, by the day.
   - Memory pale azure, the forget-me-not. It shares done's hue, which costs nothing: its page shows no run state.
@@ -196,14 +196,14 @@ Rules:
   working now; at its foot, the spend, then a footer. The nav lists the sections by how often the operator opens them
   (`SECTIONS` in `src/lib/sections.ts`): what they work in first (Attention, Tickets, Tasks, Pull requests), then what
   they check now and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav
-  item is height the sticky part has none to spare of in an 800px window. The pages under a section (Runs' Ticks and
-  Worktrees, Pull requests' Reviews, Reports' Spend) open under its item while it is the section shown, so the rail
-  says where a page is: `text-sm` rows of `h-7`, `muted-foreground`, their labels in line with the section's, on a 1px
-  hairline in its color down its icon's middle. Elsewhere they stay folded, so the nav keeps its eight rows. The strip
-  below `lg` keeps its icons alone; the sheet shows them as the whole rail does. Each nav item says on hover what its
-  page holds, and each spend window what it covers, as a native `title`; a spend window opens the spend page over its
-  week or month. Each block under the nav is a hairline and a `panel-label` over its content, but the spend's, where
-  each window's name is the label. What is working is every agent run running,
+  item is height the sticky part has none to spare of in an 800px window. The pages under a section (Workspace's
+  Runs, Ticks, and Worktrees, Pull requests' Reviews, Reports' Spend) open under its item while it is the section
+  shown, so the rail says where a page is: `text-sm` rows of `h-7`, `muted-foreground`, their labels in line with the
+  section's, on a 1px hairline in its color down its icon's middle. Elsewhere they stay folded, so the nav keeps its
+  eight rows. The strip below `lg` keeps its icons alone; the sheet shows them as the whole rail does. Each nav item
+  says on hover what its page holds, and each spend window what it covers, as a native `title`; a spend window opens the
+  spend page over its week or month. Each block under the nav is a hairline and a `panel-label` over its content, but
+  the spend's, where each window's name is the label. What is working is every agent run running,
   worker runs, reviews of PRs, chore runs, and task runs alike, then the worker runs waiting on the operator's answer,
   each oldest first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the
   PR, the chore, the task run's `task:N#M`, in medium weight), how long it has run (or `waiting on you` in
@@ -508,9 +508,10 @@ Rules:
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
   section (search, the 404) names itself there in the accent. A parent is a journal name, so it keeps its case
   (`chore:deps` on a chore run) and stays muted until hovered. The title is the trail's last step, so the trail never
-  repeats it. The trail follows the URL, not the journal: a run's page is under Runs, not its ticket, which its panel
-  links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail. Where
-  there is no title to qualify, a ticket's attention item, its `private` or `public` chip heads its conversation.
+  repeats it. The trail follows the URL, not the journal: a run's page is under Workspace's Runs, not its ticket,
+  which its panel links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in
+  the trail. Where there is no title to qualify, a ticket's attention item, its `private` or `public` chip heads its
+  conversation.
 - **A book at the header's top right** opens the guide's page about the page shown, at the heading about it when it has
   one (a run's page at `runs#a-runs-page`), named `The guide: Runs and worktrees` on hover and to a screen reader: a
   closed book with lines of text (`BookText`) at 22px in a ghost `icon` button, sized to the title beside it rather

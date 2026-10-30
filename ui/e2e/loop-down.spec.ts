@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
         }
     })
     await signIn(page)
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await settled(page)
     await expect(page.getByTestId('stream-status')).toHaveAttribute('data-status', 'open')
 })

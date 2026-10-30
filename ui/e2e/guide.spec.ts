@@ -42,7 +42,7 @@ test('a page links to a heading on it, to the next page and back, and to a secti
 })
 
 test("a page's book opens the guide at the part about it, and the guide's own pages have none", async ({ page }) => {
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     await page.getByTestId('page-guide').click()
     await expect(page).toHaveURL(/\/guide\/runs#a-runs-page$/u)
