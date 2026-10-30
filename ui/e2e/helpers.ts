@@ -45,6 +45,7 @@ export const ROUTES = [
     'runs/ticks/2',
     'reports',
     'reports/spend',
+    'reports/checklist',
     'settings',
     'settings/limits',
     'settings/skills',

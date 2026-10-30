@@ -112,5 +112,6 @@ show run:ID` prints them. Chosen conservatively, for the operator to change: a r
 held, still counts its items unanswered: `_run` does not read whether the hook held a push. `canopy checklist` counts
 them too, per repository and item: the runs reminded, then pass, fixed, held, n/a, and unanswered, over `--days`
 local days by when each run started, as `canopy health` reads them, `--repo` for one repository and `--json` for
-data; a held item's reason stays on its run. The run's page, the web UI's view of the counts, and a task's run are
-next.
+data; a held item's reason stays on its run. The web UI shows the same counts on Reports' Checklist page, over 7, 14,
+or 30 days, with a repository filter, a held item's reason left on its run there too. The run's page and a task's run
+are next.
