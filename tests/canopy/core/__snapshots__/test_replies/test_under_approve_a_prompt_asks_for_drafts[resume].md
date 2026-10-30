@@ -142,6 +142,9 @@ A follow-up is a request, not work you start: canopy asks the operator about eac
 
 ## Result
 
+The operator reads your `summary` and `question` in canopy as Markdown: paragraphs, `-` and `1.` lists, `code`,
+fenced code, and **bold**. Nothing else is read, and a link shows its address, so write a URL as itself.
+
 Your last line of stdout must be exactly one JSON object, with nothing after it, in the shape of the result line at the
 end of your message from canopy.
 

@@ -121,6 +121,9 @@ saying why.{{PLAN_REVIEW}}
 
 ## Result
 
+The operator reads your `summary` and `question` in canopy as Markdown: paragraphs, `-` and `1.` lists, `code`,
+fenced code, and **bold**. Nothing else is read, and a link shows its address, so write a URL as itself.
+
 Your last line of stdout must be exactly one JSON object and nothing after it. Only `done` records a plan, and only
 when `{{PLAN_OUT}}` holds one. `items` lists each item you cover, at most {{MAX_ITEMS}}, by the `id` the feedback file
 gives it, with what you propose, and for a review's or comment's `change` or `decline` the reply you would draft to its
