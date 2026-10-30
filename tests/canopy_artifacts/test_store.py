@@ -12,8 +12,10 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
+import canopy_mcp
+import jsonschema
 import pytest
-from canopy_artifacts import cli, server
+from canopy_artifacts import cli, server, tools
 from canopy_artifacts.store import (
     LIST_PAGE,
     MAX_BODY,
@@ -53,8 +55,16 @@ EIGHT = [
 ]
 
 
+#: Each tool's output schema, as it is listed.
+OUTPUT_SCHEMAS = {t.name: canopy_mcp.schema(t.result, "serialization") for t in tools.TOOLS if t.result is not None}
+
+
 class Client:
-    """Calls a store's tools through its MCP server, one JSON-RPC message at a time."""
+    """Calls a store's tools through its MCP server, one JSON-RPC message at a time.
+
+    Every call that succeeds is held to its tool's output schema: its structured content validates against it, as a
+    client checks, and says what its text says.
+    """
 
     def __init__(self, store: Store) -> None:
         self.store = store
@@ -67,11 +77,19 @@ class Client:
         return response
 
     def result(self, name: str, **arguments: object) -> str:
-        """Call a tool, and return its result."""
+        """Call a tool, and return its result's text, once its structured content is shown to say the same."""
         result = self.request("tools/call", {"name": name, "arguments": arguments})["result"]
         assert result["isError"] is False, result
         [content] = result["content"]
-        return str(content["text"])
+        text = str(content["text"])
+        structured = result["structuredContent"]
+        jsonschema.validate(structured, OUTPUT_SCHEMAS[name])
+        if name == "comment_feed":
+            *changes, end = (json.loads(line) for line in text.splitlines())
+            assert structured == {"changes": changes, "through": end["through"]}
+        else:
+            assert structured == json.loads(text)
+        return text
 
     def call(self, name: str, **arguments: object) -> dict[str, Any]:
         """Call a tool that succeeds, and return what it returned."""
@@ -497,13 +515,24 @@ def test_an_origin_is_set_when_an_artifact_is_made_and_kept_by_its_versions(clie
     }
 
 
+def test_a_result_that_strays_from_its_schema_is_the_servers_failure_not_a_refusal(client: Client) -> None:
+    """A store that returns what its tool's result does not hold fails the call, rather than mislead a client."""
+    with mock.patch.object(Store, "resolve", autospec=True, return_value={"state": "gone"}):
+        failed = client.request(
+            "tools/call",
+            {"name": "thread_resolve", "arguments": {"thread_id": "t", "resolved": True}},
+        )
+    assert failed["error"]["code"] == canopy_mcp.INTERNAL_ERROR
+
+
 def test_it_serves_the_eight_tools_and_nothing_else(client: Client) -> None:
     hello = client.request("initialize", {"protocolVersion": "2024-11-05", "capabilities": {}})["result"]
     assert hello["protocolVersion"] == "2024-11-05"
     assert hello["capabilities"] == {"tools": {"listChanged": False}}
+    assert hello["instructions"] == server.INSTRUCTIONS
     assert (
         client.request("initialize", {"protocolVersion": "1999-01-01"})["result"]["protocolVersion"]
-        == (server.PROTOCOL_VERSIONS[0])
+        == (canopy_mcp.PROTOCOL_VERSIONS[0])
     )
     tools = client.request("tools/list")["result"]["tools"]
     assert [t["name"] for t in tools] == EIGHT
@@ -511,18 +540,39 @@ def test_it_serves_the_eight_tools_and_nothing_else(client: Client) -> None:
     assert "$ref" not in schemas
     # No schema's title; the title field of artifact_publish stays.
     assert '"title": "' not in schemas
-    publish = next(t for t in tools if t["name"] == "artifact_publish")["inputSchema"]
-    assert all(field["description"] for field in publish["properties"].values())
+    # The model reads a tool's description and its fields' alone, so none is left without one.
+    assert all(field.get("description") for t in tools for field in t["inputSchema"]["properties"].values())
+    # Every tool lists its result's schema, which holds no field the result does not, and a refusal carries no result.
+    for t in tools:
+        jsonschema.Draft202012Validator.check_schema(t["outputSchema"])
+        assert t["outputSchema"]["additionalProperties"] is False, t["name"]
+    assert "$ref" not in json.dumps([t["outputSchema"] for t in tools])
+    refused = client.request("tools/call", {"name": "artifact_read", "arguments": {"artifact_id": "a_none"}})["result"]
+    assert (refused["isError"], "structuredContent" in refused) == (True, False)
+    reads = {"artifact_read", "artifact_list", "thread_list", "comment_feed"}
+    assert {t["name"] for t in tools if t["annotations"]["readOnlyHint"]} == reads
+    assert not any(t["annotations"]["openWorldHint"] for t in tools)
+    # (destructive, idempotent) of each tool that writes: none removes what the store holds; resolving may be repeated.
+    assert {
+        t["name"]: (t["annotations"]["destructiveHint"], t["annotations"]["idempotentHint"])
+        for t in tools
+        if t["name"] not in reads
+    } == {
+        "artifact_publish": (False, False),
+        "comment_reply": (False, False),
+        "comment_create": (False, False),
+        "thread_resolve": (False, True),
+    }
     create = next(t for t in tools if t["name"] == "comment_create")["inputSchema"]
     assert create["properties"]["anchor"]["anyOf"][0]["properties"].keys() == {"exact", "prefix", "suffix"}
-    assert client.request("resources/list")["error"]["code"] == server.METHOD_NOT_FOUND
+    assert client.request("resources/list")["error"]["code"] == canopy_mcp.METHOD_NOT_FOUND
     assert client.request("tools/call", {"name": "artifact_delete", "arguments": {}})["error"]["code"] == (
-        server.INVALID_PARAMS
+        canopy_mcp.INVALID_PARAMS
     )
     assert server.answer(b"{not json", client.store) == {
         "jsonrpc": "2.0",
         "id": None,
-        "error": {"code": server.PARSE_ERROR, "message": "not a JSON message"},
+        "error": {"code": canopy_mcp.PARSE_ERROR, "message": "not a JSON message"},
     }
     assert server.answer(b'{"jsonrpc": "2.0", "method": "notifications/initialized"}', client.store) is None
 

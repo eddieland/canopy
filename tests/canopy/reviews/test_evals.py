@@ -18,7 +18,7 @@ import pytest
 from canopy.core import records, sql
 from canopy.core.context import Context
 from canopy.reviews import evals
-from tests.canopy.helpers import agent_runs, listed, personas_dir, pool_statuses
+from tests.canopy.helpers import agent_runs, listed, personas_dir, pool_statuses, told
 from tests.canopy.review_helpers import CLEAN, PR, REPORT, THEIRS, feature_commit, head, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv, GitPool
@@ -87,8 +87,8 @@ def test_an_eval_scores_the_reviewer_and_records_nothing_in_the_journal(
         assert run["env"]["CANOPY_RUN_ID"].startswith("review-eval-")
         [merge_base] = run["commands"]
         assert merge_base["stdout"].strip() == base
-        prompt = run["argv"][3]
-        assert f"merges into `{evals.BASE_BRANCH}`" in prompt
+        prompt = told(run)
+        assert f"- Base: `{evals.BASE_BRANCH}`" in prompt
         assert "CI is down." not in prompt
         assert not Path(run["cwd"]).exists()
     assert pool_statuses(treehouse_state) == ["available", "available"]
@@ -201,7 +201,7 @@ def test_an_eval_runs_in_the_persona_and_on_the_model_it_is_given(
     assert result["persona"]["name"] == "terse"
     assert result["model"] == MODEL
     [run] = agent_runs(agent_log)
-    assert "Be terse." in run["argv"][3]
+    assert "Be terse." in told(run)
     definition = Path(run["env"]["OPENCODE_CONFIG_DIR"]) / "agents" / "canopy-reviewer.md"
     assert f'\nmodel: "{MODEL}"\n' in definition.read_text()
 

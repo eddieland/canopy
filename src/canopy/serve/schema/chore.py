@@ -44,6 +44,9 @@ class ChoreRun(Model):
     or recorded it before canopy kept it."""
     log_path: str
     """Where its log is: from the workspace root when under it."""
+    served: list[str] = []
+    """The models its session names as having served it, as `provider/model`, the most costly first; empty until
+    canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served."""
 
 
 class ChoreFinding(Model):
@@ -172,6 +175,10 @@ class ChoreRunDetail(Model):
     """An `ok` run's findings, as it listed them."""
     models: ModelsServed
     """Which models served it."""
+    model: str | None = None
+    """The model canopy asked the runtime for, for its agent (DESIGN §13, Each agent's model), as
+    `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, for a chore on an
+    agent of the operator's own, and for a run from before canopy recorded it."""
 
 
 class ChoreTried(Model):

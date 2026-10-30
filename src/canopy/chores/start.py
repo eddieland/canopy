@@ -1,4 +1,4 @@
-"""`canopy chore run`: guards, the chore's prompt, and the detached `canopy _chore` (DESIGN §19).
+"""The `chore-run` tool's run: guards, the chore's prompt, and the detached `canopy _chore` (DESIGN §19).
 
 The operator's config says what a chore is and how often it may run; the overseer chooses when. The guards hold the
 limits whatever the overseer asks for. A refusal is raised as `Refusal`; the CLI records it as `refused:<guard>`, and
@@ -174,7 +174,13 @@ def launch(ctx: Context, *, tick_id: int | None, state: view.ChoreState, body: s
         RuntimeError: the chore run's row was gone right after it was inserted.
     """
     name = state.name
-    run_id = chore_runs.insert_chore_run(ctx.conn, tick_id=tick_id, chore=name, logs_dir=runs_dir(ctx, name))
+    run_id = chore_runs.insert_chore_run(
+        ctx.conn,
+        tick_id=tick_id,
+        chore=name,
+        logs_dir=runs_dir(ctx, name),
+        model=asked_model(ctx.config, state.chore),
+    )
     run = chore_runs.get_chore_run(ctx.conn, run_id)
     if run is None:
         raise RuntimeError(f"chore run {run_id} vanished")
@@ -268,6 +274,17 @@ def _guard(
         planned_note += f", counting {len(held)} recorded for the tick to start after the overseer" if held else ""
         raise Refusal("chore_capacity", f"{busy} of {limit} chore runs are running{planned_note}")
     return chore
+
+
+def asked_model(config: Config, chore: Chore) -> str | None:
+    """Return the model a run of `chore` asks for, as the run records it (DESIGN §13).
+
+    Returns:
+        Its own `model`, else `runtime.models`' chore, as `provider/model[@variant]`; None when neither is set, or the
+        chore runs an agent of the operator's own, whose definition chooses.
+    """
+    chosen = agent_models.of_chore(config, chore).model
+    return chosen.name if chosen is not None else None
 
 
 def _check_model(ctx: Context, name: str, chore: Chore) -> None:

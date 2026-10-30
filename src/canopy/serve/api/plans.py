@@ -1,7 +1,7 @@
 """A ticket's plans (DESIGN §25): read them, approve, ask for, or skip one, save an edit, and comment on passages.
 
 Also approving its feedback plan (§32), whole or by item, which the PR's page shows beside its threads. The plan verbs
-are `canopy plan`'s, through `canopy.core.plans` and `canopy.core.feedback_plans`, so with their refusals; asking for
+are `canopy plan`'s, through `canopy.core.plans` and `canopy.runs.feedback_plans`, so with their refusals; asking for
 changes is a reply, through the tickets' reply route. Saving an edit writes the plan's file as the operator's own editor
 would, and refuses one the file changed under. Comments are the web channel's alone: there is no CLI verb to comment,
 since a passage is chosen by selecting it.
@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 
-from canopy.core import conversation, feedback_plans, plan_threads, plans
+from canopy.core import conversation, plan_threads, plans
 from canopy.infra import logs
+from canopy.runs import feedback_plans
 from canopy.serve import feedback_plan_views, plan_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, PlanId, RefusedError, ThreadId, TicketKey, not_found, ticket_ref

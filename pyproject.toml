@@ -34,14 +34,15 @@ dependencies = [
     "canopy-artifacts",
     "canopy-github",
     "canopy-jira",
+    "canopy-mcp",
     "canopy-notify-slack",
     "canopy-sandbox",
     "click>=8.5.0",
-    "fastapi>=0.143.2",
+    "fastapi>=0.161.1",
     "pydantic>=2.14.1",
     "rich>=15.0.0",
     # FastAPI's own foundation; canopy.serve's middleware and responses import it directly, so it is declared too.
-    "starlette>=1.8.0",
+    "starlette>=1.9.0",
     "tomlkit>=0.15.1",
     "uvicorn>=0.54.0",
 ]
@@ -109,8 +110,9 @@ path = "hatch_build.py"
 exclude = ["ui/node_modules", "ui/dist", "ui/test-results", "ui/playwright-report"]
 
 # The public demo over mock data (D122): Vercel installs canopy from uv.lock, whose wheel bundles the UI, and serves
-# this app. vercel.json sets the framework and deploys main only, no previews of other branches; vercel-ignore.sh
-# skips a build when nothing the demo serves changed since the last deploy.
+# this app. vercel.json sets the framework and turns deployments off, of main too, so pull requests get no Vercel
+# check; set `git.deploymentEnabled` to `{"**": false, "main": true}` to deploy main again. vercel-ignore.sh skips a
+# build when nothing the demo serves changed since the last deploy.
 [tool.vercel]
 entrypoint = "vercel_app:app"
 
@@ -127,6 +129,7 @@ canopy-artifacts = { workspace = true }
 canopy-github = { workspace = true }
 canopy-http = { workspace = true }
 canopy-jira = { workspace = true }
+canopy-mcp = { workspace = true }
 canopy-notify-slack = { workspace = true }
 canopy-review-bench = { workspace = true }
 canopy-sandbox = { workspace = true }
@@ -138,8 +141,8 @@ dev = [
     # never runs it, so it is here for its tests and type checks, not among canopy's dependencies.
     "canopy-review-bench",
     "editorconfig-checker>=3.11.1",
-    "httpx2>=2.13.1",
-    "hypothesis>=6.170.0",
+    "httpx2>=2.16.0",
+    "hypothesis>=6.170.8",
     # Holds what an MCP tool returns to the schema it lists, as a client would check it (tests/canopy/loop/test_mcp.py).
     "jsonschema>=4.26.0",
     # Git hooks (prek.toml) that run the formatters and linters on a commit: `make hooks` installs them.
@@ -149,8 +152,8 @@ dev = [
     # Line and branch coverage: `make coverage`, and `make check COVERAGE=1`, whose coverage.xml CI sends to Codecov.
     "pytest-cov>=7.1.0",
     "pytest-xdist>=3.8.0",
-    "ruff>=0.17.1",
-    "rumdl>=0.2.79",
+    "ruff>=0.17.2",
+    "rumdl>=0.3.0",
     "shellcheck-py>=0.11.0.1",
     # Snapshot tests: what canopy renders whole, held to a file under a test's `__snapshots__/` (AGENTS.md, Testing).
     "syrupy>=6.1.1",
@@ -207,10 +210,11 @@ ignore = [
 [tool.ruff.lint.pydocstyle]
 convention = "google"
 
-# pydantic resolves a model's annotations when its class is made, so what they name is imported for real (TC001): the
-# API's models in serve are built on schema.Model, and each feature's module in schema/ imports the shared ones.
+# pydantic resolves a model's annotations when its class is made, and `records` a row type's or a view's when it reads
+# one, so what they name is imported for real (TC001): the API's models in serve are built on schema.Model, and each
+# feature's module in schema/ imports the shared ones.
 [tool.ruff.lint.flake8-type-checking]
-runtime-evaluated-base-classes = ["canopy.serve.schema.Model"]
+runtime-evaluated-base-classes = ["canopy.serve.schema.Model", "canopy.core.records.Row", "canopy.core.records.View"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -237,6 +241,12 @@ ban-relative-imports = "all"
 "unittest.mock.MagicMock".msg = "Spec it: `mock.patch.object(..., autospec=True)` or `mock.create_autospec(...)`."
 # Every command line is click (D025). The workspace members turn TID251 off below, so review holds them to it.
 "argparse".msg = "Every command line is click (D025)."
+# A write to a journal table goes through its row type, which holds each column and value to the table (D125).
+"canopy.core.sql.insert".msg = "Write through the table's row type: records.insert."
+"canopy.core.sql.insert_rows".msg = "Write through the table's row type: records.insert_rows."
+"canopy.core.sql.insert_from".msg = "Write through the table's row type: records.insert_from."
+"canopy.core.sql.update".msg = "Write through the table's row type: records.update."
+"canopy.core.sql.delete".msg = "Write through the table's row type: records.delete."
 
 # `from unittest import mock`, then `mock.patch`, `mock.create_autospec` (AGENTS.md, Testing).
 [tool.ruff.lint.flake8-import-conventions]
@@ -256,9 +266,6 @@ banned-from = ["unittest.mock"]
 # A click command's docstring is its --help text, so Returns and Raises sections would print there. Every command
 # returns an exit code and raises CliError for main to report; that is main's contract, not each command's.
 "src/canopy/cli/*" = ["DOC201", "DOC501"]
-# A row type's fields are resolved by `typing.get_type_hints` when a row is read, so the vocabularies they name are
-# imported for real (TC001).
-"src/canopy/core/records.py" = ["TC001"]
 # The fakes are standalone scripts that talk on stdout and stderr.
 "tests/fakes/*" = ["T201"]
 # The sandbox wrapper is a separate program, not canopy (DESIGN §24): it runs git and srt, and reports on
@@ -269,8 +276,6 @@ banned-from = ["unittest.mock"]
 "packages/canopy-github/**" = ["TID251"]
 # The wheel's build hook runs npm (D079); it is part of packaging, not of canopy.
 "hatch_build.py" = ["S603", "TID251"]
-# The Slack sink is a separate program whose job is the network call the harness never makes (DESIGN §20).
-"packages/canopy-notify-slack/**" = ["TID251"]
 # The review bench is a separate program whose job is running git and gh against a copy of a repository.
 "packages/canopy-review-bench/**" = ["TID251"]
 # Its commands' docstrings are their --help text, so a Raises section would print there.

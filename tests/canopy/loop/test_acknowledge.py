@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING
 from canopy.core import conversation, db, records
 from canopy.core.vocab import Decider, RunKind
 from canopy.loop import acknowledge
-from tests.canopy.helpers import KEY, present, waits
-from tests.canopy.scenario_helpers import dispatches, raises
+from tests.canopy.helpers import KEY, present, raises, waits
+from tests.canopy.scenario_helpers import dispatches
 
 if TYPE_CHECKING:
     import sqlite3
@@ -124,6 +124,8 @@ def decision(action: str, rationale: str) -> records.Decision:
         chore=None,
         pr=None,
         decider=Decider.OVERSEER,
+        kept=False,
+        item=None,
     )
 
 

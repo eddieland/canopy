@@ -7,6 +7,7 @@ These tests check what the wrapper asks of the sandbox, not that the sandbox hol
 import contextlib
 import json
 import os
+import shlex
 import shutil
 import signal
 import sqlite3
@@ -22,25 +23,32 @@ import canopy_sandbox
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, context, db, review_runs, tasks
+from canopy.core import config, context, db, review_runs
 from canopy.infra import lock, logs, procs
 from canopy.infra.procs import SubprocessRunner
-from canopy.runs import tasks as task_starts
+from canopy.loop import mcp
+from canopy.runs import task_starts, tasks
 from tests.canopy.helpers import (
     DEAD_PID,
     InlineRunner,
+    answered_lines,
+    decides,
     decisions,
     in_tick,
     inline_context,
+    mcp_lines,
     operator,
+    overseer_calls,
     pool,
     present,
     private_worker_does,
     slot_of,
     tick_starts,
+    tracker_holds,
     worker_does,
 )
 from tests.canopy.review_helpers import CLEAN, PR, reviewer_reports, run_inline
+from tests.canopy.scenario_helpers import dispatches
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, executable, git, user_toml
 
 # The command the install puts beside python, which is how canopy runs it: never `python -m`, which would put the
@@ -115,6 +123,13 @@ def wrap_here(*args: str, cwd: Path, ipv6: bool) -> int:
         contextlib.chdir(cwd),
     ):
         return canopy_sandbox.run(list(args))
+
+
+def chore_dir(tmp_path: Path) -> Path:
+    """A chore's own cwd: not tmp_path, which holds the test's HOME and the role caches the wrapper denies."""
+    cwd = tmp_path / "chore"
+    cwd.mkdir(exist_ok=True)
+    return cwd
 
 
 def linked_worktree(tmp_path: Path, name: str) -> tuple[Path, Path]:
@@ -357,7 +372,7 @@ def test_each_role_caches_in_a_directory_of_its_own_and_setup_in_the_workers(san
     _, slot = linked_worktree(tmp_path, "repo")
     write = ["sh", "-c", 'mkdir -p "$XDG_CACHE_HOME/tool" && echo "$1" > "$XDG_CACHE_HOME/tool/$1"', "sh"]
     operators = {"GOMODCACHE": str(tmp_path / "go-mod"), "npm_config_cache": str(tmp_path / "npm")}
-    places = {"worker": slot, "setup": slot, "chore": tmp_path, "review": review_dir(tmp_path, slot)}
+    places = {"worker": slot, "setup": slot, "chore": chore_dir(tmp_path), "review": review_dir(tmp_path, slot)}
 
     for role, cwd in places.items():
         objects = {"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path / role))} if role in {"worker", "setup"} else {}
@@ -379,7 +394,7 @@ def test_a_cache_directory_already_there_is_made_private(sandbox: Sandbox, tmp_p
     (sandbox.caches() / "chore").mkdir(parents=True, mode=0o755)
     (sandbox.caches() / "chore").chmod(0o755)
 
-    assert wrap("chore", "true", cwd=tmp_path).ok
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path)).ok
 
     assert (sandbox.caches() / "chore").stat().st_mode & 0o777 == 0o700
 
@@ -388,7 +403,7 @@ def test_a_cache_directory_that_is_a_link_runs_nothing(sandbox: Sandbox, tmp_pat
     sandbox.caches().mkdir(parents=True)
     (sandbox.caches() / "chore").symlink_to(sandbox.cache_home, target_is_directory=True)
 
-    done = wrap("chore", "true", cwd=tmp_path)
+    done = wrap("chore", "true", cwd=chore_dir(tmp_path))
 
     assert done.returncode == 2
     assert "is not a directory of this user's" in done.stderr
@@ -398,7 +413,7 @@ def test_a_cache_directory_that_is_a_link_runs_nothing(sandbox: Sandbox, tmp_pat
 def test_a_run_that_locks_its_temp_directory_still_has_it_removed(sandbox: Sandbox, tmp_path: Path) -> None:
     lock = 'mkdir -p "$TMPDIR/a/b" && chmod 000 "$TMPDIR/a" "$TMPDIR"'
 
-    done = wrap("chore", "sh", "-c", lock, cwd=tmp_path)
+    done = wrap("chore", "sh", "-c", lock, cwd=chore_dir(tmp_path))
 
     assert done.ok, done.stderr
     assert list(sandbox.runs_root().iterdir()) == []
@@ -528,20 +543,24 @@ def test_canopy_runs_in_the_overseers_sandbox_and_records_in_the_journal(
 ) -> None:
     """`canopy --version`, which the tick checks before the overseer starts, and a decision that lands in the journal.
 
-    The fake srt sandboxes nothing: the canary checks the same under the real one.
+    The decision is a call of the overseer's tool, made through its server, which the runtime starts inside the
+    overseer's sandbox. The fake srt sandboxes nothing: the canary checks the same under the real one.
     """
     canopy = str(Path(sys.executable).parent / "canopy")
     conn = state_as_a_tick_leaves_it(canopy_env)
+    lines = mcp_lines(decides("PROJ-1", rationale="its PR is in review"))
     with in_tick(conn) as tick_id:
         version = wrap("overseer", "--", canopy, "--version", cwd=canopy_env.root)
-        skip = ["decide", "skip", "--rationale", "mcp_unavailable: the tracker is down"]
-        decided = wrap("overseer", "--", canopy, *skip, cwd=canopy_env.root)
+        serves = f"printf '%s\\n' \"$@\" | {shlex.join(mcp.COMMAND)}"
+        decided = wrap("overseer", "--", "sh", "-c", serves, "sh", *lines, cwd=canopy_env.root)
         recorded = decisions(conn, tick_id)
 
     assert version.ok, version.stderr
     assert version.stdout.startswith("canopy ")
     assert decided.ok, decided.stderr
-    assert recorded == [("skip", "mcp_unavailable: the tracker is down")]
+    [said] = answered_lines(decided.stdout)
+    assert not said.error, said.text
+    assert recorded == [("wait", "its PR is in review")]
 
 
 @pytest.mark.parametrize(
@@ -636,7 +655,7 @@ def test_the_srt_canopy_installed_runs_and_reads_its_own_vendor_directory(
     link.parent.mkdir()
     link.symlink_to(Path("..") / SRT_PACKAGE / "dist" / "cli.js")
 
-    assert wrap("chore", "true", cwd=tmp_path).ok
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path)).ok
 
     call = sandbox.only_call()
     assert call["settings"]["filesystem"]["allowRead"][-1] == str((package / "vendor").resolve())
@@ -647,7 +666,7 @@ def test_without_srt_nothing_runs(tmp_path: Path) -> None:
     empty = tmp_path / "empty"
     empty.mkdir()
 
-    done = wrap("chore", "touch", str(tmp_path / "ran"), cwd=tmp_path, env={"PATH": str(empty)})
+    done = wrap("chore", "touch", str(tmp_path / "ran"), cwd=chore_dir(tmp_path), env={"PATH": str(empty)})
 
     assert done.returncode == 2
     assert "srt is not installed; run `canopy sandbox setup`" in done.stderr
@@ -660,7 +679,7 @@ def test_a_temp_directory_too_deep_for_srts_sockets_runs_nothing(sandbox: Sandbo
     deep = sandbox.tmp / ("d" * 60)
     deep.mkdir()
 
-    done = wrap("chore", "touch", str(tmp_path / "ran"), cwd=tmp_path, env={"TMPDIR": str(deep)})
+    done = wrap("chore", "touch", str(tmp_path / "ran"), cwd=chore_dir(tmp_path), env={"TMPDIR": str(deep)})
 
     assert done.returncode == 2
     assert f"the temp directory {deep} has too long a path for srt's sockets" in done.stderr
@@ -685,13 +704,13 @@ def test_on_a_host_without_ipv6_srts_bridge_listens_on_ipv4(
     with mock.patch.dict(os.environ, {canopy_sandbox.SOCAT_LISTEN: operators or ""}):
         if operators is None:
             os.environ.pop(canopy_sandbox.SOCAT_LISTEN)
-        assert wrap_here("chore", "true", cwd=tmp_path, ipv6=ipv6) == 0
+        assert wrap_here("chore", "true", cwd=chore_dir(tmp_path), ipv6=ipv6) == 0
 
     assert sandbox.only_call()["env"].get(canopy_sandbox.SOCAT_LISTEN) == listen
 
 
 def test_the_commands_exit_status_is_the_wrappers(sandbox: Sandbox, tmp_path: Path) -> None:
-    done = wrap("chore", "sh", "-c", "exit 7", cwd=tmp_path)
+    done = wrap("chore", "sh", "-c", "exit 7", cwd=chore_dir(tmp_path))
 
     assert done.returncode == 7
 
@@ -703,7 +722,7 @@ def test_a_run_directory_whose_process_is_gone_is_removed_by_the_next_run(sandbo
         (root / name / "tmp").mkdir(parents=True)
         (root / name / "pid").write_text(f"{pid}\n")
 
-    assert wrap("chore", "true", cwd=tmp_path).ok
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path)).ok
 
     assert [p.name for p in root.iterdir()] == ["run.live"]
 
@@ -751,7 +770,24 @@ def test_a_worker_outside_a_linked_worktree_runs_nothing(sandbox: Sandbox, tmp_p
         ({"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["@READ@"]}}, "denies no reads"),
         ({"network": {}, "filesystem": {"denyRead": ["~"]}}, "no network.allowedDomains list"),
         ({"network": {"allowedDomains": []}, "filesystem": {"denyRead": "~"}}, "denyRead is not a list"),
+        ({"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowWrite": "~"}}, "not a list"),
         ([], "denies no reads"),
+        # Each would bind back what the wrapper denies: the run directories, in the fixture's temp directory under
+        # /tmp, or the role caches, under HOME.
+        ({"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowRead": ["/tmp"]}}, "names /tmp"),  # noqa: S108
+        ({"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowRead": ["~"]}}, "names ~,"),
+        (
+            {"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowWrite": ["~/.cache"]}},
+            "names ~/",
+        ),
+        (
+            {"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowRead": ["a\u0000b"]}},
+            "not a path",
+        ),
+        (
+            {"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowRead": ["~no-such-user-0/x"]}},
+            "not a path",
+        ),
     ],
 )
 def test_a_template_that_would_not_confine_the_command_runs_nothing(
@@ -766,12 +802,21 @@ def test_a_template_that_would_not_confine_the_command_runs_nothing(
     else:
         path.write_text(template if isinstance(template, str) else json.dumps(template))
 
-    done = wrap("chore", "true", cwd=tmp_path)
+    done = wrap("chore", "true", cwd=chore_dir(tmp_path))
 
     assert done.returncode == 2
     assert error in done.stderr
     assert not sandbox.log.exists()
     assert list(sandbox.runs_root().glob("run.*")) == []
+
+
+def test_a_chore_whose_cwd_holds_the_role_caches_runs_nothing(sandbox: Sandbox, tmp_path: Path) -> None:
+    """The shipped template allows reading a chore's cwd, which srt would bind back over every role's cache in it."""
+    done = wrap("chore", "true", cwd=tmp_path)
+
+    assert done.returncode == 2
+    assert f"filesystem.allowRead names {tmp_path}, which holds {sandbox.caches()}" in done.stderr
+    assert not sandbox.log.exists()
 
 
 def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
@@ -793,9 +838,9 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
     commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
     with worker_does(commit):
         runner = InlineRunner()
+        tracker_holds(conn)
         with in_tick(conn, ends_ok=True):
-            args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-            assert main([*args, "--slug", "work"], runner=runner) == 0
+            assert not overseer_calls(dispatches(slug="work"), runner=runner).error
             tick_starts(runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
@@ -830,7 +875,7 @@ def test_canopys_sandboxed_reviewer_reads_the_checkout_through_the_wrapper(
     sha = git("rev-parse", "main", cwd=git_pool.origin)
 
     with reviewer_reports(CLEAN, ["git", "-C", "checkout", "rev-parse", "HEAD"]):
-        run_id = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
+        run_id = run_inline(conn, sha=sha, ticket="PROJ-1")
 
     row = present(review_runs.get_review_run(conn, run_id))
     assert row.status == "done", Path(row.log_path).read_text()
@@ -862,9 +907,9 @@ def test_a_sandboxed_repositorys_worker_and_setup_run_in_the_wrapper_canopy_adds
     commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
     with worker_does(commit):
         runner = InlineRunner()
+        tracker_holds(conn)
         with in_tick(conn, ends_ok=True):
-            args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-            assert main([*args, "--slug", "work"], runner=runner) == 0
+            assert not overseer_calls(dispatches(slug="work"), runner=runner).error
             tick_starts(runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
@@ -892,9 +937,9 @@ def test_a_repository_sandbox_repos_does_not_name_runs_unwrapped(
     conn: sqlite3.Connection = canopy_env.journal()
     with worker_does():
         runner = InlineRunner()
+        tracker_holds(conn)
         with in_tick(conn, ends_ok=True):
-            args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-            assert main([*args, "--slug", "work"], runner=runner) == 0
+            assert not overseer_calls(dispatches(slug="work"), runner=runner).error
             tick_starts(runner)
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
@@ -924,7 +969,7 @@ def test_a_sandboxed_repositorys_review_runs_in_the_wrapper_canopy_adds(
     sha = git("rev-parse", "main", cwd=git_pool.origin)
 
     with reviewer_reports(CLEAN, ["git", "-C", "checkout", "rev-parse", "HEAD"]):
-        run_id = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
+        run_id = run_inline(conn, sha=sha, ticket="PROJ-1")
 
     row = present(review_runs.get_review_run(conn, run_id))
     assert row.status == "done", Path(row.log_path).read_text()
@@ -953,3 +998,61 @@ def test_a_sandboxed_repositorys_task_runs_in_the_wrapper_canopy_adds(canopy_env
     assert call["cwd"] == present(tasks.get_run(ctx.conn, started.run_id)).slot_path
     assert call["env"]["XDG_CACHE_HOME"] == str(sandbox.caches() / "worker")
     assert call["env"]["CANOPY_GIT_OBJECTS"]
+
+
+def answers_dir(tmp_path: Path, parent: str = "runs") -> Path:
+    """A run's answers directory as `_run` or a review makes it, in the workspace's `.canopy/`."""
+    answers = tmp_path / "ws" / ".canopy" / parent / "1.answers"
+    answers.mkdir(parents=True)
+    return answers
+
+
+@pytest.mark.parametrize("role", ["worker", "review"])
+def test_a_run_reads_its_answers_directory_and_writes_none_of_it(sandbox: Sandbox, tmp_path: Path, role: str) -> None:
+    """The operator's answer to its card's question reaches the run there (DESIGN §41)."""
+    _, slot = linked_worktree(tmp_path, "repo")
+    answers = answers_dir(tmp_path, "runs" if role == "worker" else "reviews")
+    env = {"CANOPY_ANSWERS": str(answers)}
+    if role == "worker":
+        env["CANOPY_GIT_OBJECTS"] = str(objects_dir(tmp_path))
+    cwd = slot if role == "worker" else review_dir(tmp_path, slot)
+
+    done = wrap(role, "true", cwd=cwd, env=env)
+
+    assert done.ok, done.stderr
+    filesystem = sandbox.only_call()["settings"]["filesystem"]
+    assert str(answers) in filesystem["allowRead"]
+    assert all(not str(answers).startswith(p) for p in filesystem["allowWrite"])
+
+
+def test_a_chore_is_given_no_answers_directory(sandbox: Sandbox, tmp_path: Path) -> None:
+    answers = answers_dir(tmp_path)
+
+    assert wrap("chore", "true", cwd=chore_dir(tmp_path), env={"CANOPY_ANSWERS": str(answers)}).ok
+
+    assert str(answers) not in sandbox.only_call()["settings"]["filesystem"]["allowRead"]
+
+
+@pytest.mark.parametrize("place", ["relative", "outside", "named", "link", "missing"])
+def test_an_answers_directory_that_is_not_a_runs_runs_nothing(sandbox: Sandbox, tmp_path: Path, place: str) -> None:
+    """Anything else would let the variable open a directory of the environment's choosing to the run."""
+    _, slot = linked_worktree(tmp_path, "repo")
+    answers = answers_dir(tmp_path)
+    bad = {
+        "relative": Path(".canopy/runs/1.answers"),
+        "outside": tmp_path / "1.answers",
+        "named": answers.parent / "1.objects",
+        "link": answers.parent / "2.answers",
+        "missing": answers.parent / "3.answers",
+    }[place]
+    if place == "link":
+        bad.symlink_to(tmp_path, target_is_directory=True)
+    elif place != "missing":
+        (slot / bad if place == "relative" else bad).mkdir(parents=True, exist_ok=True)
+    env = {"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path)), "CANOPY_ANSWERS": str(bad)}
+
+    done = wrap("worker", "true", cwd=slot, env=env)
+
+    assert done.returncode == 2
+    assert "CANOPY_ANSWERS is not a run's answers directory" in done.stderr
+    assert not sandbox.log.exists()

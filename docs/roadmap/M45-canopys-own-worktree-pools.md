@@ -121,7 +121,7 @@ with throwaway repositories and fake runs. Run these before stage 3's live week,
 again after a change to `core/pool.py`, `canopy workspace sync`, or how reconcile returns leases.
 
 Run them in order, as the kit's `toycanopy` from the workspace root, starting under `pools.backend = "treehouse"`
-with `capacity.slots_per_repo = 2` synced. S52 leaves slots no command can release yet (#811), so it goes last. A run
+with `capacity.slots_per_repo = 2` synced. S52 leaves slots quarantined until you release them, so it goes last. A run
 is a small toy-calc issue (the TOY_REPOS catalog's S8 or S16), started with `canopy start KEY` and dispatched by
 `canopy tick`; most steps end it with `canopy stop --now KEY` once they have seen what they need. First, give
 toy-calc's clone an ignored cache and a file to seed:
@@ -133,9 +133,11 @@ toy-calc's clone an ignored cache and a file to seed:
    the toy user config.
 
 Where to look: each slot's status and holder on the web UI's worktrees page (`canopy loop --defer 600` serves it and
-waits ten hours before its first tick; restart it after a config change); the pool's rows,
-`sqlite3 -readonly .canopy/canopy.db 'SELECT name, path, lease_holder, base, seeded FROM slots'`; the pool that made
-each run's lease, `SELECT run_id, slot_path, pool FROM run_slots`; and the log, `.canopy/canopy.log`.
+waits ten hours before its first tick; restart it after a config change), or `canopy workspace slots toy-calc`, which
+lists treehouse's pool beside canopy's after a switch, and the files seeding wrote in each slot of canopy's (with
+`--json`, the base each was last leased on too); the pool that made each run's lease,
+`sqlite3 -readonly .canopy/canopy.db 'SELECT run_id, slot_path, pool FROM run_slots'`; and the log,
+`.canopy/canopy.log`.
 
 - **S45. Switching pools, and back** (M45).
   1. Under treehouse, give the toy treehouse config (`~/canopy-toys/config/treehouse/config.toml`) a hook,
@@ -172,8 +174,8 @@ each run's lease, `SELECT run_id, slot_path, pool FROM run_slots`; and the log, 
      moved in by a later sync`), exit 0, and the run's slot left in `.treehouse/`.
   2. `canopy tick` while it runs. Expect no `canopy lease with no running worker; returned` line for its slot in the
      log, and the run still running in `canopy status`.
-  3. Let it end, or stop it. Expect its `run_slots` row to say `treehouse`, and the slot `available` in
-     `treehouse status --json`, run in `repos/toy-calc` with `TREEHOUSE_ROOT` the workspace root.
+  3. Let it end, or stop it. Expect its `run_slots` row to say `treehouse`, and the slot `available` under
+     treehouse's pool in `canopy workspace slots toy-calc`.
   4. Sync. Expect it to move that slot, now idle, its caches with it: `moved 1 of 1 idle treehouse slots into
      pools/`, then `slots: 2 of 2`, and exit 0. `.treehouse/` holds no slot of toy-calc's.
   5. The other way: start a run under canopy, set `"treehouse"` while it runs, and sync. Expect `removed 1 of 1 idle
@@ -202,8 +204,9 @@ each run's lease, `SELECT run_id, slot_path, pool FROM run_slots`; and the log, 
      `slots: 3 of 3, made 1`, with the worktree adopted as slot 3 (a row for its path), not made again: its
      `cache/warm.bin` keeps its inode.
   3. `rm -rf pools/toy-calc/3`. Expect slot 3 `damaged` on the worktrees page while its row lasts. A sync alone sees
-     `3 of 3` and leases nothing; start a run and stop it: that lease forgets the row. Sync again: `slots: 3 of 3,
-     made 1`, a new slot 3.
+     `3 of 3` and leases nothing; `canopy workspace slots toy-calc` notes that its directory is gone, and
+     `canopy workspace remove-slot toy-calc 3` forgets the row, as a lease would. Sync again: `slots: 3 of 3, made 1`,
+     a new slot 3.
   4. Damage an idle slot's git link: save its `.git` file, write `gitdir: /tmp/nowhere` in its place, and
      `touch mine.txt` in the slot. Expect it `damaged`; a run leases another slot, never this one; with the size
      lowered to 2, sync removes an idle slot and leaves this one; and `mine.txt` still there after each. Put the saved
@@ -237,7 +240,8 @@ each run's lease, `SELECT run_id, slot_path, pool FROM run_slots`; and the log, 
   2. In the idle slot the next lease takes, the lowest-numbered one, `echo mine > settings.local`, and start a run.
      Expect the dispatch refused `no_slot`, `failed to seed SLOT: settings.local: file exists`; the slot held by
      `quarantined: worktree seeding failed`, its `settings.local` still `mine`; and the next run leasing another slot.
-     A quarantined slot counts as busy and is never reused, and sync leaves it; no command releases it until #811.
+     A quarantined slot counts as busy and is never reused, and sync leaves it until `canopy workspace release`
+     frees it.
   3. In the next idle slot, `ln -s /tmp/outside.local settings.local`, and start a run. Expect the same quarantine and
      no `/tmp/outside.local`: seeding never writes through a link in the slot.
   4. Point `paths.worktree_include` at a path with no file, and start a run. Expect `no_slot` naming the include file
@@ -270,4 +274,6 @@ reconcile's shadow logs `pool_shadow_mismatch`; its check, a week of `canopy loo
 operator's. Stage 3's choice is built too, ahead of stage 2's check at the operator's request (2026-10-16):
 `pools.backend` picks the pool, each lease goes back to the pool the journal says made it, and sync moves idle slots
 across on a switch. A slot a seeding collision quarantines is freed by the operator with `canopy workspace release`,
-in either pool (#811). The default stays `"treehouse"` until stage 3's live check passes.
+in either pool (#811). The operator's pool commands, `canopy workspace slots`, `release` (which also returns a lease
+no running run holds), and `remove-slot`, reach both pools, so the live checks read a pool without treehouse's CLI. The
+default stays `"treehouse"` until stage 3's live check passes.

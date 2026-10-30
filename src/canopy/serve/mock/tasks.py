@@ -16,9 +16,10 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, sql, task_tickets, tasks
+from canopy.core import conversation, records
 from canopy.core.items import Item
 from canopy.core.vocab import RunStatus
+from canopy.runs import task_tickets, tasks
 
 if TYPE_CHECKING:
     import sqlite3
@@ -106,19 +107,16 @@ _UNRECORDED = task_tickets.check(["OPS-7"], project=None, limit=3)
 def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], slot: Callable[[str, int], str]) -> None:
     """Insert the tasks, their runs and conversations, task 1's report and tickets; `slot` names a pool slot's path."""
     for task_id, text, repo, project, channel, submitted, stopped in _TASKS:
-        sql.execute(
-            conn,
-            sql.insert(
-                "tasks",
-                id=task_id,
-                text=text,
-                repo=repo,
-                project=project,
-                channel=channel,
-                submitted_at=at(submitted),
-                stopped_at=at(stopped) if stopped is not None else None,
-            ),
-        )
+        records.insert(
+            records.Task,
+            id=task_id,
+            text=text,
+            repo=repo,
+            project=project,
+            channel=channel,
+            submitted_at=at(submitted),
+            stopped_at=at(stopped) if stopped is not None else None,
+        ).run(conn)
     runs: tuple[_Run, ...] = (
         # run, task, repo, slot, started, ended, status, result, head, cost
         (
@@ -203,56 +201,49 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
     )
     for run_id, task_id, repo, slot_number, started, ended, status, result, head, cost in runs:
         running = status is RunStatus.RUNNING
-        sql.execute(
-            conn,
-            sql.insert(
-                "task_runs",
-                id=run_id,
-                task_id=task_id,
-                tick_id=2,
-                branch=tasks.branch("agent/", task_id),
-                repo=repo,
-                slot_path=slot(repo, slot_number),
-                lease_id=RUNNING_LEASE if running else f"lease-task-{run_id}",
-                lease_holder=tasks.holder(task_id),
-                base_branch="main",
-                pool="treehouse",
-                started_at=at(started),
-                ended_at=at(ended) if ended is not None else None,
-                status=str(status),
-                result_json=json.dumps(result) if result is not None else None,
-                head=head,
-                log_path=str(state_dir / "task-runs" / f"{run_id}.log"),
-                session_id=f"ses_task{run_id}",
-                cost_usd=cost,
-                tokens_input=int(cost * 40_000),
-                tokens_output=int(cost * 6_000),
-                tokens_cache_read=int(cost * 400_000),
-                tokens_peak_context=int(cost * 60_000),
-            ),
-        )
+        records.insert(
+            records.TaskRun,
+            id=run_id,
+            task_id=task_id,
+            tick_id=2,
+            branch=tasks.branch("agent/", task_id),
+            repo=repo,
+            slot_path=slot(repo, slot_number),
+            lease_id=RUNNING_LEASE if running else f"lease-task-{run_id}",
+            lease_holder=tasks.holder(task_id),
+            base_branch="main",
+            pool="treehouse",
+            started_at=at(started),
+            ended_at=at(ended) if ended is not None else None,
+            status=str(status),
+            result_json=json.dumps(result) if result is not None else None,
+            head=head,
+            log_path=str(state_dir / "task-runs" / f"{run_id}.log"),
+            session_id=f"ses_task{run_id}",
+            cost_usd=cost,
+            tokens_input=int(cost * 40_000),
+            tokens_output=int(cost * 6_000),
+            tokens_cache_read=int(cost * 400_000),
+            tokens_peak_context=int(cost * 60_000),
+        ).run(conn)
         if result is not None and ended is not None:
             # The messages `tasks.close_run` records as a run ends: its report, and a blocked run's question.
             for kind, body in conversation.run_messages(status, json.dumps(result)):
-                sql.execute(
-                    conn,
-                    sql.insert(
-                        "messages",
-                        subject_kind=conversation.TASK,
-                        subject_id=str(task_id),
-                        at=at(ended),
-                        source="worker",
-                        kind=kind,
-                        channel="run",
-                        body=body,
-                        task_run_id=run_id,
-                    ),
-                )
+                records.insert(
+                    records.Message,
+                    subject_kind=conversation.TASK,
+                    subject_id=str(task_id),
+                    at=at(ended),
+                    source="worker",
+                    kind=kind,
+                    channel="run",
+                    body=body,
+                    task_run_id=run_id,
+                ).run(conn)
     kept = tasks.keep_report(state_dir, 1, 1, _REPORT)
     tasks.set_report(conn, 1, kept.sha256)
-    sql.execute_many(
+    records.insert_rows(records.TaskTicket, ("task_id", "task_run_id", "key", "at")).many(
         conn,
-        sql.insert_rows("task_tickets", ("task_id", "task_run_id", "key", "at")),
         [(1, 1, "ABC-120", at(-380)), (1, 1, "ABC-121", at(-380))],
     )
 

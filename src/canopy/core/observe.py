@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, assert_never, cast
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from canopy.core import contract, conversation, db, item_numbers, sql
+from canopy.core import contract, conversation, db, item_numbers, records, sql
 from canopy.core.config import REPO_NAME_RE, notify_words
 from canopy.core.vocab import (
     CheckConclusion,
@@ -48,7 +48,6 @@ from canopy.infra import logs, procs
 if TYPE_CHECKING:
     from collections.abc import Set as AbstractSet
 
-    from canopy.core import records
     from canopy.core.config import Config, Source
 
 #: How much of a connector's stderr a run keeps.
@@ -679,16 +678,16 @@ def _record(
     with db.transaction(conn):
         if kind is SourceKind.TRACKER:
             for key in sorted(whole.tickets):
-                sql.execute(conn, sql.delete("observed_tickets").where("key = ?", key))
+                records.delete(records.ObservedTicket).where("key = ?", key).run(conn)
             known = {str(r[0]) for r in sql.execute(conn, sql.select("key").from_("tickets"))}
         else:
             known = set[str]()
             for url in sorted(whole.prs):
-                sql.execute(conn, sql.delete("observed_reviews").where("pr_url = ?", url))
-                sql.execute(conn, sql.delete("observed_checks").where("pr_url = ?", url))
-                sql.execute(conn, sql.delete("observed_prs").where("url = ?", url))
+                records.delete(records.ObservedReview).where("pr_url = ?", url).run(conn)
+                records.delete(records.ObservedCheck).where("pr_url = ?", url).run(conn)
+                records.delete(records.ObservedPr).where("url = ?", url).run(conn)
             for repo in sorted(whole.repositories):
-                sql.execute(conn, sql.delete("observed_branches").where("repository = ?", repo))
+                records.delete(records.ObservedBranch).where("repository = ?", repo).run(conn)
         for line in read.lines:
             if line.of not in (whole.tickets | whole.prs | whole.repositories):
                 continue
@@ -714,74 +713,62 @@ def _insert(
     match line:
         case _Ticket():
             labels = [{"name": label.name, "added_at": label.added_at} for label in line.labels]
-            sql.execute(
-                conn,
-                sql.insert(
-                    "observed_tickets",
-                    key=line.key,
-                    title=line.title,
-                    body=line.body,
-                    state=line.state,
-                    labels=json.dumps(labels),
-                    updated_at=line.updated_at,
-                    blockers=json.dumps(line.blockers),
-                    observed_at=now,
-                ).or_replace(),
-            )
+            records.insert(
+                records.ObservedTicket,
+                key=line.key,
+                title=line.title,
+                body=line.body,
+                state=line.state,
+                labels=json.dumps(labels),
+                updated_at=line.updated_at,
+                blockers=json.dumps(line.blockers),
+                observed_at=now,
+            ).or_replace().run(conn)
         case _Comment():
             if line.ticket not in known:
                 return False
             return _record_comment(conn, config, line, now, operators=operators)
         case _Pr():
-            sql.execute(
-                conn,
-                sql.insert(
-                    "observed_prs",
-                    url=line.url,
-                    repository=line.repository,
-                    number=line.number,
-                    head_sha=line.head_sha,
-                    base_ref=line.base_ref,
-                    state=line.state,
-                    draft=line.draft,
-                    mergeable=line.mergeable,
-                    author=line.author,
-                    observed_at=now,
-                    labels=json.dumps(line.labels),
-                    mergeable_state=line.mergeable_state,
-                    title=line.title,
-                ).or_replace(),
-            )
+            records.insert(
+                records.ObservedPr,
+                url=line.url,
+                repository=line.repository,
+                number=line.number,
+                head_sha=line.head_sha,
+                base_ref=line.base_ref,
+                state=line.state,
+                draft=line.draft,
+                mergeable=line.mergeable,
+                author=line.author,
+                observed_at=now,
+                labels=json.dumps(line.labels),
+                mergeable_state=line.mergeable_state,
+                title=line.title,
+            ).or_replace().run(conn)
         case _Review():
             _insert_review(conn, line, now)
         case _Check():
             number = _keep_check_run(conn, line, now)
-            sql.execute(
-                conn,
-                sql.insert(
-                    "observed_checks",
-                    pr_url=line.pr,
-                    name=line.name,
-                    head_sha=line.head_sha,
-                    status=line.status,
-                    conclusion=line.conclusion,
-                    run_id=line.run_id,
-                    url=line.url,
-                    observed_at=now,
-                    number=number,
-                ).or_replace(),
-            )
+            records.insert(
+                records.ObservedCheck,
+                pr_url=line.pr,
+                name=line.name,
+                head_sha=line.head_sha,
+                status=line.status,
+                conclusion=line.conclusion,
+                run_id=line.run_id,
+                url=line.url,
+                observed_at=now,
+                number=number,
+            ).or_replace().run(conn)
         case _Branch():
-            sql.execute(
-                conn,
-                sql.insert(
-                    "observed_branches",
-                    repository=line.repository,
-                    name=line.name,
-                    head_sha=line.head_sha,
-                    observed_at=now,
-                ).or_replace(),
-            )
+            records.insert(
+                records.ObservedBranch,
+                repository=line.repository,
+                name=line.name,
+                head_sha=line.head_sha,
+                observed_at=now,
+            ).or_replace().run(conn)
     return True
 
 
@@ -811,10 +798,9 @@ def _record_comment(
         if conversation.worker_marked(line.body, config.trust.comment_prefix, config.trust.comment_suffix)
         else "tracker"
     )
-    cursor = sql.execute(
-        conn,
-        sql.insert(
-            "observed_comments",
+    cursor = (
+        records.insert(
+            records.ObservedComment,
             ticket=line.ticket,
             id=line.id,
             author=line.author,
@@ -823,13 +809,15 @@ def _record_comment(
             truncated=truncated,
             source=source,
             observed_at=now,
-        ).or_ignore(),
+        )
+        .or_ignore()
+        .run(conn)
     )
     if cursor.rowcount != 1:
         return False
     number = item_numbers.take(conn, NumberedItem.COMMENT, line.ticket, line.id, at=now)
-    the_comment = sql.update("observed_comments").where("ticket = ? AND id = ?", line.ticket, line.id)
-    sql.execute(conn, the_comment.set(number=number))
+    the_comment = records.update(records.ObservedComment).where("ticket = ? AND id = ?", line.ticket, line.id)
+    the_comment.set(number=number).run(conn)
     comment = db.Comment(id=line.id, author=line.author, at=line.time, truncated=truncated)
     if source == "tracker" and line.author in operators:
         whole = db.Comment(id=line.id, author=line.author, at=line.time, truncated=False)
@@ -842,31 +830,28 @@ def _record_comment(
 def _insert_review(conn: sqlite3.Connection, line: _Review, now: str) -> None:
     thread = line.thread if line.item is ReviewItem.COMMENT else None
     kind = NumberedItem.REVIEW if line.item is ReviewItem.REVIEW else NumberedItem.REVIEW_COMMENT
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_reviews",
-            pr_url=line.pr,
-            item=line.item,
-            id=line.id,
-            author=line.author,
-            bot=line.bot,
-            state=line.state if line.item is ReviewItem.REVIEW else None,
-            created_at=line.time,
-            body=line.body,
-            url=line.url,
-            review_id=line.review,
-            thread_id=None if thread is None else thread.id,
-            path=None if thread is None else thread.path,
-            line=None if thread is None else thread.line,
-            side=None if thread is None else thread.side,
-            outdated=None if thread is None else thread.outdated,
-            resolved=None if thread is None else thread.resolved,
-            observed_at=now,
-            # Kept across reads, which replace the row: what is newer than the `review` cursor (DESIGN §35).
-            number=item_numbers.take(conn, kind, line.pr, line.id, at=now),
-        ).or_replace(),
-    )
+    records.insert(
+        records.ObservedReview,
+        pr_url=line.pr,
+        item=line.item,
+        id=line.id,
+        author=line.author,
+        bot=line.bot,
+        state=line.state if line.item is ReviewItem.REVIEW else None,
+        created_at=line.time,
+        body=line.body,
+        url=line.url,
+        review_id=line.review,
+        thread_id=None if thread is None else thread.id,
+        path=None if thread is None else thread.path,
+        line=None if thread is None else thread.line,
+        side=None if thread is None else thread.side,
+        outdated=None if thread is None else thread.outdated,
+        resolved=None if thread is None else thread.resolved,
+        observed_at=now,
+        # Kept across reads, which replace the row: what is newer than the `review` cursor (DESIGN §35).
+        number=item_numbers.take(conn, kind, line.pr, line.id, at=now),
+    ).or_replace().run(conn)
 
 
 def _keep_check_run(conn: sqlite3.Connection, line: _Check, now: str) -> int | None:
@@ -882,19 +867,16 @@ def _keep_check_run(conn: sqlite3.Connection, line: _Check, now: str) -> int | N
     if line.status is not CheckStatus.COMPLETED or line.run_id is None or line.conclusion is None:
         return None
     number = item_numbers.take(conn, NumberedItem.CHECK_RUN, line.pr, line.run_id, at=now)
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_check_runs",
-            pr_url=line.pr,
-            run_id=line.run_id,
-            name=line.name,
-            head_sha=line.head_sha,
-            conclusion=line.conclusion,
-            observed_at=now,
-            number=number,
-        ).or_ignore(),
-    )
+    records.insert(
+        records.ObservedCheckRun,
+        pr_url=line.pr,
+        run_id=line.run_id,
+        name=line.name,
+        head_sha=line.head_sha,
+        conclusion=line.conclusion,
+        observed_at=now,
+        number=number,
+    ).or_ignore().run(conn)
     return number
 
 

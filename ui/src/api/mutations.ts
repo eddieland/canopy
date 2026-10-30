@@ -4,6 +4,7 @@ import { api, unwrap } from './client'
 import { keys } from './queries'
 import type {
     AgentModel,
+    Answered,
     AgentPersona,
     Attached,
     Detached,
@@ -62,8 +63,8 @@ import type {
  * those on a run's drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`,
  * `forget`, `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `task submit`, `pause`,
  * `resume`, `notice`, `memory promote`, `reject`, `renew`, `pin`, `unpin`, `edit`, and `forget`, `draft edit`, `drop`,
- * and `send`, `review edit` and `publish`, and `reply review:ID`, or as `t` at the loop's terminal, with the same
- * guards; a refusal is an ApiError naming its guard.
+ * and `send`, `review edit` and `publish`, and `reply review:ID`, and `reply run:ID` to a running agent's question, or
+ * as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -275,6 +276,37 @@ export async function deletePlanThread(key: string, thread: number): Promise<voi
             params: { path: { key, thread_id: thread } },
         }),
     )
+}
+
+/**
+ * `canopy reply run:ID LETTER`, or `review:ID` for a running review: the answer to the question the running agent's
+ * card asks, which it hears on its next tool call (DESIGN §41). Refused `moved_on` when the card asks another question
+ * than the one asked at `askedAt`, the one the page showed.
+ */
+export async function answerQuestion(target: AnswerTarget, letter: string, askedAt: string): Promise<Answered> {
+    const body = { letter, asked_at: askedAt }
+    if (target.kind === 'review') {
+        return unwrap(
+            await api.POST('/api/reviews/{run_id}/answers', { params: { path: { run_id: target.id } }, body }),
+        )
+    }
+    return unwrap(await api.POST('/api/runs/{run_id}/answers', { params: { path: { run_id: target.id } }, body }))
+}
+
+/** A running agent whose card's question the operator answers: a worker's or a planner's run, or a review's. */
+export type AnswerTarget = { kind: 'run'; id: number } | { kind: 'review'; id: number }
+
+/** After an answer: read the run or the review again, the runs list, and any ticket page, whose card shows it. */
+export async function refreshAnswered(client: QueryClient, target: AnswerTarget): Promise<void> {
+    if (target.kind === 'review') {
+        await client.invalidateQueries({ queryKey: keys.review(target.id) })
+        return
+    }
+    await Promise.all([
+        client.invalidateQueries({ queryKey: keys.run(target.id) }),
+        client.invalidateQueries({ queryKey: keys.runs }),
+        client.invalidateQueries({ predicate: ({ queryKey }) => queryKey[0] === keys.ticket('')[0] }),
+    ])
 }
 
 /** A note to a chore, as `canopy reply chore:NAME`: its next runs read it (DESIGN §19). */

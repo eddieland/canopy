@@ -2,6 +2,7 @@ import re
 import sqlite3
 import types
 import typing
+from collections.abc import Callable
 from dataclasses import dataclass, fields
 from enum import StrEnum
 from pathlib import Path
@@ -31,7 +32,7 @@ AFFINITY: dict[str, frozenset[object]] = {
     "BLOB": frozenset({bytes}),
 }
 PR = "https://github.com/acme/api/pull/7"
-DECISION_COLUMNS = "id, tick_id, ticket_key, action, rationale, created_at, repo, chore, pr, decider"
+DECISION_COLUMNS = "id, tick_id, ticket_key, action, rationale, created_at, repo, chore, pr, decider, kept, item"
 
 
 def row_types() -> list[type[records.Row]]:
@@ -100,8 +101,69 @@ def test_a_query_builds_its_rows_as_the_row_type(conn: sqlite3.Connection) -> No
         chore=None,
         pr=None,
         decider=Decider.OVERSEER,
+        kept=False,
+        item=None,
     )
     assert (second.ticket_key, second.chore) == (None, "deps")
+
+
+def test_a_select_reads_its_tables_rows_as_the_row_type(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    for key in ("PROJ-1", "PROJ-2", "PROJ-3"):
+        db.record_decision(conn, tick, key, "wait", "checks running")
+    query = records.select(records.Decision).where("ticket_key != ?", "PROJ-2").order_by("id DESC")
+    assert [d.ticket_key for d in query.all(conn)] == ["PROJ-3", "PROJ-1"]
+    assert present(query.limit(1, offset=1).one(conn)).ticket_key == "PROJ-1"
+    assert query.where("ticket_key = ?", "PROJ-9").one(conn) is None
+
+
+def test_a_select_names_its_own_columns_so_a_joined_tables_cannot_shadow_them(conn: sqlite3.Connection) -> None:
+    # A decision and its tick both have an `id` and a status-like column; the select reads the decision's alone.
+    real = db.start_tick(conn, dry_run=False)
+    dry = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, real, "PROJ-1", "wait", "checks running")
+    db.record_decision(conn, dry, "PROJ-2", "wait", "checks running")
+    query = records.select(records.Decision, "d").join("ticks t ON t.id = d.tick_id").where("t.dry_run = ?", 1)
+    assert query.statement.fragment().text.startswith("SELECT d.id, d.tick_id, d.ticket_key, ")
+    [decision] = query.all(conn)
+    assert (decision.ticket_key, decision.tick_id) == ("PROJ-2", dry)
+
+
+def test_a_select_goes_in_a_slot_as_any_piece_of_sql(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")
+    db.record_decision(conn, tick, "PROJ-2", "skip", "no tracker")
+    waits = records.select(records.Decision).where("action = ?", "wait")
+    counted = sql.execute(conn, sql.select("count(*)").from_("({}) AS w", waits.statement)).fetchone()
+    assert counted[0] == 1
+
+
+@dataclass(frozen=True)
+class DecisionTick(records.View):
+    ticket_key: str | None
+    status: TickStatus
+    dry_run: bool
+
+
+def test_a_view_reads_a_joins_columns_converted_as_a_rows_are(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")
+    query = sql.select("d.ticket_key, t.status, t.dry_run").from_("decisions d").join("ticks t ON t.id = d.tick_id")
+    [read] = records.fetch_all(conn, DecisionTick, query)
+    assert read == DecisionTick("PROJ-1", TickStatus.RUNNING, dry_run=True)
+    assert isinstance(read.status, TickStatus)
+
+
+def test_a_views_refusal_names_the_view(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")
+    query = (
+        sql.select("d.ticket_key, 'gone' AS status, t.dry_run").from_("decisions d").join("ticks t ON t.id = d.tick_id")
+    )
+    with pytest.raises(records.RowError, match=r"^DecisionTick\.status holds 'gone', which is not a TickStatus$"):
+        records.fetch_one(conn, DecisionTick, query)
+    with pytest.raises(records.RowError, match=r"^query does not fit DecisionTick: missing dry_run$"):
+        records.fetch_one(conn, DecisionTick, sql.select("ticket_key, 'ok' AS status").from_("decisions"))
 
 
 def test_columns_are_matched_by_name_not_position(conn: sqlite3.Connection) -> None:
@@ -122,7 +184,7 @@ def test_fetch_one_is_none_when_the_query_returns_nothing(conn: sqlite3.Connecti
     [
         (
             "SELECT id, tick_id FROM decisions",
-            "missing action, chore, created_at, decider, pr, rationale, repo, ticket_key",
+            "missing action, chore, created_at, decider, item, kept, pr, rationale, repo, ticket_key",
         ),
         (f"SELECT {DECISION_COLUMNS}, 1 AS extra FROM decisions", "no field for extra"),  # noqa: S608
         (f"SELECT {DECISION_COLUMNS}, id FROM decisions", "a column is repeated"),  # noqa: S608
@@ -155,7 +217,7 @@ def test_a_value_of_another_type_is_refused(conn: sqlite3.Connection, action: st
 
 @dataclass(frozen=True)
 class Flagged(records.Row):
-    TABLE: ClassVar[str] = "flagged"
+    TABLE: ClassVar[typing.LiteralString] = "flagged"
 
     id: int
     done: bool
@@ -259,3 +321,109 @@ def test_a_ticket_reads_its_phase_and_plan_setting_as_members_and_done_as_a_flag
     assert isinstance(ticket.phase, Phase)
     assert isinstance(ticket.plan_setting, PlanSetting)
     assert db.open_tickets(conn) == []
+
+
+def test_an_insert_writes_through_its_row_type_and_reads_back_what_it_wrote(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    write = records.insert(
+        records.Decision,
+        tick_id=tick,
+        ticket_key="PROJ-1",
+        action="wait",
+        rationale="checks running",
+        created_at="2026-10-29T00:00:00Z",
+        decider=Decider.HARNESS,
+        kept=True,
+    )
+    [decision] = write.returned(conn)
+    assert (decision.ticket_key, decision.decider, decision.kept) == ("PROJ-1", Decider.HARNESS, True)
+    assert present(records.select(records.Decision).one(conn)) == decision
+
+
+def test_an_update_and_a_delete_read_back_the_rows_they_changed(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    for key in ("PROJ-1", "PROJ-2"):
+        db.record_decision(conn, tick, key, "wait", "checks running")
+    [updated] = records.update(records.Decision).set(action="skip").where("ticket_key = ?", "PROJ-2").returned(conn)
+    assert (updated.ticket_key, updated.action) == ("PROJ-2", "skip")
+    gone = records.delete(records.Decision).where("action = ?", "wait").returned(conn)
+    assert [d.ticket_key for d in gone] == ["PROJ-1"]
+    assert [d.ticket_key for d in records.select(records.Decision).all(conn)] == ["PROJ-2"]
+
+
+def test_a_write_runs_its_sql_statement(conn: sqlite3.Connection) -> None:
+    write = records.update(records.Tick).set(summary="done").where("id = ?", 7)
+    assert write.statement == sql.update("ticks").set(summary="done").where("id = ?", 7)  # noqa: TID251
+    tick = db.start_tick(conn, dry_run=True)
+    assert records.update(records.Tick).set(summary="done").where("id = ?", tick).run(conn).rowcount == 1
+
+
+@pytest.mark.parametrize(
+    ("write", "error"),
+    [
+        (lambda: records.insert(records.Decision, actoin="wait"), r"^decisions has no column actoin$"),
+        (lambda: records.update(records.Tick).set(sumary="x"), r"^ticks has no column sumary$"),
+        (lambda: records.insert_rows(records.RunReason, ("run_id", "why")), r"^run_reasons has no column why$"),
+        (
+            lambda: records.insert(records.ChoreRun, status="finished"),
+            r"^chore_runs\.status holds 'finished', which is not a ChoreRunStatus$",
+        ),
+        (lambda: records.update(records.Tick).set(dry_run=2), r"^ticks\.dry_run holds neither 0 nor 1"),
+        (lambda: records.update(records.Decision).set(action=7), r"^decisions\.action is int, not str$"),
+        (lambda: records.update(records.Decision).set(action=None), r"^decisions\.action is NoneType, not str$"),
+    ],
+)
+def test_a_write_refuses_a_column_or_a_value_its_row_type_would_not_read(
+    write: Callable[[], object],
+    error: str,
+) -> None:
+    # Refused as the statement is built: nothing need run for the mistake to show.
+    with pytest.raises(records.RowError, match=error):
+        write()
+
+
+def test_a_write_takes_a_vocabularys_word_a_flag_as_a_bool_and_none_where_the_field_may_be(
+    conn: sqlite3.Connection,
+) -> None:
+    tick = db.start_tick(conn, dry_run=False)
+    write = records.update(records.Tick).set(status="ok", dry_run=True, summary=None).where("id = ?", tick)
+    [written] = write.returned(conn)
+    assert (written.status, written.dry_run, written.summary) == (TickStatus.OK, True, None)
+
+
+def test_a_write_leaves_a_piece_of_sql_or_a_row_for_sqlite_to_judge(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    computed = records.update(records.Tick).set(summary=sql.frag("'tick ' || id")).where("id = ?", tick)
+    assert present(computed.returned(conn)[0].summary) == f"tick {tick}"
+    per_row = records.update(records.Tick).set(summary=sql.ROW).where("id = ?", sql.ROW)
+    sql.execute_many(conn, per_row.statement, [("again", tick)])
+    assert present(db.get_tick(conn, tick)).summary == "again"
+
+
+def test_an_insert_of_many_rows_holds_each_to_its_row_type(conn: sqlite3.Connection) -> None:
+    rows = records.insert_rows(records.Notification, ("sink", "fingerprint", "reason", "sent_at"))
+    rows.many(conn, [("desktop", "a", "needs-human", "t"), ("desktop", "b", "needs-human", "t")])
+    assert [n.fingerprint for n in records.select(records.Notification).order_by("fingerprint").all(conn)] == ["a", "b"]
+    with pytest.raises(records.RowError, match=r"^notifications\.reason is NoneType, not str$"):
+        rows.many(conn, [("desktop", "c", "needs-human", "t"), ("desktop", "d", None, "t")])
+
+
+def test_an_insert_of_many_rows_needs_each_row_to_fill_columns(conn: sqlite3.Connection) -> None:
+    upsert = records.insert(records.PrTitle, pr_url=sql.ROW, title=sql.ROW, updated_at="t").on_conflict(
+        "(pr_url) DO UPDATE SET title = ?",
+        sql.ROW,
+    )
+    with pytest.raises(ValueError, match="binds a ROW that is not a column's value"):
+        upsert.many(conn, [("u", "x", "x")])
+
+
+def test_returned_refuses_a_write_that_returns_columns_of_its_own(conn: sqlite3.Connection) -> None:
+    with pytest.raises(ValueError, match="already returns columns of its own"):
+        records.delete(records.Decision).everything().returning("id").returned(conn)
+
+
+def test_of_table_names_a_tables_row_type() -> None:
+    assert records.of_table("runs") is records.Run
+    assert all(records.of_table(t.TABLE) is t for t in row_types())
+    with pytest.raises(KeyError):
+        records.of_table("flagged")

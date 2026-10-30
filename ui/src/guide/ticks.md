@@ -14,8 +14,8 @@ A tick reads `running` while it works, and ends:
 
 - `ok`, the usual. Its summary starts `no overseer, nothing left to judge` when canopy's own decisions left the
   overseer nothing, so it didn't run and cost nothing (see [How the loop works](how-the-loop-works#ticks));
-- `skipped`, when the overseer couldn't see the world, such as an MCP server that wasn't there. It still did the
-  chores and whatever else needed nothing from the missing server, then left the attention list alone;
+- `skipped`, only on a tick from before canopy read the tracker for the overseer, when it couldn't see the world.
+  These days a source that's down is `connector_failed` on the attention list, and the overseer never notices;
 - `overseer failed`, when the overseer didn't finish its job, such as deciding about every ticket;
 - `canopy unavailable`, when the overseer couldn't run canopy at all, so nothing was decided;
 - `disk low`, when the disk had less free than `loop.min_free_disk_mib`, 2 GiB by default, so the overseer didn't run
@@ -31,8 +31,9 @@ A tick reads `running` while it works, and ends:
 
 The line under the title says how the tick ended, how many decisions it recorded, and what woke it: the timer, your
 reply, a run ending, **Tick now**, and so on. The **Tick** panel leads with its summary, then when it ran and for how
-long, what it spent, the model its overseer ran on, and the version of canopy that ran it, laid out as a run's page
-is. The version is the one to check when a decision looks like the work of a release you thought you'd upgraded past.
+long, what it spent, the model its overseer ran on, the one `runtime.models.overseer` asked for until its session is
+read, and the version of canopy that ran it, laid out as a run's page is. The version is the one to check when a
+decision looks like the work of a release you thought you'd upgraded past.
 
 The buttons at the right of the title step to the tick before and after this one, dry runs included, so the ticks
 around an old one are a click away rather than an edit to the URL. At either end the button stays, greyed out; on the
@@ -58,7 +59,8 @@ since those are the ones you come back to debug. After that your `[retention]` r
 ## Idle ticks
 
 A tick is idle when it started no work: it closed ok, dispatched no worker, review, or chore, and nothing reached the
-journal since the tick before, no run ending and nothing from you. Waits, refusals, a ticket marked done, or a new
-attention item don't count. The loop waits longer after each idle tick, so a quiet day costs little,
-but a tick that starts nothing still pays for the overseer to read everything. The share of the overseer's spend that
-went on idle ticks is the line under the totals. If it's high, a longer `loop.idle_max_minutes` is the knob.
+journal since the tick before: no run ending, no poll finding something new, and nothing from you. Waits, refusals,
+a ticket marked done, or a new attention item don't count. The loop waits longer after each idle tick, so a quiet day
+costs little, but a tick that starts nothing still pays for the overseer to read everything. The share of the
+overseer's spend that went on idle ticks is the line under the totals. If it's high, a longer `loop.idle_max_minutes`
+is the knob.

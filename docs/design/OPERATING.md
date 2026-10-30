@@ -18,8 +18,8 @@ back. The schema is in `migrations/`, squashed once for v0.1; a journal from bef
 
 What it records, and why:
 
-- **Ticks**: each tick's status, summary, what it read up to (§6 step 3), whether it ran the overseer (§39), and, for
-  a tick `canopy loop` ran, what woke it (§6), so spend can be split by what it bought. A tick that cannot take the
+- **Ticks**: each tick's status, summary, what it read up to (§6 step 3), whether it ran the overseer (step 5), and,
+  for a tick `canopy loop` ran, what woke it (§6), so spend can be split by what it bought. A tick that cannot take the
   lock writes nothing.
 - **Tickets and units**: each ticket seen, with its derived phase, its branch, whether it is done or forgotten (§22),
   and its cursors; each unit, a ticket's work in one repository (§18), with its branch, PR, phase, and cursors (§7).
@@ -45,7 +45,9 @@ the machine canopy runs on, as the operator's own day is. A ticket counts as don
 window, `merged` and `closed` alike, since a tracker that closes a ticket when its PR merges closes most before the loop
 sees the merge. Spend per ticket done divides the window's whole spend, overseer and chores included. A tool's share of
 context is measured in characters it returned, since the runtime does not attribute tokens to tool results, and is
-labeled an estimate wherever shown (MEASUREMENTS 2026-10-13).
+labeled an estimate wherever shown (MEASUREMENTS 2026-10-13). A tick that ran no overseer costs nothing, and counts
+at nothing, never among the runs that reported no cost; ticks are split by whether it ran, beside what woke them, so
+what an idle tick costs is the overseer's runs that bought nothing.
 
 The web UI's reports page reads the same figures by local calendar month, dollars and tokens by kind and by model,
 and the sessions outside canopy beside the kinds, so a month's total is all agent spend, as the budget's is,
@@ -76,6 +78,8 @@ rendered as a run would start them, to the operator alone: it is refused inside 
 the runtime what each of canopy's agents is offered, MCP servers, skills, and its own tools, once it has merged the
 operator's own runtime config into canopy's definitions, so a recommendation to deny one rests on the merge the
 runtime makes, not on canopy's files alone.
+The Skills page under Settings (§22) asks the runtime for its skills alone, with each one's file, description, and
+text, and not which agent is offered each, which would start the runtime again for every agent.
 
 ## 12. Configuration
 
@@ -119,17 +123,25 @@ secret, and a replier added through a stolen session would go on steering worker
 | Key | From the page |
 |---|---|
 | `capacity.max_workers`, `capacity.slots_per_repo`, each `capacity.repo_slots` entry | at most 32; an unmanaged pool's first count is bounded too |
-| `capacity.max_chores`, `capacity.max_reviews` | at most 16 |
+| `capacity.max_chores`, `capacity.max_reviews`, `capacity.max_tasks` | at most 16 |
 | `capacity.max_reviews_per_day` | at most 500 |
-| `policy.max_implement_attempts`, `policy.max_resume_attempts` | at most 10 |
+| `loop.min_free_disk_mib` | at least 512 |
+| `policy.max_implement_attempts`, `policy.max_resume_attempts`, `policy.max_plan_attempts`, `policy.max_revisions_per_draft` | at most 10 |
+| `policy.max_feedback_plan_attempts`, `policy.max_follow_ups` | at most 20 |
 | `policy.max_reviews_per_pr` | at most 25 |
 | `policy.ci_cooldown_minutes` | at least 5 |
-| `loop.interval_minutes`, `loop.idle_max_minutes` | at least 2 |
+| `policy.feedback_quiet_minutes`, `loop.interval_minutes`, `loop.idle_max_minutes` | at least 2 |
+| `loop.min_gap_minutes` | at least 1 |
+| `runtime.worker_timeout_minutes`, `runtime.review_timeout_minutes`, `runtime.overseer_timeout_minutes` | at most 240, 120, 60 |
 | `spend.monthly_budget_usd` | at most 10000; raising it keeps a sink from hearing the month reached it |
 | `spend.budget_alerts` | any list the loader takes; the 100% alert is sent whatever it holds |
 | `policy.stacking` | to `"never"` only |
+| `policy.plan`, `policy.feedback_plan` | to `"approve"` only |
+| `policy.planner_may_approve` | toward `"off"` only: `lenient`, `normal`, `strict`, `off` |
 | `trust.authorized_repliers`, `trust.trusted_reviewers` | entries removed, never added |
+| `trust.review_replies` | to `"approve"` only |
 | `trust.rebase` | to `false` only |
+| `trust.max_flaky_kicks` | lowered only |
 | `trust.commit_trailer` | to `true` only |
 
 The bounds sit well above what one machine runs today, so the page serves the operator's real changes; what they stop
@@ -213,7 +225,7 @@ worker, and plan) from one key, so a sandbox wrapper (§24) cannot miss one; the
 overseer's, a chore's, and a review's templates are not wrapped: each takes a different sandbox role, or none.
 
 **Prompt overrides** in `paths.prompt_overrides` replace files of the same name in `prompts/`. An override must keep
-what the guards rely on: an overseer override passes `--label` on every `canopy dispatch`, and a worker override
+what the guards rely on: an overseer override passes `label` on every `dispatch`, and a worker override
 includes `{{LABELS}}` and the authorization check that uses it, or the dispatch is refused as `bad_prompt` (§8, D051).
 In the user file, `paths.*` values must be absolute or start with `~`, since a relative path would let a shared
 workspace supply them; in the private file a relative value resolves against the state directory, never the workspace
@@ -229,9 +241,9 @@ which a file canopy cannot use refuses as `bad_prompt`; a chore's follow its own
 reaches only its own role's prompts, and a role without one has no section for them.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
-skill, which canopy puts in the overseer's definition when it ships one (§13). `tracker.query` finds candidates; it
-does not authorize them (§17). It is shared though the overseer reads every ticket it returns before checking labels,
-an exposure stated in TRUST_MODEL T7's residual.
+skill the workers load (§17). `tracker.query` finds candidates; it does not authorize them (§17). It is shared: the
+`tracker` source reads it, and a ticket it returns that is not a candidate reaches the overseer by key and why alone
+(TRUST_MODEL T7).
 
 ## 13. Agent runtime
 
@@ -251,8 +263,9 @@ Agent definitions ship in `agents/`:
   canopy renders those last of its bash rules, after the deny of every other command, since the last match wins and
   its definition is merged after the operator's runtime config, and refuses one that runs a command it is given or is
   the loop's own (TRUST_MODEL T1). Rules `deny`, never `ask`: an `ask` ends the run under `opencode run` (D021) and
-  loses every decision not yet recorded. MCP: the tracker's read tools only (T6); of GitHub, its reads of PRs and
-  branches, and of issues only when they are the tickets.
+  loses every decision not yet recorded. MCP: no server but canopy's (T6), every other server's tools and
+  resources denied whatever the operator's runtime config grants: it reads the world from the journal alone (§30), so
+  it has no tracker or GitHub server to call.
 - `canopy-worker`: edit and bash within the worktree; `runtime.allow_bash` names commands that beat its bash denies,
   rendered last, with the overseer's checks, and the private worker's the same. MCP: the tracker (comments, labels,
   follow-ups), GitHub (open and update a PR, read reviews and checks, and its issue tools only when they are the
@@ -303,16 +316,22 @@ canopy snapshots its bundled agents, skills, and plugin into the state directory
 and the templates point the runtime at it (§12). The snapshot is written whole, never changed, unwritable once written
 (§33), and readable only by the operator, so overlapping runs never load a partial set; one that is a symlink, someone
 else's, or open to others is refused, failing the tick or making the run `crashed` (D040). Definitions are rendered
-from config, so a change to their inputs makes a new snapshot. OpenCode 2 reads the snapshot in place of the
+from config, and a run's from its prompt's fixed instructions (below), so a change to their inputs makes a new
+snapshot. OpenCode 2 reads the snapshot in place of the
 operator's own config directory, where 1 reads both, so its snapshot links to each config file of theirs, which stays
 theirs: their MCP servers, providers, and rules reach every run, as they would their own sessions. Among them:
 
 - `canopy-worker-private` gets the tracker's MCP server and only the tools of it a private worker may call (§22).
-- `canopy-overseer` gets the tracker's MCP server and only its read tools, and the overseer's prompt, or the
-  operator's override (§12), as its body, then the shipped `tracker-<provider>` skill if any, and then no skill tool,
-  having nothing left to load. The body is the system prompt the provider caches across ticks; a tick's message is its
-  state block alone (§6). An override canopy cannot read fails the tick and every run started from it, rather than
-  running without the prompt.
+- `canopy-overseer` gets the overseer's prompt, or the operator's override (§12), as its body, and nothing of the
+  tracker's, no server and no skill, its skill tool denied, since it reads no tracker (§30). The body is the system
+  prompt the provider caches across ticks; a tick's message is its state block alone (§6). An override canopy cannot
+  read fails the tick and every run started from it, rather than running without the prompt.
+- `canopy-worker`, `canopy-worker-private`, `canopy-planner`, and `canopy-reviewer` get, as their body, the fixed
+  instructions of the prompt their run starts with: what is above its run marker, which holds nothing of one run's
+  own, no ticket, slot, branch, or attempt. So every run of a kind under one config shares a body, a snapshot, and the
+  prefix the provider caches, as the overseer's ticks do (§33, The split). The run's message is the rest: `## Run`,
+  with its values, then the sections only some runs get. A prompt without the marker, an older override's, or a
+  template that runs an agent canopy does not ship, is sent whole as the message, and the definition keeps its stub.
 - Every definition gets the artifact store's MCP server denied whole, and an agent `artifacts.publish_roles` names its
   tools by exact name and its skill (§38).
 
@@ -324,7 +343,7 @@ private run (§22) is also refused where that config names any tool of the track
 after canopy's could reopen a write tool.
 
 Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
-turns none off, but for the overseer whose body holds the tracker's skill, and the operator's skill below. A
+turns none off, but for the overseer, which reads no tracker and so loads no skill, and the operator's skill below. A
 repository can also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
@@ -336,16 +355,18 @@ registered; they, and what OpenCode does with a plugin, are §33.
 ### Each agent's model
 
 Built: each agent's default in `[runtime.models]`, a chore's own model, variants, the ticket's override from
-`canopy model` or the ticket's page, the check of a model and its variant before every run the loop starts and a
-tick's overseer, and recording what served (REQUIREMENTS R23).
+`canopy model` or the ticket's page, a review request's model, the check of a model and its variant before every run
+the loop starts and a tick's overseer, and recording what served (REQUIREMENTS R23).
 
-The operator wants to canary a model, running one ticket's workers on another and comparing what they did and cost,
+The operator wants to override one ticket's model, running its workers on another and comparing what they did and cost,
 and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design
 promises:
 
 - **The operator alone chooses.** A run's model is its ticket's override for its agent, else that agent's default in
   `[runtime.models]`, else the runtime's default, fixed when the run starts; a chore's own `model` comes before the
-  chore's default (§19). A model may name the variant it runs at, such as a reasoning effort, as
+  chore's default (§19). A review request may name a model for its reviews, in every persona, which comes before
+  the ticket's override, as the more specific and more recent ask (§21), and is checked as the override is. A model
+  may name the variant it runs at, such as a reasoning effort, as
   `provider/model@variant`. `runtime.models` is private (T7): a model
   is what the operator's spend buys, and its provider is sent the ticket and the code. The override is set only by the
   operator's `canopy model` or the ticket's page, through one function refused inside an agent run (T1); the
@@ -368,7 +389,7 @@ promises:
   and its variant against the model's, since OpenCode drops an unlisted variant without a word. An unlisted model or
   variant, or a list that cannot be read, refuses the run with an attention item, spending no attempt and leasing no
   slot, so the work resumes once the model is back: a task waits, and a tick closes without its overseer (§6 step 5).
-  It never falls back to the default, since a canary's run on a model nobody chose would read as the canary's.
+  It never falls back to the default, since a run on a model nobody chose would read as the one the operator chose.
 
 The PR that builds the choosing proposes T1, T5, T7, and T8 to match. Rejected: a model chosen by the overseer or
 ticket labels (T1); a list of models shipped with canopy; one override for all of a ticket's agents; recording only the
@@ -395,7 +416,8 @@ listing sessions through the runtime's commands, which list one project's top-le
 `canopy skill` prints a skill that teaches an agent in the operator's own session the canopy CLI and how to read the
 journal read-only. canopy installs it only when asked; it is not in the snapshot and grants nothing, and every agent
 canopy ships denies it by name, wherever it is installed. Shell completion leaves out ticket keys, which would open
-the journal on every Tab, and the commands only the overseer runs.
+the journal on every Tab. `--help` and completion leave out the commands only the overseer runs, though each still
+answers its own `--help`.
 
 ## 14. Attention list
 
@@ -411,7 +433,7 @@ raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` 
 and `lesson_wrong` (§28),
 `drafts_waiting` (§29), `connector_failed` and `check_stuck` (§30), `persona_missing` and `bad_persona` (§31),
 `model_missing` and `model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34),
-`task_ticket_unrecorded` (§36), and `untrusted_artifact_comment` (§38). An item
+`task_ticket_unrecorded` (§36), `untrusted_artifact_comment` (§38), and `unobserved_pr` (§37). An item
 about one unit names its repository, shown as `KEY (repo)`. An item about a PR whose latest reviewed commit has a
 `high` review (§21), or about its ticket, comes first: within its reason on the list, and in a notification.
 
@@ -438,22 +460,26 @@ From their causes, before the overseer runs, the harness raises the phase table'
 `untrusted_review` while that row holds on a unit, `attempt_limit` for a unit or a ticket's plan whose next run is past
 its limit, `review_limit` for one of the loop's PRs unreviewed at its limit, `review_failed` while a PR's latest review
 run failed, and `plan_review` and `plan_changed` while a plan waits on the operator or its file is no longer what they
-approved; and `check_stuck`, which the overseer never recorded, for a unit one check holds at `ci_running` long after
-the rest finished (§30). Each is open while its cause holds in the journal and the observations (§30). One resting on
-an observation is kept while that observation is stale, and goes only when a fresh one shows its cause gone, or its
-ticket is done, stopped, or seen closed or unlabeled: a tick that could not read a cause drops nothing. A guard that
-refuses the overseer a dispatch or a review past its limit records `attempt_limit` or `review_limit` too.
+approved; and two the overseer never recorded: `check_stuck`, for a unit one check holds at `ci_running` long after
+the rest finished (§30), and `unobserved_pr`, for a unit whose PR URL names no PR, which no source reads, so its ticket
+waits (§37) until the unit names a PR or the operator forgets the ticket's work. Each is open while its cause holds in
+the journal and the observations (§30). One resting on an observation is kept while that observation is stale, and
+goes only when a fresh one shows its cause gone, or its ticket is done, stopped, or seen closed or unlabeled: a tick
+that could not read a cause drops nothing. A guard that refuses the overseer a dispatch or a review past its limit
+records `attempt_limit` or `review_limit` too.
 
 **Recorded by the overseer.** The overseer records the items that are judgment with its `attention` tool (§27), with a
-reason and a detail, every tick its cause holds; the tool refuses it a reason the harness raises. Items are stored as
-decisions, not a table of their own (D020). The current list is the attention decisions of the latest `ok` tick, so an
-item disappears the first tick that does not record it, and a failed or `skipped` tick leaves the previous list
-standing; a halted tick's item (§6 step 5) is added to it while it is the latest tick's. The harness holds the
-overseer's item, and a guard's, through a tick that did not give the overseer its subject, such as a ticket the harness
-decided (§37), since the overseer cannot record again what it was not shown; the item goes the first tick that gives
-the overseer its subject and leaves it out, or once its ticket is done or stopped. The state block lists the
-overseer's open items on what it is given (§6 step 4), so it records each again until it sees the cause gone. An
-item's age runs from the first tick of its unbroken run.
+reason and a detail; the tool refuses it a reason the harness raises. Items are stored as decisions, not a table of
+their own (D020). `needs_author`, `multi_repo`, and `notice_rerun` it records once, naming what each is about, and the
+harness holds each until what it names ends it (§37). Any other it records every tick its cause holds: the current list
+is the attention decisions of the latest `ok` tick, so such an item disappears the first tick that does not record it,
+and a failed tick, or an older release's `skipped` one, leaves the previous list standing; a halted tick's item (§6 step
+5) is added to it while it is the latest tick's. The harness holds such an item of the overseer's, and a guard's,
+through a tick that did not give the overseer its subject, such as a ticket the harness decided (§37), since the
+overseer cannot record again what it was not shown; the item goes the first tick that gives the overseer its subject and
+leaves it out, or once its ticket is done or stopped. The state block lists the overseer's open items on what it is
+given (§6 step 4), each it keeps with what it names, so it records none of those twice and each other again until it
+sees the cause gone. An item's age runs from the first tick of its unbroken run.
 
 **Notification.** An item is identified by its ticket, reason, and repository; rewording its detail does not make it
 new. Each sink (§20), `notify.cmd` among them, keeps its own record of what it was told, and each tick sends it the new
@@ -478,14 +504,12 @@ open item is never notified twice, and an item that returns after going away is 
 - Overseer timeout or bad output: the tick closes `overseer_failed`; nothing is dispatched; the next tick retries.
   Three consecutive ticks not `ok` send a `loop.failing` notification once per streak, and `loop.recovered` at the next
   `ok` (§20); no attention item, since a failing loop cannot add to the latest `ok` tick's list.
-- Overseer left a duty undone (the query when due, a ticket's decision, a due chore's): the tick closes
-  `overseer_failed`, naming each (§6 step 5). What it dispatched stands, and the next tick owes the same duties.
+- Overseer left a duty undone (a ticket's decision, a due chore's): the tick closes `overseer_failed`, naming each
+  (§6 step 5). What it dispatched stands, and the next tick owes the same duties.
 - Tick code raises an unexpected exception: the tick closes `error`, its summary the exception's type and message, so
   the journal keeps the cause when the logs cannot; the traceback goes to `canopy.log`, and the loop goes on.
-- MCP unavailable: the overseer first does what needs nothing from the server that failed (due chores; with GitHub,
-  reviews and a private ticket's `resume`; with the tracker, closed tickets marked done), then records a tick-wide
-  `skip`. The tick closes `skipped`: what it started stands, nothing is decided on partial data, and the attention list
-  stays as it was.
+- A source down: the tick raises `connector_failed` (§30), and what the source left stale is the harness's `wait`
+  (§37); the overseer, which reads no server (§13), has no outage of its own to skip a tick over.
 - Overseer asks for something the guards refuse: the refusal is recorded as a decision with the guard's reason.
 - An unhandled error in a tick `canopy loop` runs: the traceback is logged and the loop goes on; the next tick closes
   the row as `abandoned` (§6).

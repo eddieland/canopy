@@ -263,11 +263,11 @@ def discard(conn: sqlite3.Connection, run_id: int, *, channel: str) -> records.R
         draft = review_drafts.get(conn, draft.id) or draft
         _check_open(draft)
         _check_not_revising(conn, draft)
-        sql.execute(
-            conn,
-            sql.update("review_drafts")
+        (
+            records.update(records.ReviewDraft)
             .set(status=ReviewDraftStatus.DISCARDED, why=f"discarded by you through {channel}")
-            .where("id = ?", draft.id),
+            .where("id = ?", draft.id)
+            .run(conn)
         )
     return _present(conn, draft)
 
@@ -489,9 +489,8 @@ def _claim(conn: sqlite3.Connection, draft: records.ReviewDraft, seen: str, chan
     """
     with db.transaction(conn):
         version = _check_seen(conn, draft, seen)
-        claimed = sql.execute(
-            conn,
-            sql.update("review_drafts")
+        claimed = (
+            records.update(records.ReviewDraft)
             .set(
                 status=ReviewDraftStatus.PUBLISHING,
                 publish_version=version.number,
@@ -500,7 +499,8 @@ def _claim(conn: sqlite3.Connection, draft: records.ReviewDraft, seen: str, chan
                 why=None,
             )
             .where("id = ?", draft.id)
-            .where("status = ?", ReviewDraftStatus.WAITING),
+            .where("status = ?", ReviewDraftStatus.WAITING)
+            .run(conn)
         ).rowcount
         if not claimed:
             now = review_drafts.get(conn, draft.id)
@@ -575,23 +575,23 @@ def _pending_seen(conn: sqlite3.Connection, draft_id: int, line: str) -> None:
     if not isinstance(raw, dict) or raw.get("kind") != "pending":
         return
     with db.transaction(conn):
-        sql.execute(
-            conn,
-            sql.update("review_drafts")
+        (
+            records.update(records.ReviewDraft)
             .set(pending_review=_str(raw.get("review")), pending_review_id=_int(raw.get("id")))
-            .where("id = ?", draft_id),
+            .where("id = ?", draft_id)
+            .run(conn)
         )
 
 
 def _lost(conn: sqlite3.Connection, draft_id: int) -> None:
     """A publish that stopped before its post said how it ended: unconfirmed, with the pending review it saw, if any."""
     with db.transaction(conn):
-        sql.execute(
-            conn,
-            sql.update("review_drafts")
+        (
+            records.update(records.ReviewDraft)
             .set(status=ReviewDraftStatus.UNCONFIRMED, why="the publish stopped before the post said how it ended")
             .where("id = ?", draft_id)
-            .where("status = ?", ReviewDraftStatus.PUBLISHING),
+            .where("status = ?", ReviewDraftStatus.PUBLISHING)
+            .run(conn)
         )
 
 
@@ -636,9 +636,8 @@ def _published(
 ) -> Published:
     posted = [{"id": _int(c.get("id")), "url": _str(c.get("url"))} for c in comments]
     with db.transaction(conn):
-        sql.execute(
-            conn,
-            sql.update("review_drafts")
+        (
+            records.update(records.ReviewDraft)
             .set(
                 status=ReviewDraftStatus.PUBLISHED,
                 why=None,
@@ -649,7 +648,8 @@ def _published(
                 published_url=_str(review.get("url")),
                 published_comments=json.dumps(posted),
             )
-            .where("id = ?", draft.id),
+            .where("id = ?", draft.id)
+            .run(conn)
         )
     return Published(_present(conn, draft), version)
 
@@ -661,16 +661,16 @@ def _staged(
     pending: Mapping[str, object],
 ) -> Published:
     with db.transaction(conn):
-        sql.execute(
-            conn,
-            sql.update("review_drafts")
+        (
+            records.update(records.ReviewDraft)
             .set(
                 status=ReviewDraftStatus.STAGED,
                 why=None,
                 pending_review=_str(pending.get("review")),
                 pending_review_id=_int(pending.get("id")),
             )
-            .where("id = ?", draft.id),
+            .where("id = ?", draft.id)
+            .run(conn)
         )
     return Published(_present(conn, draft), version)
 
@@ -694,9 +694,8 @@ def _back(
 
 
 def _unclaim(conn: sqlite3.Connection, draft_id: int, *, why: str, pending: str | None) -> None:
-    sql.execute(
-        conn,
-        sql.update("review_drafts")
+    (
+        records.update(records.ReviewDraft)
         .set(
             status=ReviewDraftStatus.WAITING,
             why=why,
@@ -706,7 +705,8 @@ def _unclaim(conn: sqlite3.Connection, draft_id: int, *, why: str, pending: str 
             pending_review=pending,
             pending_review_id=None,
         )
-        .where("id = ?", draft_id),
+        .where("id = ?", draft_id)
+        .run(conn)
     )
 
 
@@ -722,16 +722,16 @@ def _unconfirmed(
         The draft, unconfirmed.
     """
     with db.transaction(conn):
-        sql.execute(
-            conn,
-            sql.update("review_drafts")
+        (
+            records.update(records.ReviewDraft)
             .set(
                 status=ReviewDraftStatus.UNCONFIRMED,
                 why="the post ended without saying whether it submitted",
                 pending_review=_str(pending.get("review")),
                 pending_review_id=_int(pending.get("id")),
             )
-            .where("id = ?", draft.id),
+            .where("id = ?", draft.id)
+            .run(conn)
         )
     return Published(_present(conn, draft), version)
 
@@ -752,13 +752,13 @@ def expire_claims(conn: sqlite3.Connection, config: Config) -> list[int]:
     minutes = config.connect.vcs().timeout_minutes + CLAIM_MARGIN_MINUTES
     before = db.format_time(datetime.now(UTC) - timedelta(minutes=minutes))
     with db.transaction(conn):
-        rows = sql.execute(
-            conn,
-            sql.update("review_drafts")
+        rows = (
+            records.update(records.ReviewDraft)
             .set(status=ReviewDraftStatus.UNCONFIRMED, why="the publish stopped before the post said how it ended")
             .where("status = ?", ReviewDraftStatus.PUBLISHING)
             .where("publish_started_at < ?", before)
-            .returning("id"),
+            .returning("id")
+            .run(conn)
         ).fetchall()
     return [int(r["id"]) for r in rows]
 
@@ -775,13 +775,11 @@ def settle_by_read(conn: sqlite3.Connection, whole: Iterable[str]) -> list[recor
         The drafts settled, as they now stand.
     """
     with db.transaction(conn):
-        waiting = records.fetch_all(
-            conn,
-            records.ReviewDraft,
-            sql.select("*")
-            .from_("review_drafts")
+        waiting = (
+            records.select(records.ReviewDraft)
             .where_in("pr_url", sorted(set(whole)))
-            .where_in("status", (ReviewDraftStatus.UNCONFIRMED, ReviewDraftStatus.STAGED)),
+            .where_in("status", (ReviewDraftStatus.UNCONFIRMED, ReviewDraftStatus.STAGED))
+            .all(conn)
         )
         settled = [draft.id for draft in waiting if _settle_one(conn, draft)]
     return [d for d in (review_drafts.get(conn, i) for i in settled) if d is not None]
@@ -793,14 +791,12 @@ def _settle_one(conn: sqlite3.Connection, draft: records.ReviewDraft) -> bool:
     Returns:
         Whether it is settled; False while a staged review is pending.
     """
-    review = records.fetch_one(
-        conn,
-        records.ObservedReview,
-        sql.select("*")
-        .from_("observed_reviews")
+    review = (
+        records.select(records.ObservedReview)
         .where("pr_url = ?", draft.pr_url)
         .where("item = ?", ReviewItem.REVIEW)
-        .where("id = ?", draft.pending_review_id),
+        .where("id = ?", draft.pending_review_id)
+        .one(conn)
     )
     staged = draft.status is ReviewDraftStatus.STAGED
     if review is not None and review.state is ReviewState.PENDING:
@@ -812,19 +808,16 @@ def _settle_one(conn: sqlite3.Connection, draft: records.ReviewDraft) -> bool:
         why = "the review you staged was deleted on GitHub" if staged else "the read found nothing posted"
         _unclaim(conn, draft.id, why=why, pending=None)
         return True
-    comments = records.fetch_all(
-        conn,
-        records.ObservedReview,
-        sql.select("*")
-        .from_("observed_reviews")
+    comments = (
+        records.select(records.ObservedReview)
         .where("pr_url = ?", draft.pr_url)
         .where("item = ?", ReviewItem.COMMENT)
         .where("review_id = ?", review.id)
-        .order_by("created_at, id"),
+        .order_by("created_at, id")
+        .all(conn)
     )
-    sql.execute(
-        conn,
-        sql.update("review_drafts")
+    (
+        records.update(records.ReviewDraft)
         .set(
             status=ReviewDraftStatus.PUBLISHED,
             why="submitted by you on GitHub" if staged else "settled published by a read",
@@ -835,7 +828,8 @@ def _settle_one(conn: sqlite3.Connection, draft: records.ReviewDraft) -> bool:
             published_url=review.url,
             published_comments=json.dumps([{"id": c.id, "url": c.url} for c in comments]),
         )
-        .where("id = ?", draft.id),
+        .where("id = ?", draft.id)
+        .run(conn)
     )
     return True
 

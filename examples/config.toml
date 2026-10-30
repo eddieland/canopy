@@ -2,7 +2,8 @@
 # ~/.config/canopy/config.toml ($XDG_CONFIG_HOME/canopy/config.toml), which serves every workspace. Either overrides
 # canopy-workspace.toml key by key, and the private file overrides the user file. Keys marked private in DESIGN §12 may
 # be set only in these two. Every key, most at its default. `canopy init` writes only tracker.labels and the trust
-# lists, to the private file: set the rest only to change them.
+# lists, to the private file: add your tracker source ([connect.sources], required), and set the rest only to change
+# them.
 
 [tracker]
 # Your queue. A ticket is yours if it carries any of these labels. Never share a
@@ -231,24 +232,28 @@ cmd = ""
 # url = "http://localhost:9000/"                # where those links open it, such as an SSH forward's port;
 #                                               # it replaces the whole address, so add base_path if you set one
 
+# Required: the program that reads your tracker into canopy's journal, a tracker source (DESIGN §30). canopy reads no
+# ticket any other way, so config refuses a workspace without one. Exactly one, canopy's Jira Cloud reader here. It
+# reads your email and an API token, one line EMAIL:API_TOKEN, from ~/.config/canopy/jira-credentials, mode 600, and
+# sends them to this site alone.
+[connect.sources.jira]
+kind = "tracker"
+cmd = "canopy-connect-jira --site acme.atlassian.net"
+
+# Or, with GitHub Issues as the tracker, a tracker source given the repository reads its issues, GH-12 being issue 12,
+# and its post_cmd lets canopy post a ticket's drafts too.
+# [connect.sources.issues]
+# kind = "tracker"
+# cmd = "canopy-connect-github --repo acme/api"  # HOST/OWNER/NAME on GitHub Enterprise
+# post_cmd = "canopy-post-github"
+
 # Optional: the programs canopy reads GitHub with and posts your approved replies through (DESIGN §29). Unset, the
-# vcs source is canopy's own, which use the token `gh` holds for each PR's and repository's host. A tracker source
-# with a post_cmd lets canopy post a ticket's drafts too, as for GitHub Issues.
+# vcs source is canopy's own, which use the token `gh` holds for each PR's and repository's host.
 # [connect.sources.github]
 # kind = "vcs"
 # cmd = "canopy-connect-github"
 # post_cmd = "canopy-post-github"
 # timeout_minutes = 2
-#
-# [connect.sources.issues]
-# kind = "tracker"
-# post_cmd = "canopy-post-github"
-#
-# Or, at most one tracker source, canopy's Jira Cloud reader (DESIGN §30). It reads your email and an API token, one
-# line EMAIL:API_TOKEN, from ~/.config/canopy/jira-credentials, mode 600, and sends them to this site alone.
-# [connect.sources.jira]
-# kind = "tracker"
-# cmd = "canopy-connect-jira --site acme.atlassian.net"
 
 # Optional: recurring chores the overseer runs when due (DESIGN §19). The prompt is your own file. A chore that runs
 # your own tools sets `cmd` to an agent of yours, defined in ~/.config/opencode/agent/, that allows exactly those tools.

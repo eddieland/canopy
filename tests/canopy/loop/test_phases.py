@@ -20,8 +20,9 @@ from canopy.core import conversation, db, item_numbers, records, sql
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import Decider, NumberedItem, Phase
 from canopy.loop import phases
-from tests.canopy.helpers import KEY, canopy, context, in_tick, seen
-from tests.canopy.observation_helpers import artifact_comment
+from tests.canopy.helpers import KEY, context, decides, in_tick, seen
+from tests.canopy.observation_helpers import artifact_comment, held, sent_draft
+from tests.canopy.scenario_helpers import sets_phase
 
 if TYPE_CHECKING:
     import sqlite3
@@ -301,9 +302,9 @@ def derived(env: CanopyEnv) -> list[phases.Derived]:
 
 @pytest.fixture
 def observed(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> sqlite3.Connection:
-    """A tracker source configured, and KEY seen and observed open with the queue label. Returns the journal."""
+    """A tracker source configured, and KEY held, then observed open with the queue label. Returns the journal."""
     canopy_env.configure(canopy_env.user_file, {"connect": TRACKER})
-    seen(conn, canopy_env)
+    held(canopy_env, conn, KEY)
     observe_ticket(conn)
     conn.commit()
     return conn
@@ -372,20 +373,56 @@ def test_a_ticket_that_depends_on_a_stale_or_missing_observation_is_stale(
         observed.execute(statement)
     observed.commit()
     # Stale by the `tracker` source's reads, but for the branches, which the `vcs` source's read.
-    tracker = not stale.startswith("branches")
-    assert derived(canopy_env) == [phases.Derived(KEY, None, stale=stale, stale_tracker=tracker)]
-
-
-def test_without_a_tracker_source_a_public_ticket_is_stale(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    seen(conn, canopy_env)
-    assert derived(canopy_env) == [phases.Derived(KEY, None, stale="no tracker source observes tickets")]
+    vcs = stale.startswith("branches")
+    assert derived(canopy_env) == [phases.Derived(KEY, None, stale=stale, stale_tracker=not vcs, stale_vcs=vcs)]
 
 
 def test_a_unit_whose_pr_is_stale_is_stale(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
     unit(canopy_env, observed)
     observe_pr(observed, at=OLD)
     observed.commit()
-    assert derived(canopy_env)[1] == phases.Derived(KEY, "repo", stale=f"{PR} last observed {OLD}")
+    assert derived(canopy_env)[1] == phases.Derived(KEY, "repo", stale=f"{PR} last observed {OLD}", stale_vcs=True)
+
+
+@pytest.mark.parametrize("at", [None, OLD], ids=["missing", "old"])
+def test_a_candidate_whose_open_blockers_pr_is_stale_is_stale_by_the_vcs_source(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    at: str | None,
+) -> None:
+    """Stacking on it, or going on stacked, reads that PR, which the overseer reads no longer (DESIGN §39)."""
+    blocker = "https://github.com/acme/repo/pull/9"
+    branches_read(observed)
+    observed.execute("UPDATE observed_tickets SET blockers = '[\"PROJ-9\"]' WHERE key = ?", (KEY,))
+    observe_ticket(observed, "PROJ-9", labels={})
+    db.set_unit(observed, "PROJ-9", str(canopy_env.root), "repo", pr_url=blocker)
+    if at is not None:
+        observed.execute(
+            "INSERT INTO observed_prs (url, repository, number, head_sha, base_ref, state, draft, mergeable, author, "
+            "observed_at, labels, mergeable_state) VALUES (?, 'acme/repo', 9, ?, 'main', 'open', 0, 'mergeable', "
+            "'operator', ?, '[]', 'clean')",
+            (blocker, HEAD, at),
+        )
+    observed.commit()
+    why = f"blocker PROJ-9's PR {blocker} " + ("never observed" if at is None else f"last observed {at}")
+    assert derived(canopy_env)[0] == phases.Derived(KEY, None, stale=why, stale_vcs=True)
+    # One marked done is owed nothing, so its PR is not read for it.
+    db.set_ticket(observed, "PROJ-9", str(canopy_env.root), done=True)
+    observed.commit()
+    assert derived(canopy_env)[0].phases == (phases.Phase.BLOCKED,)
+
+
+def test_a_candidate_with_a_pr_of_its_own_waits_on_no_blockers_pr(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    """Only a ticket with no branch is stacked, so one with its own PR goes on whatever its blocker's PR was read."""
+    green(canopy_env, observed)
+    observed.execute("UPDATE observed_tickets SET blockers = '[\"PROJ-9\"]' WHERE key = ?", (KEY,))
+    observe_ticket(observed, "PROJ-9", labels={})
+    db.set_unit(observed, "PROJ-9", str(canopy_env.root), "repo", pr_url="https://github.com/acme/repo/pull/9")
+    observed.commit()
+    assert derived(canopy_env)[0].stale is None
 
 
 def test_a_check_the_repository_names_human_is_not_ci(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
@@ -489,6 +526,53 @@ def test_an_untrusted_review_waits_on_an_operator_reply_and_no_verbs_instruction
     with db.transaction(observed):
         conversation.write_reply(observed, ticket, "Go ahead with the map.", channel="cli", submission=None)
     assert not any(phases.Phase.UNTRUSTED_REVIEW in d.phases for d in derived(canopy_env))
+
+
+def test_a_reply_the_operator_sent_is_no_feedback_on_a_pr_they_did_not_open(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    # Known by its id, not by its author: on someone else's PR the operator's login is no PR author's.
+    green(canopy_env, observed)
+    observed.execute("UPDATE observed_prs SET author = 'teammate'")
+    review(observed, "operator", "commented", body="Renamed.")
+    assert any(Phase.UNTRUSTED_REVIEW in d.phases for d in derived(canopy_env))
+    [(ident,)] = observed.execute("SELECT id FROM observed_reviews WHERE author = 'operator'").fetchall()
+    sent_draft(canopy_env, observed, comment_id=0, review_id=ident)
+    assert not any(Phase.UNTRUSTED_REVIEW in d.phases for d in derived(canopy_env))
+
+
+@pytest.mark.parametrize(
+    ("reviewer", "first_seen", "wait", "rows"),
+    [
+        ("octocat", FRESH, 30, (Phase.CI_RUNNING, Phase.CHANGES_REQUESTED)),
+        ("octocat", OLD, 30, (Phase.CHANGES_REQUESTED,)),
+        ("octocat", FRESH, 0, (Phase.CHANGES_REQUESTED,)),
+        ("stranger", OLD, 30, (Phase.CI_RUNNING, Phase.UNTRUSTED_REVIEW)),
+    ],
+    ids=["waits", "waited-out", "never-waits", "untrusted-waits"],
+)
+def test_trusted_feedback_waits_on_pending_checks_only_so_long(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+    reviewer: str,
+    first_seen: str,
+    wait: int,
+    rows: tuple[Phase, ...],
+) -> None:
+    """A queue of builds holds a trusted reviewer's feedback `policy.feedback_ci_wait_minutes` from when it was seen."""
+    canopy_env.configure(
+        canopy_env.user_file,
+        {"trust": {"trusted_reviewers": ["octocat"]}, "policy": {"feedback_ci_wait_minutes": wait}},
+    )
+    unit(canopy_env, observed)
+    observe_pr(observed)
+    check(observed, status="queued", conclusion=None)
+    number = review(observed, reviewer, "changes_requested", body="Rename it.")
+    observed.execute("UPDATE item_numbers SET numbered_at = ? WHERE number = ?", (first_seen, number))
+    observed.commit()
+    [unit_row] = [d for d in derived(canopy_env) if d.repo == "repo"]
+    assert unit_row.phases == rows
 
 
 def recorded(conn: sqlite3.Connection, tick_id: int, *derived: phases.Derived) -> None:
@@ -629,11 +713,10 @@ def test_a_tick_derives_in_shadow_and_records_the_phase_its_overseer_left(
     ]
     connector_state.write_text(json.dumps({"jira": {"lines": lines, "query": ["PROJ-1", "PROJ-2"]}}))
     ticked = scenario.tick(
-        canopy("ticket", "set", "PROJ-1", "--phase", "needs_human"),
-        canopy("decide", "PROJ-1", "wait", "--rationale", "waits on a human"),
-        canopy("ticket", "set", "PROJ-2", "--phase", "needs_human"),
-        canopy("decide", "PROJ-2", "wait", "--rationale", "waits on a human"),
-        queried=None,
+        sets_phase("PROJ-1", Phase.NEEDS_HUMAN),
+        decides("PROJ-1", "wait", "waits on a human"),
+        sets_phase("PROJ-2", Phase.NEEDS_HUMAN),
+        decides("PROJ-2", "wait", "waits on a human"),
     )
     tick_id = ticked.tick.id
     rows = records.fetch_all(

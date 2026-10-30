@@ -166,6 +166,7 @@ describe('outcomes', () => {
             ended_at: null,
             end_reason: null,
             notes: null,
+            model: null,
             personas: [],
         }
         expect(reviewRequestedText(pr, { request, already: false })).toBe(

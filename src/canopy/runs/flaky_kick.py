@@ -3,10 +3,10 @@
 Such a worker changes nothing for the check and pushes nothing, so no new run of the PR's checks would come. Under
 `trust.max_flaky_kicks` the harness, never the worker, starts one: in each of the run's slots where origin still has the
 branch where the run found it, it rebases the branch onto its base (`checkpoint.rebase_for_kick`), records the kick,
-and pushes it with a lease on that head, the one forced push this allows (TRUST_MODEL T1). A head gets at most that
-many kicks; a push of work starts a head of its own. A slot that is not kicked, for the limit, a rebase that stops or
-would drop a change, or a push that fails, is named in the run's note, and the overseer asks the operator to rerun its
-checks, as without kicks.
+and pushes it with a lease on that head, the one forced push this allows (TRUST_MODEL T1), telling the sinks of each
+(`ci.kicked`). A head gets at most that many kicks; a push of work starts a head of its own. A slot that is not
+kicked, for the limit, a rebase that stops or would drop a change, or a push that fails, is named in the run's note,
+and the overseer asks the operator to rerun its checks, as without kicks.
 """
 
 from __future__ import annotations
@@ -14,13 +14,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import db, flaky_kicks
+from canopy.core import db, outbox
 from canopy.core.vocab import ResumeReason, RunKind, RunStatus
-from canopy.runs import checkpoint
+from canopy.runs import checkpoint, flaky_kicks
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from canopy.core.context import Context
     from canopy.infra import logs
@@ -47,11 +47,13 @@ def after_run(
     *,
     flaky: bool,
     places: Sequence[tuple[checkpoint.Git, str, checkpoint.Start]],
+    prs: Mapping[str, str | None],
     log: logs.TickAdapter,
 ) -> Kicks:
     """Kick the branch in each of `places`, a slot's git, its base, and where it started, if the run is one to kick.
 
-    That is a `resume` for `ci` that ended `done` with `flaky` true, under a `trust.max_flaky_kicks` above 0.
+    That is a `resume` for `ci` that ended `done` with `flaky` true, under a `trust.max_flaky_kicks` above 0. `prs` is
+    the PR the run's result named for each repository, for what the sinks hear of a kick.
 
     Returns:
         Whether the run left a check flaky, the repositories kicked, and a note for each slot not kicked, saying why;
@@ -66,11 +68,23 @@ def after_run(
     if not limit:
         return Kicks(flaky=True)
     branch = str(run["branch"])
+    key = str(run["ticket_key"])
     kicked: list[str] = []
     notes: list[str] = []
     for git, base, start in places:
         try:
-            note = _kick(ctx, run_id, git, branch=branch, base=base, start=start, limit=limit, log=log)
+            note = _kick(
+                ctx,
+                run_id,
+                git,
+                key=key,
+                branch=branch,
+                pr=prs.get(git.name),
+                base=base,
+                start=start,
+                limit=limit,
+                log=log,
+            )
         except checkpoint.SetupError as e:
             note = f"{git.where}not kicked: {str(e).removeprefix(git.where)}"
         if note is None:
@@ -85,13 +99,17 @@ def _kick(
     run_id: int,
     git: checkpoint.Git,
     *,
+    key: str,
     branch: str,
+    pr: str | None,
     base: str,
     start: checkpoint.Start,
     limit: int,
     log: logs.TickAdapter,
 ) -> str | None:
-    """Kick `branch` in one slot, if origin has it where the run found it and its head has kicks left.
+    """Kick `branch` in one slot, if origin has it where the run found it and its head has kicks left, and say so.
+
+    A kick pushed records `ci.kicked` for the sinks, naming `key`'s ticket and `pr`, the branch's PR.
 
     Returns:
         None when it was kicked; "" when the run pushed to it, which starts its checks anyway; else why it was not.
@@ -114,6 +132,20 @@ def _kick(
     except checkpoint.SetupError:
         flaky_kicks.forget(ctx.conn, run_id, git.name)
         raise
+    event = outbox.ci_kicked(
+        ctx.config,
+        key=key,
+        run_id=run_id,
+        repo=git.name,
+        branch=branch,
+        pr=pr,
+        from_head=head,
+        to_head=made,
+        kick=spent + 1,
+        limit=limit,
+    )
+    if event is not None:
+        db.record_event(ctx.conn, event)
     log.info(
         "flaky checks kicked",
         extra={"run_id": run_id, "repo": git.name, "branch": branch, "from": head, "to": made, "kick": spent + 1},

@@ -18,11 +18,11 @@ from canopy.runtime.agents import AgentOffer
 from canopy.runtime.implementation import one, pick, two
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Collection, Mapping, Sequence
     from pathlib import Path
 
     from canopy.infra import procs
-    from canopy.runtime.agents import Offerings
+    from canopy.runtime.agents import Offerings, Skills
     from canopy.runtime.implementation import Version
 
 
@@ -44,6 +44,27 @@ def offerings(
     """
     implementation = pick(version, one.offerings, two.offerings)
     return implementation.offerings(runner, cwd=cwd, definitions_dir=definitions_dir, agents=agents)
+
+
+def skills(
+    runner: procs.Runner,
+    *,
+    version: Version,
+    cwd: Path,
+    definitions_dir: Path,
+    agents: Collection[str],
+) -> Skills:
+    """Ask the runtime `version` runs every skill it finds, started in `cwd` with canopy's definitions.
+
+    The definitions are in `definitions_dir`, and `agents` are canopy's, which a runtime whose plugins load them waits
+    on. Cheaper than `offerings`: no agent's rules are read.
+
+    Returns:
+        Each skill as the runtime read it, its description, file, and text, sorted by name; only `error` when the
+        runtime could not list them.
+    """
+    implementation = pick(version, one.offerings, two.offerings)
+    return implementation.skills(runner, cwd=cwd, definitions_dir=definitions_dir, agents=agents)
 
 
 class Probe:

@@ -5,7 +5,7 @@ start URL --review` or the web UI's reviews page, and ends with `canopy stop URL
 that PR at its head, as `review.query` would, and turns reviews on by itself. The overseer reads each one through MCP,
 finds its repository by the map's clone URL, which the state block now carries, and reviews its head, or ends it with
 `canopy review end` once the PR merged or closed first or is in none of the workspace's repositories; the harness ends
-it when its review ends `done` (DESIGN §21, §22; `core/review_requests.py`, migration 0029).
+it when its review ends `done` (DESIGN §21, §22; `reviews/review_requests.py`, migration 0029).
 
 Status: done 2026-10-16.
 Learned: closed on the operator's request with the tests with the fakes and Playwright passing, before the live check

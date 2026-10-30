@@ -12,6 +12,9 @@ from datetime import UTC, datetime
 
 from canopy.core import db
 
+#: An attention item is a decision whose action is this prefix and its reason (D020).
+ACTION_PREFIX = "attention:"
+
 
 @dataclass(frozen=True)
 class Item:
@@ -24,7 +27,9 @@ class Item:
     ticket_key: str | None
     reason: str
     detail: str
-    since: str  # created_at of the first tick in the unbroken run of ticks that recorded this item
+    #: created_at of the first tick in the unbroken run of ticks that recorded this item, or of its cause if that came
+    #: first or no tick records it, such as a task's question or the oldest of a unit's drafts waiting
+    since: str
     repo: str | None = None
     finding: bool = False
 

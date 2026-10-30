@@ -33,6 +33,19 @@ EXAMPLE_QUERIES = {
     "github": "repo:OWNER/NAME is:issue is:open",
 }
 
+#: The `tracker` source a new private file holds for the operator to fill in (DESIGN §30), one of canopy's own.
+TRACKER_SOURCE_TABLE = """
+# Required: your tracker source, the program that reads your tickets into canopy's journal (DESIGN §30). canopy reads
+# no ticket any other way, so this config does not load without one. Uncomment the table, and the cmd for your
+# tracker with your site or repository. canopy-connect-jira reads EMAIL:API_TOKEN from
+# ~/.config/canopy/jira-credentials, mode 600, and sends them to that site alone; canopy-connect-github reads issues
+# with the token `gh` holds, GH-12 being issue 12.
+# [connect.sources.tracker]
+# kind = "tracker"
+# cmd = "canopy-connect-jira --site acme.atlassian.net"
+# cmd = "canopy-connect-github --repo acme/api"
+"""
+
 BRANCH_PROTECTION = """\
 Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the repository host:
   - Protect the default branch and every release branch: no direct pushes, no force pushes.
@@ -149,7 +162,9 @@ def private_config_text(label: str | None, user_keys: AbstractSet[str]) -> str:
     """Return the text of a new private config file.
 
     It sets queue label `label`, unless None, and empty `trust.authorized_repliers` and `trust.trusted_reviewers` to
-    fill in, each unless `user_keys`, what the user file sets, holds it.
+    fill in, each unless `user_keys`, what the user file sets, holds it. Unless the user file names the sources, it
+    holds the `tracker` source config requires, commented out for the operator to fill in: only they know their
+    tracker's site or repository, and a guess would send their credentials to someone else's.
 
     Returns:
         The file's text: comments, and the tables of whichever of those keys it sets.
@@ -169,6 +184,8 @@ def private_config_text(label: str | None, user_keys: AbstractSet[str]) -> str:
 # both loops would work the same tickets.
 labels = [{json.dumps(label)}]
 """
+    if "connect.sources" not in user_keys:
+        text += TRACKER_SOURCE_TABLE
     trust = ""
     if "trust.authorized_repliers" not in user_keys:
         trust += """\

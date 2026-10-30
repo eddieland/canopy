@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { NOW, settled, signIn } from './helpers.ts'
+import { NOW, settled, signIn, spentInWindows, storeTheme } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(NOW)
@@ -87,6 +87,26 @@ test('the rail shows the spend of the last day and the last 30, and the version 
         'href',
         'https://github.com/eddieland/canopy/releases',
     )
+})
+
+test("the rail's spend at an operator's figures: two rows, the costs right-aligned, the 30 days the larger", async ({
+    page,
+}) => {
+    await spentInWindows(page, 412.07, 3118.94)
+    await storeTheme(page, 'dark')
+    await page.goto('attention')
+    await settled(page)
+    const spend = page.getByTestId('rail-spend')
+    await expect(spend.getByTestId('rail-spend-24h')).toHaveText('$412.07')
+    await expect(spend.getByTestId('rail-spend-30d')).toHaveText('$3,118.94')
+    // Each cost on its own row, the 30 days under the 24 hours, their right edges one line.
+    const rect = (testId: string): Promise<DOMRect> =>
+        spend.getByTestId(testId).evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect)
+    const day = await rect('rail-spend-24h')
+    const month = await rect('rail-spend-30d')
+    expect(month.top).toBeGreaterThanOrEqual(day.bottom)
+    expect(Math.abs(month.right - day.right)).toBeLessThan(1)
+    await expect(spend).toHaveScreenshot('rail-spend-dark.png')
 })
 
 test('the version stays at the window foot on a page longer than the window', async ({ page }) => {

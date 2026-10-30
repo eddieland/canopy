@@ -7,6 +7,7 @@ by the loop.
 import os
 import sqlite3
 from datetime import UTC, datetime, timedelta, tzinfo
+from pathlib import Path
 from typing import override
 from unittest import mock
 
@@ -16,16 +17,21 @@ from canopy.cli.main import main
 from canopy.core import conversation, db, notice, prompts
 from canopy.core.config import load
 from canopy.core.context import Context
+from canopy.core.vocab import ResumeReason, RunKind
 from canopy.loop import pacing, reread, tick_now, web
 from canopy.serve import live
 from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
+    KEY,
     PROMPT_VALUES,
     InlineRunner,
     in_tick,
+    overseer_calls,
     present,
+    tracker_holds,
+    waits,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches
+from tests.canopy.scenario_helpers import FEEDBACK_RED, Scenario, dispatches, github_shows, with_a_pr
 from tests.canopy.web_helpers import DEFAULT_CAPACITY, refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
@@ -191,25 +197,44 @@ def test_setting_a_notice_replaces_the_one_in_force_and_status_shows_it(scenario
     assert "Notice to workers" not in scenario.operator("status").out
 
 
-def test_the_state_block_carries_the_notices_in_force_and_lately_ended(scenario: Scenario) -> None:
-    scenario.tick(dry_run=True)
+def test_the_state_block_carries_the_notice_in_force_and_drops_one_ended_with_no_unit(scenario: Scenario) -> None:
+    scenario.tick(*waits(KEY), dry_run=True)
     # With none set, nothing about notices reaches the overseer.
     assert "notices" not in scenario.state()
 
     scenario.operator("notice", "The staging cluster is being rebuilt.")
     scenario.operator("notice", OUTAGE, "--for", "1h")
-    scenario.tick(dry_run=True)
+    scenario.tick(*waits(KEY), dry_run=True)
     [now, before] = scenario.conn.execute("SELECT * FROM notices ORDER BY id DESC").fetchall()
     assert scenario.state()["notices"] == [
         {"text": OUTAGE, "set_at": now["set_at"], "until": now["lapses_at"], "in_force": True},
-        # Replaced, so it ended when the next was set: a check that ran before then may be the first one's.
-        {
-            "text": "The staging cluster is being rebuilt.",
-            "set_at": before["set_at"],
-            "until": before["ended_at"],
-            "in_force": False,
-        },
     ]
+    # Replaced, so it ended when the next was set: a check that ran before then may be the first one's. No ticket has
+    # a unit, so no check can be held, and the block leaves it out.
+    assert before["ended_at"] is not None
+
+
+@pytest.mark.usefixtures("git_pool")
+@pytest.mark.parametrize(
+    ("conclusion", "kept"),
+    [pytest.param("failure", True, id="a failed check"), pytest.param("success", False, id="none failed")],
+)
+def test_an_ended_notice_stays_in_the_state_block_while_a_fresh_pr_shows_a_failed_check(
+    scenario: Scenario,
+    github_state: Path,
+    conclusion: str,
+    kept: bool,  # noqa: FBT001  (a parametrized fixture)
+) -> None:
+    with_a_pr(scenario, approve=False)
+    scenario.operator("notice", OUTAGE)
+    scenario.operator("notice", "--clear")
+    github_shows(github_state, checks=[{**FEEDBACK_RED, "conclusion": conclusion}])
+    scenario.tick(*waits(KEY), dry_run=True)
+    [unit] = scenario.state()["observations"]["tickets"][0]["units"]
+    assert unit["observed"] == "fresh"
+    # Only a failed check can be held, until a newer run of it exists (DESIGN §8). A PR not observed fresh may show
+    # one, so it keeps the notice too: the busy workspace's snapshot shows it (tests/canopy/loop/test_state.py).
+    assert [n["text"] for n in scenario.state().get("notices", [])] == ([OUTAGE] if kept else [])
 
 
 def test_notices_ended_more_than_a_week_ago_leave_the_state_block(conn: sqlite3.Connection) -> None:
@@ -313,6 +338,7 @@ def test_a_resume_for_ci_after_the_notice_moved_mid_tick_is_refused(
     moved: bool,  # noqa: FBT001  (a parametrized fixture)
 ) -> None:
     # The overseer decided from a state block without the notice; the tick the notice wakes decides with it.
+    tracker_holds(conn)
     if not moved:
         notice.set_notice(conn, OUTAGE, minutes=60, channel="cli")
     with in_tick(conn) as tick_id:
@@ -321,10 +347,11 @@ def test_a_resume_for_ci_after_the_notice_moved_mid_tick_is_refused(
         if moved:
             conn.execute("UPDATE ticks SET read_at = ? WHERE id = ?", ("2026-01-01T00:00:00.000Z", tick_id))
             notice.set_notice(conn, OUTAGE, minutes=60, channel="cli")
-        args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "resume"]
-        assert main([*args, "--reason", "review", "--reason", "ci"], runner=InlineRunner()) == 1
+        for_ci = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW, ResumeReason.CI])
+        assert overseer_calls(for_ci, runner=InlineRunner()).error
         # A resume that is not for CI is not the notice's to hold: what refuses it is the next guard in line.
-        assert main([*args, "--reason", "review"], runner=InlineRunner()) == 1
+        not_ci = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
+        assert overseer_calls(not_ci, runner=InlineRunner()).error
         [decision, not_for_ci] = db.decisions_for_tick(conn, tick_id)
     assert (decision.action == "refused:notice_changed") is moved
     assert not_for_ci.action == "refused:no_branch"

@@ -38,6 +38,17 @@ export function isPressed(
     )
 }
 
+/**
+ * Whether a key press or a paste lands in a text field, or in the plan editor, which is editable: where a key the shell
+ * listens for anywhere else (`/`, `R`, 2048) is just a character someone is typing.
+ */
+export function isTextField(target: unknown): boolean {
+    return (
+        target instanceof HTMLElement &&
+        (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
+    )
+}
+
 const APPLE_NAMES: Partial<Record<string, string>> = { Mod: '⌘', Alt: '⌥', Shift: '⇧' }
 const OTHER_NAMES: Partial<Record<string, string>> = { Mod: 'Ctrl' }
 

@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
-from canopy.core import db, gc_passes, review_diff, review_runs
+from canopy.core import cards, db, gc_passes, records, review_diff, review_runs
 from canopy.core.vocab import ReviewRunStatus
 from canopy.serve.api import reviews as reviews_api
 from canopy.serve.backend import Backend
@@ -215,6 +215,29 @@ def test_a_reviews_page_names_the_models_that_served_its_reviewer(backend: Backe
     assert (served["status"], [m["model"] for m in served["models"]]) == ("found", ["openai/gpt-5"])
 
 
+def test_a_reviews_page_names_the_model_its_reviewer_asked_for(backend: Backend) -> None:
+    c = client(None, backend)
+    assert c.get("/api/reviews/4").json()["model"] is None  # it asked for none, so the runtime's default served it
+    with backend.open() as ctx:
+        records.update(records.ReviewRun).set(model="openai/gpt-5@high").where("id = ?", 4).run(ctx.conn)
+    assert c.get("/api/reviews/4").json()["model"] == "openai/gpt-5@high"
+
+
+def test_the_reviews_list_names_the_models_that_served_each_review_so_the_runs_page_lists_them_by_model(
+    backend: Backend,
+) -> None:
+    reviews = client(None, backend).get("/api/reviews").json()
+    # Reviews 5 and 6 are still running, or their sessions unread.
+    assert {r["id"]: r["served"] for r in reviews} == {
+        6: [],
+        5: [],
+        4: ["openai/gpt-5"],
+        3: ["openai/gpt-5"],
+        2: ["openai/gpt-5"],
+        1: ["openai/gpt-5"],
+    }
+
+
 def test_a_review_that_ended_badly_shows_the_call_it_ended_on(backend: Backend) -> None:
     entries = client(None, backend).get("/api/reviews/3/transcript").json()["entries"]
     failed = [e for e in entries if e["kind"] == "tool" and e["status"] == "error"]
@@ -404,3 +427,39 @@ def test_the_mock_drafts_a_review_of_a_coworkers_pr_and_its_poster_publishes_it(
     done = published.json()["draft"]
     assert done["status"] == "published"
     assert done["published_url"].startswith(f"{mock_reviews.PR_14}#pullrequestreview-")
+
+
+def test_a_reviews_page_shows_its_reviewers_card_and_its_last_once_it_ended(backend: Backend) -> None:
+    card = cards.Card(summary="Read the diff.", now="reading retry.py", next=("write the findings",))
+    with backend.open() as ctx:
+        ctx.conn.execute("UPDATE review_runs SET status = 'running', ended_at = NULL WHERE id = 6")
+        cards.record_call(ctx.conn, "review_runs", 6, card)
+    c = client(None, backend)
+    shown = c.get("/api/reviews/6").json()["card"]
+    assert (shown["summary"], shown["now"], shown["next"], shown["calls_since"]) == (
+        "Read the diff.",
+        "reading retry.py",
+        ["write the findings"],
+        0,
+    )
+    assert shown["stale_at"] is not None
+    with backend.open() as ctx:
+        ctx.conn.execute("UPDATE review_runs SET status = 'done', ended_at = started_at WHERE id = 6")
+    ended = c.get("/api/reviews/6").json()["card"]
+    assert (ended["now"], ended["stale"], ended["stale_at"]) == ("reading retry.py", False, None)
+    assert c.get("/api/reviews/5").json()["card"] is None
+
+
+def test_a_running_reviews_question_is_answered_from_its_page(backend: Backend) -> None:
+    question = cards.Question(ask="Review the generated client too?", options=("yes", "no, skip it"), recommend="B")
+    card = cards.Card(summary="Read the diff.", now="reading retry.py", question=question)
+    with backend.open() as ctx:
+        ctx.conn.execute("UPDATE review_runs SET status = 'running', ended_at = NULL WHERE id = 6")
+        cards.record_call(ctx.conn, "review_runs", 6, card)
+    c = client(None, backend)
+    shown = c.get("/api/reviews/6").json()["card"]["question"]
+    assert (shown["options"], shown["answer"]) == (["yes", "no, skip it"], None)
+    body = {"letter": "A", "asked_at": shown["asked_at"]}
+    answered = c.post("/api/reviews/6/answers", json=body, headers=signed_in(c)).json()
+    assert (answered["letter"], answered["option"]) == ("A", "yes")
+    assert c.get("/api/reviews/6").json()["card"]["question"]["answer"] == "A"

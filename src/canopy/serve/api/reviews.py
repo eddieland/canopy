@@ -18,8 +18,10 @@ from canopy.core import chore_view, conversation, review_drafts, review_drafts_m
 from canopy.core.vocab import DismissalReason
 from canopy.infra import logs
 from canopy.serve import review_draft_views, reviews
+from canopy.serve.api import runs as runs_api
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, ReviewId, not_found
+from canopy.serve.schema import Answered, AnswerRequest
 from canopy.serve.schema.review import (
     RequestedReview,
     ReviewDetail,
@@ -122,6 +124,20 @@ def review_output(run_id: ReviewId, backend: BackendDep) -> RawOutput:
     if found is None:
         raise HTTPException(status_code=404, detail=f"no review run {run_id}")
     return found
+
+
+@router.post(
+    "/reviews/{run_id}/answers",
+    operation_id="answerReview",
+    summary="Answer a running review's question",
+    responses=REFUSED,
+)
+def answer(run_id: ReviewId, body: AnswerRequest, backend: BackendDep) -> Answered:
+    """`canopy reply review:ID LETTER` on a running review: the answer to the question its reviewer's card asks (§41).
+
+    Refused `moved_on` when its card asks another question than the one asked at `asked_at`, which the page showed.
+    """
+    return runs_api.answered(backend, conversation.Ref(conversation.REVIEW, str(run_id)), body)
 
 
 @router.post(

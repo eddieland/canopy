@@ -33,13 +33,16 @@ const MODELS: Models = {
 // Every path the panel reads, and what the server stand-in answers each.
 let sent: string[] = []
 let models: Models = MODELS
-let listed: ModelList = { models: ['acme/deep-2', 'acme/fast-1'], variants: {}, error: null }
+let listed: ModelList | Response = { models: ['acme/deep-2', 'acme/fast-1'], variants: {}, error: null }
 
 const server: Middleware = {
     onRequest({ request }) {
         const path = new URL(request.url).pathname
         sent.push(path)
-        return Response.json(path === '/api/config/models' ? models : listed)
+        if (path === '/api/config/models') {
+            return Response.json(models)
+        }
+        return listed instanceof Response ? listed : Response.json(listed)
     },
 }
 
@@ -128,5 +131,13 @@ describe('ConfigModels', () => {
         await rows()
         fireEvent.click(screen.getByRole('button', { name: "Show the runtime's models" }))
         expect((await screen.findByRole('alert')).textContent).toBe('opencode models exited 1')
+    })
+
+    it("says a read of the list that failed in a read's words, not a write's", async () => {
+        listed = Response.json({}, { status: 500 })
+        renderPanel()
+        await rows()
+        fireEvent.click(screen.getByRole('button', { name: "Show the runtime's models" }))
+        expect((await screen.findByRole('alert')).textContent).toBe('could not read it: the server answered 500')
     })
 })
