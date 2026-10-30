@@ -1,7 +1,7 @@
 """The reviewer's and the planner's read-only git (DESIGN §27): what each tool reads, refuses, and never runs."""
 
 import os
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -159,20 +159,44 @@ def test_files_lists_the_paths_at_a_commit_by_name(repo: Repo) -> None:
     git("add", ".", cwd=repo.path)
     git("commit", "--quiet", "-m", "tests", cwd=repo.path)
     at = repo.checkouts
-    assert git_tools.files(RUNNER, at, git_tools.Files(rev="main")) == f"{git_tools.DATA_NOTE}\n\nretry.py"
-    every = git_tools.files(RUNNER, at, git_tools.Files(rev="feature"))
-    assert every.endswith("\n\nnotes.md\nretry.py\ntests/test_retry.py")
+
+    def listed(**asked: object) -> Sequence[str]:
+        found = git_tools.files(RUNNER, at, git_tools.Files.model_validate({"rev": "feature", **asked}))
+        assert found.cut is None
+        return found.paths
+
+    assert listed(rev="main") == ["retry.py"]
+    assert listed() == ["notes.md", "retry.py", "tests/test_retry.py"]
     # A name matches a file's own name, not its directory.
-    assert git_tools.files(RUNNER, at, git_tools.Files(rev="feature", name="*.py")).endswith(
-        "\n\nretry.py\ntests/test_retry.py",
+    assert listed(name="*.py") == ["retry.py", "tests/test_retry.py"]
+    assert listed(name="test_*") == ["tests/test_retry.py"]
+    assert listed(name="tests*") == []
+    assert listed(paths=["tests"]) == ["tests/test_retry.py"]
+
+
+def test_files_reads_each_path_whole_and_is_bounded_by_the_paths_it_leaves_out(repo: Repo) -> None:
+    names = ['a space "quoted".py', "new\nline.py", "tab\tname.py", "ünï \U0001f600.md", "\u202eevil.py"]
+    for name in names:
+        (repo.path / name).write_text("x\n")
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "odd files", cwd=repo.path)
+    found = git_tools.files(RUNNER, repo.checkouts, git_tools.Files(rev="feature"))
+    shown = ['a space "quoted".py', "new<U+000A>line.py", "tab<U+0009>name.py", "ünï \U0001f600.md", "<U+202E>evil.py"]
+    assert sorted(found.paths) == sorted([*shown, "notes.md", "retry.py"])
+    assert (
+        git_tools.Paths.model_validate_json(git_tools.text(found).removeprefix(f"{git_tools.DATA_NOTE}\n\n")) == found
     )
-    assert git_tools.files(RUNNER, at, git_tools.Files(rev="feature", name="test_*")).endswith(
-        "\n\ntests/test_retry.py",
-    )
-    assert git_tools.files(RUNNER, at, git_tools.Files(rev="feature", name="tests*")).startswith("No file at feature")
-    assert git_tools.files(RUNNER, at, git_tools.Files(rev="feature", paths=["tests"])).endswith(
-        "\n\ntests/test_retry.py",
-    )
+
+    for n in range(100):
+        (repo.path / f"file{n:03}.txt").write_text("x\n")
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "many files", cwd=repo.path)
+    with mock.patch.object(git_tools, "MAX_CHARS", 1000):
+        many = git_tools.files(RUNNER, repo.checkouts, git_tools.Files(rev="feature", name="file*"))
+        assert len(many.model_dump_json()) <= git_tools.MAX_CHARS
+    assert many.paths == [f"file{n:03}.txt" for n in range(len(many.paths))]
+    assert 0 < len(many.paths) < 100
+    assert many.cut == f"listed {len(many.paths)} of the 100 files found: name fewer paths, or a name"
 
 
 def test_log_narrows_to_commits_that_change_a_text_or_say_one_and_follows_a_rename(repo: Repo) -> None:
@@ -487,7 +511,7 @@ def test_nothing_the_repository_names_runs(repo: Repo, tmp_path: Path) -> None:
     [hello] = git_tools.grep(RUNNER, at, git_tools.Grep(rev=signed, text="hello")).matches
     assert (hello.path, hello.line, hello.text) == ("notes.md", 1, "hello")
     assert git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head=signed, stat=True)).endswith("retry.py")
-    assert git_tools.files(RUNNER, at, git_tools.Files(rev=signed)).endswith("retry.py")
+    assert git_tools.files(RUNNER, at, git_tools.Files(rev=signed)).paths == ["notes.md", "retry.py"]
     past = git_tools.Blame(rev=signed, path="notes.md", start=1, end=1, moves=True, ignore_whitespace=True)
     assert git_tools.blame(RUNNER, at, past).endswith("hello")
     assert not marker.exists(), marker.read_text()

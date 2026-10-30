@@ -1042,6 +1042,7 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
             tool_call("blame", rev="feature", path="retry.py", start=1, end=2),
             tool_call("log", range="feature", search="call()"),
             tool_call("grep", rev="feature", text="call()"),
+            tool_call("files", rev="feature"),
             git=[f"checkout={seed}"],
         )
     # Its own tools, wherever it runs, a running tick included, and none of the overseer's.
@@ -1049,7 +1050,7 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     # A tool that reads records lists them as its output schema, every field in every result; the rest list none.
     listed = {t["name"]: t for t in served.responses[1]["result"]["tools"]}
     outputs = {name: t["outputSchema"] for name, t in listed.items() if "outputSchema" in t}
-    assert list(outputs) == ["log", "grep"]
+    assert list(outputs) == ["log", "grep", "files"]
     for output in outputs.values():
         for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
             validator.check_schema(output)
@@ -1087,6 +1088,7 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     assert blame.text.count(f"{sha} ") == 2
     assert [c["commit"] for c in records(11, "log")["commits"]] == [sha]
     assert records(12, "grep")["matches"] == [{"path": "retry.py", "line": 2, "text": "    call()"}]
+    assert records(13, "files")["paths"] == ["retry.py"]
     assert (served.stderr, served.returncode) == ("", 0)
 
 
