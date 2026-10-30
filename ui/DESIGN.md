@@ -557,6 +557,8 @@ a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.
 - A page's blocks rise in one after another (`stagger` on the page column), and so do the attention list's rows, the
   Working rows, and a conversation's bubbles. Any other list's rows arrive with their panel, as one block. A row or
   bubble the stream adds later rises in on its own. A bubble pops (`[--enter:pop]`) from the corner nearest its side.
+  A reply's `seen` pops in once (`animate-receipt`) when a tick reads it while the page shows it, never on a page that
+  opens on it already read.
 - Counter values are odometers (`RollingNumber`): each digit rolls to its new value, the units first, and rolls up from
   zero when the counter first shows. The value is in the text once, for screen readers and tests; the digits are
   drawn by CSS.
@@ -1105,10 +1107,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   says the loop reads what came after. The panel's count is of the messages after the latest forget.
   Bodies are rich text (below), on a 24px line (`leading-6`): always text, but for their URLs. An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
-  (`src/lib/acknowledged.ts`), and a plain `seen` chip once one has, so a reply never goes unacknowledged; an
-  `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the next tick, and so
-  does a `plan_review` item whose plan waits on the operator no more (approved, skipped, or changes asked); Waiting
-  on you counts neither. While a run works the ticket, the conversation ends on it (starts on
+  (`src/lib/acknowledged.ts`), and a `seen` chip with a check, in the accent, once one has, so a reply never goes
+  unacknowledged; an `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the
+  next tick, and so does a `plan_review` item whose plan waits on the operator no more (approved, skipped, or changes
+  asked); Waiting on you counts neither. While a run works the ticket, the conversation ends on it (starts on
   it, flipped newest first), on the worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`,
   `working now` in `status-running`, its `run:N` link, its kind, its latest tool call (`RunDoing`, below), its cost
   so far, and for how long. It comes from the runs on the stream, so it rises in when the run starts, follows what it
