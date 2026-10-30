@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { NOW, settled, signIn, spentInWindows, storeTheme } from './helpers.ts'
+import { NOW, settled, signIn, spentInWindows, storePalette, storeTheme } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(NOW)
@@ -123,3 +123,30 @@ test('the version stays at the window foot on a page longer than the window', as
     const box = await page.getByTestId('rail-footer').boundingBox()
     expect(box === null ? 0 : Math.round(box.y + box.height)).toBe(600)
 })
+
+// The default palette, and the two whose mono face runs wider than the sans.
+for (const [theme, palette] of [
+    ['dark', 'indigo'],
+    ['dark', 'monokai'],
+    ['light', 'gruvbox'],
+] as const) {
+    test(`the foot's buttons sit side by side inside the rail in ${theme} ${palette}`, async ({ page }) => {
+        await storeTheme(page, theme)
+        await storePalette(page, theme, palette)
+        await page.goto('attention')
+        await settled(page)
+        const rect = (testId: string): Promise<DOMRect> =>
+            page.getByTestId(testId).evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect)
+        const footer = await rect('rail-footer')
+        const guide = await rect('rail-guide')
+        const settings = await rect('rail-settings')
+        expect(settings.top).toBe(guide.top)
+        expect(guide.left).toBeGreaterThanOrEqual(footer.left)
+        expect(settings.right).toBeLessThanOrEqual(footer.right)
+        // Each label whole, not cut short.
+        for (const testId of ['rail-guide', 'rail-settings']) {
+            const button = page.getByTestId(testId)
+            expect(await button.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+        }
+    })
+}
