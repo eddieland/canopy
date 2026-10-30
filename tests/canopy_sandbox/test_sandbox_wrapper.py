@@ -23,7 +23,7 @@ import canopy_sandbox
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, context, db, review_runs
+from canopy.core import checklists, commit_hooks, config, context, db, review_runs
 from canopy.infra import lock, logs, procs
 from canopy.infra.procs import SubprocessRunner
 from canopy.loop import mcp
@@ -1056,3 +1056,40 @@ def test_an_answers_directory_that_is_not_a_runs_runs_nothing(sandbox: Sandbox, 
     assert done.returncode == 2
     assert "CANOPY_ANSWERS is not a run's answers directory" in done.stderr
     assert not sandbox.log.exists()
+
+
+def test_a_worker_reads_its_checklist_and_may_write_the_holds_marker_in_its_own_git_directory(
+    sandbox: Sandbox,
+    tmp_path: Path,
+) -> None:
+    """The policy lets canopy's `pre-push` read the slot's list and mark its hold (DESIGN §42, TRUST_MODEL T4).
+
+    The list is in the answers directory, which the run reads and cannot write. The marker is in the slot's own git
+    directory, as `git rev-parse --absolute-git-dir` names it: a worktree's, in its primary clone's common directory,
+    outside the slot's working tree. srt binds each `allowRead` path read-only after the `allowWrite` ones, so no
+    entry only read may hold the marker either.
+    """
+    _, slot = linked_worktree(tmp_path, "repo")
+    answers = answers_dir(tmp_path)
+    listed = checklists.file_of(answers, "repo")
+    listed.parent.mkdir()
+    listed.write_text("## general-types\n\nA parameter takes the most general type its body needs.\n")
+    env = {"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path)), "CANOPY_ANSWERS": str(answers)}
+
+    done = wrap("worker", "true", cwd=slot, env=env)
+
+    assert done.ok, done.stderr
+    filesystem = sandbox.only_call()["settings"]["filesystem"]
+    marker = Path(git("rev-parse", "--absolute-git-dir", cwd=slot)) / commit_hooks.HOLD_MARKER
+    assert not marker.is_relative_to(slot)
+    assert covered(filesystem["allowRead"], listed)
+    assert not covered(filesystem["allowWrite"], listed)
+    assert covered(filesystem["allowWrite"], marker)
+    assert not covered(filesystem["denyWrite"], marker)
+    only_read = [p for p in filesystem["allowRead"] if p not in filesystem["allowWrite"]]
+    assert not covered(only_read, marker)
+
+
+def covered(entries: list[str], path: Path) -> bool:
+    """Whether one of a policy's `entries`, each a path srt reads with `~` for HOME, is `path` or holds it."""
+    return any(path.is_relative_to(Path(entry).expanduser()) for entry in entries)
