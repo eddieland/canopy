@@ -118,6 +118,11 @@ Rules:
   no blur, or, on black, where a shadow does nothing, the accent's glow). Spacing, sizes, and layout never change
   with a palette, and neither do the status colors. The defaults take the soft shadow, Gruvbox's dark the crisp
   corners and hard shadow of an editor of the nineties, and black no edges, soft corners, and the glow.
+  A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
+  hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
+  or glowing), and the nav's highlight (a tint and a hairline, a solid block with the active item inked in the canvas's
+  color, or a tint with the icon lit). Each form takes the room the default does, so a switch moves nothing; the
+  defaults keep the first of each, Gruvbox's dark the second, and black the third.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
