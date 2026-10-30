@@ -138,7 +138,7 @@ export function Buddy() {
                 data-testid="buddy"
                 data-room={room === false ? undefined : room}
                 className={cn(
-                    'relative flex shrink-0 flex-col items-start gap-2 px-3 pt-3 pb-1',
+                    'relative flex shrink-0 flex-col items-start gap-2 px-2 pt-3 pb-1',
                     room === false && 'invisible',
                 )}
             >
