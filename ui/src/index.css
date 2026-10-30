@@ -1154,6 +1154,14 @@
     }
 }
 
+/* A reply's `seen` as a tick reads it while the page shows it (src/components/conversation.tsx): it pops in once. */
+@utility animate-receipt {
+    display: inline-flex;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: pop 240ms cubic-bezier(0.2, 0, 0, 1) backwards;
+    }
+}
+
 /* A skeleton's light passing over it, left to right. */
 @utility animate-shimmer {
     background-size: 200% 100%;

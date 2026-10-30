@@ -524,8 +524,9 @@
     --nav-block: 1;
     --nav-hairline: 0;
     --nav-on-ink: var(--background);
-    /* Its section colors are Gruvbox's own faded set, each still its section's hue: purple turned toward violet, so
-     * Pull requests is not the accent, and blue toward the sky, so Tickets is not done's. */
+    /* Its section colors are Gruvbox's own faded set, each in its section's hue family, a few degrees toward
+     * Gruvbox's own shades: purple turned toward violet, so Pull requests is not the accent, and blue toward the sky,
+     * so Tickets is not done's. */
     --section-attention: oklch(0.72 0.13 5);
     --section-tickets: oklch(0.72 0.06 230);
     --section-tasks: oklch(0.78 0.15 115);
