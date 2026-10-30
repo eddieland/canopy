@@ -26,6 +26,7 @@ import { Route as PullRequestsIndexRouteImport } from './routes/pull-requests.in
 import { Route as PullRequestsPrRouteImport } from './routes/pull-requests.pr'
 import { Route as ReportsIndexRouteImport } from './routes/reports.index'
 import { Route as ReportsChecklistRouteImport } from './routes/reports.checklist'
+import { Route as ReportsCiRouteImport } from './routes/reports.ci'
 import { Route as ReportsHealthRouteImport } from './routes/reports.health'
 import { Route as ReportsSpendRouteImport } from './routes/reports.spend'
 import { Route as ReviewsIndexRouteImport } from './routes/reviews.index'
@@ -134,6 +135,11 @@ const ReportsIndexRoute = ReportsIndexRouteImport.update({
 const ReportsChecklistRoute = ReportsChecklistRouteImport.update({
   id: '/reports/checklist',
   path: '/reports/checklist',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsCiRoute = ReportsCiRouteImport.update({
+  id: '/reports/ci',
+  path: '/reports/ci',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsHealthRoute = ReportsHealthRouteImport.update({
@@ -273,6 +279,7 @@ export interface FileRoutesByFullPath {
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
   '/reports/checklist': typeof ReportsChecklistRoute
+  '/reports/ci': typeof ReportsCiRoute
   '/reports/health': typeof ReportsHealthRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
@@ -316,6 +323,7 @@ export interface FileRoutesByTo {
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
   '/reports/checklist': typeof ReportsChecklistRoute
+  '/reports/ci': typeof ReportsCiRoute
   '/reports/health': typeof ReportsHealthRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
@@ -360,6 +368,7 @@ export interface FileRoutesById {
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
   '/reports/checklist': typeof ReportsChecklistRoute
+  '/reports/ci': typeof ReportsCiRoute
   '/reports/health': typeof ReportsHealthRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
@@ -405,6 +414,7 @@ export interface FileRouteTypes {
     | '/guide/$page'
     | '/pull-requests/pr'
     | '/reports/checklist'
+    | '/reports/ci'
     | '/reports/health'
     | '/reports/spend'
     | '/reviews/$id'
@@ -448,6 +458,7 @@ export interface FileRouteTypes {
     | '/guide/$page'
     | '/pull-requests/pr'
     | '/reports/checklist'
+    | '/reports/ci'
     | '/reports/health'
     | '/reports/spend'
     | '/reviews/$id'
@@ -491,6 +502,7 @@ export interface FileRouteTypes {
     | '/guide/$page'
     | '/pull-requests/pr'
     | '/reports/checklist'
+    | '/reports/ci'
     | '/reports/health'
     | '/reports/spend'
     | '/reviews/$id'
@@ -535,6 +547,7 @@ export interface RootRouteChildren {
   GuidePageRoute: typeof GuidePageRoute
   PullRequestsPrRoute: typeof PullRequestsPrRoute
   ReportsChecklistRoute: typeof ReportsChecklistRoute
+  ReportsCiRoute: typeof ReportsCiRoute
   ReportsHealthRoute: typeof ReportsHealthRoute
   ReportsSpendRoute: typeof ReportsSpendRoute
   ReviewsIdRoute: typeof ReviewsIdRoute
@@ -684,6 +697,13 @@ declare module '@tanstack/react-router' {
       path: '/reports/checklist'
       fullPath: '/reports/checklist'
       preLoaderRoute: typeof ReportsChecklistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports/ci': {
+      id: '/reports/ci'
+      path: '/reports/ci'
+      fullPath: '/reports/ci'
+      preLoaderRoute: typeof ReportsCiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports/health': {
@@ -871,6 +891,7 @@ const rootRouteChildren: RootRouteChildren = {
   GuidePageRoute: GuidePageRoute,
   PullRequestsPrRoute: PullRequestsPrRoute,
   ReportsChecklistRoute: ReportsChecklistRoute,
+  ReportsCiRoute: ReportsCiRoute,
   ReportsHealthRoute: ReportsHealthRoute,
   ReportsSpendRoute: ReportsSpendRoute,
   ReviewsIdRoute: ReviewsIdRoute,

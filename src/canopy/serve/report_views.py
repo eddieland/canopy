@@ -1,14 +1,24 @@
 """The reports, as the API sends them (DESIGN §11), by the backend's clock.
 
-What each local calendar month cost and got done, and how the last days' runs ended, as `canopy health` reads them.
+What each local calendar month cost and got done, how the last days' runs ended, as `canopy health` reads them, and
+what CI did on the PRs canopy observed.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, health, runtime_sessions, spend
+from canopy.core import ci, db, health, runtime_sessions, spend
 from canopy.serve import monthly
+from canopy.serve.schema.ci import (
+    CiCheck,
+    CiDay,
+    CiFix,
+    CiFixedCheck,
+    CiKick,
+    CiKickedPullRequest,
+    CiReport,
+)
 from canopy.serve.schema.health import (
     HealthCounts,
     HealthDay,
@@ -38,6 +48,8 @@ if TYPE_CHECKING:
 
 # How `canopy health` names a task's run's subject: its task's id after it.
 _TASK = "task:"
+# The guard whose refusals the CI page shows: a `resume` for `ci` alone held until its checks had time to run again.
+_COOLDOWN = "cooldown"
 
 
 def monthly_report(backend: Backend, ctx: Context, months: int) -> MonthlyReport:
@@ -85,6 +97,55 @@ def health_report(backend: Backend, ctx: Context, days: int) -> HealthReport:
             for d in per_day
         ],
         unpriced=[SpendUnpriced(kind=u.kind, runs=u.runs, unpriced=u.unpriced) for u in unpriced],
+    )
+
+
+def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
+    """What CI did over the last `days` local days, by the backend's clock, on the PRs canopy observed.
+
+    Returns:
+        The report, with `trust.max_flaky_kicks` and what the `cooldown` guard refused beside it.
+    """
+    now = backend.clock()
+    # One snapshot, so a check run observed between the two reads is in both or neither.
+    with db.read_snapshot(ctx.conn):
+        found = ci.report(ctx.conn, now, days)
+        refused = health.refusals(ctx.conn, found.since, found.until)
+    cooldown = next((r for r in refused if r.guard == _COOLDOWN), None)
+    return CiReport(
+        days=found.days,
+        since=db.parse_time(found.since),
+        until=db.parse_time(found.until),
+        heads=found.heads,
+        green_first=found.green_first,
+        checks=[
+            CiCheck(name=c.name, runs=c.runs, red=c.red, green=c.green, followed=c.followed, passed=c.passed)
+            for c in found.checks
+        ],
+        series=list(found.series),
+        per_day=[CiDay(day=d.day, start=db.parse_time(d.start), red=list(d.red)) for d in found.per_day],
+        fixes=[_fix(f) for f in found.fixes],
+        kicks=[_kick(k) for k in found.kicks],
+        kicked_pull_requests=[
+            CiKickedPullRequest(
+                url=p.url,
+                ticket_key=p.ticket,
+                phase=p.phase,
+                kicks=p.kicks,
+                most=p.most,
+                still_red=p.still_red,
+            )
+            for p in found.kicked_prs
+        ],
+        max_flaky_kicks=ctx.config.trust.max_flaky_kicks,
+        cooldown=None
+        if cooldown is None
+        else HealthRefusal(
+            guard=cooldown.guard,
+            decisions=cooldown.decisions,
+            ticks=cooldown.ticks,
+            last_tick=cooldown.last_tick,
+        ),
     )
 
 
@@ -178,4 +239,30 @@ def _counts(found: Mapping[spend.Kind, int]) -> HealthCounts:
         chores=found.get("chores", 0),
         reviews=found.get("reviews", 0),
         tasks=found.get("tasks", 0),
+    )
+
+
+def _fix(found: ci.Fix) -> CiFix:
+    return CiFix(
+        run_id=found.run_id,
+        ticket_key=found.ticket,
+        kind=found.kind,
+        status=found.status,
+        started_at=db.parse_time(found.started_at),
+        cost_usd=found.cost_usd,
+        checks=[CiFixedCheck(pr_url=c.pr_url, name=c.name, next=c.next) for c in found.checks],
+    )
+
+
+def _kick(found: ci.Kick) -> CiKick:
+    return CiKick(
+        run_id=found.run_id,
+        repo=found.repo,
+        branch=found.branch,
+        pr_url=found.pr_url,
+        kicked_at=db.parse_time(found.kicked_at),
+        kick=found.kick,
+        red_before=list(found.red_before),
+        still_red=list(found.still_red),
+        checked=found.checked,
     )

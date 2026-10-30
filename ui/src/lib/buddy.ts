@@ -209,6 +209,13 @@ export const TIPS = {
         'Haiku: red bars in a row / each one a run that tried hard / I tried too, then napped',
         'Fun fact: a timeout is a run that waited for nothing, but very thoroughly.',
     ],
+    '/reports/ci': [
+        "It looks like you're reading about red checks. I am green all the time. Nobody reruns me.",
+        'Unhelpful tip: a check that never runs can never go red. Please do not tell CI.',
+        'Dear diary, a check went red, then green on the next head. I went to sleep, then woke. Same thing.',
+        'Hot take: a flaky test is just a test with moods. I also have moods.',
+        'Haiku: e2e is red / rebase, push, and wait again / the same test, still red',
+    ],
     '/runs/ticks/': [
         "It looks like you're counting ticks. I counted one, then lost my place.",
         'Unhelpful tip: every tick has an id. I have an id too. It is Sprig.',

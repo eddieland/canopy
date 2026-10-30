@@ -149,6 +149,13 @@ export const GHOST_TIPS = {
         'Grimoire: a timeout is a run that waited out the Darkness. The Darkness won.',
         "Dear Traveler, a worker that asked a question didn't fail. It just needed a Ghost.",
     ],
+    '/reports/ci': [
+        'Eyes up, Guardian. Red checks, by name. Know your enemy.',
+        'Field report: a flaky kick. Same head, rebased. The Vex call that a time loop.',
+        "Scanning... e2e failed again. I've seen this raid wipe before.",
+        'Grimoire: a cooldown is a resume told to wait for its checks. Patience is a weapon.',
+        'Dear Traveler, a check went green on the next head. Took a few tries. Like most of my revives.',
+    ],
     '/runs/ticks/': [
         "Eyes up, Guardian. Between two ticks there's a tock. Nobody has survived seeing one.",
         'Grimoire: an idle tick is the overseer looking at everything and choosing a nap.',

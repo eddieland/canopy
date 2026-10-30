@@ -147,6 +147,7 @@ export const PAGE_GUIDES = {
     '/reports/spend': 'reports#the-spend-page',
     '/reports/checklist': 'reports#the-checklist-page',
     '/reports/health': 'reports#the-health-page',
+    '/reports/ci': 'reports#the-ci-page',
     '/memory': 'memory',
     '/search': 'overview#search',
     '/system': 'overview#system-resources',

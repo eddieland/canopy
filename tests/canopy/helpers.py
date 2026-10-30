@@ -40,7 +40,16 @@ from canopy.core import (
 )
 from canopy.core.checklist_answers import Answer
 from canopy.core.context import Context
-from canopy.core.vocab import ConnectorRunStatus, ItemAnswer, SourceKind, TickStatus
+from canopy.core.vocab import (
+    CheckConclusion,
+    ConnectorRunStatus,
+    ItemAnswer,
+    ResumeReason,
+    RunKind,
+    RunStatus,
+    SourceKind,
+    TickStatus,
+)
 from canopy.infra import logs, procs, resources
 from canopy.loop import connectors, mcp, spawns
 from canopy.runs import drafted
@@ -356,6 +365,66 @@ def journal_of_answers(conn: sqlite3.Connection, now: datetime) -> None:
     answered(conn, earlier(now, 1), "api", general_types=a.FIXED, newspaper=a.NOT_APPLICABLE, doc_comments=a.PASSED)
     answered(conn, earlier(now, 0), "web", no_any=a.HELD)
     answered(conn, earlier(now, 0), "api", general_types=a.PASSED, newspaper=a.FIXED, doc_comments=a.UNANSWERED)
+
+
+def check_ran(conn: sqlite3.Connection, pr: str, head: str, name: str, conclusion: CheckConclusion, at: str) -> None:
+    """A check run of `pr` at `head` a source observed completed at `at`, its id the next on its host."""
+    [(count,)] = sql.execute(conn, sql.select("count(*)").from_("observed_check_runs")).fetchall()
+    records.insert(
+        records.ObservedCheckRun,
+        pr_url=pr,
+        run_id=1000 + int(count),
+        name=name,
+        head_sha=head,
+        conclusion=conclusion,
+        observed_at=at,
+    ).run(conn)
+
+
+def worker_ran(
+    conn: sqlite3.Connection,
+    kind: RunKind,
+    started: str,
+    *,
+    key: str = "PROJ-1",
+    status: RunStatus = RunStatus.DONE,
+    prs: Mapping[str, str] | None = None,
+    reasons: Iterable[ResumeReason] = (),
+    cost: float | None = None,
+) -> int:
+    """A worker run on `key` that started at `started`, whose result named `prs`, for `reasons`; its id."""
+    db.touch_ticket(conn, key, "/ws")
+    tick = records.insert(records.Tick, started_at=started, dry_run=0).run(conn).lastrowid
+    result = None if prs is None else json.dumps({"summary": "s", "prs": dict(prs)})
+    run = records.insert(
+        records.Run,
+        tick_id=present(tick),
+        ticket_key=key,
+        kind=kind,
+        branch=f"agent/{key}",
+        started_at=started,
+        status=status,
+        result_json=result,
+        log_path="l",
+        cost_usd=cost,
+    ).run(conn)
+    run_id = present(run.lastrowid)
+    for reason in reasons:
+        records.insert(records.RunReason, run_id=run_id, reason=reason).run(conn)
+    return run_id
+
+
+def kicked(conn: sqlite3.Connection, run_id: int, from_head: str, to_head: str, at: str) -> None:
+    """A flaky kick of web's `agent/PROJ-1` from `from_head` to `to_head` that run `run_id` made at `at`."""
+    records.insert(
+        records.FlakyKick,
+        run_id=run_id,
+        repo="web",
+        branch="agent/PROJ-1",
+        from_head=from_head,
+        to_head=to_head,
+        kicked_at=at,
+    ).run(conn)
 
 
 @contextmanager
