@@ -6,7 +6,7 @@ plans](FEEDBACK_PLANS.md). Next: [Published reviews](PUBLISHED_REVIEWS.md).
 
 ## 33. A clock for running agents
 
-Built, and checked against the fakes; its live check is ROADMAP M57's.
+Built (ROADMAP M57), and checked against the fakes; its live check is SCENARIOS S61.
 
 Every agent run ends at its timeout, its process group killed (§15), and what a worker has not pushed goes with its
 slot. An agent is told its time limit once, in its prompt, and has no clock after that. This section gives it one: near
