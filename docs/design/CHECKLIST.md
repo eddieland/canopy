@@ -33,21 +33,23 @@ shared workspace cannot vouch for (T1, T7); the team's copy stays with its docs,
 ### The reminder
 
 Every worker run that pushes, public and private, `implement`, `resume`, and a task's, hears the list before its branch
-goes up, so a fix costs no CI run: canopy's plugin (§33) holds the tool call that would push (`tool.execute.before`),
-which does not run, and the call's error carries the list of each of the run's repositories, a joint run's all at once,
-after a `[canopy]` line saying the push was held, not rejected, and asking the worker to diff each branch against its
-base, hold each item to its repository's diff, commit what fails, answer each item in its result, and push again.
-Nothing in a held call runs, so a commit chained before the push in the same command is held with it. The push after a
-hold goes through, so a worker is held once and never kept from pushing: whether it held is kept in memory in the agent
-process, as the clock keeps whether it warned (§33), and a new process starts a new stretch; a push after a long stretch
-of work is held again. Near the deadline, in the clock's last stretch (§33), the plugin holds nothing, since a held push
-then risks the run ending `unpushed`: it lets the push run and, once its result shows it went through, adds the list
-there instead, asking for the fix pushed again, which D116 allows. So it does under a runtime version that does not hand
-a hook's error to the agent as the call's result: there it holds nothing and reminds only after the push. A rejected
-push is never reminded, since a worker never retries one (§8). The list reaches the run as the operator's answer to a
-running agent's question does (§41): a file in the run's answers directory, which a sandboxed run may read and not
-write, so the plugin still writes nothing and reads only what it is handed. The overseer, a planner, a reviewer, and a
-chore hear none.
+goes up, so a fix costs no CI run. canopy's own `pre-push`, the hook a worker's git already runs before the repository's
+(§8), holds the push: it prints a `[canopy]` line saying the push was held, not rejected, and its repository's list,
+asking the worker to diff the branch against its base, hold each item to the diff, commit what fails, answer each item
+in its result, and push again, and it fails, so git sends nothing. It holds only the push, whatever command ran it, a
+script's or `make`'s included: a commit chained before it is made. It holds only a push with something to send, by the
+refs git hands it, which it hands on to the repository's own hook. The push after a hold goes through, the repository's
+own `pre-push` with it, so a worker is held once and never kept from pushing; the hook marks when it held, and in which
+run, in the slot's own git directory, since a slot outlives its run, and a push after a long stretch of work is held
+again. Near the deadline, in the clock's last stretch (§33), it holds nothing, since a held push then risks the run
+ending `unpushed`: it prints the list and lets the push through, asking for the fix pushed again, which D116 allows. A
+joint run's slots are each held on their own, each with its repository's list. A push the remote will refuse is held
+first, as git runs the hook before it learns that; the next is git's rejection, which a worker never retries (§8).
+
+The list reaches the hook as the operator's answer reaches a running agent (§41): a file in the run's answers
+directory, which a sandboxed run may read and not write, and canopy points a worker's git at its hooks whenever the run
+has a list, not only when it has a mark to add. It is a reminder, not a guard: `--no-verify` skips it as it skips the
+repository's own hooks. The overseer, a planner, a reviewer, and a chore hear none.
 
 The worker's result line gains `checklist`: for each repository and item, `pass`, `fixed`, `held` with the reason, or
 `n/a`, validated (D026). A reminded run whose result answers no item is recorded as unanswered, never refused: its push
@@ -56,10 +58,11 @@ counts, per repository and item, how often it was reminded, passed, fixed, held,
 its place or is dropped. No answer raises attention: a human reviewer still reads the PR, and a `held` item is on its
 page for them.
 
-What lets it run (TRUST_MODEL): a forged `[canopy]` line can only ask the agent to check its own diff against a list
-it already holds, so it fails safe, as the clock's and the nudge's do (T1); nothing a worker does with it extends its
-run (T3); the plugin reads one more file in a directory the harness made and writes nothing, and the one call it refuses
-is a worker's push, once per stretch and never near the deadline, which only delays what the worker may do (T4).
+What lets it run (TRUST_MODEL): a forged `[canopy]` line can only ask the agent to check its own diff against a list it
+already holds, so it fails safe, as the clock's and the nudge's do (T1); nothing a worker does with it extends its run
+(T3); canopy's hook, which every worker's git already runs (T5), reads one more file in a directory the harness made and
+writes one marker in the slot's own git directory, which a sandboxed run may write and nothing on the host reads, and
+the push it holds is only delayed (T4).
 
 ### The review
 
@@ -80,6 +83,9 @@ review's, trusted under `canopy:review` (D089), a dismissal is counted per item,
 ### Rejected
 
 - The reminder after the push: the fix it asks for is a second push, and a second CI run, on most reminded runs.
+- The plugin's hold, refusing the tool call that pushes (`tool.execute.before`): it sees the command's text, so a push
+  from a script, `make`, or a joint run's `git -C` goes unseen; a commit chained before the push is lost with the call;
+  and each OpenCode version needs code of its own (MEASUREMENTS, 2026-10-30).
 - The reminder after each commit: a worker commits many times before its diff is whole, so it is asked of half a change,
   and again and again.
 - The list in `paths.worker_instructions` or `paths.reviewer_instructions`: the operator's already emphasize these
