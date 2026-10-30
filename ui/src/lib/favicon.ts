@@ -30,7 +30,7 @@ export function faviconDot(items: readonly AttentionItem[] | undefined): Favicon
 }
 
 /**
- * The tab's icon as an SVG document: the header's mark (src/components/shell/mark.tsx) in `colors.mark`, and `dot` on
+ * The tab's icon as an SVG document: the header's mark (src/components/mark.tsx) in `colors.mark`, and `dot` on
  * its top right corner, cut out of the ring so it reads apart from it on any tab strip.
  */
 export function faviconSvg(dot: FaviconDot | null, colors: FaviconColors): string {

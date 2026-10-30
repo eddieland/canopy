@@ -10,7 +10,7 @@
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check .",
     "typecheck": "tsc -b",
-    "lint": "oxlint --type-aware --deny-warnings && node scripts/check-source.mjs",
+    "lint": "oxlint --type-aware --deny-warnings && node scripts/check-source.mjs && node scripts/check-imports.mjs",
     "test": "vitest run",
     "test:e2e": "npm run build && playwright test",
     "gen:api": "node scripts/gen-api.mjs",

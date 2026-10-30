@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
   <!--
-  The header's mark (src/components/shell/mark.tsx): a ring and a dot in each theme's accent token, from
+  The header's mark (src/components/mark.tsx): a ring and a dot in each theme's accent token, from
   src/styles/tokens.css. Once signed in, the page draws the tab's icon itself, with a dot on its corner while anything
   blocks on the operator (src/lib/favicon.ts); this file is the icon before then, and after. Never write a double
   hyphen in this comment: XML refuses one, and the icon with it.

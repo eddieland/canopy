@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router'
 
 import { ticketsQuery } from '@/api/queries'
 import { Empty, Panel, PanelSkeleton } from '@/components/panel'
-import { TickNow } from '@/components/shell/tick-now'
+import { TickNow } from '@/components/tick-now'
 import { useLoopDown } from '@/hooks/use-loop-down'
 import { useClock } from '@/lib/clock'
 import { stamp } from '@/lib/time'

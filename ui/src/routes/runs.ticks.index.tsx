@@ -4,7 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ticksQuery } from '@/api/queries'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
-import { TickNow } from '@/components/shell/tick-now'
+import { TickNow } from '@/components/tick-now'
 import { TickRow } from '@/components/tick-row'
 import { ordered, useListOrder } from '@/lib/list-order'
 
