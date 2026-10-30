@@ -230,7 +230,7 @@ def start(
         repo = _guard(ctx, request, spawning=spawning)
         # Fixed before the run is recorded, so a persona or model that cannot be used costs the PR none of its reviews.
         persona = _persona(ctx, request)
-        _check_model(ctx, request)
+        model = _check_model(ctx, request)
         attempt = len(review_runs.review_runs_of(ctx.conn, request.pr)) + 1
         run_id = review_runs.insert_review_run(
             ctx.conn,
@@ -244,6 +244,7 @@ def start(
             persona=persona.name,
             persona_digest=persona.digest,
             persona_text=persona.text,
+            model=model,
         )
         lease = lease_slot(ctx, run_id, repo, base=_base(ctx.conn, request.pr))
         with returned_on_failure(ctx, repo, lease):
@@ -385,12 +386,15 @@ def _persona(ctx: Context, request: Request) -> personas.Persona:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
 
 
-def _check_model(ctx: Context, request: Request) -> None:
-    """Refuse a review whose reviewer's model the runtime does not list, looked up now (DESIGN §13).
+def _check_model(ctx: Context, request: Request) -> str | None:
+    """Return the model a review's reviewer asks for, refused unless the runtime lists it, looked up now (DESIGN §13).
 
     The model is the review's ticket's override for the reviewer, else the one `runtime.models` chooses for the agent
-    `runtime.review_cmd` runs, as the review renders it; a PR with no ticket takes config's. It is never fallen back
-    from, as a worker's dispatch is not.
+    `runtime.review_cmd` runs; a PR with no ticket takes config's. The run records it and renders what it recorded. It
+    is never fallen back from, as a worker's dispatch is not.
+
+    Returns:
+        The model as the run records it, `provider/model` or `provider/model@variant`, or None when none is chosen.
 
     Raises:
         Refusal: `model_missing` or `model_list_failed`, with its attention item, as a worker's dispatch refuses.
@@ -401,7 +405,7 @@ def _check_model(ctx: Context, request: Request) -> None:
         models = ticket_models.models_for(ctx.conn, ctx.config, key, "reviewer")
     model = agent_models.of_template(models, ctx.config.runtime.review_cmd)
     if model is None:
-        return
+        return None
     chosen = "in runtime.models"
     if key is not None and ticket_models.override(ctx.conn, key, "reviewer") == model.name:
         chosen = f"for {key}'s reviewer runs (`canopy model {key} --agent reviewer`)"
@@ -409,6 +413,7 @@ def _check_model(ctx: Context, request: Request) -> None:
         agent_models.check(ctx.runner, ctx.workspace.root, model, version=ctx.config.runtime.version, chosen=chosen)
     except agent_models.ModelError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
+    return model.name
 
 
 def _reviewers_persona(ctx: Context, name: str) -> personas.Persona:

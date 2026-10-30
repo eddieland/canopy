@@ -153,6 +153,8 @@ def _start(ctx: Context, task: records.Task, tick_id: int, log: logs.TickAdapter
     except pools.PoolError as e:
         log.warning("task waits: no slot", extra={**fields, "error": str(e)})
         return None
+    # The private worker's chosen model, as `_model_usable` found it listed; no ticket's override reaches a task.
+    model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.private_worker_cmd)
     run_id = tasks.insert_run(
         ctx.conn,
         task=task,
@@ -161,6 +163,7 @@ def _start(ctx: Context, task: records.Task, tick_id: int, log: logs.TickAdapter
         lease=lease,
         pool=ctx.config.pools.backend,
         logs_dir=runs_dir(ctx),
+        model=model.name if model is not None else None,
     )
     if run_id is None:
         _give_back(pool, lease, log, fields)
@@ -213,15 +216,9 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
         ),
     }
     log_path = Path(run.log_path)
-    # The private worker's chosen model, which canopy writes into its definition, for the commit trailer to name.
-    model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.private_worker_cmd)
     try:
-        prompt = prompts.render_task(
-            ctx.config,
-            values,
-            notice=notice.for_prompt(ctx.conn),
-            model=model.name if model is not None else None,
-        )
+        # The model the run recorded, which canopy writes into its definition, for the commit trailer to name.
+        prompt = prompts.render_task(ctx.config, values, notice=notice.for_prompt(ctx.conn), model=run.model)
         logs.write_private(prompt_file(log_path), prompt)
         # `python -m canopy`, not `canopy` from PATH: the child is this same installation.
         argv = [sys.executable, "-m", "canopy", "_task", str(run_id)]

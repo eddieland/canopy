@@ -120,6 +120,10 @@ def test_a_task_run_is_found_only_under_its_own_task_with_its_whole_result(backe
         None,
     )
     assert found["models"]["status"] == "no_session"
+    assert found["model"] is None  # it asked for none, so the runtime's default served it
+    with backend.open() as ctx:
+        records.update(records.TaskRun).set(model="provider/model-a").where("id = ?", run_id).run(ctx.conn)
+    assert c.get(f"/api/tasks/{task.id}/runs/{run_id}").json()["model"] == "provider/model-a"
     for path in ("", "/transcript", "/report"):
         assert c.get(f"/api/tasks/{other.id}/runs/{run_id}{path}").status_code == 404
         assert c.get(f"/api/tasks/{task.id}/runs/99{path}").status_code == 404

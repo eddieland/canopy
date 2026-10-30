@@ -92,6 +92,14 @@ def test_a_tick_page_names_the_models_that_served_its_overseer(backend: Backend)
     }
 
 
+def test_a_tick_page_names_the_model_its_overseer_asked_for(backend: Backend) -> None:
+    c = client(None, backend)
+    assert c.get("/api/ticks/2").json()["model"] is None  # it asked for none, so the runtime's default served it
+    with backend.open() as ctx:
+        db.set_tick_model(ctx.conn, 2, "anthropic/claude-sonnet-4-5@high")
+    assert c.get("/api/ticks/2").json()["model"] == "anthropic/claude-sonnet-4-5@high"
+
+
 def test_no_such_tick_is_a_404_and_a_tick_id_is_a_positive_integer(backend: Backend) -> None:
     c = client(None, backend)
     missing = c.get("/api/ticks/99")

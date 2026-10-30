@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
-from canopy.core import cards, db, gc_passes, review_diff, review_runs
+from canopy.core import cards, db, gc_passes, records, review_diff, review_runs
 from canopy.core.vocab import ReviewRunStatus
 from canopy.serve.api import reviews as reviews_api
 from canopy.serve.backend import Backend
@@ -213,6 +213,14 @@ def test_a_reviews_run_is_its_log_its_tokens_and_its_reviewers_session(backend: 
 def test_a_reviews_page_names_the_models_that_served_its_reviewer(backend: Backend) -> None:
     served = client(None, backend).get("/api/reviews/4").json()["models"]
     assert (served["status"], [m["model"] for m in served["models"]]) == ("found", ["openai/gpt-5"])
+
+
+def test_a_reviews_page_names_the_model_its_reviewer_asked_for(backend: Backend) -> None:
+    c = client(None, backend)
+    assert c.get("/api/reviews/4").json()["model"] is None  # it asked for none, so the runtime's default served it
+    with backend.open() as ctx:
+        records.update(records.ReviewRun).set(model="openai/gpt-5@high").where("id = ?", 4).run(ctx.conn)
+    assert c.get("/api/reviews/4").json()["model"] == "openai/gpt-5@high"
 
 
 def test_the_reviews_list_names_the_models_that_served_each_review_so_the_runs_page_lists_them_by_model(

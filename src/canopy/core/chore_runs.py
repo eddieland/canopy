@@ -15,16 +15,31 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-def insert_chore_run(conn: sqlite3.Connection, *, tick_id: int | None, chore: str, logs_dir: Path) -> int:
+def insert_chore_run(
+    conn: sqlite3.Connection,
+    *,
+    tick_id: int | None,
+    chore: str,
+    logs_dir: Path,
+    model: str | None = None,
+) -> int:
     """Insert a `running` chore run with no pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
 
     `tick_id` is the tick whose overseer started the run, or None for one the operator started with `canopy chore try`.
+    `model` is the one its agent asks for (DESIGN §13), None for the runtime's default or the operator's own agent's.
 
     Returns:
         The new chore run's id.
     """
     with db.transaction(conn):
-        run = records.insert(records.ChoreRun, tick_id=tick_id, chore=chore, started_at=db.now(), log_path="")
+        run = records.insert(
+            records.ChoreRun,
+            tick_id=tick_id,
+            chore=chore,
+            started_at=db.now(),
+            log_path="",
+            model=model,
+        )
         run_id = db.rowid(run.run(conn))
         log_path = str(logs_dir / f"{run_id}.log")
         records.update(records.ChoreRun).set(log_path=log_path).where("id = ?", run_id).run(conn)

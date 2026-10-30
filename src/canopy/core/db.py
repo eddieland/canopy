@@ -332,6 +332,11 @@ def start_tick(conn: sqlite3.Connection, *, dry_run: bool) -> int:
     return rowid(cur)
 
 
+def set_tick_model(conn: sqlite3.Connection, tick_id: int, model: str | None) -> None:
+    """Record the model tick `tick_id`'s overseer asks for as it starts (DESIGN §13); None for the runtime's default."""
+    records.update(records.Tick).set(model=model).where("id = ?", tick_id).run(conn)
+
+
 def finish_tick(conn: sqlite3.Connection, tick_id: int, status: TickStatus, summary: str) -> None:
     """Close a tick with its final status and summary."""
     records.update(records.Tick).set(ended_at=now(), status=status, summary=summary).where("id = ?", tick_id).run(conn)

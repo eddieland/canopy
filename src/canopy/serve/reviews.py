@@ -124,6 +124,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
             ended=row.ended_at is not None,
             session_id=row.session_id or None,
         ),
+        model=row.model,
         card=card(
             row,
             running=row.status is ReviewRunStatus.RUNNING,

@@ -167,6 +167,9 @@ class Tick(Row):
     #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
     #: canopy kept it.
     tokens_first_cache_read: int | None
+    #: The model canopy chose for its overseer, from `runtime.models` (DESIGN §13), as it asked the runtime for it;
+    #: None when it chose none, when the overseer did not run, and on a tick from before canopy recorded it.
+    model: str | None
 
 
 @dataclass(frozen=True)
@@ -278,6 +281,10 @@ class ChoreRun(Row):
     #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
     #: canopy kept it.
     tokens_first_cache_read: int | None
+    #: The model canopy chose for its agent, the chore's own `model` or `runtime.models`' (DESIGN §13), as it asked the
+    #: runtime for it; None when it chose none or the chore runs an agent of the operator's own, and on a run from
+    #: before canopy recorded it.
+    model: str | None
 
 
 @dataclass(frozen=True)
@@ -365,6 +372,9 @@ class ReviewRun(Row):
     card_asked_at: str | None
     card_answer: str | None
     card_answered_at: str | None
+    #: The model canopy chose for its reviewer, its ticket's override or `runtime.models`' (DESIGN §13), as it asked
+    #: the runtime for it; None when it chose none, and on a run from before canopy recorded it.
+    model: str | None
 
 
 @dataclass(frozen=True)
@@ -436,6 +446,9 @@ class TaskRun(Row):
     #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
     #: canopy kept it.
     tokens_first_cache_read: int | None
+    #: The model canopy chose for its private worker, from `runtime.models` (DESIGN §13), as it asked the runtime for
+    #: it; None when it chose none, and on a run from before canopy recorded it.
+    model: str | None
 
 
 @dataclass(frozen=True)
