@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 #: A PR's reviews: its review runs but the revisions of their drafts (DESIGN §34), which review nothing, report no
 #: verdict, and count toward their draft's limit rather than the PR's.
-_REVIEWS = sql.select("*").from_("review_runs").where("revises IS NULL")
+_REVIEWS = records.select(records.ReviewRun).where("revises IS NULL")
 
 
 def insert_review_run(
@@ -38,6 +38,7 @@ def insert_review_run(
     persona_digest: str | None = None,
     persona_text: str | None = None,
     revises: tuple[int, int] | None = None,
+    model: str | None = None,
 ) -> int:
     """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
 
@@ -45,14 +46,14 @@ def insert_review_run(
     asked for, `query` for a `review.query` match. `persona` and `persona_digest` are the name and text digest of the
     persona its prompt carries (DESIGN §31), and `persona_text` that text, kept once per digest
     (`db.record_persona_text`). `revises` makes it a revision (§34): the draft it revises, by its id, and the version of
-    it the revision reads.
+    it the revision reads. `model` is the one its reviewer asks for (DESIGN §13), None for the runtime's default.
 
     Returns:
         The new review run's id.
     """
     with db.transaction(conn):
-        run = sql.insert(
-            "review_runs",
+        run = records.insert(
+            records.ReviewRun,
             tick_id=tick_id,
             pr_url=pr_url,
             sha=sha,
@@ -65,17 +66,18 @@ def insert_review_run(
             persona_digest=persona_digest,
             revises=revises[0] if revises is not None else None,
             revises_version=revises[1] if revises is not None else None,
+            model=model,
         )
-        run_id = db.rowid(sql.execute(conn, run))
+        run_id = db.rowid(run.run(conn))
         db.record_persona_text(conn, persona_digest, persona_text)
         log_path = str(logs_dir / f"{run_id}.log")
-        sql.execute(conn, sql.update("review_runs").set(log_path=log_path).where("id = ?", run_id))
+        records.update(records.ReviewRun).set(log_path=log_path).where("id = ?", run_id).run(conn)
     return run_id
 
 
 def delete_review_run(conn: sqlite3.Connection, run_id: int) -> None:
     """Forget a review run that never started: no slot, or no prompt. It counts toward no limit."""
-    sql.execute(conn, sql.delete("review_runs").where("id = ? AND pid IS NULL", run_id))
+    records.delete(records.ReviewRun).where("id = ? AND pid IS NULL", run_id).run(conn)
 
 
 def review_dismissals(conn: sqlite3.Connection, run_id: int) -> dict[int, DismissalReason | None]:
@@ -97,20 +99,17 @@ def set_review_dismissal(
     channel: str,
 ) -> None:
     """Record that the operator dismissed review run `run_id`'s finding number `finding` now, for `reason`."""
-    sql.execute(
-        conn,
-        sql.insert(
-            "review_dismissals",
-            review_run_id=run_id,
-            finding=finding,
-            dismissed_at=db.now(),
-            channel=channel,
-            reason=reason,
-        ).on_conflict(
-            "(review_run_id, finding) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel, "
-            "reason = excluded.reason",
-        ),
-    )
+    records.insert(
+        records.ReviewDismissal,
+        review_run_id=run_id,
+        finding=finding,
+        dismissed_at=db.now(),
+        channel=channel,
+        reason=reason,
+    ).on_conflict(
+        "(review_run_id, finding) DO UPDATE SET dismissed_at = excluded.dismissed_at, channel = excluded.channel, "
+        "reason = excluded.reason",
+    ).run(conn)
 
 
 def held(conn: sqlite3.Connection, run_id: int, *, released: bool = False) -> dict[int, records.ReviewHold]:
@@ -126,10 +125,10 @@ def held(conn: sqlite3.Connection, run_id: int, *, released: bool = False) -> di
     Returns:
         Each finding still held, with its hold; one the operator released only with `released`.
     """
-    query = sql.select("*").from_("review_holds").where("review_run_id = ?", run_id)
+    query = records.select(records.ReviewHold).where("review_run_id = ?", run_id)
     if not released:
         query = query.where("released_at IS NULL")
-    return {h.finding: h for h in records.fetch_all(conn, records.ReviewHold, query)}
+    return {h.finding: h for h in query.all(conn)}
 
 
 def withheld(conn: sqlite3.Connection, run_id: int) -> frozenset[int]:
@@ -147,27 +146,25 @@ def hold(conn: sqlite3.Connection, run_id: int, finding: int, *, rebuts: tuple[i
     `rebuts` is the earlier review run, and its finding, that the worker declined; None holds the finding as `late`, on
     code unchanged since the PR's first reviewed commit. A finding already held keeps its first hold.
     """
-    sql.execute(
-        conn,
-        sql.insert(
-            "review_holds",
-            review_run_id=run_id,
-            finding=finding,
-            kind=HoldKind.LATE if rebuts is None else HoldKind.REBUTTAL,
-            rebuts_run_id=rebuts[0] if rebuts is not None else None,
-            rebuts_finding=rebuts[1] if rebuts is not None else None,
-            held_at=db.now(),
-        ).on_conflict("(review_run_id, finding) DO NOTHING"),
-    )
+    records.insert(
+        records.ReviewHold,
+        review_run_id=run_id,
+        finding=finding,
+        kind=HoldKind.LATE if rebuts is None else HoldKind.REBUTTAL,
+        rebuts_run_id=rebuts[0] if rebuts is not None else None,
+        rebuts_finding=rebuts[1] if rebuts is not None else None,
+        held_at=db.now(),
+    ).on_conflict("(review_run_id, finding) DO NOTHING").run(conn)
 
 
 def release_holds(conn: sqlite3.Connection, run_id: int, findings: Iterable[int], *, channel: str) -> None:
     """Release the operator's hold on review run `run_id`'s `findings`: they reach a worker as any other finding."""
     sql.execute_many(
         conn,
-        sql.update("review_holds")
+        records.update(records.ReviewHold)
         .set(released_at=db.now(), released_channel=channel)
-        .where("review_run_id = ? AND finding = ? AND released_at IS NULL", run_id, sql.ROW),
+        .where("review_run_id = ? AND finding = ? AND released_at IS NULL", run_id, sql.ROW)
+        .statement,
         [(f,) for f in findings],
     )
 
@@ -178,8 +175,8 @@ def delete_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int)
     Returns:
         Whether there was one to take back.
     """
-    taken = sql.delete("review_dismissals").where("review_run_id = ? AND finding = ?", run_id, finding)
-    return sql.execute(conn, taken).rowcount > 0
+    taken = records.delete(records.ReviewDismissal).where("review_run_id = ? AND finding = ?", run_id, finding)
+    return taken.run(conn).rowcount > 0
 
 
 def set_review_slot(
@@ -193,41 +190,41 @@ def set_review_slot(
     pool: PoolKind,
 ) -> None:
     """Record the slot a review run leased, the base branch it was leased on, and the pool that made the lease."""
-    lease = sql.update("review_runs").set(
+    lease = records.update(records.ReviewRun).set(
         slot_path=str(slot),
         lease_id=lease_id,
         lease_holder=lease_holder,
         base_branch=base_branch,
         pool=pool,
     )
-    sql.execute(conn, lease.where("id = ?", run_id))
+    lease.where("id = ?", run_id).run(conn)
 
 
 def get_review_run(conn: sqlite3.Connection, run_id: int) -> records.ReviewRun | None:
     """Return the review run with `run_id`, or None."""
-    return records.fetch_one(conn, records.ReviewRun, sql.select("*").from_("review_runs").where("id = ?", run_id))
+    return records.select(records.ReviewRun).where("id = ?", run_id).one(conn)
 
 
 def review_runs_of(conn: sqlite3.Connection, pr_url: str) -> list[records.ReviewRun]:
     """Return a PR's review runs, newest first, revisions left out."""
-    return records.fetch_all(conn, records.ReviewRun, _REVIEWS.where("pr_url = ?", pr_url).order_by("id DESC"))
+    return _REVIEWS.where("pr_url = ?", pr_url).order_by("id DESC").all(conn)
 
 
 def recent_review_runs(conn: sqlite3.Connection, limit: int) -> list[records.ReviewRun]:
     """Return the latest `limit` review runs, newest first, revisions left out."""
-    return records.fetch_all(conn, records.ReviewRun, _REVIEWS.order_by("id DESC").limit(limit))
+    return _REVIEWS.order_by("id DESC").limit(limit).all(conn)
 
 
 def review_runs_since(conn: sqlite3.Connection, since: str, *, revisions: bool = False) -> list[records.ReviewRun]:
     """Return the review runs started at or after `since`, newest first, with `revisions` the revisions too."""
-    every = sql.select("*").from_("review_runs") if revisions else _REVIEWS
-    return records.fetch_all(conn, records.ReviewRun, every.where("started_at >= ?", since).order_by("id DESC"))
+    every = records.select(records.ReviewRun) if revisions else _REVIEWS
+    return every.where("started_at >= ?", since).order_by("id DESC").all(conn)
 
 
 def revision_runs_of(conn: sqlite3.Connection, draft_id: int) -> list[records.ReviewRun]:
     """Return the revisions of review draft `draft_id` (DESIGN §34), newest first."""
-    query = sql.select("*").from_("review_runs").where("revises = ?", draft_id).order_by("id DESC")
-    return records.fetch_all(conn, records.ReviewRun, query)
+    query = records.select(records.ReviewRun).where("revises = ?", draft_id).order_by("id DESC")
+    return query.all(conn)
 
 
 def is_unit_pr(conn: sqlite3.Connection, key: str, pr_url: str, *, repo: str | None = None) -> bool:
@@ -243,7 +240,7 @@ def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict
     found: dict[str, list[records.ReviewRun]] = {}
     # SQLite takes an empty list, `IN ()`, as matching nothing.
     query = _REVIEWS.where_in("pr_url", pr_urls).order_by("id DESC")
-    for run in records.fetch_all(conn, records.ReviewRun, query):
+    for run in query.all(conn):
         found.setdefault(run.pr_url, []).append(run)
     return found
 
@@ -257,17 +254,17 @@ def see_review_head(conn: sqlite3.Connection, pr_url: str, sha: str, at: str) ->
     Returns:
         Since when `sha` has been the head: `at`, or the time it was first seen if it still was the head.
     """
-    seen = sql.insert("review_heads", pr_url=pr_url, sha=sha, seen_at=at).on_conflict(
+    seen = records.insert(records.ReviewHead, pr_url=pr_url, sha=sha, seen_at=at).on_conflict(
         "(pr_url) DO UPDATE SET sha = excluded.sha, seen_at = excluded.seen_at WHERE review_heads.sha != excluded.sha",
     )
-    sql.execute(conn, seen)
+    seen.run(conn)
     return review_head_seen_at(conn, pr_url, sha) or at
 
 
 def review_head_seen_at(conn: sqlite3.Connection, pr_url: str, sha: str) -> str | None:
     """Return since when `sha` has been the PR's head canopy last saw, or None if that head is another commit."""
-    query = sql.select("*").from_("review_heads").where("pr_url = ? AND sha = ?", pr_url, sha)
-    head = records.fetch_one(conn, records.ReviewHead, query)
+    query = records.select(records.ReviewHead).where("pr_url = ? AND sha = ?", pr_url, sha)
+    head = query.one(conn)
     return None if head is None else head.seen_at
 
 
@@ -279,10 +276,9 @@ def review_heads_seen_after(conn: sqlite3.Connection, since: str) -> list[record
         .where("r.pr_url = h.pr_url AND r.sha = h.sha AND r.revises IS NULL AND r.status = ?", ReviewRunStatus.DONE)
     )
     query = (
-        sql.select("h.*")
-        .from_("review_heads h")
+        records.select(records.ReviewHead, "h")
         .where("h.seen_at > ?", since)
         .where("NOT EXISTS ({})", reviewed)
         .order_by("h.seen_at DESC, h.pr_url")
     )
-    return records.fetch_all(conn, records.ReviewHead, query)
+    return query.all(conn)

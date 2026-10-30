@@ -10,10 +10,9 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import memory
-from canopy.core.vocab import MemoryCited, MemoryStatus
+from canopy.core.vocab import MemoryCited, MemoryStatus, ResumeReason, RunKind
 from tests.canopy.helpers import (
     KEY,
-    WORK,
     dispatch_in_tick,
     dispatch_refused,
     last_run,
@@ -22,11 +21,15 @@ from tests.canopy.helpers import (
     run_with,
     with_memory,
 )
+from tests.canopy.scenario_helpers import dispatches
 
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
-FIX_CI = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci")
+WORK = dispatches(slug="work")
+FIX_CI = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
+#: A resume for review, which no cooldown holds back, so one may follow another.
+FOR_REVIEW = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
 NOTE = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
 HEADING = "## Notes from earlier runs\n\n"
 OTHER = "PROJ-2"
@@ -39,12 +42,12 @@ def test_a_note_reaches_its_tickets_next_run_and_no_other_tickets(
     conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
-    first = run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
+    first = run_with(conn, WORK, notes=[{"key": "lint", "text": NOTE}])
     # A ticket with no note in force gets no section.
     assert HEADING not in prompt_of(canopy_env, int(first["id"]))
     [note] = memories(conn)
 
-    assert dispatch_in_tick(conn, *FIX_CI).code == 0
+    assert not dispatch_in_tick(conn, FIX_CI).said.error
     run_id = int(last_run(conn)["id"])
     text = prompt_of(canopy_env, run_id)
     assert (
@@ -55,7 +58,7 @@ def test_a_note_reaches_its_tickets_next_run_and_no_other_tickets(
     assert '`"memory_used":[<id>]` and `"memory_wrong":[<id>]`' in text
     assert [m.id for m in memory.read_by(conn, run_id)] == [note.id]
 
-    assert dispatch_in_tick(conn, *WORK, key=OTHER).code == 0
+    assert not dispatch_in_tick(conn, dispatches(OTHER, slug="work")).said.error
     other = prompt_of(canopy_env, int(last_run(conn)["id"]))
     assert NOTE not in other
     assert HEADING not in other
@@ -66,18 +69,18 @@ def test_a_note_recorded_at_record_is_served_once_the_tier_is_in_use(
     conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, ticket_notes="record")
-    run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
+    run_with(conn, WORK, notes=[{"key": "lint", "text": NOTE}])
     with_memory(canopy_env, ticket_notes="use")
-    assert dispatch_in_tick(conn, *FIX_CI).code == 0
+    assert not dispatch_in_tick(conn, FIX_CI).said.error
     assert f"> {NOTE}" in prompt_of(canopy_env, int(last_run(conn)["id"]))
 
 
 def test_a_run_renews_drops_and_retires_only_what_it_was_shown(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     with_memory(canopy_env, ticket_notes="use")
-    run_with(conn, *WORK, key=OTHER, notes=[{"key": "theirs", "text": "Another ticket's note."}])
+    run_with(conn, dispatches(OTHER, slug="work"), notes=[{"key": "theirs", "text": "Another ticket's note."}])
     run_with(
         conn,
-        *WORK,
+        WORK,
         notes=[
             {"key": "lint", "text": NOTE},
             {"key": "stale", "text": "The API test is skipped on main."},
@@ -87,7 +90,7 @@ def test_a_run_renews_drops_and_retires_only_what_it_was_shown(canopy_env: Canop
     theirs, lint, stale, cause = memories(conn)
     run_with(
         conn,
-        *FIX_CI,
+        FIX_CI,
         memory_used=[lint.id, cause.id, theirs.id, "x", True],
         memory_wrong=[cause.id, theirs.id, 99_999],
         drop_notes=["stale", "theirs", "never-shown"],
@@ -115,13 +118,11 @@ def test_a_memory_names_the_latest_runs_that_relied_on_it_newest_first(
     conn: sqlite3.Connection,
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
-    run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
+    run_with(conn, WORK, notes=[{"key": "lint", "text": NOTE}])
     [note] = memories(conn)
-    # A resume for review, which no cooldown holds back, so one may follow another.
-    resume = (*FIX_CI[:-1], "review")
-    relied = [int(run_with(conn, *resume, memory_used=[note.id])["id"]) for _ in range(3)]
+    relied = [int(run_with(conn, FOR_REVIEW, memory_used=[note.id])["id"]) for _ in range(3)]
     # Shown it, and cited it in neither list: read, but not among those that relied on it.
-    quiet = int(run_with(conn, *resume)["id"])
+    quiet = int(run_with(conn, FOR_REVIEW)["id"])
     assert memory.citations(conn, quiet) == {}
     assert memory.used_by(conn, note.id) == relied[::-1]
     assert memory.used_by(conn, note.id, limit=2) == relied[:0:-1]
@@ -129,11 +130,11 @@ def test_a_memory_names_the_latest_runs_that_relied_on_it_newest_first(
 
 def test_a_note_written_at_use_supersedes_by_key(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     with_memory(canopy_env, ticket_notes="use")
-    run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
-    run_with(conn, *FIX_CI, notes=[{"key": "lint", "text": "Fixed on main; lint is reliable again."}])
+    run_with(conn, WORK, notes=[{"key": "lint", "text": NOTE}])
+    run_with(conn, FIX_CI, notes=[{"key": "lint", "text": "Fixed on main; lint is reliable again."}])
     old, new = memories(conn)
     assert (old.status, new.status, new.supersedes) == (MemoryStatus.SUPERSEDED, MemoryStatus.ACTIVE, old.id)
-    assert dispatch_in_tick(conn, *WORK).code == 0
+    assert not dispatch_in_tick(conn, WORK).said.error
     text = prompt_of(canopy_env, int(last_run(conn)["id"]))
     assert "Fixed on main; lint is reliable again." in text
     assert NOTE not in text
@@ -146,10 +147,10 @@ def test_at_use_an_override_without_the_notes_is_refused(canopy_env: CanopyEnv, 
         "Work on {{KEY}}, labels {{LABELS}}.\n{{MEMORY_CONTRACT}}{{DRAFTS}}\n",
     )
     with_memory(canopy_env, ticket_notes="record")
-    assert dispatch_in_tick(conn, *WORK).code == 0
+    assert not dispatch_in_tick(conn, WORK).said.error
     conn.execute("UPDATE runs SET status = 'crashed', ended_at = 'x' WHERE status = 'running'")
     with_memory(canopy_env, ticket_notes="use")
-    [(action, rationale)] = dispatch_refused(conn, *WORK)[-1:]
+    [(action, rationale)] = dispatch_refused(conn, WORK)[-1:]
     assert action == "refused:bad_prompt"
     assert "missing required placeholder {{TICKET_MEMORY}}" in rationale
 
@@ -160,8 +161,8 @@ def test_memory_list_says_the_digest_is_served_and_what_a_run_read(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
-    run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
-    second = run_with(conn, *FIX_CI, memory_used=[memories(conn)[0].id])
+    run_with(conn, WORK, notes=[{"key": "lint", "text": NOTE}])
+    second = run_with(conn, FIX_CI, memory_used=[memories(conn)[0].id])
     capsys.readouterr()
     assert main(["memory", "list", KEY, "--digest"]) == 0
     out = capsys.readouterr().out
@@ -180,13 +181,11 @@ def test_the_listings_count_the_runs_that_read_a_note_apart_from_those_that_cite
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
-    run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
+    run_with(conn, WORK, notes=[{"key": "lint", "text": NOTE}])
     [note] = memories(conn)
-    # A resume for review, which no cooldown holds back, so one may follow another.
-    resume = (*FIX_CI[:-1], "review")
-    run_with(conn, *resume, memory_used=[note.id])
+    run_with(conn, FOR_REVIEW, memory_used=[note.id])
     # Shown it and silent on it: a worker may rely on a note and leave `memory_used` unsaid, so these count as reads.
-    quiet = [run_with(conn, *resume) for _ in range(2)]
+    quiet = [run_with(conn, FOR_REVIEW) for _ in range(2)]
     [cited] = memories(conn)
     use = f"read by 3 runs (last at {quiet[-1]['started_at']}), cited by 1 (last at {cited.last_used_at})"
     capsys.readouterr()

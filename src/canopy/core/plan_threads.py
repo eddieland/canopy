@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, records, sql
+from canopy.core import conversation, db, records
 from canopy.core.conversation import Refused
 
 if TYPE_CHECKING:
@@ -40,19 +40,13 @@ def threads(conn: sqlite3.Connection, key: str) -> list[Thread]:
     Returns:
         The threads, in the order they were written.
     """
-    found = records.fetch_all(
-        conn,
-        records.PlanThread,
-        sql.select("*").from_("plan_threads").where("ticket_key = ?", key).order_by("id"),
-    )
-    replies = records.fetch_all(
-        conn,
-        records.PlanReply,
-        sql.select("r.*")
-        .from_("plan_replies r")
+    found = records.select(records.PlanThread).where("ticket_key = ?", key).order_by("id").all(conn)
+    replies = (
+        records.select(records.PlanReply, "r")
         .join("plan_threads t ON t.id = r.thread_id")
         .where("t.ticket_key = ?", key)
-        .order_by("r.id"),
+        .order_by("r.id")
+        .all(conn)
     )
     return [Thread(t, [r for r in replies if r.thread_id == t.id]) for t in found]
 
@@ -74,19 +68,15 @@ def add(conn: sqlite3.Connection, key: str, *, quote: str, prefix: str, suffix: 
     with db.transaction(conn):
         if db.get_ticket(conn, key) is None:
             raise Refused("unknown", f"canopy has no record of {key}")
-        [thread] = records.fetch_all(
-            conn,
+        [thread] = records.insert(
             records.PlanThread,
-            sql.insert(
-                "plan_threads",
-                ticket_key=key,
-                quote=quote,
-                prefix=prefix,
-                suffix=suffix,
-                body=text,
-                created_at=db.now(),
-            ).returning("*"),
-        )
+            ticket_key=key,
+            quote=quote,
+            prefix=prefix,
+            suffix=suffix,
+            body=text,
+            created_at=db.now(),
+        ).returned(conn)
     return Thread(thread, ())
 
 
@@ -103,11 +93,7 @@ def reply(conn: sqlite3.Connection, key: str, thread_id: int, body: str) -> reco
     text = _body(body)
     with db.transaction(conn):
         _thread(conn, key, thread_id)
-        [found] = records.fetch_all(
-            conn,
-            records.PlanReply,
-            sql.insert("plan_replies", thread_id=thread_id, body=text, created_at=db.now()).returning("*"),
-        )
+        [found] = records.insert(records.PlanReply, thread_id=thread_id, body=text, created_at=db.now()).returned(conn)
     return found
 
 
@@ -144,26 +130,29 @@ def change(
     with db.transaction(conn):
         _thread(conn, key, thread_id)
         if text is not None and reply_id is not None:
-            changed = sql.execute(
-                conn,
-                sql.update("plan_replies").set(body=text).where("id = ? AND thread_id = ?", reply_id, thread_id),
-            ).rowcount
+            changed = (
+                records.update(records.PlanReply)
+                .set(body=text)
+                .where("id = ? AND thread_id = ?", reply_id, thread_id)
+                .run(conn)
+                .rowcount
+            )
             if not changed:
                 raise Refused("unknown", f"thread {thread_id} of {key} has no reply {reply_id}")
         elif text is not None:
-            sql.execute(conn, sql.update("plan_threads").set(body=text).where("id = ?", thread_id))
+            records.update(records.PlanThread).set(body=text).where("id = ?", thread_id).run(conn)
         if anchor is not None:
             quote, prefix, suffix = anchor
-            moved = sql.update("plan_threads").set(quote=quote, prefix=prefix, suffix=suffix)
-            sql.execute(conn, moved.where("id = ?", thread_id))
+            moved = records.update(records.PlanThread).set(quote=quote, prefix=prefix, suffix=suffix)
+            moved.where("id = ?", thread_id).run(conn)
         if resolved is not None:
             # Resolving it again keeps when it was first resolved.
-            resolving = sql.update("plan_threads").set_to(
+            resolving = records.update(records.PlanThread).set_to(
                 "resolved_at = CASE WHEN ? THEN coalesce(resolved_at, ?) END",
                 resolved,
                 db.now(),
             )
-            sql.execute(conn, resolving.where("id = ?", thread_id))
+            resolving.where("id = ?", thread_id).run(conn)
     [found] = [t for t in threads(conn, key) if t.thread.id == thread_id]
     return found
 
@@ -177,8 +166,8 @@ def delete(conn: sqlite3.Connection, key: str, thread_id: int) -> None:
     conversation.check_operator()
     with db.transaction(conn):
         _thread(conn, key, thread_id)
-        sql.execute(conn, sql.delete("plan_replies").where("thread_id = ?", thread_id))
-        sql.execute(conn, sql.delete("plan_threads").where("id = ?", thread_id))
+        records.delete(records.PlanReply).where("thread_id = ?", thread_id).run(conn)
+        records.delete(records.PlanThread).where("id = ?", thread_id).run(conn)
 
 
 def _thread(conn: sqlite3.Connection, key: str, thread_id: int) -> records.PlanThread:
@@ -190,11 +179,7 @@ def _thread(conn: sqlite3.Connection, key: str, thread_id: int) -> records.PlanT
     Raises:
         Refused: (`unknown`) the ticket has no such thread.
     """
-    found = records.fetch_one(
-        conn,
-        records.PlanThread,
-        sql.select("*").from_("plan_threads").where("id = ? AND ticket_key = ?", thread_id, key),
-    )
+    found = records.select(records.PlanThread).where("id = ? AND ticket_key = ?", thread_id, key).one(conn)
     if found is None:
         raise Refused("unknown", f"{key} has no plan comment {thread_id}")
     return found

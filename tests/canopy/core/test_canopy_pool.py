@@ -8,6 +8,7 @@ link a run rewrote (D118), and seeding that must not follow a link the slot hold
 import contextlib
 import json
 import os
+import shutil
 import sqlite3
 import sys
 import threading
@@ -130,6 +131,19 @@ def test_a_lease_that_died_before_its_worktree_is_returned_and_made_again(ws: Ws
     assert again.path == lease.path
     assert (again.path / ".git").is_file()
     assert [r["name"] for r in ws.rows()] == ["1"]
+
+
+def test_destroy_forgets_an_idle_slot_whose_directory_is_gone_and_keeps_a_held_one(ws: Ws) -> None:
+    held = ws.pool().lease("PROJ-1")
+    idle = ws.pool().lease("PROJ-2")
+    ws.pool().return_slot(idle.path, lease_id=idle.lease_id, lease_holder=idle.lease_holder)
+    for path in (idle.path, held.path):
+        shutil.rmtree(path.parent)
+    # A held slot waits for its return, which frees it without a reset.
+    assert "leased by canopy:PROJ-1" in present(ws.pool().destroy(held.path))
+    assert ws.pool().destroy(idle.path) is None
+    assert [r["name"] for r in ws.rows()] == ["1"]
+    assert str(idle.path) not in git("worktree", "list", cwd=ws.clone)
 
 
 def test_a_slot_whose_git_link_was_rewritten_is_never_touched(ws: Ws, tmp_path: Path) -> None:

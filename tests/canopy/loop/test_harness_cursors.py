@@ -15,9 +15,9 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from canopy.core import db
-from canopy.core.vocab import Decider, DraftStatus, ReviewRunStatus, TickStatus
+from canopy.core.vocab import Decider, ReviewRunStatus, TickStatus
 from canopy.loop import harness, harness_cursors, phases
-from tests.canopy.helpers import KEY, context, in_tick, operator, running_run, waits
+from tests.canopy.helpers import KEY, context, in_tick, operator, waits
 from tests.canopy.observation_helpers import (
     FRESH,
     NOW,
@@ -31,6 +31,7 @@ from tests.canopy.observation_helpers import (
     observe_ticket,
     review,
     review_number,
+    sent_draft,
 )
 
 if TYPE_CHECKING:
@@ -272,17 +273,6 @@ def cursors(conn: sqlite3.Connection) -> tuple[int | None, int | None]:
     comment_cursor = conn.execute("SELECT comment_cursor FROM tickets WHERE key = ?", (KEY,)).fetchone()[0]
     review_cursor = conn.execute("SELECT review_cursor FROM ticket_units WHERE ticket_key = ?", (KEY,)).fetchone()[0]
     return comment_cursor, review_cursor
-
-
-def sent_draft(env: CanopyEnv, conn: sqlite3.Connection, *, comment_id: int, review_id: int) -> None:
-    """Record a run's thread draft the operator sent on PR as review comment `comment_id`, in review `review_id`."""
-    run_id = running_run(context(env), KEY, private=False)
-    conn.execute(
-        "INSERT INTO drafts (run_id, number, ticket_key, kind, repo, pr_url, comment_id, status, basis, created_at, "
-        "sent_at, sent_comment_id, sent_review_id, stance) VALUES (?, 1, ?, 'thread', 'repo', ?, 1, ?, ?, ?, ?, ?, ?, "
-        "'changed')",
-        (run_id, KEY, PR, DraftStatus.SENT, FRESH, FRESH, FRESH, comment_id, review_id),
-    )
 
 
 def worked_pr(scenario: Scenario, github_state: Path) -> None:

@@ -5,8 +5,6 @@ Choosing is of the persona or the model one of the ticket's agents runs in or on
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from fastapi import APIRouter, HTTPException
 
 from canopy.core import conversation, personas, ticket_models
@@ -18,11 +16,6 @@ from canopy.serve.schema import Granted, Replied, ReplyRequest, TicketSummary
 from canopy.serve.schema.model import AgentModel, ModelRequest
 from canopy.serve.schema.persona import AgentPersona, PersonaRequest
 from canopy.serve.schema.ticket import ForgetRequest, Forgot, GrantRequest, Started, Stopped, StopRequest, TicketDetail
-
-if TYPE_CHECKING:
-    from canopy.core.context import Context
-    from canopy.runtime.report import ModelList
-    from canopy.serve.backend import Backend
 
 TAG = "tickets"
 router = APIRouter(tags=[TAG])
@@ -196,9 +189,8 @@ def model(key: TicketKey, body: ModelRequest, backend: BackendDep) -> AgentModel
                 ref.id,
                 body.agent,
                 body.model,
-                # The backend's list carries the variants whether or not the model names one. It may be minutes old: a
-                # run checks its model against a list read as it starts.
-                listing=lambda _variants: _listing(backend, ctx, body.model),
+                # The backend's list carries the variants whether or not the model names one.
+                listing=lambda _variants: backend.model_list_for(ctx, body.model),
                 channel=WEB,
             )
         except conversation.Refused as r:
@@ -209,22 +201,3 @@ def model(key: TicketKey, body: ModelRequest, backend: BackendDep) -> AgentModel
         extra={"ticket": ref.id, "agent": body.agent, "model": body.model, "channel": WEB},
     )
     return views.agent_model(now, served)
-
-
-def _listing(backend: Backend, ctx: Context, model: str | None) -> ModelList:
-    """The model list a choice of `model` is checked against: the one the backend keeps, read again if it lacks `model`.
-
-    A model, or a variant of one, set up since the list was kept is then not refused for minutes; a list that could
-    not be read is not read twice, and a model the runtime does not list costs one more read to refuse.
-
-    Returns:
-        The list.
-    """
-    kept = backend.model_list(ctx)
-    if kept.error is not None or model is None:
-        return kept
-    try:
-        ticket_models.check(model, kept)
-    except conversation.Refused:
-        return backend.model_list(ctx, refresh=True)
-    return kept

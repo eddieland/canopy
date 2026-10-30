@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import db, review_diff, review_drafts, sql
+from canopy.core import db, records, review_diff, review_drafts
 from canopy.core.review_result import Finding, ReviewResult
 from canopy.core.vocab import ReviewDraftStatus
 from canopy.infra import logs
@@ -238,32 +238,28 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
     )
     for run_id, pr, sha, ticket, repo, purpose, started, ended, status, result, cost, diff in rows:
         log_path = reviews / f"{run_id}.log"
-        sql.execute(
-            conn,
-            sql.insert(
-                "review_runs",
-                id=run_id,
-                tick_id=1,
-                pr_url=pr,
-                sha=sha,
-                ticket_key=ticket,
-                repo=repo,
-                purpose=purpose,
-                started_at=at(started),
-                ended_at=at(ended),
-                status=status,
-                result_json=result,
-                log_path=str(log_path),
-                base_branch="main",
-                session_id=f"ses_review{run_id}",
-                cost_usd=cost,
-            ),
-        )
+        records.insert(
+            records.ReviewRun,
+            id=run_id,
+            tick_id=1,
+            pr_url=pr,
+            sha=sha,
+            ticket_key=ticket,
+            repo=repo,
+            purpose=purpose,
+            started_at=at(started),
+            ended_at=at(ended),
+            status=status,
+            result_json=result,
+            log_path=str(log_path),
+            base_branch="main",
+            session_id=f"ses_review{run_id}",
+            cost_usd=cost,
+        ).run(conn)
         if diff is not None:
             logs.write_private(review_diff.path_for(log_path), diff)
-    sql.execute_many(
+    records.insert_rows(records.Seen, ["kind", "subject", "at", "channel"]).many(
         conn,
-        sql.insert_rows("seen", ["kind", "subject", "at", "channel"]),
         [
             ("review", "1", at(-96), "web"),
             ("review", "3", at(-68), "web"),
@@ -273,78 +269,62 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
         ],
     )
     # The request review 2 answered, which ended with it (DESIGN §21).
-    sql.execute(
-        conn,
-        sql.insert(
-            "review_requests",
-            pr_url=PR_12,
-            created_at=at(-85),
-            channel="cli",
-            ended_at=at(-79),
-            end_reason="reviewed",
-        ),
-    )
+    records.insert(
+        records.ReviewRequest,
+        pr_url=PR_12,
+        created_at=at(-85),
+        channel="cli",
+        ended_at=at(-79),
+        end_reason="reviewed",
+    ).run(conn)
     # Carol's PR, which the operator asked canopy to review in two personas, and its reviews answered.
-    made = sql.execute(
+    made = records.insert(
+        records.ReviewRequest,
+        pr_url=PR_14,
+        created_at=at(-34),
+        channel="web",
+        ended_at=at(-29),
+        end_reason="reviewed",
+    ).run(conn)
+    records.insert_rows(records.ReviewRequestPersona, ["request_id", "persona"]).many(
         conn,
-        sql.insert(
-            "review_requests",
-            pr_url=PR_14,
-            created_at=at(-34),
-            channel="web",
-            ended_at=at(-29),
-            end_reason="reviewed",
-        ),
-    )
-    sql.execute_many(
-        conn,
-        sql.insert_rows("review_request_personas", ["request_id", "persona"]),
         [(made.lastrowid, persona) for persona in PERSONAS_14],
     )
     # The reader's last read of Carol's PR, at the commit review 5 read, which names her as its author and its title.
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_prs",
-            url=PR_14,
-            repository="acme/api",
-            number=14,
-            head_sha=SHA_14,
-            base_ref="main",
-            state="open",
-            draft=0,
-            mergeable="mergeable",
-            author="carol",
-            title="Retry the upstream on a 503, with backoff",
-            observed_at=at(-29),
-        ),
-    )
+    records.insert(
+        records.ObservedPr,
+        url=PR_14,
+        repository="acme/api",
+        number=14,
+        head_sha=SHA_14,
+        base_ref="main",
+        state="open",
+        draft=0,
+        mergeable="mergeable",
+        author="carol",
+        title="Retry the upstream on a 503, with backoff",
+        observed_at=at(-29),
+    ).run(conn)
     # A coworker's PR the operator asked canopy to review from the web UI (DESIGN §21).
-    sql.execute(
-        conn,
-        sql.insert(
-            "review_requests",
-            pr_url=PR_95,
-            created_at=at(-20),
-            channel="web",
-            notes="The author asked for a close look at the retry loop; I'm not sure it backs off.",
-        ),
-    )
+    records.insert(
+        records.ReviewRequest,
+        pr_url=PR_95,
+        created_at=at(-20),
+        channel="web",
+        notes="The author asked for a close look at the retry loop; I'm not sure it backs off.",
+    ).run(conn)
     # The reader's read of it, since an open request watches its PR (DESIGN §21): whose it is, before its review.
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_prs",
-            url=PR_95,
-            repository="acme/web",
-            number=95,
-            base_ref="main",
-            state="open",
-            draft=0,
-            author="dana",
-            observed_at=at(-15),
-        ),
-    )
+    records.insert(
+        records.ObservedPr,
+        url=PR_95,
+        repository="acme/web",
+        number=95,
+        base_ref="main",
+        state="open",
+        draft=0,
+        author="dana",
+        observed_at=at(-15),
+    ).run(conn)
 
 
 def drafts(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
@@ -355,9 +335,8 @@ def drafts(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
     for run_id in DRAFTED:
         review_drafts.make(conn, run_id)
     with db.transaction(conn):
-        sql.execute(
-            conn,
-            sql.update("review_drafts")
+        (
+            records.update(records.ReviewDraft)
             .set(
                 status=ReviewDraftStatus.PUBLISHED,
                 publish_version=1,
@@ -368,17 +347,18 @@ def drafts(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
                 published_url=f"{PR_12}#pullrequestreview-2480000001",
                 published_comments="[]",
             )
-            .where("review_run_id = ?", 2),
+            .where("review_run_id = ?", 2)
+            .run(conn)
         )
-        sql.execute(
-            conn,
-            sql.update("review_drafts")
+        (
+            records.update(records.ReviewDraft)
             .set_to("created_at = (SELECT ended_at FROM review_runs WHERE id = review_drafts.review_run_id)")
-            .everything(),
+            .everything()
+            .run(conn)
         )
-        sql.execute(
-            conn,
-            sql.update("review_draft_versions")
+        (
+            records.update(records.ReviewDraftVersion)
             .set_to("created_at = (SELECT created_at FROM review_drafts WHERE id = review_draft_versions.draft_id)")
-            .everything(),
+            .everything()
+            .run(conn)
         )

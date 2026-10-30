@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Fake connector for tests (DESIGN §30): prints the lines a test configured, then an `end` line.
 
-    connector [NAME]
+    connector [NAME] [--labeled LABEL]
 
 Reads the request on stdin and answers as the source NAME (default `default`) is configured, so one state file can
-script a `tracker` and a `vcs` source at once. Configured through the environment:
+script a `tracker` and a `vcs` source at once. With `--labeled`, as the tests' workspaces run it as their `tracker`
+source, a ticket asked that no `ticket` line of its state names is open, titled with its key, and labeled LABEL, with
+nothing else on it: a tracker that holds every ticket a test works. Configured through the environment:
 
     FAKE_CONNECTOR_STATE    the state file, JSON, {NAME: {...}}. Missing, or no entry for NAME: an `end` line naming
                             everything asked, and nothing else.
@@ -34,7 +36,13 @@ from typing import Any
 
 
 def main() -> int:
-    name = sys.argv[1] if len(sys.argv) > 1 else "default"
+    args = sys.argv[1:]
+    labeled = None
+    if "--labeled" in args:
+        at = args.index("--labeled")
+        labeled = args[at + 1]
+        args = args[:at] + args[at + 2 :]
+    name = args[0] if args else "default"
     request = json.loads(sys.stdin.read() or "{}")
     log = os.environ.get("FAKE_CONNECTOR_LOG")
     if log:
@@ -44,11 +52,19 @@ def main() -> int:
     state: dict[str, Any] = (json.loads(path.read_text()) if path.is_file() else {}).get(name, {})
     if state.get("sleep"):
         time.sleep(float(state["sleep"]))
-    for line in state.get("lines", []):
+    lines: list[Any] = list(state.get("lines", []))
+    if labeled is not None:
+        named = {line.get("key") for line in lines if isinstance(line, dict) and line.get("kind") == "ticket"}
+        lines += [
+            {"kind": "ticket", "key": t["key"], "title": t["key"], "state": "open", "labels": [{"name": labeled}]}
+            for t in request.get("tickets", [])
+            if t["key"] not in named
+        ]
+    for line in lines:
         print(line if isinstance(line, str) else json.dumps(line), flush=True)
     end = state.get("end", "asked")
     if end == "asked" and "since" in request:
-        seqs = [line.get("seq", 0) for line in state.get("lines", []) if isinstance(line, dict)]
+        seqs = [line.get("seq", 0) for line in lines if isinstance(line, dict)]
         end = {"through": max([request["since"], *seqs])}
     elif end == "asked":
         end = asked(request, state)

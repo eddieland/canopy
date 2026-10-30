@@ -51,11 +51,11 @@ def test_a_recorded_list_gives_each_model_by_its_provider_and_id() -> None:
     )
 
 
-def test_with_variants_each_models_variants_are_read() -> None:
+def test_with_variants_each_models_variants_are_read_in_its_order() -> None:
     assert models.listed(runner(RECORDED.read_text()), cwd=Path("/ws"), variants=True).variants == {
-        "opencode/mimo-v2.6-flash-free": frozenset(),
-        "github-copilot/claude-opus-4.8-fast": frozenset({"low", "medium", "high", "xhigh", "max"}),
-        "stub/stub-1": frozenset({"deep"}),
+        "opencode/mimo-v2.6-flash-free": (),
+        "github-copilot/claude-opus-4.8-fast": ("low", "medium", "high", "xhigh", "max"),
+        "stub/stub-1": ("deep",),
     }
 
 
@@ -67,7 +67,7 @@ def test_an_entry_that_names_no_model_canopy_renders_is_passed_over() -> None:
     )
     assert models.listed(runner(printed), cwd=Path("/ws"), variants=True) == ModelList(
         frozenset({"anthropic/claude-x"}),
-        {"anthropic/claude-x": frozenset({"high"})},
+        {"anthropic/claude-x": ("high",)},
     )
 
 

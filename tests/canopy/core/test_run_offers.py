@@ -143,7 +143,7 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
     ticked = scenario.tick(dispatches(), worker=pushes())
     # The overseer's server denied whole, the one turned off for every agent, and the skill denied by name: none of
     # them was offered to it. canopy's own, which its run alone is given, it was offered in part, as its rules allow
-    # some of its tools. The worker's rules deny none, and its run is given no server of canopy's.
+    # some of its tools. The worker's rules deny none, and its run is given canopy's `status` server alone.
     assert offered(scenario.conn, "ticks", ticked.tick.id) == (
         "canopy-overseer",
         None,
@@ -155,7 +155,7 @@ def test_each_run_records_what_the_runtime_offered_its_agent(
     assert offered(scenario.conn, "runs", run.id) == (
         "canopy-worker",
         None,
-        (("github", "all"),),
+        (("canopy_run", "all"), ("github", "all")),
         ("pdf", "tracker-jira"),
     )
     assert tools_and_rules(scenario.conn, "runs", run.id) == (("bash", "edit"), {})
@@ -210,7 +210,7 @@ def test_each_run_records_what_opencode_2_offered_its_agent(
     assert offered(scenario.conn, "runs", run.id) == (
         "canopy-worker",
         None,
-        (("github", "all"),),
+        (("canopy_run", "all"), ("github", "all")),
         ("pdf", "tracker-jira"),
     )
     tools, rules = tools_and_rules(scenario.conn, "runs", run.id)

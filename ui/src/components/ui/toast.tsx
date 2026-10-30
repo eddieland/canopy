@@ -1,6 +1,6 @@
 // shadcn/ui Toast, Radix base, ported by hand; see button.tsx. shadcn now ships sonner in its place, a dependency of
 // its own; Radix's Toast is already in the radix-ui package. Only the parts the toaster uses, on `surface` with a
-// hairline and no shadow (ui/DESIGN.md, "Shape and space").
+// palette's edge and floating shadow (ui/DESIGN.md, "Shape and space").
 import { Toast as ToastPrimitive } from 'radix-ui'
 import type { ComponentProps } from 'react'
 
@@ -38,7 +38,8 @@ function Toast({ className, ...props }: ComponentProps<typeof ToastPrimitive.Roo
         <ToastPrimitive.Root
             data-slot="toast"
             className={cn(
-                'animate-toast flex items-start gap-2 rounded-md border bg-surface px-3 py-2 text-foreground',
+                'animate-toast flex items-start gap-2 rounded-md border border-edge bg-surface px-3 py-2',
+                'text-foreground shadow-float',
                 'outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
                 'data-[swipe=move]:translate-y-(--radix-toast-swipe-move-y) data-[swipe=cancel]:translate-y-0',
                 'data-[swipe=end]:translate-y-(--radix-toast-swipe-end-y)',

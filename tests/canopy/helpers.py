@@ -5,15 +5,17 @@ module: a test module imports from no other (`test_layers.py`). Fixtures live in
 """
 
 import io
+import itertools
 import json
 import os
+import re
 import sqlite3
 import sys
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
-from contextlib import AbstractContextManager, ExitStack, contextmanager
+from contextlib import AbstractContextManager, ExitStack, closing, contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, NamedTuple, TypedDict, Unpack, cast
 from unittest import mock
@@ -21,13 +23,26 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, git_tools, plans, prompts, recorded_runs, records, replies, sql, workspace
+from canopy.core import (
+    config,
+    connector_runs,
+    db,
+    git_tools,
+    observe,
+    plans,
+    prompts,
+    recorded_runs,
+    records,
+    replies,
+    sql,
+    workspace,
+)
 from canopy.core.context import Context
-from canopy.core.vocab import TickStatus
+from canopy.core.vocab import ConnectorRunStatus, SourceKind, TickStatus
 from canopy.infra import logs, procs, resources
 from canopy.loop import connectors, mcp, spawns
 from canopy.runs import drafted
-from tests.conftest import CanopyEnv, Journals, git
+from tests.conftest import FAKES_DIR, TRACKER_CMD, TRACKER_SOURCE, CanopyEnv, Journals, git
 
 KEY = "PROJ-1"
 #: A plan as a planner writes one, for a test that needs any.
@@ -36,19 +51,34 @@ PLAN = "# Plan\n\n## api\n\nAdd the endpoint.\n"
 PLAN_PROMPT = "You are planning PROJ-1.\n\nThe operator said: keep it small.\n"
 # The branch an `implement` of KEY with slug `work` pushes.
 BRANCH = f"agent/{KEY}-work"
-# The label the test operator's tickets carry (`user_toml`), and the arguments of an `implement` dispatch of one.
+# The label the test operator's tickets carry (`user_toml`).
 LABEL = "agent-ready-tester"
-IMPLEMENT = ("--label", LABEL, "--kind", "implement")
-# An `implement` on the branch WORKER_DONE names.
-WORK = (*IMPLEMENT, "--slug", "work")
-WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": "https://example.test/pr/1", "summary": "did it"})
+#: The PR WORKER_DONE reports, as a URL that names no PR, so no source reads it.
+WORKER_PR = "https://example.test/pr/1"
+WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": WORKER_PR, "summary": "did it"})
 #: The PR a worker that sends drafts opens (`sends_drafts`).
 DRAFTS_PR = "https://github.com/acme/api/pull/7"
+#: A PR the tests' `vcs` source reads, open with nothing on it, unless a test's GitHub state says otherwise. A ticket
+#: with a unit at it reaches the overseer; one at WORKER_PR is the harness's `wait` instead (DESIGN §39).
+READ_PR = "https://github.com/acme/repo/pull/1"
+#: Why the harness waits on a candidate with a unit at WORKER_PR.
+UNOBSERVED = (
+    f"unobserved: {WORKER_PR} is not a PR's URL, so it is not observed; no source reads it, so it waits until the "
+    "operator forgets the ticket's work"
+)
+#: What the harness's `unobserved_pr` item says of KEY's unit in `repo` at WORKER_PR.
+UNOBSERVED_ITEM = (
+    f"{KEY} in repo names {WORKER_PR} as its PR, which is not a PR's URL, so no source reads it and the ticket waits; "
+    f"`canopy forget {KEY}` drops its work, and its next implement starts over"
+)
 #: The `trust` keys of the private file that hold a worker's drafts for the operator to approve:
 #: `scenario.configures("private", trust=APPROVE)`.
 APPROVE = {"review_replies": "approve"}
+#: The tests' `tracker` source, as the user file names it (`tests.conftest.TRACKER_TOML`).
+TRACKER = {"kind": "tracker", "cmd": TRACKER_CMD}
 #: The `connect` keys of a source that posts to the tracker, for drafts on a ticket.
-TRACKER_POSTS = {"sources": {"issues": {"kind": "tracker", "post_cmd": "canopy-post-github"}}}
+#: The private file's sources replace the user file's whole, so they name the tests' tracker source again.
+TRACKER_POSTS = {"sources": {TRACKER_SOURCE: {**TRACKER, "post_cmd": "canopy-post-github"}}}
 # What a blocked worker asks (`blocked_result`).
 QUESTION = "Should the button be red or blue?"
 # The last line an overseer prints when it has finished its tick.
@@ -86,7 +116,7 @@ PROMPT_VALUES = {
     "REVIEW_ANSWERS": "",
     "PLAN": None,
     "REASONS": "- `review`: review comments to address.",
-    "FOLLOW_UPS": prompts.follow_ups("PROJ-1", 5, ["repo"], needs_human="needs-human", labels=["agent-ready-alice"]),
+    "FOLLOW_UPS": prompts.follow_ups(5, ["repo"], needs_human="needs-human", labels=["agent-ready-alice"]),
     # How comments reach GitHub under `trust.review_replies = "post"`, the text the prompts held before (DESIGN §29).
     **replies.posted_values("In every comment and reply you post, start it with `CANOPY:` and a space.", "needs-human"),
 }
@@ -94,7 +124,6 @@ PROMPT_VALUES = {
 PRIVATE_PROMPT_VALUES = {
     **PROMPT_VALUES,
     "FOLLOW_UPS": prompts.follow_ups(
-        "PROJ-1",
         5,
         ["repo"],
         needs_human="needs-human",
@@ -124,6 +153,60 @@ def in_tick(conn: sqlite3.Connection, *, dry_run: bool = False, ends_ok: bool = 
         yield tick_id
         if ends_ok:
             db.finish_tick(conn, tick_id, TickStatus.OK, "test")
+
+
+def sources(**more: Mapping[str, object]) -> dict[str, object]:
+    """The `connect` keys of the tests' `tracker` source and the sources `more` names, for the private file.
+
+    Its `connect.sources` replaces the user file's whole, so a test's sources there name the tracker source again:
+    config requires one (DESIGN §30).
+
+    Returns:
+        `{"sources": ...}`, for `configures("private", connect=...)`.
+    """
+    return {"sources": {TRACKER_SOURCE: TRACKER, **more}}
+
+
+def tracker_holds(conn: sqlite3.Connection, *keys: str) -> None:
+    """The tests' tracker holds `keys`, KEY if none, and the sources read them now, as a tick's do (DESIGN §6).
+
+    Config requires a `tracker` source (DESIGN §30), and a dispatch rests on its fresh read of the ticket and, the
+    `vcs` source running beside it, of the repositories' branches (§35, §39). The tests' workspaces run the fake
+    connector as theirs, `connector --labeled`, which holds every ticket it is asked open and labeled. Each key is
+    touched into the journal first, as the query's record would, so the source is asked for it. The `vcs` source reads
+    too unless a run of it read whole within `connect.max_age_minutes`, so a test that scripts GitHub to hang or fail
+    from a run on reads it once before it does. A test that configures a tracker of its own reads nothing here: its
+    world is what it scripts.
+    """
+    root = Path.cwd()
+    cfg = config.load(root)
+    source = cfg.connect.tracker()
+    if "--labeled" not in config.notify_words(source.cmd):
+        return
+    ctx = Context(config=cfg, conn=conn, runner=procs.SubprocessRunner(), ws=workspace.load(root))
+    with db.transaction(conn):
+        for key in keys or (KEY,):
+            db.touch_ticket(conn, key, ctx.repo)
+    log = logs.for_tick(None)
+    # The fakes first on PATH, as `fakes_on_path` puts them, for a test that runs no fake itself.
+    with mock.patch.dict(os.environ, {"PATH": os.pathsep.join([str(FAKES_DIR), os.environ.get("PATH", "")])}):
+        observe.observe(conn, cfg, ctx.runner, source, connectors.tracker_request(ctx), log=log)
+        if not _vcs_read_lately(conn, cfg.connect.max_age_minutes):
+            vcs, request = cfg.connect.vcs(), connectors.vcs_request(ctx)
+            observed = observe.observe(conn, cfg, ctx.runner, vcs, request, log=log)
+            name = config.DEFAULT_SOURCE
+            connector_runs.record(conn, None, name=name, source=vcs, request=request, observed=observed)
+
+
+def _vcs_read_lately(conn: sqlite3.Connection, minutes: int) -> bool:
+    since = db.format_time(datetime.now(UTC) - timedelta(minutes=minutes))
+    query = records.select(records.ConnectorRun).where(
+        "kind = ? AND status = ? AND ended_at >= ?",
+        SourceKind.VCS,
+        ConnectorRunStatus.OK,
+        since,
+    )
+    return bool(query.all(conn))
 
 
 def tick_starts(runner: procs.Runner | None = None, *, tick_id: int | None = None) -> None:
@@ -379,45 +462,91 @@ def pool_statuses(treehouse_state: Path) -> list[str]:
     return [str(s["status"]) for s in pool(treehouse_state)]
 
 
-# Dispatching in this process
+# Calling the overseer's tools, and dispatching, in this process
+
+
+class Said(NamedTuple):
+    """What a tool call came back with: its text, and whether it is a tool error."""
+
+    text: str
+    error: bool
+
+
+class Called(NamedTuple):
+    """A call an agent makes of one of canopy's tools (DESIGN §27), through the server its inline config names."""
+
+    #: The tool, as the runtime names it: `canopy_decide`, `canopy_chore_history`, `canopy_git_diff`.
+    name: str
+    #: Its arguments, the fields of its request.
+    arguments: Mapping[str, object]
+
+    def __str__(self) -> str:
+        """The call as a story tells it: the tool, then its arguments as JSON."""
+        return f"{self.name} {json.dumps(self.arguments, default=str)}"
+
+
+def calls(name: str, /, **arguments: object) -> Called:
+    """The call an agent makes of canopy's tool `name`, as the runtime names it, with `arguments`."""
+    return Called(name, arguments)
+
+
+def overseer_calls(move: Called, *, runner: procs.Runner | None = None) -> Said:
+    """Make the overseer's call `move` of one of its tools here, in this process, as `canopy _mcp` answers it.
+
+    The server answers it as it would the overseer's: its arguments validated, the workspace the test is in opened
+    afresh, and the tick CANOPY_TICK_ID names checked. `runner` runs what the call runs, such as the runtime asked for
+    its models, the real one if None.
+
+    Returns:
+        What the call came back with: its text, and whether it is a tool error.
+    """
+    name = move.name.removeprefix(f"{mcp.SERVER}_")
+    assert name in {t.name for t in mcp.TOOLS}, f"{move.name} is not one of the overseer's tools"
+    request = {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": move.arguments}}
+    found = runner or procs.SubprocessRunner()
+    response = mcp.answer(json.dumps(request, default=str).encode(), lambda: mcp.opened(found, Path.cwd()))
+    assert response is not None, move
+    result = response.get("result")
+    assert isinstance(result, dict), response
+    [content] = cast("list[dict[str, str]]", result["content"])
+    return Said(content["text"], bool(result["isError"]))
 
 
 class Dispatched(NamedTuple):
-    """What `canopy dispatch` did: its exit code, and the decisions of the tick it ran in, as (action, rationale)."""
+    """What the overseer's `dispatch` tool did: what it said, and the decisions of the tick it ran in."""
 
-    code: int
+    #: What the call came back with.
+    said: Said
+    #: The tick's decisions, as (action, rationale).
     decisions: list[tuple[str, str]]
 
 
-def dispatch_in_tick(
-    conn: sqlite3.Connection,
-    *args: str,
-    key: str = KEY,
-    runner: procs.Runner | None = None,
-) -> Dispatched:
-    """In a tick of its own, run `canopy dispatch` of `key` in `repo` with `args`; the run it starts does not run."""
+def dispatch_in_tick(conn: sqlite3.Connection, move: Called, *, runner: procs.Runner | None = None) -> Dispatched:
+    """In a tick of its own, make the overseer's dispatch `move` and start what it recorded; the run does not run.
+
+    `move` is a `dispatches(...)` from `scenario_helpers.py`, or any call of `canopy_dispatch`.
+    """
     runner = runner or InlineRunner()
+    key = str(move.arguments["key"])
+    tracker_holds(conn, key)
     with in_tick(conn) as tick_id:
-        code = main(["dispatch", key, "--repo", "repo", *args], runner=runner)
+        said = overseer_calls(move, runner=runner)
         tick_starts(runner, tick_id=tick_id)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
-        return Dispatched(code, decisions(conn, tick_id))
+        return Dispatched(said, decisions(conn, tick_id))
 
 
-def dispatch_and_run(
-    conn: sqlite3.Connection,
-    *args: str,
-    key: str = KEY,
-    runner: procs.Runner | None = None,
-) -> sqlite3.Row:
+def dispatch_and_run(conn: sqlite3.Connection, move: Called, *, runner: procs.Runner | None = None) -> sqlite3.Row:
     """Dispatch as `dispatch_in_tick` does, then do the run in this process, as the detached one would.
 
     Returns:
         The run, closed.
     """
     runner = runner or InlineRunner()
+    tracker_holds(conn, str(move.arguments["key"]))
     with in_tick(conn) as tick_id:
-        assert main(["dispatch", key, "--repo", "repo", *args], runner=runner) == 0, decisions(conn, tick_id)
+        said = overseer_calls(move, runner=runner)
+        assert not said.error, (said.text, decisions(conn, tick_id))
         tick_starts(runner, tick_id=tick_id)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         run_id = int(last_run(conn)["id"])
@@ -425,14 +554,14 @@ def dispatch_and_run(
     return present(db.get_run(conn, run_id))
 
 
-def dispatch_refused(conn: sqlite3.Connection, *args: str, key: str = KEY) -> list[tuple[str, str]]:
-    """Dispatch as `dispatch_in_tick` does, expecting a refusal, at the ask or as the tick starts the run (DESIGN §40).
+def dispatch_refused(conn: sqlite3.Connection, move: Called) -> list[tuple[str, str]]:
+    """Dispatch as `dispatch_in_tick` does, expecting a refusal, at the call or as the tick starts the run (DESIGN §40).
 
     Returns:
         The tick's decisions, as (action, rationale).
     """
-    code, made = dispatch_in_tick(conn, *args, key=key)
-    assert code == 1 or any(action.startswith("refused:") for action, _ in made), made
+    said, made = dispatch_in_tick(conn, move)
+    assert said.error or any(action.startswith("refused:") for action, _ in made), made
     return made
 
 
@@ -504,18 +633,66 @@ def canopy(*args: str) -> list[str]:
     return ["canopy", *args]
 
 
-class Called(NamedTuple):
-    """A call an agent makes of one of canopy's tools (DESIGN §27), through the server its inline config names."""
-
-    #: The tool, as the runtime names it: `canopy_chore_history`, `canopy_git_diff`.
-    name: str
-    #: Its arguments, the fields of its request.
-    arguments: Mapping[str, object]
+def decides(key: str, action: str = "wait", rationale: str = "nothing to do yet") -> Called:
+    """The overseer decides `action` for `key`, a wait by default, with `rationale`."""
+    return calls("canopy_decide", decisions=[{"key": key, "action": action, "rationale": rationale}])
 
 
-def calls(name: str, /, **arguments: object) -> Called:
-    """The call an agent makes of canopy's tool `name`, as the runtime names it, with `arguments`."""
-    return Called(name, arguments)
+def raises(key: str | None, reason: str, detail: str | None = None, **more: object) -> Called:
+    """The overseer raises `reason` about `key` on the attention list, with `detail`, `<key> detail` by default.
+
+    `more` names the item's other fields: `pr` for a PR with no ticket, with `key` None, and `repo` or `item`.
+    """
+    shown = detail if detail is not None else f"{key} detail"
+    return calls("canopy_attention", **({"key": key} if key is not None else {}), reason=reason, detail=shown, **more)
+
+
+def ticket_sets(*keys: str, **fields: object) -> Called:
+    """The overseer sets `fields` on each of `keys`, as the `ticket-set` tool names them: `phase`, `cursors`, `repo`."""
+    return calls("canopy_ticket-set", tickets=[{"key": key, **fields} for key in keys])
+
+
+def chore_runs(name: str, context: str | None = None) -> Called:
+    """The overseer starts a run of chore `name`, with `context` for it if given."""
+    return calls("canopy_chore-run", name=name, **({"context": context} if context is not None else {}))
+
+
+def chore_waits(name: str, rationale: str = "not now") -> Called:
+    """The overseer records that chore `name`, due, should not run now, and why."""
+    return calls("canopy_chore-wait", name=name, rationale=rationale)
+
+
+#: The overseer's tools whose call names a ticket the state block lists to it: a dispatch, a decision, an attention
+#: item, and a ticket's settings.
+_LISTED = ("canopy_dispatch", "canopy_decide", "canopy_attention", "canopy_ticket-set")
+#: A ticket's key, as the tests name them.
+_TICKET_KEY = re.compile(r"[A-Z][A-Z0-9]*-[0-9]+")
+
+
+def named_tickets(moves: Iterable[list[str] | Called]) -> list[str]:
+    """The ticket each move names that the overseer must be listed to make it, in order: the tracker holds each."""
+    found: list[str] = []
+    for move in moves:
+        if not isinstance(move, Called) or move.name not in _LISTED:
+            continue
+        nested = move.arguments.get("decisions", move.arguments.get("tickets"))
+        items = cast("list[Mapping[str, object]]", nested) if isinstance(nested, list) else [move.arguments]
+        found += [key for item in items if isinstance(key := item.get("key"), str) and _TICKET_KEY.fullmatch(key)]
+    return found
+
+
+def holds_listed(moves: Iterable[list[str] | Called]) -> None:
+    """The tests' tracker holds each ticket `moves` name that the journal does not know yet (`tracker_holds`).
+
+    Outside a workspace, or with no such ticket, it does nothing.
+    """
+    found = workspace.load(Path.cwd()) if (Path.cwd() / config.WORKSPACE_FILE_NAME).exists() else None
+    if found is None or not (keys := named_tickets(moves)):
+        return
+    with closing(db.connect(found.state_dir / db.DB_FILE_NAME)) as conn:
+        db.migrate(conn, resources.migrations_dir())
+        if unknown := [key for key in dict.fromkeys(keys) if db.get_ticket(conn, key) is None]:
+            tracker_holds(conn, *unknown)
 
 
 class Behavior(TypedDict, total=False):
@@ -580,23 +757,21 @@ class Script(AbstractContextManager[None]):
 
 @contextmanager
 def overseer_does(
-    *commands: list[str],
-    tools: Sequence[Called] = (),
+    *moves: Called | list[str],
     result: str = TICK_DONE,
-    queried: str | None = None,
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
-    """Until the block ends, the fake overseer makes the calls `tools` names, runs `commands`, and prints `result`.
+    """Until the block ends, the fake overseer makes each move and prints `result`.
 
-    `result` by default ends its tick.
-
-    `queried`, if given, is what it records when the tracker query is due, with the `canopy_queried` tool when it calls
-    any; see FAKE_AGENT_QUERIED in the fake.
+    A move is a call of one of canopy's tools, `calls(...)` or a helper that makes one, such as `decides`; or a command
+    it runs through its shell, `canopy(...)`, where a test plays one the overseer has no shell for. It makes the calls
+    first, in order, then runs the commands. `result` by default ends its tick. A ticket the calls name that the
+    journal does not know yet, the tests' tracker holds and reads first (`holds_listed`), so the overseer is listed it.
     """
-    settings = {"COMMANDS": json.dumps(commands), "RESULT": result}
-    settings["TOOLS"] = json.dumps([[call.name, call.arguments] for call in tools])
-    if queried is not None:
-        settings["QUERIED"] = queried
+    holds_listed(moves)
+    commands = [move for move in moves if not isinstance(move, Called)]
+    tools = [[move.name, move.arguments] for move in moves if isinstance(move, Called)]
+    settings = {"COMMANDS": json.dumps(commands), "RESULT": result, "TOOLS": json.dumps(tools, default=str)}
     with scripted("OVERSEER", settings, behavior):
         yield
 
@@ -607,14 +782,13 @@ def overseer_records(*items: tuple[str, str], waiting: Iterable[str] = ()) -> It
 
     Each key in `waiting` it decides to wait on instead, as it must for a ticket in the journal it records nothing for.
     """
-    recorded = [canopy("attention", key, reason, "--detail", f"{key} detail") for key, reason in items]
-    with overseer_does(*recorded, *waits(*waiting)):
+    with overseer_does(*itertools.starmap(raises, items), *waits(*waiting)):
         yield
 
 
-def waits(*keys: str, rationale: str = "nothing to do yet") -> list[list[str]]:
-    """The commands an overseer runs to wait on each of `keys`, as it must on a ticket it has nothing to do for."""
-    return [canopy("decide", key, "wait", "--rationale", rationale) for key in keys]
+def waits(*keys: str, rationale: str = "nothing to do yet") -> list[Called]:
+    """The calls an overseer makes to wait on each of `keys`, as it must on a ticket it has nothing to do for."""
+    return [decides(key, "wait", rationale) for key in keys]
 
 
 def with_events(env: CanopyEnv, agent: str) -> None:
@@ -705,12 +879,12 @@ def memories(conn: sqlite3.Connection) -> list[records.Memory]:
     return records.fetch_all(conn, records.Memory, sql.frag("SELECT * FROM memories ORDER BY id"))
 
 
-def run_with(conn: sqlite3.Connection, *args: str, key: str = KEY, **fields: object) -> sqlite3.Row:
-    """Dispatch and run `key`'s next run with `args`, its worker committing, pushing, and sending `fields`."""
-    branch = f"agent/{key}-work"
+def run_with(conn: sqlite3.Connection, move: Called, **fields: object) -> sqlite3.Row:
+    """Dispatch and run the dispatch `move`, its worker committing, pushing, and sending `fields`."""
+    branch = f"agent/{move.arguments['key']}-work"
     line = worker_result(**fields).replace(BRANCH, branch)
     with worker_does(*commit_and_push(branch), result=line):
-        return dispatch_and_run(conn, *args, key=key, runner=InlineRunner())
+        return dispatch_and_run(conn, move, runner=InlineRunner())
 
 
 def worker_result(**memory: object) -> str:
@@ -718,13 +892,21 @@ def worker_result(**memory: object) -> str:
     return json.dumps({"status": "done", "branch": BRANCH, "prs": {"repo": None}, "summary": "did it", **memory})
 
 
-def worker_does(*commands: list[str], result: str = WORKER_DONE, **behavior: Unpack[Behavior]) -> Script:
-    """Until the block ends, the fake worker runs `commands` and then prints `result`.
+def worker_does(
+    *commands: list[str],
+    result: str = WORKER_DONE,
+    tools: Sequence[Called] = (),
+    **behavior: Unpack[Behavior],
+) -> Script:
+    """Until the block ends, the fake worker makes the calls `tools` names, runs `commands`, and then prints `result`.
 
     Returns:
         The worker's script, a block.
     """
-    return scripted("WORKER", {"COMMANDS": json.dumps(commands), "RESULT": result}, behavior)
+    settings = {"COMMANDS": json.dumps(commands), "RESULT": result}
+    if tools:
+        settings["TOOLS"] = json.dumps([[call.name, call.arguments] for call in tools])
+    return scripted("WORKER", settings, behavior)
 
 
 @contextmanager
@@ -832,6 +1014,34 @@ def agent_runs(agent_log: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in agent_log.read_text().splitlines()]
 
 
+def ran_on(agent_log: Path, agent: str = "canopy-worker") -> str | None:
+    """The model the definition of the latest run of `agent` names, as it loaded it; None when it names none.
+
+    A variant it names follows the model's id after an `@`, as config spells it.
+    """
+    run = [r for r in agent_runs(agent_log) if f"--agent {agent}" in " ".join(r["argv"])][-1]
+    text = (Path(run["env"]["OPENCODE_CONFIG_DIR"]) / "agents" / f"{agent}.md").read_text()
+    found = [line for line in text.splitlines() if line.startswith("model: ")]
+    variant = [line for line in text.splitlines() if line.startswith("variant: ")]
+    if not found:
+        return None
+    model = json.loads(found[0].removeprefix("model: "))
+    return f"{model}@{json.loads(variant[0].removeprefix('variant: '))}" if variant else model
+
+
+def told(run: Mapping[str, Any]) -> str:
+    """What fake agent run `run`, as the fake logged it, was told: its definition's body, then its message.
+
+    The tests' templates pass the prompt last, and the snapshot as OpenCode's config directory, whose definition of the
+    agent holds the prompt's fixed instructions as its body (DESIGN §13).
+    """
+    argv = run["argv"]
+    agent = argv[argv.index("--agent") + 1]
+    definition = Path(run["env"]["OPENCODE_CONFIG_DIR"]) / "agents" / f"{agent}.md"
+    body = definition.read_text().rpartition("\n---\n")[2].lstrip("\n")
+    return f"{body}\n{argv[-1]}"
+
+
 def has_deadline(run: Mapping[str, Any], minutes: int, *, before: float, after: float) -> bool:
     """Whether agent run `run`, as the fake agent logged it, had a deadline `minutes` after its start.
 
@@ -919,13 +1129,6 @@ def tool_call(name: str, /, **arguments: object) -> dict[str, object]:
     return {"method": "tools/call", "params": {"name": name, "arguments": arguments}}
 
 
-class Said(NamedTuple):
-    """What a tool call came back with: its text, and whether it is a tool error."""
-
-    text: str
-    error: bool
-
-
 @dataclass(frozen=True)
 class Served:
     """What `canopy _mcp` answered in one session, and how it ended."""
@@ -958,24 +1161,52 @@ def mcp_session(
     raw: Sequence[str] = (),
     chore: bool = False,
     reports: bool = False,
+    status: bool = False,
     git: Sequence[str] = (),
 ) -> Served:
     """Talk to `canopy _mcp` as the runtime does, here, in this environment.
 
     It talks as the runtime does for the overseer, with `chore` for a chore's run, `reports` for the server of canopy's
-    reports, or with `git`, each `NAME=PATH`, for a review's or a plan's: open the session, send each of `requests`
-    numbered from 1, then each line of `raw` as it is, and close the server's stdin.
+    reports, `status` for a worker's, planner's, or reviewer's card, or with `git`, each `NAME=PATH`, for a review's or
+    a plan's: open the session, send each of `requests` numbered from 1, then each line of `raw` as it is, and close
+    the server's stdin.
 
     The server answers one message at a time, and the session waits for it to exit, which it must on its own.
     """
     numbered = [{"jsonrpc": "2.0", "id": n, **request} for n, request in enumerate(requests, 1)]
     lines = [*(json.dumps(m) for m in (*MCP_OPENING, *numbered)), *raw]
     checkouts = [arg for checkout in git for arg in ("--git", checkout)]
-    server = (*MCP_SERVER, *(["--chore"] if chore else []), *(["--reports"] if reports else []), *checkouts)
+    flags = [*(["--chore"] if chore else []), *(["--reports"] if reports else []), *(["--status"] if status else [])]
+    server = (*MCP_SERVER, *flags, *checkouts)
     result = procs.SubprocessRunner().run(server, stdin="".join(f"{line}\n" for line in lines), timeout=60)
     assert not result.timed_out, f"canopy _mcp did not exit when its stdin closed: {result.stderr}"
     answers = [json.loads(line) for line in result.stdout.splitlines()]
     return Served({a["id"]: a for a in answers}, result.stderr, result.returncode)
+
+
+def mcp_lines(*moves: Called) -> list[str]:
+    """What a client sends `canopy _mcp` to make each of the overseer's `moves`: the opening, then each call from id 1.
+
+    A test pipes them, a line each, to a server it starts itself, such as one inside a sandbox, and reads the answers
+    with `answered_lines`.
+    """
+    numbered = [
+        {**tool_call(move.name.removeprefix(f"{mcp.SERVER}_"), **move.arguments), "jsonrpc": "2.0", "id": n}
+        for n, move in enumerate(moves, 1)
+    ]
+    return [json.dumps(message, default=str) for message in (*MCP_OPENING, *numbered)]
+
+
+def answered_lines(stdout: str) -> list[Said]:
+    """What each call `mcp_lines` sent came back with, in order, read from what the server printed."""
+    answers = {a["id"]: a for a in map(json.loads, stdout.splitlines()) if isinstance(a.get("id"), int) and a["id"]}
+    return [Served(answers, "", 0).said(n) for n in sorted(answers)]
+
+
+def inline_servers(run: Mapping[str, Any]) -> dict[str, list[str]]:
+    """The servers of canopy's that a fake agent run's inline config (FAKE_AGENT_LOG's `env`) gave it, with commands."""
+    inline: dict[str, Any] = json.loads(run["env"].get("OPENCODE_CONFIG_CONTENT", "{}")).get("mcp", {})
+    return {name: entry["command"] for name, entry in inline.items()}
 
 
 def ancestors(pid: int) -> list[int]:

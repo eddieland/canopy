@@ -24,14 +24,14 @@ first one these checks would refuse it to cover (`default_cursors`, DESIGN §37)
 untrusted reviewer's feedback with no operator message after it among those it carries. A cursor passed is kept, so the
 overseer passes one only to stop shorter, and the checks above hold it to the same bounds.
 
-`canopy ticket set` moves cursors too, so its cursors are checked the same way in a tick (`check_cursors`), refused
+The `ticket-set` tool moves cursors too, so its cursors are checked the same way in a tick (`check_cursors`), refused
 `unobserved` alone: it starts nothing, so a stale subject is not refused, but the block shows none of a stale subject's
 items, so a cursor on one may move no further than the items it already passed. A unit with no PR is unobserved, since
 no source reads checks or reviews but a PR's.
 
-A private ticket, which its start record authorizes (§22), is not checked; nor is a subject no source covers, such as
-every ticket without a `tracker` source: its claims stay claims, checked again by the worker (D051). Neither, nor a
-stale subject, gets a default cursor, since none can be read from a fresh observation. A cursor is a
+A private ticket, which its start record authorizes (§22), is not checked; nor is a subject no source can read, such as
+a unit whose PR is not a PR's URL: its claims stay claims, checked again by the worker (D051). Neither, nor a stale
+subject, gets a default cursor, since none can be read from a fresh observation. A cursor is a
 journal number (§35): it names an item by the number it took when first observed, or a review run by the one it took
 when it ended.
 """
@@ -43,11 +43,12 @@ from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import artifact_authority, conversation, db, item_numbers, notice, observe, records, review_runs, sql
+from canopy.core import conversation, db, item_numbers, notice, observe, records, review_runs
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import CheckStatus, ResumeReason, RunKind
 from canopy.core.workspace import CheckRole
 from canopy.loop import observations, phases
+from canopy.runs import artifact_authority, drafts
 from canopy.runs.dispatch import Refusal
 
 if TYPE_CHECKING:
@@ -87,11 +88,10 @@ def check(
         return
     reader = observations.Reader.read(ctx, phases.recorded(ctx.conn, tick_id), now, [record])
     units = {u["repo"]: u for u in reader.units(key)}
-    tracked = _check_subjects(ctx, reader, key, kind=kind, label=label, repos=repos, units=units, base=base)
+    _check_subjects(ctx, reader, key, kind=kind, label=label, repos=repos, units=units, base=base)
     one = repos[0] if len(set(repos)) == 1 else None
     pr = _fresh_pr(units.get(one)) if one is not None else None
-    if tracked:
-        _check_comment(reader, record, cursors.get("comment"))
+    _check_comment(reader, record, cursors.get("comment"))
     if pr is not None:
         _check_ci(reader, pr, cursors.get("ci"))
     unit = next((u for u in reader.units_of.get(key, []) if one is not None and u.repo == one), None)
@@ -101,7 +101,7 @@ def check(
         return
     if set(reasons) == {ResumeReason.CI} and pr is not None and unit is not None:
         _check_handled(ctx, reader, pr, unit)
-    if tracked and ResumeReason.REPLY in reasons:
+    if ResumeReason.REPLY in reasons:
         _check_reply(ctx, reader, record, cursors)
     gated = ResumeReason.REVIEW in reasons and ctx.config.policy.feedback_plan != "approve"
     if gated and pr is not None:
@@ -117,7 +117,7 @@ def check_cursors(
     repo: str | None,
     cursors: Mapping[str, str],
 ) -> None:
-    """Refuse a `ticket set` whose cursors name no item observed, or pass one the block left out, at `now`.
+    """Refuse a `ticket-set` whose cursors name no item observed, or pass one the block left out, at `now`.
 
     `cursors` are the ones it moves, by name; a unit's (`review`, `ci`) is of `repo`. A `review` cursor may name the end
     of any canopy review run of the PR, as the block's `reviews` shows the latest's number.
@@ -131,8 +131,7 @@ def check_cursors(
     if record is None:
         return
     reader = observations.Reader.read(ctx, phases.recorded(ctx.conn, tick_id), now, [record])
-    if reader.ticket(key)["observed"] != "unobserved":
-        _check_comment(reader, record, cursors.get("comment"))
+    _check_comment(reader, record, cursors.get("comment"))
     unit = next((u for u in reader.units_of.get(key, []) if repo is not None and u.repo == repo), None)
     seen = next((u for u in reader.units(key) if u["repo"] == repo), None)
     if unit is None or unit.pr_url is None or seen is None or seen["observed"] == "unobserved":
@@ -273,26 +272,21 @@ def _check_subjects(
     repos: Sequence[str],
     units: Mapping[str, observations.UnitObservation],
     base: str | None,
-) -> bool:
+) -> None:
     """Refuse a dispatch that rests on a stale subject, or names a label not observed on its ticket.
-
-    Returns:
-        Whether the ticket is observed fresh; False when no source covers it, so its label and replies stay claims.
 
     Raises:
         Refusal: `stale` or `unauthorized`.
     """
     ticket = reader.ticket(key)
-    if ticket["observed"] == "stale":
+    if ticket["observed"] != "fresh":
         raise Refusal("stale", _stale(key, ticket.get("why")))
-    tracked = ticket["observed"] == "fresh"
-    if tracked and label is not None:
+    if label is not None:
         _check_label(reader.observed[key], key, label)
     if kind == RunKind.RESUME:
         _check_units(reader, key, repos, units)
     if base is not None:
         _check_blocker(ctx, reader, key, base)
-    return tracked
 
 
 def _stale(what: str, why: str | None) -> str:
@@ -345,8 +339,8 @@ def _check_blocker(ctx: Context, reader: observations.Reader, key: str, base: st
     Raises:
         Refusal: `stale`, naming the blocker's unit.
     """
-    query = sql.select("*").from_("tickets").where("branch = ? AND key != ?", base, key)
-    for blocker in records.fetch_all(ctx.conn, records.Ticket, query):
+    query = records.select(records.Ticket).where("branch = ? AND key != ?", base, key)
+    for blocker in query.all(ctx.conn):
         with_pr = {u.repo for u in reader.units_of.get(blocker.key, []) if u.pr_url}
         for unit in reader.units(blocker.key):
             if unit["repo"] in with_pr and unit["observed"] == "stale":
@@ -428,12 +422,13 @@ def _check_handled(
     if cursor is None:
         return
     failed = _failed_at_head(ctx, reader, pr, unit.repo)
-    query = (
-        sql.select("*")
-        .from_("observed_check_runs")
-        .where("pr_url = ? AND head_sha = ? AND number <= ?", pr["url"], pr["head"], cursor)
+    query = records.select(records.ObservedCheckRun).where(
+        "pr_url = ? AND head_sha = ? AND number <= ?",
+        pr["url"],
+        pr["head"],
+        cursor,
     )
-    runs = records.fetch_all(ctx.conn, records.ObservedCheckRun, query)
+    runs = query.all(ctx.conn)
     behind = {r.name for r in runs if r.conclusion in observe.FAILED}
     if not failed or any(c.number is None or (c.number > cursor and c.name not in behind) for c in failed):
         return
@@ -546,6 +541,7 @@ def _newest_review(
     trust = ctx.config.trust
     trusted = {t.lower() for t in trust.trusted_reviewers}
     said = [db.parse_time(m.at) for m in _operator_messages(ctx, record, message)]
+    sent = drafts.sent_by_pr(ctx.conn)
     new = observations.new_reviews(reader.reviews.get(pr["url"], []), unit.review_cursor)
     covered: list[int] = []
     stop: int | None = None
@@ -553,7 +549,7 @@ def _newest_review(
         if r.number is None:
             # No cursor passes it: an item with no number stays newer than any.
             continue
-        if n >= observations.MAX_NEW_ITEMS or (_feedback(r, pr, trust) and not _go_ahead(r, trusted, said)):
+        if n >= observations.MAX_NEW_ITEMS or (_feedback(r, pr, trust, sent) and not _go_ahead(r, trusted, said)):
             stop = r.number
             break
         covered.append(r.number)
@@ -564,15 +560,22 @@ def _newest_review(
     return max(covered, default=None)
 
 
-def _feedback(r: records.ObservedReview, pr: observations.PrObservation, trust: Trust) -> bool:
+def _feedback(
+    r: records.ObservedReview,
+    pr: observations.PrObservation,
+    trust: Trust,
+    sent: Mapping[str, Mapping[str, Sequence[int]]],
+) -> bool:
     """Whether a review item is feedback, and neither the PR author's, under whom workers post, nor a worker's (D069).
+
+    Nor is one the operator sent through canopy, known by its id among `sent` whoever opened the PR (DESIGN §29).
 
     Returns:
         True for a review comment, a change request, or a review that says something, by anyone else.
     """
     author = (pr["author"] or "").lower()
     marked = conversation.worker_marked(r.body, trust.comment_prefix, trust.comment_suffix)
-    return phases.is_feedback(r) and (r.author or "").lower() != author and not marked
+    return phases.is_feedback(r) and (r.author or "").lower() != author and not marked and not drafts.was_sent(r, sent)
 
 
 def _go_ahead(r: records.ObservedReview, trusted: AbstractSet[str], said: Collection[datetime]) -> bool:
@@ -696,7 +699,8 @@ class _Review:
         trust = ctx.config.trust
         trusted = {t.lower() for t in trust.trusted_reviewers}
         pr = self.pr
-        feedback = [] if pr is None else [r for r in self.covered if _feedback(r, pr, trust)]
+        sent = drafts.sent_by_pr(ctx.conn)
+        feedback = [] if pr is None else [r for r in self.covered if _feedback(r, pr, trust, sent)]
         said = [db.parse_time(m.at) for m in _operator_messages(ctx, record, message)]
         for r in feedback:
             if not _go_ahead(r, trusted, said):

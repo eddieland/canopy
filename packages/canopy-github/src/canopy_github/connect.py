@@ -1,5 +1,8 @@
 """`canopy-connect-github`: canopy's GitHub reader, the `vcs` source (DESIGN §29, §30). Prints what it reads.
 
+Given a repository, `--repo OWNER/NAME`, it is instead the `tracker` source for that repository's GitHub Issues, which
+`canopy_github.issues` reads. Without one, it reads PRs and branches, as follows.
+
 On stdin, one JSON object naming what to observe, each key optional: `prs`, PRs' URLs; `repositories`, each
 `{"name": NAME, "url": CLONE_URL}`, with `branch_prefix`; and `review_query`, in GitHub's search syntax. On stdout, one
 JSON line per observation, in DESIGN §30's shapes:
@@ -40,6 +43,7 @@ from canopy_github import (
     Token,
     client_for,
     emit,
+    issues,
     parse_pr,
     parse_repository,
     read_input,
@@ -77,13 +81,22 @@ class Request:
 
 
 @click.command("canopy-connect-github", context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--repo",
+    metavar="[HOST/]OWNER/NAME",
+    default=None,
+    help="Read this repository's issues instead, as canopy's tracker source: issue 12 is ticket GH-12.",
+)
 @click.pass_context
-def main(ctx: click.Context) -> None:
+def main(ctx: click.Context, repo: str | None) -> None:
     """Read GitHub's PRs and branches into canopy's journal: canopy's vcs source (DESIGN §29, §30).
 
-    The request is one JSON object on stdin; what was read is JSON lines on stdout, the `end` line last.
+    With --repo, read that repository's issues instead: canopy's tracker source for GitHub Issues. The request is one
+    JSON object on stdin; what was read is JSON lines on stdout, the `end` line last.
     """
     hosts = ctx.find_object(Hosts) or Hosts()
+    if repo is not None:
+        ctx.exit(issues.observe(repo, hosts, sys.stdin, sys.stdout))
     try:
         request = _request(read_input(sys.stdin))
     except InputError as e:

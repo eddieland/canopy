@@ -33,6 +33,8 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `accent`, `accent-foreground` | The one accent: active nav item, links, primary buttons, focus, live. |
 | `ring` | Focus outlines (the accent, translucent). |
 | `scrollbar` | Every scrollbar's thumb, on a clear track: `muted-foreground`, translucent. Set once on the root. |
+| `edge` | A panel's and a float's outline: `border` by default, clear where a palette draws none. |
+| `depth-panel`, `-float`, `-action` | The palette's shadows, as `shadow-panel`, `shadow-float`, and `shadow-action`. |
 | `status-running` | A run working. Pulses. |
 | `status-blocked` | A run that asked a question, and anything else waiting on the operator. |
 | `status-stopped` | A run the operator stopped. |
@@ -88,7 +90,7 @@ Rules:
   and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no
   section (the 404) takes the accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the spend page's
-  chart and its legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
+  charts and the legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
   beside a swatch. Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on
   `surface` in both themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
@@ -98,14 +100,40 @@ Rules:
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check it
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
 - **Palettes.** Lavender is light's default and indigo dark's. Each other palette is a rule in `tokens.css` that sets
-  only the neutrals over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. Light has
-  off-white, a warm paper, sage, and the light tones of Solarized, Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the
-  near-colorless neutrals the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of
-  Solarized, Gruvbox, and Monokai. A light
-  canvas is never grey, which only looks dim. Every hue, the accent's included, is the same in all, so a component never
-  knows which it is on; where a scheme's own bases would drop a hue below 4.5:1, the bases move, never the hue. A scheme
-  whose bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts`
-  measures every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
+  the neutrals and the accent over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. A
+  scheme with an accent of its own wears it (Nord's, Solarized's, Monokai's, Rosé Pine Dawn's, and Gruvbox's purple);
+  the others take one that suits the canvas. Light has off-white, a warm paper, sage, and the light tones of Solarized,
+  Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the near-colorless neutrals the 2026-10-19 exploration drew for
+  Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox, and Monokai. A light canvas is never grey,
+  which only looks dim. Every other hue is the same in all, so a component never knows which it is on, and an accent is
+  read through its token, never assumed indigo; where a scheme's own bases would drop a hue below 4.5:1, the bases move,
+  never the hue. A palette's accent is darkened or lightened until it reads as text there, on its own tint, and under
+  `accent-foreground`, and sets `ring` with it. A scheme whose accent would pass for a status wears another of its
+  colors, as Gruvbox wears its purple, not its orange, and a green canvas never takes a green accent. A scheme whose
+  bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts` measures
+  every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
+  A palette sets its character too, beyond color, from a few closed choices, in the same rule, so a component still
+  never knows which it is on: its corners (`--radius`: crisp, the default, or soft), its `edge` (a hairline, or none,
+  where panels stand apart by their lightness alone), its depth (a soft shadow in the canvas's hue, a hard one with
+  no blur, or, on black, where a shadow does nothing, the accent's glow), and its face (`--face`: interface text in
+  Plex Sans, or in Plex Mono, as an editor sets it). Spacing, sizes, and layout never change with a palette, and
+  neither do the status colors; only the mono face reflows text, since it runs wider, so it stays with the few palettes
+  that are an editor's own look: Gruvbox's sides and Monokai. The defaults take the soft shadow, Gruvbox's dark the
+  crisp corners, hard shadow, and mono face of an editor of the nineties, and black no edges, soft corners, and the
+  glow.
+  A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
+  hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
+  or glowing), and the nav's highlight (a tint and a hairline, a solid block with the active item inked in the canvas's
+  color, or a tint with the icon lit). Each form takes the room the default does, so a switch moves nothing; the
+  defaults keep the first of each, Gruvbox's dark the second, and black the third.
+  A palette may tune its section colors too, muted toward a scheme's own set or turned up, but each keeps its hue's
+  family, which says what its page is for: a rose stays a rose, a gold a gold, though a scheme's own shade of it may
+  sit a few degrees round the wheel. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
+  from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage.
+  Every other palette picks from the same choices, so each reads as its own place: Gruvbox's light side as its dark
+  one, Solarized's sides crisp and flat, Monokai crisp and in mono under a neon aurora, Nord's light side soft under a
+  fade through Frost's blues, grey tight under one steel rule, and sage, Rosé Pine Dawn, forest, and plum soft, plum
+  the softest. Off-white lays its panels on the canvas like paper.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
@@ -117,6 +145,7 @@ Rules:
   two sit together on a line. Self-hosted from `@fontsource-variable/ibm-plex-sans` and `@fontsource/ibm-plex-mono`
   (Plex Mono has no variable build); the latin subsets are preloaded, so text never paints in a fallback face. A
   heavier mono weight needs its own import in `src/index.css` and a place in `PRELOAD_FONTS` in `vite.config.ts`.
+  A palette may set interface text in Plex Mono too (Palettes, under Tokens), so no third face is ever loaded.
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
 - `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.
@@ -133,10 +162,17 @@ Rules:
 
 ## Shape and space
 
-- Hairlines: 1px `border` everywhere. No shadows except `shadow-xs` on a pressed segment.
+- Hairlines: 1px `border` everywhere inside a panel. A panel, and what floats over the page, draws its palette's
+  `edge` instead, a hairline but where the palette draws none.
+- Depth is used sparingly, in three places and nowhere else: a faint lift under a panel and a counter
+  (`shadow-panel`), a shadow under what floats over the page, a menu, a card, a tip, a dialog, a toast, the rail's
+  sheet, and the settings' save bar (`shadow-float`), and one under the primary action, the default button
+  (`shadow-action`). Each is the palette's (Palettes, under Tokens), so its form changes with it, and nothing inside
+  a panel casts one but a pressed segment's `shadow-xs`.
 - Radius: `rounded-md` (8px) for panels, buttons, and fields, `rounded-sm` (6px) for chips and nav items, `rounded-xs`
-  (4px) for a mark smaller than a line of text, a checkbox or a slot's square. The scale is in `tokens.css`; no
-  arbitrary radius (`rounded-[4px]`), which `npm run lint` refuses.
+  (4px) for a mark smaller than a line of text, a checkbox or a slot's square, at the default palettes' `--radius`. A
+  palette may set its own, and the scale follows it. The scale is in `tokens.css`; no arbitrary radius
+  (`rounded-[4px]`), which `npm run lint` refuses.
 - The shell: a 3rem header, a 13rem side nav, content capped at `max-w-[112rem]` with `p-6` and `gap-6` between
   blocks.
   The header stays put and only what is under it scrolls (`page-scroll`), so the header spans the window's width
@@ -164,9 +200,9 @@ Rules:
   the ticket's title, the review's reference and ticket, `chore run #N`, or the task's first line, opening the run's
   page; at most four, then `+N more` to the page of
   the ones left out, or the runs page for a mix, so the sticky part fits an 800px window. The
-  spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, on one line, each cost in a
-  small readout after its window's name, so the block takes a line's height (a cost too long to share it puts the 30
-  days under the 24 hours): it is shown
+  spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in two rows: the window's name
+  on the left, its cost right-aligned in a readout, so the figures line up at four digits as at one. The 30 days is
+  the headline, a step larger and medium weight under the 24 hours' `text-xs`, both in `foreground`: it is shown
   nowhere else, but for the lifetime total Sprig's hats and the Ghost's shells are bought with (Fun, below). The
   footer is two lines, the version, a link out to canopy's releases on GitHub, with the width to itself and cut
   short only past a long build's hash, then the guide and Settings as two filled pills alike, `foreground` on
@@ -196,9 +232,11 @@ Rules:
 - Between the header's name and its readouts, the ticker crawls joke headlines (Fun, below).
 - The header carries, after its name, the stream's state (and `mock`), then at its end the loop's pause
   (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
-  `status-failed` when it failed or was abandoned, its summary on hover, linking to its page; before the first, `no
-  tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), and the theme toggle, in three
-  groups with a hairline rule between each: the actions, the readouts, the theme.
+  `status-failed` when it failed or was abandoned, one link to its page, with a hover card of its summary, when it
+  started and how long it took, its decisions, its overseer's cost, and what woke the loop; before the first, `no
+  tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), the budget's readout while a
+  budget is set, the host's readout last among the readouts, and the theme toggle, in three groups with a hairline
+  rule between each: the actions, the readouts, the theme. Every readout that opens a page has a hover card of it.
 - The stream's readout sits beside the name (`StreamReadout`), not with the readouts at the end, so a drop moves
   nothing: its word hugs its text, and only the ticker's window gives way when it changes. Held to one width at the end,
   it left a hole before `live` whenever the loop was up. The word sits in a pill with a dot, as `mock` does in a pill
@@ -238,6 +276,22 @@ Rules:
   runs, and from the click until the tick it asked for starts, which the readout and the logo show as starting
   meanwhile: the loop takes the ask at its wait's next step, after a poll of the sources if one is under way. Like the
   pause it has no `Notice`, since the tick it asked for shows in the readouts, and a failure looks the same.
+- **The budget's readout** (`BudgetReadout`) is the local month's spend against the monthly budget, while one is set:
+  a wallet's icon and the percent spent, `39%`, muted while on budget, in `status-blocked` once the month's pace heads
+  over, and in `status-failed` once it is over, the spend page's word for it and its line (`Headed over: $15.76 of $40
+  (39%), on pace for $63.04.`) as its accessible name, and a hover card of the month: what it spent, its pace, how
+  much of it has gone by, and what the spend is made of. Short of `2xl` the icon stands alone in its color:
+  the ticker needs the room, or a tick's readout widening as the tick starts steps it out. It opens the spend page.
+  It comes with the spend on the stream, which sends it again when a cost or the budget changes.
+- **The host's readout** (`HostReadout`) is the machine the loop runs on, which serves the page: a server's icon and
+  `host ok` in muted readout type, or its worst pressure in two words (`disk low`, `memory low`, `host busy`) in
+  `status-blocked` while worth a look and `status-failed` past what canopy works with, a disk under the tick's
+  free-space floor among it (`src/lib/host.ts` holds the thresholds). Under `lg` the header has no room for the words:
+  the icon stands alone in the pressure's color, as the strip's icons carry their counts, its words its accessible
+  name and the card's. It is a link to the system resources page, in no section, with a hover card over it: the
+  machine's name and system, what is under pressure, the load, the memory, each disk canopy writes to, and the
+  loop's process. It shows nothing until its first read lands. Its read is not on the stream, since none of it is in
+  the journal: it is read every 10 seconds while the tab is visible, as the worktrees are.
 - **The notice to workers** (`NoticeBanner`, `canopy notice`) heads the content column, above every page, only while
   one is in force: a band on a `status-blocked` tint with its border, since every run waits on what the operator said,
   the notice's words through `LinkedText`, until when runs hear it (when and from where on hover), and ghost Edit,
@@ -253,7 +307,8 @@ Rules:
   note, and it leaves once a run fits.
 - **Agent memory** (docs/design §28) shows only while a tier is on, and always says each tier's mode in words, never by
   color alone, so recorded memory is never taken for memory in use. The header's readout, after the latest tick, is
-  `memory: recording` or `memory: in use` in muted readout type, each tier's mode on hover and to a screen reader,
+  `memory: recording` or `memory: in use` in muted readout type, each tier's mode to a screen reader and, with what
+  reads it and the proposals waiting, in a hover card,
   opening the memory page, which is in no section and so reached from there. A tier's **band** heads its panel there and
   on a ticket's page: a chip naming the tier and its mode (the running tone at `use`, plain while recording) and the
   server's sentence on what reads it. A ticket's page reads its notes far less than it decides, so its Memory panel,
@@ -465,22 +520,23 @@ Rules:
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
-- **The aurora**: a 2px hairline along the header's foot, over its border, fading from Attention's rose through Pull
-  requests' violet to Tickets' sky. It is static.
+- **The aurora**: a 2px hairline along the header's foot, over its border, fading through the nav's colors in the
+  nav's order, Attention's rose first and Memory's last. It is static.
 
 ## Fun
 
 canopy should be a little fun to use (PRODUCT.md): the header's ticker, Sprig at the foot of the rail, the empty inbox
 and the leaf a cleared item drops (an approved plan drops one too, and so does a review draft once published, not
-staged), and the lightswitch rave. Fun is ancillary, so this design holds only the rules it all keeps; what each one
-does is written in its code. None of it is journal text.
+staged), the lightswitch rave, and 2048, typed anywhere but a text field. Fun is ancillary, so this design holds only
+the rules it all keeps; what each one does is written in its code. None of it is journal text.
 
 - **Fun never covers data, and never squeezes it.** Each has a place of its own in the layout. Where the window
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
   something; its room stays, so nothing beside it moves. The fit is measured as the layout changes (`useFits` in
-  `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in. Two exceptions, both the
+  `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in. Three exceptions, all the
   operator's call: Sprig may stand over the foot of the rail's spend by 40px rather than step out, offering tips there
-  only when clicked; and the rave covers the whole page, taking no pointer, hidden from a screen reader, not printed.
+  only when clicked; the rave covers the whole page, taking no pointer, hidden from a screen reader, not printed; and
+  2048 opens over the page as a dialog, only when typed, and Escape puts it away.
 - **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`, `rave-dark`) or the accent,
   never a status color, so nothing in it reads as a run's state.
 - **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and counters.
@@ -490,7 +546,8 @@ does is written in its code. None of it is journal text.
   second, well clear of the three that WCAG 2.3.1 counts as harmful.
 - **Settings has one Fun panel**, second to last, below the settings that change how canopy works and above Session:
   an on/off for each, as checkboxes, then each one's details. Everything in it is kept in this browser (Themes, below).
-  The rave is the one without a checkbox: its switch hides in the panel's header.
+  The rave is the one without a checkbox: its switch hides in the panel's header. 2048 is not in the panel at all:
+  nothing of it shows until it is typed.
 
 ## Motion
 
@@ -505,6 +562,8 @@ a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.
 - A page's blocks rise in one after another (`stagger` on the page column), and so do the attention list's rows, the
   Working rows, and a conversation's bubbles. Any other list's rows arrive with their panel, as one block. A row or
   bubble the stream adds later rises in on its own. A bubble pops (`[--enter:pop]`) from the corner nearest its side.
+  A reply's `seen` pops in once (`animate-receipt`) when a tick reads it while the page shows it, never on a page that
+  opens on it already read.
 - Counter values are odometers (`RollingNumber`): each digit rolls to its new value, the units first, and rolls up from
   zero when the counter first shows. The value is in the text once, for screen readers and tests; the digits are
   drawn by CSS.
@@ -517,6 +576,10 @@ a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.
 - Fun moves as its code says, within these rules. A cleared item's fold is the one animation that fills forwards:
   the row is let go once it has played.
 - A toast rises in from below and fades out.
+- What floats over the page fades in, growing a little from where it opens (`animate-float`): a dialog over its
+  fading scrim, a popover, a hover card, or a tooltip from its trigger's side, and fades out quicker. A sheet slides
+  in from its edge. A menu only floats in (`animate-float-in`): it goes at once on a choice, so the focus the choice
+  moves is not left waiting on it.
 - Only `running` runs pulse.
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
@@ -603,7 +666,11 @@ side.
   persona (DESIGN §31), are adjacent rows where the first of them falls (`requestGroups`), with no hairline between
   them: each keeps its own verdict, draft chip, cost, and age, and after the first, the free column says only
   `as skeptic`, at any width, in place of the PR and commit it shares, its ticket's cell empty. Rows, not a nested
-  card: the request is one entry read down its personas.
+  card: the request is one entry read down its personas. A run's model, in its row as in its Run panel
+  (`ModelsField`), takes no status color: a run the model asked for served none of reads `asked Y ≠ X`, asked first,
+  the served model in `foreground`, and one it served beside another marks only the other; `sameModel` takes `X@v`
+  asked and `X` served alike. Until its session is read the row says `model unread` (`UNREAD`), muted, why in its tip,
+  and a run with no session names no model.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
   around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
@@ -624,6 +691,14 @@ side.
   for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
   output that was never recorded is `none`; a PR canopy only reviews has as its ticket `none: canopy only reviews it`
   (`NO_TICKET` in `src/lib/words.ts`). A list with no rows is an `Empty`, not a `None`.
+- **A model** (`src/lib/models.ts`) is named one way on every page: its id, `provider/model@variant`, in monospace, a
+  variant after `@` (`withVariant`), never `at high`. A dense list, a runs list or a cost split, drops the provider
+  (`modelNames`), unless two of its models would then read alike, and gives the whole id in the tip; a picker, a field,
+  or a table of models names it whole, as a gateway (`github-copilot/`) can serve its maker's models under the same
+  name. No model is muted sans, never monospace, since it is no id: `runtime default` (`RUNTIME_DEFAULT`) where nothing
+  sets one; `unread` (`UNREAD`) for a run whose session canopy has not read, why in its tip; and `None` with why for one
+  read that named none. A model takes no status color, but one the runtime no longer lists, `status-failed`, since it
+  refuses the next run.
 - **`Input`**, **`Textarea`**, and **`SearchField`** (`src/components/input.tsx`): every text field, on
   `surface-raised` with a hairline and the accent's focus ring. An `Input` is one height everywhere, `h-9`, a form's,
   beside its default buttons; a number is an `Input` too. A field to search or filter with is a `SearchField`: a
@@ -682,6 +757,15 @@ Patterns names what is its own.
 - **A table holds the same numbers** wherever the chart is `aria-hidden`, for a screen reader and for a value too small
   to see.
 
+A measure over time (`TrendChart`, `src/lib/trend.ts`, the system resources page's graphs) is a line, not bars: 2px
+in the accent with round joins, the area under it the accent at 10%, from zero on a 1px `border` baseline, broken where
+no reading was taken rather than bridged. Its top is a capacity where the measure has one (all the memory, a disk's
+size) and the peak with `HEADROOM` where it has none. A threshold it is read against (the cores, the tick's floor) is
+a 1px `muted-foreground` line at 40% with its name at its right end, drawn only while it is under the top. Its label and
+its latest value head it, `now · peak` after the value; the pointer snaps a crosshair and an 8px accent dot ringed in
+`surface` to the nearest reading, whose value and time stand in the latest's place. The plot is `aria-hidden`, and a
+screen reader hears its latest value, peak, and low in words in place of a table.
+
 The context chart differs where it must: its bars are its controls, each named for its call on hover and to a screen
 reader, so no table repeats them; a call's added part is 1px at least, since it is one of two segments and never a
 sliver beside four others; and its axis names short call numbers without measuring, every one up to twelve.
@@ -722,6 +806,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   already, and a stop inside it would be a control in a control. What the operator acts on is in the text, never only
   in a tip (the `canopy grant` command under its button). A `title` that explains rather than informs, a button's
   hint or what a column counts, stays a `title`.
+- **A link's page at a glance is a hover card** (`HoverCard` in `src/components/ui/hover-card.tsx`): more than a tip
+  holds, a few rows of what the page it opens shows, as each header readout shows its page (`ReadoutCard`). It opens
+  on hover after half a second, as a tip does, and on the keyboard's focus, and stays while the pointer moves onto
+  it; a tap follows the link. Like a tip it is on `surface` with its edge and floating shadow and no motion, its rows
+  `text-xs` under `panel-label`s. Nothing in it is found only there: it is a preview of the page, never a place to act.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): every list
   in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
   PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The
@@ -888,7 +977,20 @@ sliver beside four others; and its axis names short call numbers without measuri
   and what reported no cost while no run ended. The window is a segmented control (`ToggleGroup`) in the totals' panel
   header, kept in `?days=`. By model and By tool sum each model's or tool's rows over every kind under `all`; the
   runs page's kind filter in each one's header keeps one kind's (`?model_kind=`, `?tool_kind=`), and offers only the
-  kinds the window has rows of. A window switch keeps both filters.
+  kinds the window has rows of. A window switch keeps both filters. By model's ids link the runs page's runs on the
+  model (`?model=`), with the kind shown (`?kind=`, `RUNS_KIND`: a plan run is a worker run there); one the runs page
+  lists no run of by model, the overseer's alone, is plain, why on hover. The runs page's model filter is always
+  offered, a picker of one (`ModelFilter`, below).
+- **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
+  bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
+  the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
+  bar's rate over it, since there are six at most and the eye compares neighbours. A week whose runs recorded no cache
+  read is a stub with a dash. A week whose runs used a runtime version or definitions snapshot the week before's did
+  not has a 1px `muted-foreground` rule down the gap before its bar, and a line under the chart names what it used, in
+  `canopy spend`'s words, so a screen reader hears it beside the table of each week's runs, median first call, and
+  rate. The axis names each week's Monday. The kind filter has no `all`, since kinds' prefixes do not sum
+  (`?first_kind=`, the first kind with a week by default), and the chips over the chart pick the kind's runs, a
+  chore's, or a model's (`?first_series=`); a kind switch goes back to all its runs.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.
@@ -959,7 +1061,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   a question's head as a ticket's, then an outline `Answer on task:N` (`Open` for the other), a router link to the
   task's page, which holds its question and its answer, never the `canopy` commands its detail names. A ticket's run
   refused its model (`model_missing`, `model_list_failed`): the ticket's models (`TicketModels`), as its page shows
-  them, the runtime's list read as the item opens rather than when a menu does, so the model it no longer lists is
+  them, the runtime's list read fresh from the runtime as the item opens, so the model it no longer lists is
   marked already. An item about nothing the page shows whose detail names a `canopy` command to run (`repo_missing`),
   or the overseer's or a chore's run refused its model, `canopy models`: the command, `Copyable`, and nothing to
   answer. A broken run's item shows any limit it is stuck at (below) under its run, as
@@ -984,29 +1086,40 @@ sliver beside four others; and its axis names short call numbers without measuri
   dropping its own.
 - **The reply form is always open** (`ReplyForm`), on every ticket and every chore, never folded under a `Disclosure`: a
   note for the next worker is as likely as an answer to a question, and a click to reach the box hides where the
-  operator writes. Its label names the message it answers while a question waits, and its placeholder speaks of an
-  untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree. On a
+  operator writes. Its label names the message it answers while a question waits, and on a ticket the form then
+  wears the open question's tint and hairline, its label in `status-blocked`, so the question and the box answering it
+  read as a pair (a task's page draws the same band around it). Its placeholder speaks of an untrusted review only
+  while one waits. Focused, the box takes the accent's 8% tint, the operator's side. Its count of characters shows
+  only past 80% of the bound. It is the form's rule, so the ticket's page and its attention item agree. On a
   public ticket it says what a reply is for and where it goes, `For its next worker, as an instruction. It stays in
   canopy, never on the ticket.`, as the ticket's `public` chip says on hover and to a screen reader, where its comments
   stay on the tracker.
   A ticket's page description is its state, not what public or private means: the running run, a question waiting,
   its plan's status, and when it was last active, `run:41 running · plan waiting on you · active 38m ago`
   (`ticketDescription`).
-- **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
-  wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, a dashed
-  hairline with muted text for canopy's note on what a tick did, and the accent's tint for the operator's own words,
-  which sit on the right. A bubble's corner nearest its side is square.
+- **A conversation** is a column of messages, each a head line over a bubble. The head leads with who, in sans
+  `font-medium` `foreground`, then what (kind, run, what it answers, how) and its chips in muted mono; its id and age
+  are a readout at the end away from the bubble's square corner. A tracker comment's head is its author `on the
+  tracker`, the comment's id and when it was written in its tip. A message that carries on the one before it (the same
+  speaker, kind, run, and channel, within five minutes, answering nothing) keeps only its chips and readout, and sits
+  closer under it. A bubble is as wide as its words, up to 42rem and never past 85% of the panel, so the other side
+  keeps a gutter at any width:
+  `surface-raised` for a worker's report or a question answered, a hairline on `surface` for a tracker comment, quoted
+  since it is data from outside the loop, the `status-blocked` tint at 8% with a `status-blocked/40` hairline for the
+  question still open, the one amber bubble, a dashed hairline with muted text for canopy's note on what a tick did,
+  and the accent's tint at 18% for the operator's own words, which sit on the right, their head line mirrored. A
+  bubble's corner nearest its side is square.
   The question still open carries a `waiting on you` chip in `status-blocked`. A forgotten ticket's conversation
   (`TicketThread`) shows what came after the latest forget. At the oldest end, each forget heads the attempt it ended:
   a muted line saying when and how, with the branch and PRs it dropped under it, and that attempt's messages folded
   under `Show N earlier messages`, a `Disclosure`, and dimmed, since the loop no longer reads them. Only the latest
   says the loop reads what came after. The panel's count is of the messages after the latest forget.
-  Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
+  Bodies are rich text (below), on a 24px line (`leading-6`): always text, but for their URLs. An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
-  (`src/lib/acknowledged.ts`), and a plain `seen` chip once one has, so a reply never goes unacknowledged; an
-  `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the next tick, and so
-  does a `plan_review` item whose plan waits on the operator no more (approved, skipped, or changes asked); Waiting
-  on you counts neither. While a run works the ticket, the conversation ends on it (starts on
+  (`src/lib/acknowledged.ts`), and a `seen` chip with a check, in the accent, once one has, so a reply never goes
+  unacknowledged; an `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the
+  next tick, and so does a `plan_review` item whose plan waits on the operator no more (approved, skipped, or changes
+  asked); Waiting on you counts neither. While a run works the ticket, the conversation ends on it (starts on
   it, flipped newest first), on the worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`,
   `working now` in `status-running`, its `run:N` link, its kind, its latest tool call (`RunDoing`, below), its cost
   so far, and for how long. It comes from the runs on the stream, so it rises in when the run starts, follows what it
@@ -1015,6 +1128,26 @@ sliver beside four others; and its axis names short call numbers without measuri
   in `status-running`, what the call did muted (a shell call's command, else the runtime's title; cut to fit, whole on
   hover), and how long ago. A running run's row has it where an ended run's summary goes, `WorkingNow` after the
   kind, and the run's page as its `last call` field. It is agent output, rendered as text.
+- **A running agent's progress** (`RunProgress`, `ProgressPanel`, `RunProgressLine`, `ProgressMeter`,
+  `src/components/run-progress.tsx`, DESIGN §41): the agent's own account of where its work stands, which the operator
+  reads to know what a run is up to now, so it leads wherever it shows. Whole, it is the summary in `font-medium`, a
+  meter of its steps if it has any (a segment each, 2px apart, on the bare `border` track: only done fills its
+  segment, in `status-done`, so the filled ones are the `N` beside it; working fills half in `status-running`,
+  wiping in and striped as a barber pole whose stripes drift along it while the run runs, blocked
+  or stuck half in `muted-foreground`; to do is the track) with `N of M done · stage S`, its question, then its work
+  as one checklist, each entry led by a 12px mark: a `status-done` check, the pulsing running dot, an hourglass, a
+  dash for skipped, an empty ring to do. The steps are the list when it has any, `now` under the working one, and what
+  it wrote is done and next folds under a disclosure; without steps, done (each with its proof in muted mono), now,
+  and next are the list. What it works around follows, after an hourglass. Its question is a box on
+  `status-blocked/8` with a `status-blocked/40` border while it waits (muted on `surface-raised` once answered or
+  ended): `asks you`, the question, and each option a full-width row that answers with its letter on a click, its
+  letter in a small square, `recommended · working toward it` after the one the agent works toward. Amber means that
+  question alone: a stale update is a clock and `stale` in `foreground`, a fact about the record, never a request.
+  When it was last updated, in time and tool calls, is the head line, or the right of the panel's header. A run's and
+  a review's page lead with it as a `Progress` panel (`Last progress` once ended), a ticket's `WorkingNow` shows it as a
+  bubble on the worker's side, a running run's row as one line (a 4rem meter and `N/M` when it has steps, what it does
+  now, `asks you`, when), and the rail's working row of a worker run as its meter under the phase line, when it has
+  steps. Agent text, as text.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub
@@ -1124,13 +1257,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   until turned on, across reloads (`src/lib/pretty-output.ts`), as a list keeps its order; a run's keeps it for the
   page alone.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
-  summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
-  `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` (at `text-xs`) and
-  **strong** inline.
+  summary, a decision's rationale, and a conversation's message: line breaks kept, `-` and `1.` lists (nested by
+  indent), `#` headings as a `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and
+  `code` (at `text-xs`) and **strong** inline.
   It reads nothing else: other markup, a labelled link's included, stays characters. Every piece is React text, and
   its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
-  A conversation's bubbles keep their own `whitespace-pre-wrap`.
+  A conversation's bubbles lay out their bodies with it too, their line breaks kept, since the operator and the
+  workers break lines on purpose; on a raised bubble its code sits on `background`.
 - **The guide** (`/guide/PAGE`, `src/lib/guide.ts`, `GuideText`) is the operator's documentation, a page each, as
   Markdown in `src/guide/` (docs/design/CONVERSATIONS.md §22), laid out as a documentation site rather than in panels.
   On the left, the pages by group (`SOURCES`), each group a heading over its pages on a hairline, the page shown in
@@ -1402,7 +1536,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   chosen, picking one keeps the list open, `every repository` heads it and clears them, and what was chosen as it
   opened is listed first, so nothing moves under the pointer. It is kept in `?repo=` as names joined by commas
   (`src/lib/repo-filter.ts`), replacing the history entry as a filter field does, and a row shows when it is in any of
-  them. In a form (`RepoSelect`) it takes one, and picking it closes the list.
+  them. In a form (`RepoSelect`) it takes one, and picking it closes the list. The runs page's filter by model
+  (`ModelFilter`, `?model=`) is the same picker of one, `every model` heading it, each id whole, as a gateway can list
+  dozens; the button, list, and item are `src/components/picker.tsx`, which both build on.
 - **A config page** (`ConfigForm`, `/settings/limits`, which Settings links to from a one-line panel so Settings stays
   short): the keys in panels by what they govern (`CONFIG_GROUPS` in `src/lib/config-settings.ts`), two to a row on a
   wide window and Trust across the whole row, a key no panel names in an `Other` panel. A row is the key in words over
@@ -1440,20 +1576,28 @@ sliver beside four others; and its axis names short call numbers without measuri
   A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
   to the config: `Clear the override`, or `Use the default`.
 - **A choice of model** (`src/components/ticket-models.tsx`) is the same menu over the models the runtime lists, read
-  when it opens, in a row per agent laid out as the persona rows are: `worker model`, then the button, then where it
-  comes from in muted `text-xs`, beside the persona rows once the Work panel is `@3xl`, so each agent's model is level
-  with its persona and the conversation under the panel stays in reach, and under them in a narrower one. A model's id
-  is monospace; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
+  as a row naming a model shows, so one gone is marked before the menu opens, else when it opens: the button, then
+  where it comes from in muted `text-xs`. On a ticket's page it shares one grid with
+  the persona (`src/components/ticket-agents.tsx`): a row per agent, its name, its persona, then its model, under a
+  muted `persona` and `model` heading, so the conversation under the panel stays in reach; a Work panel narrower than
+  `@lg` puts each model under its persona. The persona's column is as wide as its widest, up to 45%, and the model
+  takes the rest. A model's id is monospace, and a long one ends in an ellipsis, on the button and in the list, whole
+  on hover; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
   `last served` names the model that served the agent's latest read run when it is not the button's. A variant on the
-  button follows the model's id, muted. Each model's variants are items of their own under it, indented, each
-  `@variant` to the eye and named whole for a screen reader. A choice saved is confirmed in its row, a `saved` in
-  `status-done`, so nothing below moves, until the ticket's models change after it; one that sets aside config's
-  variant says so after it in muted text. The menu offers only what the server would take: the model chosen now, when
-  it is not one, is a disabled item with why in muted text after it (`no longer listed; its next run is refused`,
+  button follows the model's id, muted. Each model's variants are items of their own under it, indented, in the
+  runtime's order, each `@variant` to the eye and named whole for a screen reader; a model with variants is marked a
+  muted `(default)`. The field finds each item by its own id alone, and sets the pinned item aside while it holds
+  anything, so Enter takes the first id found; a variant whose model is hidden shows its model's id before it, muted.
+  `Clear the override` is a ghost button under the list, out of its scroll. A choice saved is confirmed in its row, a
+  `saved`, or `cleared` for a clear, in `status-done` in place of where the model comes from, so nothing below moves,
+  until the ticket's models change after it; one that sets aside config's variant says so after it in muted text. The
+  menu offers only what the server would take: the model chosen now, when it is not one, is a disabled item with why
+  under it, out of its disabled look, in `status-failed` `text-xs` (`no longer listed; its next run is refused`,
   `variant no longer listed; its next run is refused`), and a model or variant gone from the list marks its trigger in
-  `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
-  `Read again` item. While a choice saves, its trigger names it with a trailing `…` and is `aria-busy`; a refusal's
-  `Notice` names the agent before its guard.
+  `status-failed`, as its attention item's chip is. A list that cannot be read says why in `status-failed`, in a
+  read's words (`whyReadFailed`), offers no model, and has a `Read again` item. While a choice saves, its trigger
+  names it with a trailing `…` and is `aria-busy` and `aria-disabled`, never `disabled`, so the focus the list hands
+  back stays on it; a refusal's `Notice` is in its agent's row.
 - **Attachments** (`src/components/attachments.tsx`, DESIGN §22) are a section with a `panel-label` heading, under the
   verbs at the foot of a ticket's or a task's conversation, beside the reply that says what to do with them: each file a
   row of its name in monospace, its size muted, and a ghost `icon-xs` ✕ named `Remove NAME`; an outline `xs` **Attach a
@@ -1687,6 +1831,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   the ticket stands now in its state's color (waiting on you, its plan waiting, its run) or its phase muted, and for a
   ticket viewed, how long ago. What was viewed, a ticket's page or its plan's, is this browser's alone: localStorage
   (`src/lib/recent-tickets.ts`), never the journal, and a ticket the journal no longer holds leaves it.
+- **The review dialog** (`ReviewDialog`, `src/components/shell/review-dialog.tsx`) asks for a review from anywhere:
+  `R`, with no modifier, from anywhere but a text field or the plan editor (the rule `/` follows), or a GitHub PR's URL
+  pasted outside a field, which it fills in, opens it; on a PR's page, `R` fills in that PR's. It never opens over
+  another dialog. It is a `Dialog` placed as the jump palette is, titled `Review a PR` in a panel's header, holding the
+  reviews page's form (`ReviewRequestForm`), one component for both so they cannot drift. The focus starts in the URL
+  field, or in the notes once the URL is filled in. A request that goes through closes it and opens the PR's page; a
+  refusal keeps it open, its `Notice` naming the guard. What is written outlives closing it, kept in the tab's
+  `sessionStorage` (`src/lib/review-request-draft.ts`) until a request goes through or the operator signs out.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.
   Signed out by a 401 to an action, the card says under its heading, in `status-failed`, that the action was not sent
   (`unsentQuery`). A reply being written outlives the page that held it: the reply form keeps what is written, with its

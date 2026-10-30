@@ -91,12 +91,20 @@ def _check_name(value: str) -> str:
 
 
 def _impact_path(value: str) -> str:
-    # Compared with the paths git names, which are from the root, by whole components (`canopy.reviews.impact`).
+    # Compared with the paths git names, which are from the root, by whole components (`canopy.reviews.impact`). A part
+    # may hold `*` and `?`, or be `**`. `[`, `]`, and `\` are refused, so no entry is read as a class or an escape its
+    # author did not mean, or meant one this does not read.
     parts = value.removesuffix("/").split("/")
-    if not value.isprintable() or value.startswith("/") or any(p in {"", ".", ".."} for p in parts):
+    if (
+        not value.isprintable()
+        or value.startswith("/")
+        or any(c in value for c in "[]\\")
+        or any(p in {"", ".", ".."} or ("**" in p and p != "**") for p in parts)
+    ):
         raise ValueError(
-            "must be a path from the repository's root, such as '.agents/' or 'docs/TRUST_MODEL.md', with no leading "
-            "'/', empty part, '.', or '..'",
+            "must be a path from the repository's root, such as '.agents/' or 'docs/TRUST_MODEL.md', or a pattern, "
+            "such as '**/OWNERS' or 'services/*/migrations/': no leading '/', empty part, '.', or '..'; '*' and '?' "
+            "within a part, '**' only as a whole part, and no '[', ']', or '\\'",
         )
     return value
 
@@ -155,8 +163,9 @@ class Repo:
     branch_url: str = ""
     #: The role of each check its map names, by exact name: every other check is CI (DESIGN §30).
     checks: Mapping[str, CheckRole] = field(default_factory=dict[str, CheckRole])
-    #: The paths from the root, each covering itself and everything under it, whose change makes a review of this
-    #: repository `high` impact. They add to `.github/workflows/`, which covers every repository (DESIGN §21).
+    #: The paths or patterns from the root, each covering what it matches and everything under it, whose change makes
+    #: a review of this repository `high` impact. They add to `.github/workflows/`, which covers every repository
+    #: (DESIGN §21).
     high_impact_paths: Sequence[str] = ()
 
     @property

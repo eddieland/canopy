@@ -6,6 +6,7 @@ switches.
 
 import dataclasses
 import json
+import shutil
 import sqlite3
 from pathlib import Path
 from unittest import mock
@@ -21,16 +22,19 @@ from canopy.runs import reconcile
 from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import (
     BRANCH,
-    LABEL,
     InlineRunner,
     commit_and_push,
+    in_run,
     in_tick,
+    overseer_calls,
     present,
     running_run,
     tick_starts,
+    tracker_holds,
     worker_does,
 )
 from tests.canopy.helpers import context as loop_context
+from tests.canopy.scenario_helpers import dispatches
 from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv, git, user_toml
 
@@ -41,10 +45,6 @@ def use(canopy_env: CanopyEnv, backend: str, *, slots: str = "") -> None:
     canopy_env.write_user(user_toml() + f'\n[pools]\nbackend = "{backend}"\n' + declared)
 
 
-def implement(repo: str) -> list[str]:
-    return ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "implement", "--repo", repo]
-
-
 def context(ws: Ws, canopy_env: CanopyEnv, conn: sqlite3.Connection) -> Context:
     cfg = config.load(ws.root, canopy_env.user_file)
     return Context(config=cfg, conn=conn, runner=procs.SubprocessRunner(), ws=workspace.load(ws.root))
@@ -53,6 +53,19 @@ def context(ws: Ws, canopy_env: CanopyEnv, conn: sqlite3.Connection) -> Context:
 def fake_pool(treehouse_state: Path, ws: Ws, name: str) -> list[dict[str, object]]:
     found: list[dict[str, object]] = json.loads(treehouse_state.read_text())["pools"][str(ws.clone(name))]["slots"]
     return found
+
+
+def calls(treehouse_state: Path, verb: str) -> list[list[str]]:
+    """The fake treehouse's invocations of `verb`, each its argv."""
+    made: list[list[str]] = json.loads(treehouse_state.read_text())["calls"]
+    return [c for c in made if c[0] == verb]
+
+
+def unmerged(treehouse_state: Path, paths: list[str]) -> None:
+    """Have the fake treehouse's `destroy` keep the slots at `paths` as unmerged."""
+    state = json.loads(treehouse_state.read_text())
+    state["unmerged"] = paths
+    treehouse_state.write_text(json.dumps(state))
 
 
 def canopy_rows(conn: sqlite3.Connection) -> list[tuple[str, str, str | None]]:
@@ -88,8 +101,9 @@ def test_under_canopy_a_run_leases_from_canopy_s_pool_and_its_slot_goes_back_the
     use(canopy_env, "canopy")
     conn = ws.journal()
     runner = InlineRunner()
+    tracker_holds(conn)
     with worker_does(*commit_and_push(BRANCH)), in_tick(conn) as tick_id:
-        assert main(implement("api"), runner=runner) == 0
+        assert not overseer_calls(dispatches(repo="api"), runner=runner).error
         tick_starts(runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         [slot] = db.run_slots(conn, 1)
@@ -114,8 +128,9 @@ def test_a_lease_goes_back_to_the_pool_that_made_it_after_a_switch(
     seed_pools(ws, treehouse_state)
     conn = ws.journal()
     runner = InlineRunner()
+    tracker_holds(conn)
     with worker_does(*commit_and_push(BRANCH)), in_tick(conn) as tick_id:
-        assert main(implement("api"), runner=runner) == 0
+        assert not overseer_calls(dispatches(repo="api"), runner=runner).error
         tick_starts(runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         [slot] = db.run_slots(conn, 1)
@@ -417,21 +432,135 @@ def test_release_frees_a_quarantined_slot_of_canopy_s_pool(
     assert context(ws, canopy_env, conn).pool("api").lease("PROJ-3").path == path
 
 
-def test_release_refuses_a_slot_no_failed_seeding_holds(
+def held_by_a_run(conn: sqlite3.Connection, lease: pools.Lease, key: str, *, pool_: PoolKind) -> int:
+    """Record a running run of `key` that holds `lease`, as a dispatch records one, and return its id."""
+    tick_id = db.start_tick(conn, dry_run=False)
+    db.touch_ticket(conn, key, "repo")
+    slot = db.RunSlot("api", lease.path, lease.lease_id, lease.lease_holder, "main", pool_)
+    run_id = db.insert_run(
+        conn,
+        tick_id=tick_id,
+        key=key,
+        kind="implement",
+        branch=f"agent/{key}-work",
+        slots=[slot],
+        runs_dir=conn_dir(conn) / "runs",
+    )
+    db.finish_tick(conn, tick_id, TickStatus.OK, "test")
+    return run_id
+
+
+def conn_dir(conn: sqlite3.Connection) -> Path:
+    [(path,)] = conn.execute("SELECT file FROM pragma_database_list WHERE name = 'main'").fetchall()
+    return Path(path).parent
+
+
+def test_release_refuses_a_slot_something_running_holds_or_nothing_does(
     ws: Ws,
     canopy_env: CanopyEnv,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     use(canopy_env, "canopy")
     conn = ws.journal()
-    lease = context(ws, canopy_env, conn).pool("api").lease("PROJ-1")
+    ours = context(ws, canopy_env, conn).pool("api")
+    lease = ours.lease("PROJ-1")
+    run_id = held_by_a_run(conn, lease, "PROJ-1", pool_=PoolKind.CANOPY)
     assert main(["workspace", "release", "api", "1"]) == 1
-    assert "slot 1 is leased, held by canopy:PROJ-1, not quarantined" in capsys.readouterr().err
+    assert f"slot 1 is held by run:{run_id} of PROJ-1, still running" in capsys.readouterr().err
     assert canopy_rows(conn) == [("api", str(lease.path), "canopy:PROJ-1")]
+    idle = ours.lease("PROJ-2")
+    ours.return_slot(idle.path, lease_id=idle.lease_id, lease_holder=idle.lease_holder)
     assert main(["workspace", "release", "api", "2"]) == 1
-    assert "api's pool has no slot 2" in capsys.readouterr().err
+    assert "slot 2 is available, and nothing holds it; nothing released" in capsys.readouterr().err
+    assert main(["workspace", "release", "api", "3"]) == 1
+    assert "api's pool has no slot 3" in capsys.readouterr().err
     assert main(["workspace", "release", "elsewhere", "1"]) == 1
     assert "the map lists no repository elsewhere" in capsys.readouterr().err
+
+
+def test_release_returns_a_canopy_lease_no_running_run_holds(
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    use(canopy_env, "canopy")
+    conn = ws.journal()
+    # A lease whose run is no longer running, as reconcile finds one: it would return it at the next tick.
+    lease = context(ws, canopy_env, conn).pool("api").lease("PROJ-9")
+    (lease.path / "stray.txt").write_text("left behind\n")
+    assert main(["workspace", "release", "api", str(lease.path)]) == 0
+    assert capsys.readouterr().out == (
+        f"api: returned slot 1 ({lease.path}), whose lease canopy:PROJ-9 no running run held\n"
+    )
+    assert canopy_rows(conn) == [("api", str(lease.path), None)]
+    assert not (lease.path / "stray.txt").exists()
+
+
+def test_release_refuses_inside_one_of_canopy_s_runs(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
+    for command in (["release", "api", "1"], ["remove-slot", "api", "1"]):
+        with in_run(7):
+            assert main(["workspace", *command]) == 1
+        assert f"{command[0]} refused (inside_run)" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("holder", "said"),
+    [
+        (pools.SYNC_HOLDER, "a sync that did not finish; `canopy workspace sync` returns it"),
+        ("someone", "is held by someone, which is not canopy's"),
+    ],
+)
+def test_release_leaves_a_lease_that_is_not_a_run_s(
+    ws: Ws,
+    treehouse_state: Path,
+    holder: str,
+    said: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    slot = ws.root / ".treehouse" / "api-fake" / "1" / "api"
+    held = {"name": "1", "path": str(slot), "status": "leased", "lease_id": "id-1", "lease_holder": holder}
+    treehouse_state.write_text(json.dumps({"pools": {str(ws.clone("api")): {"slots": [held]}}}))
+    assert main(["workspace", "release", "api", "1"]) == 1
+    assert said in capsys.readouterr().err
+    assert not calls(treehouse_state, "return")
+
+
+def test_under_treehouse_release_returns_a_stale_lease_through_treehouse(
+    ws: Ws,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    slot = ws.root / ".treehouse" / "api-fake" / "1" / "api"
+    slot.mkdir(parents=True)
+    held = {"name": "1", "path": str(slot), "status": "leased", "lease_id": "id-1", "lease_holder": "canopy:PROJ-9"}
+    treehouse_state.write_text(json.dumps({"pools": {str(ws.clone("api")): {"slots": [held]}}}))
+    assert main(["workspace", "release", "api", "1"]) == 0
+    assert "api: returned slot 1" in capsys.readouterr().out
+    returns = calls(treehouse_state, "return")
+    assert returns == [["return", "--force", "--if-lease-id", "id-1", "--if-lease-holder", "canopy:PROJ-9", str(slot)]]
+
+
+def test_after_a_switch_release_finds_the_slot_in_the_other_pool(
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    use(canopy_env, "canopy")
+    slot = ws.root / ".treehouse" / "api-fake" / "1" / "api"
+    slot.mkdir(parents=True)
+    held = {"name": "1", "path": str(slot), "status": "leased", "lease_id": "", "lease_holder": pools.QUARANTINED}
+    treehouse_state.write_text(json.dumps({"pools": {str(ws.clone("api")): {"slots": [held]}}}))
+    conn = ws.journal()
+    ours = context(ws, canopy_env, conn).pool("api")
+    lease = ours.lease("PROJ-1")
+    held_by_a_run(conn, lease, "PROJ-1", pool_=PoolKind.CANOPY)
+    # Both pools have a slot 1, so its number names neither.
+    assert main(["workspace", "release", "api", "1"]) == 1
+    assert f"name it by its path, {lease.path} or {slot}" in capsys.readouterr().err
+    assert main(["workspace", "release", "api", str(slot)]) == 0
+    assert capsys.readouterr().out == f"api: released slot 1 ({slot})\n"
+    assert [s["status"] for s in fake_pool(treehouse_state, ws, "api")] == ["available"]
 
 
 def test_under_treehouse_release_frees_the_slot_through_treehouse(
@@ -448,3 +577,144 @@ def test_under_treehouse_release_frees_the_slot_through_treehouse(
     assert [s["status"] for s in fake_pool(treehouse_state, ws, "api")] == ["available"]
     returns = [c for c in json.loads(treehouse_state.read_text())["calls"] if c[0] == "return"]
     assert returns == [["return", "--force", "--if-lease-holder", pools.QUARANTINED, str(slot)]]
+
+
+# Listing a pool's slots, with `canopy workspace slots`
+
+
+def test_slots_lists_each_slot_with_what_holds_it(
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    use(canopy_env, "canopy", slots="api = 3")
+    conn = ws.journal()
+    ours = context(ws, canopy_env, conn).pool("api")
+    first = ours.lease("PROJ-1")
+    run_id = held_by_a_run(conn, first, "PROJ-1", pool_=PoolKind.CANOPY)
+    stale = ours.lease("PROJ-9")
+    quarantined_path = quarantined(ws, canopy_env, conn, tmp_path)
+    assert main(["workspace", "slots", "api"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    leased = {r["path"]: r["leased_at"] for r in conn.execute("SELECT path, leased_at FROM slots")}
+    stale_note = (
+        "      no running run holds this lease; `canopy workspace release api 2` returns it now, as the next tick would"
+    )
+    quarantine_note = (
+        "      a failed seeding holds it, counted as busy: remove the file seeding collided with, then "
+        "`canopy workspace release api 3`"
+    )
+    assert out == [
+        "api: canopy's pool, 3 slots of 3 declared",
+        f"  1  leased  canopy:PROJ-1 (run:{run_id} of PROJ-1), since {leased[str(first.path)]}  pools/api/1/api",
+        f"  2  leased  canopy:PROJ-9, since {leased[str(stale.path)]}  pools/api/2/api",
+        stale_note,
+        f"  3  leased  {pools.QUARANTINED}, since {leased[str(quarantined_path)]}  pools/api/3/api",
+        quarantine_note,
+    ]
+    assert quarantined_path == ws.root / "pools" / "api" / "3" / "api"
+    assert main(["workspace", "slots", "--json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert [(p["repo"], p["pool"], p["backend"], p["declared"]) for p in report["pools"]] == [
+        ("api", "canopy", True, 3),
+        ("web", "canopy", True, None),
+    ]
+    [one, two, _] = report["pools"][0]["slots"]
+    assert (one["held_by"], one["note"], one["base"], one["seeded"]) == (f"run:{run_id} of PROJ-1", None, "", [])
+    assert (two["held_by"], two["lease_holder"], two["lease_id"]) == (None, "canopy:PROJ-9", stale.lease_id)
+
+
+def test_slots_lists_the_other_pool_while_it_has_slots(
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    treehouse_worktree(ws, treehouse_state, "api")
+    use(canopy_env, "canopy")
+    ws.journal()
+    assert main(["workspace", "slots", "api"]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        "api: canopy's pool, 0 slots",
+        "api: treehouse's pool, 1 slot; pools.backend names the other, so this one only takes back its leases",
+        "  1  available  .treehouse/api-fake/1/api",
+    ]
+
+
+def test_slots_says_which_pools_could_not_be_read_and_exits_1(
+    ws: Ws,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    treehouse_state.write_text("not json")
+    shutil.rmtree(ws.clone("web"))
+    assert main(["workspace", "slots"]) == 1
+    printed = capsys.readouterr()
+    lines = printed.out.splitlines()
+    assert lines[0].startswith("api: treehouse's pool: treehouse status exited 1")
+    assert lines[-1] == "web: treehouse's pool: no clone; run `canopy workspace sync`"
+    assert "2 of 2 pools could not be read" in printed.err
+    assert main(["workspace", "slots", "elsewhere"]) == 1
+    assert "the map lists no repository elsewhere" in capsys.readouterr().err
+
+
+# Removing one slot, with `canopy workspace remove-slot`
+
+
+def test_remove_slot_removes_an_idle_slot_and_keeps_a_leased_one(
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    use(canopy_env, "canopy")
+    conn = ws.journal()
+    ours = context(ws, canopy_env, conn).pool("api")
+    leased = ours.lease("PROJ-1")
+    idle = ours.lease("PROJ-2")
+    ours.return_slot(idle.path, lease_id=idle.lease_id, lease_holder=idle.lease_holder)
+    assert main(["workspace", "remove-slot", "api", "1"]) == 1
+    assert "api's pool kept slot 1: leased by canopy:PROJ-1" in capsys.readouterr().err
+    assert main(["workspace", "remove-slot", "api", "2"]) == 0
+    assert capsys.readouterr().out == f"api: removed slot 2 ({idle.path})\n"
+    assert not idle.path.parent.exists()
+    assert canopy_rows(conn) == [("api", str(leased.path), "canopy:PROJ-1")]
+
+
+def test_remove_slot_forgets_a_slot_whose_directory_is_gone(
+    ws: Ws,
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    use(canopy_env, "canopy")
+    conn = ws.journal()
+    ours = context(ws, canopy_env, conn).pool("api")
+    lease = ours.lease("PROJ-1")
+    ours.return_slot(lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
+    shutil.rmtree(lease.path.parent)
+    assert main(["workspace", "slots", "api"]) == 0
+    assert capsys.readouterr().out.splitlines()[1:] == [
+        "  1  damaged  pools/api/1/api",
+        "      its directory is gone; `canopy workspace remove-slot api 1` forgets it",
+    ]
+    assert main(["workspace", "remove-slot", "api", "1"]) == 0
+    assert canopy_rows(conn) == []
+    assert str(lease.path) not in git("worktree", "list", cwd=ws.clone("api"))
+
+
+def test_under_treehouse_remove_slot_destroys_through_treehouse(
+    ws: Ws,
+    treehouse_state: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    seed_pools(ws, treehouse_state)
+    slot = ws.root / ".treehouse" / "api-fake" / "1" / "api"
+    unmerged(treehouse_state, [str(slot)])
+    assert main(["workspace", "remove-slot", "api", "1"]) == 1
+    assert "api's pool kept slot 1" in capsys.readouterr().err
+    unmerged(treehouse_state, [])
+    assert main(["workspace", "remove-slot", "api", "1"]) == 0
+    assert capsys.readouterr().out == f"api: removed slot 1 ({slot})\n"
+    destroys = calls(treehouse_state, "destroy")
+    assert destroys == [["destroy", "--yes", str(slot)]] * 2
+    assert fake_pool(treehouse_state, ws, "api") == []

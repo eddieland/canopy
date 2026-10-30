@@ -2,8 +2,9 @@
 
 import pytest
 
-from canopy.core import db, task_tickets, tasks
+from canopy.core import db
 from canopy.core.vocab import RunStatus
+from canopy.runs import task_tickets, tasks
 from canopy.serve import mock
 from canopy.serve.backend import Backend
 from canopy.serve.mock import tasks as mock_tasks

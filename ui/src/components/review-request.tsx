@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { reviewPersonasText, reviewRequestedText, reviewStoppedText } from '@/lib/outcomes'
 import { pullRequestUrl } from '@/lib/pull-request-label'
+import { EMPTY_DRAFT } from '@/lib/review-request-draft'
+import type { ReviewRequestDraft } from '@/lib/review-request-draft'
 import { usablePersonas, useReviewPersonas } from '@/lib/review-personas'
 import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
@@ -36,18 +38,42 @@ const SEVERAL =
  * which the disclosure's line names while it is closed. canopy reviews it once, at its head, in whichever of the
  * workspace's repositories it is in, and the form opens the PR's page, where the request stands. Its review becomes a
  * draft the operator may publish as their own; nothing posts until they do, and nothing is reviewed now: the next tick
- * does it.
+ * does it. The reviews page and the Review a PR dialog (`ReviewDialog`), which `R` opens from anywhere, both render it,
+ * so the two cannot drift.
  */
-export function ReviewRequestForm({ className }: { className?: string }) {
+export function ReviewRequestForm({
+    className,
+    draft = EMPTY_DRAFT,
+    onDraft,
+    onRequested,
+    focus = false,
+}: {
+    /** Classes for the form. */
+    className?: string
+    /** What the form starts with: a draft kept from before, or a PR's URL filled in. Empty by default. */
+    draft?: ReviewRequestDraft
+    /** Hears each change to what is written or picked, to keep it. */
+    onDraft?: (draft: ReviewRequestDraft) => void
+    /** Hears a request go through, as the form opens the PR's page. */
+    onRequested?: () => void
+    /** Whether the form takes the focus as it mounts: the URL field, or the notes once a URL is filled in. */
+    focus?: boolean
+}) {
     const client = useQueryClient()
     const navigate = useNavigate()
     const id = useId()
     const sendKeys = useSendKeys()
-    const [url, setUrl] = useState('')
-    const [notes, setNotes] = useState('')
+    const [url, setUrl] = useState(draft.url)
+    const [notes, setNotes] = useState(draft.notes)
     const [more, setMore] = useState(false)
     // The personas picked for this request alone, or null for the operator's preferred ones, as Settings has them now.
-    const [picked, setPicked] = useState<readonly string[] | null>(null)
+    const [picked, setPicked] = useState<readonly string[] | null>(draft.picked)
+    // Where the focus starts, as the form mounts: a dialog's own first focus keeps a focus already inside it.
+    const [focused] = useState(focus ? (draft.url.trim() === '' ? 'url' : 'notes') : null)
+
+    function change(next: Partial<ReviewRequestDraft>) {
+        onDraft?.({ url, notes, picked, ...next })
+    }
     const { data: personas } = useQuery(personasQuery)
     const preferred = useReviewPersonas()
     const chosen = picked ?? usablePersonas(preferred, personas)
@@ -57,6 +83,7 @@ export function ReviewRequestForm({ className }: { className?: string }) {
         mutationFn: () => requestReview(target, notes.trim(), chosen),
         onSuccess: () => {
             void refreshReviewRequests(client)
+            onRequested?.()
             void navigate({ to: '/pull-requests/pr', search: { url: target } })
         },
     })
@@ -65,6 +92,7 @@ export function ReviewRequestForm({ className }: { className?: string }) {
         <form
             className={cn('flex flex-col gap-2 p-3', className)}
             aria-label="Review a PR"
+            aria-keyshortcuts="R"
             data-testid="review-request-form"
             onSubmit={(event) => {
                 event.preventDefault()
@@ -75,11 +103,17 @@ export function ReviewRequestForm({ className }: { className?: string }) {
         >
             <div className="flex flex-wrap items-center gap-2">
                 <Input
+                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
+                    autoFocus={focused === 'url'}
                     aria-label="PR URL"
                     placeholder="https://github.com/org/repo/pull/123"
+                    title="R opens this form from any page, and so does pasting a PR's URL"
                     className="max-w-lg min-w-64 flex-1 font-mono text-xs"
                     value={url}
-                    onChange={(event) => setUrl(event.target.value)}
+                    onChange={(event) => {
+                        setUrl(event.target.value)
+                        change({ url: event.target.value })
+                    }}
                     data-testid="review-request-url"
                 />
                 <Button
@@ -100,11 +134,16 @@ export function ReviewRequestForm({ className }: { className?: string }) {
                     Notes for the reviewer (optional)
                 </label>
                 <Textarea
+                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
+                    autoFocus={focused === 'notes'}
                     id={`${id}-notes`}
                     className="min-h-16 text-xs"
                     value={notes}
                     maxLength={MAX_NOTES}
-                    onChange={(event) => setNotes(event.target.value)}
+                    onChange={(event) => {
+                        setNotes(event.target.value)
+                        change({ notes: event.target.value })
+                    }}
                     onKeyDown={sendKeys.onKeyDown}
                     placeholder="What the author asked for, or the part of the change that worries you"
                     data-testid="review-request-notes"
@@ -128,7 +167,10 @@ export function ReviewRequestForm({ className }: { className?: string }) {
                             personas={personas}
                             chosen={chosen}
                             disabled={request.isPending}
-                            onChange={setPicked}
+                            onChange={(next) => {
+                                setPicked(next)
+                                change({ picked: next })
+                            }}
                             title="canopy start URL --review --persona NAME"
                             testId="review-request-personas"
                         />

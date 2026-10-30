@@ -47,6 +47,9 @@ export const keys = {
     ticks: ['ticks'] as const,
     tickDetail: (id: number) => ['ticks', id] as const,
     worktrees: ['worktrees'] as const,
+    host: ['host'] as const,
+    hostSamples: ['host-samples'] as const,
+    hostProcesses: ['host-processes'] as const,
     spend: ['spend'] as const,
     // Under the spend's key, so the stream's `spend.updated` marks every window's breakdown stale.
     spendBreakdown: (range: SpendBreakdownRange) =>
@@ -82,6 +85,7 @@ export const keys = {
     // Under the config's key, so what marks the config stale, a save that reloads the loop, marks it stale too.
     configModels: ['config', 'models'] as const,
     models: ['models'] as const,
+    skills: ['skills'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -423,13 +427,52 @@ export const WORKTREES_REFRESH_MS = 10_000
 /**
  * Each pool's worktrees, read from the pool by the server on every fetch. Not on the event stream: the stream marks it
  * stale when a run starts or ends (live.ts), the page reads it again on demand, and every 10 seconds while a page shows
- * it and its tab is visible. That timer is the UI's one refetch on an interval: what runs in a slot,
- * whether it is dirty, and a slot sync adds never reach the journal.
+ * it and its tab is visible. What runs in a slot, whether it is dirty, and a slot sync adds never reach the journal.
  */
 export const worktreesQuery = queryOptions({
     queryKey: keys.worktrees,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/worktrees', { signal })),
     refetchInterval: WORKTREES_REFRESH_MS,
+    refetchIntervalInBackground: false,
+})
+
+/** How often the host's resources are read again while a page shows them in a visible tab. */
+export const HOST_REFRESH_MS = 10_000
+
+/**
+ * The machine the loop runs on: its load, memory, disks, and the loop's process, read by the server on every fetch.
+ * Not on the event stream, since none of it is in the journal: read every 10 seconds while a page shows it and its tab
+ * is visible, which with the header's readout is every page. A read costs the server a few small files, less than a
+ * journal read.
+ */
+export const hostQuery = queryOptions({
+    queryKey: keys.host,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/host', { signal })),
+    refetchInterval: HOST_REFRESH_MS,
+    refetchIntervalInBackground: false,
+})
+
+/**
+ * The machine's readings over the last hour, for the system resources page's graphs: kept by the server in memory,
+ * read every 10 seconds whether a page is open or not. Read as the host's resources are, every 10 seconds while the
+ * page shows them and its tab is visible, so each read finds a new one.
+ */
+export const hostSamplesQuery = queryOptions({
+    queryKey: keys.hostSamples,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/host/samples', { signal })),
+    refetchInterval: HOST_REFRESH_MS,
+    refetchIntervalInBackground: false,
+})
+
+/**
+ * The machine's processes, for the system resources page: each with the processors it kept busy since the server's
+ * read before, which is this query's previous fetch while the page is open. Read as the host's resources are, every 10
+ * seconds while the page shows them and its tab is visible; the server reads nothing while no page asks.
+ */
+export const hostProcessesQuery = queryOptions({
+    queryKey: keys.hostProcesses,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/host/processes', { signal })),
+    refetchInterval: HOST_REFRESH_MS,
     refetchIntervalInBackground: false,
 })
 
@@ -474,13 +517,14 @@ export const personasQuery = queryOptions({
 
 /**
  * The models the runtime lists, as `canopy models` prints them: what a ticket's agent's model may be chosen from. Not
- * on the stream, since a read can start the runtime: read when a Model menu opens, and again when one opens later,
- * which the server answers from the list it read in the last few minutes, or until the loop reads its config again.
+ * on the stream, since a read can start the runtime: read as a ticket's models show one that may be gone, or a Model
+ * menu opens, and again once the list is a minute old, which the server answers from the list it read in the last few
+ * minutes, or until the loop reads its config again.
  */
 export const modelsQuery = queryOptions({
     queryKey: keys.models,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/models', { signal })),
-    staleTime: 0,
+    staleTime: 60_000,
 })
 
 /**
@@ -493,6 +537,17 @@ export const freshModelsQuery = queryOptions({
     queryFn: async ({ signal }) =>
         unwrap(await api.GET('/api/models', { params: { query: { refresh: true } }, signal })),
     staleTime: 0,
+})
+
+/**
+ * Every skill the runtime finds for canopy's agents, with each one's file and text. Not on the stream, since a read
+ * starts the runtime: read when the skills page opens, kept for the rest of the visit, and read again when its Read
+ * again button asks.
+ */
+export const skillsQuery = queryOptions({
+    queryKey: keys.skills,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/skills', { signal })),
+    staleTime: Infinity,
 })
 
 /** The PRs the journal knows, most recent activity first. Marked stale on every tick and every ticket change. */
