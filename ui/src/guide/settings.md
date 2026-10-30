@@ -31,11 +31,11 @@ outlines, since a step of lightness does the job on an OLED screen, rounds its c
 ultraviolet, because a shadow on black is a shadow nobody sees. The rest cast a soft shadow under what floats. Gruvbox
 turns the strip under the header into a stepped status bar and sets the name on a yellow block, and its section colors
 fade to Gruvbox's own; Black makes it glow like a neon sign, and turns its section colors all the way up. The others
-have a little of the same: Gruvbox's light side matches its dark one, Solarized is crisp and flat, Monokai crisp with a
-neon glow, Nord's light side a calm fade through its blues, Grey one steel-blue rule, Off-white panels lying on the page
-like paper, and Sage, Rosé Pine, Forest, and Plum round their corners, Plum most of all. Layout and sizes never change
-with a palette, so nothing moves when you switch, except under dark Gruvbox, where monospace runs wider and a long line
-wraps a little sooner.
+have a little of the same: Gruvbox's light side matches its dark one, monospace included, Solarized is crisp and flat,
+Monokai crisp and monospaced with a neon glow, Nord's light side a calm fade through its blues, Grey one steel-blue
+rule, Off-white panels lying on the page like paper, and Sage, Rosé Pine, Forest, and Plum round their corners, Plum
+most of all. Layout and sizes never change with a palette, so nothing moves when you switch, except under Gruvbox and
+Monokai, where monospace runs wider and a long line wraps a little sooner.
 
 ## Time
 

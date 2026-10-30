@@ -152,9 +152,11 @@
         0 2px 6px oklch(from var(--foreground) l c h / 0.08);
     --depth-action: 0 1px 2px oklch(from var(--accent) l c h / 0.35);
 
-    /* The face interface text is set in: Plex Sans, or Plex Mono for an editor that sets everything in it. Both are
-     * bundled and preloaded, so a palette that switches never paints in a fallback face. */
+    /* The face interface text is set in: Plex Sans, or the mono data is set in (`--face-mono`), for an editor that
+     * sets everything in it. Both are bundled and preloaded, so a palette that switches never paints in a fallback
+     * face. */
     --face: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
+    --face-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
 .dark {
@@ -348,9 +350,10 @@
     --spend-dry-run: oklch(0.59 0.02 70);
     --context-carried: oklch(0.59 0.02 70);
 
-    /* As its dark side: crisp corners, a hard shadow with no blur, the stepped aurora, the name on a block of its
-     * yellow, and the nav's highlight a solid block. */
+    /* As its dark side: crisp corners, a hard shadow with no blur, every line in its mono, the stepped aurora, the
+     * name on a block of its yellow, and the nav's highlight a solid block. */
     --radius: 0.1875rem;
+    --face: var(--face-mono);
     --depth-panel: none;
     --depth-float: 4px 4px 0 oklch(from var(--foreground) l c h / 0.85);
     --depth-action: 3px 3px 0 oklch(from var(--foreground) l c h / 0.85);
@@ -524,7 +527,7 @@
     /* A code editor of the nineties: crisp corners, and a hard shadow with no blur under what floats and the primary
      * action. Panels sit flat on the canvas, and every line of text is in its mono. */
     --radius: 0.1875rem;
-    --face: 'IBM Plex Mono', ui-monospace, monospace;
+    --face: var(--face-mono);
     /* Its aurora is a stepped bar of solid blocks, an editor's status line; its name sits on a block of its yellow; the
      * nav's highlight is a solid block, the active item inked in the canvas's color, with no hairline. */
     --aurora-height: 0.25rem;
@@ -624,8 +627,10 @@
     --spend-dry-run: oklch(0.62 0.02 100);
     --context-carried: oklch(0.62 0.02 100);
 
-    /* A neon editor: crisp corners, the aurora blooming and the name glowing pink, and the active icon lit. */
+    /* A neon editor: crisp corners, every line in its mono, the aurora blooming and the name glowing pink, and the
+     * active icon lit. */
     --radius: 0.25rem;
+    --face: var(--face-mono);
     --aurora-bloom: blur(6px);
     --aurora-bloom-opacity: 1;
     --wordmark-glow: drop-shadow(0 0 6px oklch(from var(--accent) l c h / 0.6));
@@ -754,5 +759,5 @@
 
     /* A palette sets the face interface text is in (`--face`, above). */
     --font-sans: var(--face);
-    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    --font-mono: var(--face-mono);
 }
