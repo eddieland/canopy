@@ -13,10 +13,11 @@ import { PersonaField } from '@/components/persona-field'
 import { FoldPanel } from '@/components/fold-panel'
 import { MemoryKinds } from '@/components/memory'
 import { ModelsField } from '@/components/models-field'
-import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } from '@/components/panel'
 import { PromptPanel } from '@/components/prompt-panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
+import { ProgressPanel } from '@/components/run-progress'
 import { RunDoing } from '@/components/run-doing'
 import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
@@ -83,6 +84,13 @@ function Loaded({ id }: { id: number }) {
                 {runDescription(data)} · <TicketLink ticketKey={data.ticket_key} className="align-baseline" />
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
+                {data.card !== null && (
+                    <ProgressPanel
+                        card={data.card}
+                        running={data.ended_at === null}
+                        answers={{ kind: 'run', id: data.id }}
+                    />
+                )}
                 <RunPanel run={data} transcript={transcript} onShow={view.show} />
                 <TranscriptPanel transcript={transcript} running={data.state === 'running'} page="run" view={view} />
                 <PromptPanel transcript={transcript} />
@@ -123,7 +131,10 @@ function RunPanel({
         <Panel>
             <PanelHeader label="Run" />
             <Fields>
-                <Field label="summary">{run.summary ? <RichText text={run.summary} /> : <None />}</Field>
+                {/* Its progress says where it stands until it ends with a summary, so no `none` sits over it. */}
+                {(run.summary || run.card === null) && (
+                    <Field label="summary">{run.summary ? <RichText text={run.summary} /> : <None />}</Field>
+                )}
                 <EndedOnField status={run.status} transcript={transcript} onShow={onShow} />
                 {run.feedback_plan !== null && (
                     <Field label="wrote" mono>
@@ -180,12 +191,21 @@ function RunPanel({
  * was served, which is not an empty digest.
  */
 function RunMemoryPanel({ id }: { id: number }) {
-    const { data } = useQuery(runMemoryQuery(id))
+    const query = useQuery(runMemoryQuery(id))
+    const { data } = query
     // Each tier's mode now, so a memory in force under a tier that only records reads `recorded` in its rows.
     const tiers = useQuery(loopQuery).data?.memory
     const modes = tiers ? { ticket_notes: tiers.ticket_notes.mode, lessons: tiers.lessons.mode } : undefined
-    const rendered = data?.rendered ?? null
-    if (data === undefined || rendered === null) {
+    if (data === undefined) {
+        // Its folded height while the read is pending, so the page does not grow under the reader when it lands.
+        return query.isPending ? (
+            <Panel>
+                <PanelSkeleton rows={1} className="h-9 justify-center py-0" />
+            </Panel>
+        ) : null
+    }
+    const { rendered } = data
+    if (rendered === null) {
         return null
     }
     const served = rendered.ticket_notes === 'use' || rendered.lessons === 'use'

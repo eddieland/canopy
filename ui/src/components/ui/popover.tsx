@@ -1,5 +1,5 @@
 // shadcn/ui Popover, Radix base, ported by hand because the registry was unreachable. Only the parts the UI uses: no
-// anchor, header, title, or description. As the dropdown menu, it sits on `surface` with its hairline and no shadow,
+// anchor, header, title, or description. As the dropdown menu, it sits on `surface` with its edge and floating shadow,
 // and does not animate, so it opens as fast as what it holds (ui/DESIGN.md).
 import { Popover as PopoverPrimitive } from 'radix-ui'
 import type { ComponentProps } from 'react'
@@ -33,8 +33,9 @@ function PopoverContent({
                 align={align}
                 sideOffset={sideOffset}
                 className={cn(
-                    'z-50 w-72 origin-(--radix-popover-content-transform-origin) rounded-md border bg-surface p-4',
-                    'text-foreground outline-hidden',
+                    'z-50 w-72 origin-(--radix-popover-content-transform-origin)',
+                    'rounded-md border border-edge bg-surface p-4 text-foreground shadow-float outline-hidden',
+                    'animate-float',
                     className,
                 )}
                 {...props}

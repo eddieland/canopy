@@ -1,6 +1,6 @@
 """`canopy attach` and `canopy detach`: text files on a ticket or a task, for its runs to read (DESIGN §22).
 
-Both write through `canopy.core.attachments`, which refuses inside canopy's own ticks and runs (`inside_run`) and holds
+Both write through `canopy.runs.attachments`, which refuses inside canopy's own ticks and runs (`inside_run`) and holds
 attachments to `policy`'s limits; `canopy show` lists a subject's attachments with `listed`.
 """
 
@@ -11,9 +11,10 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import attachments, conversation, plans
+from canopy.core import conversation, plans
 from canopy.core.items import age
 from canopy.infra import logs
+from canopy.runs import attachments
 
 if TYPE_CHECKING:
     from canopy.core.context import Context

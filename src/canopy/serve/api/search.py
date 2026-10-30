@@ -7,8 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from fastapi.exceptions import RequestValidationError
 
-from canopy.core import search
-from canopy.serve import search_views
+from canopy.serve import search, search_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.search import SearchResults
 

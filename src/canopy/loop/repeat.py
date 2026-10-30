@@ -58,7 +58,7 @@ from rich.live import Live
 from rich.spinner import Spinner
 from rich.text import Text
 
-from canopy.core import config, connector_runs, db, notice, pause, tasks
+from canopy.core import config, connector_runs, db, notice, pause
 from canopy.core.vocab import ConnectorRunStatus
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import (
@@ -74,6 +74,7 @@ from canopy.loop import (
     tick_now,
     tick_report,
 )
+from canopy.runs import tasks
 
 if TYPE_CHECKING:
     import sqlite3
@@ -527,7 +528,7 @@ def _ticks(
             _toggle_pause(ctx, keys(), log)
         statuses[outcome.status] += 1
         # Classified with idle pacing off too: the journal records it for spend, though only pacing counts it.
-        idle = pacing.idle(ctx, outcome)
+        idle = pacing.idle(ctx, outcome, woken_by=woken_by)
         # Measured for the prompt, not acted on (ROADMAP M28): what the tick changed with nothing new to see.
         churn = pacing.churn(ctx, outcome, before)
         idle_count = pacing.count(ctx, outcome, idle_count, idle=idle, on=pace.on)

@@ -16,6 +16,7 @@ import { Route as PlanEditorRouteImport } from './routes/plan-editor'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SpendRouteImport } from './routes/spend'
+import { Route as SystemRouteImport } from './routes/system'
 import { Route as WorktreesRouteImport } from './routes/worktrees'
 import { Route as ChoresIndexRouteImport } from './routes/chores.index'
 import { Route as ChoresNameRouteImport } from './routes/chores.$name'
@@ -31,6 +32,7 @@ import { Route as RunsIndexRouteImport } from './routes/runs.index'
 import { Route as RunsIdRouteImport } from './routes/runs.$id'
 import { Route as RunsWorktreesRouteImport } from './routes/runs.worktrees'
 import { Route as SettingsLimitsRouteImport } from './routes/settings_.limits'
+import { Route as SettingsSkillsRouteImport } from './routes/settings_.skills'
 import { Route as TasksIndexRouteImport } from './routes/tasks.index'
 import { Route as TasksIdRouteImport } from './routes/tasks.$id'
 import { Route as TicketsIndexRouteImport } from './routes/tickets.index'
@@ -80,6 +82,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SpendRoute = SpendRouteImport.update({
   id: '/spend',
   path: '/spend',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SystemRoute = SystemRouteImport.update({
+  id: '/system',
+  path: '/system',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WorktreesRoute = WorktreesRouteImport.update({
@@ -155,6 +162,11 @@ const RunsWorktreesRoute = RunsWorktreesRouteImport.update({
 const SettingsLimitsRoute = SettingsLimitsRouteImport.update({
   id: '/settings_/limits',
   path: '/settings/limits',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsSkillsRoute = SettingsSkillsRouteImport.update({
+  id: '/settings_/skills',
+  path: '/settings/skills',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TasksIndexRoute = TasksIndexRouteImport.update({
@@ -243,6 +255,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/spend': typeof SpendRoute
+  '/system': typeof SystemRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
@@ -252,6 +265,7 @@ export interface FileRoutesByFullPath {
   '/runs/$id': typeof RunsIdRoute
   '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings/limits': typeof SettingsLimitsRoute
+  '/settings/skills': typeof SettingsSkillsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
@@ -282,6 +296,7 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/spend': typeof SpendRoute
+  '/system': typeof SystemRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
@@ -291,6 +306,7 @@ export interface FileRoutesByTo {
   '/runs/$id': typeof RunsIdRoute
   '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings/limits': typeof SettingsLimitsRoute
+  '/settings/skills': typeof SettingsSkillsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
@@ -322,6 +338,7 @@ export interface FileRoutesById {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/spend': typeof SpendRoute
+  '/system': typeof SystemRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
@@ -331,6 +348,7 @@ export interface FileRoutesById {
   '/runs/$id': typeof RunsIdRoute
   '/runs/worktrees': typeof RunsWorktreesRoute
   '/settings_/limits': typeof SettingsLimitsRoute
+  '/settings_/skills': typeof SettingsSkillsRoute
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
@@ -363,6 +381,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/spend'
+    | '/system'
     | '/worktrees'
     | '/chores/$name'
     | '/guide/$page'
@@ -372,6 +391,7 @@ export interface FileRouteTypes {
     | '/runs/$id'
     | '/runs/worktrees'
     | '/settings/limits'
+    | '/settings/skills'
     | '/tasks/$id'
     | '/tickets/$key'
     | '/ticks/$id'
@@ -402,6 +422,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/spend'
+    | '/system'
     | '/worktrees'
     | '/chores/$name'
     | '/guide/$page'
@@ -411,6 +432,7 @@ export interface FileRouteTypes {
     | '/runs/$id'
     | '/runs/worktrees'
     | '/settings/limits'
+    | '/settings/skills'
     | '/tasks/$id'
     | '/tickets/$key'
     | '/ticks/$id'
@@ -441,6 +463,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/spend'
+    | '/system'
     | '/worktrees'
     | '/chores/$name'
     | '/guide/$page'
@@ -450,6 +473,7 @@ export interface FileRouteTypes {
     | '/runs/$id'
     | '/runs/worktrees'
     | '/settings_/limits'
+    | '/settings_/skills'
     | '/tasks/$id'
     | '/tickets/$key'
     | '/ticks/$id'
@@ -481,6 +505,7 @@ export interface RootRouteChildren {
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SpendRoute: typeof SpendRoute
+  SystemRoute: typeof SystemRoute
   WorktreesRoute: typeof WorktreesRoute
   ChoresNameRoute: typeof ChoresNameRoute
   GuidePageRoute: typeof GuidePageRoute
@@ -490,6 +515,7 @@ export interface RootRouteChildren {
   RunsIdRoute: typeof RunsIdRoute
   RunsWorktreesRoute: typeof RunsWorktreesRoute
   SettingsLimitsRoute: typeof SettingsLimitsRoute
+  SettingsSkillsRoute: typeof SettingsSkillsRoute
   TasksIdRoute: typeof TasksIdRoute
   TicketsKeyRoute: typeof TicketsKeyRoute
   TicksIdRoute: typeof TicksIdRoute
@@ -562,6 +588,13 @@ declare module '@tanstack/react-router' {
       path: '/spend'
       fullPath: '/spend'
       preLoaderRoute: typeof SpendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/system': {
+      id: '/system'
+      path: '/system'
+      fullPath: '/system'
+      preLoaderRoute: typeof SystemRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/worktrees': {
@@ -667,6 +700,13 @@ declare module '@tanstack/react-router' {
       path: '/settings/limits'
       fullPath: '/settings/limits'
       preLoaderRoute: typeof SettingsLimitsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings_/skills': {
+      id: '/settings_/skills'
+      path: '/settings/skills'
+      fullPath: '/settings/skills'
+      preLoaderRoute: typeof SettingsSkillsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tasks/': {
@@ -785,6 +825,7 @@ const rootRouteChildren: RootRouteChildren = {
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SpendRoute: SpendRoute,
+  SystemRoute: SystemRoute,
   WorktreesRoute: WorktreesRoute,
   ChoresNameRoute: ChoresNameRoute,
   GuidePageRoute: GuidePageRoute,
@@ -794,6 +835,7 @@ const rootRouteChildren: RootRouteChildren = {
   RunsIdRoute: RunsIdRoute,
   RunsWorktreesRoute: RunsWorktreesRoute,
   SettingsLimitsRoute: SettingsLimitsRoute,
+  SettingsSkillsRoute: SettingsSkillsRoute,
   TasksIdRoute: TasksIdRoute,
   TicketsKeyRoute: TicketsKeyRoute,
   TicksIdRoute: TicksIdRoute,

@@ -19,6 +19,7 @@ import {
     dearestDay,
     doneText,
     kindsOffered,
+    listedModels,
     modelRows,
     monthName,
     perRun,
@@ -308,5 +309,23 @@ describe('sessionsReadText', () => {
         expect(sessionsReadText(sessions, H24)).toBe(`read ${stamp(at, H24)}`)
         expect(sessionsReadText({ ...sessions, status: 'failed' }, H24)).toBe(`read ${stamp(at, H24)}, last failed`)
         expect(sessionsReadText({ ...sessions, read_at: null, status: null }, H24)).toBe('never read')
+    })
+})
+
+// One kind's By model row for `model`, of one run.
+function modelRow(kind: SpendModel['kind'], model: string | null): SpendModel {
+    return { kind, model, runs: 1, replies: 1, cost_usd: 0.1 }
+}
+
+describe('listedModels', () => {
+    it('keeps the models a kind the runs page lists served, a plan as a worker, never the overseer alone', () => {
+        const listed = listedModels([
+            modelRow('overseer', 'a/tick-only'),
+            modelRow('overseer', 'a/both'),
+            modelRow('plans', 'a/both'),
+            modelRow('reviews', 'b/review'),
+            modelRow('workers', null),
+        ])
+        expect([...listed].toSorted()).toEqual(['a/both', 'b/review'])
     })
 })

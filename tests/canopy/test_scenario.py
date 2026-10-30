@@ -2,7 +2,6 @@
 
 import json
 import os
-import shlex
 import sys
 import tomllib
 from datetime import timedelta
@@ -14,7 +13,19 @@ from canopy.core import db
 from canopy.core.vocab import ResumeReason, RunKind
 from tests.canopy import scenario_helpers
 from tests.canopy.conftest import Ws
-from tests.canopy.helpers import DRAFTS_PR, InlineRunner, agent_runs, last_tick, present, waits
+from tests.canopy.helpers import (
+    DRAFTS_PR,
+    UNOBSERVED,
+    UNOBSERVED_ITEM,
+    InlineRunner,
+    agent_runs,
+    decides,
+    last_tick,
+    present,
+    raises,
+    ticket_sets,
+    waits,
+)
 from tests.canopy.review_helpers import CLEAN, PR, head, reviewer_reports
 from tests.canopy.scenario_helpers import (
     Printed,
@@ -23,7 +34,6 @@ from tests.canopy.scenario_helpers import (
     dispatches,
     fails,
     pushes,
-    raises,
     reviews,
     sends_drafts,
 )
@@ -37,22 +47,27 @@ def test_the_story_tells_each_move_and_what_canopy_did_with_it(scenario: Scenari
     scenario.refuses(fix)
     scenario.time_passes(hours=1, minutes=30)
     scenario.seen("PROJ-2")
-    scenario.tick(*waits("PROJ-1"), raises("PROJ-2", "needs_human"))
+    # PROJ-1's PR is one no source reads, so the harness waits on it (DESIGN §39).
+    scenario.tick(raises("PROJ-2", "needs_human"))
     scenario.operator("grant", "PROJ-1", "resume")
     assert scenario.told().splitlines() == [
         "1. run 1, implement of PROJ-1: done: did it",
         "2. run 2, resume of PROJ-1 for ci: done: did it",
-        "3. tick 3 refuses canopy dispatch PROJ-1 --repo repo --kind resume --label agent-ready-tester --reason ci",
+        (
+            '3. tick 3 refuses canopy_dispatch {"key": "PROJ-1", "kind": "resume", "repos": ["repo"], '
+            '"label": "agent-ready-tester", "reasons": ["ci"]}'
+        ),
         f"     PROJ-1 refused:cooldown: a resume for CI alone in PROJ-1 in repo may run again after {held}",
         "4. 1:30:00 passes",
         "5. an earlier tick saw PROJ-2",
-        "6. tick 4, exits 0: ok: 3 decisions: attention:needs_human=1, queried=1, wait=1",
+        "6. tick 4, exits 0: ok: 4 decisions: attention:needs_human=1, attention:unobserved_pr=1, queried=1, wait=1",
+        f"     PROJ-1 attention:unobserved_pr: {UNOBSERVED_ITEM}",
+        f"     PROJ-1 wait: {UNOBSERVED}",
         "     - queried: the query returned no open ticket",
-        "     PROJ-1 wait: nothing to do yet",
         "     PROJ-2 attention:needs_human: PROJ-2 detail",
         "7. the operator runs canopy grant PROJ-1 resume, which exits 0",
         "     PROJ-1 in repo has had 1 resume runs, and may now have 7. The next tick decides whether to dispatch it.",
-        "The attention list now: PROJ-2 needs_human.",
+        "The attention list now: PROJ-1 unobserved_pr, PROJ-2 needs_human.",
     ]
 
 
@@ -67,7 +82,7 @@ def test_the_step_that_failed_is_in_the_story(scenario: Scenario) -> None:
             "     Error: grant refused (bad_kind): a resume now fixes CI, and fix-ci runs count as resume runs: grant "
             "resume instead"
         ),
-        "2. tick 1, exits 0: ok: 1 decisions: queried=1",
+        "2. tick 1, exits 0: ok: no overseer, nothing left to judge; 1 decisions: queried=1",
         "     - queried: the query returned no open ticket",
         "The attention list now: nothing.",
     ]
@@ -79,20 +94,24 @@ def test_a_held_run_is_at_work_until_the_story_says_what_becomes_of_it(scenario:
     scenario.refuses(dispatches())
     assert working.finishes().status == "done"
     slot = git_pool.slots[0]  # run 1 gave it back
-    [left] = scenario.tick(*waits("PROJ-1"), dispatches("PROJ-2"), hold=True).working
+    [left] = scenario.tick(dispatches("PROJ-2"), hold=True).working
     left.dies()
     assert scenario.told().splitlines() == [
         "1. run 1, implement of PROJ-1: at work",
-        "2. tick 2 refuses canopy dispatch PROJ-1 --repo repo --kind implement --label agent-ready-tester",
+        (
+            '2. tick 2 refuses canopy_dispatch {"key": "PROJ-1", "kind": "implement", "repos": ["repo"], '
+            '"label": "agent-ready-tester"}'
+        ),
         "     PROJ-1 refused:running: run 1 is already working PROJ-1",
         "3. run 1, implement of PROJ-1: done: did it",
-        "4. tick 3, exits 0: ok: 3 decisions: dispatch:implement=1, queried=1, wait=1",
+        "4. tick 3, exits 0: ok: 4 decisions: attention:unobserved_pr=1, dispatch:implement=1, queried=1, wait=1",
+        f"     PROJ-1 attention:unobserved_pr: {UNOBSERVED_ITEM}",
+        f"     PROJ-1 wait: {UNOBSERVED}",
         "     - queried: the query returned no open ticket",
-        "     PROJ-1 wait: nothing to do yet",
         f"     PROJ-2 dispatch:implement: run 2: agent/PROJ-2-work in repo at {slot}; label agent-ready-tester",
         "     run 2, implement of PROJ-2: at work",
         "5. run 2, implement of PROJ-2: its `canopy _run` dies, its worker still at work",
-        "The attention list now: nothing.",
+        "The attention list now: PROJ-1 unobserved_pr.",
     ]
 
 
@@ -108,9 +127,8 @@ def test_each_ticket_a_tick_dispatches_plays_its_own_worker(scenario: Scenario, 
     assert "PR: https://example.test/pr/2." in resumed.prompt  # the PR PROJ-2's own implement reported
 
     # And a ticket `workers` names plays the script it gives instead.
-    first, second = (dispatches(key, RunKind.RESUME, reasons=[ResumeReason.REVIEW]) for key in ("PROJ-1", "PROJ-2"))
-    ticked = scenario.tick(first, second, workers={"PROJ-2": fails()})
-    assert [(r.key, r.status) for r in ticked.runs] == [("PROJ-1", "done"), ("PROJ-2", "failed")]
+    ticked = scenario.tick(dispatches("PROJ-3"), dispatches("PROJ-4"), workers={"PROJ-4": fails()})
+    assert [(r.key, r.status) for r in ticked.runs] == [("PROJ-3", "done"), ("PROJ-4", "failed")]
 
 
 def test_a_held_run_plays_its_tickets_own_worker_once_it_finishes(scenario: Scenario, git_pool: GitPool) -> None:
@@ -162,7 +180,9 @@ def test_what_a_command_that_raises_printed_is_left_in_the_tests_own_output(
 
 def test_the_config_a_test_sets_is_a_move_and_lands_in_its_own_table(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.configures(policy={"max_resume_attempts": 1})
-    scenario.configures(policy={"max_implement_attempts": 3}, tracker={"labels": ["mine"]})
+    # The tests' tracker labels the tickets it holds with the queue label it is given.
+    mine = {"sources": {"jira": {"cmd": "connector jira --labeled mine"}}}
+    scenario.configures(policy={"max_implement_attempts": 3}, tracker={"labels": ["mine"]}, connect=mine)
     scenario.configures("workspace", tracker={"needs_human_label": "blocked-on-team"})
     scenario.configures("private", notify={"sinks": {"log": {"cmd": "true", "events": ["runs"]}}})
     # Each key in its own table, though the user file ended on `[paths]`; a key set again takes the place of the old.
@@ -174,7 +194,10 @@ def test_the_config_a_test_sets_is_a_move_and_lands_in_its_own_table(scenario: S
     assert tracker == {"provider": "jira", "query": "project = PROJ", "needs_human_label": "blocked-on-team"}
     assert scenario.told().splitlines()[:4] == [
         "1. the user file sets policy.max_resume_attempts = 1",
-        '2. the user file sets policy.max_implement_attempts = 3, tracker.labels = ["mine"]',
+        (
+            '2. the user file sets policy.max_implement_attempts = 3, tracker.labels = ["mine"], '
+            'connect.sources.jira.cmd = "connector jira --labeled mine"'
+        ),
         '3. the workspace file sets tracker.needs_human_label = "blocked-on-team"',
         '4. the private file sets notify.sinks.log.cmd = "true", notify.sinks.log.events = ["runs"]',
     ]
@@ -212,7 +235,7 @@ def test_a_story_in_two_repositories_names_them_and_a_joint_worker_pushes_in_eac
     ws: Ws,
 ) -> None:
     both = ("api", "web")
-    assert dispatches(repo=both)[:6] == ["canopy", "dispatch", "PROJ-1", "--repo", "api", "--repo"]
+    assert dispatches(repo=both).arguments["repos"] == ["api", "web"]
     joint = ws_scenario.run(dispatches(repo=both), worker=pushes(repos=both))
     assert (joint.status, joint.branch) == ("done", "agent/PROJ-1-work")
     assert all(ws.remote_head(name, "agent/PROJ-1-work") is not None for name in both)
@@ -241,7 +264,7 @@ def reviews_on(scenario: Scenario) -> None:
 def test_a_review_is_a_move_and_so_is_one_canopy_refuses(scenario: Scenario, git_pool: GitPool) -> None:
     reviews_on(scenario)
     sha = head(git_pool)
-    assert reviews(sha, ticket="PROJ-1")[-2:] == ["--ticket", "PROJ-1"]
+    assert reviews(sha, ticket="PROJ-1").arguments["ticket"] == "PROJ-1"
 
     reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(CLEAN))
     assert (reviewed.status, reviewed.row.sha, reviewed.row.pr_url) == ("done", sha, PR)
@@ -253,7 +276,7 @@ def test_a_review_is_a_move_and_so_is_one_canopy_refuses(scenario: Scenario, git
     # What canopy noted of the report is told with it.
     noted = "reported low impact, but review.low_impact is not set; recorded as normal"
     assert review_step == f"2. review run 1 of {PR} at {sha[:7]}: done: clean: Nothing found.: {noted}"
-    assert refused_step == f"3. tick 2 refuses {shlex.join(reviews(sha))}"
+    assert refused_step == f"3. tick 2 refuses {reviews(sha)}"
 
 
 def test_a_review_held_at_work_runs_until_the_story_says_what_becomes_of_it(
@@ -274,7 +297,7 @@ def test_a_review_held_at_work_runs_until_the_story_says_what_becomes_of_it(
     _, at_work, refused, done, _, _ = [line for line in scenario.told().splitlines() if line[0].isdigit()]
     assert (at_work, refused) == (
         f"2. review run 1 of {PR} at {sha[:7]}: at work",
-        f"3. tick 2 refuses {shlex.join(reviews(sha))}",
+        f"3. tick 2 refuses {reviews(sha)}",
     )
     assert done.startswith(f"4. review run 1 of {PR} at {sha[:7]}: done: clean")
     assert (
@@ -313,40 +336,43 @@ def test_a_key_set_to_none_is_dropped_and_the_story_says_so(scenario: Scenario) 
     assert scenario.story[-1] == "the user file sets no notify.sinks.log, policy.max_resume_attempts = 2"
 
 
-def test_a_refusal_gives_back_its_tick_its_decisions_whole_and_what_it_printed(scenario: Scenario) -> None:
+def test_a_refusal_gives_back_its_tick_its_decisions_whole_and_what_it_said(scenario: Scenario) -> None:
     refused = scenario.refuses(dispatches(repo="nope"))
     assert refused == [("refused:unknown_repo", "'nope' is not a repository in this workspace (repo)")]
     assert refused.tick == last_tick(scenario.conn).id
     [decision] = refused.decisions
     assert (decision.tick_id, decision.ticket_key) == (refused.tick, "PROJ-1")
-    assert "dispatch refused (unknown_repo)" in refused.printed.err
+    assert "dispatch refused (unknown_repo)" in refused.said.text
     # A list's own methods make a plain one of what was decided.
     assert refused[:1] == [("refused:unknown_repo", "'nope' is not a repository in this workspace (repo)")]
 
 
-def test_the_overseer_runs_a_command_in_a_tick_of_its_own_or_in_one_held_open(scenario: Scenario) -> None:
-    refused = scenario.overseer("ticket", "set", "PROJ-1", "--phase", "conflicted", "--repo", "nope", code=1)
-    assert "'nope' is not a repository" in refused.err
+def test_the_overseer_calls_a_tool_in_a_tick_of_its_own_or_in_one_held_open(scenario: Scenario) -> None:
+    refused = scenario.overseer(ticket_sets("PROJ-1", phase="conflicted", repo="nope"), error=True)
+    assert "'nope' is not a repository" in refused.text
     with scenario.ticking() as tick_id:
-        scenario.overseer("attention", "PROJ-1", "needs_human", "--detail", "one")
-        scenario.overseer("attention", "PROJ-2", "needs_human", "--detail", "two")
+        scenario.overseer(raises("PROJ-1", "needs_human", "one"))
+        scenario.overseer(raises("PROJ-2", "needs_human", "two"))
     # Both raised in the one tick, which ended ok, so both are on the attention list.
     assert scenario.attention() == [("PROJ-1", "needs_human"), ("PROJ-2", "needs_human")]
     steps = [line for line in scenario.told().splitlines() if line[0].isdigit()]
+    raised = 'canopy_attention {"key": "PROJ-%d", "reason": "needs_human", "detail": "%s"}'
     assert steps[1:] == [
-        f"2. tick {tick_id} begins, for the overseer's commands",
-        f"3. the overseer runs canopy attention PROJ-1 needs_human --detail one in tick {tick_id}, which exits 0",
-        f"4. the overseer runs canopy attention PROJ-2 needs_human --detail two in tick {tick_id}, which exits 0",
+        f"2. tick {tick_id} begins, for the overseer's calls",
+        f"3. the overseer calls {raised % (1, 'one')} in tick {tick_id}, which comes back an answer",
+        f"4. the overseer calls {raised % (2, 'two')} in tick {tick_id}, which comes back an answer",
         f"5. tick {tick_id} ends ok",
     ]
+    with pytest.raises(AssertionError, match="canopy_attention came back an answer, not a tool error"):
+        scenario.overseer(raises("PROJ-1", "needs_human", "three"), error=True)
 
 
 def test_the_overseer_acts_in_a_dry_run_tick_as_in_any_other(scenario: Scenario) -> None:
     with scenario.ticking(dry_run=True) as tick_id:
         # Still running while the block lasts, so the test may look at it.
         assert present(db.get_tick(scenario.conn, tick_id)).ended_at is None
-        scenario.overseer("decide", "PROJ-1", "wait", "--rationale", "dry")
+        scenario.overseer(decides("PROJ-1", rationale="dry"))
     assert present(db.get_tick(scenario.conn, tick_id)).dry_run
-    scenario.overseer("decide", "PROJ-2", "wait", "--rationale", "dry too", dry_run=True)
+    scenario.overseer(decides("PROJ-2", rationale="dry too"), dry_run=True)
     assert present(db.get_tick(scenario.conn, last_tick(scenario.conn).id)).dry_run
-    assert scenario.story[0] == f"dry-run tick {tick_id} begins, for the overseer's commands"
+    assert scenario.story[0] == f"dry-run tick {tick_id} begins, for the overseer's calls"

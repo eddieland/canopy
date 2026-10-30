@@ -23,17 +23,23 @@ const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' 
  * untrusted, so every piece is React text, never HTML; a URL outside code is a link to itself (`LinkedText`, D113).
  * With `lines`, text longer than that shows its first lines and a toggle for the rest; a long line counts as the lines
  * it wraps to, so one long paragraph folds too. With `prose`, a paragraph's or an item's lines join with a space, as
- * Markdown's soft breaks do, for a file wrapped at a column (a persona) rather than written a line a thought.
+ * Markdown's soft breaks do, for a file wrapped at a column (a persona) rather than written a line a thought. With
+ * `pullRequests`, a GitHub PR's address is its `PullRequestLink`, as `LinkedText` names it. With `raised`, on a
+ * surface already raised (a conversation's bubble), code sits on the canvas's color so it still stands apart.
  */
 export function RichText({
     text,
     lines,
     prose = false,
+    pullRequests = false,
+    raised = false,
     className,
 }: {
     text: string
     lines?: number
     prose?: boolean
+    pullRequests?: boolean
+    raised?: boolean
     className?: string
 }) {
     const [open, setOpen] = useState(false)
@@ -43,7 +49,7 @@ export function RichText({
     return (
         <div className={cn('flex min-w-0 flex-col gap-1.5 text-sm wrap-break-word', className)}>
             {shown.map((block, i) => (
-                <BlockView key={i} block={block} prose={prose} />
+                <BlockView key={i} block={block} prose={prose} look={{ pullRequests, raised }} />
             ))}
             {cut.hidden > 0 && <MoreLines hidden={cut.hidden} open={open} onToggle={() => setOpen(!open)} />}
         </div>
@@ -85,7 +91,13 @@ function HarnessText({ part, links }: { part: Piece; links: boolean }) {
     return links ? <LinkedText text={part.text} /> : part.text
 }
 
-function BlockView({ block, prose }: { block: Block; prose: boolean }) {
+// How a piece is drawn where the text sits: its PRs named, and its code on the canvas when the surface is raised.
+interface Look {
+    pullRequests: boolean
+    raised: boolean
+}
+
+function BlockView({ block, prose, look }: { block: Block; prose: boolean; look: Look }) {
     switch (block.kind) {
         case 'paragraph': {
             return (
@@ -93,7 +105,7 @@ function BlockView({ block, prose }: { block: Block; prose: boolean }) {
                     {block.lines.map((line, i) => (
                         <Fragment key={i}>
                             {i > 0 && (prose ? ' ' : <br />)}
-                            <LineView line={line} />
+                            <LineView line={line} look={look} />
                         </Fragment>
                     ))}
                 </p>
@@ -102,7 +114,7 @@ function BlockView({ block, prose }: { block: Block; prose: boolean }) {
         case 'heading': {
             return (
                 <p className="font-medium">
-                    <LineView line={block.line} />
+                    <LineView line={block.line} look={look} />
                 </p>
             )
         }
@@ -112,7 +124,7 @@ function BlockView({ block, prose }: { block: Block; prose: boolean }) {
                     {item.lines.map((line, j) => (
                         <Fragment key={j}>
                             {j > 0 && (prose ? ' ' : <br />)}
-                            <LineView line={line} />
+                            <LineView line={line} look={look} />
                         </Fragment>
                     ))}
                 </li>
@@ -128,7 +140,12 @@ function BlockView({ block, prose }: { block: Block; prose: boolean }) {
         }
         case 'code': {
             return (
-                <pre className="overflow-x-auto rounded-sm border bg-surface-raised px-2 py-1.5 font-mono text-xs">
+                <pre
+                    className={cn(
+                        'overflow-x-auto rounded-sm border px-2 py-1.5 font-mono text-xs',
+                        look.raised ? 'bg-background' : 'bg-surface-raised',
+                    )}
+                >
                     {block.lines.join('\n')}
                 </pre>
             )
@@ -136,28 +153,32 @@ function BlockView({ block, prose }: { block: Block; prose: boolean }) {
     }
 }
 
-function LineView({ line }: { line: Line }) {
-    return line.map((piece, i) => <InlineView key={i} piece={piece} />)
+function LineView({ line, look }: { line: Line; look: Look }) {
+    return line.map((piece, i) => <InlineView key={i} piece={piece} look={look} />)
 }
 
-function InlineView({ piece }: { piece: Inline }) {
+function InlineView({ piece, look }: { piece: Inline; look: Look }) {
     switch (piece.kind) {
         case 'text': {
-            return <LinkedText text={piece.text} />
+            return <LinkedText text={piece.text} pullRequests={look.pullRequests} />
         }
         case 'strong': {
             return (
                 <strong className="font-semibold">
-                    <LinkedText text={piece.text} />
+                    <LinkedText text={piece.text} pullRequests={look.pullRequests} />
                 </strong>
             )
         }
         case 'code': {
-            return <Code text={piece.text} />
+            return <Code text={piece.text} raised={look.raised} />
         }
     }
 }
 
-function Code({ text }: { text: string }) {
-    return <code className="rounded-sm bg-surface-raised px-1 py-px font-mono text-xs">{text}</code>
+function Code({ text, raised = false }: { text: string; raised?: boolean }) {
+    return (
+        <code className={cn('rounded-sm px-1 py-px font-mono text-xs', raised ? 'bg-background' : 'bg-surface-raised')}>
+            {text}
+        </code>
+    )
 }

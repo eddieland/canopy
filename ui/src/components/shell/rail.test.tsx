@@ -176,6 +176,7 @@ describe('RailSpend', () => {
         month: { hours: 720, since: '2026-09-08T12:03:00Z', cost_usd: null },
         total_usd: 12,
         sessions_read_at: '2026-10-08T11:55:00Z',
+        budget: null,
     }
 
     it("shows each window's cost after its name, a dash where nothing reported one", async () => {

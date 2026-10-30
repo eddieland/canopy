@@ -34,6 +34,7 @@ const REVIEW: ReviewSummary = {
     news: true,
     seen: true,
     draft: null,
+    served: [],
 }
 
 const REQUESTED: RequestedReview = {

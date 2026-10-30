@@ -4,7 +4,7 @@
 take a reference whose shape names its kind: a ticket key, `REPO#N` or a PR's URL, `chore:NAME`, `run:ID`,
 `review:ID`, or `task:N`. A kind refuses a verb it does not take. `start`, `stop`, `reply`, `forget`, `dismiss`, and
 `send` write through `canopy.core.conversation`, which every channel shares, or for a PR's review request (`start URL
---review`, `stop URL`) through `canopy.core.review_requests`, for a task (`stop task:N`) through `canopy.core.tasks`
+--review`, `stop URL`) through `canopy.reviews.review_requests`, for a task (`stop task:N`) through `canopy.runs.tasks`
 (`cli/tasks.py`), `grant` through `canopy.runs.policy`, or `canopy.reviews.grants`
 for a PR's reviews, `pause` and `resume` through `canopy.core.pause`, and `notice` through `canopy.core.notice`; all
 ten refuse inside canopy's own ticks and runs, `notice` only when it sets or clears one. On `review:ID`, `reply` notes
@@ -26,11 +26,10 @@ from canopy.cli import tasks as tasks_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.core import (
+    cards,
     chore_view,
     conversation,
     db,
-    feedback_items,
-    feedback_plans,
     notice,
     pause,
     personas,
@@ -39,17 +38,17 @@ from canopy.core import (
     prompts,
     reports,
     review_drafts_manage,
-    review_requests,
     review_revisions,
     review_runs,
 )
-from canopy.core.vocab import DismissalReason, PlanItem, PlanStatus, RunKind
+from canopy.core.vocab import DismissalReason, PlanItem, PlanStatus, ReviewRunStatus, RunKind
 from canopy.infra import logs
 from canopy.infra.text import one_line
 from canopy.loop import attention, readback
 from canopy.loop.render import phase_of
-from canopy.reviews import grants
-from canopy.runs import halt, policy
+from canopy.reviews import grants, review_requests
+from canopy.runs import feedback_items, feedback_plans, halt, policy
+from canopy.runtime import models as runtime_models
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -183,6 +182,11 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
     help="The persona of the run this starts, alone: its first worker's, its planner's with --plan, or its review's. "
     "With --review, give it again for a review in each, side by side.",
 )
+@click.option(
+    "--model",
+    metavar="MODEL",
+    help="With --review: the model its reviews run on, provider/model[@variant]. Default: the reviewer's.",
+)
 @click.option("--plan", is_flag=True, help="Plan it first: its implement waits on a plan you approve.")
 @click.pass_context
 def cmd_start(
@@ -192,6 +196,7 @@ def cmd_start(
     review: bool,
     notes: str | None,
     chosen: tuple[str, ...],
+    model: str | None,
     plan: bool,
 ) -> int:
     """Work a ticket privately, or with --review have canopy review someone else's PR.
@@ -212,16 +217,20 @@ def cmd_start(
     hands its reviewer what you want it to know, such as what the author asked for or the part that worries you; on a
     PR already requested, they replace the request's notes. --persona NAME, one `canopy personas` lists, is the voice
     its review is written in; given more than once, canopy reviews the PR once in each, side by side, and each review
-    keeps its own draft. On a PR already requested, they replace the request's personas.
+    keeps its own draft. On a PR already requested, they replace the request's personas. --model MODEL, one
+    `canopy models` lists, is the model every review the request makes runs on, in place of the reviewer's in
+    [runtime.models] or the ticket's override; on a PR already requested, it replaces the request's model.
     """
     _operator("start")
     subject = _ref(ref, "start")
     if notes is not None and not review:
         raise click.UsageError("--notes is for a PR's review, with --review")
+    if model is not None and not review:
+        raise click.UsageError("--model is for a PR's review, with --review; a ticket's is `canopy model KEY MODEL`")
     if review:
         if plan:
             raise click.UsageError("--plan is for a ticket; a PR's review has no plan")
-        return _start_review(click_ctx, subject, notes, chosen)
+        return _start_review(click_ctx, subject, notes, chosen, model)
     if len(chosen) > 1:
         raise click.UsageError("a ticket's run takes one --persona; several are for a PR's reviews, with --review")
     return _start_ticket(click_ctx, subject, chosen[0] if chosen else None, plan=plan)
@@ -262,16 +271,43 @@ def _start_ticket(click_ctx: click.Context, subject: Ref, persona: str | None, *
     return 0
 
 
-def _start_review(click_ctx: click.Context, subject: Ref, notes: str | None, chosen: tuple[str, ...]) -> int:
+def _start_review(
+    click_ctx: click.Context,
+    subject: Ref,
+    notes: str | None,
+    chosen: tuple[str, ...],
+    model: str | None,
+) -> int:
     ctx = open_context(click_ctx)
     try:
-        requested = review_requests.request(ctx.conn, ctx.config, subject, channel=CLI, notes=notes, chosen=chosen)
+        requested = review_requests.request(
+            ctx.conn,
+            ctx.config,
+            subject,
+            channel=CLI,
+            notes=notes,
+            chosen=chosen,
+            model=model,
+            listing=lambda variants: runtime_models.listed(
+                ctx.runner,
+                version=ctx.config.runtime.version,
+                cwd=ctx.workspace.root,
+                variants=variants,
+            ),
+        )
     except conversation.Refused as r:
         raise CliError(f"start refused ({r.guard}): {r.reason}") from None
     noted = requested.request.notes is not None
     logs.for_tick(None).info(
         "review requested",
-        extra={"pr": subject.id, "already": requested.already, "notes": noted, "personas": chosen, "channel": CLI},
+        extra={
+            "pr": subject.id,
+            "already": requested.already,
+            "notes": noted,
+            "personas": chosen,
+            "model": model,
+            "channel": CLI,
+        },
     )
     names = review_requests.personas_of(ctx.conn, requested.request.id)
     written = (
@@ -279,14 +315,18 @@ def _start_review(click_ctx: click.Context, subject: Ref, notes: str | None, cho
         if len(names) == 1
         else f"It is reviewed once in each of {', '.join(names)}, side by side."
     )
+    on = f"Its reviews run on {model}."
     if requested.already:
         replaced = " Its notes are replaced." if (notes or "").strip() else ""
         replaced += f" {written}" if chosen else ""
+        replaced += f" {on}" if model is not None else ""
         click.echo(f"{subject} was already requested for review.{replaced}")
         return 0
     click.echo(f"{subject} is requested for review. The next tick reviews its head, once. Nothing is posted on the PR.")
     if chosen:
         click.echo(written)
+    if model is not None:
+        click.echo(on)
     return 0
 
 
@@ -348,7 +388,7 @@ def _stop_review(click_ctx: click.Context, subject: Ref) -> int:
 @click.argument("text", required=False)
 @click.pass_context
 def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
-    """Answer a ticket or a task, note to a chore, or ask for a revision of a review's draft, with TEXT or stdin.
+    """Answer a ticket, a task, or a running agent, note to a chore, or revise a review's draft, with TEXT or stdin.
 
     On a ticket the next tick reads it and a waiting loop wakes. On a public ticket it is your word to the loop, read as
     an authorized reply is, and how you say what to do about an untrusted reviewer's comments (`untrusted_review`). It
@@ -357,12 +397,20 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     On `chore:NAME` it is a note the chore's next runs read, such as a finding to leave out until a date; the loop does
     not wake for it. On `review:ID` it says what to change in that review's draft: the next tick revises it with an
     agent, which reads the PR and the draft and makes a new version, posting nothing, unless you change the draft first.
+
+    On a running run, `run:ID` for a worker or a planner and `review:ID` for a review, TEXT is the letter of one of the
+    options its question offers: the agent hears it on its next tool call, and has worked around the question
+    until then. A later letter replaces it. Once a review has ended, a lone letter is refused rather than noted on its
+    draft, if it asked a question.
     """
     _operator("reply")
     subject = _ref(ref, "reply")
     body = text if text is not None else sys.stdin.read()
     ctx = open_context(click_ctx)
+    if subject.kind == conversation.RUN or (subject.kind == conversation.REVIEW and _running_review(ctx, subject)):
+        return _answer(ctx, subject, body)
     if subject.kind == conversation.REVIEW:
+        _refuse_late_answer(ctx, subject, body)
         return _note_review(ctx, subject, body)
     try:
         chores = chore_view.defined(ctx.config, ctx.workspace)
@@ -377,6 +425,44 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
         click.echo(f"Message {replied.message_id} on {subject} already says this{answered}; nothing new recorded.")
     if subject.kind == conversation.TASK:
         tasks_cli.replied(ctx, int(subject.id))
+    return 0
+
+
+def _running_review(ctx: Context, subject: Ref) -> bool:
+    run = review_runs.get_review_run(ctx.conn, int(subject.id))
+    return run is not None and run.status is ReviewRunStatus.RUNNING
+
+
+def _refuse_late_answer(ctx: Context, subject: Ref, body: str) -> None:
+    """Refuse a lone letter on an ended review that asked a question: it was meant as an answer, not a note."""
+    run = review_runs.get_review_run(ctx.conn, int(subject.id))
+    standing = cards.of(run) if run is not None else None
+    asked = standing is not None and standing.card is not None and standing.card.question is not None
+    if run is not None and asked and body.strip().upper() in cards.LETTERS:
+        raise CliError(
+            f"reply refused (ended): {subject} has ended ({run.status}); its agent can no longer hear an answer. A "
+            "note on its draft says more than a letter.",
+        )
+
+
+def _answer(ctx: Context, subject: Ref, body: str) -> int:
+    try:
+        answered = conversation.answer(ctx.conn, subject, body, state_dir=ctx.state_dir)
+    except conversation.Refused as r:
+        raise CliError(f"reply refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info(
+        "question answered",
+        extra={"subject": str(subject), "answer": answered.letter, "already": answered.already, "channel": CLI},
+    )
+    said = f"{subject}'s question: {one_line(answered.question.ask)}"
+    if answered.already:
+        click.echo(f"{said}\nIt was already answered {answered.letter}: {answered.option}. Nothing new recorded.")
+    else:
+        click.echo(f"{said}\nAnswered {answered.letter}: {answered.option}.")
+    if answered.heard:
+        click.echo("Its agent hears it on its next tool call.")
+    else:
+        click.echo("Its agent had already ended, and will not hear it.")
     return 0
 
 
@@ -703,18 +789,7 @@ def _show_pr(ctx: Context, url: str) -> None:
     if request is None:
         click.echo("  no review request: reviewed as one of the loop's own PRs or a review.query match")
     else:
-        made = f"made {attention.age(request.created_at)} ago via {request.channel}"
-        if request.ended_at is None:
-            click.echo(f"  review request: {made}, open")
-        else:
-            click.echo(f"  review request: {made}, ended {attention.age(request.ended_at)} ago ({request.end_reason})")
-        chosen = review_requests.personas_of(ctx.conn, request.id)
-        if chosen:
-            click.echo(f"  {'persona' if len(chosen) == 1 else 'personas'}: {', '.join(chosen)}")
-        if request.notes is not None:
-            click.echo("  notes:")
-            for line in conversation.printable(request.notes).splitlines():
-                click.echo(f"    {line}")
+        _show_request(ctx, request)
     click.echo(f"\nReviews ({len(runs)}):")
     for r in runs:
         when = f"started {attention.age(r.started_at)} ago"
@@ -725,6 +800,23 @@ def _show_pr(ctx: Context, url: str) -> None:
         click.echo("  none yet")
     else:
         click.echo(f"\nRead one with `canopy review show {runs[0].id}`.")
+
+
+def _show_request(ctx: Context, request: records.ReviewRequest) -> None:
+    made = f"made {attention.age(request.created_at)} ago via {request.channel}"
+    if request.ended_at is None:
+        click.echo(f"  review request: {made}, open")
+    else:
+        click.echo(f"  review request: {made}, ended {attention.age(request.ended_at)} ago ({request.end_reason})")
+    chosen = review_requests.personas_of(ctx.conn, request.id)
+    if chosen:
+        click.echo(f"  {'persona' if len(chosen) == 1 else 'personas'}: {', '.join(chosen)}")
+    if request.model is not None:
+        click.echo(f"  model: {request.model}")
+    if request.notes is not None:
+        click.echo("  notes:")
+        for line in conversation.printable(request.notes).splitlines():
+            click.echo(f"    {line}")
 
 
 def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:
@@ -926,7 +1018,8 @@ def _echo_message(m: records.Message) -> None:
 
 def _show_run(ctx: Context, run_id: int) -> None:
     try:
-        click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id)))
+        # A run's progress is the operator's alone (DESIGN §41): not printed inside one of canopy's ticks or runs.
+        click.echo(readback.read_run(ctx, readback.ShowRun(run=run_id), card=conversation.is_operator()))
     except reports.Refused as e:
         raise CliError(str(e)) from None
 

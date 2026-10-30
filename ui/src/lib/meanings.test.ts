@@ -18,6 +18,7 @@ describe('meanings', () => {
 
     it('has none for a reason or a phase it does not know, nor for no phase', () => {
         expect(reasonMeaning('review_late')).toMatch(/unchanged since the PR’s first review/u)
+        expect(reasonMeaning('unobserved_pr')).toMatch(/no source reads it/u)
         expect(reasonMeaning('the_overseers_own')).toBeNull()
         expect(phaseMeaning('ci_red')).toBe('Its PR’s checks failed.')
         expect(phaseMeaning('not_a_phase')).toBeNull()

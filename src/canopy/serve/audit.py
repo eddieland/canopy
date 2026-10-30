@@ -22,8 +22,9 @@ import asyncio
 import dataclasses
 from typing import TYPE_CHECKING
 
-from canopy.core import db, web_writes
+from canopy.core import db
 from canopy.infra import logs
+from canopy.serve import web_writes
 from canopy.serve.auth import AUTHORIZED, READ_METHODS, Signed
 
 if TYPE_CHECKING:

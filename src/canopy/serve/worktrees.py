@@ -17,8 +17,9 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, records, tasks
+from canopy.core import conversation, db, records
 from canopy.core.pools import AVAILABLE, HOLDER_PREFIX, QUARANTINED, SYNC_HOLDER, PoolError, Slot
+from canopy.runs import tasks
 from canopy.serve import views
 from canopy.serve.schema.worktree import Pool, Process, ReviewHold, TaskHold, Worktree, WorktreeState
 
@@ -42,7 +43,10 @@ _STATES: dict[str, WorktreeState] = {
     "dirty": "dirty",
 }
 _NO_CLONE = "no clone; run `canopy workspace sync`"
-_STALE = "no running run holds this lease; the next tick's reconcile returns it"
+_STALE = (
+    "no running run holds this lease; the next tick's reconcile returns it, or `canopy workspace release {repo} "
+    "{name}` now"
+)
 _SYNC = "held while `canopy workspace sync` makes this pool's slots"
 # What a dirty slot blocks and what clears it (DESIGN §18, What a pool guarantees). No canopy command clears one: its
 # changes may be someone's work, so the operator keeps or discards them.
@@ -132,7 +136,7 @@ def worktree(
     elif leased and slot.lease_holder == SYNC_HOLDER:
         note = _SYNC
     elif leased and slot.lease_holder.startswith(HOLDER_PREFIX):
-        note = _STALE
+        note = _STALE.format(repo=repo, name=slot.name)
     elif state == "dirty":
         note = _DIRTY
     return Worktree(

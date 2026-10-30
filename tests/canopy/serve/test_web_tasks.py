@@ -7,9 +7,10 @@ the state directory as the CLI reads it.
 import json
 from pathlib import Path
 
-from canopy.core import conversation, db, pools, records, tasks
+from canopy.core import conversation, db, pools, records
 from canopy.core.context import Context
 from canopy.core.vocab import PoolKind, RunStatus
+from canopy.runs import tasks
 from canopy.serve.backend import Backend
 from canopy.serve.task_views import RUN_STANDINGS
 from tests.canopy.helpers import present
@@ -119,6 +120,10 @@ def test_a_task_run_is_found_only_under_its_own_task_with_its_whole_result(backe
         None,
     )
     assert found["models"]["status"] == "no_session"
+    assert found["model"] is None  # it asked for none, so the runtime's default served it
+    with backend.open() as ctx:
+        records.update(records.TaskRun).set(model="provider/model-a").where("id = ?", run_id).run(ctx.conn)
+    assert c.get(f"/api/tasks/{task.id}/runs/{run_id}").json()["model"] == "provider/model-a"
     for path in ("", "/transcript", "/report"):
         assert c.get(f"/api/tasks/{other.id}/runs/{run_id}{path}").status_code == 404
         assert c.get(f"/api/tasks/{task.id}/runs/99{path}").status_code == 404
@@ -223,3 +228,23 @@ def end(
     if question is not None:
         result["question"] = question
     assert tasks.close_run(ctx.conn, ctx.config, run_id, status, json.dumps(result), head=head, tickets=tickets or [])
+
+
+def test_a_tasks_runs_name_the_models_that_served_them_so_the_runs_page_lists_them_by_model(backend: Backend) -> None:
+    with backend.open() as ctx:
+        records.insert(
+            records.RunModel,
+            run_table="task_runs",
+            run_id=1,
+            model="openai/gpt-5",
+            replies=3,
+            cost_usd=0.1,
+        ).run(ctx.conn)
+    c = client(None, backend)
+    assert {t["id"]: t["latest"]["served"] for t in c.get("/api/tasks").json() if t["latest"]}[1] == ["openai/gpt-5"]
+    page = c.get("/api/tasks/1").json()
+    assert (page["task"]["latest"]["served"], [r["served"] for r in page["runs"]]) == (
+        ["openai/gpt-5"],
+        [["openai/gpt-5"]],
+    )
+    assert c.get("/api/tasks/1/runs/1").json()["run"]["served"] == ["openai/gpt-5"]

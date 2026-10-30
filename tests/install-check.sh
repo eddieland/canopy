@@ -74,7 +74,7 @@ import sqlite3
 sqlite3.connect(":memory:").execute("CREATE VIRTUAL TABLE t USING fts5(x)")
 ' || fail "the installed Python's SQLite has no FTS5, which the journal's memory index needs"
 
-# A workspace of one repository, cloned from a local origin as `canopy init` clones any URL it is given.
+# A workspace of one repository, cloned from a local origin as `canopy workspace add` clones any URL it is given.
 origin="$work/project.git"
 git init --quiet --bare "$origin"
 seed="$work/seed"
@@ -84,13 +84,32 @@ git -C "$seed" push --quiet "$origin" HEAD
 workspace="$work/acme"
 mkdir -p "$workspace"
 cd "$workspace"
-canopy init --provider github "project=$origin"
-[ -d "$workspace/repos/project/.git" ] || fail "canopy init did not clone the repository into the workspace"
-# init writes the workspace's private config, with the queue label, and no user config (DESIGN §12).
+init=$(canopy init --provider github)
+# init writes the workspace's private config, with the queue label and the tracker source to fill in, and no user
+# config (DESIGN §12). Config requires a tracker source (§30), so it does not load until the operator names one.
 private="$workspace/.canopy/config.toml"
 grep -q '^labels = \["agent-ready-' "$private" || fail "canopy init did not write the label to $private"
+grep -q '^# \[connect.sources.tracker\]$' "$private" || fail "canopy init did not write a tracker source to fill in"
+echo "$init" | grep -q 'a tracker source is required' || fail "canopy init did not say a tracker source is needed"
 config="$XDG_CONFIG_HOME/canopy/config.toml"
 [ ! -e "$config" ] || fail "canopy init wrote the user config, $config"
+# The fake connector as the tracker source, holding every ticket it is asked open and labeled with the queue label,
+# and its query finding GH-1; and as the vcs source in place of canopy's GitHub reader, which reads no local origin.
+label=$(sed -n 's/^labels = \["\(.*\)"\]$/\1/p' "$private")
+cat >>"$private" <<TOML
+
+[connect.sources.tracker]
+kind = "tracker"
+cmd = "connector tracker --labeled $label"
+
+[connect.sources.vcs]
+kind = "vcs"
+cmd = "connector vcs"
+TOML
+export FAKE_CONNECTOR_STATE="$work/connector.json"
+printf '{"tracker": {"query": ["GH-1"]}}\n' >"$FAKE_CONNECTOR_STATE"
+canopy workspace add "project=$origin"
+[ -d "$workspace/repos/project/.git" ] || fail "canopy workspace add did not clone the repository into the workspace"
 
 # Point the runtime at the fake agent in the user config, which serves every workspace, keeping {definitions_dir} as
 # the templates require. init writes no [runtime]: the defaults run OpenCode.
@@ -103,7 +122,12 @@ TOML
 
 export FAKE_TREEHOUSE_STATE="$work/treehouse.json"
 export FAKE_AGENT_RESULT="CANOPY_TICK_DONE"
-export FAKE_AGENT_COMMANDS='[["canopy", "decide", "GH-1", "wait", "--rationale", "install check"]]'
+# The overseer decides through its tool, as it does with no shell (DESIGN §27): the fake agent calls it through the
+# server the tick names in its inline config, which runs the installed canopy.
+decision='{"key": "GH-1", "action": "wait", "rationale": "install check"}'
+export FAKE_AGENT_TOOLS="[[\"canopy_decide\", {\"decisions\": [$decision]}]]"
+# The first tick records the query's GH-1, which the source reads on the next, so its overseer is given GH-1.
+canopy tick --dry-run
 canopy tick --dry-run
 decisions=$(canopy decisions)
 echo "$decisions" | grep -Eq 'GH-1 +wait +install check' || fail "the dry tick's decision was not recorded"

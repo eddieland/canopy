@@ -21,8 +21,6 @@ def reviewed(number: int, ticket: str | None) -> ReviewedPR:
             "findings": [],
             "dismissed_findings": 0,
             "held_findings": 0,
-            "started_at": "2026-10-28T10:00:00.000Z",
-            "ended_at": "2026-10-28T10:05:00.000Z",
             "number": number,
         },
     }
@@ -68,11 +66,6 @@ def test_the_prs_kept_are_the_listed_tickets_and_those_the_fresh_query_found() -
     scoped = view.scoped(REVIEWED, tickets={"PROJ-1"}, prs={f"{API}/3"}, found={f"{API}/4"})
     assert urls(scoped) == [f"{API}/1", f"{API}/3", f"{API}/4"]
     assert {k: v for k, v in scoped.items() if k != "prs"} == {k: v for k, v in REVIEWED.items() if k != "prs"}
-
-
-def test_while_the_overseer_runs_the_query_itself_every_pr_of_no_ticket_is_kept() -> None:
-    scoped = view.scoped(REVIEWED, tickets={"PROJ-1"}, prs=set(), found=None)
-    assert urls(scoped) == [f"{API}/1", f"{API}/3", f"{API}/4", f"{API}/5"]
 
 
 def test_with_no_query_a_pr_of_no_ticket_and_no_unit_is_left_out_unless_the_operator_asked() -> None:

@@ -184,6 +184,13 @@ export const GHOST_TIPS = {
         'Scanning... the comments in your config are love letters. This page keeps every one.',
         "Dear Traveler, they dropped a trusted reviewer. I checked. I'm still trusted. Phew.",
     ],
+    '/settings_/skills': [
+        'Eyes up, Guardian. Skills. I have one: I float. The Traveler did not ship a SKILL.md for it.',
+        'Field report: every skill an agent is offered rides along on every call. Light travels light.',
+        'Grimoire: a skill with no description is a skill nobody loads. Write one. Ghosts read.',
+        'Scanning... five skills found. None of them is reviving Guardians. I checked twice.',
+        "Dear Traveler, a skill in your home goes everywhere you go. Like me. You're welcome.",
+    ],
     '/search': [
         'Eyes up, Guardian. Searching. I lost a shell in 2014. Let me know if it turns up.',
         'Scanning... scanning... still scanning. It is what I do best. It is also all I do.',
@@ -197,6 +204,13 @@ export const GHOST_TIPS = {
         'Scanning... recording is not using. Ask the Cryptarch about engrams.',
         'Field report: a note says "it works on my machine". That is a note about the machine.',
         'Dear Traveler, a worker proposed a lesson. I proposed a shell. One of us got promoted.',
+    ],
+    '/system': [
+        'Eyes up, Guardian. The machine itself. Its light is a status LED. Still counts.',
+        'Scanning... load average nominal. Disk nominal. Ghost nominal. Mostly.',
+        'Field report: a disk under the floor and the overseer stays home. Wise. I would too.',
+        'Grimoire: memory available is what is left after everyone else ate. Like loot drops.',
+        'Dear Traveler, the loop has been up for hours. I have been up since the Golden Age.',
     ],
     '/guide/$page': [
         "Eyes up, Guardian. Documentation. I'll read it to you in a calm, soothing voice.",

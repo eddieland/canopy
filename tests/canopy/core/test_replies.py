@@ -13,14 +13,13 @@ import pytest
 from canopy.core import prompts, replies
 from canopy.core.config import load
 from canopy.core.vocab import ReplyMode, RunKind
-from tests.canopy.helpers import PRIVATE_PROMPT_VALUES, PROMPT_VALUES, present
+from tests.canopy.helpers import APPROVE, PRIVATE_PROMPT_VALUES, PROMPT_VALUES, TRACKER_POSTS, present
 
 if TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
 
     from tests.conftest import CanopyEnv
 
-TRACKER_POSTS = '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n'
 DRAFTING = [
     (RunKind.IMPLEMENT, False, False),
     (RunKind.IMPLEMENT, False, True),
@@ -32,7 +31,7 @@ DRAFTING = [
 
 
 def approving(env: CanopyEnv, *, tracker_posts: bool = False) -> None:
-    env.write_private('[trust]\nreview_replies = "approve"\n' + (TRACKER_POSTS if tracker_posts else ""))
+    env.configure(env.private_file, {"trust": APPROVE, **({"connect": TRACKER_POSTS} if tracker_posts else {})})
 
 
 @pytest.mark.parametrize(

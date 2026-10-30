@@ -227,6 +227,14 @@ reviews list, so you can see it landed, and it waits on the [pull requests page]
 or `cli`. Once the request ends, the page says when and why: `reviewed`, `stopped`, `merged` or `closed` before a
 review got to it, or `unknown_repo` when none of your repositories holds the PR.
 
+You needn't go to the reviews page for it. Press `R` on any page, anywhere but a text field, and the same form opens
+over whatever you were reading; on a PR's page it comes with that PR's URL already in it. Or skip the key: paste a PR's
+URL anywhere outside a field and the form opens with it filled in, the focus waiting in the notes. Pasting anything
+else does nothing, so a stray paste of your shopping list stays between you and your clipboard. Escape or a click
+outside closes the form without losing what you wrote; it's still there when you open it again in the same tab, and
+it clears once the request goes through. A refusal, such as one of the loop's own PRs (`loop_pr`), keeps it open and
+says why.
+
 Already on the PR's page? Its **Pull request** panel asks for you: **Review this PR** on one canopy has never
 reviewed, and **Review again** once it has, or once your request has ended, say after the author pushed a fix. It's the
 same request, in the personas its menu names: the last request's, or those [Settings](settings#reviews) prefers. The
@@ -305,13 +313,14 @@ the PR (with its other reviews, if any, on a line under it), the persona the rev
 the base branch it was read against, and when its run ended, with a link to the run. The persona carries the start of
 its text's digest, whole on hover: two reviews in one persona with different digests had it edited between them. When
 the harness decided the review's status itself, such as failing a run that never reported, its reason is the red
-**harness** note under the summary. The status is the line under the title. Then its findings, each linking to where it
-sits, and the diff, a panel per file, with each finding pinned under the line it names. A finding on a line the diff
-doesn't show sits under its file's header, and one about a file the diff doesn't touch waits in a panel of its own after
-the files. A long diff shows the lines around each finding at first, with folds that open the rest. A renamed file is
-headed `old → new`, and a binary one is marked `binary`. A diff too long to keep whole says so at its end. A review that
-holds a draft of yours leads with the draft instead, and folds all this but the diff under it
-([Publishing your review](#publishing-your-review)).
+**harness** note under the summary. While the reviewer works, its [progress](runs#a-running-agents-progress) leads the
+page, and a review that ended keeps its last. The status is the line under the title. Then its findings, each linking
+to where it sits, and the diff, a panel per file, with each finding pinned under the line it names. A finding on a line
+the diff doesn't show sits under its file's header, and one about a file the diff doesn't touch waits in a panel of its
+own after the files. A long diff shows the lines around each finding at first, with folds that open the rest. A renamed
+file is headed `old → new`, and a binary one is marked `binary`. A diff too long to keep whole says so at its end. A
+review that holds a draft of yours leads with the draft instead, and folds all this but the diff under it ([Publishing
+your review](#publishing-your-review)).
 
 An old review may have no diff kept, either from before canopy kept them or because your `[retention]` removed it with
 the review's log, which the page says as `removed after 30 days`. Its findings list is then the cards themselves, each
@@ -334,7 +343,9 @@ The results are the page you read; how the reviewer got there is a page of its o
 **transcript and log**. It's the review in the trail, then **Run**, and holds what [a run's page](runs#a-runs-page)
 does, [Context](runs#context) included: what a failed review ended on, the harness's note, when it ran, what it spent
 and on which model, and where its log is; then the reviewer's transcript, every file it read and command it ran, the
-prompt canopy handed it, and the log's end as written, each folded until you open it.
+prompt canopy handed it, and the log's end as written, each folded until you open it. Its **model** names the model
+canopy asked for from the moment the review starts, the ticket's reviewer override or `runtime.models.reviewer`, so an
+override you just picked is checkable before the review's session is even read, let alone before the next tick.
 
 Open it when a verdict surprises you, or when a review failed and you want to know whether to blame the reviewer, the
 PR, or the runtime. While it works, the transcript grows as the reviewer goes, as a worker's does, and what it has spent

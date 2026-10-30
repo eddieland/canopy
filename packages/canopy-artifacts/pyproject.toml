@@ -21,9 +21,10 @@ classifiers = [
     "Topic :: Software Development",
 ]
 requires-python = ">=3.12"
-# click for its command line (D025) and pydantic for its tools' arguments (D026), and nothing from canopy: canopy names
-# it in its runtime's MCP config and never imports it, so what workers publish stays out of the journal (D041, §38).
-dependencies = ["click>=8.5.0", "pydantic>=2.14.1"]
+# click for its command line (D025), pydantic for its tools' arguments (D026), canopy-mcp for the protocol (D124), and
+# nothing from canopy: canopy names it in its runtime's MCP config and never imports it, so what workers publish stays
+# out of the journal (D041, §38).
+dependencies = ["canopy-mcp", "click>=8.5.0", "pydantic>=2.14.1"]
 
 [project.scripts]
 canopy-artifacts = "canopy_artifacts.cli:main"

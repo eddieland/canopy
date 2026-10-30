@@ -2,12 +2,12 @@
 
 A scenario test reads the way an entry in docs/SCENARIOS.md does: the overseer ticks and decides, workers run and push,
 the operator replies, and the test checks what canopy did. The `scenario` fixture's `Scenario` tells the story; the
-functions below it are the moves in it, the overseer's (`dispatches`, `reviews`, `raises`, `sets_phase`, `skips_tick`,
+functions below it are the moves in it, the overseer's (`dispatches`, `reviews`, `sets_phase`, and `raises`, `decides`,
 and `waits` from `helpers.py`) and a worker's (`pushes`, `asks`, `fails`, or any `*_does` helper). Each is a helper of
 `helpers.py` with the plumbing folded in: a tick's exit code checked, the runs it started waited for, a dispatch's
-flags spelled as keywords. Those moves run the overseer's commands; a tick's move may instead be a call of one of
-canopy's tools, `calls("canopy_decide", key=..., ...)` from `helpers.py`, made through the server as the overseer makes
-it.
+fields spelled as keywords. The overseer's moves are calls of its tools (DESIGN §27), each a `Called`, which a tick's
+overseer makes through the server its inline config names, and the other verbs make here, as `canopy _mcp` answers
+them; `calls("canopy_review-wait", ...)` from `helpers.py` makes any other.
 
     def test_a_red_check_resumes_the_branch(scenario: Scenario, git_pool: GitPool) -> None:
         scenario.run(worker=pushes())
@@ -51,9 +51,11 @@ the story says what the next command reads:
         assert action == "refused:attempt_limit"
 
 A run can be left at work while the story goes on around it: `starts`, or a tick with `hold=True`, holds each worker
-it starts before it does anything and gives the run back as `Working`. The test then says what becomes of it: it
-`finishes`, doing what its script says, or its `canopy _run` `dies`, as a crash or a shutdown would leave it, its worker
-still at work, for the next tick to find. A run still held when the test ends is stopped:
+it starts once it has made its tool calls, before its commands, and gives the run back as `Working`. canopy records
+each call a moment after the worker prints it, so a test that reads what they recorded, such as the run's card, first
+waits until it `has_called` them all. The test then says what becomes of the run: it `finishes`, doing what its script
+says, or its `canopy _run` `dies`, as a crash or a shutdown would leave it, its worker still at work, for the next tick
+to find. A run still held when the test ends is stopped:
 
     def test_a_run_whose_process_died_is_crashed_on_the_next_tick(scenario: Scenario, git_pool: GitPool) -> None:
         working = scenario.starts(worker=pushes())
@@ -63,12 +65,12 @@ still at work, for the next tick to find. A run still held when the test ends is
         ticked = scenario.tick(*waits("PROJ-1"))
         assert ticked.actions[0] == "attention:crashed"
 
-The overseer is played whole, not only its commands: what its query found (`queried=`), the line it ends on
-(`result=`), and how it runs (`exit_code=`, `says=`, ...), so a tick it fails, or a duty it leaves undone, is a story
-too:
+The overseer is played whole, not only its commands: the line it ends on (`result=`), and how it runs
+(`exit_code=`, `says=`, ...), so a tick it fails, or a duty it leaves undone, is a story too:
 
-    def test_a_ticket_the_query_found_is_owed_a_decision(scenario: Scenario) -> None:
-        failed = scenario.tick(queried=["PROJ-9"], code=1)
+    def test_a_ticket_left_out_is_owed_a_decision(scenario: Scenario) -> None:
+        scenario.seen("PROJ-9")
+        failed = scenario.tick(code=1)
         assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-9"
 
 The operator is played whole too: `operator` runs one of their commands and gives back what canopy printed, `out` and
@@ -98,20 +100,20 @@ own and does it in this process, its reviewer reporting what the test gives it:
         reviewed = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
         assert (reviewed.status, reviewed.row.ticket_key) == ("done", "PROJ-1")
 
-A review is held at work as a run is, with `starts_review`. The overseer's own commands are moves too: `overseer` runs
+A review is held at work as a run is, with `starts_review`. The overseer's own calls are moves too: `overseer` makes
 one in a tick of its own, or in the one `ticking` holds open, so what several raise is the attention list:
 
     def test_two_items_raised_in_one_tick(scenario: Scenario) -> None:
         with scenario.ticking():
-            scenario.overseer("attention", "PROJ-1", "needs_human", "--detail", "one")
-            scenario.overseer("attention", "PROJ-2", "needs_human", "--detail", "two")
+            scenario.overseer(raises("PROJ-1", "needs_human", "one"))
+            scenario.overseer(raises("PROJ-2", "needs_human", "two"))
         assert len(scenario.attention()) == 2
 
 The loop is told the same way: `loops(scenario, ...)` runs `canopy loop`, dry, on a fake clock, acting at the minutes
 it is given, and gives back each tick with what woke it and the minute it started at.
 
-A step the verbs do not cover is written as before, in the same test: the verbs are argv lists and context managers, so
-they mix with `canopy(...)`, `overseer_does`, and the journal's own queries.
+A step the verbs do not cover is written as before, in the same test: the verbs are calls and context managers, so they
+mix with `overseer_calls(...)`, `overseer_does`, and the journal's own queries.
 
 A scenario keeps the story as it played: each move a `Scenario` method made, and what canopy did with it, failing step
 included. When a scenario test fails, its report carries that story in a section of its own, `scenario`, ending on the
@@ -142,15 +144,16 @@ from contextlib import AbstractContextManager, ExitStack, contextmanager, redire
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal, Unpack, assert_never
+from typing import Any, Literal, Self, Unpack, assert_never
 from unittest import mock
 
 from canopy.cli.main import main
-from canopy.core import db, feedback_items, records, review_runs
+from canopy.core import db, records, review_runs
 from canopy.core.context import Context
 from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, RunStatus, TickStatus
 from canopy.infra import logs, procs
 from canopy.loop import attention, poll, repeat, tick
+from canopy.runs import feedback_items
 from tests.canopy.helpers import (
     DRAFTS_PR,
     KEY,
@@ -162,9 +165,10 @@ from tests.canopy.helpers import (
     Called,
     FakeTime,
     InlineRunner,
+    Said,
     Script,
     blocked_result,
-    canopy,
+    calls,
     comment,
     commit_and_push,
     context,
@@ -173,12 +177,15 @@ from tests.canopy.helpers import (
     last_tick,
     log_file,
     operator,
+    overseer_calls,
     overseer_does,
     planner_does,
     present,
     seen,
     state_block,
     tick_starts,
+    ticket_sets,
+    tracker_holds,
     wait_for_run,
     worker_does,
 )
@@ -226,7 +233,7 @@ HOLD_TIMEOUT = 60
 CHORE_SECONDS = 30
 
 #: The overseer's commands that start a review run: a review, and a revision of a review's draft (DESIGN §34).
-REVIEW_COMMANDS = (["canopy", "review", "run"], ["canopy", "review", "revise"])
+REVIEW_TOOLS = ("canopy_review-run", "canopy_review-revise")
 
 #: The roles a held run's agent may play, each scripted by its own `FAKE_<ROLE>_*` variables: a worker, a private
 #: ticket's, a planner, and a reviewer. The overseer is never held.
@@ -343,6 +350,15 @@ class Working:
         """The run's row as it stands."""
         return present(db.get_run(self.scenario.conn, self.id))
 
+    def has_called(self, calls: int) -> Self:
+        """Wait until canopy has recorded `calls` of the worker's tool calls, as `canopy _run` reads its events.
+
+        Returns:
+            The run, still at work.
+        """
+        _recorded(calls, lambda: int(self.row["tool_calls"]), str(self))
+        return self
+
     def finishes(self) -> Ran:
         """Let the worker go on to what its script says, and wait for the run to end.
 
@@ -417,6 +433,15 @@ class Reviewing:
         """The review run's row as it stands."""
         return present(review_runs.get_review_run(self.scenario.conn, self.id))
 
+    def has_called(self, calls: int) -> Self:
+        """Wait until canopy has recorded `calls` of the reviewer's tool calls, as `canopy _review` reads its events.
+
+        Returns:
+            The review run, still at work.
+        """
+        _recorded(calls, lambda: self.row.tool_calls, str(self))
+        return self
+
     def finishes(self) -> Reviewed:
         """Let the reviewer go on to what its script says, and wait for the review run to end.
 
@@ -452,7 +477,7 @@ class Refused(UserList[tuple[str, str]]):
     """What canopy refused: the decisions of the tick it refused in, as (action, rationale).
 
     Those are the refusal and the attention it raised, if any. Beside them it holds that tick, its decisions whole, and
-    what the refused command printed.
+    what the refused call came back with.
     """
 
     def __init__(
@@ -461,9 +486,9 @@ class Refused(UserList[tuple[str, str]]):
         *,
         tick: int | None = None,
         made: Sequence[records.Decision] = (),
-        printed: Printed | None = None,
+        said: Said | None = None,
     ) -> None:
-        """Hold what refusing `tick` decided, `made`, and what the refused command printed.
+        """Hold what refusing `tick` decided, `made`, and what the refused call came back with.
 
         `decided` is given alone when a list's own methods make a new one, a slice say, which keeps no tick.
         """
@@ -472,8 +497,8 @@ class Refused(UserList[tuple[str, str]]):
         self.tick = tick
         #: Its decisions whole, with the ticket, repository, and PR each named.
         self.decisions = list(made)
-        #: What the refused command printed, its refusal on stderr.
-        self.printed = printed or Printed("", "")
+        #: What the refused call came back with: its refusal, a tool error, or what it said when the spawn refused.
+        self.said = said or Said("", error=False)
 
 
 @dataclass(frozen=True)
@@ -556,31 +581,26 @@ class Scenario:
         dry_run: bool = False,
         hold: bool = False,
         code: int = 0,
-        queried: Sequence[str] | None = (),
         result: str = TICK_DONE,
         **overseer: Unpack[Behavior],
     ) -> Ticked:
         """Run one tick, `canopy tick`, its overseer making `moves`, and wait for each run it dispatches to end.
 
-        A move is a command it runs, such as `dispatches(...)`, or a call of one of canopy's tools, `calls(...)`: it
-        makes every call first, then runs every command.
+        A move is a call of one of its tools, such as `dispatches(...)`, or a command it runs through its shell,
+        `canopy(...)`, where a test plays one it has no shell for: it makes every call first, then runs every command.
 
         Each run's worker does `worker`, the fake's default `done` if None, or what `workers` gives for its ticket: a
         script each ticket's run plays as made for that ticket, so `pushes()` pushes the branch of the ticket it runs
         for. With `hold`, each is held at work instead, and the tick's runs are left `working` for the test to finish
-        or kill. The overseer records `queried`, the keys its query found, when the query is due, or no query at all if
-        None; it ends on `result`, by default the line that ends a tick, and runs as `overseer` says (`exit_code`,
-        `says`, ...). The tick must exit `code`, and a failure says how it ended instead.
+        or kill. The overseer ends on `result`, by default the line that ends a tick, and runs as `overseer` says
+        (`exit_code`, `says`, ...). The tick must exit `code`, and a failure says how it ended instead.
 
         Returns:
             What the tick did.
         """
         argv = ["tick", "--dry-run"] if dry_run else ["tick"]
-        recorded = "skip" if queried is None else json.dumps(list(queried))
-        commands = [move for move in moves if not isinstance(move, Called)]
-        tools = [move for move in moves if isinstance(move, Called)]
         with ExitStack() as stack:
-            stack.enter_context(overseer_does(*commands, tools=tools, result=result, queried=recorded, **overseer))
+            stack.enter_context(overseer_does(*moves, result=result, **overseer))
             if worker is not None:
                 stack.enter_context(worker)
             stack.enter_context(_each_ticket(worker, workers or {}, moves))
@@ -601,14 +621,14 @@ class Scenario:
 
     def run(
         self,
-        command: list[str] | None = None,
+        move: Called | None = None,
         *,
         worker: Worker | None = None,
         runner: InlineRunner | None = None,
     ) -> Ran:
-        """Dispatch `command` in a tick of its own, and run it in this process, its worker doing `worker`.
+        """Dispatch `move` in a tick of its own, and run it in this process, its worker doing `worker`.
 
-        `command` is a `dispatches(...)`, KEY's `implement` if None, and `worker` is made for the ticket it names.
+        `move` is a `dispatches(...)`, KEY's `implement` if None, and `worker` is made for the ticket it names.
 
         The overseer is not run, so a run's story can start without a tick's. `runner` runs its processes, one that
         times a worker out, say, or a plain `InlineRunner` if None.
@@ -616,17 +636,18 @@ class Scenario:
         Returns:
             The run, closed, with what its `canopy _run` printed.
         """
-        command = command or dispatches()
-        assert command[:2] == ["canopy", "dispatch"], command
+        move = move or dispatches()
+        key = _dispatch_key(move)
         runner = runner or InlineRunner()
+        tracker_holds(self.conn, key)
         with ExitStack() as stack:
             if worker is not None:
-                stack.enter_context(_made_for(worker, command[2]))
+                stack.enter_context(_made_for(worker, key))
             with in_tick(self.conn) as tick_id:
-                exited = main(command[1:], runner=runner)
-                if exited != 0:
-                    self._tell(f"tick {tick_id} does not dispatch {shlex.join(command)}", tick_id)
-                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                said = overseer_calls(move, runner=runner)
+                if said.error:
+                    self._tell(f"tick {tick_id} does not dispatch {move}: {said.text}", tick_id)
+                assert not said.error, (said.text, db.decisions_for_tick(self.conn, tick_id))
                 tick_starts(runner, tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(last_run(self.conn)["id"])
@@ -636,28 +657,29 @@ class Scenario:
         assert exited == 0, ran
         return ran
 
-    def starts(self, command: list[str] | None = None, *, worker: Worker | None = None) -> Working:
-        """Dispatch `command` in a tick of its own, and hold its worker at work.
+    def starts(self, move: Called | None = None, *, worker: Worker | None = None) -> Working:
+        """Dispatch `move` in a tick of its own, and hold its worker at work.
 
-        `command` is a `dispatches(...)`, KEY's `implement` if None. The worker is set to do `worker`, made for the
-        ticket `command` names, once the test lets it go on.
+        `move` is a `dispatches(...)`, KEY's `implement` if None. The worker is set to do `worker`, made for the
+        ticket `move` names, once the test lets it go on.
 
         The run is detached, as a tick's is, and the overseer is not run.
 
         Returns:
             The run, at work.
         """
-        command = command or dispatches()
-        assert command[:2] == ["canopy", "dispatch"], command
+        move = move or dispatches()
+        key = _dispatch_key(move)
+        tracker_holds(self.conn, key)
         with ExitStack() as stack:
             if worker is not None:
-                stack.enter_context(_made_for(worker, command[2]))
+                stack.enter_context(_made_for(worker, key))
             stack.enter_context(self._held())
             with in_tick(self.conn) as tick_id:
-                exited = main(command[1:])
-                if exited != 0:
-                    self._tell(f"tick {tick_id} does not dispatch {shlex.join(command)}", tick_id)
-                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                said = overseer_calls(move)
+                if said.error:
+                    self._tell(f"tick {tick_id} does not dispatch {move}: {said.text}", tick_id)
+                assert not said.error, (said.text, db.decisions_for_tick(self.conn, tick_id))
                 tick_starts(tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(last_run(self.conn)["id"])
@@ -667,14 +689,14 @@ class Scenario:
 
     def review(
         self,
-        command: list[str],
+        move: Called,
         *,
         reviewer: Worker | None = None,
         runner: InlineRunner | None = None,
     ) -> Reviewed:
-        """Start the review `command` in a tick of its own, and do it in this process, its reviewer doing `reviewer`.
+        """Start the review `move` in a tick of its own, and do it in this process, its reviewer doing `reviewer`.
 
-        `command` is a `reviews(...)` or a `revises(...)`, and `reviewer` a `reviewer_reports(...)`, or the fake's
+        `move` is a `reviews(...)` or a `revises(...)`, and `reviewer` a `reviewer_reports(...)`, or the fake's
         default report if None.
 
         The overseer is not run. `runner` runs the reviewer's processes, one that times it out, say, or a plain
@@ -683,15 +705,15 @@ class Scenario:
         Returns:
             The review run, closed, with what its `canopy _review` printed.
         """
-        assert command[:3] in REVIEW_COMMANDS, command
+        assert move.name in REVIEW_TOOLS, move
         with ExitStack() as stack:
             if reviewer is not None:
                 stack.enter_context(reviewer)
             with in_tick(self.conn) as tick_id:
-                exited = main(command[1:], runner=InlineRunner())
-                if exited != 0:
-                    self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
-                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                said = overseer_calls(move, runner=InlineRunner())
+                if said.error:
+                    self._tell(f"tick {tick_id} does not start {move}: {said.text}", tick_id)
+                assert not said.error, (said.text, db.decisions_for_tick(self.conn, tick_id))
                 tick_starts(InlineRunner(), tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(self.conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
@@ -702,8 +724,8 @@ class Scenario:
         assert exited == 0, reviewed
         return reviewed
 
-    def reviews_each(self, command: list[str], *, reviewer: Worker | None = None) -> list[Reviewed]:
-        """Start the reviews `command`, a `reviews(...)`, starts in a tick of its own, then do each in this process.
+    def reviews_each(self, move: Called, *, reviewer: Worker | None = None) -> list[Reviewed]:
+        """Start the reviews `move`, a `reviews(...)`, starts in a tick of its own, then do each in this process.
 
         It starts one in each persona chosen for the PR, side by side, and they are done in turn, each reviewer doing
         `reviewer`.
@@ -711,16 +733,16 @@ class Scenario:
         Returns:
             The review runs, closed, in the order they started.
         """
-        assert command[:3] == ["canopy", "review", "run"], command
+        assert move.name == "canopy_review-run", move
         done: list[Reviewed] = []
         with ExitStack() as stack:
             if reviewer is not None:
                 stack.enter_context(reviewer)
             with in_tick(self.conn) as tick_id:
-                exited = main(command[1:], runner=InlineRunner())
-                if exited != 0:
-                    self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
-                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                said = overseer_calls(move, runner=InlineRunner())
+                if said.error:
+                    self._tell(f"tick {tick_id} does not start {move}: {said.text}", tick_id)
+                assert not said.error, (said.text, db.decisions_for_tick(self.conn, tick_id))
                 tick_starts(InlineRunner(), tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 started = self.conn.execute("SELECT id FROM review_runs WHERE tick_id = ? ORDER BY id", (tick_id,))
@@ -735,10 +757,10 @@ class Scenario:
                 done.append(reviewed)
         return done
 
-    def starts_review(self, command: list[str], *, reviewer: Worker | None = None) -> Reviewing:
-        """Start the review `command` in a tick of its own, and hold its reviewer at work.
+    def starts_review(self, move: Called, *, reviewer: Worker | None = None) -> Reviewing:
+        """Start the review `move` in a tick of its own, and hold its reviewer at work.
 
-        `command` is a `reviews(...)` or a `revises(...)`. The reviewer is set to do `reviewer`, a
+        `move` is a `reviews(...)` or a `revises(...)`. The reviewer is set to do `reviewer`, a
         `reviewer_reports(...)`, once the test lets it go on.
 
         The review run is detached, as the overseer's is, and the overseer is not run.
@@ -746,16 +768,16 @@ class Scenario:
         Returns:
             The review run, at work.
         """
-        assert command[:3] in REVIEW_COMMANDS, command
+        assert move.name in REVIEW_TOOLS, move
         with ExitStack() as stack:
             if reviewer is not None:
                 stack.enter_context(reviewer)
             stack.enter_context(self._held())
             with in_tick(self.conn) as tick_id:
-                exited = main(command[1:])
-                if exited != 0:
-                    self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
-                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                said = overseer_calls(move)
+                if said.error:
+                    self._tell(f"tick {tick_id} does not start {move}: {said.text}", tick_id)
+                assert not said.error, (said.text, db.decisions_for_tick(self.conn, tick_id))
                 tick_starts(tick_id=tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(self.conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
@@ -763,30 +785,29 @@ class Scenario:
         self.story.append(str(reviewing))
         return reviewing
 
-    def refuses(self, command: list[str], *, dry_run: bool = False) -> Refused:
-        """Dispatch or start the review `command` in a tick of its own, which canopy must refuse, starting no run.
+    def refuses(self, move: Called, *, dry_run: bool = False) -> Refused:
+        """Dispatch or start the review `move` in a tick of its own, which canopy must refuse, starting no run.
 
-        `command` is a `dispatches(...)`, or a `reviews(...)` or a `revises(...)`. canopy refuses it at the ask, the
-        command exiting 1, or at the spawn, when the tick starts what it recorded (DESIGN §40).
+        `move` is a `dispatches(...)`, or a `reviews(...)` or a `revises(...)`. canopy refuses it at the call, a tool
+        error, or at the spawn, when the tick starts what it recorded (DESIGN §40).
 
         Returns:
             The tick's decisions, as (action, rationale): the refusal, and the attention it raised, if any; the tick,
-            its decisions whole, and what the command printed ride along.
+            its decisions whole, and what the call came back with ride along.
         """
-        review = command[:3] in REVIEW_COMMANDS
-        assert review or command[:2] == ["canopy", "dispatch"], command
+        review = move.name in REVIEW_TOOLS
+        if not review:
+            tracker_holds(self.conn, _dispatch_key(move))
         with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
-            exited, printed = _printing(lambda: main(command[1:], runner=InlineRunner()))
-            if exited == 0:
+            said = overseer_calls(move, runner=InlineRunner())
+            if not said.error:
                 tick_starts(InlineRunner(), tick_id=tick_id)
         made = db.decisions_for_tick(self.conn, tick_id)
-        refused = Refused(tick=tick_id, made=made, printed=printed)
-        at_spawn = exited == 0 and any(d.action.startswith("refused:") for d in made)
-        said = "refuses" if exited == 1 else "refuses at the spawn" if at_spawn else "does not refuse"
-        self._tell(f"tick {tick_id} {said} {shlex.join(command)}", tick_id)
-        assert exited == 1 or at_spawn, (
-            f"{shlex.join(command[:3])} exited {exited}, not refused: {list(refused)} {printed.err}"
-        )
+        refused = Refused(tick=tick_id, made=made, said=said)
+        at_spawn = not said.error and any(d.action.startswith("refused:") for d in made)
+        told = "refuses" if said.error else "refuses at the spawn" if at_spawn else "does not refuse"
+        self._tell(f"tick {tick_id} {told} {move}", tick_id)
+        assert said.error or at_spawn, f"{move.name} was not refused: {list(refused)} {said.text}"
         # The table's name is one of two literals.
         runs = "review_runs" if review else "runs"
         started = self.conn.execute(f"SELECT count(*) FROM {runs} WHERE tick_id = ?", (tick_id,)).fetchone()[0]  # noqa: S608
@@ -836,36 +857,40 @@ class Scenario:
         assert exited == code, f"{command} exited {exited}, not {code}: {printed.err or printed.out}"
         return printed
 
-    def overseer(self, *args: str, code: int = 0, dry_run: bool = False) -> Printed:
-        """Run one of the overseer's commands, `canopy ARGS`, which must exit `code`.
+    def overseer(self, move: Called, *, error: bool = False, dry_run: bool = False) -> Said:
+        """Make the overseer's call `move` of one of its tools, which must come back a tool error if `error`.
 
-        It runs in the tick `ticking` holds open, or in a tick of its own that ends ok, a dry run with `dry_run`.
+        It is made in the tick `ticking` holds open, or in a tick of its own that ends ok, a dry run with `dry_run`.
 
         Returns:
-            What it printed, as the overseer would read it.
+            What the call came back with, as the overseer would read it.
         """
-        command = shlex.join(["canopy", *args])
+        # A ticket it dispatches that the journal does not know yet, the tracker reads first, as `tick` has it.
+        if keys := [key for key in _dispatched([move]) if db.get_ticket(self.conn, key) is None]:
+            tracker_holds(self.conn, *keys)
         with ExitStack() as stack:
             tick_id = self.open_tick
             if tick_id is None:
                 tick_id = stack.enter_context(in_tick(self.conn, dry_run=dry_run, ends_ok=True))
             else:
-                assert not dry_run, "a command in the tick `ticking` holds open runs as that tick does"
-            exited, printed = _printing(lambda: main(list(args)))
+                assert not dry_run, "a call in the tick `ticking` holds open is made as that tick does"
+            said = overseer_calls(move)
             if self.open_tick is None:
-                # Its tick ends here, so it starts what the command recorded, as a tick does after its overseer.
+                # Its tick ends here, so it starts what the call recorded, as a tick does after its overseer.
                 tick_starts(tick_id=tick_id)
-        said = f"the overseer runs {command} in tick {tick_id}, which exits {exited}"
-        self.story.append("\n".join([said, *printed.told()]))
-        assert exited == code, f"{command} exited {exited}, not {code}: {printed.err or printed.out}"
-        return printed
+        came = "a tool error" if said.error else "an answer"
+        told = f"the overseer calls {move} in tick {tick_id}, which comes back {came}"
+        self.story.append("\n".join([told, *(f"  {line}" for line in said.text.splitlines())]))
+        wanted = "a tool error" if error else "an answer"
+        assert said.error == error, f"{move.name} came back {came}, not {wanted}: {said.text}"
+        return said
 
     @contextmanager
     def ticking(self, *, dry_run: bool = False) -> Iterator[int]:
-        """Hold a tick open for the overseer's commands, a dry run with `dry_run`.
+        """Hold a tick open for the overseer's calls, a dry run with `dry_run`.
 
-        Each `overseer` move inside the block runs in it, the test may look at the tick while it is still running, and
-        it ends ok as the block does, as one whose overseer finished, so what they raised is the attention list.
+        Each `overseer` move inside the block is made in it, the test may look at the tick while it is still running,
+        and it ends ok as the block does, as one whose overseer finished, so what they raised is the attention list.
 
         Yields:
             The tick's id.
@@ -873,13 +898,13 @@ class Scenario:
         assert self.open_tick is None, f"tick {self.open_tick} is open already"
         with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
             dry = "dry-run " if dry_run else ""
-            self.story.append(f"{dry}tick {tick_id} begins, for the overseer's commands")
+            self.story.append(f"{dry}tick {tick_id} begins, for the overseer's calls")
             self.open_tick = tick_id
             try:
                 yield tick_id
             finally:
                 self.open_tick = None
-            # It ends as one whose overseer finished: the runs its commands recorded start now.
+            # It ends as one whose overseer finished: the runs its calls recorded start now.
             tick_starts(tick_id=tick_id)
         self.story.append(f"tick {tick_id} ends ok")
 
@@ -1017,7 +1042,7 @@ class Scenario:
         return Reviewing(self, run_id)
 
 
-# What the overseer does in a tick: each is the command it runs, for `Scenario.tick`.
+# What the overseer does in a tick: each is a call of one of its tools, for `Scenario.tick`.
 
 
 def dispatches(
@@ -1032,22 +1057,20 @@ def dispatches(
     cursors: Mapping[str, str] | None = None,
     context: str | None = None,
     review_run: int | None = None,
-) -> list[str]:
+) -> Called:
     """The overseer dispatches a run of `key` in `repo`, by default an `implement` under the test operator's label.
 
     `repo` is one repository, or several for a joint run, in `ws_scenario`'s workspace of two. Pass `label=None` for a
     ticket the operator started, which needs none.
     """
+    fields = {"label": label, "slug": slug, "base": base, "review_run": review_run, "context": context}
+    given: dict[str, object] = {name: value for name, value in fields.items() if value is not None}
+    if why := [str(reason) for reason in reasons]:
+        given["reasons"] = why
+    if cursors:
+        given["cursors"] = dict(cursors)
     repos = [repo] if isinstance(repo, str) else list(repo)
-    flags = [arg for name in repos for arg in ("--repo", name)] + ["--kind", str(kind)]
-    flags += _option("--label", label) + _option("--slug", slug) + _option("--base", base)
-    flags += _option("--review-run", None if review_run is None else str(review_run))
-    for reason in reasons:
-        flags += ["--reason", str(reason)]
-    for name, value in (cursors or {}).items():
-        flags += ["--cursor", f"{name}={value}"]
-    flags += _option("--context", context)
-    return canopy("dispatch", key, *flags)
+    return calls("canopy_dispatch", key=key, kind=str(kind), repos=repos, **given)
 
 
 def reviews(
@@ -1057,33 +1080,39 @@ def reviews(
     repo: str = "repo",
     ticket: str | None = None,
     context: str | None = None,
-) -> list[str]:
+) -> Called:
     """The overseer starts a review of `pr` at `sha` in `repo`.
 
     It reviews `ticket`'s PR if given, with `context` for the reviewer.
     """
-    flags = _option("--ticket", ticket) + _option("--context", context)
-    return canopy("review", "run", "--pr", pr, "--sha", sha, "--repo", repo, *flags)
+    given = {name: value for name, value in {"ticket": ticket, "context": context}.items() if value is not None}
+    return calls("canopy_review-run", pr=pr, sha=sha, repo=repo, **given)
 
 
-def revises(review_run: int) -> list[str]:
+def revises(review_run: int) -> Called:
     """The overseer starts a revision of review run `review_run`'s draft, which the operator's note asks for."""
-    return canopy("review", "revise", "--run", str(review_run))
+    return calls("canopy_review-revise", run=review_run)
 
 
-def raises(key: str, reason: str, detail: str | None = None) -> list[str]:
-    """The overseer raises `reason` about `key` on the attention list, with `detail`, `<key> detail` by default."""
-    return canopy("attention", key, reason, "--detail", detail if detail is not None else f"{key} detail")
+def review_waits(pr: str = PR, rationale: str = "checks still running", *, ticket: str | None = None) -> Called:
+    """The overseer records that `pr` is not to be reviewed now, and why; `ticket`'s PR if given."""
+    return calls("canopy_review-wait", pr=pr, rationale=rationale, **({"ticket": ticket} if ticket is not None else {}))
 
 
-def skips_tick(rationale: str) -> list[str]:
-    """The overseer skips the whole tick, for `rationale`, one of the tick-wide reasons: `mcp_unavailable: github`."""
-    return canopy("decide", "skip", "--rationale", rationale)
+def review_ends(pr: str = PR, reason: str = "merged") -> Called:
+    """The overseer ends the operator's request for a review of `pr`, for `reason`."""
+    return calls("canopy_review-end", pr=pr, reason=reason)
 
 
-def sets_phase(key: str, phase: Phase, *, repo: str | None = None, cursor: str | None = None) -> list[str]:
+def sets_phase(key: str, phase: Phase, *, repo: str | None = None, cursor: str | None = None) -> Called:
     """The overseer records `key`'s phase, its unit's in `repo` if given, and a cursor as `name=value`."""
-    return canopy("ticket", "set", key, "--phase", str(phase), *_option("--repo", repo), *_option("--cursor", cursor))
+    fields: dict[str, object] = {"phase": str(phase)}
+    if repo is not None:
+        fields["repo"] = repo
+    if cursor is not None:
+        name, _, value = cursor.partition("=")
+        fields["cursors"] = {name: value}
+    return ticket_sets(key, **fields)
 
 
 # What a worker does in its run: each is a block, for `Scenario.tick` and `Scenario.run`.
@@ -1148,11 +1177,11 @@ def sends_drafts(entries: object, *, pr: str = DRAFTS_PR) -> Script:
 
 def loops(
     scenario: Scenario,
-    *moves: list[str],
+    *moves: Called | list[str],
     ticks: int = 2,
     at: Mapping[float, Callable[[], None]] | None = None,
 ) -> Looped:
-    """Run `canopy loop` in `scenario`, dry, for `ticks` ticks on a fake clock, its overseer running `moves`.
+    """Run `canopy loop` in `scenario`, dry, for `ticks` ticks on a fake clock, its overseer making `moves`.
 
     `at` acts during the waits: each action runs once, as the loop's clock reaches that many minutes, such as a
     source that answers otherwise from then on. The clock starts at 0 and only a wait moves it. The overseer records
@@ -1184,13 +1213,17 @@ def loops(
     before = int(scenario.conn.execute("SELECT coalesce(max(id), 0) FROM ticks").fetchone()[0])
     term, out = log_file()
     with (
-        overseer_does(*moves, queried="skip"),
+        overseer_does(*moves),
         mock.patch.object(
             tick,
             "run",
             autospec=True,
             side_effect=ticks_at,
         ),
+        # The wait looks for what ends it every half second of the fake clock, reading the journal each time: a wait of
+        # hours is tens of thousands of looks, past the tests' timeout on a busy runner. A wait still ends at its
+        # deadline, which its last sleep is cut to; an `at` action runs up to one step late.
+        mock.patch.object(repeat, "_WAIT_STEP_SECONDS", 30),
     ):
         repeat.run(
             context(scenario.env),
@@ -1305,11 +1338,7 @@ def _each_ticket(
     moves: Iterable[list[str] | Called],
 ) -> Iterator[None]:
     # Each ticket a move dispatches, and each `workers` names, gets its script made for it; a run reads its own.
-    dispatched = [
-        str(move.arguments["key"]) if isinstance(move, Called) else move[2]
-        for move in moves
-        if (move.name == "canopy_dispatch" if isinstance(move, Called) else move[:2] == ["canopy", "dispatch"])
-    ]
+    dispatched = _dispatched(moves)
     every = worker if isinstance(worker, Script) else None
     made = {
         key: script.for_ticket(key)
@@ -1320,6 +1349,16 @@ def _each_ticket(
     tickets = {key: dict(script.settings) for key, script in made.items()}
     with mock.patch.dict(os.environ, {"FAKE_WORKER_FOR": json.dumps(tickets)}):
         yield
+
+
+def _dispatched(moves: Iterable[list[str] | Called]) -> list[str]:
+    """The ticket each move that dispatches names, in order."""
+    return [_dispatch_key(move) for move in moves if isinstance(move, Called) and move.name == "canopy_dispatch"]
+
+
+def _dispatch_key(move: Called) -> str:
+    assert move.name == "canopy_dispatch", move
+    return str(move.arguments["key"])
 
 
 def _made_for(worker: Worker, key: str) -> Worker:
@@ -1357,12 +1396,16 @@ def _killed(pid: int, what: str) -> None:
         time.sleep(0.02)
 
 
+def _recorded(calls: int, counted: Callable[[], int], what: str) -> None:
+    # The agent prints each call's event before its gate, but its run's process records it on its own time.
+    deadline = time.monotonic() + HOLD_TIMEOUT
+    while (made := counted()) < calls:
+        assert time.monotonic() < deadline, f"{what}: {made} of {calls} tool calls recorded after {HOLD_TIMEOUT}s"
+        time.sleep(0.02)
+
+
 def _decided(decision: records.Decision) -> str:
     return f"  {decision.ticket_key or '-'} {decision.action}: {decision.rationale}"
-
-
-def _option(name: str, value: str | None) -> list[str]:
-    return [name, value] if value is not None else []
 
 
 def _shift(conn: sqlite3.Connection, table: str, column: str, modifier: str) -> None:

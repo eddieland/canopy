@@ -24,6 +24,11 @@ from canopy.runtime import servers
     help="Serve canopy's read-only reports alone (health, spend, memory), not the overseer's verbs.",
 )
 @click.option(
+    "--status",
+    is_flag=True,
+    help="Serve a worker's, planner's, or reviewer's run the one tool it posts progress with, which writes nothing.",
+)
+@click.option(
     "--git",
     "checkouts",
     type=CheckoutType(),
@@ -36,6 +41,7 @@ def cmd_mcp(
     *,
     chore: bool,
     serve_reports: bool,
+    status: bool,
     checkouts: tuple[tuple[str, Path], ...],
 ) -> int:
     """Serve the overseer's verbs as MCP tools over stdio, until stdin closes. Started by the runtime; not for people.
@@ -45,12 +51,17 @@ def cmd_mcp(
     `config show`, and `agents` print with `--json`, and `canopy decisions` and `show` of a run or a chore print, and
     nothing else.
     With --git, serve a review's or a plan's run read-only git in the checkouts it names, and nothing else.
+    With --status, serve a worker's, planner's, or reviewer's run the `status` tool, which validates an update and
+    writes nothing: canopy records the update from the call in the events the agent prints (DESIGN §41).
 
     A run a tool asks for is recorded, and the tick starts it once the overseer's run has ended (DESIGN §40), so no run
     is the server's descendant.
     """
-    if chore + serve_reports + bool(checkouts) > 1:
-        raise click.UsageError("--chore, --reports, and --git each name what the server serves: give one")
+    if chore + serve_reports + status + bool(checkouts) > 1:
+        raise click.UsageError("--chore, --reports, --status, and --git each name what the server serves: give one")
+    if status:
+        # It opens no workspace and starts no process.
+        return mcp.run_stdio(runner_of(click_ctx), status=True)
     runner = runner_of(click_ctx)
     # A test's fake runner is used as it is.
     if isinstance(runner, procs.SubprocessRunner):

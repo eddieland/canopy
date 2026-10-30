@@ -2,6 +2,7 @@
 
 The figures are `canopy spend`'s, by the backend's clock, with the idle ticks in the window as the ticks list has them.
 The last day's, 30 days', and all time's are all agent spend: canopy's runs and the runtime's sessions outside canopy.
+The breakdown carries each kind's first model calls by week too, for the page's chart of their cache hit rate.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from canopy.serve.schema.spend import (
     SpendCosts,
     SpendDay,
     SpendDirectory,
+    SpendFirstCallWeek,
     SpendModel,
     SpendMonth,
     SpendPullRequest,
@@ -41,21 +43,24 @@ if TYPE_CHECKING:
 
 
 def spend(backend: Backend, ctx: Context) -> Spend:
-    """What the last day and the last 30 days cost, by the backend's clock, and what everything ever cost.
+    """What the last day and the last 30 days cost, by the backend's clock, what everything ever cost, and the month.
 
     Returns:
-        The cost the journal recorded in each window, with the window's start, and its total.
+        The cost the journal recorded in each window, with the window's start, its total, and the calendar month
+        against its budget when one is set.
     """
     now = backend.clock()
     # One snapshot, so a month never shows less than its day.
     with db.read_snapshot(ctx.conn):
         read = runtime_sessions.last_read(ctx.conn)
+        budget = spending.budget_month(ctx.conn, now, ctx.config.spend, state_dir=ctx.state_dir)
         return Spend(
             day=_spent(ctx, now, SPEND_DAY_HOURS),
             month=_spent(ctx, now, SPEND_MONTH_HOURS),
             # Every recorded time sorts after the empty string.
             total_usd=spending.spent_since(ctx.conn, "", state_dir=ctx.state_dir),
             sessions_read_at=db.parse_time(read.read_at) if read is not None else None,
+            budget=_spend_month(budget) if budget is not None else None,
         )
 
 
@@ -150,6 +155,20 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> 
         ],
         month=_spend_month(month) if month is not None else None,
         sessions=_spend_sessions(found.sessions) if found.sessions is not None else None,
+        first_call_weeks=[
+            SpendFirstCallWeek(
+                kind=w.kind,
+                by=w.by,
+                name=w.name,
+                week=w.week,
+                runs=w.runs,
+                first_call=w.first_call,
+                hit_rate=w.hit_rate,
+                new_runtime_versions=list(w.new_runtime_versions),
+                new_digests=list(w.new_digests),
+            )
+            for w in found.first_call_weeks
+        ],
     )
 
 

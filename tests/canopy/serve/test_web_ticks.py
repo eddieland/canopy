@@ -92,6 +92,14 @@ def test_a_tick_page_names_the_models_that_served_its_overseer(backend: Backend)
     }
 
 
+def test_a_tick_page_names_the_model_its_overseer_asked_for(backend: Backend) -> None:
+    c = client(None, backend)
+    assert c.get("/api/ticks/2").json()["model"] is None  # it asked for none, so the runtime's default served it
+    with backend.open() as ctx:
+        db.set_tick_model(ctx.conn, 2, "anthropic/claude-sonnet-4-5@high")
+    assert c.get("/api/ticks/2").json()["model"] == "anthropic/claude-sonnet-4-5@high"
+
+
 def test_no_such_tick_is_a_404_and_a_tick_id_is_a_positive_integer(backend: Backend) -> None:
     c = client(None, backend)
     missing = c.get("/api/ticks/99")
@@ -136,6 +144,8 @@ def test_the_spend_breakdown_carries_the_month_against_its_budget_whatever_the_w
     assert found["spent_usd"] == pytest.approx(c.get("/api/spend").json()["day"]["cost_usd"])
     assert found["projected_usd"] == pytest.approx(found["spent_usd"] / found["elapsed"])
     assert c.get("/api/spend/breakdown", params={"days": 30}).json()["month"] == found
+    # The header's read carries the same month.
+    assert c.get("/api/spend").json()["budget"] == found
 
 
 def test_the_spend_counters_add_the_sessions_outside_canopy_and_say_when_they_were_read(backend: Backend) -> None:
@@ -223,3 +233,34 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
     assert c.get("/api/spend/breakdown").json()["days"] == 7  # canopy spend's default
     assert c.get("/api/spend/breakdown", params={"days": 0}).status_code == 422
     assert c.get("/api/spend/breakdown", params={"days": 367}).status_code == 422
+
+
+def test_the_spend_breakdown_carries_each_kinds_first_calls_by_week_with_what_changed(backend: Backend) -> None:
+    c = client(None, backend)
+    found = c.get("/api/spend/breakdown", params={"days": 30}).json()["first_call_weeks"]
+    # The workers' own series runs back into the history's September, where a prompt change made a snapshot whose week
+    # read little from the cache, and the runtime was upgraded the week after; the fixtures' week changed neither.
+    workers = [w for w in found if (w["kind"], w["by"]) == ("workers", "kind")]
+    assert [(w["week"], w["runs"], w["new_runtime_versions"], w["new_digests"]) for w in workers] == [
+        ("2026-W37", 1, [], []),
+        ("2026-W38", 2, [], []),
+        ("2026-W39", 1, [], [history.SNAPSHOT]),
+        ("2026-W40", 3, [history.RUNTIME], []),
+        ("2026-W41", 6, [], []),
+    ]
+    assert [w["hit_rate"] for w in workers][2:4] == [pytest.approx(0.57, abs=0.001), pytest.approx(0.79, abs=0.001)]
+    assert workers[2]["first_call"] == 22_400
+    # Each kind's own series first, then its chores' and its models', the runs no single model served last.
+    chores = [(w["by"], w["name"]) for w in found if w["kind"] == "chores"]
+    assert chores == [
+        ("kind", None),
+        ("chore", "build-health"),
+        ("chore", "deps"),
+        ("model", "anthropic/claude-haiku-4-5"),
+        ("model", None),
+    ]
+    assert list(dict.fromkeys(w["kind"] for w in found)) == list(spending.KINDS)
+    # The week holds the fixtures' alone: a series' first week names no change, having none before it.
+    week = c.get("/api/spend/breakdown").json()["first_call_weeks"]
+    assert {w["week"] for w in week} == {"2026-W41"}
+    assert not any(w["new_runtime_versions"] or w["new_digests"] for w in week)

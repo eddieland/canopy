@@ -150,7 +150,7 @@ function RunPanel({
                     <Cost usd={review.cost_usd} />
                     <span title={RUN_TOKENS_TITLE}>{runTokens(detail.new_tokens, detail.peak_context)}</span>
                 </Field>
-                <ModelsField models={detail.models} />
+                <ModelsField models={detail.models} asked={detail.model} />
                 <Field label="log" mono>
                     <CopyablePath path={detail.log_path} label="log path">
                         <span title="the reviewer's stdout and stderr: yours alone">{detail.log_path}</span>

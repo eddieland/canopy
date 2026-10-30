@@ -7,9 +7,11 @@ import json
 
 import pytest
 
-from canopy.core import chore_runs, conversation, db, pools, search, tasks
+from canopy.core import chore_runs, conversation, db, pools
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, PoolKind, RunStatus, TickStatus
+from canopy.runs import tasks
+from canopy.serve import search
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import present, running_run
 from tests.canopy.web_helpers import SECRET, client

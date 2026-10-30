@@ -83,7 +83,7 @@ def listed(runner: procs.Runner, *, cwd: Path, variants: bool = False) -> ModelL
         # Not the error itself: it quotes what was printed, which may hold a provider's key.
         return ModelList(error=f"`{COMMAND}` printed what canopy cannot read")
     found = {
-        name: frozenset(v.id for v in model.variants)
+        name: tuple(v.id for v in model.variants)
         for model in printed.data
         if MODEL_RE.fullmatch(name := f"{model.provider}/{model.id}")
     }

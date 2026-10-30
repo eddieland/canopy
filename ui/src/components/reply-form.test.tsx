@@ -58,14 +58,17 @@ describe('ReplyForm', () => {
         expect(screen.getByRole('form', { name: 'Reply' })).toBeDefined()
         const send = screen.getByRole<HTMLButtonElement>('button', { name: 'Reply' })
         expect(send.disabled).toBe(true)
-        expect(screen.getByText('0/4000')).toBeDefined()
+        // The count stays out of the way until the reply nears its bound.
+        expect(screen.queryByText(/\/4000$/u)).toBeNull()
 
         type('Reply', '   ')
         expect(send.disabled).toBe(true)
         type('Reply', 'Use the v2 API')
         expect(send.disabled).toBe(false)
-        expect(screen.getByText('14/4000')).toBeDefined()
+        expect(screen.queryByText('14/4000')).toBeNull()
         expect(send.getAttribute('aria-keyshortcuts')).toBe('Enter')
+        type('Reply', 'x'.repeat(3200))
+        expect(screen.getByText('3200/4000')).toBeDefined()
     })
 
     it('names the message it answers, and on a public ticket says the reply stays in canopy', () => {

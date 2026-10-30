@@ -25,6 +25,8 @@ import { cn } from '@/lib/utils'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
 const MAX_REPLY = 4000
+// How long a reply grows before its count shows: near the limit, where the count is worth reading.
+const NEAR_LIMIT = MAX_REPLY * 0.8
 
 /**
  * What a reply goes to: a ticket, public or private; a chore, whose next runs read it as a note (DESIGN §19), and
@@ -129,14 +131,22 @@ export function ReplyForm({
             : 'For its next worker, as an instruction. It stays in canopy, never on the ticket.'
     }
 
+    // On a ticket, a question waiting pairs with the form in its own tint, so the two read as one; a task's page draws
+    // its band around the form instead (`TaskAnswer`).
+    const answering = waiting !== null && target.kind === 'ticket'
+    const near = body.length >= NEAR_LIMIT
     return (
         <form
             onSubmit={submit}
             aria-label={chore ? 'Note' : 'Reply'}
-            className={cn('flex flex-col gap-2 border-t p-3', className)}
+            className={cn(
+                'flex flex-col gap-2 border-t p-3',
+                answering && 'border-status-blocked/40 bg-status-blocked/8',
+                className,
+            )}
         >
             <label className="flex flex-col gap-1.5">
-                <span className="panel-label">{label}</span>
+                <span className={cn('panel-label', answering && 'text-status-blocked')}>{label}</span>
                 <Textarea
                     name="body"
                     value={body}
@@ -147,14 +157,18 @@ export function ReplyForm({
                     }}
                     onKeyDown={sendKeys.onKeyDown}
                     placeholder={placeholder}
+                    className="focus-visible:bg-accent/8"
                 />
             </label>
             <div className="flex items-center justify-between gap-3">
                 <Notice error={mutation.error}>{said}</Notice>
-                <span className="ml-auto readout text-xs text-muted-foreground">
-                    {body.length}/{MAX_REPLY}
-                </span>
+                {near && (
+                    <span className="ml-auto readout text-xs text-muted-foreground">
+                        {body.length}/{MAX_REPLY}
+                    </span>
+                )}
                 <Button
+                    className={cn(!near && 'ml-auto')}
                     type="submit"
                     disabled={mutation.isPending || !body.trim()}
                     aria-keyshortcuts={sendKeys.shortcut}

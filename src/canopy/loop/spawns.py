@@ -16,10 +16,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import db, recorded_runs, review_requests
+from canopy.core import db, recorded_runs
 from canopy.core.vocab import RecordedKind, RecordedStatus, ResumeReason, RunKind
 from canopy.loop import chore_tools, harness_dispatches, review_tools, tools
 from canopy.loop.harness_dispatches import Rank
+from canopy.reviews import review_requests
 
 if TYPE_CHECKING:
     from collections.abc import Callable

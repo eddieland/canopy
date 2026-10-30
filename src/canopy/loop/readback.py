@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING, Annotated
 
 from pydantic import AfterValidator, Field, StrictInt, StrictStr
 
-from canopy.core import chore_result, chore_view, config, contract, conversation, db, reports
-from canopy.core.vocab import Decider
+from canopy.core import cards, chore_result, chore_view, config, contract, conversation, db, reports
+from canopy.core.vocab import Decider, RunStatus
 from canopy.infra.text import one_line
 from canopy.loop import attention
 from canopy.loop.render import chore_line, named, prs_of, result_of, spent
@@ -110,8 +110,10 @@ def read_decisions(ctx: Context, request: Decisions) -> str:
     return "\n".join(lines)
 
 
-def read_run(ctx: Context, request: ShowRun) -> str:
-    """Print a run, as `canopy show run:ID` prints it.
+def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
+    """Print a run, as `canopy show run:ID` prints it, with its agent's progress when `card` says so.
+
+    A run's progress is the operator's alone (DESIGN §41): the report a chore's agent reads leaves it out.
 
     Returns:
         The run's lines and its messages.
@@ -138,6 +140,19 @@ def read_run(ctx: Context, request: ShowRun) -> str:
         lines.append(f"  harness: {said}")
     session = f"session {run['session_id']}" if run["session_id"] else "no session reported"
     lines.extend([f"  {session}{spent(run)}", f"  log {run['log_path']}"])
+    # Its agent's progress, while it runs and its last once it ends (DESIGN §41).
+    running = run["status"] == RunStatus.RUNNING
+    standing = cards.of(run)
+    if card and (standing.card is not None or running):
+        lines.extend(
+            cards.lines(
+                standing,
+                started_at=str(run["started_at"]),
+                running=running,
+                timeout_minutes=ctx.config.runtime.worker_timeout_minutes,
+                ref=f"run:{run_id}",
+            ),
+        )
     messages = db.run_messages(ctx.conn, run_id)
     if messages:
         lines.append("\nMessages:")

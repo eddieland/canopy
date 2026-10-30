@@ -8,8 +8,9 @@ from unittest import mock
 
 import pytest
 
+from canopy.cli import agent_commands
 from canopy.cli.main import main
-from canopy.core import agent_commands, config, conversation, definitions, sandboxing
+from canopy.core import config, conversation, definitions, sandboxing
 from tests.conftest import CanopyEnv
 
 PLAN_CMD = (

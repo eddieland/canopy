@@ -595,11 +595,17 @@ test('the worktrees page reads the pools again every 10 seconds, and only while 
     expect(reads).toBe(2)
 })
 
-test('the header names the latest tick and how long ago it ended', async ({ page }) => {
+test('the header names the latest tick and how long ago it ended, and shows it at a glance on hover', async ({
+    page,
+}) => {
     await page.goto('runs')
     await settled(page)
-    await expect(page.getByTestId('last-tick')).toHaveText(/^tick:2 · \d+[a-z]+ ago$/u)
-    await expect(page.getByTestId('last-tick')).toHaveAttribute('title', 'mock tick')
+    const readout = page.getByTestId('last-tick')
+    await expect(readout).toHaveText(/^tick:2 · \d+[a-z]+ ago$/u)
+    await readout.hover()
+    const card = page.getByTestId('tick-card')
+    await expect(card).toContainText('tick:2')
+    await expect(card).toContainText('mock tick')
 })
 
 test("the header's tick opens its decisions, each about its subject, the overseer's text shown as text", async ({
@@ -607,7 +613,7 @@ test("the header's tick opens its decisions, each about its subject, the oversee
 }) => {
     await page.goto('runs')
     await settled(page)
-    await page.getByTestId('last-tick').getByRole('link', { name: 'tick:2' }).click()
+    await page.getByTestId('last-tick').click()
     await expect(page).toHaveURL(/\/runs\/ticks\/2$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick:2')
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' })).toHaveAttribute(
