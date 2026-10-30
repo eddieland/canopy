@@ -395,10 +395,11 @@
     --context-carried: oklch(0.62 0.02 70);
 }
 
-/* Forest: a deep green canvas, the dark side of Sage, with a lake blue for an accent. */
+/* Forest: a deep green canvas, the dark side of Sage, and heather for an accent, as Sage wears: a lake blue read as
+ * the Tickets section, and a green one would pass for running. */
 .dark[data-dark-palette='forest'] {
-    --accent: oklch(0.76 0.11 240);
-    --ring: oklch(0.76 0.11 240 / 0.5);
+    --accent: oklch(0.77 0.12 320);
+    --ring: oklch(0.77 0.12 320 / 0.5);
     --background: oklch(0.17 0.02 165);
     --surface: oklch(0.205 0.024 165);
     --surface-raised: oklch(0.25 0.028 165);
