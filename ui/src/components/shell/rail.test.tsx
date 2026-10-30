@@ -95,7 +95,7 @@ describe('RailWorking', () => {
         expect(within(second).getByText('waiting on you')).toBeDefined()
 
         await follow(second)
-        expect(router.state.location.pathname).toBe('/runs/42')
+        expect(router.state.location.pathname).toBe('/workspace/runs/42')
     })
 
     it('lists a review of a PR and a chore run running among the runs, each opening its page', async () => {
@@ -166,7 +166,7 @@ describe('RailWorking', () => {
         expect(within(working).getByText('6')).toBeDefined()
 
         await follow(within(working).getByRole('link', { name: '+2 more' }))
-        expect(router.state.location.href).toBe('/runs')
+        expect(router.state.location.href).toBe('/workspace/runs')
     })
 })
 

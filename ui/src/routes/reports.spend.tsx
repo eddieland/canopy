@@ -123,7 +123,7 @@ const PER_RUN_HINT = 'What it spent over its runs: a run on two models counts it
 const WORKSPACE_HINT =
     "What the workspace's runs of the kind spent on the model, over its runs: this ticket's among them, every other " +
     "ticket's too"
-const UNLISTED_HINT = 'The runs page lists no overseer tick by model: Ticks, under Runs, lists them by tick'
+const UNLISTED_HINT = 'The runs page lists no overseer tick by model: Ticks, under Workspace, lists them by tick'
 
 // The column names of a table in a padded scrolling region. A sticky head sticks inside the region's padding, so the
 // rows scrolling under it would show in a strip above it: the region's top padding is the head's cells' instead.
@@ -1145,7 +1145,7 @@ function Models({
                                     </span>
                                 ) : (
                                     <Link
-                                        to="/runs"
+                                        to="/workspace/runs"
                                         search={{ model: m.model, kind: of }}
                                         className="block text-accent underline-offset-4 hover:underline"
                                     >

@@ -39,10 +39,12 @@ The nav on the left lists them, most used first. If you learn only one, learn At
   runs and reviews. Under it, [Reviews](pull-requests#the-reviews-page) has canopy's PR reviews, kept in the journal,
   with their findings pinned to the diff. One of a coworker's PR is also a draft you may publish as your own; nothing
   posts until you do.
-- [Runs](/runs): every agent canopy runs, workers, reviews, chores, and tasks alike, the ones running now first, and
-  how full each limit is. A worker run's page has its session's transcript. When you want to know what an agent was
-  thinking, this is the receipt. Under it, [Ticks](ticks#the-ticks-page) has the overseer's latest ticks, and what
-  each one decided, and [Worktrees](runs#worktrees) each repository's pool, its slots, and what's holding them.
+- [Workspace](/workspace): what the loop is doing, at a glance: the pools, the agents running now, the latest ticks,
+  and how full each limit is. Under it, [Runs](runs#the-runs-page) has every agent canopy runs, workers, reviews,
+  chores, and tasks alike, the ones running now first. A worker run's page has its session's transcript. When you want
+  to know what an agent was thinking, this is the receipt. [Ticks](ticks#the-ticks-page) has the overseer's latest
+  ticks, and what each one decided, and [Worktrees](runs#worktrees) each repository's pool, its slots, and what's
+  holding them.
 - [Chores](/chores): scheduled agents that look at your CI, PRs, tracker, or anything else they can read, and report
   what needs you. Each chore's runs and findings are here, and Try now on its page runs it at once, whatever its
   schedule.
@@ -52,10 +54,10 @@ The nav on the left lists them, most used first. If you learn only one, learn At
 - [Memory](/memory): what workers remember, the ticket notes and the lessons, and which runs read them. The header's
   `memory:` readout opens it too.
 
-While you're in Runs, Pull requests, or Reports, the nav opens the pages under that section beneath its name: Ticks and
-Worktrees, Reviews, and Spend. The one you're on is lit, and so is the one your page sits under: a tick's page lights
-Ticks, so the nav says where you are instead of leaving you to work it out from the URL. Everywhere else they fold
-away, and the nav stays eight rows.
+While you're in Workspace, Pull requests, or Reports, the nav opens the pages under that section beneath its name: Runs,
+Ticks, and Worktrees, Reviews, and Spend. The one you're on is lit, and so is the one your page sits under: a tick's
+page lights Ticks, so the nav says where you are instead of leaving you to work it out from the URL. Everywhere else
+they fold away, and the nav stays eight rows.
 
 [System resources](#system-resources), the machine the loop runs on, is in no nav at all: the header's `host`
 readout opens it.

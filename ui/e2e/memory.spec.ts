@@ -94,7 +94,7 @@ test("a ticket's page lists its notes and what its next run gets", async ({ page
     await expect(panel.getByTestId('memory-1')).toContainText('cited in run:40')
     await expect(panel.getByTestId('memory-1').getByRole('link', { name: 'run:40' })).toHaveAttribute(
         'href',
-        /\/runs\/40$/u,
+        /\/workspace\/runs\/40$/u,
     )
     // What its next run is served is folded at the notes' foot until asked for.
     await expect(panel.getByTestId('memory-digest')).toHaveCount(0)
@@ -115,7 +115,7 @@ test("a ticket with no decisions, runs, or notes shows each list's header alone"
 test('a run says what it wrote, what it read, and what was refused, and recording apart from empty', async ({
     page,
 }) => {
-    await page.goto('runs/40')
+    await page.goto('workspace/runs/40')
     await settled(page)
     const run = page.getByTestId('run-memory')
     // Folded on arrival: its header counts what it wrote and read, each tier's mode for the run on hover.
@@ -135,18 +135,18 @@ test('a run says what it wrote, what it read, and what was refused, and recordin
     await expect(run.getByRole('region', { name: 'ticket notes' }).getByTestId(/^memory-\d+$/u)).toHaveCount(3)
 
     // A run that wrote a note and proposed a lesson lists each under its own kind.
-    await page.goto('runs/42')
+    await page.goto('workspace/runs/42')
     await settled(page)
     await page.getByTestId('run-memory').getByRole('button', { name: 'Show memory' }).click()
     await expect(page.getByRole('region', { name: 'ticket notes' }).getByTestId('memory-4')).toBeVisible()
     await expect(page.getByRole('region', { name: 'proposals' }).getByTestId('memory-6')).toBeVisible()
 
-    await page.goto('runs/37')
+    await page.goto('workspace/runs/37')
     await settled(page)
     await expect(page.getByTestId('run-memory-said')).toContainText('read none, recording only')
 
     // Rendered with memory off: no panel at all.
-    await page.goto('runs/41')
+    await page.goto('workspace/runs/41')
     await settled(page)
     await expect(page.getByTestId('run-memory')).toHaveCount(0)
 })

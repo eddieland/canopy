@@ -195,7 +195,7 @@ export interface RailWork {
     /** How many it leaves out. */
     more: number
     /** The page listing the ones left out: their kind's, or the runs page when they are of more than one kind. */
-    moreAt: '/runs' | '/pull-requests/reviews' | '/chores' | '/tasks'
+    moreAt: '/workspace/runs' | '/pull-requests/reviews' | '/chores' | '/tasks'
 }
 
 /**
@@ -223,13 +223,13 @@ export function railWork({ runs, reviews = [], chores = [], tasks = [] }: EveryR
     return {
         shown: sorted.slice(0, limit),
         more: left.length,
-        moreAt: only === undefined ? '/runs' : MORE_AT[only],
+        moreAt: only === undefined ? '/workspace/runs' : MORE_AT[only],
     }
 }
 
 // The page listing the rows left out when they are all of one kind.
 const MORE_AT = {
-    run: '/runs',
+    run: '/workspace/runs',
     review: '/pull-requests/reviews',
     chore: '/chores',
     task: '/tasks',

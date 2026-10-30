@@ -14,7 +14,7 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await page.goto('tickets/ABC-099')
     await settled(page)
     await page.getByTestId('run-39').getByRole('link', { name: 'run:39' }).click()
-    await expect(page).toHaveURL(/\/runs\/39$/u)
+    await expect(page).toHaveURL(/\/workspace\/runs\/39$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('run:39 Debounce search input')
     // Its description is its state; what every run's page shows is the title's help, on hover.
     await expect(page.locator('main header p')).toHaveText('done · implement · ABC-099')
@@ -62,7 +62,7 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
 })
 
 test('a search keeps the rows with a line that holds it, marked, and opens the calls it is in', async ({ page }) => {
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const rows = transcript.getByTestId('transcript-entries').locator(':scope > li')
@@ -108,7 +108,7 @@ test('a search keeps the rows with a line that holds it, marked, and opens the c
 })
 
 test('by call, each model call opens to what it was sent and what it did, as text', async ({ page }) => {
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const toggle = transcript.getByRole('button', { name: 'By call' })
@@ -157,7 +157,7 @@ test('by call, each model call opens to what it was sent and what it did, as tex
 test("a failed run's Run panel names the error it ended on, and a running one's transcript is so far", async ({
     page,
 }) => {
-    await page.goto('runs/40')
+    await page.goto('workspace/runs/40')
     await settled(page)
     const last = page.getByTestId('transcript-entries').locator('li').last()
     await expect(last).toContainText('APIErrorRate limited: retry after 60s')
@@ -172,11 +172,11 @@ test("a failed run's Run panel names the error it ended on, and a running one's 
     await expect(last).toBeInViewport()
 
     // A run that ended done names nothing.
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     await expect(page.getByText('ended on')).toHaveCount(0)
 
-    await page.goto('runs/41')
+    await page.goto('workspace/runs/41')
     await settled(page)
     // Its latest tool call is on its row, and the calls so far in its transcript.
     await expect(page.getByTestId('run-doing')).toContainText('bashnpm test -- login')
@@ -188,7 +188,7 @@ test("a failed run's Run panel names the error it ended on, and a running one's 
 test("a run's output is its log as written: what its setup commands and the runtime printed, read when shown", async ({
     page,
 }) => {
-    await page.goto('runs/40')
+    await page.goto('workspace/runs/40')
     await settled(page)
     const output = page.getByTestId('run-output')
     await expect(output).toContainText('the run’s log as written: its setup commands’ output')
@@ -207,7 +207,7 @@ test("a run's output is its log as written: what its setup commands and the runt
 test("a transcript's chart names what grew each call's context, and shows the largest addition's row", async ({
     page,
 }) => {
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const context = transcript.getByTestId('transcript-context')
@@ -258,7 +258,7 @@ function center(box: { x: number; width: number } | null): number {
 test("a short session's context bars stand centered in their track, each call's number under its bar", async ({
     page,
 }) => {
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     const context = page.getByTestId('transcript-context')
     await context.getByRole('button', { name: 'Show chart' }).click()
@@ -287,7 +287,7 @@ test("a short session's context bars stand centered in their track, each call's 
 test("a transcript's context chart folds to its line, which still shows the largest addition's row", async ({
     page,
 }) => {
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const context = transcript.getByTestId('transcript-context')
@@ -314,13 +314,13 @@ test("a transcript's context chart folds to its line, which still shows the larg
     await settled(page)
     await expect(calls.getByRole('radio')).toHaveCount(3)
     await expect(context.getByRole('button', { name: 'Hide chart' })).toHaveAttribute('aria-expanded', 'true')
-    await page.goto('runs/ticks/2')
+    await page.goto('workspace/ticks/2')
     await settled(page)
     await expect(page.getByTestId('transcript-context')).toContainText('peak 9.3k at call 1')
 })
 
 test("a session of one model call has its context's line alone, and no By call", async ({ page }) => {
-    await page.goto('runs/ticks/2')
+    await page.goto('workspace/ticks/2')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const context = transcript.getByTestId('transcript-context')
@@ -333,7 +333,7 @@ test("a session of one model call has its context's line alone, and no By call",
     await expect(transcript.getByRole('button', { name: 'By call' })).toHaveCount(0)
 
     // A runtime error printed under a second call the runtime counted no tokens for draws no bars either.
-    await page.goto('runs/40')
+    await page.goto('workspace/runs/40')
     await settled(page)
     const run = page.getByTestId('transcript')
     await expect(run).toContainText('1 model call')
@@ -343,7 +343,7 @@ test("a session of one model call has its context's line alone, and no By call",
 })
 
 test("a tick's page shows its overseer's session under its decisions", async ({ page }) => {
-    await page.goto('runs/ticks/2')
+    await page.goto('workspace/ticks/2')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const tools = transcript.getByTestId('transcript-tool')
@@ -387,7 +387,7 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
 test("a tool call's name takes its own width, so its command keeps the rest on either side of the rail's step", async ({
     page,
 }) => {
-    await page.goto('runs/ticks/2')
+    await page.goto('workspace/ticks/2')
     await settled(page)
     await windowWidth(page, 820)
     const transcript = page.getByTestId('transcript')
@@ -417,7 +417,7 @@ test("a tool call's name takes its own width, so its command keeps the rest on e
 test("a tick's output shows as written when asked, stderr included, and a tick that kept none says so once", async ({
     page,
 }) => {
-    await page.goto('runs/ticks/2')
+    await page.goto('workspace/ticks/2')
     await settled(page)
     const output = page.getByTestId('tick-output')
     await expect(output).toContainText('.canopy/ticks/2.log as written: stdout, then stderr')
@@ -443,7 +443,7 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
 
     // With no file, there is no Output panel: the transcript, read from the same file, says why in its header, and
     // is that header alone.
-    await page.goto('runs/ticks/1')
+    await page.goto('workspace/ticks/1')
     await settled(page)
     await expect(page.getByTestId('tick-output')).toHaveCount(0)
     const transcript = page.getByTestId('transcript')
@@ -457,7 +457,7 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
 })
 
 test("a tick's output lays its JSON out when asked, and that tick's panel remembers it", async ({ page }) => {
-    await page.goto('runs/ticks/2')
+    await page.goto('workspace/ticks/2')
     await settled(page)
     const output = page.getByTestId('tick-output')
     await output.getByRole('button', { name: 'Show output' }).click()
@@ -526,9 +526,9 @@ test("a chore run's id opens its page: what it reported, in full, over its sessi
 })
 
 test('a run that does not exist, or a path that names none, says so', async ({ page }) => {
-    await page.goto('runs/99')
+    await page.goto('workspace/runs/99')
     await expect(page.getByText('no run 99')).toBeVisible()
-    await page.goto('runs/two')
+    await page.goto('workspace/runs/two')
     await expect(page.getByText("not a run: a run's id is a positive number")).toBeVisible()
 })
 

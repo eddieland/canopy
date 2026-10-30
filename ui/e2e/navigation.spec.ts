@@ -37,25 +37,30 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     })
     const nav = page.getByRole('navigation', { name: 'Main' })
 
+    await nav.getByRole('link', { name: 'Workspace' }).click()
+    await expect(page).toHaveURL(/\/workspace$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Workspace')
+    await expect(nav.getByRole('link', { name: 'Workspace' })).toHaveAttribute('data-status', 'active')
+
+    // The runs, the worktrees, and the ticks are under Workspace: the nav opens them under it while Workspace is shown,
+    // marking the one shown rather than Workspace, and the runs page links the other two.
     await nav.getByRole('link', { name: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/runs$/u)
+    await expect(page).toHaveURL(/\/workspace\/runs$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
     await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('data-status', 'active')
-
-    // The worktrees and the ticks are under Runs: its page links them, and the nav opens them under it while Runs is
-    // shown, marking the one shown rather than Runs.
+    await expect(nav.getByRole('link', { name: 'Workspace' })).not.toHaveAttribute('data-status', 'active')
     await page.getByTestId('runs-worktrees-link').click()
-    await expect(page).toHaveURL(/\/runs\/worktrees$/u)
+    await expect(page).toHaveURL(/\/workspace\/worktrees$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Worktrees')
     await expect(nav.getByRole('link', { name: 'Worktrees' })).toHaveAttribute('data-status', 'active')
     await expect(nav.getByRole('link', { name: 'Runs' })).not.toHaveAttribute('data-status', 'active')
     await nav.getByRole('link', { name: 'Ticks' }).click()
-    await expect(page).toHaveURL(/\/runs\/ticks$/u)
+    await expect(page).toHaveURL(/\/workspace\/ticks$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Ticks')
     await expect(nav.getByRole('link', { name: 'Ticks' })).toHaveAttribute('data-status', 'active')
 
     await nav.getByRole('link', { name: 'Tickets' }).click()
-    // Out of Runs, its pages fold away again.
+    // Out of Workspace, its pages fold away again.
     await expect(nav.getByRole('link', { name: 'Ticks' })).toHaveCount(0)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Tickets')
     // A ticket the overseer named shows its title beside its key (DESIGN §7).
@@ -82,19 +87,40 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await expect(page.getByTestId('app-header')).toHaveAttribute('data-marker', 'kept')
 })
 
+test('the workspace page sums up its pages: the pools, the runs working now, and the latest ticks', async ({
+    page,
+}) => {
+    await page.goto('workspace')
+    await settled(page)
+    await expect(page.getByTestId('pool-counters')).toBeVisible()
+    await expect(page.getByTestId('counter-free')).not.toHaveText('Free')
+    // Every subject whose latest run works now, as the runs page lists them under its running filter.
+    const running = page.getByTestId('runs').locator(':scope > li')
+    await expect(page.getByTestId('workspace-running-count')).toHaveText(String(await running.count()))
+    await expect(page.getByTestId('workspace-ticks').locator(':scope > li')).toHaveCount(2)
+
+    await page.getByRole('link', { name: 'All ticks' }).click()
+    await expect(page).toHaveURL(/\/workspace\/ticks$/u)
+    await page.goBack()
+    await page.getByRole('link', { name: 'All runs' }).click()
+    await expect(page).toHaveURL(/\/workspace\/runs$/u)
+})
+
 test('every page header opens with a trail back up to its section', async ({ page }) => {
     const trail = page.getByRole('navigation', { name: 'Breadcrumb' })
 
-    // On a section's list the trail names the section and links nowhere.
-    await page.goto('runs')
-    await expect(trail).toHaveText('Runs')
+    // On a section's own page the trail names the section and links nowhere.
+    await page.goto('workspace')
+    await expect(trail).toHaveText('Workspace')
     await expect(trail.getByRole('link')).toHaveCount(0)
 
-    // On a run, the section links back to its list; the title is not repeated in the trail.
-    await page.goto('runs/39')
-    await expect(trail).toHaveText('Runs')
+    // On a run, the trail goes back through the runs to the section; the title is not repeated in it.
+    await page.goto('workspace/runs/39')
+    await expect(trail.getByRole('link')).toHaveText(['Workspace', 'Runs'])
     await trail.getByRole('link', { name: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/runs$/u)
+    await expect(page).toHaveURL(/\/workspace\/runs$/u)
+    await trail.getByRole('link', { name: 'Workspace' }).click()
+    await expect(page).toHaveURL(/\/workspace$/u)
 
     // A chore run's trail passes through its chore, by its name as written.
     await page.goto('chores/deps/runs/2')
@@ -114,7 +140,7 @@ test('each nav item says on hover what its page holds', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
     const nav = page.getByRole('navigation', { name: 'Main' })
-    await expect(nav.getByRole('link', { name: 'Runs' })).toHaveAttribute('title', /ended last/u)
+    await expect(nav.getByRole('link', { name: 'Workspace' })).toHaveAttribute('title', /pool of worktrees/u)
     for (const link of await nav.getByRole('link').all()) {
         await expect(link).toHaveAttribute('title', /\w/u)
     }
@@ -148,8 +174,8 @@ test('the header spans the window and only what is under it scrolls', async ({ p
     await scroller.evaluate((el) => el.scrollTo(0, el.scrollHeight))
     await expect(header).toBeInViewport({ ratio: 1 })
     // A new page starts at its top, and going back returns to where the last one was.
-    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/runs$/u)
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Workspace' }).click()
+    await expect(page).toHaveURL(/\/workspace$/u)
     await expect.poll(() => scroller.evaluate((el) => el.scrollTop)).toBe(0)
     await page.goBack()
     await expect(page).toHaveURL(/\/tickets\/ABC-102$/u)
@@ -182,7 +208,7 @@ test('search params are typed: a known state filters, an unknown one is dropped'
 })
 
 test('the runs page lists a ticket once, by its latest run, and opens its earlier runs under it', async ({ page }) => {
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await settled(page)
     const rows = page.getByTestId('runs').locator(':scope > li')
     await expect(rows.filter({ has: page.getByRole('link', { name: 'ABC-100', exact: true }) })).toHaveCount(1)
@@ -209,7 +235,7 @@ test('the runs page lists a ticket once, by its latest run, and opens its earlie
 test('the runs page lists the reviews and chore runs beside the workers, and what runs against capacity', async ({
     page,
 }) => {
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await settled(page)
     // Two workers run, a task's run, and a chore: both limits are full, so the next dispatch of either waits for one to
     // end.
@@ -241,7 +267,7 @@ test('the runs page lists the reviews and chore runs beside the workers, and wha
 test('the runs page lists a task by its newest run, counted in the workers it fills, and opens its run', async ({
     page,
 }) => {
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await settled(page)
     // Workers 3 of 3 is runs 41 and 43 and task 6's run: each is listed running, beside the chore that runs apart.
     await expect(page.getByTestId('capacity-workers')).toHaveText('workers 3 of 3 · full')
@@ -475,7 +501,7 @@ test('a chore not defined for this workspace says so', async ({ page }) => {
 })
 
 test('the worktrees page shows each pool of the workspace and what holds each slot', async ({ page }) => {
-    await page.goto('runs/worktrees')
+    await page.goto('workspace/worktrees')
     await settled(page)
     // Its command set as code, as an attention item's detail sets it.
     await expect(page.getByTestId('pool-api')).toContainText('no clone; run canopy workspace sync')
@@ -525,7 +551,7 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
 })
 
 test("a slot a task's run holds names the task and the run, each opening its page", async ({ page }) => {
-    await page.goto('runs/worktrees')
+    await page.goto('workspace/worktrees')
     await settled(page)
     // Task 6's run 6 holds mobile's second slot, as run 43 holds its first.
     const slot = page.getByTestId('pool-mobile').getByTestId('worktree-2')
@@ -559,7 +585,7 @@ test('a slot with long text keeps it inside its row', async ({ page }) => {
         slot.note = `left ${'/a/path/with/no/spaces'.repeat(12)}`
         await route.fulfill({ response, json: pools })
     })
-    await page.goto('runs/worktrees')
+    await page.goto('workspace/worktrees')
     await settled(page)
     const slot = page.getByTestId('pool-web').getByTestId('worktree-1')
     await expect(slot).toContainText('great_gasdbq_0 340928')
@@ -582,7 +608,7 @@ test('the worktrees page reads the pools again every 10 seconds, and only while 
             reads += 1
         }
     })
-    await page.goto('runs/worktrees')
+    await page.goto('workspace/worktrees')
     await settled(page)
     expect(reads).toBe(1)
 
@@ -602,7 +628,7 @@ test('the worktrees page reads the pools again every 10 seconds, and only while 
 test('the header names the latest tick and how long ago it ended, and shows it at a glance on hover', async ({
     page,
 }) => {
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await settled(page)
     const readout = page.getByTestId('last-tick')
     await expect(readout).toHaveText(/^tick:2 · \d+[a-z]+ ago$/u)
@@ -615,12 +641,12 @@ test('the header names the latest tick and how long ago it ended, and shows it a
 test("the header's tick opens its decisions, each about its subject, the overseer's text shown as text", async ({
     page,
 }) => {
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await settled(page)
     await page.getByTestId('last-tick').click()
-    await expect(page).toHaveURL(/\/runs\/ticks\/2$/u)
+    await expect(page).toHaveURL(/\/workspace\/ticks\/2$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick:2')
-    // A tick's page is under Ticks, under Runs: the nav marks Ticks.
+    // A tick's page is under Ticks, under Workspace: the nav marks Ticks.
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Ticks' })).toHaveAttribute(
         'data-status',
         'active',
@@ -642,7 +668,7 @@ test("the header's tick opens its decisions, each about its subject, the oversee
 test('the ticks page lists the latest ticks, and a ticket page why the loop did or did not work it', async ({
     page,
 }) => {
-    await page.goto('runs/ticks')
+    await page.goto('workspace/ticks')
     await settled(page)
     await expect(page.getByTestId('ticks').locator(':scope > li')).toHaveCount(2)
     // Its five, and the `done` of each ticket the months before the mock's day landed or closed (history.py).
@@ -659,7 +685,7 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
     await expect(decisions.nth(0)).toContainText('tick:2')
     await expect(decisions.nth(1)).toContainText('dispatch: implement')
     await decisions.nth(1).getByRole('link', { name: 'tick:1' }).click()
-    await expect(page).toHaveURL(/\/runs\/ticks\/1$/u)
+    await expect(page).toHaveURL(/\/workspace\/ticks\/1$/u)
     await expect(page.getByTestId('decisions')).toContainText('chore:deps')
 })
 
@@ -696,33 +722,52 @@ test("a run's summary keeps its lines and lists, its first four shown until the 
     await expect(run).not.toContainText('ABC-112 owns it')
 })
 
-test('the worktrees page where it was before Runs held it leads to where it is, its filter kept', async ({ page }) => {
+test('the worktrees page where it was before Workspace held it leads to where it is, its filter kept', async ({
+    page,
+}) => {
     await page.goto('worktrees?state=dirty')
-    await expect(page).toHaveURL(/\/runs\/worktrees\?state=dirty$/u)
+    await expect(page).toHaveURL(/\/workspace\/worktrees\?state=dirty$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Worktrees')
 })
 
-test('the ticks pages where they were before Runs held them lead to where they are', async ({ page }) => {
+test('the ticks pages where they were before Workspace held them lead to where they are', async ({ page }) => {
     await page.goto('ticks')
-    await expect(page).toHaveURL(/\/runs\/ticks$/u)
+    await expect(page).toHaveURL(/\/workspace\/ticks$/u)
     await page.goto('ticks/2')
-    await expect(page).toHaveURL(/\/runs\/ticks\/2$/u)
+    await expect(page).toHaveURL(/\/workspace\/ticks\/2$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('tick:2')
-    // Under Runs, the trail goes back through the ticks.
+    // Under Workspace, the trail goes back through the ticks.
     const trail = page.getByRole('navigation', { name: 'Breadcrumb' })
-    await expect(trail.getByRole('link', { name: 'Runs' })).toBeVisible()
-    await expect(trail.getByRole('link', { name: 'Ticks' })).toHaveAttribute('href', /\/runs\/ticks$/u)
+    await expect(trail.getByRole('link', { name: 'Workspace' })).toBeVisible()
+    await expect(trail.getByRole('link', { name: 'Ticks' })).toHaveAttribute('href', /\/workspace\/ticks$/u)
+})
+
+test('the pages where they were under Runs lead to where they are under Workspace, their filters kept', async ({
+    page,
+}) => {
+    await page.goto('runs?state=running')
+    await expect(page).toHaveURL(/\/workspace\/runs\?state=running$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
+    await page.goto('runs/39')
+    await expect(page).toHaveURL(/\/workspace\/runs\/39$/u)
+    await page.goto('runs/ticks/2')
+    await expect(page).toHaveURL(/\/workspace\/ticks\/2$/u)
+    await page.goto('runs/ticks')
+    await expect(page).toHaveURL(/\/workspace\/ticks$/u)
+    await page.goto('runs/worktrees?state=dirty')
+    await expect(page).toHaveURL(/\/workspace\/worktrees\?state=dirty$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Worktrees')
 })
 
 test('a tick that does not exist, or a path that names none, says so', async ({ page }) => {
-    await page.goto('runs/ticks/99')
+    await page.goto('workspace/ticks/99')
     await expect(page.getByText('no tick 99')).toBeVisible()
-    await page.goto('runs/ticks/two')
+    await page.goto('workspace/ticks/two')
     await expect(page.getByText("not a tick: a tick's id is a positive number")).toBeVisible()
 })
 
 test('the worktrees page counts every pool, and each pool shows its slots at a glance', async ({ page }) => {
-    await page.goto('runs/worktrees')
+    await page.goto('workspace/worktrees')
     await settled(page)
     // The mock: web's two runs, a shell, an idle and a dirty slot; mobile's run 43 slot and a task's; api has no
     // clone.

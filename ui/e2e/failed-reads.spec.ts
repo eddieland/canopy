@@ -6,16 +6,16 @@ import { signIn } from './helpers.ts'
 // read were still coming (ui/DESIGN.md, Primitives, PanelLoading). Each case: the page, the read that fails, and a
 // glob for it that matches nothing else the page reads.
 const PAGES = [
-    { page: 'runs/39', read: '**/api/runs/39' },
+    { page: 'workspace/runs/39', read: '**/api/runs/39' },
     { page: 'tickets/ABC-102', read: '**/api/tickets/ABC-102' },
     { page: 'tickets/ABC-105/plan', read: '**/api/tickets/ABC-105/plans' },
-    { page: 'runs/ticks/2', read: '**/api/ticks/2' },
+    { page: 'workspace/ticks/2', read: '**/api/ticks/2' },
     { page: 'chores/deps', read: '**/api/chores/deps' },
     { page: 'pull-requests/reviews/4', read: '**/api/reviews/4' },
     { page: 'reports', read: '**/api/reports/monthly*' },
     { page: 'reports/spend', read: '**/api/spend/breakdown*' },
     { page: 'search?q=web', read: '**/api/search*' },
-    { page: 'runs/worktrees', read: '**/api/worktrees' },
+    { page: 'workspace/worktrees', read: '**/api/worktrees' },
 ] as const
 
 test.beforeEach(async ({ page }) => {
@@ -42,13 +42,13 @@ for (const { page: path, read } of PAGES) {
 
 test('a read that gets no answer says canopy did not answer, and what serves the page', async ({ page }) => {
     await page.route('**/api/runs/39', (route) => route.abort())
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await expect(page.getByTestId('panel-failed').getByRole('alert')).toContainText('canopy did not answer')
     await expect(page.getByTestId('panel-failed').getByRole('alert')).toContainText('canopy loop')
 })
 
 test("a failed read's notice keeps the skeleton's height, so nothing moves", async ({ page }) => {
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     let release: (() => void) | undefined
     const held = new Promise<void>((resolve) => {
         release = resolve
@@ -57,7 +57,7 @@ test("a failed read's notice keeps the skeleton's height, so nothing moves", asy
         await held
         await route.fulfill({ status: 500, json: { detail: 'database is locked' } })
     })
-    await page.goto('runs/41')
+    await page.goto('workspace/runs/41')
     const pending = await page.getByTestId('panel-skeleton').boundingBox()
     release?.()
     const failed = await page.getByTestId('panel-failed').boundingBox()
@@ -67,6 +67,6 @@ test("a failed read's notice keeps the skeleton's height, so nothing moves", asy
 
 test('the worktrees with no pool at all say how to make them', async ({ page }) => {
     await page.route('**/api/worktrees', (route) => route.fulfill({ json: [] }))
-    await page.goto('runs/worktrees')
+    await page.goto('workspace/worktrees')
     await expect(page.getByTestId('pools')).toContainText('no pools yet: canopy workspace sync makes one for each')
 })

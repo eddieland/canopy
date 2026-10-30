@@ -40,7 +40,7 @@ describe('PageHeader', () => {
     it('names the tab for the page and its subject, after how many attention items block work', async () => {
         const finding = { ...mockAttention[0], id: 'f1', finding: true } as AttentionItem
         await renderRouted(<PageHeader title="run:39" subject="Debounce search input" />, {
-            at: '/runs/39',
+            at: '/workspace/runs/39',
             client: client([...mockAttention, finding]),
         })
         expect(document.title).toBe('(1) run:39 Debounce search input · canopy')
@@ -56,8 +56,8 @@ describe('PageHeader', () => {
     })
 
     it('is only the section’s name on the section’s own list', async () => {
-        await renderRouted(<PageHeader title="Runs" />, { at: '/runs', client: client([]) })
-        expect(trail().textContent).toBe('Runs')
+        await renderRouted(<PageHeader title="Workspace" />, { at: '/workspace', client: client([]) })
+        expect(trail().textContent).toBe('Workspace')
         expect(within(trail()).queryByRole('link')).toBeNull()
     })
 
@@ -87,7 +87,7 @@ describe('PageHeader', () => {
         const runs = createRootRoute()
         const run = createRoute({
             getParentRoute: () => runs,
-            path: '/runs/$id',
+            path: '/workspace/runs/$id',
             component: () => <PageHeader title="run:39" />,
         })
         const guide = createRoute({
@@ -97,7 +97,7 @@ describe('PageHeader', () => {
         })
         const router = createRouter({
             routeTree: runs.addChildren([run, guide]),
-            history: createMemoryHistory({ initialEntries: ['/runs/39'] }),
+            history: createMemoryHistory({ initialEntries: ['/workspace/runs/39'] }),
         })
         await router.load()
         render(
@@ -115,14 +115,14 @@ describe('PageHeader', () => {
     it('says what every page of its kind shows on the title’s hover, and a description only if any', async () => {
         const { unmount } = await renderRouted(
             <PageHeader title="run:39" help="A run’s page: what it did, and its transcript." />,
-            { at: '/runs/39', client: client([]) },
+            { at: '/workspace/runs/39', client: client([]) },
         )
         expect(screen.getByRole('heading', { level: 1 }).title).toBe('A run’s page: what it did, and its transcript.')
         expect(screen.queryByRole('paragraph')).toBeNull()
         unmount()
 
         await renderRouted(<PageHeader title="run:39">Waiting on your answer.</PageHeader>, {
-            at: '/runs/39',
+            at: '/workspace/runs/39',
             client: client([]),
         })
         expect(screen.getByRole('paragraph').textContent).toBe('Waiting on your answer.')

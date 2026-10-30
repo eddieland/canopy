@@ -190,6 +190,11 @@ function viewOf(routeId: keyof FileRoutesById | undefined): View | undefined {
         routeId === '/ticks/' ||
         routeId === '/ticks/$id' ||
         routeId === '/worktrees' ||
+        routeId === '/runs/' ||
+        routeId === '/runs/$id' ||
+        routeId === '/runs/ticks/' ||
+        routeId === '/runs/ticks/$id' ||
+        routeId === '/runs/worktrees' ||
         routeId === '/guide/'
         ? undefined
         : routeId
