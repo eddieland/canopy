@@ -913,10 +913,11 @@ def worker_does(
 def private_worker_does(
     *commands: list[str],
     result: dict[str, object],
+    tools: Sequence[Called] = (),
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
-    """Until the block ends, the fake private worker runs `commands` and then prints `result`."""
-    with scripted("WORKER_PRIVATE", {"COMMANDS": json.dumps(commands), "RESULT": json.dumps(result)}, behavior):
+    """Until the block ends, the fake private worker makes the calls `tools` names, runs `commands`, prints `result`."""
+    with scripted("WORKER_PRIVATE", {**reported(result, commands, tools), "COMMANDS": json.dumps(commands)}, behavior):
         yield
 
 
@@ -1012,6 +1013,21 @@ def agent_runs(agent_log: Path) -> list[dict[str, Any]]:
     if not agent_log.exists():
         return []
     return [json.loads(line) for line in agent_log.read_text().splitlines()]
+
+
+def ran_on(agent_log: Path, agent: str = "canopy-worker") -> str | None:
+    """The model the definition of the latest run of `agent` names, as it loaded it; None when it names none.
+
+    A variant it names follows the model's id after an `@`, as config spells it.
+    """
+    run = [r for r in agent_runs(agent_log) if f"--agent {agent}" in " ".join(r["argv"])][-1]
+    text = (Path(run["env"]["OPENCODE_CONFIG_DIR"]) / "agents" / f"{agent}.md").read_text()
+    found = [line for line in text.splitlines() if line.startswith("model: ")]
+    variant = [line for line in text.splitlines() if line.startswith("variant: ")]
+    if not found:
+        return None
+    model = json.loads(found[0].removeprefix("model: "))
+    return f"{model}@{json.loads(variant[0].removeprefix('variant: '))}" if variant else model
 
 
 def told(run: Mapping[str, Any]) -> str:

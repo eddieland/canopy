@@ -34,7 +34,7 @@ function DropdownMenuContent({
                 className={cn(
                     'z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-32 overflow-x-hidden',
                     'overflow-y-auto rounded-md border border-edge bg-surface p-1 text-foreground shadow-float',
-                    'origin-(--radix-dropdown-menu-content-transform-origin)',
+                    'origin-(--radix-dropdown-menu-content-transform-origin) animate-float-in',
                     className,
                 )}
                 {...props}

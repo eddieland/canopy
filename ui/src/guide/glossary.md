@@ -178,8 +178,8 @@ A repository's set of worktrees, kept by treehouse, or by canopy itself when you
 
 ### Progress
 
-What a running worker, planner, or reviewer says of its own work while it runs: a summary, its steps or what's done
-and next, what it works around, and now and then a question for you. Each update replaces the last. See
+What a running worker, planner, reviewer, or task's worker says of its own work while it runs: a summary, its steps or
+what's done and next, what it works around, and now and then a question for you. Each update replaces the last. See
 [Runs](runs#a-running-agents-progress).
 
 ### Reason

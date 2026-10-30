@@ -4,7 +4,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
-import type { PersonaList, ReviewRequest } from '@/api/types'
+import type { ConfigModels, ModelList, PersonaList, ReviewRequest } from '@/api/types'
 import { setReviewPersonas } from '@/lib/review-personas'
 import { renderRouted } from '@/test-utils'
 
@@ -17,6 +17,7 @@ const OPEN: ReviewRequest = {
     ended_at: null,
     end_reason: null,
     notes: null,
+    model: null,
     personas: [],
 }
 const ENDED: ReviewRequest = { ...OPEN, ended_at: '2026-10-08T12:00:00Z', end_reason: 'merged' }
@@ -36,12 +37,29 @@ const PERSONAS: PersonaList = {
     ],
 }
 
+// Config's reviewer on acme/fast-1, and the models the runtime lists: acme/deep-2 at two variants.
+const CONFIG: ConfigModels = {
+    agents: [{ agent: 'reviewer', model: 'acme/fast-1', variant: null, source: 'config' }],
+    chores: [],
+    models_file: '/home/me/.config/canopy/config.toml',
+    chores_file: null,
+    user_file: '/home/me/.config/canopy/config.toml',
+    private_file: '/home/me/.config/canopy/private.toml',
+}
+const LISTED: ModelList = {
+    models: ['acme/fast-1', 'acme/deep-2'],
+    variants: { 'acme/deep-2': ['low', 'high'] },
+    error: null,
+}
+
 // Every request sent, by its path and the PR it names, the bodies sent, and what the server stand-in answers each.
 let sent: { path: string; url: string | null }[] = []
 let bodies: unknown[] = []
 let answer: Response | undefined
 // The personas the server stand-in lists.
 let listed: PersonaList = PERSONAS
+// How many times the runtime's models were read.
+let modelReads = 0
 
 const server: Middleware = {
     async onRequest({ request }) {
@@ -49,6 +67,14 @@ const server: Middleware = {
         // The personas the menus list: a read, not one of the requests a test counts.
         if (url.pathname === '/api/personas') {
             return Response.json(listed)
+        }
+        // And config's models and the runtime's, which the model menu reads.
+        if (url.pathname === '/api/config/models') {
+            return Response.json(CONFIG)
+        }
+        if (url.pathname === '/api/models') {
+            modelReads += 1
+            return Response.json(LISTED)
         }
         sent.push({ path: url.pathname, url: url.searchParams.get('url') })
         const body = await request.text()
@@ -64,6 +90,7 @@ beforeEach(() => {
     bodies = []
     answer = undefined
     listed = PERSONAS
+    modelReads = 0
     setReviewPersonas([])
     api.use(server)
 })
@@ -85,9 +112,18 @@ function notesField(): HTMLTextAreaElement {
     return screen.getByRole('textbox', { name: 'Notes for the reviewer (optional)' })
 }
 
-// Opens what the form keeps folded: its personas.
+// Opens what the form keeps folded: its personas and its model.
 function showPersona() {
-    fireEvent.click(screen.getByRole('button', { name: 'Show persona' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Show reviewer' }))
+}
+
+// Opens the model menu its trigger names, and returns the list of models once the runtime's are read.
+async function openModels(name: string) {
+    const trigger = await screen.findByRole('button', { name })
+    fireEvent.click(trigger)
+    const list = screen.getByRole('listbox', { name: 'Models' })
+    await within(list).findByRole('group', { name: 'acme' })
+    return list
 }
 
 async function openPersonas(name = 'Persona: canopy (default)') {
@@ -286,6 +322,69 @@ describe('ReviewRequestForm', () => {
         expect(within(menu).getByRole('menuitemcheckbox', { name: 'p09' }).getAttribute('aria-disabled')).toBeNull()
     })
 
+    it("picks the model its reviews run on, naming config's while none is, and goes back to it", async () => {
+        const drafts: unknown[] = []
+        await renderRouted(<ReviewRequestForm onDraft={(draft) => void drafts.push(draft)} />)
+        fireEvent.change(field(), { target: { value: PR } })
+        showPersona()
+        const trigger = await screen.findByRole('button', { name: 'Model: default' })
+        expect(trigger.title).toBe('canopy start URL --review --model M')
+        expect((await screen.findByTestId('review-model-default')).textContent).toBe("config's acme/fast-1")
+        // Config's model is the one chosen now, pinned and checked.
+        let list = await openModels('Model: default')
+        const pinned = within(within(list).getByRole('group', { name: 'Chosen now' })).getByRole('option')
+        expect(pinned.textContent).toContain('[runtime.models]')
+        expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Use the default' }).disabled).toBe(true)
+        fireEvent.click(within(list).getByRole('option', { name: 'acme/deep-2@high' }))
+        const picked = await screen.findByRole('button', { name: 'Model: acme/deep-2@high' })
+        expect(picked.title).toBe('canopy start URL --review --model acme/deep-2@high')
+        expect(screen.queryByTestId('review-model-default')).toBeNull()
+        expect(drafts.at(-1)).toEqual({ url: PR, notes: '', picked: null, model: 'acme/deep-2@high' })
+        // Folded, the form says which model it will use.
+        fireEvent.click(screen.getByRole('button', { name: 'Hide reviewer' }))
+        expect(screen.getByTestId('review-request-chosen').textContent).toBe(
+            'in canopy, the default, on acme/deep-2@high',
+        )
+
+        showPersona()
+        list = await openModels('Model: acme/deep-2@high')
+        fireEvent.click(screen.getByRole('button', { name: 'Use the default' }))
+        expect(await screen.findByRole('button', { name: 'Model: default' })).toBeTruthy()
+        expect(drafts.at(-1)).toEqual({ url: PR, notes: '', picked: null, model: null })
+        expect(list.isConnected).toBe(false)
+
+        list = await openModels('Model: default')
+        fireEvent.click(within(list).getByRole('option', { name: 'acme/deep-2 (default)' }))
+        fireEvent.click(screen.getByRole('button', { name: /^Review/u }))
+        await waitFor(() => {
+            expect(bodies).toEqual([{ notes: '', personas: [], model: 'acme/deep-2' }])
+        })
+    })
+
+    it('marks a model a draft kept before its menu opens, once the runtime no longer lists it', async () => {
+        await renderRouted(<ReviewRequestForm draft={{ url: PR, notes: '', picked: null, model: 'acme/gone-1' }} />)
+        expect(screen.getByTestId('review-request-chosen').textContent).toBe('in canopy, the default, on acme/gone-1')
+        showPersona()
+        // A model picked reads the runtime's list as its menu shows, so it is marked without opening it.
+        const gone = 'Model: acme/gone-1, no longer listed; its next run is refused'
+        const list = await openModels(gone)
+        // Checked, but not offered again: its reviews would be refused, which it is described by.
+        const pinned = within(within(list).getByRole('group', { name: 'Chosen now' })).getByRole('option', {
+            name: 'acme/gone-1',
+            description: 'no longer listed; its next run is refused',
+        })
+        expect(pinned.getAttribute('aria-disabled')).toBe('true')
+    })
+
+    it("reads the runtime's models only once its menu opens while config's is the default", async () => {
+        await renderRouted(<ReviewRequestForm />)
+        showPersona()
+        await screen.findByTestId('review-model-default')
+        expect(modelReads).toBe(0)
+        await openModels('Model: default')
+        expect(modelReads).toBeGreaterThan(0)
+    })
+
     it('names the guard that refused a request in place of the hint, keeps the URL, and stays', async () => {
         answer = Response.json(
             { detail: { guard: 'unknown_repo', reason: 'acme/web is in no repository' } },
@@ -381,6 +480,58 @@ describe('ReviewRequestStatus', () => {
                 'Review run 7 of it is still running and will finish.',
         )
         expect(sent).toEqual([{ path: '/api/pull-request/stop', url: PR }])
+    })
+
+    it('asks again on a model picked for that request alone, and says so as --model does', async () => {
+        answer = Response.json({ already: false, request: { ...OPEN, model: 'acme/deep-2' } })
+        renderWith(<ReviewRequestStatus url={PR} request={ENDED} loopPr={false} reviewed />)
+        // Config's, though the ended request named another.
+        const list = await openModels('Model: default')
+        fireEvent.click(within(list).getByRole('option', { name: 'acme/deep-2 (default)' }))
+        expect(screen.getByRole('button', { name: 'Model: acme/deep-2' }).title).toBe(
+            `canopy start ${PR} --review --model acme/deep-2`,
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'Review again' }))
+        expect((await screen.findByRole('status')).textContent).toBe(
+            `${PR} is requested for review. The next tick reviews its head, once. Its reviews run on acme/deep-2.`,
+        )
+        expect(bodies).toEqual([{ notes: '', personas: [], model: 'acme/deep-2' }])
+        // The pick was the request's alone.
+        expect(await screen.findByRole('button', { name: 'Model: default' })).toBeTruthy()
+    })
+
+    it('names the guard that refused a model the runtime does not list', async () => {
+        answer = Response.json(
+            { detail: { guard: 'unknown_model', reason: 'OpenCode does not list the model acme/gone-1' } },
+            { status: 409 },
+        )
+        renderWith(<ReviewRequestStatus url={PR} request={null} loopPr={false} reviewed={false} />)
+        const list = await openModels('Model: default')
+        fireEvent.click(within(list).getByRole('option', { name: 'acme/fast-1' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Review this PR' }))
+        expect((await screen.findByRole('alert')).textContent).toBe(
+            'refused (unknown_model): OpenCode does not list the model acme/gone-1',
+        )
+    })
+
+    it("names the model a request's reviews run on beside its personas, open or ended", () => {
+        const { rerender } = renderWith(
+            <ReviewRequestStatus
+                url={PR}
+                request={{ ...OPEN, personas: ['skeptic'], model: 'acme/deep-2@high' }}
+                loopPr={false}
+                reviewed
+            />,
+        )
+        expect(screen.getByTestId('review-request-personas').textContent).toBe(
+            'Its review is written in skeptic. Its reviews run on acme/deep-2@high.',
+        )
+        rerender(
+            <QueryClientProvider client={new QueryClient()}>
+                <ReviewRequestStatus url={PR} request={{ ...ENDED, model: 'acme/fast-1' }} loopPr reviewed />
+            </QueryClientProvider>,
+        )
+        expect(screen.getByTestId('review-request-personas').textContent).toBe('Its reviews run on acme/fast-1.')
     })
 
     it('shows the notes the request gave its reviewer, line breaks kept', () => {

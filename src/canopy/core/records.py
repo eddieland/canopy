@@ -449,6 +449,19 @@ class TaskRun(Row):
     #: The model canopy chose for its private worker, from `runtime.models` (DESIGN §13), as it asked the runtime for
     #: it; None when it chose none, and on a run from before canopy recorded it.
     model: str | None
+    #: Its worker's latest card, as JSON, when it was recorded, and the tool calls made by then (DESIGN §41); None with
+    #: no card.
+    card_json: str | None
+    card_at: str | None
+    card_calls: int | None
+    #: The tool calls its worker has ended so far.
+    tool_calls: int
+    #: When each step its card names as working was first seen so, as JSON by title (DESIGN §41); None with none.
+    card_working_since: str | None
+    #: A task's run asks no question on its card, so these stay None; kept so a card reads as any run's (DESIGN §41).
+    card_asked_at: str | None
+    card_answer: str | None
+    card_answered_at: str | None
 
 
 @dataclass(frozen=True)
@@ -518,6 +531,8 @@ class ReviewRequest(Row):
     ended_at: str | None
     end_reason: str | None
     notes: str | None
+    #: The model the operator chose for its reviews, `provider/model[@variant]`; None for the reviewer's own.
+    model: str | None
 
 
 @dataclass(frozen=True)

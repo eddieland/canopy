@@ -539,17 +539,26 @@ export function reloadedText(reload: ConfigReload): string {
 
 /**
  * What a review request did, as `canopy start URL --review` says it: new, or already open, its notes replaced when
- * `noted`, the request having given some, and the personas it is reviewed in when `chose`, the request having named
- * some, or when an open request kept its own.
+ * `noted`, the request having given some, the personas it is reviewed in when `chose`, the request having named
+ * some, or when an open request kept its own, and the model its reviews run on when `onModel`, the request having
+ * named one.
  */
-export function reviewRequestedText(url: string, requested: ReviewRequested, noted = false, chose = false): string {
+export function reviewRequestedText(
+    url: string,
+    requested: ReviewRequested,
+    noted = false,
+    chose = false,
+    onModel = false,
+): string {
     // A request that has personas keeps them when none are chosen: say which, lest the form's default read as theirs.
     const kept = requested.already && requested.request.personas.length > 0
     const written = chose || kept ? ` ${reviewPersonasText(requested.request.personas)}` : ''
+    const model = requested.request.model
+    const on = onModel && model !== null ? ` Its reviews run on ${model}.` : ''
     if (requested.already) {
-        return `${url} was already requested for review.${noted ? ' Its notes are replaced.' : ''}${written}`
+        return `${url} was already requested for review.${noted ? ' Its notes are replaced.' : ''}${written}${on}`
     }
-    return `${url} is requested for review. The next tick reviews its head, once.${written}`
+    return `${url} is requested for review. The next tick reviews its head, once.${written}${on}`
 }
 
 /** The personas a review request is reviewed in, as `canopy start URL --review --persona NAME` says it. */

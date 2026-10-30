@@ -12,10 +12,12 @@ export interface ReviewRequestDraft {
     notes: string
     /** The personas picked for this request alone, or null for those Settings prefers. */
     picked: readonly string[] | null
+    /** The model picked for this request's reviews alone, `provider/model[@variant]`, or null for config's. */
+    model: string | null
 }
 
 /** A draft with nothing in it, as the dialog first opens. */
-export const EMPTY_DRAFT: ReviewRequestDraft = { url: '', notes: '', picked: null }
+export const EMPTY_DRAFT: ReviewRequestDraft = { url: '', notes: '', picked: null, model: null }
 
 /** The draft kept in this tab, or an empty one when none is, storage is unavailable, or what is kept is not one. */
 export function readReviewRequestDraft(): ReviewRequestDraft {
@@ -31,7 +33,7 @@ export function readReviewRequestDraft(): ReviewRequestDraft {
 /** Keeps `draft` in this tab, or drops it once it holds nothing. Without storage it is kept nowhere. */
 export function keepReviewRequestDraft(draft: ReviewRequestDraft): void {
     try {
-        if (draft.url === '' && draft.notes === '' && draft.picked === null) {
+        if (draft.url === '' && draft.notes === '' && draft.picked === null && draft.model === null) {
             globalThis.sessionStorage.removeItem(KEY)
         } else {
             globalThis.sessionStorage.setItem(KEY, JSON.stringify(draft))
@@ -50,7 +52,7 @@ export function dropReviewRequestDraft(): void {
     }
 }
 
-/** A draft as stored, or null for anything that is not one. */
+/** A draft as stored, or null for anything that is not one. One kept before drafts held a model has none. */
 export function parseReviewRequestDraft(raw: string | null): ReviewRequestDraft | null {
     if (raw === null) {
         return null
@@ -64,15 +66,25 @@ export function parseReviewRequestDraft(raw: string | null): ReviewRequestDraft 
     if (typeof value !== 'object' || value === null) {
         return null
     }
-    const { url, notes, picked } = value as { url?: unknown; notes?: unknown; picked?: unknown }
-    if (typeof url !== 'string' || typeof notes !== 'string') {
+    const {
+        url,
+        notes,
+        picked,
+        model = null,
+    } = value as {
+        url?: unknown
+        notes?: unknown
+        picked?: unknown
+        model?: unknown
+    }
+    if (typeof url !== 'string' || typeof notes !== 'string' || (model !== null && typeof model !== 'string')) {
         return null
     }
     if (picked === null) {
-        return { url, notes, picked: null }
+        return { url, notes, picked: null, model }
     }
     if (!Array.isArray(picked) || !picked.every((name) => typeof name === 'string')) {
         return null
     }
-    return { url, notes, picked }
+    return { url, notes, picked, model }
 }

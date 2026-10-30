@@ -35,6 +35,7 @@ const server: Middleware = {
                     ended_at: null,
                     end_reason: null,
                     notes: null,
+                    model: null,
                     personas: [],
                 },
                 running_review: null,
@@ -177,7 +178,7 @@ describe('ReviewDialog', () => {
         expect(router.state.location.search).toEqual({ url: PR })
         expect(sent).toEqual([PR])
         expect(dialog()).toBeNull()
-        expect(readReviewRequestDraft()).toEqual({ url: '', notes: '', picked: null })
+        expect(readReviewRequestDraft()).toEqual({ url: '', notes: '', picked: null, model: null })
     })
 
     it('stays open on a refusal, naming its guard', async () => {

@@ -17,7 +17,16 @@ from canopy.cli.main import main
 from canopy.core import definitions
 from canopy.core.config import load
 from canopy.core.vocab import ResumeReason, RunKind
-from tests.canopy.helpers import KEY, Called, agent_runs, in_tick, listed, planner_does, pool_statuses, trailers_on
+from tests.canopy.helpers import (
+    KEY,
+    Called,
+    in_tick,
+    listed,
+    planner_does,
+    pool_statuses,
+    ran_on,
+    trailers_on,
+)
 from tests.canopy.review_helpers import CLEAN, feature_commit, head, reviewer_reports
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool
@@ -433,18 +442,3 @@ def calls(state: Path) -> list[tuple[list[str], str]]:
         return []
     entries = [json.loads(line) for line in log.read_text().splitlines()]
     return [(e["argv"], e["cwd"]) for e in entries if e["argv"][:1] == ["models"]]
-
-
-def ran_on(agent_log: Path, agent: str = "canopy-worker") -> str | None:
-    """The model the definition of the latest run of `agent` names, as it loaded it; None when it names none.
-
-    A variant it names follows the model's id after an `@`, as config spells it.
-    """
-    run = [r for r in agent_runs(agent_log) if f"--agent {agent}" in " ".join(r["argv"])][-1]
-    text = (Path(run["env"]["OPENCODE_CONFIG_DIR"]) / "agents" / f"{agent}.md").read_text()
-    found = [line for line in text.splitlines() if line.startswith("model: ")]
-    variant = [line for line in text.splitlines() if line.startswith("variant: ")]
-    if not found:
-        return None
-    model = json.loads(found[0].removeprefix("model: "))
-    return f"{model}@{json.loads(variant[0].removeprefix('variant: '))}" if variant else model

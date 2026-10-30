@@ -4,6 +4,7 @@ import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { LinkedText } from '@/components/linked-text'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { RunProgressLine } from '@/components/run-progress'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
@@ -46,7 +47,8 @@ export function TaskRow({ task }: { task: TaskSummary }) {
 
 /**
  * One run of a task on its page, in a run's columns there (`own-run`): its state, its reference (`task:4#5`, opening
- * its page), cost, and when; under them, what it said, the PRs it named, and its session.
+ * its page), cost, and when; under them, what it said, its progress on one line while it runs, the PRs it named, and
+ * its session.
  */
 export function TaskRunRow({ task, run }: { task: number; run: TaskRun }) {
     return (
@@ -61,6 +63,11 @@ export function TaskRunRow({ task, run }: { task: number; run: TaskRun }) {
             </span>
             <Age variant="span" started={run.started_at} ended={run.ended_at ?? null} className="text-right" />
             {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={rowLineFrom('facts')} />}
+            {run.card !== null && run.ended_at === null && (
+                <RowLine from="facts">
+                    <RunProgressLine card={run.card} />
+                </RowLine>
+            )}
             {(run.prs.length > 0 || run.session_id) && (
                 <RowLine from="facts" className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs">
                     {run.prs.map((pr) => (

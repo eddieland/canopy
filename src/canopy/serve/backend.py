@@ -26,7 +26,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, config, db, definitions, pools
+from canopy.core import chore_view, config, conversation, db, definitions, pools, ticket_models
 from canopy.core.context import Context, db_path
 from canopy.core.vocab import RunStatus
 from canopy.infra import procs
@@ -275,6 +275,25 @@ class Backend:
             found = self.models(ctx)
             self._listed = None if found.error is not None else _Listed(ctx.config, ctx.ws, now, found)
             return found
+
+    def model_list_for(self, ctx: Context, model: str | None) -> ModelList:
+        """The list the operator's choice of `model` is checked against: the one kept, read again if it lacks `model`.
+
+        A model, or a variant of one, set up since the list was kept is then not refused for minutes; a list that could
+        not be read is not read twice, and a model the runtime does not list costs one more read to refuse. It may be
+        minutes old: a run checks its model against a list read for it as it starts.
+
+        Returns:
+            The list.
+        """
+        kept = self.model_list(ctx)
+        if kept.error is not None or model is None:
+            return kept
+        try:
+            ticket_models.check(model, kept)
+        except conversation.Refused:
+            return self.model_list(ctx, refresh=True)
+        return kept
 
 
 @dataclass(frozen=True)

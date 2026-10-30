@@ -166,6 +166,7 @@ describe('outcomes', () => {
             ended_at: null,
             end_reason: null,
             notes: null,
+            model: null,
             personas: [],
         }
         expect(reviewRequestedText(pr, { request, already: false })).toBe(
@@ -186,6 +187,11 @@ describe('outcomes', () => {
         const both = { request: { ...request, personas: ['skeptic', 'canopy'] }, already: true }
         expect(reviewRequestedText(pr, both, false, true)).toBe(
             `${pr} was already requested for review. It is reviewed once in each of skeptic, canopy, side by side.`,
+        )
+        // A model chosen is named, as --model is.
+        const on = { request: { ...request, model: 'acme/deep-2@high' }, already: false }
+        expect(reviewRequestedText(pr, on, false, false, true)).toBe(
+            `${pr} is requested for review. The next tick reviews its head, once. Its reviews run on acme/deep-2@high.`,
         )
         expect(reviewStoppedText(pr, { request, running_review: null })).toBe(
             `${pr}'s review request is stopped; nothing reviews it now.`,
