@@ -19,20 +19,26 @@ interface Said {
     seen: string
     /** Whether the ticket's models have caught up with the choice: any change after that ends the confirmation. */
     settled: boolean
+    /** Whether the choice cleared the override rather than set one, which the confirmation says. */
+    cleared: boolean
 }
 
 /**
  * The model each of a ticket's agents runs on at its next run (DESIGN §13), and where that comes from: a row for its
  * workers, its planner, and its reviewer, each a `ModelChoice`, as an attention item shows them. The ticket's page lays
- * them out beside the personas instead (`TicketAgents`).
+ * them out beside the personas instead (`TicketAgents`). `fresh` reads the runtime's list from the runtime itself, not
+ * the one the server kept, as an item about a run refused its model does: that run has just found a model gone, which
+ * a list read minutes ago may still name.
  */
 export function TicketModels({
     ticketKey,
     models,
+    fresh = false,
     className,
 }: {
     ticketKey: string
     models: readonly AgentModel[]
+    fresh?: boolean
     className?: string
 }) {
     if (models.length === 0) {
@@ -43,7 +49,7 @@ export function TicketModels({
             <Fields className="pb-1.5">
                 {models.map((m) => (
                     <Field key={m.agent} label={`${m.agent} model`}>
-                        <ModelChoice ticketKey={ticketKey} current={m} models={models} />
+                        <ModelChoice ticketKey={ticketKey} current={m} models={models} fresh={fresh} />
                     </Field>
                 ))}
             </Fields>
@@ -53,22 +59,25 @@ export function TicketModels({
 
 /**
  * One agent's model at its next run: a menu that sets the ticket's override to one of the models the runtime lists,
- * read when the menu opens, or clears it, as `canopy model KEY MODEL --agent AGENT` and `--clear` do, each model at its
- * default or at one of the variants the runtime lists for it, then where the model comes from. The runtime's default
- * names no model, so a row on it names the one that served the agent's latest run once its session is read, as does a
- * row whose runs went to another. A choice saved is confirmed in place of where the model comes from, so nothing
- * moves, until the ticket's `models` change again, saying so when it sets aside
- * config's variant; a choice refused says why under the row. A model or variant the runtime no longer lists refuses
- * the agent's next run rather than run it on another: its menu's trigger is in the blocked color once the list says so.
+ * or clears it, as `canopy model KEY MODEL --agent AGENT` and `--clear` do, each model at its default or at one of the
+ * variants the runtime lists for it, then where the model comes from. The runtime's default names no model, so a row on
+ * it names the one that served the agent's latest run once its session is read, as does a row whose runs went to
+ * another. A choice saved is confirmed in place of where the model comes from, so nothing moves, until the ticket's
+ * `models` change again: `saved`, saying so when it sets aside config's variant, or `cleared`; a choice refused says
+ * why under the row. A model or variant the runtime no longer lists refuses the agent's next run rather than run it on
+ * another: its menu's trigger is in the failure color, as its attention item is, once the list says so, which a row
+ * that names a model reads as it shows (`fresh`, as `TicketModels` says).
  */
 export function ModelChoice({
     ticketKey,
     current,
     models,
+    fresh = false,
 }: {
     ticketKey: string
     current: AgentModel
     models: readonly AgentModel[]
+    fresh?: boolean
 }) {
     const client = useQueryClient()
     const seen = seenOf(models)
@@ -82,8 +91,8 @@ export function ModelChoice({
     const choose = useMutation({
         mutationFn: (model: string | null) => chooseTicketModel(ticketKey, current.agent, model),
         onMutate: () => setSaid(null),
-        onSuccess: (now) => {
-            setSaid({ now, seen, settled: false })
+        onSuccess: (now, model) => {
+            setSaid({ now, seen, settled: false, cleared: model === null })
             void client.invalidateQueries({ queryKey: keys.ticket(ticketKey) })
         },
     })
@@ -105,6 +114,10 @@ export function ModelChoice({
                     agent={row.agent}
                     clear="Clear the override"
                     clearing="clearing the override"
+                    fresh={fresh}
+                    // A row that names a model reads the runtime's list as it shows, so one gone is marked before
+                    // its menu opens; the runtime's default names none to lose.
+                    eager={row.model !== null}
                     // The choice being saved, while the server reads the runtime's list again to check it, for up to
                     // 30 seconds.
                     saving={choose.isPending ? { model: choose.variables ?? null } : undefined}
@@ -119,7 +132,7 @@ export function ModelChoice({
                     // In place of where the model comes from, which the sentence a screen reader is told says.
                     <output className="inline-flex items-baseline gap-1 text-xs text-status-done">
                         <Check aria-hidden className="size-3 self-center" />
-                        saved
+                        {said.cleared ? 'cleared' : 'saved'}
                         <span className="sr-only">: {modelText(ticketKey, said.now)}</span>
                         {/* What the sentence before says, to the eye, as the CLI puts it. */}
                         {said.now.dropped_variant !== null && (

@@ -1,14 +1,15 @@
-import { useQuery } from '@tanstack/react-query'
+import { noop, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { modelsQuery } from '@/api/queries'
+import { freshModelsQuery, modelsQuery } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { PickerModel } from '@/lib/models'
-import { failedText, modelName } from '@/lib/outcomes'
+import { modelName } from '@/lib/outcomes'
+import { whyReadFailed } from '@/lib/read-failure'
 import { cn } from '@/lib/utils'
 
 /** Why a model the menu shows cannot be chosen: the runtime no longer lists it, so its agent's next run is refused. */
@@ -19,16 +20,16 @@ const VARIANT_GONE = 'variant no longer listed; its next run is refused'
 /**
  * The menu that chooses the model one of canopy's agents runs on (DESIGN §13), shared by a ticket's agents
  * (`TicketModels`) and a review request (`ReviewModelMenu`): the trigger names the model its next run goes to, its
- * variant set apart, or `unchosen` in muted prose while the menu's own choice is unset, and opens a list of the
- * models the runtime lists, read when it opens, under a field that narrows it, grouped by provider, each model's
- * variants under it in the runtime's order, with the model chosen now pinned at the top and checked wherever it is,
- * whatever sets it. What is typed finds each row by its own id alone, the pinned one set aside, so a variant typed
- * and Enter picks the first model at that variant. Picking one hands it to `onChoose` and closes the list; `clear`,
- * below the list rather than in it, so a long list never scrolls it away, hands it null. The trigger ends a long id
- * in an ellipsis, the whole of it on hover, and stays in the keyboard's reach while a choice saves, so the focus
- * comes back to it once the list closes; it opens nothing until the save is done. A model or variant the runtime no
- * longer lists refuses the agent's next run rather than run it on another: the trigger is in the blocked color once
- * the list says so.
+ * variant set apart, or `unchosen` in muted prose while the menu's own choice is unset, and opens a list of the models
+ * the runtime lists, read as the trigger shows when `eager`, else when it opens, under a field that narrows it, grouped
+ * by provider, each model's variants under it in the runtime's order, with the model chosen now pinned at the top and
+ * checked wherever it is, whatever sets it. What is typed finds each row by its own id alone, the pinned one set aside,
+ * so a variant typed and Enter picks the first model at that variant. Picking one hands it to `onChoose` and closes the
+ * list; `clear`, below the list rather than in it, so a long list never scrolls it away, hands it null. The trigger
+ * ends a long id in an ellipsis, the whole of it on hover, and stays in the keyboard's reach while a choice saves, so
+ * the focus comes back to it once the list closes; it opens nothing until the save is done. A model or variant the
+ * runtime no longer lists refuses the agent's next run rather than run it on another: the trigger is in the failure
+ * color once the list says so, and the pinned row says why under it.
  */
 export function ModelPicker({
     current,
@@ -40,6 +41,8 @@ export function ModelPicker({
     clearing = clear,
     unchosen,
     title,
+    fresh = false,
+    eager = false,
     saving,
     disabled = false,
     onChoose,
@@ -63,6 +66,10 @@ export function ModelPicker({
     unchosen?: string
     /** The trigger's tip, such as the command it stands for; the model it names if unset. */
     title?: string
+    /** Whether to read the runtime's list from the runtime itself, not the one the server kept, as it shows. */
+    fresh?: boolean
+    /** Whether to read the runtime's list as the trigger shows, not only when the menu opens, to mark a model gone. */
+    eager?: boolean
     /** The choice being saved, a model or null for clearing it, while the server checks it; none while idle. */
     saving?: { model: string | null }
     /** Whether the menu is closed to choices, as while what it belongs to is sent. */
@@ -72,13 +79,20 @@ export function ModelPicker({
     /** The trigger's test id. */
     testId?: string
 }) {
+    const client = useQueryClient()
     const [open, setOpen] = useState(false)
     // What is typed in the field, which a variant's row reads to name its model when the model's own row is hidden.
     const [search, setSearch] = useState('')
-    // Read when the list opens, not before: each read starts the runtime.
-    const listed = useQuery({ ...modelsQuery, enabled: open })
+    // Read as the trigger shows when `eager`, not when its list opens, so a model gone is marked before anyone goes
+    // looking: the server keeps the list it read for minutes, so a read seldom starts the runtime. Each menu's read is
+    // the others', under one key.
+    const listed = useQuery({
+        ...(fresh ? freshModelsQuery : modelsQuery),
+        enabled: fresh || open || eager,
+    })
     const reading = listed.isPending || listed.isFetching
-    const why = listed.data?.error ?? (listed.isError ? failedText(listed.error) : null)
+    // A read that failed did nothing, so it says so in a read's words, not a write's.
+    const why = listed.data?.error ?? (listed.isError ? whyReadFailed(listed.error) : null)
     // What the runtime lists, once read; undefined while unread or unreadable, when no model is known to be gone.
     const models = why === null ? listed.data?.models : undefined
     const variants = listed.data?.variants ?? {}
@@ -86,6 +100,7 @@ export function ModelPicker({
     // Why the model chosen now would be refused as a choice, and refuses its agent's next run: shown, checked, never
     // offered. Null while the list is unread, or nothing is chosen.
     const refusal = models === undefined || id === null ? null : refusalOf(id, current.variant, models, variants)
+    const refusalId = useId()
     const placeholder = saving === undefined && !chosen ? unchosen : undefined
     const shown = saving === undefined ? (placeholder ?? modelName(current.model)) : `${saving.model ?? clearing}…`
     // A model's id is data, in monospace; the runtime's default names none, nor does a placeholder: they are prose.
@@ -104,6 +119,11 @@ export function ModelPicker({
         setOpen(now)
         // Each opening starts from the whole list, as cmdk's own field does.
         setSearch('')
+        if (now) {
+            // On a page left open, a list older than a minute is read again as the menu opens, the server's kept one;
+            // a read that fails says so in the list, from the query's own state.
+            client.query(modelsQuery).catch(noop)
+        }
     }
 
     return (
@@ -121,7 +141,8 @@ export function ModelPicker({
                         'max-w-full aria-disabled:opacity-50',
                         // The `xs` button is monospace of its own, as an id is.
                         !named && 'font-sans text-muted-foreground',
-                        refusal !== null && 'border-status-blocked/40 text-status-blocked',
+                        // It refuses the agent's next run, so it is broken, as its attention item says.
+                        refusal !== null && 'border-status-failed/40 text-status-failed',
                     )}
                     data-testid={testId}
                 >
@@ -148,10 +169,10 @@ export function ModelPicker({
                     <CommandInput placeholder="Find a model" value={search} onValueChange={setSearch} />
                     <CommandList label="Models">
                         {models !== undefined && <CommandEmpty>no model has that name</CommandEmpty>}
-                        {/* Pinned, so a long list keeps it in reach: the id, then where it comes from, or why it
-                            cannot be chosen again. The runtime's default is a state, not a choice. Set aside while
-                            something is typed, which finds the model chosen in its provider's group, so Enter takes
-                            what was typed for. */}
+                        {/* Pinned, so a long list keeps it in reach: the id, then where it comes from, or, under it and
+                            out of its disabled look, in the failure color, why it cannot be chosen again. The
+                            runtime's default is a state, not a choice. Set aside while something is typed, which finds
+                            the model chosen in its provider's group, so Enter takes what was typed for. */}
                         {search.trim() === '' && (
                             <CommandGroup heading="Chosen now">
                                 <ModelItem
@@ -159,7 +180,8 @@ export function ModelPicker({
                                     checked={current.model !== null}
                                     disabled={current.model === null || refusal !== null}
                                     title={refusal ?? modelName(current.model)}
-                                    note={refusal ?? source}
+                                    note={refusal === null ? source : undefined}
+                                    describedBy={refusal === null ? undefined : refusalId}
                                     // The menu's own choice chosen again is the same choice: nothing to save.
                                     onSelect={() => (chosen ? setOpen(false) : choose(current.model))}
                                 >
@@ -167,6 +189,11 @@ export function ModelPicker({
                                         {modelName(current.model)}
                                     </span>
                                 </ModelItem>
+                                {refusal !== null && (
+                                    <p id={refusalId} className="pb-1.5 pl-8 text-xs text-status-failed">
+                                        {refusal}
+                                    </p>
+                                )}
                             </CommandGroup>
                         )}
                         {reading && (
@@ -249,7 +276,8 @@ export function ModelPicker({
 
 /**
  * A model in the picker's list, with a check at its left while it is the one chosen now: its id, ending in an ellipsis
- * when it is too long for the list, then a muted `note` after it, or under it when the two do not fit on a line.
+ * when it is too long for the list, then a muted `note` after it, or under it when the two do not fit on a line;
+ * `describedBy` names what says more of it outside it.
  */
 function ModelItem({
     value,
@@ -259,6 +287,7 @@ function ModelItem({
     onSelect,
     label,
     note,
+    describedBy,
     className,
     children,
 }: {
@@ -269,6 +298,7 @@ function ModelItem({
     onSelect: () => void
     label?: string
     note?: string
+    describedBy?: string
     className?: string
     children: ReactNode
 }) {
@@ -281,6 +311,7 @@ function ModelItem({
             onSelect={onSelect}
             aria-checked={checked}
             aria-label={label}
+            aria-describedby={describedBy}
             className={cn('font-mono text-xs', className)}
         >
             <span className="flex size-4 items-center justify-center">

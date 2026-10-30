@@ -58,6 +58,8 @@ let bodies: unknown[] = []
 let answer: Response | undefined
 // The personas the server stand-in lists.
 let listed: PersonaList = PERSONAS
+// How many times the runtime's models were read.
+let modelReads = 0
 
 const server: Middleware = {
     async onRequest({ request }) {
@@ -71,6 +73,7 @@ const server: Middleware = {
             return Response.json(CONFIG)
         }
         if (url.pathname === '/api/models') {
+            modelReads += 1
             return Response.json(LISTED)
         }
         sent.push({ path: url.pathname, url: url.searchParams.get('url') })
@@ -87,6 +90,7 @@ beforeEach(() => {
     bodies = []
     answer = undefined
     listed = PERSONAS
+    modelReads = 0
     setReviewPersonas([])
     api.use(server)
 })
@@ -357,17 +361,28 @@ describe('ReviewRequestForm', () => {
         })
     })
 
-    it('starts from the model a draft kept, marked once the runtime no longer lists it', async () => {
+    it('marks a model a draft kept before its menu opens, once the runtime no longer lists it', async () => {
         await renderRouted(<ReviewRequestForm draft={{ url: PR, notes: '', picked: null, model: 'acme/gone-1' }} />)
         expect(screen.getByTestId('review-request-chosen').textContent).toBe('in canopy, the default, on acme/gone-1')
         showPersona()
-        const list = await openModels('Model: acme/gone-1')
-        // Checked, but not offered again: its reviews would be refused.
-        const pinned = within(within(list).getByRole('group', { name: 'Chosen now' })).getByRole('option')
+        // A model picked reads the runtime's list as its menu shows, so it is marked without opening it.
+        const gone = 'Model: acme/gone-1, no longer listed; its next run is refused'
+        const list = await openModels(gone)
+        // Checked, but not offered again: its reviews would be refused, which it is described by.
+        const pinned = within(within(list).getByRole('group', { name: 'Chosen now' })).getByRole('option', {
+            name: 'acme/gone-1',
+            description: 'no longer listed; its next run is refused',
+        })
         expect(pinned.getAttribute('aria-disabled')).toBe('true')
-        expect(
-            screen.getByRole('button', { name: 'Model: acme/gone-1, no longer listed; its next run is refused' }),
-        ).toBeTruthy()
+    })
+
+    it("reads the runtime's models only once its menu opens while config's is the default", async () => {
+        await renderRouted(<ReviewRequestForm />)
+        showPersona()
+        await screen.findByTestId('review-model-default')
+        expect(modelReads).toBe(0)
+        await openModels('Model: default')
+        expect(modelReads).toBeGreaterThan(0)
     })
 
     it('names the guard that refused a request in place of the hint, keeps the URL, and stays', async () => {

@@ -8,8 +8,10 @@ import { pickerModel, RUNTIME_DEFAULT, withVariant } from '@/lib/models'
  * The model a review request's reviews run on (DESIGN §13, §21), in every persona: `Model [default ▾]`, the menu a
  * ticket's agents choose theirs with (`ModelPicker`), config's reviewer's model named after it in muted text while
  * none is picked. A model picked is this request's alone, as `canopy start URL --review --model M` gives it, and
- * `Use the default` goes back to config's. A model the runtime no longer lists is in the blocked color, since the
- * request's reviews would be refused on it.
+ * `Use the default` goes back to config's. A model picked reads the runtime's list as the menu shows, as a ticket's
+ * row naming a model does, so one the runtime no longer lists, kept in the form's draft, is in the failure color
+ * before the menu opens, since the request's reviews would be refused on it; config's is the settings page's to mark,
+ * and is read when the menu opens.
  */
 export function ReviewModelMenu({
     model,
@@ -48,6 +50,7 @@ export function ReviewModelMenu({
                 clear="Use the default"
                 unchosen="default"
                 title={`canopy start ${url} --review --model ${model ?? 'M'}`}
+                eager={model !== null}
                 disabled={disabled}
                 onChoose={onChange}
                 testId={testId}

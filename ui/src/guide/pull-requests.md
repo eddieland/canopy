@@ -267,9 +267,10 @@ names config's reviewer's model after it, so you know what you're getting before
 bigger model for the PR that touches billing, or a variant of one at a higher effort, and every review that request
 makes runs on it, in each persona; it's the request's alone, and the next one starts from config's again. A model on a
 ticket's own reviewer comes second to it. The menu is the one a ticket's page uses, so it lists what the runtime does,
-and a model the runtime has since dropped turns the button the blocked color; canopy refuses a request on one, and the
-form says why. Asking again for a PR that's waiting, with a model picked, replaces its model; left on `default`, it
-keeps it. The PR's page names the model with the request, open or ended, so you can tell later which run cost what.
+and a model you picked that the runtime has since dropped turns the button red without your opening it; canopy
+refuses a request on one, and the form says why. Asking again for a PR that's waiting, with a model picked, replaces
+its model; left on `default`, it keeps it. The PR's page names the model with the request, open or ended, so you can
+tell later which run cost what.
 
 The review stays in canopy until you say otherwise. Its page holds it as a draft of your review on the PR, which you
 can trim, reword, and publish ([below](#publishing-your-review)); whether you pass any of it on, and in what tone, is
