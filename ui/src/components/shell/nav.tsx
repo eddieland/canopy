@@ -70,26 +70,28 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
     },
 ]
 
-// The active item's icon, in the ink a palette that draws its highlight as a block sets (`--nav-on-ink`), else in its
-// section's color. Written out, so Tailwind finds each.
-const SECTION_ON_INK: Record<Section, string> = {
-    '/attention': 'group-data-[status=active]:text-[color:var(--nav-on-ink,var(--section-attention))]',
-    '/runs': 'group-data-[status=active]:text-[color:var(--nav-on-ink,var(--section-runs))]',
-    '/tickets': 'group-data-[status=active]:text-[color:var(--nav-on-ink,var(--section-tickets))]',
-    '/tasks': 'group-data-[status=active]:text-[color:var(--nav-on-ink,var(--section-tasks))]',
-    '/pull-requests': 'group-data-[status=active]:text-[color:var(--nav-on-ink,var(--section-pull-requests))]',
-    '/chores': 'group-data-[status=active]:text-[color:var(--nav-on-ink,var(--section-chores))]',
-    '/reports': 'group-data-[status=active]:text-[color:var(--nav-on-ink,var(--section-reports))]',
-    '/memory': 'group-data-[status=active]:text-[color:var(--nav-on-ink,var(--section-memory))]',
-    '/settings': 'group-data-[status=active]:text-[color:var(--nav-on-ink,var(--section-settings))]',
+// The active item's label and icon, in the ink a palette that draws its highlight as a block sets (`--nav-on-ink`),
+// else in its section's color, shaded where it would not read on its tint (`--nav-label-*` in `tokens.css`). Written
+// out, so Tailwind finds each.
+const SECTION_ACTIVE_INK: Record<Section, string> = {
+    '/attention': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-attention))]',
+    '/runs': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-runs))]',
+    '/tickets': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-tickets))]',
+    '/tasks': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-tasks))]',
+    '/pull-requests': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-pull-requests))]',
+    '/chores': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-chores))]',
+    '/reports': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-reports))]',
+    '/memory': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-memory))]',
+    '/settings': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-settings))]',
 }
 
 /**
  * The side navigation. Each item's icon is in its section's color. The active item is marked by one highlight, a tint
- * and a hairline in that color, which slides to the item a navigation lands on and takes on its color as it goes. A
- * palette may draw it as a solid block instead, inking the active item in the canvas's color, drop the hairline, or
- * light the active icon (`--nav-block`, `--nav-hairline`, `--nav-on-ink`, `--nav-on-glow` in `tokens.css`); a
- * ticket's page keeps Tickets active, a PR's or a review's Pull requests, a chore's Chores, and a tick's Runs.
+ * and a bar down its left edge in that color, which slides to the item a navigation lands on and takes on its color as
+ * it goes, and its label is in that color too. A palette may draw the highlight as a solid block instead, inking the
+ * active item in the canvas's color, drop the bar, or light the active icon (`--nav-block`, `--nav-hairline`,
+ * `--nav-on-ink`, `--nav-on-glow` in `tokens.css`); a ticket's page keeps Tickets active, a PR's or a review's Pull
+ * requests, a chore's Chores, and a tick's Runs.
  * Attention shows how many items it lists, on every page, split by severity, Pull requests how many review results the
  * operator has not opened, and Memory how many proposals wait on the operator, while proposals are on. Hovering an item
  * says what its page holds.
@@ -112,7 +114,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
                 aria-hidden
                 data-testid="nav-highlight"
                 className={cn(
-                    'absolute inset-x-2 top-2 h-8 rounded-sm',
+                    'absolute inset-x-2 top-2 h-8 overflow-hidden rounded-sm',
                     SECTION_TINT[tone],
                     'motion-safe:transition-[translate,opacity,background-color] motion-safe:duration-300',
                     'motion-safe:ease-[cubic-bezier(0.2,0,0,1)]',
@@ -130,7 +132,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
                 />
                 <span
                     className={cn(
-                        'absolute inset-y-1.5 left-0 w-0.5 rounded-full opacity-[var(--nav-hairline,1)]',
+                        'absolute inset-y-0 left-0 w-0.75 opacity-[var(--nav-hairline,1)]',
                         SECTION_FILL[tone],
                         'motion-safe:transition-colors motion-safe:duration-300',
                     )}
@@ -145,7 +147,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
                     className={cn(
                         'group relative flex h-8 items-center gap-2.5 rounded-sm px-2.5 text-sm text-muted-foreground',
                         'transition-colors hover:bg-surface-raised hover:text-foreground',
-                        'data-[status=active]:text-[color:var(--nav-on-ink,var(--foreground))]',
+                        SECTION_ACTIVE_INK[to],
                         'data-[status=active]:hover:bg-transparent',
                         compact && 'justify-center',
                     )}
@@ -155,10 +157,12 @@ export function Nav({ compact = false }: { compact?: boolean }) {
                             'size-4 transition-transform group-hover:-rotate-6 motion-reduce:transition-none',
                             'group-data-[status=active]:[filter:var(--nav-on-glow,none)]',
                             SECTION_TEXT[to],
-                            SECTION_ON_INK[to],
+                            'group-data-[status=active]:text-current',
                         )}
                     />
-                    {compact ? <span className="sr-only">{SECTION_LABEL[to]}</span> : SECTION_LABEL[to]}
+                    <span className={compact ? 'sr-only' : 'group-data-[status=active]:font-medium'}>
+                        {SECTION_LABEL[to]}
+                    </span>
                     {to === '/attention' && counts !== undefined && (
                         <AttentionCount counts={counts} compact={compact} />
                     )}

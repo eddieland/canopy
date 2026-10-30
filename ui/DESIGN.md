@@ -8,9 +8,9 @@ this file wins until it is changed in the same PR. How to work in `ui/` is in `A
 An operations inbox: a control room's at-a-glance state, kept calm enough to read a worker's words and answer
 them. Data sits in monospace readouts on quiet surfaces, separated by hairlines, on a plain canvas. One accent color
 marks what is live, selected, or the action to take; what is selected in a page sits on its tint. Each section of
-the nav has a color of its own, for a little fun and a sense of place: its icon, the nav's highlight on it, and the
-trail over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
-counter wears the color of what it counts; section colors never mark state, and nothing else is colored for
+the nav has a color of its own, for a little fun and a sense of place: its icon, the nav's highlight and label on it,
+and the trail over its pages wear it, and an aurora of them runs under the header. Status color is reserved for
+state, and a counter wears the color of what it counts; section colors never mark state, and nothing else is colored for
 decoration, but the fun's own (Fun, below). By default both themes' neutrals carry the accent's indigo hue, so the
 canvas has color of its own: dark is a deep indigo slate, light a lavender grey and white. Each can wear another
 palette instead, picked apart (Themes, below). Dark is the one the operator lives in; neither is the lesser theme.
@@ -41,6 +41,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `status-done` | A run that finished. |
 | `status-failed` | A run that failed, crashed, or left no result. Also shadcn's `destructive` and refusals. |
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
+| `nav-label-attention`, `-runs`, ... | The nav's active label: its section's color, shaded by `nav-label-shade`. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
 | `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
@@ -58,10 +59,11 @@ Rules:
 - **Text reads at 4.5:1** (WCAG AA for small text), in both themes and every palette: every token used as text
   (`foreground`, `muted-foreground`, `accent`, each status, section, diff, and syntax color) on `background`, `surface`,
   and `surface-raised`, and each status on its own tint up to 20% (a chip, a destructive button, a question's bubble),
-  in a selected row too. `src/styles/tokens.test.ts` measures every pair from `tokens.css` and fails below it, so a
-  token change that drops one fails `npm test`. Text is never faded with `opacity` to look quieter: that is what
-  `muted-foreground` is for, and an opacity under it drops below AA. Only a disabled control, and a state that passes
-  (search's last hits while the next load), dim. The ticker's `flair-*` colors are decoration, not held to it.
+  in a selected row too, and the nav's active label on its highlight. `src/styles/tokens.test.ts` measures every pair
+  from `tokens.css` and fails below it, so a token change that drops one fails `npm test`. Text is never faded with
+  `opacity` to look quieter: that is what `muted-foreground` is for, and an opacity under it drops below AA. Only a
+  disabled control, and a state that passes (search's last hits while the next load), dim. The ticker's `flair-*`
+  colors are decoration, not held to it.
 - **Status colors** work three ways, in both themes, on `surface` and `surface-raised`: as a dot (`RunDot` in
   `src/components/status.tsx`), as text, and as a tint (`bg-status-blocked/8` behind a question). Map a state to its
   classes through a `Record<State, string>` written out in full, never by building a class name from a string:
@@ -86,9 +88,9 @@ Rules:
 
   A new section takes a color the same way, from what its page holds, and stays apart from its neighbours in the nav
   and from the status colors on its own page. Eight nav hues, five statuses, and the accent leave the wheel full, so a
-  new one may mean moving another. They go on the nav's icons and highlight, the first step of the page header's trail,
-  and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no
-  section (the 404) takes the accent.
+  new one may mean moving another. They go on the nav's icons, highlight, and active label, the first step of the page
+  header's trail, and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a
+  state's. A page in no section (the 404) takes the accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the spend page's
   charts and the legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
   beside a swatch. Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on
@@ -123,7 +125,7 @@ Rules:
   glow.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
-  or glowing), and the nav's highlight (a tint and a hairline, a solid block with the active item inked in the canvas's
+  or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
   color, or a tint with the icon lit). Each form takes the room the default does, so a switch moves nothing; the
   defaults keep the first of each, Gruvbox's dark the second, and black the third.
   A palette may tune its section colors too, muted toward a scheme's own set or turned up, but each keeps its hue's
@@ -517,9 +519,11 @@ Rules:
   for the rest (`faviconDot` in `src/lib/favicon.ts`). Signed in, the page draws it from the theme's tokens
   (`Favicon`); `public/favicon.svg`, the plain mark in each theme's accent, is the icon before sign-in and the API
   docs'. It is static: a tab that moves pulls the eye from whatever the operator is reading.
-- **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
-  with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
-  the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
+- **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 24% tint
+  with a 3px bar down its full height, its label at medium weight in the section's color. Light's section colors sit
+  near 4.5:1 on the bare canvas, so on their tint the label is shaded toward black (`nav-label-shade`); dark's is not.
+  In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and the runs page's chosen
+  filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
 - **The aurora**: a 2px hairline along the header's foot, over its border, fading through the nav's colors in the
   nav's order, Attention's rose first and Memory's last. It is static.
 
@@ -567,7 +571,7 @@ a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.
 - Counter values are odometers (`RollingNumber`): each digit rolls to its new value, the units first, and rolls up from
   zero when the counter first shows. The value is in the text once, for screen readers and tests; the digits are
   drawn by CSS.
-- The nav's highlight (its tint and hairline) is one element that slides to the active item, changing into that
+- The nav's highlight (its tint and bar) is one element that slides to the active item, changing into that
   item's section color as it goes.
 - The header's logo is alive: its dot breathes while the stream is live, an arc sweeps its ring while a tick runs or
   one Tick now asked for is starting, and a ripple leaves it when a new tick appears.
