@@ -17,9 +17,9 @@ run's own (`core.git_tools`); it opens no workspace, and serves nothing else. A 
 CANOPY_RUN_ID names such a run: a call is validated and writes nothing, since the harness records the update from the
 call in the events the agent prints; it opens no workspace.
 
-An overseer's tool lists its result's schema as its output schema, and answers with its text and
-the result as structured content; git's `log` does too, its text the result as JSON. A refusal or an invalid argument
-is a tool error, `isError`, with text that says why and no structured content, and the server goes on. It
+An overseer's tool lists its result's schema as its output schema, and answers with its text and the result as
+structured content; a git tool that reads records does too, its text the result as JSON. A refusal or an invalid
+argument is a tool error, `isError`, with text that says why and no structured content, and the server goes on. It
 writes nothing to stderr, which the runtime never reads, and logs no argument's text.
 """
 
@@ -504,11 +504,12 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         ),
         _git_tool(
             git_tools.GREP,
-            "Find the lines that hold an exact text in the files as they are at a commit, each as path:line:text: "
-            "who calls a function, or what used a name before a branch changed it. Not a pattern; files that are not "
-            f"text are left out. {_CUT}",
+            "Find the lines that hold an exact text in the files as they are at a commit, as JSON, each with its path "
+            "and line number: who calls a function, or what used a name before a branch changed it. Not a pattern; "
+            "files that are not text are left out.",
             git_tools.Grep,
             git_tools.grep,
+            result=git_tools.Matches,
             runner=runner,
             checkouts=checkouts,
         ),
