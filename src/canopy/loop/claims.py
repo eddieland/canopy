@@ -48,7 +48,7 @@ from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import CheckStatus, ResumeReason, RunKind
 from canopy.core.workspace import CheckRole
 from canopy.loop import observations, phases
-from canopy.runs import artifact_authority
+from canopy.runs import artifact_authority, drafts
 from canopy.runs.dispatch import Refusal
 
 if TYPE_CHECKING:
@@ -541,6 +541,7 @@ def _newest_review(
     trust = ctx.config.trust
     trusted = {t.lower() for t in trust.trusted_reviewers}
     said = [db.parse_time(m.at) for m in _operator_messages(ctx, record, message)]
+    sent = drafts.sent_by_pr(ctx.conn)
     new = observations.new_reviews(reader.reviews.get(pr["url"], []), unit.review_cursor)
     covered: list[int] = []
     stop: int | None = None
@@ -548,7 +549,7 @@ def _newest_review(
         if r.number is None:
             # No cursor passes it: an item with no number stays newer than any.
             continue
-        if n >= observations.MAX_NEW_ITEMS or (_feedback(r, pr, trust) and not _go_ahead(r, trusted, said)):
+        if n >= observations.MAX_NEW_ITEMS or (_feedback(r, pr, trust, sent) and not _go_ahead(r, trusted, said)):
             stop = r.number
             break
         covered.append(r.number)
@@ -559,15 +560,22 @@ def _newest_review(
     return max(covered, default=None)
 
 
-def _feedback(r: records.ObservedReview, pr: observations.PrObservation, trust: Trust) -> bool:
+def _feedback(
+    r: records.ObservedReview,
+    pr: observations.PrObservation,
+    trust: Trust,
+    sent: Mapping[str, Mapping[str, Sequence[int]]],
+) -> bool:
     """Whether a review item is feedback, and neither the PR author's, under whom workers post, nor a worker's (D069).
+
+    Nor is one the operator sent through canopy, known by its id among `sent` whoever opened the PR (DESIGN §29).
 
     Returns:
         True for a review comment, a change request, or a review that says something, by anyone else.
     """
     author = (pr["author"] or "").lower()
     marked = conversation.worker_marked(r.body, trust.comment_prefix, trust.comment_suffix)
-    return phases.is_feedback(r) and (r.author or "").lower() != author and not marked
+    return phases.is_feedback(r) and (r.author or "").lower() != author and not marked and not drafts.was_sent(r, sent)
 
 
 def _go_ahead(r: records.ObservedReview, trusted: AbstractSet[str], said: Collection[datetime]) -> bool:
@@ -691,7 +699,8 @@ class _Review:
         trust = ctx.config.trust
         trusted = {t.lower() for t in trust.trusted_reviewers}
         pr = self.pr
-        feedback = [] if pr is None else [r for r in self.covered if _feedback(r, pr, trust)]
+        sent = drafts.sent_by_pr(ctx.conn)
+        feedback = [] if pr is None else [r for r in self.covered if _feedback(r, pr, trust, sent)]
         said = [db.parse_time(m.at) for m in _operator_messages(ctx, record, message)]
         for r in feedback:
             if not _go_ahead(r, trusted, said):

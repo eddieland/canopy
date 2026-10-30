@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 from unittest import mock
 
 from canopy.core import conversation, db, item_numbers, records, sql
-from canopy.core.vocab import NumberedItem
+from canopy.core.vocab import DraftStatus, NumberedItem, RunStatus
 from canopy.runs import artifact_feed
-from tests.canopy.helpers import KEY, LABEL, present
+from tests.canopy.helpers import KEY, LABEL, context, present, running_run
 
 if TYPE_CHECKING:
     import sqlite3
@@ -218,6 +218,18 @@ def review(
 
 
 #: Who comments on an artifact in the helpers' changes: a person the store signed in.
+def sent_draft(env: CanopyEnv, conn: sqlite3.Connection, *, comment_id: int, review_id: int) -> None:
+    """Record a run's thread draft the operator sent on PR as review comment `comment_id`, in review `review_id`."""
+    run_id = running_run(context(env), KEY, private=False)
+    assert db.finish_run(conn, "runs", run_id, RunStatus.DONE, None)
+    conn.execute(
+        "INSERT INTO drafts (run_id, number, ticket_key, kind, repo, pr_url, comment_id, status, basis, created_at, "
+        "sent_at, sent_comment_id, sent_review_id, stance) VALUES (?, 1, ?, 'thread', 'repo', ?, 1, ?, ?, ?, ?, ?, ?, "
+        "'changed')",
+        (run_id, KEY, PR, DraftStatus.SENT, FRESH, FRESH, FRESH, comment_id, review_id),
+    )
+
+
 ANA = {"id": "u_ana", "display_name": "Ana", "kind": "person"}
 
 
