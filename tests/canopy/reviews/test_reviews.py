@@ -16,6 +16,7 @@ from canopy.core import (
     conversation,
     db,
     definitions,
+    git_tools,
     personas,
     prompts,
     records,
@@ -39,12 +40,12 @@ from tests.canopy.helpers import (
     agent_runs,
     calls,
     decisions,
+    git_records,
     granted_meanwhile,
     has_deadline,
     in_run,
     in_tick,
     lifelock_left,
-    logged,
     messages,
     overseer_calls,
     personas_dir,
@@ -955,7 +956,7 @@ def test_a_review_of_a_stacked_pr_runs_from_the_branch_it_merges_into(
     assert "- Base: `feature`" in reviewed.prompt
     [reviewer] = agent_runs(scenario.agent_log)
     [fork] = reviewer["tools"]
-    assert (fork["error"], fork["text"]) == (False, parent)
+    assert (fork["error"], git_records(fork["text"], git_tools.Base).commit) == (False, parent)
 
 
 def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
@@ -984,9 +985,9 @@ def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
     assert reviewer["env"]["OPENCODE_EXPERIMENTAL_CODE_MODE"] == "false"
     fork, diff, log, root, escape, option = reviewer["tools"]
     assert [call["error"] for call in (fork, diff, log, root)] == [False] * 4, [fork, diff, log, root]
-    assert fork["text"] == head(git_pool)
+    assert git_records(fork["text"], git_tools.Base).commit == head(git_pool)
     assert "+while True:\n+    call()" in diff["text"]
-    [commit] = logged(log["text"]).commits
+    [commit] = git_records(log["text"], git_tools.Commits).commits
     assert (commit.commit, [(f.status, f.path) for f in commit.files]) == (sha, [("A", "retry.py")])
     assert root["text"] == "Nothing at . in origin/main."
     assert (escape["error"], option["error"]) == (True, True)

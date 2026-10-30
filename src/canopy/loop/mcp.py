@@ -456,9 +456,10 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
             git_tools.MERGE_BASE,
             "Find the commit where two commits' histories meet, such as where a branch left its base: the commit to "
             "diff a branch from, so the diff holds the branch's own changes and not its base's since. Returns that "
-            "commit's full id.",
+            "commit's full id, as JSON.",
             git_tools.MergeBase,
             git_tools.merge_base,
+            result=git_tools.Base,
             runner=runner,
             checkouts=checkouts,
         ),

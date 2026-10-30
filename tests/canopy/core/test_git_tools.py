@@ -50,7 +50,7 @@ def repo(tmp_path: Path) -> Iterator[Repo]:
 
 def test_each_tool_reads_the_checkouts_history(repo: Repo) -> None:
     at = repo.checkouts
-    assert git_tools.merge_base(RUNNER, at, git_tools.MergeBase(base="main", head="feature")) == repo.base
+    assert git_tools.merge_base(RUNNER, at, git_tools.MergeBase(base="main", head="feature")).commit == repo.base
 
     diff = git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head="feature"))
     assert diff.startswith(f"{git_tools.DATA_NOTE}\n\ndiff --git a/notes.md b/notes.md\n")
@@ -561,7 +561,7 @@ def test_nothing_the_repository_names_runs(repo: Repo, tmp_path: Path) -> None:
     assert "+hello" in diff
     assert len(git_tools.log(RUNNER, at, git_tools.Log(range=f"main..{signed}")).commits) == 1
     assert git_tools.show(RUNNER, at, git_tools.Show(rev=signed, path="notes.md")).endswith("hello")
-    assert git_tools.merge_base(RUNNER, at, git_tools.MergeBase(base="main", head=signed)) == repo.base
+    assert git_tools.merge_base(RUNNER, at, git_tools.MergeBase(base="main", head=signed)).commit == repo.base
     assert len(git_tools.log(RUNNER, at, git_tools.Log(range=signed, search="hello")).commits) == 1
     [hello] = git_tools.blame(RUNNER, at, git_tools.Blame(rev=signed, path="notes.md", start=1, end=1)).lines
     assert hello.text == "hello"
