@@ -171,6 +171,10 @@ export type ReportTokens = Schemas['ReportTokens']
 export type ChecklistCounts = Schemas['ChecklistCounts']
 /** One item of one repository's checklist: the runs reminded of it, and how many gave each answer. */
 export type ChecklistItemCounts = Schemas['ChecklistItemCounts']
+/** What a run answered of one item of its repository's checklist, with a held item's reason, on the run's page. */
+export type ChecklistAnswer = Schemas['ChecklistAnswer']
+/** A worker's answer to a checklist item: pass, fixed, held, n/a, or unanswered. */
+export type ItemAnswer = Schemas['ItemAnswer']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */

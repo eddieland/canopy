@@ -2677,6 +2677,29 @@ export type components = {
             step: string;
         };
         /**
+         * ChecklistAnswer
+         * @description One item of a run's repository's checklist and what the run answered (DESIGN §42), as `canopy show` prints.
+         */
+        ChecklistAnswer: {
+            /** @description What the run answered of it. */
+            answer: components["schemas"]["ItemAnswer"];
+            /**
+             * Item
+             * @description The item's id, as the operator's list names it.
+             */
+            item: string;
+            /**
+             * Reason
+             * @description For `held`, why the run left it failing: the worker's words, untrusted, line breaks kept. None otherwise.
+             */
+            reason: string | null;
+            /**
+             * Repo
+             * @description The repository whose list holds the item.
+             */
+            repo: string;
+        };
+        /**
          * ChecklistCounts
          * @description The answers of the worker runs that started in a window of whole local days, as `canopy checklist` counts them.
          *
@@ -4531,6 +4554,11 @@ export type components = {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * @description What a worker answered of an item of its checklist (DESIGN §42): `pass`, the diff held to it; `fixed`, the run committed the fix; `held`, it left it failing, for a reason it gave; `n/a`, the diff changed nothing it is about; `unanswered`, the run's result said nothing of it.
+         * @enum {string}
+         */
+        ItemAnswer: "pass" | "fixed" | "held" | "n/a" | "unanswered";
         /**
          * ItemName
          * @description An item of a feedback plan, as canopy names it: by number and observed id, never by its text.
@@ -7474,6 +7502,13 @@ export type components = {
             branch: string | null;
             /** @description Its agent's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none. */
             card: components["schemas"]["RunCard"] | null;
+            /**
+             * Checklist
+             * @description What it answered of its repositories' checklists (DESIGN §42), on its page alone: a row per item it was given,
+             *     by repository, each list in its order. Empty for a run given no list, one still running, and in the lists.
+             * @default []
+             */
+            checklist: components["schemas"]["ChecklistAnswer"][];
             /**
              * Cost Usd
              * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
