@@ -282,17 +282,20 @@ test.describe('turned on', () => {
         await expect.poll(typing).toBe(0)
     })
 
-    test('Sprig stands above the rail footer, never on the version', async ({ page }) => {
+    test('Sprig stands on the rail foot, never on the spend or the version', async ({ page }) => {
         await page.goto('settings')
         await settled(page)
         // At the page's foot, where the footer of a rail that scrolled with the page once sat under Sprig.
         await page.locator('[data-scroll-restoration-id=page]').evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
         const sprig = await page.getByTestId('buddy').boundingBox()
-        const footer = await page.getByTestId('rail-footer').boundingBox()
-        if (sprig === null || footer === null) {
-            throw new Error('Sprig or the rail footer is not shown')
+        const foot = await page.getByTestId('rail-foot').boundingBox()
+        const spend = await page.getByTestId('rail-spend').boundingBox()
+        if (sprig === null || foot === null || spend === null) {
+            throw new Error('Sprig or the rail foot is not shown')
         }
-        expect(sprig.y + sprig.height).toBeLessThanOrEqual(footer.y)
+        // The spend is the foot's top, and Sprig stands right on it.
+        expect(Math.abs(spend.y - foot.y)).toBeLessThan(1)
+        expect(Math.abs(sprig.y + sprig.height - foot.y)).toBeLessThan(1)
     })
 
     test('Sprig sits out a window whose rail has no room for it, and covers nothing in one that has', async ({
@@ -309,18 +312,21 @@ test.describe('turned on', () => {
         await expect(buddy).toHaveAttribute('data-room', 'roomy')
         await askSprig(page)
         const sprig = await buddy.boundingBox()
-        const spend = await page.getByTestId('rail-spend').boundingBox()
-        if (sprig === null || spend === null) {
-            throw new Error('Sprig or the rail spend is not shown')
+        const working = await page.getByTestId('rail-working').boundingBox()
+        const foot = await page.getByTestId('rail-foot').boundingBox()
+        if (sprig === null || working === null || foot === null) {
+            throw new Error('Sprig, the working runs, or the rail foot is not shown')
         }
-        expect(spend.y + spend.height).toBeLessThanOrEqual(sprig.y)
+        expect(working.y + working.height).toBeLessThanOrEqual(sprig.y)
+        expect(sprig.y + sprig.height).toBeLessThanOrEqual(foot.y)
     })
 
-    test("Sprig stands over the spend a little in a laptop's window, and tips there only when asked", async ({
+    test("Sprig stands over the working runs a little in a laptop's window, and tips there only when asked", async ({
         page,
     }) => {
-        // Tall enough for the figure alone over the mock's rail, whose four working rows end in `+1 more`.
-        await page.setViewportSize({ width: 1280, height: 980 })
+        // Tall enough for the figure alone over the mock's rail, whose four working rows end in `+1 more`, and short
+        // enough that it rises over their foot.
+        await page.setViewportSize({ width: 1280, height: 880 })
         await page.goto('attention')
         await settled(page)
         await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'tight')
@@ -330,11 +336,13 @@ test.describe('turned on', () => {
         const tip = page.getByTestId('buddy-tip')
         await expect(tip).toBeHidden()
         const sprig = await figure.boundingBox()
-        const spend = await page.getByTestId('rail-spend').boundingBox()
-        if (sprig === null || spend === null) {
-            throw new Error('Sprig or the rail spend is not shown')
+        const working = await page.getByTestId('rail-working').boundingBox()
+        if (sprig === null || working === null) {
+            throw new Error('Sprig or the working runs are not shown')
         }
-        expect(spend.y + spend.height - sprig.y).toBeLessThanOrEqual(40)
+        const over = working.y + working.height - sprig.y
+        expect(over).toBeGreaterThan(0)
+        expect(over).toBeLessThanOrEqual(40)
 
         await figure.click()
         await expect(tip).toBeVisible()

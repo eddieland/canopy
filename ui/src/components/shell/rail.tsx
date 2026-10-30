@@ -245,17 +245,18 @@ function Under({ children }: { children: string }) {
 }
 
 /**
- * Under what is working, in two rows: what the last 24 hours and then the last 30 days cost, each window's name on the
- * left, standing for the block's label, and its cost on the right, so the figures line up however many digits they
- * have. The 30 days, the figure the operator watches, is the larger. Either opens the spend page over its own window:
- * the 24 hours by the hour, or the 30 days by the day.
+ * The top of the rail's foot, a readout at its base standing on the footer's hairline, in two rows: what the last 24
+ * hours and then the last 30 days cost, each window's name on the left, standing for the block's label, and its cost on
+ * the right, so the figures line up however many digits they have. The 30 days, the figure the operator watches, is the
+ * larger. Either opens the spend page over its own window: the 24 hours by the hour, or the 30 days by the day.
  */
 export function RailSpend() {
     const spend = useQuery(spendQuery).data
     const clock = useClock()
     const outside = outsideHint(spend, clock)
     return (
-        <section aria-label="Spent" className={SECTION} data-testid="rail-spend">
+        // pb-1, not more: the rows sit right on the footer's hairline, and the foot keeps the 800px window's budget.
+        <section aria-label="Spent" className="mx-2 border-t pt-3 pb-1" data-testid="rail-spend">
             <div className="grid gap-y-0.5 px-2.5">
                 <Spent
                     window={spend?.day}
@@ -276,11 +277,12 @@ export function RailSpend() {
 }
 
 /**
- * The rail's foot, on two lines: the version canopy serves, with the width to itself, cut short only past a long
- * build's hash, opening the releases on GitHub in a new tab; and under it two buttons alike, the guide, the operator's
- * documentation, bundled with that version, and Settings, which the operator opens too seldom to take a place in the
- * nav. The buttons are side by side on the hairline's width, wider than the version's column, and set a step smaller
- * than the nav, so they fit on one row in the mono face too. Always at the window's foot, however long the page.
+ * The rail's footer, under the spend, on two lines: the version canopy serves, in the muted print so it stays behind
+ * the buttons, with the width to itself, cut short only past a long build's hash, opening the releases on GitHub in a
+ * new tab; and under it two buttons alike, the guide, the operator's documentation, bundled with that version, and
+ * Settings, which the operator opens too seldom to take a place in the nav. The buttons split the hairline's width
+ * evenly, edge to edge, wider than the version's column, and are set a step smaller than the nav, so they fit on one
+ * row in the mono face too. Always at the window's foot, however long the page.
  */
 export function RailFooter() {
     const meta = useQuery(metaQuery).data
@@ -295,7 +297,7 @@ export function RailFooter() {
                 target="_blank"
                 rel="noreferrer noopener"
                 title={meta === undefined ? undefined : `canopy ${meta.version}: the releases on GitHub`}
-                className="readout min-h-4 min-w-0 truncate rounded-sm text-foreground/80 hover:text-foreground"
+                className="readout min-h-4 min-w-0 truncate rounded-sm text-muted-foreground hover:text-foreground"
                 data-testid="rail-version"
             >
                 {meta === undefined ? '' : `canopy ${meta.version}`}
@@ -318,7 +320,10 @@ export function RailFooter() {
     )
 }
 
-/** A page the rail's foot opens, as a filled pill in `foreground` so it stands out from the version's print. */
+/**
+ * A page the rail's foot opens, as a filled pill in `foreground` so it stands out from the version's print, taking its
+ * half of the row with its icon and label centered in it.
+ */
 function FooterLink({
     to,
     title,
@@ -336,8 +341,10 @@ function FooterLink({
             title={title}
             data-testid={testId}
             className={cn(
-                'flex h-7 items-center gap-1.5 rounded-md bg-surface-raised px-2.5 text-xs whitespace-nowrap',
-                'text-foreground',
+                // px-1.5, the least room either side: the label is centered in its half, which the mono face's
+                // `Settings` all but fills.
+                'flex h-7 flex-1 items-center justify-center gap-1.5 rounded-md bg-surface-raised px-1.5 text-xs',
+                'whitespace-nowrap text-foreground',
                 'transition-colors outline-none hover:bg-surface focus-visible:ring-2 focus-visible:ring-ring',
                 '[&_svg]:size-3.5',
             )}

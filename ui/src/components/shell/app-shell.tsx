@@ -47,10 +47,10 @@ import { NoticeBanner } from './worker-notice'
 export const PAGE_SCROLLER = 'page'
 
 /**
- * The frame every page renders in: header (with its ticker), side rail (search, navigation, what is working now, the
- * spend, Sprig once Settings turns it on and the rail has room for it, and a footer), the routed page, and over it
- * all the jump palette while ⌘K has it open (`JumpPalette`), the Review a PR dialog while `R` or a pasted PR's URL
- * has it open (`ReviewDialog`), and the lightswitch rave while Settings' light switch is
+ * The frame every page renders in: header (with its ticker), side rail (search, navigation, what is working now, Sprig
+ * once Settings turns it on and the rail has room for it, and at its foot the spend over a footer), the routed page,
+ * and over it all the jump palette while ⌘K has it open (`JumpPalette`), the Review a PR dialog while `R` or a pasted
+ * PR's URL has it open (`ReviewDialog`), and the lightswitch rave while Settings' light switch is
  * on, 2048 once it is typed away from a field (`Game2048`), and the tab's icon (`Favicon`). Coming back to the tab
  * after a while away, a note of what changed (`useAwayNote`). Signed out, the sign-in page instead, whatever the
  * route: every API route but the session's needs a session (DESIGN §22).
@@ -156,9 +156,10 @@ export function AppShell() {
                     >
                         <SkipToContent />
                         {/* The rail spans the whole row, so its border and fill reach the page's foot. What it holds
-                        sticks, a column as tall as the window under the header (its 3rem row above), so the footer
-                        stays at the window's foot however long the page; the part above it scrolls on its own in a
-                        window too short. The room left between them is Sprig's, when it is on. */}
+                        sticks, a column as tall as the window under the header (its 3rem row above), so its foot, the
+                        spend and the footer, stays at the window's foot however long the page; the part above it
+                        scrolls on its own in a window too short. The room left between them is Sprig's, when it is
+                        on. */}
                         {mode === 'full' && (
                             <aside className="border-r border-edge bg-surface/60">
                                 <div
@@ -255,19 +256,23 @@ function SkipToContent() {
     )
 }
 
-/** What the rail holds, top to bottom, whether beside the page or in the sheet: DESIGN's Shape and space. */
+/**
+ * What the rail holds, whether beside the page or in the sheet, in two groups (DESIGN's Shape and space): the top, the
+ * search box, the nav, and what is working, and the foot, the spend standing on the footer. The room left between them
+ * is one gap, Sprig's slot when it is on, so Sprig stands on the foot.
+ */
 function RailColumn({ buddy, onJump }: { buddy: boolean; onJump: () => void }) {
     return (
         <>
-            <div className="panel-scroll min-h-0">
+            {/* pb-3: the gap's least, so with none to spare the foot's hairline still has room above it. */}
+            <div className="panel-scroll min-h-0 pb-3">
                 <SearchBox onJump={onJump} />
                 <Nav />
                 <RailWorking />
-                <RailSpend />
             </div>
             {buddy ? <Buddy /> : <div className="flex-1" />}
-            {/* pt-1, not more: the room is Sprig's slot, which a laptop's window has little of to spare. */}
-            <div className="pt-1">
+            <div data-testid="rail-foot">
+                <RailSpend />
                 <RailFooter />
             </div>
         </>
