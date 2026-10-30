@@ -24,9 +24,8 @@ const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' 
  * With `lines`, text longer than that shows its first lines and a toggle for the rest; a long line counts as the lines
  * it wraps to, so one long paragraph folds too. With `prose`, a paragraph's or an item's lines join with a space, as
  * Markdown's soft breaks do, for a file wrapped at a column (a persona) rather than written a line a thought. With
- * `pullRequests`, a GitHub PR's
- * address is its `PullRequestLink`, as `LinkedText` names it. With `raised`, on a surface already raised (a
- * conversation's bubble), code sits on the canvas's color so it still stands apart.
+ * `pullRequests`, a GitHub PR's address is its `PullRequestLink`, as `LinkedText` names it. With `raised`, on a
+ * surface already raised (a conversation's bubble), code sits on the canvas's color so it still stands apart.
  */
 export function RichText({
     text,
