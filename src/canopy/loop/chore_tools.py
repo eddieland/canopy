@@ -1,7 +1,7 @@
 """The overseer's chore verbs (DESIGN §6, §19, §27): start a run of one of the operator's chores, or hold one off.
 
-Each is a request (`loop.tools.Request`) and a function, which the `canopy chore` commands and the MCP server
-(`loop.mcp`) both call, as they do the overseer's other verbs. A chore with no `when` is the harness's, which runs it
+Each is a request (`loop.tools.Request`) and a function, which the MCP server (`loop.mcp`) calls, as it does the
+overseer's other verbs. A chore with no `when` is the harness's, which runs it
 when it is due (DESIGN §37): either verb about one is refused `decided`. A chore run the overseer asks for is recorded,
 and the tick starts it once the overseer's run has ended (`spawn_chore`, DESIGN §40).
 """

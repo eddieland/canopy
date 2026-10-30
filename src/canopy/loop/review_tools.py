@@ -1,9 +1,9 @@
 """The overseer's review verbs (DESIGN §6, §21, §27, §34): start, hold off, or end a review, or revise its draft.
 
 A revision is of a review's draft, which the operator's note asks for. Each verb is a request (`loop.tools.Request`) and
-a function, which the `canopy review` commands and the MCP server (`loop.mcp`) both call, as they do the overseer's
-other verbs. A review or a revision the overseer asks for is recorded, and the tick starts it once the overseer's run
-has ended (`spawn_review`, `spawn_revision`, DESIGN §40).
+a function, which the MCP server (`loop.mcp`) calls, as it does the overseer's other verbs. A review or a revision the
+overseer asks for is recorded, and the tick starts it once the overseer's run has ended (`spawn_review`,
+`spawn_revision`, DESIGN §40).
 """
 
 from __future__ import annotations
