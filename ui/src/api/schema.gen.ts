@@ -3370,6 +3370,27 @@ export type components = {
              * @description The load averages over the last 1, 5, and 15 minutes; None where the operating system keeps none.
              */
             load: number[] | null;
+            /**
+             * @description Their time since the machine started, which two readings measure how busy they were between; None where only
+             *     Linux's `/proc/stat` says.
+             */
+            time: components["schemas"]["CpuTime"] | null;
+        };
+        /**
+         * CpuTime
+         * @description The time the machine's processors have spent since it started, summed over every core, in seconds.
+         */
+        CpuTime: {
+            /**
+             * Busy
+             * @description The time they spent on work: everything but idle and waiting on a disk.
+             */
+            busy: number;
+            /**
+             * Total
+             * @description All their time, busy or not.
+             */
+            total: number;
         };
         /**
          * Decision
@@ -4326,6 +4347,8 @@ export type components = {
              * @description When these figures were read.
              */
             read_at: string;
+            /** @description How much processes waited for memory and on disks. */
+            stalled: components["schemas"]["Stalls"];
             /**
              * System
              * @description Its operating system and release, as `uname` names them, such as `Linux 6.8.0`.
@@ -4344,15 +4367,31 @@ export type components = {
              */
             at: string;
             /**
+             * Cpu Busy
+             * @description The share of the processors' time busy since the reading before, 1.0 every core the whole time; None at the
+             *     first reading, or where only Linux's `/proc/stat` says.
+             */
+            cpu_busy: number | null;
+            /**
              * Disks
              * @description Each disk read, in the order `HostResources.disks` has them.
              */
             disks: components["schemas"]["DiskSample"][];
             /**
+             * Io Stalled
+             * @description The share of the last ten seconds a process waited on a disk; None where `/proc/pressure` does not say.
+             */
+            io_stalled: number | null;
+            /**
              * Load
              * @description The load average over the last minute; None where the operating system keeps none.
              */
             load: number | null;
+            /**
+             * Memory Stalled
+             * @description The share of the last ten seconds a process waited for memory; None where `/proc/pressure` does not say.
+             */
+            memory_stalled: number | null;
             /**
              * Memory Used
              * @description The memory not available to a new process, in bytes; None where only Linux's `/proc/meminfo` says.
@@ -4363,6 +4402,11 @@ export type components = {
              * @description The memory the loop's process held, in bytes; None where only Linux's `/proc` says.
              */
             rss: number | null;
+            /**
+             * Swap Used
+             * @description The swap in use, in bytes; None where only Linux's `/proc/meminfo` says.
+             */
+            swap_used: number | null;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -8610,6 +8654,23 @@ export type components = {
              * @default 0
              */
             without_overseer: number;
+        };
+        /**
+         * Stalls
+         * @description How much of the last ten seconds at least one process waited, as a share of it: Linux's pressure stalls.
+         */
+        Stalls: {
+            /**
+             * Io
+             * @description Waiting on a disk; None where Linux's `/proc/pressure` does not say.
+             */
+            io: number | null;
+            /**
+             * Memory
+             * @description Waiting for memory to be freed; None where Linux's `/proc/pressure` does not say, as off Linux or on an older
+             *     kernel.
+             */
+            memory: number | null;
         };
         /**
          * Started

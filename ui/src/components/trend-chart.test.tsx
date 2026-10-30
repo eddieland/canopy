@@ -18,7 +18,11 @@ function loads(): Trend {
             samples: [1.2, 3.4, 2.41].map((load, i) => ({
                 at: new Date(Date.parse('2026-10-08T12:00:00Z') + i * 10_000).toISOString(),
                 load,
+                cpu_busy: null,
                 memory_used: null,
+                swap_used: null,
+                memory_stalled: null,
+                io_stalled: null,
                 rss: null,
                 disks: [],
             })),

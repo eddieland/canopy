@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from canopy.serve import host
 from canopy.serve.schema.host import (
     Cpu,
+    CpuTime,
     Disk,
     DiskSample,
     HostProcess,
@@ -24,12 +25,19 @@ from canopy.serve.schema.host import (
     LoopProcess,
     Memory,
     ProcessState,
+    Stalls,
 )
 
 _GIB = 1024**3
 _MIB = 1024**2
 #: The minutes before the last reading a build started, and ended: the hour's readings rise and settle with it.
 _BUILD_START, _BUILD_END = 25, 15
+#: The share of the cores the mock's processors keep busy while no build runs, and at the last reading.
+_IDLE_BUSY = 0.15
+#: The mock's cores.
+_CORES = 12
+#: How long the mock's machine has been up.
+_UP = timedelta(days=9, hours=4)
 #: The loop's process id, which its process and the processes' list share.
 _LOOP = 48213
 #: The mock's processes, parent first: pid, parent, name, user, state, processors kept busy, memory in MiB, threads,
@@ -146,10 +154,11 @@ def machine(now: datetime) -> HostResources:
         system="Linux 6.8.0",
         machine="x86_64",
         python="3.13.1",
-        booted_at=now - timedelta(days=9, hours=4),
+        booted_at=now - _UP,
         read_at=now,
-        cpu=Cpu(cores=12, load=[2.41, 1.87, 1.52]),
+        cpu=Cpu(cores=_CORES, load=[2.41, 1.87, 1.52], time=_time(_UP)),
         memory=Memory(total=64 * _GIB, available=23 * _GIB + 410 * _MIB, swap_total=8 * _GIB, swap_free=7 * _GIB),
+        stalled=Stalls(memory=0.0, io=0.004),
         disks=[
             Disk(
                 holds=["workspace", "journal"],
@@ -203,13 +212,22 @@ def samples(now: datetime) -> host.Samples:
     """The mock's hour of readings, ending with `machine(now)`'s.
 
     Returns:
-        A full hour, every `host.SAMPLE_SECONDS`: the load and memory rise with a build from 25 to 15 minutes before
-        and settle again, the temporary directory fills while it runs and is cleared after, the workspace's disk keeps
-        what it wrote, and the loop's own memory climbs slowly, as a long-lived process's does.
+        A full hour, every `host.SAMPLE_SECONDS`: the load, the processors, the memory, and the stalls rise with a
+        build from 25 to 15 minutes before and settle again, the swap it pushed out stays out, the temporary directory
+        fills while it runs and is cleared after, the workspace's disk keeps what it wrote, and the loop's own memory
+        climbs slowly, as a long-lived process's does.
     """
     last = machine(now)
     readings = [_reading(now, i) for i in range(host.KEPT - 1, 0, -1)]
-    return host.Samples(seeded=[*readings, host.sample(last)])
+    before = _time(_UP - timedelta(seconds=host.SAMPLE_SECONDS))
+    return host.Samples(seeded=[*readings, host.sample(last, before)])
+
+
+def _time(up: timedelta) -> CpuTime:
+    # The processors' time after `up`, busy at the idle share throughout: the build's is not counted, nor need it be,
+    # since only the last reading is measured against the one before it.
+    total = up.total_seconds() * _CORES
+    return CpuTime(busy=total * _IDLE_BUSY, total=total)
 
 
 def _reading(now: datetime, back: int) -> HostSample:
@@ -224,7 +242,12 @@ def _reading(now: datetime, back: int) -> HostSample:
     return HostSample(
         at=now - timedelta(seconds=back * host.SAMPLE_SECONDS),
         load=round(max(0.2, 1.9 + wobble + 5.2 * build), 2),
+        cpu_busy=round(_IDLE_BUSY + wobble * 0.06 + 0.6 * build, 4),
         memory_used=int((40.6 + wobble * 0.8 + 9.5 * build) * _GIB),
+        # The build pushed a little out to swap, which stays there after it.
+        swap_used=int((0.85 + 0.15 * min(1.0, max(0.0, (_BUILD_START - minutes) / lasted))) * _GIB),
+        memory_stalled=round(0.03 * build, 4),
+        io_stalled=round(0.004 + abs(wobble) * 0.004 + 0.09 * build, 4),
         rss=int((268 - minutes * 0.45 + (back % 31) * 0.3) * _MIB),
         disks=[
             DiskSample(path="/home/operator/acme", free=int((412 + written) * _GIB)),
