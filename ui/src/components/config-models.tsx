@@ -10,14 +10,14 @@ import { Notice } from '@/components/notice'
 import { PanelLoading } from '@/components/panel'
 import { Chip } from '@/components/status'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
-import { RUNTIME_DEFAULT } from '@/lib/models'
+import { RUNTIME_DEFAULT, withVariant } from '@/lib/models'
 import { readFailure } from '@/lib/read-failure'
 
 /**
  * The model config chooses for each of canopy's agents and each chore (DESIGN §13, §19), read only: a row each, its
- * model and the variant it runs at, or `runtime default`, then a muted line naming the file to edit, and the
- * runtime's own list of models, read only when opened, since each read starts the runtime. The models are the ones
- * the loop runs on, so an edit shows here after Reload; a ticket's override is its own page's.
+ * model at its variant, `provider/model@variant`, or `runtime default`, then a muted line naming the file to edit,
+ * and the runtime's own list of models, read only when opened, since each read starts the runtime. The models are the
+ * ones the loop runs on, so an edit shows here after Reload; a ticket's override is its own page's.
  */
 export function ConfigModels() {
     const query = useQuery(configModelsQuery)
@@ -81,17 +81,12 @@ function ChoreValue({ row }: { row: ChoreModel }) {
     )
 }
 
-/** A model and its variant, in monospace, or `runtime default`, muted, when there is none. */
+/** A model at its variant, `provider/model@variant`, in monospace, or `runtime default`, muted sans, when none. */
 function Model({ model, variant }: { model: string | null; variant: string | null }) {
     if (model === null) {
-        return <span className="font-mono text-xs text-muted-foreground">{RUNTIME_DEFAULT}</span>
+        return <span className="text-xs text-muted-foreground">{RUNTIME_DEFAULT}</span>
     }
-    return (
-        <span className="font-mono text-xs break-all">
-            {model}
-            {variant !== null && <span className="text-muted-foreground"> at {variant}</span>}
-        </span>
-    )
+    return <span className="font-mono text-xs break-all">{withVariant(model, variant)}</span>
 }
 
 /**
