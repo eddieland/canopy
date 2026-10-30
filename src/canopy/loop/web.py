@@ -1,7 +1,8 @@
 """The web UI for `canopy loop` (DESIGN §22, D073): the listener secret checked, the server's backend wired, started.
 
 The server is a feature (`canopy.serve`) and cannot import the loop, `runs`, `reviews`, or `chores`, so this hands it
-the attention list as `canopy status` shows it, `runs.halt.end` and `runs.task_run.stop_now`, which `canopy stop --now`
+the attention list as `canopy status` shows it, with each running run's question unanswered (`attention.shown`),
+`runs.halt.end` and `runs.task_run.stop_now`, which `canopy stop --now`
 uses for a ticket and a task, for a stop with `now`, a way to ask the loop to read its config again, as SIGHUP does,
 and one to ask it for a tick now, as `t` does, the attempt and review limits with the grants that `canopy grant`
 records (`runs.policy`, `reviews.grants`), and a chore's try (`chores.trial`).
@@ -107,7 +108,7 @@ def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow, every:
     return Backend(
         config=ctx.config,
         workspace=ctx.ws,
-        attention=attention.listed,
+        attention=attention.shown,
         end_run=end_run,
         end_task_run=end_task_run,
         reload=reload_config,

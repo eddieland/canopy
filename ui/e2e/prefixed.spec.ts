@@ -1062,6 +1062,33 @@ test("a reply answers a task's question, which clears, and its reply shows", asy
     await expect(form.getByRole('textbox', { name: 'Reply', exact: true })).toBeVisible()
 })
 
+test("a running run's question waits on you in the list, the rail, and the runs filter, until answered", async ({
+    page,
+}) => {
+    await page.goto('runs?state=blocked')
+    // Run 41 runs on, working around its question, and waits on you as well.
+    await expect(page.getByTestId('run-41')).toBeVisible()
+    await expect(page.getByTestId('rail-run-41')).toContainText('asks you')
+    await page.goto('attention')
+    const item = page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'run question' })
+    await expect(item).toContainText('run:41')
+    await expect(item).toContainText('Sign in with SSO')
+    await item.click()
+    const detail = page.getByTestId('attention-detail')
+    await expect(detail.getByTestId('question-line')).toContainText("Waits on your answer to run:41's question")
+    const question = detail.getByTestId('attention-question')
+    await expect(question).toContainText('Keep the password form beside the SSO button, or hide it behind a link?')
+    // The ticket's conversation follows, as a plan's item has it.
+    await expect(detail.getByTestId('conversation')).toBeVisible()
+
+    await question.getByRole('button', { name: 'Answer A: keep both side by side' }).click()
+    await expect(page.getByTestId('toast')).toContainText('Answered A: keep both side by side.')
+    await expect(item).toHaveCount(0)
+    await expect(page.getByTestId('rail-run-41')).not.toContainText('asks you')
+    await page.goto('runs?state=blocked')
+    await expect(page.getByTestId('run-41')).toHaveCount(0)
+})
+
 test('stopping a queued task asks once more, then drops it, and its reply goes', async ({ page }) => {
     await page.goto('tasks/7')
     const actions = page.getByTestId('task-actions')

@@ -396,16 +396,19 @@ const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
  * recommends marked as the one it works toward meanwhile, and once you answered, your letter. While it waits it sits on
  * the tint of what waits on you. While the run runs and the page knows which it is (`answers`), each other option is a
  * button that answers with its letter, as `canopy reply run:ID LETTER` does; the agent hears it on its next tool call,
- * and a later answer replaces it. A question asked since the page read it is refused `moved_on`.
+ * and a later answer replaces it. A question asked since the page read it is refused `moved_on`. `onAnswered` hears
+ * what an answer did, in the CLI's words, for a page the answer takes the question off, as the attention list's item.
  */
-function ProgressQuestion({
+export function ProgressQuestion({
     question,
     running,
     answers,
+    onAnswered,
 }: {
     question: RunCardQuestion
     running: boolean
     answers: AnswerTarget | undefined
+    onAnswered?: (said: string) => void
 }) {
     const client = useQueryClient()
     const [said, setSaid] = useState<string | null>(null)
@@ -414,6 +417,7 @@ function ProgressQuestion({
             answerQuestion(target, letter, question.asked_at),
         onSuccess: (answered, { target }) => {
             setSaid(answeredText(answered))
+            onAnswered?.(answeredText(answered))
             void refreshAnswered(client, target)
         },
     })

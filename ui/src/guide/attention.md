@@ -20,8 +20,9 @@ plan waiting on you leaves only when a fresh read shows it so: a GitHub outage k
 announcing it resolved, then raising it again an hour later. A judgment call the loop made stays until what it's
 about is settled: a comment that `needs author` until it's handled or you reply on the ticket, a ticket split across
 repositories (`multi repo`) until you reply, a check a notice held (`notice rerun`) until it runs again. You can't clear
-an item by hand, only its cause, and chore findings are the one exception. When an item leaves while you're looking, it
-folds shut and a leaf drifts off.
+an item by hand, only its cause, and chore findings are the one exception. A running agent's question doesn't wait for a
+tick at all: it's read as the list is, so it arrives with the update that asks it and leaves the moment you answer, the
+agent drops it, or the run ends. When an item leaves while you're looking, it folds shut and a leaf drifts off.
 
 The items come in four groups, in this order, and within a group the one open longest comes first:
 
@@ -36,8 +37,9 @@ The items come in four groups, in this order, and within a group the one open lo
    declined, which canopy holds for you to settle ([`review rebuttal`](pull-requests#when-canopy-reviews)), a later
    review's finding on code its first review already read ([`review late`](pull-requests#when-canopy-reviews)), a plan
    or a feedback plan to approve (`plan review`), replies a run drafted for you to send (`drafts waiting`), a review
-   you asked for that's done with its draft unpublished (`review waiting`), and a review you staged on GitHub, or whose
-   post never said how it went (`review unsettled`).
+   you asked for that's done with its draft unpublished (`review waiting`), a review you staged on GitHub, or whose
+   post never said how it went (`review unsettled`), and a running worker, planner, or reviewer asking you something
+   it works around meanwhile (`run question`).
 3. **Other**: things worth knowing that aren't on fire, such as a PR that `needs reviewer` or is `ready to merge`, a
    lesson a worker proposed for [memory](memory), or a worker's report of follow-up tickets canopy couldn't record
    (`follow up unrecorded`), until its ticket is done or forgotten. The follow-ups it did record never land here:
@@ -106,6 +108,13 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
   or you dismiss and delete everything the draft would post, which is how you say "thanks, no". A staged one waits
   until you submit or delete it on GitHub and the next read notices. A review canopy found on its own waits on
   nobody: read it or don't.
+- **A running agent's question** (`run question`): named by its run, `run:N` or `review:N`, with the question and its
+  lettered options as the run's page shows them
+  ([A running agent's progress](runs#a-running-agents-progress)). Click an option and the agent hears it on its next
+  tool call; the item leaves at once, and a toast says what you chose. A worker's or a planner's question is about its
+  ticket, so the ticket's conversation follows, as a plan's does. This item lives on this page alone: the overseer,
+  `attention.md`, and your notification sinks never hear of it, since it's yours to answer and nobody else's to act
+  on.
 - **A task** (`awaiting reply`, `task ticket unrecorded`): named by the first line of what you asked it, with a button
   to its page, where its question waits, marked, and where you answer it
   ([Replying and stopping](tasks#replying-and-stopping)). The other item, tickets its run reported that canopy

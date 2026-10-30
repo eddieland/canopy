@@ -132,6 +132,39 @@ export function subjectRuns({ runs, reviews = [], chores = [], tasks = [] }: Eve
     return groups.toSorted(byLatest)
 }
 
+/**
+ * Whether a running worker's or planner's run asks the operator a question in its progress they have not answered
+ * (DESIGN §41): it works around it meanwhile, so it stays running, but it waits on them too.
+ */
+export function asksYou(run: Run): boolean {
+    return run.state === 'running' && run.card?.question?.answer === null
+}
+
+/**
+ * Whether a subject's latest run is in `state`, as the runs page's filter keeps it. A running run whose progress asks a
+ * question unanswered (`asksYou`, a review's `asks_you`) is in `blocked`, `waiting on you`, as well as `running`.
+ */
+export function inState(group: SubjectRuns, state: RunState): boolean {
+    if (group.latest.state === state) {
+        return true
+    }
+    if (state !== 'blocked') {
+        return false
+    }
+    switch (group.of) {
+        case 'worker': {
+            return asksYou(group.latest)
+        }
+        case 'review': {
+            return group.latest.state === 'running' && group.latest.asks_you
+        }
+        case 'chore':
+        case 'task': {
+            return false
+        }
+    }
+}
+
 /** How many runs `groups` list, each subject's earlier runs too. */
 export function runsListed(groups: readonly SubjectRuns[]): number {
     return groups.reduce((sum, g) => sum + 1 + g.earlier.length, 0)

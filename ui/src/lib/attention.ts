@@ -38,9 +38,10 @@ const REVIEW_DRAFT_REASONS = new Set(['review_waiting', 'review_unsettled'])
 // Reasons that wait on the operator's own answer: a private ticket's question or a planner's, an untrusted review's
 // go-ahead (D089), an unlisted author's comment on an artifact to send on (§38), a review's rebuttal of a worker's
 // decline or its late finding (DESIGN §21), a plan to approve (§25), the replies a run drafted (§29), or a review's
-// draft (§34).
+// draft (§34), or a running run's question in its progress (§41).
 const WAITING = new Set([
     'awaiting_reply',
+    'run_question',
     'untrusted_review',
     'untrusted_artifact_comment',
     'review_rebuttal',
@@ -160,7 +161,8 @@ export function breakdownText(parts: readonly BreakdownPart[]): string {
  * "The attention detail"): the ticket's latest run, for a run that broke; the PR, for one waiting on someone else; the
  * reply, for an answer; the plan's card, for a plan; the PR's page at the plan, for a feedback plan; the proposals or
  * lessons memory's items name; the PR's threads, for the replies a run drafted; the review's page, for a review's
- * draft; the task's page, for a one-off task's item; the ticket's models, for a ticket's run refused its model; the
+ * draft; the question, for a running run's or review's question in its progress, answered by letter; the task's page,
+ * for a one-off task's item; the ticket's models, for a ticket's run refused its model; the
  * command to run, for an item about nothing canopy shows that names one, or one refused its model about no ticket.
  * `ticket` is any other ticket's item, which leads with the ticket's own actions; `none`, the rest.
  */
@@ -173,6 +175,7 @@ export type Ask =
     | 'memory'
     | 'drafts'
     | 'review'
+    | 'question'
     | 'task'
     | 'model'
     | 'command'
@@ -190,6 +193,10 @@ export function ask(item: AttentionItem, ticket?: TicketSummary): Ask {
     }
     if (REVIEW_DRAFT_REASONS.has(item.reason) && !item.finding && reviewOf(item) !== null) {
         return 'review'
+    }
+    // A running run's question is answered here, by letter, whatever ticket it is about.
+    if (item.run !== null || item.review !== null) {
+        return 'question'
     }
     // A task's item names `canopy` commands in its detail, but its page is where it is read and answered.
     if (item.task !== null) {

@@ -120,9 +120,11 @@ _KINDS: dict[str, MessageKind] = {
 def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
     """The attention list, as `canopy status` shows it.
 
+    A running run's question names the run (DESIGN §41): its ticket is the run's, or the review's when it has one.
+
     Returns:
-        One item per entry, its subject split into a ticket key, a chore name, a PR, or a task's id, with the ticket's
-        title, and its detail without control characters.
+        One item per entry, its subject split into a ticket key, a chore name, a PR, a task's id, or a run's or a
+        review's id, with the ticket's title, and its detail without control characters.
     """
     found: list[AttentionItem] = []
     for item in backend.attention(ctx):
@@ -130,7 +132,12 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
         chore = key.removeprefix(_CHORE) if key is not None and key.startswith(_CHORE) else None
         pr = key.removeprefix(_PR) if key is not None and key.startswith(_PR) else None
         task = int(key.removeprefix(_TASK)) if key is not None and key.startswith(_TASK) else None
-        ticket = key if key is not None and chore is None and pr is None and task is None else None
+        run = _numbered(key, cards.RUN_PREFIX)
+        review = _numbered(key, cards.REVIEW_PREFIX)
+        named = (chore, pr, task, run, review)
+        ticket = key if key is not None and all(n is None for n in named) else None
+        if run is not None or review is not None:
+            ticket = _asked_about(ctx.conn, run, review)
         row = db.get_ticket(ctx.conn, ticket) if ticket is not None else None
         found.append(
             AttentionItem(
@@ -146,9 +153,37 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
                 finding=item.finding,
                 pr=pr,
                 task=task,
+                run=run,
+                review=review,
             ),
         )
     return found
+
+
+def _numbered(key: str | None, prefix: str) -> int | None:
+    """The id an item's key names after `prefix`, as `run:41` names run 41.
+
+    Returns:
+        The id; None for a key without the prefix, or one whose rest is no id.
+    """
+    if key is None or not key.startswith(prefix) or not key.removeprefix(prefix).isdigit():
+        return None
+    return int(key.removeprefix(prefix))
+
+
+def _asked_about(conn: sqlite3.Connection, run: int | None, review: int | None) -> str | None:
+    """The ticket a running run's question is about: the worker's or planner's run's, or the review's.
+
+    Returns:
+        The ticket key; None for a review of a PR no ticket owns, or a run the journal no longer holds.
+    """
+    if run is not None:
+        found = records.select(records.Run).where("id = ?", run).one(conn)
+        return found.ticket_key if found is not None else None
+    reviewed = records.select(records.ReviewRun).where("id = ?", review).one(conn)
+    if reviewed is None:
+        return None
+    return reviewed.ticket_key or None
 
 
 def loop_state(ctx: Context) -> LoopState:

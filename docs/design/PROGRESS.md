@@ -68,9 +68,10 @@ A run's progress is shown to the operator and never put in another agent's promp
 waiting on the operator; `canopy show` of a run, `canopy review show` of a review, and their pages in
 the web UI, its whole progress, or the last once it has ended, as a ticket's page does under the run working it. A run that
 has gone too many tool calls or minutes without an update says so plainly rather than going quiet, and `canopy
-status` names a running run with no progress yet that long. No notification: the sinks hear of what a run ends with, as
-before (§20). canopy's report of a run that a chore's agent may read (§27) leaves its progress out, so none reaches an
-agent.
+status` names a running run with no progress yet that long. While a question waits, the web UI's attention list holds
+it too, `run_question` about its run, answered there by letter as on the run's page; `attention.md` and the overseer's
+state block leave it out. No notification: the sinks hear of what a run ends with, as before (§20). canopy's report of
+a run that a chore's agent may read (§27) leaves its progress out, so none reaches an agent.
 
 ### Rejected
 

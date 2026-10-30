@@ -126,6 +126,8 @@ export const mockAttention: AttentionItem[] = [
         finding: false,
         pr: null,
         task: null,
+        run: null,
+        review: null,
     },
 ]
 
@@ -174,6 +176,7 @@ export const mockReviews: ReviewSummary[] = [
         seen: false,
         draft: null,
         served: [],
+        asks_you: false,
     },
 ]
 

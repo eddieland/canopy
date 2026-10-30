@@ -459,7 +459,13 @@ def test_a_running_reviews_question_is_answered_from_its_page(backend: Backend) 
     c = client(None, backend)
     shown = c.get("/api/reviews/6").json()["card"]["question"]
     assert (shown["options"], shown["answer"]) == (["yes", "no, skip it"], None)
+    # The reviews list and the attention list say it waits on the operator, until they answer (DESIGN §41).
+    assert [r["id"] for r in c.get("/api/reviews").json() if r["asks_you"]] == [6]
+    [item] = [i for i in c.get("/api/attention").json() if i["review"] == 6]
+    assert (item["reason"], item["subject"], item["run"]) == ("run_question", "review:6", None)
     body = {"letter": "A", "asked_at": shown["asked_at"]}
     answered = c.post("/api/reviews/6/answers", json=body, headers=signed_in(c)).json()
     assert (answered["letter"], answered["option"]) == ("A", "yes")
     assert c.get("/api/reviews/6").json()["card"]["question"]["answer"] == "A"
+    assert not any(r["asks_you"] for r in c.get("/api/reviews").json())
+    assert all(i["review"] is None for i in c.get("/api/attention").json())
