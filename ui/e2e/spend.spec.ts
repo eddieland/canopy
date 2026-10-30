@@ -215,6 +215,8 @@ test('a long list of idle ticks scrolls in its panel', async ({ page }) => {
     // It scrolls itself, rather than spilling its rows past a capped height.
     await region.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
     await expect.poll(() => region.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
+    // A live event refetches the breakdown, which can still be in the route when the page closes (`padDecisions`).
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
 test("each ticket's and PR's own runs, the costliest first, open their pages beside the tickets done", async ({
