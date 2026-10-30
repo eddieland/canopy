@@ -79,7 +79,7 @@ Rules:
   - Tasks chartreuse, a new shoot: a task seeds the tickets that follow it, and a shoot is yellow-green before it
     is emerald, which is `status-running`'s hue and would read as a running task on its own page.
   - Pull requests violet, the purple a merged PR turns, where every PR is headed. The reviews are under it.
-  - Runs indigo, the night shift: workers carry on after the operator logs off.
+  - Workspace indigo, the night shift: its runs, ticks, and worktrees carry on after the operator logs off.
   - Chores orange, a hi-vis vest: scheduled maintenance.
   - Reports gold, coins: what canopy cost, by the month and, on the spend page under it, by the day.
   - Memory pale azure, the forget-me-not. It shares done's hue, which costs nothing: its page shows no run state.
@@ -92,10 +92,11 @@ Rules:
   pages open under a section, the first step of the page header's trail, and the header's aurora and name
   (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the
   accent.
-- **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the spend page's
-  charts and the legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
-  beside a swatch. Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on
-  `surface` in both themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
+- **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the report pages'
+  charts and their legends, and nowhere else: the spend page's, and the health page's failures by kind, so a kind is
+  one color across Reports. They are fills, never text, so the legend's words are `muted-foreground` beside a swatch.
+  Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both
+  themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
   with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
   legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
@@ -195,14 +196,14 @@ Rules:
   working now; at its foot, the spend, then a footer. The nav lists the sections by how often the operator opens them
   (`SECTIONS` in `src/lib/sections.ts`): what they work in first (Attention, Tickets, Tasks, Pull requests), then what
   they check now and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav
-  item is height the sticky part has none to spare of in an 800px window. The pages under a section (Runs' Ticks and
-  Worktrees, Pull requests' Reviews, Reports' Spend) open under its item while it is the section shown, so the rail
-  says where a page is: `text-sm` rows of `h-7`, `muted-foreground`, their labels in line with the section's, on a 1px
-  hairline in its color down its icon's middle. Elsewhere they stay folded, so the nav keeps its eight rows. The strip
-  below `lg` keeps its icons alone; the sheet shows them as the whole rail does. Each nav item says on hover what its
-  page holds, and each spend window what it covers, as a native `title`; a spend window opens the spend page over its
-  week or month. Each block under the nav is a hairline and a `panel-label` over its content, but the spend's, where
-  each window's name is the label. What is working is every agent run running,
+  item is height the sticky part has none to spare of in an 800px window. The pages under a section (Workspace's
+  Runs, Ticks, and Worktrees, Pull requests' Reviews, Reports' Spend) open under its item while it is the section
+  shown, so the rail says where a page is: `text-sm` rows of `h-7`, `muted-foreground`, their labels in line with the
+  section's, on a 1px hairline in its color down its icon's middle. Elsewhere they stay folded, so the nav keeps its
+  eight rows. The strip below `lg` keeps its icons alone; the sheet shows them as the whole rail does. Each nav item
+  says on hover what its page holds, and each spend window what it covers, as a native `title`; a spend window opens the
+  spend page over its week or month. Each block under the nav is a hairline and a `panel-label` over its content, but
+  the spend's, where each window's name is the label. What is working is every agent run running,
   worker runs, reviews of PRs, chore runs, and task runs alike, then the worker runs waiting on the operator's answer,
   each oldest first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the
   PR, the chore, the task run's `task:N#M`, in medium weight), how long it has run (or `waiting on you` in
@@ -509,9 +510,10 @@ Rules:
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
   section (search, the 404) names itself there in the accent. A parent is a journal name, so it keeps its case
   (`chore:deps` on a chore run) and stays muted until hovered. The title is the trail's last step, so the trail never
-  repeats it. The trail follows the URL, not the journal: a run's page is under Runs, not its ticket, which its panel
-  links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail. Where
-  there is no title to qualify, a ticket's attention item, its `private` or `public` chip heads its conversation.
+  repeats it. The trail follows the URL, not the journal: a run's page is under Workspace's Runs, not its ticket,
+  which its panel links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in
+  the trail. Where there is no title to qualify, a ticket's attention item, its `private` or `public` chip heads its
+  conversation.
 - **A book at the header's top right** opens the guide's page about the page shown, at the heading about it when it has
   one (a run's page at `runs#a-runs-page`), named `The guide: Runs and worktrees` on hover and to a screen reader: a
   closed book with lines of text (`BookText`) at 22px in a ghost `icon` button, sized to the title beside it rather
@@ -1000,6 +1002,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   model (`?model=`), with the kind shown (`?kind=`, `RUNS_KIND`: a plan run is a worker run there); one the runs page
   lists no run of by model, the overseer's alone, is plain, why on hover. The runs page's model filter is always
   offered, a picker of one (`ModelFilter`, below).
+- **The failures chart** (the health page) is the spend chart's (`DayChart`), a bar per local day of the runs that
+  failed, stacked by kind in `HEALTH_SERIES` order in each kind's spend series fill, its peak's count over its bar. A
+  bar's hover says the day's failures out of its ended runs, and the table under it holds each kind's failures with
+  the day's failed and ended runs, since a failure's weight is its share. A window where nothing failed is one `Empty`
+  line. Its window, a week or 30 days, is the same segmented control as the spend page's (`WindowToggle`), in the
+  outcomes panel's header, kept in `?days=`.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every

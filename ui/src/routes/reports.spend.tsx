@@ -16,6 +16,7 @@ import type {
     SpendTicket,
 } from '@/api/types'
 import { Cost } from '@/components/cost'
+import { DayChart, DayChartLegend } from '@/components/day-chart'
 import { FirstCallChart } from '@/components/first-call-chart'
 import { None } from '@/components/none'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
@@ -25,16 +26,12 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
 import { TickRow } from '@/components/tick-row'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { UnnamedModel } from '@/components/unnamed-model'
-import { useMeasure } from '@/hooks/use-measure'
-import { axisNames, axisStep, HEADROOM } from '@/lib/chart'
-import type { AxisRoom } from '@/lib/chart'
+import { WindowToggle } from '@/components/window-toggle'
 import { useClock } from '@/lib/clock'
-import type { Clock } from '@/lib/clock'
-import { costText } from '@/lib/cost-total'
 import { firstKind, KIND_SERIES, seriesOf, seriesWeeks } from '@/lib/first-calls'
 import { phaseMeaning } from '@/lib/meanings'
+import { windowName } from '@/lib/report-window'
 import { unnamedHint, UNREAD, UNREAD_RUNS_HINT } from '@/lib/models'
 import {
     alertMarks,
@@ -46,14 +43,12 @@ import {
     budgetText,
     sessionsReadText,
     chartTop,
-    dayHint,
-    dayLabel,
     dayName,
-    dearestDay,
     DEFAULT_WINDOW,
     doneText,
     GROUP_HINT,
     GROUP_LABEL,
+    KIND_LABEL,
     kindsOffered,
     listedModels,
     modelKind,
@@ -63,15 +58,14 @@ import {
     perRun,
     RUNS_KIND,
     SERIES,
-    seriesCost,
     shareText,
     SPEND_WINDOWS,
     spendLine,
+    spendBars,
     spendWindow,
+    unpricedText,
     toolRows,
     unreadShare,
-    windowId,
-    windowName,
     workspacePerRun,
 } from '@/lib/spend'
 import type { BudgetState, ModelRow, ToolRow } from '@/lib/spend'
@@ -123,21 +117,11 @@ const PER_RUN_HINT = 'What it spent over its runs: a run on two models counts it
 const WORKSPACE_HINT =
     "What the workspace's runs of the kind spent on the model, over its runs: this ticket's among them, every other " +
     "ticket's too"
-const UNLISTED_HINT = 'The runs page lists no overseer tick by model: Ticks, under Runs, lists them by tick'
+const UNLISTED_HINT = 'The runs page lists no overseer tick by model: Ticks, under Workspace, lists them by tick'
 
 // The column names of a table in a padded scrolling region. A sticky head sticks inside the region's padding, so the
 // rows scrolling under it would show in a strip above it: the region's top padding is the head's cells' instead.
 const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
-
-// Each kind of run in words, as `canopy spend` counts the runs that reported no cost.
-const KIND_LABEL = {
-    overseer: 'overseer runs',
-    workers: 'worker runs',
-    plans: 'plan runs',
-    chores: 'chore runs',
-    reviews: 'review runs',
-    tasks: 'task runs',
-} as const
 
 // Where the month stands against its budget, as its color and the budget bar's fill: a state's, never a spend
 // series'.
@@ -169,21 +153,6 @@ const TOTALS_ORDER = [
 // What the ticks' tables' last column counts, said when the operator hovers its name.
 const NO_OVERSEER_HINT =
     'ticks that ran no overseer: the harness left it nothing to judge, or the tick halted before it; each cost nothing'
-
-// The chart's axis names every day of up to a week, and every fifth day or hour past that, back from the latest.
-const AXIS_ALL = 7
-// The widest name the axis leaves room for at least, `Sep 30`, in characters, and the space it keeps from the next, in
-// pixels. An hour on a 12-hour clock, `12:00 PM`, is wider, and gets its own.
-const AXIS_NAME_CHARS = 6
-const AXIS_GAP = 8
-
-// Where the dearest day's total sits over its bar (`peakAlign`), and the class that puts it there.
-type PeakAlign = 'start' | 'center' | 'end'
-const PEAK_JUSTIFY: Record<PeakAlign, string> = {
-    start: 'justify-start',
-    center: 'justify-center',
-    end: 'justify-end',
-}
 
 /**
  * What agent runs cost per day, by kind, and what the overseer's ticks bought, as `canopy spend` prints it, beside
@@ -247,36 +216,22 @@ function SpendPage() {
             )}
             <Panel data-testid="spend-totals">
                 <PanelHeader label="Totals">
-                    <ToggleGroup
-                        type="single"
-                        value={windowId(shown)}
-                        aria-label="Window"
-                        onValueChange={(value) => {
-                            const picked = SPEND_WINDOWS.find((w) => windowId(w) === value)
-                            // Pressing the window shown turns it off: keep it. The week, the default, needs no search;
-                            // the kind filters stay as they are.
-                            if (picked !== undefined) {
-                                const week = picked === DEFAULT_WINDOW
-                                void navigate({
-                                    search: (prev) => ({
-                                        ...prev,
-                                        days: week ? undefined : picked.days,
-                                        hours: week ? undefined : picked.hours,
-                                    }),
-                                })
-                            }
+                    <WindowToggle
+                        windows={SPEND_WINDOWS}
+                        shown={shown}
+                        testId="spend"
+                        onPick={(picked) => {
+                            // The week, the default, needs no search; the kind filters stay as they are.
+                            const week = picked === DEFAULT_WINDOW
+                            void navigate({
+                                search: (prev) => ({
+                                    ...prev,
+                                    days: week ? undefined : picked.days,
+                                    hours: week ? undefined : picked.hours,
+                                }),
+                            })
                         }}
-                    >
-                        {SPEND_WINDOWS.map((w) => (
-                            <ToggleGroupItem
-                                key={windowId(w)}
-                                value={windowId(w)}
-                                data-testid={`spend-window-${windowId(w)}`}
-                            >
-                                {windowName(w)}
-                            </ToggleGroupItem>
-                        ))}
-                    </ToggleGroup>
+                    />
                 </PanelHeader>
                 {data === undefined ? <PanelLoading query={query} className="min-h-20" /> : <Totals found={data} />}
             </Panel>
@@ -522,10 +477,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
             testId: series.key.replace('_', '-'),
         })),
     ]
-    const unpriced = found.unpriced
-        .filter((u) => u.unpriced > 0)
-        .map((u) => `${u.unpriced} of ${u.runs} ${KIND_LABEL[u.kind]}`)
-        .join(', ')
+    const unpriced = unpricedText(found.unpriced)
     // In a window where nothing was spent, neither sentence has anything behind it: the share is of the live
     // overseer's spend, and the cost clause speaks for the runs that ended.
     const spent = found.idle_share !== null
@@ -575,8 +527,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
                         </>
                     )}
                     {spent && ended && ' '}
-                    {ended &&
-                        (unpriced === '' ? 'Every run that ended reported a cost.' : `No cost reported: ${unpriced}.`)}
+                    {ended && unpriced}
                 </p>
             )}
         </div>
@@ -597,15 +548,8 @@ function ByDay({ days, span, unit }: { days: SpendDay[]; span: string; unit: 'da
     return (
         <div className="flex flex-col gap-4 p-3">
             {/* Measured afresh for each window: another count of bars is another pitch. */}
-            <Chart key={days.length} days={days} clock={clock} />
-            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" data-testid="spend-legend">
-                {SERIES.map((series) => (
-                    <li key={series.key} className="flex items-center gap-1.5" title={series.hint}>
-                        <span aria-hidden className={cn('size-2.5 rounded-xs', series.fill)} />
-                        {series.label}
-                    </li>
-                ))}
-            </ul>
+            <DayChart key={days.length} bars={spendBars(days, clock)} testId="spend" />
+            <DayChartLegend series={SERIES} testId="spend" />
             <PanelScroll
                 label={`Spend by ${unit}`}
                 className="max-h-60 overflow-x-auto"
@@ -650,144 +594,6 @@ function ByDay({ days, span, unit }: { days: SpendDay[]; span: string; unit: 'da
                     </tbody>
                 </table>
             </PanelScroll>
-        </div>
-    )
-}
-
-/**
- * The bars over their axis, the row centered and each bar 3rem at most, so a sparse window draws narrow bars rather
- * than slabs. The axis names a day centered under its bar, whole, wider than the bar where it must be; where names
- * that often would touch, it names fewer days (`axisStep`).
- */
-function Chart({ days, clock }: { days: SpendDay[]; clock: Clock }) {
-    const names = days.map((day) => dayLabel(day, clock))
-    const widest = Math.max(AXIS_NAME_CHARS, ...names.map((name) => name.length))
-    // The same room is the same state: a new object each time would render again for nothing.
-    const [measure, room] = useMeasure((chart: HTMLElement) => axisRoom(chart, widest), undefined, { same: sameRoom })
-    const top = chartTop(days) * HEADROOM
-    const dearest = dearestDay(days)
-    const step = axisStep(days.length, AXIS_ALL, room)
-    return (
-        <div ref={measure} aria-hidden className="flex flex-col gap-1.5 px-3" data-testid="spend-chart">
-            <div className="flex h-48 items-end justify-center gap-1">
-                {days.map((day, i) => (
-                    <Bar
-                        key={day.day}
-                        day={day}
-                        top={top}
-                        clock={clock}
-                        peak={i === dearest ? peakAlign(i, days.length) : undefined}
-                    />
-                ))}
-            </div>
-            <div className="flex justify-center gap-1">
-                {days.map((day, i) => (
-                    <span key={day.day} className="relative h-4 max-w-12 min-w-0 flex-1">
-                        {axisNames(i, days.length, step) && (
-                            <span
-                                className={cn(
-                                    'readout absolute left-1/2 -translate-x-1/2',
-                                    'text-2xs whitespace-nowrap text-muted-foreground',
-                                )}
-                                data-testid={`spend-axis-${day.day}`}
-                            >
-                                {names[i]}
-                            </span>
-                        )}
-                    </span>
-                ))}
-            </div>
-        </div>
-    )
-}
-
-/**
- * What the drawn chart has room for: from one bar to the next, and the widest name a day can have, `widest`
- * characters, from the width of a name shown (the axis is monospace), with its gap. Undefined while there is nothing
- * to measure.
- */
-function axisRoom(chart: HTMLElement, widest: number): AxisRoom | undefined {
-    const [plot, axis] = chart.children
-    const first = plot?.children[0]?.getBoundingClientRect()
-    const second = plot?.children[1]?.getBoundingClientRect()
-    const name = [...(axis?.children ?? [])].find((slot) => slot.firstElementChild !== null)?.firstElementChild
-    const chars = name?.textContent.length ?? 0
-    if (first === undefined || name === undefined || name === null || chars === 0) {
-        return undefined
-    }
-    const width = name.getBoundingClientRect().width
-    return {
-        pitch: second === undefined ? Number.POSITIVE_INFINITY : Math.round(second.left - first.left),
-        label: Math.ceil((width / chars) * widest) + AXIS_GAP,
-    }
-}
-
-// Whether two measures of the axis leave it the same room.
-function sameRoom(before: AxisRoom | undefined, after: AxisRoom | undefined): boolean {
-    return before?.pitch === after?.pitch && before?.label === after?.label
-}
-
-/**
- * Where the dearest day's total sits over its bar: centered, but flush with the bar's outer edge on the first and the
- * last, since a total is wider than a narrow bar and the chart's padding is less than the half that would overhang.
- */
-function peakAlign(i: number, count: number): PeakAlign {
-    if (count > 1 && i === 0) {
-        return 'start'
-    }
-    return count > 1 && i === count - 1 ? 'end' : 'center'
-}
-
-/**
- * One day's bar. Its segments stack bottom up, each its series' share of the day, at least 2px and 2px apart, the whole
- * as tall as the day's share of the chart's top; the dearest day's total sits over its bar. A day with no cost is a
- * stub on the baseline, so it reads as nothing spent rather than a column gone missing.
- */
-function Bar({ day, top, clock, peak }: { day: SpendDay; top: number; clock: Clock; peak: PeakAlign | undefined }) {
-    const segments = SERIES.map((series) => ({ series, usd: seriesCost(day.costs, series.key) })).filter(
-        ({ usd }) => usd > 0,
-    )
-    const sum = segments.reduce((total, { usd }) => total + usd, 0)
-    const height = ((day.costs.total ?? 0) / top) * 100
-    return (
-        <div
-            className={cn(
-                'relative flex h-full max-w-12 min-w-0 flex-1 flex-col justify-end',
-                'rounded-t-xs hover:bg-surface-raised',
-            )}
-            title={dayHint(day, clock)}
-            data-testid={`spend-bar-${day.day}`}
-        >
-            {sum === 0 ? (
-                <span className="h-px w-full shrink-0 bg-border" data-testid="spend-stub" />
-            ) : (
-                <span
-                    className="flex min-h-min w-full shrink-0 flex-col-reverse gap-0.5"
-                    style={{ height: `${height}%` }}
-                >
-                    {segments.map(({ series, usd }) => (
-                        <span
-                            key={series.key}
-                            className={cn('min-h-0.5 w-full last:rounded-t-xs', series.fill)}
-                            // A share of 100, not of 1: flex factors that sum under 1 leave part of the bar unfilled.
-                            style={{ flexGrow: (usd / sum) * 100, flexBasis: 0 }}
-                            data-testid={`spend-segment-${series.key}`}
-                        />
-                    ))}
-                </span>
-            )}
-            {peak !== undefined && (
-                <span
-                    className={cn(
-                        'readout absolute inset-x-0 flex pb-0.5 text-2xs whitespace-nowrap',
-                        PEAK_JUSTIFY[peak],
-                    )}
-                    style={{ bottom: `${height}%` }}
-                    data-testid="spend-peak"
-                >
-                    <span>{costText(day.costs.total)}</span>
-                </span>
-            )}
         </div>
     )
 }
@@ -1145,7 +951,7 @@ function Models({
                                     </span>
                                 ) : (
                                     <Link
-                                        to="/runs"
+                                        to="/workspace/runs"
                                         search={{ model: m.model, kind: of }}
                                         className="block text-accent underline-offset-4 hover:underline"
                                     >

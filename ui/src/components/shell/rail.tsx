@@ -31,7 +31,7 @@ const RAIL_ROWS = 4
 
 // What `+N more` says on hover, by the page it opens.
 const MORE_TITLE = {
-    '/runs': 'Every run, on the runs page',
+    '/workspace/runs': 'Every run, on the runs page',
     '/pull-requests/reviews': 'Every review, on the reviews page',
     '/chores': 'Every chore, on the chores page',
     '/tasks': 'Every task, on the tasks page',
@@ -119,7 +119,7 @@ function WorkingRow({ item }: { item: RailItem }) {
             const asks = asksYou(run)
             return (
                 <Link
-                    to="/runs/$id"
+                    to="/workspace/runs/$id"
                     params={{ id: String(run.id) }}
                     title={`${runRef(run.id)} ${run.kind}`}
                     className={row(asks ? 'blocked' : run.state)}

@@ -65,7 +65,7 @@ interface NavSetup {
 }
 
 // The nav's sections, in its order, with no pages open under any.
-const SECTIONS = ['Attention', 'Tickets', 'Tasks', 'Pull requests', 'Runs', 'Chores', 'Reports', 'Memory']
+const SECTIONS = ['Attention', 'Tickets', 'Tasks', 'Pull requests', 'Workspace', 'Chores', 'Reports', 'Memory']
 
 // The nav's links with the pages under one section open: the section, then its pages.
 function opening([section, ...pages]: readonly string[]): string[] {
@@ -91,8 +91,7 @@ describe('Nav', () => {
         ['a ticket', '/tickets/ABC-102', 'Tickets'],
         ['a PR', '/pull-requests/pr?url=x', 'Pull requests'],
         ['a chore', '/chores/deps', 'Chores'],
-        ['a run', '/runs/41', 'Runs'],
-        ['the runs list', '/runs', 'Runs'],
+        ['the workspace overview', '/workspace', 'Workspace'],
         ['the memory page', '/memory', 'Memory'],
     ] as const)("keeps its section current on %s's page", async (_, at, section) => {
         await renderNav({ at, items: [] })
@@ -105,10 +104,9 @@ describe('Nav', () => {
     })
 
     it.each([
-        ['Runs', '/runs', ['Runs', 'Ticks', 'Worktrees'], 'Runs'],
-        ['Runs', '/runs/41', ['Runs', 'Ticks', 'Worktrees'], 'Runs'],
+        ['Workspace', '/workspace', ['Workspace', 'Runs', 'Ticks', 'Worktrees'], 'Workspace'],
         ['Pull requests', '/pull-requests', ['Pull requests', 'Reviews'], 'Pull requests'],
-        ['Reports', '/reports?month=2026-08', ['Reports', 'Spend', 'Checklist'], 'Reports'],
+        ['Reports', '/reports?month=2026-08', ['Reports', 'Spend', 'Checklist', 'Health'], 'Reports'],
     ] as const)("opens %s's pages under it on %s, the section current", async (_, at, opened, page) => {
         await renderNav({ at, items: [] })
         expect(listed()).toEqual(opening(opened))
@@ -116,11 +114,13 @@ describe('Nav', () => {
     })
 
     it.each([
-        ['Ticks', '/runs/ticks', ['Runs', 'Ticks', 'Worktrees']],
-        ['Worktrees', '/runs/worktrees', ['Runs', 'Ticks', 'Worktrees']],
+        ['Runs', '/workspace/runs?state=running', ['Workspace', 'Runs', 'Ticks', 'Worktrees']],
+        ['Ticks', '/workspace/ticks', ['Workspace', 'Runs', 'Ticks', 'Worktrees']],
+        ['Worktrees', '/workspace/worktrees', ['Workspace', 'Runs', 'Ticks', 'Worktrees']],
         ['Reviews', '/pull-requests/reviews', ['Pull requests', 'Reviews']],
-        ['Spend', '/reports/spend?days=30', ['Reports', 'Spend', 'Checklist']],
-        ['Checklist', '/reports/checklist?days=14', ['Reports', 'Spend', 'Checklist']],
+        ['Spend', '/reports/spend?days=30', ['Reports', 'Spend', 'Checklist', 'Health']],
+        ['Checklist', '/reports/checklist?days=14', ['Reports', 'Spend', 'Checklist', 'Health']],
+        ['Health', '/reports/health?days=30', ['Reports', 'Spend', 'Checklist', 'Health']],
     ] as const)('marks %s current on its own page, not the section over it', async (page, at, opened) => {
         await renderNav({ at, items: [] })
         expect(listed()).toEqual(opening(opened))
@@ -128,7 +128,8 @@ describe('Nav', () => {
     })
 
     it.each([
-        ['a tick', '/runs/ticks/12', 'Ticks'],
+        ['a run', '/workspace/runs/41', 'Runs'],
+        ['a tick', '/workspace/ticks/12', 'Ticks'],
         ['a review', '/pull-requests/reviews/4', 'Reviews'],
         ["a review's run", '/pull-requests/reviews/4/run', 'Reviews'],
     ] as const)("marks the page it is under current on %s's page", async (_, at, page) => {
@@ -137,9 +138,9 @@ describe('Nav', () => {
     })
 
     it('opens no pages under a section in a compact nav, so the section stays current on them', async () => {
-        await renderNav({ at: '/runs/ticks/12', items: [], compact: true })
+        await renderNav({ at: '/workspace/ticks/12', items: [], compact: true })
         expect(listed()).toEqual(SECTIONS)
-        expect(current()).toEqual(['Runs'])
+        expect(current()).toEqual(['Workspace'])
     })
 
     it('marks no section on a page in none', async () => {
@@ -163,7 +164,7 @@ describe('Nav', () => {
     })
 
     it("splits Attention's count as its counter does, in words for a screen reader and on hover", async () => {
-        await renderNav({ at: '/runs', items: [...ITEMS, WAITING] })
+        await renderNav({ at: '/workspace/runs', items: [...ITEMS, WAITING] })
         expect(screen.getByRole('link', { name: 'Attention 1 broken, 2 waiting on you, 1 other' })).toBeDefined()
         expect(screen.getByTitle('1 broken, 2 waiting on you, 1 other')).toBeDefined()
         // The eye reads the three numbers, each in its part's color.
@@ -182,7 +183,7 @@ describe('Nav', () => {
         [1, '1 proposal waiting on you'],
         [3, '3 proposals waiting on you'],
     ])('counts %i proposal(s) waiting beside Memory, in words for a screen reader and on hover', async (n, said) => {
-        await renderNav({ at: '/runs', items: [], waiting: n })
+        await renderNav({ at: '/workspace/runs', items: [], waiting: n })
         expect(screen.getByRole('link', { name: `Memory ${said}` })).toBeDefined()
         expect(screen.getByTitle(said).textContent).toBe(`${n}${said}`)
     })
@@ -205,7 +206,7 @@ describe('Nav', () => {
             ended(5, { verdict: 'clean', news: false }),
             ended(3, { verdict: 'findings', findings: 1, worst: 'blocking', worst_count: 1, seen: true }),
         ]
-        await renderNav({ at: '/runs', items: [], reviews })
+        await renderNav({ at: '/workspace/runs', items: [], reviews })
         expect(screen.getByRole('link', { name: 'Pull requests 2 new reviews to read' })).toBeDefined()
         expect(screen.getByTitle('2 new reviews to read').textContent).toBe('22 new reviews to read')
         expect(screen.getByTestId('nav-reviews-count').className).toContain('text-status-blocked')

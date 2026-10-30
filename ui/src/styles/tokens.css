@@ -39,7 +39,7 @@
 
     /* The nav's sections: identity, never state, each from what its page is about (ui/DESIGN.md, "Tokens"). */
     --section-attention: oklch(0.55 0.2 2);
-    --section-runs: oklch(0.45 0.15 272);
+    --section-workspace: oklch(0.45 0.15 272);
     --section-tickets: oklch(0.52 0.12 242);
     --section-tasks: oklch(0.505 0.125 115);
     --section-pull-requests: oklch(0.54 0.21 302);
@@ -53,7 +53,7 @@
      * none, and set it to 0%. Each is set once, here, and resolves against whichever palette is worn. */
     --nav-label-shade: 15%;
     --nav-label-attention: color-mix(in oklab, var(--section-attention), black var(--nav-label-shade));
-    --nav-label-runs: color-mix(in oklab, var(--section-runs), black var(--nav-label-shade));
+    --nav-label-workspace: color-mix(in oklab, var(--section-workspace), black var(--nav-label-shade));
     --nav-label-tickets: color-mix(in oklab, var(--section-tickets), black var(--nav-label-shade));
     --nav-label-tasks: color-mix(in oklab, var(--section-tasks), black var(--nav-label-shade));
     --nav-label-pull-requests: color-mix(in oklab, var(--section-pull-requests), black var(--nav-label-shade));
@@ -184,7 +184,7 @@
 
     --section-attention: oklch(0.75 0.17 2);
     /* Bluer than the canvas's 270, so the nav's highlight on Runs reads as a color, not a lighter canvas. */
-    --section-runs: oklch(0.73 0.135 262);
+    --section-workspace: oklch(0.73 0.135 262);
     --section-tickets: oklch(0.77 0.13 242);
     --section-tasks: oklch(0.86 0.165 115);
     --section-pull-requests: oklch(0.75 0.16 302);
@@ -367,7 +367,7 @@
         var(--section-tickets) 0 25%,
         var(--section-tasks) 0 37.5%,
         var(--section-pull-requests) 0 50%,
-        var(--section-runs) 0 62.5%,
+        var(--section-workspace) 0 62.5%,
         var(--section-chores) 0 75%,
         var(--section-reports) 0 87.5%,
         var(--section-memory) 0
@@ -476,7 +476,7 @@
     --section-tickets: oklch(0.76 0.16 242);
     --section-tasks: oklch(0.89 0.21 120);
     --section-pull-requests: oklch(0.72 0.22 305);
-    --section-runs: oklch(0.7 0.19 275);
+    --section-workspace: oklch(0.7 0.19 275);
     --section-chores: oklch(0.79 0.18 52);
     --section-reports: oklch(0.89 0.18 98);
     --section-memory: oklch(0.86 0.12 215);
@@ -541,7 +541,7 @@
         var(--section-tickets) 0 25%,
         var(--section-tasks) 0 37.5%,
         var(--section-pull-requests) 0 50%,
-        var(--section-runs) 0 62.5%,
+        var(--section-workspace) 0 62.5%,
         var(--section-chores) 0 75%,
         var(--section-reports) 0 87.5%,
         var(--section-memory) 0
@@ -560,7 +560,7 @@
     --section-tickets: oklch(0.72 0.06 230);
     --section-tasks: oklch(0.78 0.15 115);
     --section-pull-requests: oklch(0.72 0.09 320);
-    --section-runs: oklch(0.68 0.06 260);
+    --section-workspace: oklch(0.68 0.06 260);
     --section-chores: oklch(0.74 0.15 52);
     --section-reports: oklch(0.84 0.15 85);
     --section-memory: oklch(0.78 0.07 190);
@@ -662,7 +662,7 @@
     --color-status-failed: var(--status-failed);
 
     --color-section-attention: var(--section-attention);
-    --color-section-runs: var(--section-runs);
+    --color-section-workspace: var(--section-workspace);
     --color-section-tickets: var(--section-tickets);
     --color-section-tasks: var(--section-tasks);
     --color-section-pull-requests: var(--section-pull-requests);

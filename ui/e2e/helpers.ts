@@ -17,10 +17,11 @@ export const PALETTE_KEY = 'canopy-palette'
 /** Every page, by its path and any query; a screenshot each in dark, of its main pane alone unless in WHOLE_ROUTES. */
 export const ROUTES = [
     'attention',
-    'runs',
-    'runs/39',
-    'runs/41',
-    'runs/worktrees',
+    'workspace',
+    'workspace/runs',
+    'workspace/runs/39',
+    'workspace/runs/41',
+    'workspace/worktrees',
     'tickets',
     'tickets?view=board',
     'tickets/ABC-101',
@@ -41,11 +42,12 @@ export const ROUTES = [
     'chores',
     'chores/deps',
     'chores/deps/runs/2',
-    'runs/ticks',
-    'runs/ticks/2',
+    'workspace/ticks',
+    'workspace/ticks/2',
     'reports',
     'reports/spend',
     'reports/checklist',
+    'reports/health',
     'settings',
     'settings/limits',
     'settings/skills',
@@ -64,15 +66,15 @@ export type Route = (typeof ROUTES)[number]
 export const WHOLE_ROUTES: readonly Route[] = [
     'attention',
     'tickets/ABC-102',
-    'runs/39',
+    'workspace/runs/39',
     'pull-requests/reviews/4',
-    'runs/ticks/2',
+    'workspace/ticks/2',
 ]
 /**
  * The pages screenshotted in light as well: the shell, a list, and a detail page. Both themes draw from the same
  * tokens, so a few pages in light catch a light token gone wrong without doubling every image.
  */
-export const LIGHT_ROUTES: readonly Route[] = ['attention', 'runs', 'tickets/ABC-102']
+export const LIGHT_ROUTES: readonly Route[] = ['attention', 'workspace/runs', 'tickets/ABC-102']
 /** The themes the app has; a page is screenshotted in light only if in LIGHT_ROUTES. */
 export const THEMES = ['light', 'dark'] as const
 /** Half an hour after the fixtures' T0 (canopy/serve/mock/): every age on a page is the same on every run. */

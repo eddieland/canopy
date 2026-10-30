@@ -5,7 +5,7 @@
 import type { ChecklistAnswer, ChecklistItemCounts, ItemAnswer } from '@/api/types'
 import { counted } from '@/lib/descriptions'
 import { inRepos } from '@/lib/repo-filter'
-import { windowName } from '@/lib/spend'
+import { windowName } from '@/lib/report-window'
 
 /** How many days the page opens on: a week, as `canopy checklist` counts by default. */
 export const DEFAULT_CHECKLIST_DAYS = 7

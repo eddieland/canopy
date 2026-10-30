@@ -35,7 +35,14 @@ const TONE: Record<BreakdownPart['kind'], string> = {
 
 // A page under a section, which opens under its item while the section is shown.
 interface SubPage {
-    to: '/runs/ticks' | '/runs/worktrees' | '/pull-requests/reviews' | '/reports/spend' | '/reports/checklist'
+    to:
+        | '/workspace/runs'
+        | '/workspace/ticks'
+        | '/workspace/worktrees'
+        | '/pull-requests/reviews'
+        | '/reports/spend'
+        | '/reports/checklist'
+        | '/reports/health'
     label: string
     hint: string
 }
@@ -68,19 +75,24 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
         ],
     },
     {
-        to: '/runs',
+        to: '/workspace',
         icon: Activity,
         hint:
-            "Workers running now, then the ones that ended last; the overseer's ticks, and each repository's pool " +
-            'of worktrees',
+            "What the loop does in the workspace: its runs, the overseer's ticks, and each repository's pool of " +
+            'worktrees',
         pages: [
             {
-                to: '/runs/ticks',
+                to: '/workspace/runs',
+                label: 'Runs',
+                hint: 'Workers running now, then the ones that ended last: on tickets, PRs, chores, and tasks',
+            },
+            {
+                to: '/workspace/ticks',
                 label: 'Ticks',
                 hint: "The overseer's latest ticks: what each found, what it cost, and what it decided",
             },
             {
-                to: '/runs/worktrees',
+                to: '/workspace/worktrees',
                 label: 'Worktrees',
                 hint: "Each repository's pool of worktrees, and what holds them",
             },
@@ -91,8 +103,8 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
         to: '/reports',
         icon: ChartColumn,
         hint:
-            'What canopy cost and got done month by month, what agent runs cost each day, and how workers answered ' +
-            'your checklists',
+            'What canopy cost and got done month by month, what agent runs cost each day and how they ended, ' +
+            'and how workers answered your checklists',
         pages: [
             {
                 to: '/reports/spend',
@@ -103,6 +115,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
                 to: '/reports/checklist',
                 label: 'Checklist',
                 hint: "How workers answered each repository's checklist, item by item, over the last days",
+            },
+            {
+                to: '/reports/health',
+                label: 'Health',
+                hint: "How the last days' runs ended, the newest failures, and what the guards refused",
             },
         ],
     },
@@ -118,7 +135,7 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
 // out, so Tailwind finds each.
 const SECTION_ACTIVE_INK: Record<Section, string> = {
     '/attention': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-attention))]',
-    '/runs': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-runs))]',
+    '/workspace': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-workspace))]',
     '/tickets': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-tickets))]',
     '/tasks': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-tasks))]',
     '/pull-requests': 'data-[status=active]:text-[color:var(--nav-on-ink,var(--nav-label-pull-requests))]',
@@ -134,11 +151,11 @@ const SECTION_ACTIVE_INK: Record<Section, string> = {
  * it goes, and its label is in that color too. A palette may draw the highlight as a solid block instead, inking the
  * active item in the canvas's color, drop the bar, or light the active icon (`--nav-block`, `--nav-hairline`,
  * `--nav-on-ink`, `--nav-on-glow` in `tokens.css`); a ticket's page keeps Tickets active, a PR's Pull requests, a
- * chore's Chores, and a run's Runs.
- * While the section shown has pages under it (Runs: Ticks and Worktrees; Pull requests: Reviews; Reports: Spend and
- * Checklist), they open under its item, indented to its label, on a hairline in its color; elsewhere they stay folded.
- * On one of them, or a page under it, such as a tick's, the highlight is on that page's item, and the section's label
- * stays in `foreground`, untinted.
+ * chore's Chores, and a run's Runs, under Workspace.
+ * While the section shown has pages under it (Workspace: Runs, Ticks, and Worktrees; Pull requests: Reviews; Reports:
+ * Spend, Checklist, and Health), they open under its item, indented to its label, on a hairline in its color;
+ * elsewhere they stay folded. On one of them, or a page under it, such as a tick's, the highlight is on that page's
+ * item, and the section's label stays in `foreground`, untinted.
  * Attention shows how many items it lists, on every page, split by severity, Pull requests how many review results the
  * operator has not opened, and Memory how many proposals wait on the operator, while proposals are on. Hovering an item
  * says what its page holds.

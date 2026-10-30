@@ -64,6 +64,8 @@ export const keys = {
     monthlyReport: (months: number) => ['spend', 'breakdown', 'months', months] as const,
     // Under the breakdowns' key too, so a run's end, which records its answers, marks the counts stale.
     checklistCounts: (days: number) => ['spend', 'breakdown', 'checklist', days] as const,
+    // Under the breakdowns' key too: a run's start or end, or a tick's decisions, changes how the runs ended.
+    healthReport: (days: number) => ['spend', 'breakdown', 'health', days] as const,
     tick: ['tick'] as const,
     // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
     tickNow: ['tick-now'] as const,
@@ -243,6 +245,18 @@ export function checklistCountsQuery(days: number) {
         queryKey: keys.checklistCounts(days),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/reports/checklist', { params: { query: { days } }, signal })),
+    })
+}
+
+/**
+ * How the runs of the last `days` local days ended, as `canopy health` reads them: each kind's runs by status, the
+ * newest failures, the guards' refusals, and each day's ended and failed runs. Marked stale with the spend breakdowns.
+ */
+export function healthReportQuery(days: number) {
+    return queryOptions({
+        queryKey: keys.healthReport(days),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reports/health', { params: { query: { days } }, signal })),
     })
 }
 

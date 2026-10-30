@@ -103,7 +103,7 @@ describe('MemoryRows', () => {
         expect(within(row).getByText('read 6 · cited 2').getAttribute('title')).toMatch(
             /^read by 6 runs, last at .+; cited by 2, last at .+$/u,
         )
-        expect(within(row).getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/runs/41')
+        expect(within(row).getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/workspace/runs/41')
         expect(within(row).getByTitle('written at a1b2c3d')).toBeDefined()
         expect(within(row).queryByRole('link', { name: 'ABC-102' })).toBeNull()
     })
@@ -118,7 +118,7 @@ describe('MemoryRows', () => {
     it('names the runs that cited a memory, and counts those it cannot name', async () => {
         await renderRows(<MemoryRows entries={[{ ...NOTE, use_count: 4, used_by: [43, 42] }]} />)
         expect(screen.getByText(/^cited in/u).textContent).toBe('cited in run:43, run:42 and 2 more')
-        expect(screen.getByRole('link', { name: 'run:43' }).getAttribute('href')).toBe('/runs/43')
+        expect(screen.getByRole('link', { name: 'run:43' }).getAttribute('href')).toBe('/workspace/runs/43')
 
         cleanup()
         await renderRows(<MemoryRows entries={[{ ...NOTE, use_count: 0, last_used_at: null, used_by: [] }]} />)
@@ -160,7 +160,7 @@ describe('MemoryRows', () => {
         }
         await renderRows(<MemoryRows entries={[lesson]} />)
         expect(screen.getByText(/^from proposal/u).textContent).toBe('from proposal memory:7 of ABC-103, by run:38')
-        expect(screen.getByRole('link', { name: 'run:38' }).getAttribute('href')).toBe('/runs/38')
+        expect(screen.getByRole('link', { name: 'run:38' }).getAttribute('href')).toBe('/workspace/runs/38')
     })
 
     it('says when a run reported a lesson wrong', async () => {

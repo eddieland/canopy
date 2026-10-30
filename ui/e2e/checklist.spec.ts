@@ -49,7 +49,7 @@ test("Reports opens the checklist's counts, each repository's items in its list'
 })
 
 test("a run's page lists what it answered of its list, a held item's reason under it", async ({ page }) => {
-    await page.goto('runs/38')
+    await page.goto('workspace/runs/38')
     await settled(page)
     const checklist = page.getByTestId('run-checklist')
     await expect(checklist.getByRole('heading', { level: 2 })).toHaveText('Checklist')
@@ -66,7 +66,7 @@ test("a run's page lists what it answered of its list, a held item's reason unde
     expect(panels.slice(panels.indexOf('Run'), panels.indexOf('Run') + 3)).toEqual(['Run', 'Checklist', 'Transcript'])
 
     // A run given no list has no panel.
-    await page.goto('runs/41')
+    await page.goto('workspace/runs/41')
     await settled(page)
     await expect(page.getByTestId('run-checklist')).toHaveCount(0)
 })

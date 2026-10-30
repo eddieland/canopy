@@ -26,7 +26,7 @@ test.describe('no flash of the wrong theme', () => {
                 seen.scheme = document.documentElement.style.colorScheme
             })
         })
-        await page.goto('runs')
+        await page.goto('workspace/runs')
         await page.reload()
         const seen = await page.evaluate(() => globalThis.canopyThemeProbe)
         expect(seen?.atBody).toMatch(/\bdark\b/u)
@@ -36,7 +36,7 @@ test.describe('no flash of the wrong theme', () => {
 
     test('with nothing stored it follows the system theme', async ({ page }) => {
         await page.emulateMedia({ colorScheme: 'dark' })
-        await page.goto('runs')
+        await page.goto('workspace/runs')
         await expect(page.locator('html')).toHaveClass(/\bdark\b/u)
         await page.emulateMedia({ colorScheme: 'light' })
         await expect(page.locator('html')).not.toHaveClass(/\bdark\b/u)
@@ -59,7 +59,7 @@ test.describe('the toggle', () => {
 
     test('switches with a view transition, persists, and survives a reload', async ({ page }) => {
         await storeTheme(page, 'light')
-        await page.goto('runs')
+        await page.goto('workspace/runs')
         await settled(page)
         const toggle = page.getByTestId('theme-toggle')
         await expect(toggle).toHaveAccessibleName('Switch to dark theme')
@@ -77,7 +77,7 @@ test.describe('the toggle', () => {
     test('swaps instantly when reduced motion is preferred', async ({ page }) => {
         await page.emulateMedia({ reducedMotion: 'reduce' })
         await storeTheme(page, 'light')
-        await page.goto('runs')
+        await page.goto('workspace/runs')
         await settled(page)
         await page.getByTestId('theme-toggle').click()
         await expect(page.locator('html')).toHaveClass(/\bdark\b/u)
@@ -105,7 +105,7 @@ test.describe('the toggle', () => {
         const second = await context.newPage()
         await signIn(first)
         await first.goto('settings')
-        await second.goto('runs')
+        await second.goto('workspace/runs')
         await settled(second)
 
         await first.getByTestId('theme-dark').click()
@@ -152,7 +152,7 @@ test.describe('palettes', () => {
                 }
             }).observe(document, { childList: true, subtree: true })
         })
-        await page.goto('runs')
+        await page.goto('workspace/runs')
         await expect(page.locator('html')).toHaveAttribute('data-palette-at-body', 'solarized')
     })
 
@@ -161,7 +161,7 @@ test.describe('palettes', () => {
         const second = await context.newPage()
         await signIn(first)
         await first.goto('settings')
-        await second.goto('runs')
+        await second.goto('workspace/runs')
         await settled(second)
 
         await first.getByTestId('palette-light-off-white').click()
