@@ -431,7 +431,8 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
 def _models(ctx: Context, run: records.ReviewRun) -> dict[str, Model]:
     """Each agent's model by its name for `run`: config's, but the reviewer's, the one the run recorded (DESIGN §13).
 
-    The run recorded its ticket's override for the reviewer, else config's, so what is recorded is what runs.
+    The run recorded its PR's review request's model, else its ticket's override for the reviewer, else config's, so
+    what is recorded is what runs.
 
     Returns:
         Each agent with a model, by its name, for the runtime to write into the run's definitions.

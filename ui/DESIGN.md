@@ -117,9 +117,10 @@ Rules:
   where panels stand apart by their lightness alone), its depth (a soft shadow in the canvas's hue, a hard one with
   no blur, or, on black, where a shadow does nothing, the accent's glow), and its face (`--face`: interface text in
   Plex Sans, or in Plex Mono, as an editor sets it). Spacing, sizes, and layout never change with a palette, and
-  neither do the status colors; only the mono face reflows text, since it runs wider. The defaults take the soft
-  shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the nineties, and black no
-  edges, soft corners, and the glow.
+  neither do the status colors; only the mono face reflows text, since it runs wider, so it stays with the few palettes
+  that are an editor's own look: Gruvbox's sides and Monokai. The defaults take the soft shadow, Gruvbox's dark the
+  crisp corners, hard shadow, and mono face of an editor of the nineties, and black no edges, soft corners, and the
+  glow.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a hairline, a solid block with the active item inked in the canvas's
@@ -130,9 +131,9 @@ Rules:
   sit a few degrees round the wheel. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
   from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage.
   Every other palette picks from the same choices, so each reads as its own place: Gruvbox's light side as its dark
-  one, Solarized's sides crisp and flat, Monokai crisp with a neon aurora, Nord's light side soft under a fade
-  through Frost's blues, grey tight under one steel rule, and sage, Rosé Pine Dawn, forest, and plum soft, plum the
-  softest. Off-white lays its panels on the canvas like paper.
+  one, Solarized's sides crisp and flat, Monokai crisp and in mono under a neon aurora, Nord's light side soft under a
+  fade through Frost's blues, grey tight under one steel rule, and sage, Rosé Pine Dawn, forest, and plum soft, plum
+  the softest. Off-white lays its panels on the canvas like paper.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
@@ -199,9 +200,9 @@ Rules:
   the ticket's title, the review's reference and ticket, `chore run #N`, or the task's first line, opening the run's
   page; at most four, then `+N more` to the page of
   the ones left out, or the runs page for a mix, so the sticky part fits an 800px window. The
-  spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, on one line, each cost in a
-  small readout after its window's name, so the block takes a line's height (a cost too long to share it puts the 30
-  days under the 24 hours): it is shown
+  spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in two rows: the window's name
+  on the left, its cost right-aligned in a readout, so the figures line up at four digits as at one. The 30 days is
+  the headline, a step larger and medium weight under the 24 hours' `text-xs`, both in `foreground`: it is shown
   nowhere else, but for the lifetime total Sprig's hats and the Ghost's shells are bought with (Fun, below). The
   footer is two lines, the version, a link out to canopy's releases on GitHub, with the width to itself and cut
   short only past a long build's hash, then the guide and Settings as two filled pills alike, `foreground` on
