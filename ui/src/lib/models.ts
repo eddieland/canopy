@@ -15,6 +15,27 @@ export const UNREAD = 'unread'
  */
 export const RUNTIME_DEFAULT = 'runtime default'
 
+/** The model an agent's next run goes to, as a model menu shows it. */
+export interface PickerModel {
+    /** The model, as `provider/model` or `provider/model@variant`, or null for the runtime's default. */
+    model: string | null
+    /** The variant `model` names after its id, set apart; null for the model's default. */
+    variant: string | null
+}
+
+/**
+ * A model as `provider/model[@variant]` with its variant set apart, as canopy reads one (`agent_models.parse`): the
+ * part after its last `@` when that starts with a letter, since a model's own id may hold a dated `@20250101`.
+ */
+export function pickerModel(model: string | null): PickerModel {
+    if (model === null) {
+        return { model, variant: null }
+    }
+    const at = model.lastIndexOf('@')
+    const variant = model.slice(at + 1)
+    return at > 0 && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/u.test(variant) ? { model, variant } : { model, variant: null }
+}
+
 /**
  * A model at a variant as every page names it, `provider/model@variant`, from config's model and variant apart: the
  * model alone at its default variant, never `at high`.

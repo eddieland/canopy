@@ -24,7 +24,7 @@ export function ReviewDialog() {
     const searchUrl = useSearch({ strict: false, select: (search) => search.url })
     const here = matchRoute({ to: '/pull-requests/pr' }) === false ? undefined : searchUrl
 
-    // A URL given replaces the one kept, and is kept in its place; the notes and the personas stay as written.
+    // A URL given replaces the one kept, and is kept in its place; the notes, personas, and model stay as written.
     function open(url: string | undefined) {
         const kept = readReviewRequestDraft()
         const draft = url === undefined ? kept : { ...kept, url }

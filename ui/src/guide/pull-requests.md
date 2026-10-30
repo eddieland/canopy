@@ -237,8 +237,9 @@ says why.
 
 Already on the PR's page? Its **Pull request** panel asks for you: **Review this PR** on one canopy has never
 reviewed, and **Review again** once it has, or once your request has ended, say after the author pushed a fix. It's the
-same request, in the personas its menu names: the last request's, or those [Settings](settings#reviews) prefers. The
-loop's own PRs have neither button. `review.agent_prs` reviews those, and canopy would refuse the request anyway.
+same request, in the personas its menu names: the last request's, or those [Settings](settings#reviews) prefers,
+and on the model its **Model** menu names, config's unless you pick one. The loop's own PRs have neither button.
+`review.agent_prs` reviews those, and canopy would refuse the request anyway.
 
 **Notes for the reviewer**, under the URL, takes whatever you want the reviewer to know before it starts: what the
 author asked you to look at, the part of the change that worries you, or why the PR exists at all. It's optional, and
@@ -247,7 +248,7 @@ narrow the review: it still reads the whole change. The PR's page shows the note
 a PR that's already waiting, with new notes, replaces the old ones; a review already running keeps the notes it
 started with.
 
-**Show persona**, under the notes, opens the **Persona** menu, which picks the voice the review is written in, as
+**Show reviewer**, under the notes, opens the **Persona** menu, which picks the voice the review is written in, as
 `--persona` does. Left alone, it reads `(default)` beside `[personas] reviewer`'s, which is usually `canopy`; folded,
 the form says which it will use. Each persona in the menu
 says what it is under its name, in its own words. Check one persona, say `skeptic`, and the review is
@@ -260,6 +261,15 @@ personas with the request.
 If you always reach for the same reviewer, pick it once in [Settings](settings#reviews) and the form starts there,
 saying `as Settings prefers`, and so does a PR's **Review this PR**. You can still check others for one request; the
 next one starts from your preference again. **Use the default** is still `[personas] reviewer`'s.
+
+Beside the persona, **Model** picks what the reviewer runs on, as `--model` does. Left alone it reads `default`, and
+names config's reviewer's model after it, so you know what you're getting before you change it. Pick another, say a
+bigger model for the PR that touches billing, or a variant of one at a higher effort, and every review that request
+makes runs on it, in each persona; it's the request's alone, and the next one starts from config's again. A model on a
+ticket's own reviewer comes second to it. The menu is the one a ticket's page uses, so it lists what the runtime does,
+and a model the runtime has since dropped turns the button the blocked color; canopy refuses a request on one, and the
+form says why. Asking again for a PR that's waiting, with a model picked, replaces its model; left on `default`, it
+keeps it. The PR's page names the model with the request, open or ended, so you can tell later which run cost what.
 
 The review stays in canopy until you say otherwise. Its page holds it as a draft of your review on the PR, which you
 can trim, reword, and publish ([below](#publishing-your-review)); whether you pass any of it on, and in what tone, is

@@ -305,13 +305,14 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
         title="Retry the upstream on a 503, with backoff",
         observed_at=at(-29),
     ).run(conn)
-    # A coworker's PR the operator asked canopy to review from the web UI (DESIGN §21).
+    # A coworker's PR the operator asked canopy to review from the web UI (DESIGN §21), on a model of its own (§13).
     records.insert(
         records.ReviewRequest,
         pr_url=PR_95,
         created_at=at(-20),
         channel="web",
         notes="The author asked for a close look at the retry loop; I'm not sure it backs off.",
+        model="anthropic/claude-opus-4-1@max",
     ).run(conn)
     # The reader's read of it, since an open request watches its PR (DESIGN §21): whose it is, before its review.
     records.insert(

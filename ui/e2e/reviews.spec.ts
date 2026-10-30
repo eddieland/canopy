@@ -214,7 +214,7 @@ test('settings prefers the personas a review request starts from, apart from the
     const form = page.getByTestId('review-request-form')
     // Folded, the form names them; opened, its menu holds them.
     await expect(form.getByTestId('review-request-chosen')).toHaveText('in skeptic, as Settings prefers')
-    await form.getByRole('button', { name: 'Show persona' }).click()
+    await form.getByRole('button', { name: 'Show reviewer' }).click()
     await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
     await page.reload()
     await settled(page)
