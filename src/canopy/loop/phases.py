@@ -42,7 +42,7 @@ from canopy.core.workspace import CheckRole
 from canopy.loop import attention, harness
 from canopy.reviews import start as review_start
 from canopy.reviews.start import DISPATCH_ACTION as REVIEW_ACTION
-from canopy.runs import artifact_authority
+from canopy.runs import artifact_authority, drafts
 
 if TYPE_CHECKING:
     import sqlite3
@@ -428,6 +428,8 @@ class _World:
     prs: Mapping[str, records.ObservedPr]
     checks: Mapping[str, Sequence[records.ObservedCheck]]
     reviews: Mapping[str, Sequence[records.ObservedReview]]
+    #: What the operator sent through canopy on each PR (`drafts.sent_by_pr`), never feedback.
+    sent: Mapping[str, Mapping[str, Sequence[int]]]
     branches: Mapping[str, Sequence[records.ObservedBranch]]
     #: The repositories whose branches were read whole since the cutoff.
     fresh_repos: AbstractSet[str]
@@ -472,6 +474,7 @@ class _World:
             prs={p.url: p for p in records.select(records.ObservedPr).all(conn)},
             checks=checks,
             reviews=reviews,
+            sent=drafts.sent_by_pr(conn),
             branches=branches,
             fresh_repos=fresh_repos(conn, branches, cutoff),
             units_of=db.all_units(conn),
@@ -740,7 +743,8 @@ class _World:
         """Derive the review rows (DESIGN §7, D089): feedback past the unit's `review` cursor, by whom it is from.
 
         Feedback is a review that says something, or a review comment; an approval is not feedback. What the PR's own
-        author writes is not either: canopy's workers post as the operator, who opens the PR.
+        author writes is not either: canopy's workers post as the operator, who opens the PR. Nor is what the operator
+        sent through canopy, known by its id whoever opened the PR.
 
         Returns:
             The rows that hold of `review_findings`, `changes_requested`, and `untrusted_review`, and the journal
@@ -754,6 +758,7 @@ class _World:
             for r in self.reviews.get(pr.url, [])
             if is_feedback(r)
             and (pr.author is None or (r.author or "").lower() != pr.author.lower())
+            and not drafts.was_sent(r, self.sent)
             and item_numbers.newer(r.number, cursor)
         ]
         waiting = [r.number for r in new if (r.author or "").lower() in trusted and r.number is not None]
