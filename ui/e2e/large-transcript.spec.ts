@@ -69,7 +69,7 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('a transcript as long as the server sends draws a page of rows, and a fold shows more', async ({ page }) => {
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const rows = transcript.getByTestId('transcript-entries').locator(':scope > li')
@@ -91,7 +91,7 @@ test('a transcript as long as the server sends draws a page of rows, and a fold 
 })
 
 test('Find finds a row the page has not drawn', async ({ page }) => {
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const rows = transcript.getByTestId('transcript-entries').locator(':scope > li')
@@ -112,7 +112,7 @@ test('Find finds a row the page has not drawn', async ({ page }) => {
 })
 
 test("the context chart's row is drawn before it is shown, wherever the budget left it", async ({ page }) => {
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const context = transcript.getByTestId('transcript-context')
@@ -142,7 +142,7 @@ test('a search redraws the rows without cross-fading the page, and loses no key 
             return start(update)
         }
     })
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     const transcript = page.getByTestId('transcript')
     const find = transcript.getByRole('searchbox', { name: 'Find lines in the transcript' })

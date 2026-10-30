@@ -15,7 +15,7 @@ test('a deep link gets index.html, uncached, with a CSP and no external origins'
 })
 
 test('hashed assets are immutable; a missing one is a 404, not the page', async ({ request, page }) => {
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     const script = await page.locator('script[type=module]').getAttribute('src')
     expect(script).toMatch(/^\.\/assets\//u)
     const asset = await request.get(script ?? '')
@@ -53,7 +53,7 @@ test('the page makes no request to another origin', async ({ page, baseURL }) =>
 
 test('a page from an older build offers a reload, and the reload loads the build served', async ({ page }) => {
     await signIn(page)
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     const served = await page.locator('meta[name=canopy-build]').getAttribute('content')
     expect(served).toMatch(/^[0-9a-f]{16}$/u)
     await expect(page.getByTestId('loop-pause')).toBeVisible()
@@ -78,7 +78,7 @@ test('the stream coming back reads the build again, so a page open across an upg
     page,
 }) => {
     await signIn(page)
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await expect(page.getByTestId('loop-pause')).toBeVisible()
     await page.route('**/api/meta', async (route) => {
         const meta = (await (await route.fetch()).json()) as Record<string, unknown>

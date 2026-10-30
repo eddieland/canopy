@@ -50,7 +50,7 @@ test("a broken run's item leads with the run, and grants another try without lea
     // The run that failed, as the ticket's Runs list shows it: what it said, and its page a click away.
     const run = detail.getByTestId('attention-run')
     await expect(run).toContainText('failed')
-    await expect(run.getByRole('link', { name: 'run:40' })).toHaveAttribute('href', /\/runs\/40$/u)
+    await expect(run.getByRole('link', { name: 'run:40' })).toHaveAttribute('href', /\/workspace\/runs\/40$/u)
     // The detail's own `run:40` links there too.
     await expect(detail.getByRole('link', { name: 'run:40' })).toHaveCount(2)
     await expect(detail.getByRole('button', { name: 'Allow one more' })).toBeVisible()
@@ -271,7 +271,7 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
     // Outside the rail and the nav, the page says it once: the counter's label.
     await expect(page.getByRole('main').getByText(/waiting on you/iu)).toHaveCount(1)
 
-    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /Runs/u }).click()
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Workspace' }).click()
     await expect(page.getByTestId('nav-attention-failed')).toHaveText('1')
     await expect(page.getByTestId('nav-attention-waiting')).toHaveText('6')
     await expect(page.getByTestId('nav-attention-other')).toHaveText('4')

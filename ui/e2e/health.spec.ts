@@ -58,7 +58,7 @@ test('each failure opens its own page, beside what it was about', async ({ page 
         page.getByTestId('health-failure-tasks-2').getByRole('link', { name: 'task:2', exact: true }),
     ).toBeVisible()
     await worker.getByRole('link', { name: 'run:40' }).click()
-    await expect(page).toHaveURL(/\/runs\/40$/u)
+    await expect(page).toHaveURL(/\/workspace\/runs\/40$/u)
 })
 
 test('the window switches to 30 days and back, and the guards say what they refused', async ({ page }) => {

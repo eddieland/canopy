@@ -86,14 +86,21 @@ export const GHOST_TIPS = {
         'Field report: a review of the review. Somebody call Saint-14, this goes deep.',
         "Dear Traveler, a reviewer read a file I've never seen. I nodded like a Warlock.",
     ],
-    '/runs/': [
+    '/workspace/': [
+        'Eyes up, Guardian. The whole workspace, from orbit. Pools, runs, ticks. No Cabal, for once.',
+        'Scanning... nothing runs now. Either the loop is idle or it learned to cloak.',
+        "Grimoire: the capacity line is the Vanguard's roster. Full means wait your turn.",
+        'Field report: one glance, three pages. The fastest patrol of my life.',
+        'Dear Traveler, saw everything at once. Very Oracle. Slightly less singing.',
+    ],
+    '/workspace/runs/': [
         "Eyes up, Guardian. A watched run never finishes. I've watched one since the Red War.",
         "Field report: a run that cost nothing hasn't started. Or it's a Sparrow race.",
         'Scanning... runs are measured in dollars, minutes, and how often you check on them.',
         'Grimoire: a run that fails fast saves glimmer. Spin it that way to Zavala.',
         'Dear Traveler, one row per ticket, and the latest speaks for the rest. Like a briefing.',
     ],
-    '/runs/$id': [
+    '/workspace/runs/$id': [
         "Eyes up, Guardian. A worker is working. Don't distract it. I'm mostly talking to myself.",
         'Scanning... a transcript reads best backwards. The end is where the worker figures it out.',
         'Grimoire: stderr is stdout that has seen the Darkness.',
@@ -156,21 +163,21 @@ export const GHOST_TIPS = {
         'Grimoire: a cooldown is a resume told to wait for its checks. Patience is a weapon.',
         'Dear Traveler, a check went green on the next head. Took a few tries. Like most of my revives.',
     ],
-    '/runs/ticks/': [
+    '/workspace/ticks/': [
         "Eyes up, Guardian. Between two ticks there's a tock. Nobody has survived seeing one.",
         'Grimoire: an idle tick is the overseer looking at everything and choosing a nap.',
         'Scanning... peak context is the overseer saying "I have a lot on my mind". Same.',
         'Field report: counted one tick. Then the Vex reversed time and I lost my place.',
         "Dear Traveler, every tick has an id. I have a name: Ghost. It's also my job title.",
     ],
-    '/runs/ticks/$id': [
+    '/workspace/ticks/$id': [
         "Eyes up, Guardian. The overseer's reasons. Don't tell it I decrypted them.",
         "Field report: the overseer thinks out loud so I don't have to. We should be friends.",
         'Grimoire: a tick decides everything and remembers nothing. A Ghost is the other way round.',
         "Scanning... stare at a decision long enough and it won't change. But you will.",
         'Dear Traveler, the overseer never dispatches me. I keep my shell polished, just in case.',
     ],
-    '/runs/worktrees': [
+    '/workspace/worktrees': [
         'Eyes up, Guardian. Worktrees. Please keep it to three. I can only revive so many.',
         'Scanning... a held worktree is not a free worktree. Ancient wisdom. From earlier today.',
         'Grimoire: every worktree gets its own copy of the bugs. Fair is fair.',
