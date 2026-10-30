@@ -146,7 +146,7 @@ test("Reports opens the spend page on the week, Reports' item marked", async ({ 
     await expect(page).toHaveURL(/\/reports\/spend$/u)
     await expect(page.getByTestId('spend-window-7')).toHaveAttribute('data-state', 'on')
     await expect(nav.getByRole('link', { name: 'Reports' })).toHaveAttribute('data-status', 'active')
-    await expect(page.getByTestId('nav-highlight')).toHaveClass(/\bbg-section-reports\/16\b/u)
+    await expect(page.getByTestId('nav-highlight')).toHaveClass(/\bbg-section-reports\/24\b/u)
 })
 
 test("30 days' table scrolls in its panel under its column names, and a week's shows whole", async ({ page }) => {
