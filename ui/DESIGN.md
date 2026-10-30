@@ -126,6 +126,10 @@ Rules:
   A palette may tune its section colors too, never their hues, which say what each page is for: muted toward a
   scheme's own set, or turned up. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
   from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage.
+  Every other palette picks from the same choices, so each reads as its own place: Gruvbox's light side as its dark
+  one, Solarized's sides crisp and flat, Monokai crisp with a neon aurora, Nord's light side soft under a fade
+  through Frost's blues, grey tight under one steel rule, and sage, Rosé Pine Dawn, forest, and plum soft, plum the
+  softest. Off-white lays its panels on the canvas like paper.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
