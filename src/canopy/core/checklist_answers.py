@@ -7,22 +7,24 @@ the lists the run was given, read back from its answers directory, and records a
 the answer, or `unanswered` for an item its result said nothing of. An answer to an item or a repository the run's
 lists do not hold is dropped, and named in the run's note; a result with no `checklist` is never refused, since its push
 is already made. The reason is the worker's text, which read the PR: it is shown as data, made printable, and
-authorizes nothing.
+authorizes nothing. `canopy checklist` counts the answers per repository and item over a window (`counts`), so an item
+earns its place or is dropped.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, assert_never, cast
 
 from pydantic import BaseModel, ConfigDict
 
-from canopy.core import contract, records
+from canopy.core import contract, db, records, spend, sql
 from canopy.core.vocab import ItemAnswer
 
 if TYPE_CHECKING:
     import sqlite3
+    from datetime import datetime
 
     from canopy.core.checklists import Checklist
 
@@ -67,6 +69,72 @@ class Checked:
         if rest:
             parts.append(f"{rest} more, not named")
         return f"checklist answers dropped: {'; '.join(parts)}"
+
+
+@dataclass(frozen=True)
+class ItemCounts(records.View):
+    """How the runs of a window answered one item of one repository's list, by answer.
+
+    Counts only: a `held` answer's reason is the worker's text, which the run's own `show` prints, never a count.
+    """
+
+    repo: str
+    #: The item's id, the operator's, as their list names it.
+    item: str
+    #: The runs given the item: each answered it, or is counted `unanswered`.
+    reminded: int
+    passed: int
+    fixed: int
+    held: int
+    not_applicable: int
+    unanswered: int
+
+    def of(self, answer: ItemAnswer) -> int:
+        """Return how many of the runs answered the item `answer`."""
+        match answer:
+            case ItemAnswer.PASSED:
+                return self.passed
+            case ItemAnswer.FIXED:
+                return self.fixed
+            case ItemAnswer.HELD:
+                return self.held
+            case ItemAnswer.NOT_APPLICABLE:
+                return self.not_applicable
+            case ItemAnswer.UNANSWERED:
+                return self.unanswered
+            case _:
+                assert_never(answer)
+
+
+@dataclass(frozen=True)
+class Counts:
+    """The answers of the worker runs that started in a window, `[since, until)`, per repository and item."""
+
+    since: str
+    until: str
+    days: int
+    #: The one repository counted; None for every one.
+    repo: str | None
+    #: By repository, then each item in its list's order, as the window's first run given it was.
+    items: Sequence[ItemCounts] = ()
+
+    def as_json(self) -> dict[str, object]:
+        """Return the counts as one JSON object.
+
+        Returns:
+            `since`, `until`, `days`, `repo`, and `items`, each with its `repo`, `item`, `reminded`, and a count under
+            each answer's word: `pass`, `fixed`, `held`, `n/a`, and `unanswered`.
+        """
+        return {
+            "since": self.since,
+            "until": self.until,
+            "days": self.days,
+            "repo": self.repo,
+            "items": [
+                {"repo": c.repo, "item": c.item, "reminded": c.reminded, **{str(a): c.of(a) for a in ItemAnswer}}
+                for c in self.items
+            ],
+        }
 
 
 class _Reported(BaseModel):
@@ -147,6 +215,39 @@ def of_run(conn: sqlite3.Connection, run_id: int) -> list[records.ChecklistAnswe
         A row per item it was given; none for a run given no list.
     """
     return records.select(records.ChecklistAnswer).where("run_id = ?", run_id).order_by("repo, rowid").all(conn)
+
+
+def counts(conn: sqlite3.Connection, now: datetime, days: int, *, repo: str | None = None) -> Counts:
+    """Count the answers of the runs that started in the last `days` local days, today's so far included.
+
+    The window is `canopy spend`'s and `canopy health`'s (`spend.window`), and a run is in it by when it started. A run
+    still running has recorded no answers yet.
+
+    Returns:
+        A count per repository and item a run of the window was given; `repo`'s alone when it is named.
+    """
+    start, end = spend.window(now, days)
+    since, until = db.format_time(start), db.format_time(end)
+    query = (
+        sql.select(
+            "a.repo, a.item, count(*) AS reminded, sum(a.answer = ?) AS passed, sum(a.answer = ?) AS fixed, "
+            "sum(a.answer = ?) AS held, sum(a.answer = ?) AS not_applicable, sum(a.answer = ?) AS unanswered",
+            ItemAnswer.PASSED,
+            ItemAnswer.FIXED,
+            ItemAnswer.HELD,
+            ItemAnswer.NOT_APPLICABLE,
+            ItemAnswer.UNANSWERED,
+        )
+        .from_("checklist_answers a")
+        .join("runs r ON r.id = a.run_id")
+        .where("r.started_at >= ? AND r.started_at < ?", since, until)
+    )
+    if repo is not None:
+        query = query.where("a.repo = ?", repo)
+    # An answer's rowid follows its list's order, as `record` wrote them, so the window's first run orders the items.
+    query = query.group_by("a.repo, a.item").order_by("a.repo, min(a.rowid)")
+    items = tuple(records.fetch_all(conn, ItemCounts, query))
+    return Counts(since=since, until=until, days=days, repo=repo, items=items)
 
 
 def contract_text(lists: Sequence[Checklist]) -> str:

@@ -109,5 +109,8 @@ told in its prompt that a held push is pushed again, unlike a rejected one, and 
 `checklist`; `_run` holds the answers to the lists it wrote for the run, drops one to an item or a repository they do
 not hold, records a row for every item, `unanswered` for one the result left out, however the run ended, and `canopy
 show run:ID` prints them. Chosen conservatively, for the operator to change: a run that never pushed, and so was never
-held, still counts its items unanswered: `_run` does not read whether the hook held a push. The run's page,
-`canopy checklist`'s counts, and a task's run are next.
+held, still counts its items unanswered: `_run` does not read whether the hook held a push. `canopy checklist` counts
+them too, per repository and item: the runs reminded, then pass, fixed, held, n/a, and unanswered, over `--days`
+local days by when each run started, as `canopy health` reads them, `--repo` for one repository and `--json` for
+data; a held item's reason stays on its run. The run's page, the web UI's view of the counts, and a task's run are
+next.
