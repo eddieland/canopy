@@ -190,7 +190,7 @@ prompt's, not a guard (TRUST_MODEL T6). Where the `vcs` source observes the PR, 
 
 ### R14. Flaky CI is rerun, not fixed
 
-Built in M25, live acceptance pending (SCENARIOS S63). Written down 2026-10-09. When a PR's check fails for a reason
+Built (M25), and in real use since 2026-10-22. Written down 2026-10-09. When a PR's check fails for a reason
 the change did not cause (a flaky test, a lost runner, a registry outage), canopy should get it rerun instead of sending
 a worker to "fix" code that is not broken, again and again.
 
