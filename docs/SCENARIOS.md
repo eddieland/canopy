@@ -68,7 +68,10 @@ any OpenCode upgrade, and before relying on a permission they check.
   compare `canopy spend --json`'s first calls for the `workers`, `plans`, and `reviews` kinds on the snapshot with the
   split against the one before it: expect `cold_share` to fall where unsandboxed runs of one kind start within five
   minutes of each other, and no change otherwise, sandboxed runs' included. No fall at all means the split found no
-  boundary, or such runs are too rare for it to pay.
+  boundary, or such runs are too rare for it to pay. Since each run's prompt splits at its run marker (DESIGN §13),
+  the body is its kind's fixed instructions, 1.6k to 2.4k tokens more than the stub it was: expect the pair's first
+  system block to hold them, and the second run's first call to write only its environment and its `## Run` message.
+  A snapshot is now a kind's and no longer one for every run, so compare each kind's first calls on its own.
 
 ## Before a release
 
