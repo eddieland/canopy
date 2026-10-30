@@ -1,4 +1,4 @@
-"""The reports (DESIGN §11): what each local calendar month cost, in dollars and tokens, and what it got done.
+"""The reports (DESIGN §11): what each local calendar month cost and got done, and how the last days' runs ended.
 
 Reads only.
 """
@@ -9,8 +9,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from canopy.core import spend
 from canopy.serve import monthly, report_views
 from canopy.serve.api.deps import BackendDep
+from canopy.serve.schema.health import HealthReport
 from canopy.serve.schema.reports import MonthlyReport
 
 TAG = "reports"
@@ -34,3 +36,20 @@ def monthly_report(
     """What each month cost by kind and by model, its tokens, and the tickets it landed with what each took."""
     with backend.open() as ctx:
         return report_views.monthly_report(backend, ctx, months)
+
+
+@router.get("/reports/health", operation_id="getHealthReport", summary="Get how the last days' runs ended")
+def health_report(
+    backend: BackendDep,
+    days: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=spend.MAX_DAYS,
+            description=f"How many local days to read, today's so far included: 1 to {spend.MAX_DAYS}.",
+        ),
+    ] = spend.DEFAULT_DAYS,
+) -> HealthReport:
+    """Each kind's runs by how they ended, the newest failures, what the guards refused, and each day's failures."""
+    with backend.open() as ctx:
+        return report_views.health_report(backend, ctx, days)

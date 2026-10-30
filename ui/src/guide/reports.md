@@ -1,7 +1,8 @@
 # Reports
 
-What canopy cost and what it got done, month by month, and what agent runs cost each day. Every dollar and token here
-is what the agent runtime reported, so if a runtime under-reports, so does this page. It is a mirror, not an audit.
+What canopy cost and what it got done, month by month, what agent runs cost each day, and how they ended. Every
+dollar and token here is what the agent runtime reported, so if a runtime under-reports, so does this page. It is a
+mirror, not an audit.
 
 ## The reports page
 
@@ -140,3 +141,29 @@ rail's. Then:
 - **Idle ticks**: the newest of them, to open.
 
 If a run reported no cost, the totals say how many, so a gap in the figures never passes for a quiet week.
+
+## The health page
+
+The health page, **Health** under [Reports](/reports) in the nav, is `canopy health` with a chart: how the runs of the
+last **7 days** or **30 days** ended, the failures among them, and what the guards refused. A day runs midnight to
+midnight on the clock of the machine canopy runs on, as on the spend page, and a run counts on the day it started. The
+line under the title is the window at a glance, `3 of 140 runs failed over 7 days`.
+
+A failure is a run that didn't do what it was started for: a tick that didn't close `ok`, or a run that ended
+`failed`, `unknown`, `unpushed`, `crashed`, or `timeout`. A worker that stopped to ask you a question did its job, and
+so did one you stopped yourself. Neither counts, however much the question annoyed you.
+
+- **How runs ended**: each kind's runs, the overseer's ticks first, by their sort and how they ended, with what they
+  cost. A tick's sort is `live`, `dry run`, or `no overseer`; a worker's is its run kind; a chore's is its name. A
+  failed ending is in red. Under it, which runs reported no cost, so a gap in the dollars never passes for a cheap week.
+- **Failures by day**: a bar per day of the failed runs, stacked by kind in the spend page's colors, so a kind is one
+  color across Reports. Hover a bar for that day's failures of each kind out of the runs that ended. The table under it
+  holds the same numbers, with each day's ended runs beside its failures, because three failures out of four runs and
+  three out of three hundred are different afternoons.
+- **Newest failures**: the latest twenty, each with how it ended, its id to open (`tick:`, `run:`, `chore:`,
+  `review:`, or `task:`), what it was about, its sort, the note it left, what it cost, and when it started. The note is
+  the harness's word on what went wrong, or else the agent's summary, cut to a line; open the run for the rest.
+- **What the guards refused**: each guard that turned the overseer down, the most often first, with how many asks it
+  refused, in how many ticks, and the latest tick to open. A guard refusing the same thing tick after tick is the
+  overseer asking for something your limits don't allow; [Limits and trust](settings#limits-and-trust) is where that
+  argument is settled.

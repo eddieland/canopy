@@ -193,6 +193,14 @@ export const TIPS = {
         'Haiku: a bar for each day / stacked by who spent what on what / none of it was me',
         'Fun fact: tokens are like leaves. You never notice them until they are on the bill.',
     ],
+    '/reports/health': [
+        "It looks like you're reading about failures. I failed to find my hat. It was on my head.",
+        'Unhelpful tip: a run that never starts can never fail. I have never started anything.',
+        'Dear diary, a guard told the overseer no today. I told bedtime no. Only one of us won.',
+        'Hot take: a worker that asks you a question did not fail. It is being polite.',
+        'Haiku: red bars in a row / each one a run that tried hard / I tried too, then napped',
+        'Fun fact: a timeout is a run that waited for nothing, but very thoroughly.',
+    ],
     '/runs/ticks/': [
         "It looks like you're counting ticks. I counted one, then lost my place.",
         'Unhelpful tip: every tick has an id. I have an id too. It is Sprig.',

@@ -167,6 +167,18 @@ export type ReportModel = Schemas['ReportModel']
 export type ReportTicket = Schemas['ReportTicket']
 /** The tokens a month's runs reported, by kind, and the share of what was sent read from the cache. */
 export type ReportTokens = Schemas['ReportTokens']
+/** How the last days' runs ended, the newest failures, what the guards refused, and each day's counts. */
+export type HealthReport = Schemas['HealthReport']
+/** How many of one kind's runs, of one sort, ended in one status, and what they cost. */
+export type HealthOutcome = Schemas['HealthOutcome']
+/** One run that ended in a failed status, with what it was about by its kind. */
+export type HealthFailure = Schemas['HealthFailure']
+/** How often a guard refused what a tick asked for. */
+export type HealthRefusal = Schemas['HealthRefusal']
+/** One local day's ended and failed runs, by kind. */
+export type HealthDay = Schemas['HealthDay']
+/** A count of runs by kind. */
+export type HealthCounts = Schemas['HealthCounts']
 /** How many of a kind's ended runs reported no cost, of how many. */
 export type SpendUnpriced = Schemas['SpendUnpriced']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */

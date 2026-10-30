@@ -96,8 +96,8 @@ _FIRST_CALL: LiteralString = (
 # The chore a run ran: only a chore's run names one. Fixed, never input (D125).
 _CHORE = sql.frag("r.chore")
 _NO_CHORE = sql.frag("NULL")
-# The local day a row started on, as `YYYY-MM-DD`: SQLite reads the journal's UTC time in the local time Python does.
-_DAY = sql.frag("date(started_at, 'localtime')")
+#: The local day a row started on, as `YYYY-MM-DD`: SQLite reads the journal's UTC time in the local time Python does.
+DAY = sql.frag("date(started_at, 'localtime')")
 # The local hour a row started on, as `YYYY-MM-DDTHH`, read the same way.
 _HOUR_FORMAT = "%Y-%m-%dT%H"
 _HOUR = sql.frag("strftime(?, started_at, 'localtime')", _HOUR_FORMAT)
@@ -507,6 +507,17 @@ def window(now: datetime, days: int) -> tuple[datetime, datetime]:
     return _midnight(today - timedelta(days=days - 1)), _midnight(today + timedelta(days=1))
 
 
+def day_starts(start: datetime, days: int) -> dict[str, str]:
+    """Each local day of a window that `window` began at `start`, by its name, with when it starts.
+
+    Returns:
+        The days oldest first, each named `YYYY-MM-DD` as `local_day` names it, with its local midnight, a journal time.
+    """
+    first = start.astimezone().date()
+    each = [first + timedelta(days=i) for i in range(days)]
+    return {day.isoformat(): db.format_time(_midnight(day)) for day in each}
+
+
 # A day's local midnight. A naive time's `astimezone` reads it in this machine's local time, with its own DST rules.
 def _midnight(day: date) -> datetime:
     return datetime.combine(day, time()).astimezone().astimezone(UTC)
@@ -542,10 +553,7 @@ def breakdown(
         The breakdown; a window with nothing in it lists each day with no costs.
     """
     start, end = window(now, days)
-    first = start.astimezone().date()
-    each = [first + timedelta(days=i) for i in range(days)]
-    starts = {day.isoformat(): db.format_time(_midnight(day)) for day in each}
-    buckets = _Buckets(expression=_DAY, starts=starts, name_of=local_day)
+    buckets = _Buckets(expression=DAY, starts=day_starts(start, days), name_of=local_day)
     return _breakdown(conn, start, end, buckets, state_dir=state_dir, days=days, ticket=ticket)
 
 
@@ -583,7 +591,7 @@ def costs(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) 
     """
     found: dict[str, float | None] = {}
     with db.read_snapshot(conn):
-        rows = _tick_rows(conn, since, until, _DAY)
+        rows = _tick_rows(conn, since, until, DAY)
         for kind, (table, which) in _TABLES.items():
             summed = (
                 sql.select("SUM(cost_usd)")
@@ -832,6 +840,17 @@ def _idle_share(ticks: Collection[TickGroup]) -> float | None:
     live = _sum([g.cost_usd for g in ticks if g.group != "dry_run"])
     idle = next((g.cost_usd for g in ticks if g.group == "idle"), None)
     return (idle or 0.0) / live if live else None
+
+
+def unpriced(conn: sqlite3.Connection, since: str, until: str) -> list[Unpriced]:
+    """How many of each kind's runs that started in `[since, until)`, each a journal time, and ended, reported no cost.
+
+    Counted as `breakdown` counts them: a tick that ran no overseer costs nothing, so it is never among them.
+
+    Returns:
+        A row per kind, in `KINDS` order, those with no runs among them.
+    """
+    return _unpriced(conn, since, until, _tick_rows(conn, since, until, DAY))
 
 
 def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: Iterable[_TickRow]) -> list[Unpriced]:

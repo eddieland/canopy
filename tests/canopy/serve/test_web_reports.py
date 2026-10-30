@@ -1,8 +1,8 @@
-"""The web UI's reports (DESIGN §11): what each local month cost and got done. Reads only."""
+"""The web UI's reports (DESIGN §11): what each local month cost and got done, and how runs ended. Reads only."""
 
 import pytest
 
-from canopy.core import db, runtime_sessions
+from canopy.core import db, health, runtime_sessions, spend
 from canopy.runtime.report import SessionPage, SessionSpend
 from canopy.serve import monthly
 from canopy.serve.backend import Backend
@@ -59,3 +59,50 @@ def test_each_month_counts_the_sessions_outside_canopy_as_the_budget_does(backen
     assert after["sessions_read_at"] == "2026-10-08T12:00:00Z"
     spent = c.get("/api/spend/breakdown", params={"days": 30}).json()["month"]["spent_usd"]
     assert october["cost_usd"] == pytest.approx(spent)
+
+
+def test_the_health_report_is_canopy_healths_with_each_days_failures(backend: Backend) -> None:
+    """The health report holds what `canopy health` reads, with every day's ended and failed runs beside it."""
+    c = client(None, backend)
+    found = c.get("/api/reports/health").json()
+    assert found["days"] == 7
+    assert found["since"] == "2026-10-02T00:00:00Z"
+    assert found["until"] == "2026-10-09T00:00:00Z"
+    with backend.open() as ctx:
+        expected = health.report(ctx.conn, backend.clock(), 7)
+    assert [(o["kind"], o["what"], o["status"], o["runs"]) for o in found["outcomes"]] == [
+        (o.kind, o.what, o.status, o.runs) for o in expected.outcomes
+    ]
+    assert [(f["kind"], f["id"]) for f in found["failures"]] == [(f.kind, f.id) for f in expected.failures]
+    assert [r["guard"] for r in found["refusals"]] == [r.guard for r in expected.refusals]
+    # Every day of the window, and the days add up to the outcomes.
+    assert [d["day"] for d in found["per_day"]] == [f"2026-10-0{n}" for n in range(2, 9)]
+    ended = sum(sum(d["ended"].values()) for d in found["per_day"])
+    failed = sum(sum(d["failed"].values()) for d in found["per_day"])
+    assert ended == sum(o.runs for o in expected.outcomes)
+    assert failed == sum(o.runs for o in expected.outcomes if o.failed)
+    assert failed > 0
+    assert [u["kind"] for u in found["unpriced"]] == ["overseer", "workers", "plans", "chores", "reviews", "tasks"]
+    assert c.get("/api/reports/health", params={"days": 30}).json()["days"] == 30
+    assert c.get("/api/reports/health", params={"days": 0}).status_code == 422
+    assert c.get("/api/reports/health", params={"days": spend.MAX_DAYS + 1}).status_code == 422
+
+
+def test_a_health_failure_names_what_it_was_about_by_its_kind(backend: Backend) -> None:
+    """A failure carries its ticket, PR, chore, or task apart, rather than one subject to parse."""
+    c = client(None, backend)
+    failures = c.get("/api/reports/health", params={"days": 30}).json()["failures"]
+    assert failures
+    for f in failures:
+        named = {k for k in ("ticket", "pr_url", "chore", "task_id") if f[k] is not None}
+        assert (
+            named
+            == {
+                "overseer": set(),
+                "workers": {"ticket"},
+                "plans": {"ticket"},
+                "chores": {"chore"},
+                "reviews": {"pr_url"},
+                "tasks": {"task_id"},
+            }[f["kind"]]
+        )

@@ -92,10 +92,11 @@ Rules:
   pages open under a section, the first step of the page header's trail, and the header's aurora and name
   (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the
   accent.
-- **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the spend page's
-  charts and the legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
-  beside a swatch. Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on
-  `surface` in both themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
+- **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the report pages'
+  charts and their legends, and nowhere else: the spend page's, and the health page's failures by kind, so a kind is
+  one color across Reports. They are fills, never text, so the legend's words are `muted-foreground` beside a swatch.
+  Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both
+  themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
   with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
   legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
@@ -997,6 +998,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   model (`?model=`), with the kind shown (`?kind=`, `RUNS_KIND`: a plan run is a worker run there); one the runs page
   lists no run of by model, the overseer's alone, is plain, why on hover. The runs page's model filter is always
   offered, a picker of one (`ModelFilter`, below).
+- **The failures chart** (the health page) is the spend chart's (`DayChart`), a bar per local day of the runs that
+  failed, stacked by kind in `HEALTH_SERIES` order in each kind's spend series fill, its peak's count over its bar. A
+  bar's hover says the day's failures out of its ended runs, and the table under it holds each kind's failures with
+  the day's failed and ended runs, since a failure's weight is its share. A window where nothing failed is one `Empty`
+  line. Its window, a week or 30 days, is the same segmented control as the spend page's (`WindowToggle`), in the
+  outcomes panel's header, kept in `?days=`.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
