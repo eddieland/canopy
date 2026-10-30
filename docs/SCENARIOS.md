@@ -56,7 +56,8 @@ any OpenCode upgrade, and before relying on a permission they check.
   its last minute, after a built-in tool's output and first in an MCP tool's result, the longer wording once, and a push
   before the kill; and no `node_modules` or `package.json` written into the snapshot. Then run it in a repository with a
   `.opencode/` directory, sandboxed with the registry refused, and time the wait before the session starts. Record the
-  times in `MEASUREMENTS.md`.
+  times in `MEASUREMENTS.md`, with how many runs over a week of real use ended `timeout`, by kind, and how many of them
+  pushed after canopy's line.
 - **S65. The split** (#923). Confirmed against OpenCode's source (1.19.3), not in a run: the plugin finds where the
   environment starts by the lines `session/system.ts` writes. With S40's recorder, unsandboxed, run two workers in two
   slots, then two reviews, each pair within five minutes. Expect two system blocks in every request, the first the
