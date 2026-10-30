@@ -105,6 +105,9 @@ for (const theme of THEMES) {
         await page.keyboard.press('Control+k')
         const palette = page.getByTestId('jump-palette')
         await expect(palette.getByRole('option')).toHaveCount(2)
+        // Each title fills in once the tickets load: under load, the box was taken with both still untitled.
+        await expect(palette.getByRole('option', { name: /Debounce search input/u })).toBeVisible()
+        await expect(palette.getByRole('option', { name: /Schedule report exports/u })).toBeVisible()
         await expect(palette).toHaveScreenshot(`jump-palette-${theme}.png`)
     })
 
