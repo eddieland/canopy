@@ -151,6 +151,10 @@
         0 12px 32px -12px oklch(from var(--foreground) l c h / 0.24),
         0 2px 6px oklch(from var(--foreground) l c h / 0.08);
     --depth-action: 0 1px 2px oklch(from var(--accent) l c h / 0.35);
+
+    /* The face interface text is set in: Plex Sans, or Plex Mono for an editor that sets everything in it. Both are
+     * bundled and preloaded, so a palette that switches never paints in a fallback face. */
+    --face: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
 }
 
 .dark {
@@ -518,8 +522,9 @@
     --context-carried: oklch(0.62 0.02 70);
 
     /* A code editor of the nineties: crisp corners, and a hard shadow with no blur under what floats and the primary
-     * action. Panels sit flat on the canvas. */
+     * action. Panels sit flat on the canvas, and every line of text is in its mono. */
     --radius: 0.1875rem;
+    --face: 'IBM Plex Mono', ui-monospace, monospace;
     /* Its aurora is a stepped bar of solid blocks, an editor's status line; its name sits on a block of its yellow; the
      * nav's highlight is a solid block, the active item inked in the canvas's color, with no hairline. */
     --aurora-height: 0.25rem;
@@ -747,6 +752,7 @@
     --text-2xs: 0.6875rem;
     --text-2xs--line-height: 1rem;
 
-    --font-sans: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
+    /* A palette sets the face interface text is in (`--face`, above). */
+    --font-sans: var(--face);
     --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
