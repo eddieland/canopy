@@ -46,7 +46,7 @@ export function RunProgress({
                 <p className="text-sm font-medium text-pretty">
                     <LinkedText text={card.summary} />
                 </p>
-                {counted && <MeterLine card={card} />}
+                {counted && <MeterLine card={card} running={running} />}
             </div>
             {card.question !== null && (
                 // Keyed by when it was asked, so what an answer said goes with the question it answered.
@@ -136,7 +136,7 @@ export function RunProgressLine({ card, className }: { card: RunCard; className?
         <span className={cn('flex min-w-0 items-center gap-2 text-xs', className)} data-testid="run-progress-line">
             {card.steps.length > 0 && (
                 <span className="flex shrink-0 items-center gap-1.5">
-                    <ProgressMeter card={card} className="w-16" />
+                    <ProgressMeter card={card} running className="w-16" />
                     <span className="readout text-muted-foreground">{doneOf(card)}</span>
                 </span>
             )}
@@ -156,10 +156,10 @@ export function RunProgressLine({ card, className }: { card: RunCard; className?
 /**
  * A run's steps as a bar of segments, one each, in its status's color. Only a done step fills its segment, in
  * `status-done`, so the filled segments are the count beside the meter; working fills half of the track in
- * `status-running`, blocked or stuck half in `muted-foreground`, to do is the bare track, skipped the track fainter
- * still. Drawn, so its words are its label.
+ * `status-running`, a shade passing along it while the run runs, blocked or stuck half in `muted-foreground`, to do is
+ * the bare track, skipped the track fainter still. Drawn, so its words are its label.
  */
-export function ProgressMeter({ card, className }: { card: RunCard; className?: string }) {
+export function ProgressMeter({ card, running, className }: { card: RunCard; running: boolean; className?: string }) {
     const items = checklist(card, useNow())
     const done = items.filter((i) => i.status === 'done').length
     const counted = items.filter((i) => i.status !== 'skipped').length
@@ -173,7 +173,13 @@ export function ProgressMeter({ card, className }: { card: RunCard; className?: 
                     className={cn('h-full min-w-1 flex-1 overflow-hidden rounded-xs', SEGMENT[item.status])}
                 >
                     {HALF[item.status] !== undefined && (
-                        <span className={cn('block h-full w-1/2', HALF[item.status])} />
+                        <span
+                            className={cn(
+                                'block h-full w-1/2',
+                                HALF[item.status],
+                                running && item.status === 'working' && 'animate-sheen',
+                            )}
+                        />
                     )}
                 </span>
             ))}
@@ -246,12 +252,12 @@ function doneOf(card: RunCard): string {
 }
 
 /** The meter, then how many steps are done of those counted, and the stage under way. */
-function MeterLine({ card }: { card: RunCard }) {
+function MeterLine({ card, running }: { card: RunCard; running: boolean }) {
     const counted = card.steps.filter((step) => step.status !== 'skipped')
     const done = counted.filter((step) => step.status === 'done').length
     return (
         <div className="flex max-w-xl items-center gap-3">
-            <ProgressMeter card={card} className="flex-1" />
+            <ProgressMeter card={card} running={running} className="flex-1" />
             <span className="shrink-0 text-xs text-muted-foreground">
                 <span className="readout text-foreground">{done}</span> of{' '}
                 <span className="readout text-foreground">{counted.length}</span> done
