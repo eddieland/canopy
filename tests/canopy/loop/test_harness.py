@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.vocab import Decider, Phase, RunStatus, TickStatus
 from canopy.loop import attention, harness, phases
@@ -22,14 +21,17 @@ from tests.canopy.helpers import (
     LABEL,
     UNOBSERVED,
     WORKER_PR,
+    calls,
     context,
+    decides,
     decisions,
     in_tick,
-    mcp_session,
     messages,
     operator,
+    overseer_calls,
+    raises,
     running_run,
-    tool_call,
+    ticket_sets,
     waits,
 )
 from tests.canopy.observation_helpers import (
@@ -45,7 +47,10 @@ from tests.canopy.observation_helpers import (
     observe_ticket,
     query_read,
 )
-from tests.canopy.scenario_helpers import dispatches, pushes, raises
+from tests.canopy.scenario_helpers import (
+    dispatches,
+    pushes,
+)
 
 if TYPE_CHECKING:
     import sqlite3
@@ -285,21 +290,12 @@ def test_its_attention_items_are_marked_its_own_and_are_not_its_decisions(scenar
     assert harness.recorded(scenario.conn, ticked.tick.id) == []
 
 
-#: What the overseer records about a ticket, through each verb's command and its tool.
+#: What the overseer records about a ticket, through each of its tools.
 VERBS = {
-    "decide": (
-        ["decide", KEY, "wait", "--rationale", "r"],
-        {"decisions": [{"key": KEY, "action": "wait", "rationale": "r"}]},
-    ),
-    "dispatch": (
-        ["dispatch", KEY, "--repo", "repo", "--kind", "implement", "--label", LABEL],
-        {"key": KEY, "kind": "implement", "repos": ["repo"], "label": LABEL},
-    ),
-    "attention": (
-        ["attention", KEY, "needs_author", "--detail", "d"],
-        {"key": KEY, "reason": "needs_author", "detail": "d"},
-    ),
-    "ticket-set": (["ticket", "set", KEY, "--phase", "ready"], {"tickets": [{"key": KEY, "phase": "ready"}]}),
+    "decide": decides(KEY, "wait", "r"),
+    "dispatch": dispatches(),
+    "attention": raises(KEY, "needs_author", "d"),
+    "ticket-set": ticket_sets(KEY, phase="ready"),
 }
 
 
@@ -309,58 +305,47 @@ def test_what_the_overseer_records_about_a_ticket_the_harness_decided_is_refused
     conn: sqlite3.Connection,
     verb: str,
 ) -> None:
-    command, arguments = VERBS[verb]
-    for through in ("command", "tool"):
-        with in_tick(conn) as tick_id:
-            harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
-            if through == "command":
-                assert main(command) == 1
-            else:
-                said = mcp_session(tool_call(verb, **arguments)).said()
-                assert said.error
-                assert "refused (decided)" in said.text
-            [_, (action, reason)] = decisions(conn, tick_id)
-            assert action == "refused:decided"
-            assert reason.startswith(f"the harness decided {KEY} this tick")
+    with in_tick(conn) as tick_id:
+        harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
+        said = overseer_calls(VERBS[verb])
+        assert said.error
+        assert "refused (decided)" in said.text
+        [_, (action, reason)] = decisions(conn, tick_id)
+        assert action == "refused:decided"
+        assert reason.startswith(f"the harness decided {KEY} this tick")
     assert conn.execute("SELECT phase FROM tickets WHERE key = ?", (KEY,)).fetchone()[0] == Phase.RUNNING
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
-def test_another_ticket_and_the_operators_ticket_set_are_not_refused(
+def test_what_the_overseer_records_about_another_ticket_is_not_refused(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
 ) -> None:
     with in_tick(conn) as tick_id:
         harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
-        assert main(["decide", "PROJ-2", "wait", "--rationale", "r"]) == 0
-        assert operator("ticket", "set", KEY, "--title", "Retry uploads") == 0
+        assert not overseer_calls(decides("PROJ-2", "wait", "r")).error
+        assert not overseer_calls(ticket_sets("PROJ-2", title="Retry uploads")).error
     assert [a for a, _ in decisions(conn, tick_id)] == ["wait", "wait"]
+    assert conn.execute("SELECT title FROM tickets WHERE key = 'PROJ-2'").fetchone()[0] == "Retry uploads"
 
 
 def test_decisions_in_one_call_are_refused_together_when_the_harness_decided_one(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
 ) -> None:
-    batch = ["decide", "PROJ-2", "wait", "--rationale", "r", KEY, "wait", "--rationale", "r"]
     arguments = [
         {"key": "PROJ-2", "action": "wait", "rationale": "r"},
         {"key": KEY, "action": "wait", "rationale": "r"},
     ]
-    for through in ("command", "tool"):
-        with in_tick(conn) as tick_id:
-            harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
-            if through == "command":
-                assert main(batch) == 1
-            else:
-                said = mcp_session(tool_call("decide", decisions=arguments)).said()
-                assert said.error
-                assert said.text.endswith(
-                    "the refusal was recorded, and nothing else in the call: decide the rest again",
-                )
-            # Only the refusal is recorded: PROJ-2's wait is not, and is the overseer's to decide again.
-            [_, (action, reason)] = decisions(conn, tick_id)
-            assert action == "refused:decided"
-            assert reason.startswith(f"the harness decided {KEY} this tick")
+    with in_tick(conn) as tick_id:
+        harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
+        said = overseer_calls(calls("canopy_decide", decisions=arguments))
+        assert said.error
+        assert said.text.endswith("the refusal was recorded, and nothing else in the call: decide the rest again")
+        # Only the refusal is recorded: PROJ-2's wait is not, and is the overseer's to decide again.
+        [_, (action, reason)] = decisions(conn, tick_id)
+        assert action == "refused:decided"
+        assert reason.startswith(f"the harness decided {KEY} this tick")
     assert conn.execute("SELECT count(*) FROM tickets WHERE key = 'PROJ-2'").fetchone()[0] == 0
 
 
@@ -368,22 +353,16 @@ def test_a_ticket_set_of_several_is_refused_whole_when_the_harness_decided_one(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
 ) -> None:
-    batch = ["ticket", "set", "PROJ-2", KEY, "--phase", "ready"]
-    arguments = [{"key": "PROJ-2", "phase": "ready"}, {"key": KEY, "phase": "ready"}]
-    for through in ("command", "tool"):
-        with in_tick(conn) as tick_id:
-            harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
-            if through == "command":
-                assert main(batch) == 1
-            else:
-                said = mcp_session(tool_call("ticket-set", tickets=arguments)).said()
-                assert said.error
-                assert said.text.startswith(f"{KEY}: ticket set refused (decided)")
-                assert said.text.endswith("nothing else in the call was recorded: set the rest again")
-            # Only the refusal is recorded: PROJ-2's phase is not, and is the overseer's to set again.
-            [_, (action, reason)] = decisions(conn, tick_id)
-            assert action == "refused:decided"
-            assert reason.startswith(f"the harness decided {KEY} this tick")
+    with in_tick(conn) as tick_id:
+        harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
+        said = overseer_calls(ticket_sets("PROJ-2", KEY, phase="ready"))
+        assert said.error
+        assert said.text.startswith(f"{KEY}: ticket-set refused (decided)")
+        assert said.text.endswith("nothing else in the call was recorded: set the rest again")
+        # Only the refusal is recorded: PROJ-2's phase is not, and is the overseer's to set again.
+        [_, (action, reason)] = decisions(conn, tick_id)
+        assert action == "refused:decided"
+        assert reason.startswith(f"the harness decided {KEY} this tick")
     assert conn.execute("SELECT count(*) FROM tickets WHERE key = 'PROJ-2'").fetchone()[0] == 0
     assert conn.execute("SELECT phase FROM tickets WHERE key = ?", (KEY,)).fetchone()[0] == Phase.RUNNING
 

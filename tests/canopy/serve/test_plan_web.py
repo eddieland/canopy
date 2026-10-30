@@ -13,10 +13,9 @@ import pytest
 
 from canopy.core import db, personas, plans, records
 from canopy.core.context import Context
-from canopy.core.vocab import PlanStatus, RunStatus
+from canopy.core.vocab import PlanStatus, RunKind, RunStatus
 from tests.canopy.helpers import (
     KEY,
-    LABEL,
     dispatch_and_run,
     dispatch_in_tick,
     operator,
@@ -24,11 +23,12 @@ from tests.canopy.helpers import (
     present,
     prompt_of,
 )
+from tests.canopy.scenario_helpers import dispatches
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button to `ui/form.tsx`, red.\n"
-PLAN = ("--label", LABEL, "--kind", "plan")
+PLAN = dispatches(KEY, RunKind.PLAN)
 
 
 def proposed(ctx: Context, text: str = TEXT) -> int:
@@ -252,7 +252,7 @@ def test_comments_asked_for_from_the_web_reach_the_next_plans_prompt(
     conn: sqlite3.Connection,
 ) -> None:
     with planner_does(plan=TEXT):
-        dispatch_and_run(conn, *PLAN)
+        dispatch_and_run(conn, PLAN)
     c, headers = signed_in_client(ctx)
     # Ask for changes is a reply: the open comments, each with its passage, as the editor composes them.
     request = 'Change the plan where I commented. Each comment quotes the passage it is on.\n\n1. On "red":\n   Blue.'
@@ -261,7 +261,7 @@ def test_comments_asked_for_from_the_web_reach_the_next_plans_prompt(
     # The page says so until a planner reads it, as the overseer's state block does.
     assert c.get(f"/api/tickets/{KEY}/plans").json()["changes_asked"] is not None
     with planner_does(plan="# Plan, blue\n"):
-        second = dispatch_and_run(conn, *PLAN)
+        second = dispatch_and_run(conn, PLAN)
     assert second["status"] == RunStatus.DONE
     assert c.get(f"/api/tickets/{KEY}/plans").json()["changes_asked"] is None
     prompt = prompt_of(canopy_env, int(second["id"]))
@@ -295,8 +295,9 @@ def test_the_plan_verbs_refuse_while_a_plan_run_is_running_from_the_web(
     conn: sqlite3.Connection,
 ) -> None:
     with planner_does(plan=TEXT):
-        dispatch_and_run(conn, *PLAN)
-    assert dispatch_in_tick(conn, *PLAN).code == 0
+        dispatch_and_run(conn, PLAN)
+    said = dispatch_in_tick(conn, PLAN).said
+    assert not said.error, said.text
     c, headers = signed_in_client(ctx)
     assert c.get(f"/api/tickets/{KEY}/plans").json()["planning"] == 2
     body = {"markdown": "# Mine\n", "read_sha256": sha(TEXT)}

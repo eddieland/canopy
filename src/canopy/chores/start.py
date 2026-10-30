@@ -1,4 +1,4 @@
-"""`canopy chore run`: guards, the chore's prompt, and the detached `canopy _chore` (DESIGN §19).
+"""The `chore-run` tool's run: guards, the chore's prompt, and the detached `canopy _chore` (DESIGN §19).
 
 The operator's config says what a chore is and how often it may run; the overseer chooses when. The guards hold the
 limits whatever the overseer asks for. A refusal is raised as `Refusal`; the CLI records it as `refused:<guard>`, and

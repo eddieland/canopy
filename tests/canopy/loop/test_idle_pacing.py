@@ -28,20 +28,18 @@ from tests.canopy.helpers import (
     KEY,
     FakeKeys,
     FakeTime,
-    canopy,
     chore_toml,
     console,
     context,
+    decides,
     overseer_does,
     overseer_titles,
     titled_overseer,
 )
-from tests.canopy.scenario_helpers import Scenario
+from tests.canopy.scenario_helpers import Scenario, dispatches, sets_phase
 from tests.conftest import CanopyEnv
 
 PR = "https://example.test/pr/1"
-#: What the overseer passes to dispatch KEY: a dry run records it without starting a run.
-DISPATCH = ("--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement")
 # The journal's clock and the test's: a tick's `read_at` is put this far back, so what the test records after it is
 # after it, whatever the millisecond.
 BACK = timedelta(seconds=1)
@@ -348,13 +346,13 @@ def test_the_loop_waits_line_says_what_a_tick_churned(
     time = FakeTime()
     term, _ = console()
     with contextlib.ExitStack() as stack:
-        wait = canopy("decide", KEY, "wait", "--rationale", "checks pending")
-        label = canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_running")
+        wait = decides(KEY, "wait", "checks pending")
+        label = sets_phase(KEY, Phase.CI_RUNNING, repo="repo")
         stack.enter_context(overseer_does(label, wait))
 
         def relabel_at_the_first_wait() -> None:
             if len(time.slept) == 1:
-                relabel = canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_red")
+                relabel = sets_phase(KEY, Phase.CI_RED, repo="repo")
                 stack.enter_context(overseer_does(relabel, wait))
 
         time.on_sleep = relabel_at_the_first_wait
@@ -477,7 +475,7 @@ def test_idle_ticks_lengthen_the_wait_to_the_cap_and_a_change_resets_it(
 ) -> None:
     loop_config(canopy_env, interval=1, cap=4)
     with (
-        overseer_does(canopy("decide", KEY, "wait", "--rationale", "checks pending")),
+        overseer_does(decides(KEY, "wait", "checks pending")),
         contextlib.ExitStack() as later,
     ):
         time = FakeTime()
@@ -485,7 +483,8 @@ def test_idle_ticks_lengthen_the_wait_to_the_cap_and_a_change_resets_it(
         def at_each_wait() -> None:
             # The fourth tick finds work to start, and the fifth finds none again.
             if time.now == sum((60, 120, 240)):
-                later.enter_context(overseer_does(canopy("dispatch", KEY, *DISPATCH)))
+                # A dry run records the dispatch without starting a run.
+                later.enter_context(overseer_does(dispatches()))
             elif time.now == sum((60, 120, 240, 60)):
                 later.close()
 
@@ -534,7 +533,7 @@ def test_the_cap_stays_the_cap_however_long_nothing_changes(
 ) -> None:
     loop_config(canopy_env, interval=1, cap=3)
     # A ticket left to the overseer, so each tick runs it: idle pacing paces its runs alone (DESIGN §39).
-    with overseer_does(canopy("decide", KEY, "wait", "--rationale", "checks pending")):
+    with overseer_does(decides(KEY, "wait", "checks pending")):
         time = FakeTime()
         term, _ = console()
         repeat.run(

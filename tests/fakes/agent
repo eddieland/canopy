@@ -10,7 +10,7 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
     FAKE_AGENT_EXIT     exit code. Default 0.
     FAKE_AGENT_SLEEP    seconds to sleep before printing the final line, to exercise timeouts. Default 0.
     FAKE_AGENT_COMMANDS a JSON list of argv lists, run in order before the final line, the way an agent runs
-                        commands through its bash tool. Stands in for an overseer calling `canopy decide`. Default none.
+                        commands through its bash tool. Stands in for a worker's git, say. Default none.
     FAKE_AGENT_TOOLS    a JSON list of [tool, arguments] pairs, each called in order before the commands, `tool` named
                         as OpenCode names it, `<server>_<tool>`, through the local MCP server of that name its inline
                         config names (OPENCODE_CONFIG_CONTENT), as OpenCode starts it: its command, in its cwd, with
@@ -51,7 +51,7 @@ import functools
 import itertools
 import json
 import os
-import subprocess  # noqa: TID251  (stands in for an agent runtime, so a fake overseer can run the CLI)
+import subprocess  # noqa: TID251  (stands in for an agent runtime, which runs commands and local MCP servers)
 import sys
 import time
 from pathlib import Path

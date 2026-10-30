@@ -48,7 +48,7 @@ CURSOR_ACTION = "cursor"
 class Row:
     """A row of §7 the harness decides: what it records for it, and on which tickets."""
 
-    #: What it records, as `canopy decide` would.
+    #: What it records, as the overseer's `decide` would.
     action: str
     #: Why, the decision's rationale.
     why: str

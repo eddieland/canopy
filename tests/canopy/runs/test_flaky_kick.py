@@ -10,8 +10,8 @@ from unittest import mock
 from canopy.core import contract
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.notify import message
-from tests.canopy.helpers import KEY, READ_PR, WORKER_DONE, messages, waits, worker_does
-from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes, raises
+from tests.canopy.helpers import KEY, READ_PR, WORKER_DONE, Called, messages, raises, waits, worker_does
+from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes
 from tests.conftest import GitPool, git
 
 BRANCH = "agent/PROJ-1-work"
@@ -23,7 +23,7 @@ LEAVES_FLAKY = json.dumps(
 )
 
 
-def resumes(*reasons: ResumeReason) -> list[str]:
+def resumes(*reasons: ResumeReason) -> Called:
     """The overseer resumes PROJ-1 for `reasons`."""
     return dispatches(kind=RunKind.RESUME, reasons=reasons)
 

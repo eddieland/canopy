@@ -35,6 +35,7 @@ from tests.canopy.helpers import (
     private_worker_does,
     scripted,
     slot_of,
+    ticket_sets,
     tools_of,
     tools_printed,
     unit_of,
@@ -160,7 +161,7 @@ def test_the_session_title_names_the_ticket_and_its_title(
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker --title={title} {prompt}"
     scenario.configures(runtime={"worker_cmd": template})
     if title is not None:
-        scenario.overseer("ticket", "set", "PROJ-1", "--title", title)
+        scenario.overseer(ticket_sets("PROJ-1", title=title))
     scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)
     argv = w["argv"]

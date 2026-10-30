@@ -351,7 +351,7 @@ The operator asks for one review of a coworker's PR at its head; asking again af
 request is a journal fact, at most one open per PR, ended by a `done` review, by the overseer finding the PR merged,
 closed, or in no cloned repository, or by the operator. A request may carry the operator's notes, which its reviewer's
 prompt carries; a prompt override that drops them fails to render. A request may name several personas (§31): one
-`canopy review run` starts a review in each still owed one, side by side, each counting against the per-PR limit and
+`review-run` starts a review in each still owed one, side by side, each counting against the per-PR limit and
 keeping its own draft, and the request ends once each has a `done` review. A requested review is the overseer's first
 start of a tick, ahead of every worker and every other review, since the operator asked for it by hand. Starting work on
 a coworker's PR is refused, so a review never turns into work on someone else's branch. Requests are refused inside a

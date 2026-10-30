@@ -68,7 +68,7 @@ def chore_run(ctx: Context, request: ChoreRun) -> Outcome[ChoreStarted]:
     The tick starts the recorded run once the overseer's run has ended (DESIGN §40).
 
     Returns:
-        What the command prints, and the same as fields.
+        The tool's text, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, a guard refused the run, or the chore is the harness's; each is recorded.
@@ -155,7 +155,7 @@ def chore_wait(ctx: Context, request: ChoreWait) -> Outcome[ChoreWaitRecorded]:
     """Record that a chore is due but should not run now, and why.
 
     Returns:
-        What the command prints, and the same as fields.
+        The tool's text, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, no chore of that name is configured here, or the chore is the harness's, which

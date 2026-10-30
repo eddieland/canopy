@@ -24,7 +24,7 @@ first one these checks would refuse it to cover (`default_cursors`, DESIGN §37)
 untrusted reviewer's feedback with no operator message after it among those it carries. A cursor passed is kept, so the
 overseer passes one only to stop shorter, and the checks above hold it to the same bounds.
 
-`canopy ticket set` moves cursors too, so its cursors are checked the same way in a tick (`check_cursors`), refused
+The `ticket-set` tool moves cursors too, so its cursors are checked the same way in a tick (`check_cursors`), refused
 `unobserved` alone: it starts nothing, so a stale subject is not refused, but the block shows none of a stale subject's
 items, so a cursor on one may move no further than the items it already passed. A unit with no PR is unobserved, since
 no source reads checks or reviews but a PR's.
@@ -117,7 +117,7 @@ def check_cursors(
     repo: str | None,
     cursors: Mapping[str, str],
 ) -> None:
-    """Refuse a `ticket set` whose cursors name no item observed, or pass one the block left out, at `now`.
+    """Refuse a `ticket-set` whose cursors name no item observed, or pass one the block left out, at `now`.
 
     `cursors` are the ones it moves, by name; a unit's (`review`, `ci`) is of `repo`. A `review` cursor may name the end
     of any canopy review run of the PR, as the block's `reviews` shows the latest's number.
