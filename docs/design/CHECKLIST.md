@@ -7,9 +7,9 @@ the whole design; the [README](README.md) has the map. Previous: [Where a runnin
 ## 42. The operator's checklist
 
 Proposed (REQUIREMENTS R27, ROADMAP M66). The checklist is the operator's list of rules a team holds and no linter
-checks, each a question that can be asked of a diff, one list per repository, since a workspace's repositories differ in
-language and team. canopy asks it at the moment it matters: when a worker's diff is whole and before it is pushed, as a
-reminder in its own run, with the worker's answer to each item recorded. If that is not enough, or for PRs workers did
+checks, each a question that can be asked of a diff, one list per repository, since a workspace's repositories differ
+in language and team. canopy asks it at the moment it matters: when a worker's diff is whole and before it is pushed, as
+a reminder in its own run, with the worker's answer to each item recorded. If that is not enough, or for PRs workers did
 not write, a checklist review asks the same list of a PR at one commit, as a second review beside the adversarial one
 (§21).
 
@@ -36,14 +36,18 @@ Every worker run that pushes, public and private, `implement`, `resume`, and a t
 goes up, so a fix costs no CI run: canopy's plugin (§33) holds the tool call that would push (`tool.execute.before`),
 which does not run, and the call's error carries the list of each of the run's repositories, a joint run's all at once,
 after a `[canopy]` line saying the push was held, not rejected, and asking the worker to diff each branch against its
-base, hold each item to its repository's diff, commit what fails, answer each item in its result, and push again. The
-push after a hold goes through, so a worker is held once and never kept from pushing; a push after a long stretch of
-work is held again. Near the deadline, in the clock's last stretch (§33), the plugin holds nothing, since a held push
+base, hold each item to its repository's diff, commit what fails, answer each item in its result, and push again.
+Nothing in a held call runs, so a commit chained before the push in the same command is held with it. The push after a
+hold goes through, so a worker is held once and never kept from pushing: whether it held is kept in memory in the agent
+process, as the clock keeps whether it warned (§33), and a new process starts a new stretch; a push after a long stretch
+of work is held again. Near the deadline, in the clock's last stretch (§33), the plugin holds nothing, since a held push
 then risks the run ending `unpushed`: it lets the push run and, once its result shows it went through, adds the list
-there instead, asking for the fix pushed again, which D116 allows. A rejected push is never reminded, since a worker
-never retries one (§8). The list reaches the run as the operator's answer to a running agent's question does (§41): a
-file in the run's answers directory, which a sandboxed run may read and not write, so the plugin still writes nothing
-and reads only what it is handed. The overseer, a planner, a reviewer, and a chore hear none.
+there instead, asking for the fix pushed again, which D116 allows. So it does under a runtime version that does not hand
+a hook's error to the agent as the call's result: there it holds nothing and reminds only after the push. A rejected
+push is never reminded, since a worker never retries one (§8). The list reaches the run as the operator's answer to a
+running agent's question does (§41): a file in the run's answers directory, which a sandboxed run may read and not
+write, so the plugin still writes nothing and reads only what it is handed. The overseer, a planner, a reviewer, and a
+chore hear none.
 
 The worker's result line gains `checklist`: for each repository and item, `pass`, `fixed`, `held` with the reason, or
 `n/a`, validated (D026). A reminded run whose result answers no item is recorded as unanswered, never refused: its push
