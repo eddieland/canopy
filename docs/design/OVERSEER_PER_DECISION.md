@@ -7,8 +7,9 @@ stands](PROGRESS.md).
 
 ## 40. The overseer per decision
 
-Built in part (ROADMAP M40): the tick starts every run (below), and §6, §8, §27, and TRUST_MODEL T3 and T4 say so. The
-runs per subject are designed, not built; until they are, §5, §6, §8, §11, §13, §15, and TRUST_MODEL
+Built in part (ROADMAP M40): the tick starts every run (below), and §6, §8, §27, and TRUST_MODEL T3 and T4 say so; and
+a tick records its overseer's run as What each run owes says, its one run given the whole block. The rest of the runs
+per subject is designed, not built; until they are, §5, §6, §8, §11, §13, §15, and TRUST_MODEL
 describe canopy as it is, this section says what changes, and the PR that finishes it changes those sections and cuts
 this one to what is left.
 

@@ -68,6 +68,7 @@ from canopy.core.vocab import (
     MoveKind,
     NumberedItem,
     OverrideKind,
+    OverseerRunStatus,
     Phase,
     PlanEffort,
     PlanItem,
@@ -176,6 +177,37 @@ class Tick(Row):
     activity_tool: str | None
     activity: str | None
     activity_at: str | None
+
+
+@dataclass(frozen=True)
+class OverseerRun(Row):
+    """A tick's run of the overseer (DESIGN §40): the subject it was given, how it ended, its session, and its cost."""
+
+    TABLE: ClassVar[LiteralString] = "overseer_runs"
+
+    id: int
+    tick_id: int
+    #: The subject it was given; None for the whole state block, as every run is until a tick runs one per subject.
+    subject: str | None
+    started_at: str
+    ended_at: str | None
+    status: OverseerRunStatus
+    #: Why it failed, or the duties it left undone; None for one running, `ok`, or abandoned while it ran.
+    failure: str | None
+    session_id: str | None
+    #: The model canopy asked the runtime for (DESIGN §13), as `ticks.model`; what served it is `run_models`' under
+    #: its tick.
+    model: str | None
+    cost_usd: float | None
+    tokens_input: int | None
+    tokens_output: int | None
+    tokens_reasoning: int | None
+    tokens_cache_read: int | None
+    tokens_cache_write: int | None
+    tokens_peak_context: int | None
+    tokens_first_call: int | None
+    tokens_first_cache_write: int | None
+    tokens_first_cache_read: int | None
 
 
 @dataclass(frozen=True)
