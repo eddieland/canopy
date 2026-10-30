@@ -26,6 +26,7 @@ import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
 import { TickRow } from '@/components/tick-row'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { UnnamedModel } from '@/components/unnamed-model'
 import { useMeasure } from '@/hooks/use-measure'
 import { axisNames, axisStep, HEADROOM } from '@/lib/chart'
 import type { AxisRoom } from '@/lib/chart'
@@ -34,6 +35,7 @@ import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { firstKind, KIND_SERIES, seriesOf, seriesWeeks } from '@/lib/first-calls'
 import { phaseMeaning } from '@/lib/meanings'
+import { unnamedHint, UNREAD, UNREAD_RUNS_HINT } from '@/lib/models'
 import {
     alertMarks,
     alertsText,
@@ -55,6 +57,7 @@ import {
     kindsOffered,
     listedModels,
     modelKind,
+    modelKey,
     modelRows,
     monthName,
     perRun,
@@ -66,7 +69,7 @@ import {
     spendLine,
     spendWindow,
     toolRows,
-    unattributedShare,
+    unreadShare,
     windowId,
     windowName,
     workspacePerRun,
@@ -121,9 +124,6 @@ const WORKSPACE_HINT =
     "What the workspace's runs of the kind spent on the model, over its runs: this ticket's among them, every other " +
     "ticket's too"
 const UNLISTED_HINT = 'The runs page lists no overseer tick by model: Ticks, under Runs, lists them by tick'
-const NO_MODEL_HINT =
-    "Runs whose sessions named no model: not read yet, as a tick reads a few ended runs' sessions; no longer kept by " +
-    'the runtime; failed to read; or making no model call. Their cost is what the runs reported'
 
 // The column names of a table in a padded scrolling region. A sticky head sticks inside the region's padding, so the
 // rows scrolling under it would show in a strip above it: the region's top padding is the head's cells' instead.
@@ -325,9 +325,7 @@ function SpendPage() {
                                     kinds={kindsOffered(data?.models ?? [], modelsOf)}
                                     chosen={modelsOf}
                                 />
-                                {data !== undefined && (
-                                    <Unattributed share={unattributedShare(modelRows(data.models, modelsOf))} />
-                                )}
+                                {data !== undefined && <Unread share={unreadShare(modelRows(data.models, modelsOf))} />}
                                 <span className="readout text-xs text-muted-foreground" data-testid="spend-model-count">
                                     {data === undefined ? '' : modelCount(modelRows(data.models, modelsOf))}
                                 </span>
@@ -1071,10 +1069,11 @@ function FirstCalls({
 
 /**
  * What the runs spent on each model, as their sessions say: every kind's summed, or one kind's, the most costly first,
- * and the runs no session named a model for last, muted. Each model's id, in mono as every page sets one, opens the
- * runs page's runs on it (`?model=`), of the kind shown (`?kind=`, `RUNS_KIND`), and `per run` makes two models with
- * different run counts comparable. A model the runs page cannot list a run of, as only the overseer's ticks used it
- * (`listed`), is plain, why on hover. Until a tick has read any run's session, says so rather than list only those.
+ * and the runs no session named a model for last, muted: `unread`, then `none` (`UnnamedModel`). Each model's id, in
+ * mono as every page sets one, opens the runs page's runs on it (`?model=`), of the kind shown (`?kind=`,
+ * `RUNS_KIND`), and `per run` makes two models with different run counts comparable. A model the runs page cannot list
+ * a run of, as only the overseer's ticks used it (`listed`), is plain, why on hover. Until a tick has read any run's
+ * session, says so rather than list only those unread.
  */
 function Models({
     models,
@@ -1099,7 +1098,7 @@ function Models({
             </Empty>
         )
     }
-    if (models.every((m) => m.model === null)) {
+    if (models.every((m) => m.model === null && m.unread)) {
         return (
             <Empty size="panel">
                 no {runs}&apos;s model read in these {span} yet: a tick reads a few ended runs&apos; sessions
@@ -1132,14 +1131,14 @@ function Models({
                 </thead>
                 <tbody className="font-mono text-xs">
                     {models.map((m) => (
-                        <tr key={m.model ?? ''} className="text-right" data-testid="spend-model">
+                        <tr key={modelKey(m)} className="text-right" data-testid="spend-model">
                             <th
                                 scope="row"
                                 className="w-full max-w-0 py-0.5 text-left font-normal"
-                                title={m.model === null ? NO_MODEL_HINT : undefined}
+                                title={m.model === null ? unnamedHint(m.unread) : undefined}
                             >
                                 {m.model === null ? (
-                                    <None reason="no session named one" className="block truncate font-sans" />
+                                    <UnnamedModel unread={m.unread} className="block truncate" />
                                 ) : of === null || !listed.has(m.model) ? (
                                     <span title={UNLISTED_HINT} className="block" data-testid="spend-model-unlisted">
                                         <Clipped text={m.model} className="block readout" />
@@ -1178,23 +1177,23 @@ function Models({
 }
 
 /**
- * How much of what By model shows went on runs no session has named a model for yet (`unattributedShare`): the `none`
- * row's part, said in the header, since it is often the largest and sits last. Nothing when there is none.
+ * How much of what By model shows went on runs whose sessions canopy has yet to read (`unreadShare`): the `unread`
+ * row's part, said in the header, since it is often the largest and sits near the end. Nothing when there is none.
  */
-function Unattributed({ share }: { share: number | null }) {
+function Unread({ share }: { share: number | null }) {
     if (share === null) {
         return null
     }
     return (
-        <Tip fact={NO_MODEL_HINT}>
-            <span className="readout text-xs text-muted-foreground" data-testid="spend-model-unattributed">
-                {shareText(share)} not yet attributed
+        <Tip fact={UNREAD_RUNS_HINT}>
+            <span className="readout text-xs text-muted-foreground" data-testid="spend-model-unread">
+                {shareText(share)} {UNREAD}
             </span>
         </Tip>
     )
 }
 
-/** How many models the rows shown name, the runs no session named one for not among them. */
+/** How many models the rows shown name, the runs no session named one for, `unread` or `none`, not among them. */
 function modelCount(models: ModelRow[]): number | string {
     const named = models.filter((m) => m.model !== null).length
     return named === 0 ? '' : named

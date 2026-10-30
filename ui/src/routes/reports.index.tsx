@@ -5,12 +5,12 @@ import type { ReactNode } from 'react'
 import { monthlyReportQuery } from '@/api/queries'
 import type { ReportKind, ReportModel, ReportMonth, ReportTicket } from '@/api/types'
 import { Cost } from '@/components/cost'
-import { None } from '@/components/none'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped } from '@/components/tip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { UnnamedModel } from '@/components/unnamed-model'
 import { useClock } from '@/lib/clock'
 import {
     costPercent,
@@ -27,7 +27,8 @@ import {
     sentTokens,
     wroteTokens,
 } from '@/lib/reports'
-import { shareText } from '@/lib/spend'
+import { unnamedHint } from '@/lib/models'
+import { modelKey, shareText } from '@/lib/spend'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
@@ -56,9 +57,6 @@ const TO_LAND_HINT =
     'the merge stands in'
 const WAIT_HINT =
     'From the end of its first worker run that ended done, when its PR was ready, to the first review after it'
-const NO_MODEL_HINT =
-    'Runs whose sessions named no model: not read yet, no longer kept by the runtime, or making no model call. Their ' +
-    'cost is what the runs reported'
 
 // The column names of a table in a padded scrolling region, as the spend page's: the region's top padding is the
 // head's cells', so the rows scrolling under the sticky head never show above it.
@@ -385,7 +383,10 @@ function Kinds({ month, readAt }: { month: ReportMonth; readAt: string | null })
     )
 }
 
-/** The picked month's models: what each one's replies cost over every kind of run, the dearest first. */
+/**
+ * The picked month's models: what each one's replies cost over every kind of run, the dearest first, then the runs no
+ * session named a model for, `unread` and then `none` (`UnnamedModel`).
+ */
 function Models({ month }: { month: ReportMonth }) {
     if (month.models.length === 0) {
         return <Empty size="panel">nothing ran in {monthLabel(month.month, 'long')}</Empty>
@@ -403,14 +404,14 @@ function Models({ month }: { month: ReportMonth }) {
                 </thead>
                 <tbody className="font-mono text-xs">
                     {month.models.map((m: ReportModel) => (
-                        <tr key={m.model ?? ''} className="text-right" data-testid="reports-model">
+                        <tr key={modelKey(m)} className="text-right" data-testid="reports-model">
                             <th
                                 scope="row"
                                 className="w-full max-w-0 py-0.5 text-left font-normal"
-                                title={m.model === null ? NO_MODEL_HINT : undefined}
+                                title={m.model === null ? unnamedHint(m.unread) : undefined}
                             >
                                 {m.model === null ? (
-                                    <None reason="no session named one" className="block truncate font-sans" />
+                                    <UnnamedModel unread={m.unread} className="block truncate" />
                                 ) : (
                                     <Clipped text={m.model} className="block readout" />
                                 )}

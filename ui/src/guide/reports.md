@@ -36,8 +36,8 @@ Click a month to see it in detail below; the page opens on the latest.
 workers, plans, chores, reviews, and your tasks, each with its runs, cost, tokens, and cache hit. Under them, **outside
 canopy** is the runtime's sessions none of canopy's runs started, counted in sessions, not runs: yours, and another
 workspace's canopy, as of when `canopy loop` last read them (hover it for when). **By model** is what each model's
-replies cost over every kind of run, the dearest first, with the runs canopy hasn't read a model for yet last as
-**none**.
+replies cost over every kind of run, the dearest first, with the runs no session named a model for last: **unread**
+for those whose sessions canopy hasn't read yet, then **none** for those it read and found no model in.
 
 **Landed** lists the month's tickets the loop marked done as merged, the latest first, with each one's iterations, PR
 comments, reviews (the ones that asked for changes in brackets), time to land, review wait, and what its own runs cost.
@@ -99,11 +99,14 @@ rail's. Then:
   each model summed over every kind of run; the **kind** filter in its header narrows it to the overseer's, the
   workers', or any other kind the window has runs of. A run that switched models counts under both, with its share
   of the cost under each, so the runs column won't add up to the kind's. **per run** is what a model spent over its
-  runs, which is how you compare a model that ran twice with one that ran twenty times. Runs whose model canopy
-  hasn't read yet sit last as **none**, with what they reported costing, and the header says how much of the table
-  that is (`43% not yet attributed`), since a big **none** quietly flatters every model above it. Each run's session
-  is read as it ends, and the loop reads the stragglers while it waits between ticks, so **none** is mostly runs from
-  before canopy read models, and it shrinks while the loop idles. Click a model to see [its runs](runs#the-runs-page),
+  runs, which is how you compare a model that ran twice with one that ran twenty times. The runs no session named a
+  model for sit last, at what they reported costing, in two rows. **unread** is the ones whose sessions canopy hasn't
+  read yet: still running, waiting for a tick to read them, or a read that failed and will be tried again. The header
+  says how much of the table that is (`43% unread`), since a big **unread** quietly flatters every model above it.
+  Each run's session is read as it ends, and the loop reads the stragglers while it waits between ticks, so
+  **unread** shrinks while the loop idles. **none** is the ones canopy read and found no model in: the runtime no
+  longer keeps the session, the run reported none to read, or it never called a model. That row stays put, so don't
+  wait on it. Click a model to see [its runs](runs#the-runs-page),
   of the kind the table shows, or of every kind under **all**. The overseer's models aren't links: the runs page lists
   ticks apart, under Ticks, and not by model. This is the table to read before and after you change a model in your
   config, which moves the whole workspace. To try one on a single ticket first, read that ticket's line instead

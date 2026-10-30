@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { costText, countedText, unattributedCost } from './cost-total'
+import { costText, countedText, unnamedCost } from './cost-total'
 
 describe('costText', () => {
     it('shows dollars to the cent, or a dash when nothing reported a cost', () => {
@@ -43,17 +43,23 @@ describe('countedText', () => {
     })
 })
 
-describe('unattributedCost', () => {
+describe('unnamedCost', () => {
     const OPUS = { model: 'anthropic/claude-opus-4-1', runs: 2, cost_usd: 1.5 }
     const SONNET = { model: 'anthropic/claude-sonnet-4-5', runs: 1, cost_usd: 0.25 }
+    const models = [OPUS, SONNET]
 
-    it('is what is left of the total once each model named has its cost', () => {
-        expect(unattributedCost({ cost_usd: 2.25, models: [OPUS, SONNET] })).toBe(0.5)
+    it('is what is left of the total once each model named has its cost, the unread runs apart from none', () => {
+        expect(unnamedCost({ cost_usd: 2.25, models, unread_cost_usd: null })).toEqual({ unread: null, none: 0.5 })
+        expect(unnamedCost({ cost_usd: 2.25, models, unread_cost_usd: 0.5 })).toEqual({ unread: 0.5, none: null })
+        const split = unnamedCost({ cost_usd: 2.25, models, unread_cost_usd: 0.125 })
+        expect(split.unread).toBe(0.125)
+        expect(split.none).toBeCloseTo(0.375)
     })
 
     it('is nothing when the models account for it all, to the cent, or none is named', () => {
-        expect(unattributedCost({ cost_usd: 1.750_000_1, models: [OPUS, SONNET] })).toBeNull()
-        expect(unattributedCost({ cost_usd: 2.25, models: [] })).toBeNull()
-        expect(unattributedCost({ cost_usd: null, models: [] })).toBeNull()
+        const nothing = { unread: null, none: null }
+        expect(unnamedCost({ cost_usd: 1.750_000_1, models, unread_cost_usd: 0.000_000_1 })).toEqual(nothing)
+        expect(unnamedCost({ cost_usd: 2.25, models: [], unread_cost_usd: 2.25 })).toEqual(nothing)
+        expect(unnamedCost({ cost_usd: null, models: [], unread_cost_usd: null })).toEqual(nothing)
     })
 })

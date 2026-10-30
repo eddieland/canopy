@@ -18,6 +18,7 @@ import type {
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
+import { UNREAD } from '@/lib/models'
 import type { RunsOf } from '@/lib/run-state'
 import { clockTime, stamp } from '@/lib/time'
 
@@ -248,18 +249,19 @@ export type ToolRow = Omit<SpendTool, 'kind'>
 
 /**
  * The By model table's rows: one kind's as the server sent them, or with no kind each model summed over every kind,
- * the most costly first and the runs no session named a model for last. A run has one kind, so the runs add up.
+ * the most costly first and the runs no session named a model for last, those `unread` before those read that named
+ * none. A run has one kind, so the runs add up.
  */
 export function modelRows(models: readonly SpendModel[], kind: SpendKind | undefined): ModelRow[] {
     if (kind !== undefined) {
         return models.filter((m) => m.kind === kind)
     }
     // Each row a copy, its kind left out, so summing into it never changes the query's data.
-    const summed = new Map<string | null, ModelRow>()
+    const summed = new Map<string, ModelRow>()
     for (const { kind: _, ...m } of models) {
-        const seen = summed.get(m.model)
+        const seen = summed.get(modelKey(m))
         if (seen === undefined) {
-            summed.set(m.model, m)
+            summed.set(modelKey(m), m)
         } else {
             seen.runs += m.runs
             seen.replies += m.replies
@@ -271,10 +273,22 @@ export function modelRows(models: readonly SpendModel[], kind: SpendKind | undef
     return [...summed.values()].toSorted((a, b) =>
         firstOf(
             Number(a.model === null) - Number(b.model === null),
+            Number(b.unread) - Number(a.unread),
             (b.cost_usd ?? 0) - (a.cost_usd ?? 0),
             (a.model ?? '').localeCompare(b.model ?? ''),
         ),
     )
+}
+
+/**
+ * What tells a By model row from the others of its table: its model, else whether its runs are `unread` or `none`,
+ * each its own row.
+ */
+export function modelKey(row: Pick<ModelRow, 'model' | 'unread'>): string {
+    if (row.model !== null) {
+        return row.model
+    }
+    return row.unread ? UNREAD : 'none'
 }
 
 /**
@@ -332,13 +346,13 @@ export function comparedModels(models: readonly SpendModel[], override: boolean)
 }
 
 /**
- * The share of the By model rows' spend on runs no session has named a model for yet, 0 to 1: the `none` row's cost
- * over every row's. Null when there is no such spend.
+ * The share of the By model rows' spend on runs whose sessions canopy has yet to read, 0 to 1: the `unread` row's
+ * cost over every row's. Null when there is no such spend.
  */
-export function unattributedShare(rows: readonly ModelRow[]): number | null {
+export function unreadShare(rows: readonly ModelRow[]): number | null {
     const total = rows.reduce((sum, m) => sum + (m.cost_usd ?? 0), 0)
-    const unnamed = rows.find((m) => m.model === null)?.cost_usd ?? 0
-    return unnamed > 0 && total > 0 ? unnamed / total : null
+    const unread = rows.find((m) => m.model === null && m.unread)?.cost_usd ?? 0
+    return unread > 0 && total > 0 ? unread / total : null
 }
 
 /**

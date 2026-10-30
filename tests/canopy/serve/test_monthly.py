@@ -136,7 +136,12 @@ def test_a_months_kinds_carry_their_runs_cost_and_tokens(tmp_path: Path, journal
     assert october.tokens.input == 1000 + 100 + 100
     # Read from the cache over everything sent: 3000 of 1200 + 3000 + 500.
     assert october.tokens.cache_hit == pytest.approx(3000 / 4700)
-    assert [(m.model, m.runs, m.cost_usd) for m in october.models] == [("opus", 1, 0.5), (None, 3, 2.75)]
+    # The chore run, which has not ended, is unread; the runs that ended with no session to read are none.
+    assert [(m.model, m.unread, m.runs, m.cost_usd) for m in october.models] == [
+        ("opus", False, 1, 0.5),
+        (None, True, 1, 0.75),
+        (None, False, 2, 2.0),
+    ]
     assert september.cost_usd == 0.25
     assert monthly.Tokens().cache_hit is None
 

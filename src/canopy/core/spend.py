@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Literal, LiteralString
 
-from canopy.core import contract, db, records, runtime_sessions, sql
+from canopy.core import contract, db, records, run_models, runtime_sessions, sql
 from canopy.core.vocab import RunKind, SessionsRead
 
 if TYPE_CHECKING:
@@ -298,8 +298,8 @@ class ModelSpend:
 
     `runs` counts the runs one of whose replies the model wrote, so a run on two models counts under each, `replies`
     the replies it wrote, and `cost_usd` what the session priced them at. `model` is None for the kind's runs whose
-    sessions named no model: not read yet, no longer kept, not read for failing, or making no model call; their cost
-    is what the runs themselves reported, and `replies` is 0.
+    sessions named no model, in two rows by `unread`; their cost is what the runs themselves reported, and `replies`
+    is 0.
     """
 
     kind: Kind
@@ -307,6 +307,10 @@ class ModelSpend:
     runs: int
     replies: int
     cost_usd: float | None
+    #: For a row of no model, whether its runs' sessions canopy has yet to read: running, not read yet, or a read that
+    #: failed (`run_models.unread`). False for the rest: no longer kept, no session to read, or no model call; and for
+    #: a model's row.
+    unread: bool = False
     #: For a row narrowed to a ticket (`models`), the workspace's runs of its kind on its model in the window, the
     #: ticket's among them, to compare with; None for a row of the whole workspace.
     workspace_runs: int | None = None
@@ -326,8 +330,9 @@ class Breakdown:
     kinds in `KINDS` order and each kind's snapshots by when their first run started; the overseer's include dry runs,
     whose first call is a live tick's. `tools` is what each kind's tool calls returned, by tool, the most characters
     first; the overseer's include dry runs too. `models` is what each kind spent on each model, the kinds in `KINDS`
-    order and each kind's models the most costly first, its runs no session named a model for last; the overseer's
-    include dry runs too. `sessions` is what every session the runtime keeps cost, canopy's apart from the rest.
+    order and each kind's models the most costly first, its runs no session named a model for last, those unread
+    before the rest; the overseer's include dry runs too. `sessions` is what every session the runtime keeps cost,
+    canopy's apart from the rest.
     """
 
     since: str
@@ -1138,10 +1143,10 @@ def models(
     """What each kind's runs that started in `[since, until)`, each a journal time, spent on each model (§13).
 
     As a breakdown's `models` lists them, the kinds in `KINDS` order and each kind's models the most costly first, its
-    runs no session named a model for last. `kind` keeps one kind's rows. `ticket` keeps that ticket's runs, its
-    workers', plans', and reviews', since no other kind's run names a ticket; each row then carries the workspace's
-    runs of its kind on its model too, the ticket's among them, so a model the ticket was moved to reads against what
-    it costs everywhere else.
+    runs no session named a model for last, those unread before the rest. `kind` keeps one kind's rows. `ticket` keeps
+    that ticket's runs, its workers', plans', and reviews', since no other kind's run names a ticket; each row then
+    carries the workspace's runs of its kind on its model too, the ticket's among them, so a model the ticket was moved
+    to reads against what it costs everywhere else.
 
     Returns:
         A row per kind and model; none for a kind with no runs in the window.
@@ -1152,21 +1157,24 @@ def models(
             if ticket is None:
                 found.extend(_models_of(conn, each, since, until, None))
             elif KIND_TABLES[each][0] in _TICKET_TABLES:
-                workspace = {m.model: m for m in _models_of(conn, each, since, until, None)}
-                found.extend(_beside(m, workspace.get(m.model)) for m in _models_of(conn, each, since, until, ticket))
+                workspace = {(m.model, m.unread): m for m in _models_of(conn, each, since, until, None)}
+                found.extend(
+                    _beside(m, workspace.get((m.model, m.unread))) for m in _models_of(conn, each, since, until, ticket)
+                )
     return found
 
 
 # One kind's spend by model in the window, from its runs that started in it, `ticket`'s alone when one is given; then
-# those of its runs no session named a model for, under None.
+# those of its runs no session named a model for, under None, the unread ones first.
 def _models_of(conn: sqlite3.Connection, kind: Kind, since: str, until: str, ticket: str | None) -> list[ModelSpend]:
     found = [
         ModelSpend(kind=kind, model=str(model), runs=int(runs), replies=int(replies), cost_usd=float(cost))
         for model, runs, replies, cost in sql.execute(conn, _named_models(kind, since, until, ticket))
     ]
-    [(runs, cost)] = sql.execute(conn, _unnamed_models(kind, since, until, ticket)).fetchall()
-    if runs:
-        found.append(ModelSpend(kind=kind, model=None, runs=int(runs), replies=0, cost_usd=cost))
+    found.extend(
+        ModelSpend(kind=kind, model=None, runs=int(runs), replies=0, cost_usd=cost, unread=bool(unread))
+        for unread, runs, cost in sql.execute(conn, _unnamed_models(kind, since, until, ticket))
+    )
     return found
 
 
@@ -1193,16 +1201,19 @@ def _named_models(kind: Kind, since: str, until: str, ticket: str | None = None)
     )
 
 
-# One kind's runs in a window that no session named a model for, and what they reported they cost.
+# One kind's runs in a window that no session named a model for, and what they reported they cost: those canopy has
+# yet to read, then the rest, a row each of them that has a run.
 def _unnamed_models(kind: Kind, since: str, until: str, ticket: str | None = None) -> sql.Select:
     table, which = KIND_TABLES[kind]
     return (
-        sql.select("count(*), SUM(r.cost_usd)")
+        sql.select("{} AS unread, count(*), SUM(r.cost_usd)", run_models.unread(table))
         .from_("{} r", sql.name(table))
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
         .where("{}", which)
         .where("{}", _of_ticket(ticket))
         .where("NOT EXISTS (SELECT 1 FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)", table)
+        .group_by("unread")
+        .order_by("unread DESC")
     )
 
 

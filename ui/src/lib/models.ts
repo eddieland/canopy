@@ -10,6 +10,24 @@ export const FAILED_READ = 'its session could not be read, tried again later'
 export const UNREAD = 'unread'
 
 /**
+ * What a row of runs whose sessions canopy has yet to read says on hover, as a total's split or a table of spend by
+ * model lumps them: `unread`, apart from `none` (`NONE_RUNS_HINT`).
+ */
+export const UNREAD_RUNS_HINT =
+    "Runs whose sessions canopy has yet to read: still running, not read yet (a tick reads a few ended runs' " +
+    'sessions), or a read that failed, tried again later. Their cost is what the runs reported'
+
+/** What a row of runs whose sessions, read, named no model says on hover: `none`, apart from `unread`. */
+export const NONE_RUNS_HINT =
+    'Runs whose sessions named no model: no longer kept by the runtime, no session to read, or no model call. Their ' +
+    'cost is what the runs reported'
+
+/** Why a row of runs no session named a model for has none, `unread` or not, as its tip says it. */
+export function unnamedHint(unread: boolean): string {
+    return unread ? UNREAD_RUNS_HINT : NONE_RUNS_HINT
+}
+
+/**
  * What names no model, as the runtime picks its own: shown in muted sans wherever an id would be, never monospace,
  * since it is no id.
  */

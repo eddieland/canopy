@@ -54,7 +54,10 @@ def _month(found: monthly.Month) -> ReportMonth:
             cost_usd=found.outside.cost_usd,
             tokens=_tokens(found.outside.tokens),
         ),
-        models=[ReportModel(model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd) for m in found.models],
+        models=[
+            ReportModel(model=m.model, runs=m.runs, replies=m.replies, cost_usd=m.cost_usd, unread=m.unread)
+            for m in found.models
+        ],
         landed=[_ticket(t) for t in found.landed],
         closed=found.closed,
         pull_requests=found.pull_requests,

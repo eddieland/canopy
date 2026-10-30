@@ -786,6 +786,7 @@ def _ticket_cost(conn: sqlite3.Connection, key: str) -> CostTotal:
         priced=int(row["priced"]),
         cost_usd=float(cost) if cost is not None else None,
         models=[ModelCost(model=m.model, runs=m.runs, cost_usd=m.cost_usd) for m in run_models.of_ticket(conn, key)],
+        unread_cost_usd=run_models.unread_of_ticket(conn, key),
     )
 
 
@@ -803,6 +804,7 @@ def spend_model(found: spending.ModelSpend) -> SpendModel:
         cost_usd=found.cost_usd,
         workspace_runs=found.workspace_runs,
         workspace_cost_usd=found.workspace_cost_usd,
+        unread=found.unread,
     )
 
 

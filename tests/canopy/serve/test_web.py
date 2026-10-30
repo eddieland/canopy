@@ -907,6 +907,7 @@ def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Conte
         "priced": 0,
         "cost_usd": None,
         "models": [],
+        "unread_cost_usd": None,
     }
 
     second = running_run(ctx, KEY)
@@ -927,7 +928,15 @@ def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Conte
     ctx.conn.execute("UPDATE ticks SET cost_usd = 3.0 WHERE id = ?", (tick_id,))  # the overseer's is the workspace's
 
     cost = c.get(f"/api/tickets/{KEY}").json()["cost"]
-    assert cost == {"runs": 2, "reviews": 1, "priced": 2, "cost_usd": pytest.approx(1.75), "models": []}
+    # Every one still runs, so no session has been read: all of it is unread.
+    assert cost == {
+        "runs": 2,
+        "reviews": 1,
+        "priced": 2,
+        "cost_usd": pytest.approx(1.75),
+        "models": [],
+        "unread_cost_usd": pytest.approx(1.75),
+    }
 
 
 def test_the_last_tick_is_the_latest_row_with_its_status_and_cost(ctx: Context) -> None:

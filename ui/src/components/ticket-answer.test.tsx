@@ -40,7 +40,7 @@ const DETAIL: TicketDetail = {
     messages: [QUESTION],
     forgets: [],
     decisions: [],
-    cost: { runs: 0, reviews: 0, priced: 0, cost_usd: null, models: [] },
+    cost: { runs: 0, reviews: 0, priced: 0, cost_usd: null, models: [], unread_cost_usd: null },
     drafts: [],
     personas: [],
     persona_names: [],

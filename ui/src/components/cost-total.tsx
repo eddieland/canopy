@@ -1,19 +1,16 @@
 import type { CostTotal } from '@/api/types'
 import { Cost } from '@/components/cost'
 import { Field } from '@/components/fields'
+import { None } from '@/components/none'
 import { Tip } from '@/components/tip'
-import { countedText, unattributedCost } from '@/lib/cost-total'
-import { modelNames } from '@/lib/models'
-
-// What the part of a total no session named a model for counts, on hover.
-const UNNAMED_HINT =
-    'What the runs no session named a model for reported: not read yet, no longer kept by the runtime, failed to ' +
-    'read, or making no model call'
+import { countedText, unnamedCost } from '@/lib/cost-total'
+import { modelNames, NONE_RUNS_HINT, UNREAD, UNREAD_RUNS_HINT } from '@/lib/models'
 
 /**
  * A `Fields` row for what a ticket's or a PR's runs cost in all (DESIGN §13): the total, and what it counted. Not the
  * overseer's: a tick serves the whole workspace. When more than one model served a ticket's runs, a line under it
- * splits the total by model, the most costly first, then what no session named a model for.
+ * splits the total by model, the most costly first, then what no session named a model for: `unread`, then `none`,
+ * each a word in muted sans as no id is.
  */
 export function CostTotalRow({ cost }: { cost: CostTotal }) {
     return (
@@ -28,7 +25,7 @@ export function CostTotalRow({ cost }: { cost: CostTotal }) {
 /** A total cost split by model, each named as a list names it (`modelNames`), whole in its tip with its runs. */
 function ByModel({ cost }: { cost: CostTotal }) {
     const names = modelNames(cost.models.map((m) => m.model))
-    const unnamed = unattributedCost(cost)
+    const unnamed = unnamedCost(cost)
     return (
         <span
             className="flex basis-full flex-wrap gap-x-3 font-mono text-muted-foreground"
@@ -41,10 +38,18 @@ function ByModel({ cost }: { cost: CostTotal }) {
                     </span>
                 </Tip>
             ))}
-            {unnamed !== null && (
-                <Tip fact={UNNAMED_HINT} mono>
+            {unnamed.unread !== null && (
+                <Tip fact={UNREAD_RUNS_HINT}>
                     <span>
-                        none <Cost usd={unnamed} className="text-foreground" />
+                        <span className="font-sans">{UNREAD}</span>{' '}
+                        <Cost usd={unnamed.unread} className="text-foreground" />
+                    </span>
+                </Tip>
+            )}
+            {unnamed.none !== null && (
+                <Tip fact={NONE_RUNS_HINT}>
+                    <span>
+                        <None className="font-sans" /> <Cost usd={unnamed.none} className="text-foreground" />
                     </span>
                 </Tip>
             )}

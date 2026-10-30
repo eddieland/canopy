@@ -222,11 +222,13 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
         ("workers", "bash", 4, 119, 279_000),
     ]
     assert found["tools"][0]["est_tokens"] == 325_000 // 4
-    # What each kind spent on each model, the most costly first, its runs no session named a model for last.
-    assert [(m["kind"], m["model"], m["runs"], m["replies"]) for m in found["models"]][1:4] == [
-        ("workers", "anthropic/claude-sonnet-4-5", 3, 186),
-        ("workers", "anthropic/claude-opus-4-1", 1, 23),
-        ("workers", None, 6, 0),  # ABC-099's feedback plan run among them
+    # What each kind spent on each model, the most costly first, its runs no session named a model for last: those
+    # canopy has yet to read, then those read that named none.
+    assert [(m["kind"], m["model"], m["unread"], m["runs"], m["replies"]) for m in found["models"]][1:5] == [
+        ("workers", "anthropic/claude-sonnet-4-5", False, 3, 186),
+        ("workers", "anthropic/claude-opus-4-1", False, 1, 23),
+        ("workers", None, True, 5, 0),
+        ("workers", None, False, 1, 0),  # ABC-099's feedback plan run, which reported no session
     ]
     assert found["models"][2]["cost_usd"] == pytest.approx(1.65)
 
@@ -241,11 +243,12 @@ def test_a_tickets_spend_by_model_is_its_own_runs_beside_the_workspaces(backend:
     workspace = c.get("/api/spend/breakdown", params={"days": 30}).json()
     found = c.get("/api/spend/breakdown", params={"days": 30, "ticket": "ABC-099"}).json()
     # Its workers' and reviews' runs alone, each beside the workspace's runs of its kind on its model.
-    assert [(m["kind"], m["model"], m["runs"], m["workspace_runs"]) for m in found["models"]] == [
-        ("workers", "anthropic/claude-opus-4-1", 1, 1),
-        ("workers", "anthropic/claude-sonnet-4-5", 1, 10),
-        ("workers", None, 2, 14),
-        ("reviews", "openai/gpt-5", 2, 4),
+    assert [(m["kind"], m["model"], m["unread"], m["runs"], m["workspace_runs"]) for m in found["models"]] == [
+        ("workers", "anthropic/claude-opus-4-1", False, 1, 1),
+        ("workers", "anthropic/claude-sonnet-4-5", False, 1, 10),
+        ("workers", None, True, 1, 5),
+        ("workers", None, False, 1, 9),
+        ("reviews", "openai/gpt-5", False, 2, 4),
     ]
     assert (found["models"][1]["cost_usd"], found["models"][1]["workspace_cost_usd"]) == (0.66, pytest.approx(15.39))
     # Every other figure is the workspace's still, and the workspace's own rows have nothing beside them.

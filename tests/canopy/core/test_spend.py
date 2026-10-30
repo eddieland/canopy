@@ -949,7 +949,8 @@ def journal_of_models(conn: sqlite3.Connection, now: datetime) -> None:
     served(conn, "ticks", old, ("anthropic/claude-old", 9, 5.0))
     first = tick(conn, earlier(now, 0, 3), 0.5)
     served(conn, "ticks", first, ("anthropic/claude-haiku", 4, 0.5))
-    tick(conn, earlier(now, 0, 2), 0.25)  # not read yet
+    unread = tick(conn, earlier(now, 0, 2), 0.25)  # not read yet
+    conn.execute("UPDATE ticks SET session_id = 'ses_unread' WHERE id = ?", (unread,))
     for started, cost in ((earlier(now, 0, 3), 2.0), (earlier(now, 0, 2), 3.0)):
         run(conn, first, "PROJ-1", started, cost, None)
     served(conn, "runs", 1, ("openai/gpt-x", 10, 2.0))
@@ -971,6 +972,53 @@ def test_each_kind_s_spend_is_split_by_the_models_its_sessions_name(tmp_path: Pa
     assert {(m.workspace_runs, m.workspace_cost_usd) for m in found} == {(None, None)}  # the workspace's own
 
 
+def test_the_runs_no_session_named_a_model_for_are_unread_apart_from_none(tmp_path: Path, journals: Journals) -> None:
+    """Unread is a session canopy has yet to read: running, never read, or a failed read; the rest were read to none."""
+    conn = journals.open(tmp_path / "canopy.db")
+    ticket(conn, "PROJ-1")
+    first = tick(conn, earlier(NOW, 0, 3), None)
+    # cost, session, ended, how the last read ended
+    for cost, session, ended, status in (
+        (1.0, "ses_1", False, None),  # running
+        (2.0, "ses_2", True, None),  # not read yet
+        (4.0, "ses_4", True, "failed"),  # tried again later
+        (8.0, "ses_8", True, "missing"),  # the runtime no longer keeps it
+        (16.0, None, True, None),  # it reported no session to read
+        (32.0, "ses_32", True, "found"),  # it made no model call
+    ):
+        run(conn, first, "PROJ-1", earlier(NOW, 0, 2), cost, None)
+        run_id = conn.execute("SELECT max(id) FROM runs").fetchone()[0]
+        conn.execute(
+            "UPDATE runs SET session_id = ?, ended_at = ? WHERE id = ?",
+            (session, earlier(NOW, 0, 1) if ended else None, run_id),
+        )
+        if status is not None:
+            conn.execute(
+                "INSERT INTO run_model_reads (run_table, run_id, status, error, attempts, read_at) "
+                "VALUES ('runs', ?, ?, ?, 1, 'x')",
+                (run_id, status, "timed out" if status == "failed" else None),
+            )
+    run(conn, first, "PROJ-1", earlier(NOW, 0, 2), 64.0, None)
+    served(conn, "runs", 7, ("openai/gpt-x", 3, 64.0))
+    # A failed read again, of a run an earlier read named a model of, keeps the model.
+    conn.execute("UPDATE run_model_reads SET status = 'failed', error = 'timed out' WHERE run_id = 7")
+    found = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR).models
+    assert [(m.kind, m.model, m.unread, m.runs, m.cost_usd) for m in found if m.kind == "workers"] == [
+        ("workers", "openai/gpt-x", False, 1, 64.0),
+        ("workers", None, True, 3, 7.0),
+        ("workers", None, False, 3, 56.0),
+    ]
+    # Narrowed to the ticket, each row of no model is beside the workspace's of the same why.
+    narrowed = spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR, ticket="PROJ-1").models
+    assert [(m.model, m.unread, m.runs, m.workspace_runs, m.workspace_cost_usd) for m in narrowed] == [
+        ("openai/gpt-x", False, 1, 1, 64.0),
+        (None, True, 3, 3, 7.0),
+        (None, False, 3, 3, 56.0),
+    ]
+    assert run_models.unread_of_ticket(conn, "PROJ-1") == 7.0
+    assert run_models.unread_of_ticket(conn, "PROJ-2") is None
+
+
 def test_a_ticket_s_spend_by_model_is_its_runs_beside_the_workspace_s(tmp_path: Path, journals: Journals) -> None:
     """Narrowed to a ticket, a row counts its runs on a model, with the workspace's runs of its kind on it beside."""
     conn = journals.open(tmp_path / "canopy.db")
@@ -990,7 +1038,12 @@ def test_a_ticket_s_spend_by_model_is_its_runs_beside_the_workspace_s(tmp_path: 
     assert found.totals == spend.breakdown(conn, NOW, 1, state_dir=STATE_DIR).totals
     since, until = (db.format_time(t) for t in spend.window(NOW, 1))
     assert [m.kind for m in spend.models(conn, since, until, ticket="PROJ-2", kind="workers")] == ["workers"]
-    assert [m.model for m in spend.models(conn, since, until, kind="overseer")] == ["anthropic/claude-haiku", None]
+    # The later tick reported no session, so it is none, apart from the one not read yet.
+    assert [(m.model, m.unread) for m in spend.models(conn, since, until, kind="overseer")] == [
+        ("anthropic/claude-haiku", False),
+        (None, True),
+        (None, False),
+    ]
 
 
 def test_canopy_spend_prints_the_spend_by_model(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
@@ -1001,7 +1054,7 @@ def test_canopy_spend_prints_the_spend_by_model(canopy_env: CanopyEnv, capsys: p
     assert [line.split() for line in out[start : start + 6]] == [
         ["model", "kind", "runs", "replies", "spent"],
         ["anthropic/claude-haiku", "overseer", "1", "4", "$0.50"],
-        ["(no", "model", "read)", "overseer", "1", "-", "$0.25"],
+        ["(unread)", "overseer", "1", "-", "$0.25"],
         ["openai/gpt-x", "workers", "2", "15", "$3.00"],
         ["anthropic/claude-sonnet", "workers", "1", "6", "$2.00"],
         ["A", "run", "on", "two", "models", "counts", "under", "each."],
