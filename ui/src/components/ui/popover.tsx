@@ -35,6 +35,7 @@ function PopoverContent({
                 className={cn(
                     'z-50 w-72 origin-(--radix-popover-content-transform-origin)',
                     'rounded-md border border-edge bg-surface p-4 text-foreground shadow-float outline-hidden',
+                    'animate-float',
                     className,
                 )}
                 {...props}

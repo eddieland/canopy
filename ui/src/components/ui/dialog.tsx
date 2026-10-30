@@ -19,12 +19,15 @@ function Dialog(props: ComponentProps<typeof DialogPrimitive.Root>) {
 function DialogContent({ className, ...props }: ComponentProps<typeof DialogPrimitive.Content>) {
     return (
         <DialogPrimitive.Portal>
-            <DialogPrimitive.Overlay data-slot="dialog-overlay" className="fixed inset-0 z-50 bg-background/70" />
+            <DialogPrimitive.Overlay
+                data-slot="dialog-overlay"
+                className="fixed inset-0 z-50 bg-background/70 animate-scrim"
+            />
             <DialogPrimitive.Content
                 data-slot="dialog-content"
                 className={cn(
                     'fixed top-[16dvh] left-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2',
-                    'rounded-md border border-edge bg-surface shadow-float outline-none',
+                    'rounded-md border border-edge bg-surface shadow-float outline-none animate-float',
                     className,
                 )}
                 {...props}

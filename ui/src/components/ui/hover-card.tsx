@@ -45,6 +45,7 @@ function HoverCardContent({
                 className={cn(
                     'z-50 w-96 origin-(--radix-hover-card-content-transform-origin)',
                     'rounded-md border border-edge bg-surface p-3 text-foreground shadow-float outline-hidden',
+                    'animate-float',
                     className,
                 )}
                 {...props}

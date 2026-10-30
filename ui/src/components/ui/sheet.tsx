@@ -22,12 +22,15 @@ function SheetTrigger(props: ComponentProps<typeof SheetPrimitive.Trigger>) {
 function SheetContent({ className, children, ...props }: ComponentProps<typeof SheetPrimitive.Content>) {
     return (
         <SheetPrimitive.Portal>
-            <SheetPrimitive.Overlay data-slot="sheet-overlay" className="fixed inset-0 z-50 bg-background/70" />
+            <SheetPrimitive.Overlay
+                data-slot="sheet-overlay"
+                className="fixed inset-0 z-50 bg-background/70 animate-scrim"
+            />
             <SheetPrimitive.Content
                 data-slot="sheet-content"
                 className={cn(
                     'fixed inset-y-0 left-0 z-50 flex h-full w-3/4 max-w-xs flex-col border-r border-edge bg-surface',
-                    'shadow-float outline-none',
+                    'shadow-float outline-none animate-sheet',
                     className,
                 )}
                 {...props}
