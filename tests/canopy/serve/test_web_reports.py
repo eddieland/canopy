@@ -1,13 +1,20 @@
-"""The web UI's reports (DESIGN §11): what each local month cost and got done, and how runs ended. Reads only."""
+"""The web UI's reports (DESIGN §11, §42): what each local month cost and got done, the checklist, and health.
+
+Reads only.
+"""
+
+from datetime import UTC, datetime
 
 import pytest
 
 from canopy.core import db, health, runtime_sessions, spend
+from canopy.core.context import Context
 from canopy.runtime.report import SessionPage, SessionSpend
 from canopy.serve import monthly
 from canopy.serve.backend import Backend
 from canopy.serve.mock import T0, history
-from tests.canopy.web_helpers import client
+from tests.canopy.helpers import journal_of_answers
+from tests.canopy.web_helpers import client, signed_in_client
 
 
 def test_the_monthly_report_reads_local_months_oldest_first(backend: Backend) -> None:
@@ -59,6 +66,50 @@ def test_each_month_counts_the_sessions_outside_canopy_as_the_budget_does(backen
     assert after["sessions_read_at"] == "2026-10-08T12:00:00Z"
     spent = c.get("/api/spend/breakdown", params={"days": 30}).json()["month"]["spent_usd"]
     assert october["cost_usd"] == pytest.approx(spent)
+
+
+def test_the_checklist_counts_each_repositorys_items_as_the_cli_does(ctx: Context) -> None:
+    """Per repository and item over the last local days, `repo` narrowing it; a held item's reason is never sent."""
+    journal_of_answers(ctx.conn, datetime.now(UTC))
+    c, _ = signed_in_client(ctx)
+    found = c.get("/api/reports/checklist").json()
+    assert (found["days"], found["repo"]) == (spend.DEFAULT_DAYS, None)
+    assert found["since"] < found["until"]
+    columns = ("repo", "item", "reminded", "passed", "fixed", "held", "not_applicable", "unanswered")
+    assert [tuple(row[k] for k in columns) for row in found["items"]] == [
+        ("api", "general-types", 3, 2, 1, 0, 0, 0),
+        ("api", "newspaper", 3, 0, 1, 1, 1, 0),
+        ("api", "doc-comments", 3, 1, 0, 0, 0, 2),
+        ("web", "no-any", 1, 0, 0, 1, 0, 0),
+    ]
+    assert "Its reason." not in c.get("/api/reports/checklist", params={"days": 30}).text
+    today = c.get("/api/reports/checklist", params={"days": 1}).json()
+    assert [(row["item"], row["reminded"]) for row in today["items"]] == [
+        ("general-types", 1),
+        ("newspaper", 1),
+        ("doc-comments", 1),
+        ("no-any", 1),
+    ]
+    web = c.get("/api/reports/checklist", params={"repo": "web"}).json()
+    assert (web["repo"], [row["item"] for row in web["items"]]) == ("web", ["no-any"])
+    assert c.get("/api/reports/checklist", params={"repo": "docs"}).json()["items"] == []
+    for bad in ({"days": 0}, {"days": spend.MAX_DAYS + 1}, {"repo": "Not a repo"}):
+        assert c.get("/api/reports/checklist", params=bad).status_code == 422
+
+
+def test_the_mock_counts_its_two_lists(backend: Backend) -> None:
+    """`api`'s list in its order, answered by ABC-102's run, then `web`'s, by T0's four ended worker runs in it."""
+    found = client(None, backend).get("/api/reports/checklist").json()
+    assert [(row["repo"], row["item"], row["reminded"]) for row in found["items"]] == [
+        ("api", "general-types", 1),
+        ("api", "newspaper-order", 1),
+        ("api", "doc-comments", 1),
+        ("api", "migration-companion", 1),
+        ("web", "no-fixed-sleeps", 4),
+        ("web", "query-keys", 4),
+        ("web", "no-any", 4),
+        ("web", "i18n-strings", 4),
+    ]
 
 
 def test_the_health_report_is_canopy_healths_with_each_days_failures(backend: Backend) -> None:

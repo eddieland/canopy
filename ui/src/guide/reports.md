@@ -2,7 +2,7 @@
 
 What canopy cost and what it got done, month by month, what agent runs cost each day, and how they ended. Every
 dollar and token here is what the agent runtime reported, so if a runtime under-reports, so does this page. It is a
-mirror, not an audit.
+mirror, not an audit. Beside them, the checklist page counts how workers answered your checklists, item by item.
 
 ## The reports page
 
@@ -141,6 +141,31 @@ rail's. Then:
 - **Idle ticks**: the newest of them, to open.
 
 If a run reported no cost, the totals say how many, so a gap in the figures never passes for a quiet week.
+
+## The checklist page
+
+A checklist is your list of rules for a repository that no linter checks, one file per repository in
+`paths.checklists`. Before a worker's first push, canopy holds it and asks the worker to check its diff against each
+item and answer it. The checklist page, which **Checklist** on [Reports](/reports) opens, counts those answers so you
+can tell which items earn their place. It's what `canopy checklist` prints.
+
+**By item** is one table, a group of rows per repository under its name, each item in its list's order. **reminded**
+is how many worker runs were given the item, by when they started; then how many answered **pass** (the diff already
+held to it), **fixed** (it didn't, and the worker committed the fix), **held** (it doesn't, and the worker left it so
+for a reason it gave), or **n/a** (the diff touches nothing the item is about), and how many said nothing of it,
+**unanswered**. A run still running hasn't answered yet, so it isn't counted. A zero is dimmed, so the answers that
+happened stand out. Hover a column's name for what it counts.
+
+How to read it: an item that's mostly **n/a**, or never anything but **pass**, is one to reword or drop, because a
+rule that never fails is a rule the workers are paying tokens to agree with. One that's often **held** is one to argue
+about with whoever wrote it. A lot of **unanswered** usually means runs that never pushed, so were never asked: canopy
+counts every item of a run it gave a list to, pushed or not, and errs toward too many.
+
+Why a worker held an item is its own words, so it stays on the run rather than here: `canopy show run:ID` prints it.
+Pick **7 days**, **14 days**, or **30 days** in the header; a day runs midnight to midnight on canopy's clock, as the
+spend page's do. Two weeks is the measurement the checklist was built to take. With lists in more than one repository,
+the picker beside it narrows the table to the ones you choose. With no list answered in the window, the page says so,
+and names `paths.checklists`, where the lists live.
 
 ## The health page
 

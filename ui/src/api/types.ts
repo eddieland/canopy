@@ -167,6 +167,10 @@ export type ReportModel = Schemas['ReportModel']
 export type ReportTicket = Schemas['ReportTicket']
 /** The tokens a month's runs reported, by kind, and the share of what was sent read from the cache. */
 export type ReportTokens = Schemas['ReportTokens']
+/** How the worker runs of a window of local days answered each repository's checklist, as `canopy checklist` counts. */
+export type ChecklistCounts = Schemas['ChecklistCounts']
+/** One item of one repository's checklist: the runs reminded of it, and how many gave each answer. */
+export type ChecklistItemCounts = Schemas['ChecklistItemCounts']
 /** How the last days' runs ended, the newest failures, what the guards refused, and each day's counts. */
 export type HealthReport = Schemas['HealthReport']
 /** How many of one kind's runs, of one sort, ended in one status, and what they cost. */

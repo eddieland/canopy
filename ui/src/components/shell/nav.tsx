@@ -35,7 +35,13 @@ const TONE: Record<BreakdownPart['kind'], string> = {
 
 // A page under a section, which opens under its item while the section is shown.
 interface SubPage {
-    to: '/runs/ticks' | '/runs/worktrees' | '/pull-requests/reviews' | '/reports/spend' | '/reports/health'
+    to:
+        | '/runs/ticks'
+        | '/runs/worktrees'
+        | '/pull-requests/reviews'
+        | '/reports/spend'
+        | '/reports/checklist'
+        | '/reports/health'
     label: string
     hint: string
 }
@@ -90,12 +96,19 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
     {
         to: '/reports',
         icon: ChartColumn,
-        hint: 'What canopy cost and got done month by month, what agent runs cost each day, and how they ended',
+        hint:
+            'What canopy cost and got done month by month, what agent runs cost each day and how they ended, ' +
+            'and how workers answered your checklists',
         pages: [
             {
                 to: '/reports/spend',
                 label: 'Spend',
                 hint: 'What agent runs cost over the last 24 hours, 7 days, or 30 days',
+            },
+            {
+                to: '/reports/checklist',
+                label: 'Checklist',
+                hint: "How workers answered each repository's checklist, item by item, over the last days",
             },
             {
                 to: '/reports/health',
@@ -133,10 +146,10 @@ const SECTION_ACTIVE_INK: Record<Section, string> = {
  * active item in the canvas's color, drop the bar, or light the active icon (`--nav-block`, `--nav-hairline`,
  * `--nav-on-ink`, `--nav-on-glow` in `tokens.css`); a ticket's page keeps Tickets active, a PR's Pull requests, a
  * chore's Chores, and a run's Runs.
- * While the section shown has pages under it (Runs: Ticks and Worktrees; Pull requests: Reviews; Reports: Spend), they
- * open under its item, indented to its label, on a hairline in its color; elsewhere they stay folded. On one of them,
- * or a page under it, such as a tick's, the highlight is on that page's item, and the section's label stays in
- * `foreground`, untinted.
+ * While the section shown has pages under it (Runs: Ticks and Worktrees; Pull requests: Reviews; Reports: Spend and
+ * Checklist), they open under its item, indented to its label, on a hairline in its color; elsewhere they stay folded.
+ * On one of them, or a page under it, such as a tick's, the highlight is on that page's item, and the section's label
+ * stays in `foreground`, untinted.
  * Attention shows how many items it lists, on every page, split by severity, Pull requests how many review results the
  * operator has not opened, and Memory how many proposals wait on the operator, while proposals are on. Hovering an item
  * says what its page holds.

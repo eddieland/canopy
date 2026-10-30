@@ -1111,6 +1111,15 @@ def usage_of(row: sqlite3.Row | records.Row) -> Usage | None:
     )
 
 
+def spent_on[R: records.Row](update: records.Update[R], usage: Usage | None) -> records.Update[R]:
+    """`update`, also setting a row's cost and token columns to what `usage` says, each NULL when it is None.
+
+    Returns:
+        The update, with those columns set.
+    """
+    return update.set_to(_SPENT, *(_spent(usage) if usage is not None else (None,) * 10))
+
+
 def _set_report(
     conn: sqlite3.Connection,
     table: RunTable | Literal["ticks"],
@@ -1121,13 +1130,11 @@ def _set_report(
     digest: str | None,
     tools: Sequence[ToolUse],
 ) -> None:
-    spent = _spent(usage) if usage is not None else (None,) * 10
     # Only with a report: a template of the operator's that prints plain text may not load the snapshot at all.
     loaded = digest if session_id is not None or usage is not None else None
     report = (
-        records.update(records.of_table(table))
+        spent_on(records.update(records.of_table(table)), usage)
         .set(session_id=session_id)
-        .set_to(_SPENT, *spent)
         .set(definitions_digest=loaded)
         .where("id = ?", row_id)
     )
