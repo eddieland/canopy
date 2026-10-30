@@ -1056,10 +1056,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   A ticket's page description is its state, not what public or private means: the running run, a question waiting,
   its plan's status, and when it was last active, `run:41 running · plan waiting on you · active 38m ago`
   (`ticketDescription`).
-- **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
-  wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, a dashed
+- **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble as wide as its
+  words, up to 42rem and never past 85% of the panel, so the other side keeps a gutter at any width:
+  `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, a dashed
   hairline with muted text for canopy's note on what a tick did, and the accent's tint for the operator's own words,
-  which sit on the right. A bubble's corner nearest its side is square.
+  which sit on the right, their head line mirrored, its age at the outer edge. A bubble's corner nearest its side is
+  square.
   The question still open carries a `waiting on you` chip in `status-blocked`. A forgotten ticket's conversation
   (`TicketThread`) shows what came after the latest forget. At the oldest end, each forget heads the attempt it ended:
   a muted line saying when and how, with the branch and PRs it dropped under it, and that attempt's messages folded
