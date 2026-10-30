@@ -11,6 +11,7 @@ import { Disclosure } from '@/components/disclosure'
 import { Input, Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { PersonasMenu } from '@/components/personas-menu'
+import { ReviewModelMenu } from '@/components/review-model'
 import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
@@ -31,11 +32,12 @@ const SEVERAL =
     'canopy reviews its head once in each persona, in the repository it is in, and the request ends once each has.'
 
 /**
- * `canopy start URL --review --notes TEXT --persona NAME` from the reviews page (DESIGN §21, §22, §31), compact as a
- * ticket's `StartTicket` is: a PR the loop does not own, by its URL, an outline `Review`, and what its reviewer should
- * know, always open since the operator writes notes often; the personas to review it in, one review each, or none for
- * `[personas] reviewer`'s, are under `Show persona`. The personas start as those the operator prefers in Settings,
- * which the disclosure's line names while it is closed. canopy reviews it once, at its head, in whichever of the
+ * `canopy start URL --review --notes TEXT --persona NAME --model M` from the reviews page (DESIGN §13, §21, §22, §31),
+ * compact as a ticket's `StartTicket` is: a PR the loop does not own, by its URL, an outline `Review`, and what its
+ * reviewer should know, always open since the operator writes notes often; the personas to review it in, one review
+ * each, or none for `[personas] reviewer`'s, and the model its reviews run on, config's by default, are under
+ * `Show reviewer`. The personas start as those the operator prefers in Settings, which the disclosure's line names
+ * while it is closed, with the model when one is picked. canopy reviews it once, at its head, in whichever of the
  * workspace's repositories it is in, and the form opens the PR's page, where the request stands. Its review becomes a
  * draft the operator may publish as their own; nothing posts until they do, and nothing is reviewed now: the next tick
  * does it. The reviews page and the Review a PR dialog (`ReviewDialog`), which `R` opens from anywhere, both render it,
@@ -68,11 +70,13 @@ export function ReviewRequestForm({
     const [more, setMore] = useState(false)
     // The personas picked for this request alone, or null for the operator's preferred ones, as Settings has them now.
     const [picked, setPicked] = useState<readonly string[] | null>(draft.picked)
+    // The model picked for this request alone, or null for config's.
+    const [model, setModel] = useState<string | null>(draft.model)
     // Where the focus starts, as the form mounts: a dialog's own first focus keeps a focus already inside it.
     const [focused] = useState(focus ? (draft.url.trim() === '' ? 'url' : 'notes') : null)
 
     function change(next: Partial<ReviewRequestDraft>) {
-        onDraft?.({ url, notes, picked, ...next })
+        onDraft?.({ url, notes, picked, model, ...next })
     }
     const { data: personas } = useQuery(personasQuery)
     const preferred = useReviewPersonas()
@@ -80,7 +84,7 @@ export function ReviewRequestForm({
     // A link into a GitHub PR, such as one of its threads, names the PR: the server takes only its own address.
     const target = pullRequestUrl(url.trim()) ?? url.trim()
     const request = useMutation({
-        mutationFn: () => requestReview(target, notes.trim(), chosen),
+        mutationFn: () => requestReview(target, notes.trim(), chosen, model),
         onSuccess: () => {
             void refreshReviewRequests(client)
             onRequested?.()
@@ -151,10 +155,15 @@ export function ReviewRequestForm({
             </div>
             <Collapsible open={more} onOpenChange={setMore} className="flex flex-col gap-2">
                 <span className="flex flex-wrap items-center gap-x-2">
-                    <Disclosure open={more} what="persona" className="-ml-2" />
+                    <Disclosure open={more} what="reviewer" className="-ml-2" />
                     {!more && (
                         <span className="text-xs text-muted-foreground" data-testid="review-request-chosen">
                             {chosenText(chosen, picked === null, personas?.reviewer)}
+                            {model !== null && (
+                                <>
+                                    , on <span className="font-mono">{model}</span>
+                                </>
+                            )}
                         </span>
                     )}
                 </span>
@@ -181,6 +190,15 @@ export function ReviewRequestForm({
                             <span className="text-xs text-muted-foreground">one review in each, side by side</span>
                         )}
                     </div>
+                    <ReviewModelMenu
+                        model={model}
+                        disabled={request.isPending}
+                        onChange={(next) => {
+                            setModel(next)
+                            change({ model: next })
+                        }}
+                        testId="review-request-model"
+                    />
                 </CollapsibleContent>
             </Collapsible>
             <Notice error={request.error}>
@@ -201,11 +219,11 @@ function chosenText(chosen: readonly string[], preferred: boolean, reviewer: str
 
 /**
  * A PR's review request on its page, in the foot of its Pull request panel: open, with `Stop`, which ends it as
- * `canopy stop URL` does, or how it ended, and the personas and notes it gave the reviewer. While none is open on a
- * PR the loop does not own, `Review this PR`, or `Review again` once it has a review or a request that ended, asks
- * for one as `canopy start URL --review` does, in the personas its menu names: the ended request's, else those
- * Settings prefers. Nothing for one of the loop's own PRs never asked to be reviewed, which the server refuses
- * (`loop_pr`).
+ * `canopy stop URL` does, or how it ended, and the personas, model, and notes it gave the reviewer. While none is open
+ * on a PR the loop does not own, `Review this PR`, or `Review again` once it has a review or a request that ended,
+ * asks for one as `canopy start URL --review` does, in the personas its menu names: the ended request's, else those
+ * Settings prefers; and on the model its model menu names, config's unless one is picked for this request alone.
+ * Nothing for one of the loop's own PRs never asked to be reviewed, which the server refuses (`loop_pr`).
  */
 export function ReviewRequestStatus({
     url,
@@ -224,6 +242,8 @@ export function ReviewRequestStatus({
     const [said, setSaid] = useState<string | null>(null)
     // The personas picked for the next request alone, or null for the ended request's, else Settings'.
     const [picked, setPicked] = useState<readonly string[] | null>(null)
+    // The model picked for the next request alone, or null for config's.
+    const [model, setModel] = useState<string | null>(null)
     const { data: personas } = useQuery(personasQuery)
     const preferred = useReviewPersonas()
     const before = request === null ? [] : request.personas
@@ -236,10 +256,11 @@ export function ReviewRequestStatus({
         },
     })
     const ask = useMutation({
-        mutationFn: () => requestReview(url, '', chosen),
+        mutationFn: () => requestReview(url, '', chosen, model),
         onSuccess: (requested) => {
-            setSaid(reviewRequestedText(url, requested, false, chosen.length > 0))
+            setSaid(reviewRequestedText(url, requested, false, chosen.length > 0, model !== null))
             setPicked(null)
+            setModel(null)
             void refreshReviewRequests(client)
         },
     })
@@ -293,6 +314,13 @@ export function ReviewRequestStatus({
                             title={`canopy start ${url} --review --persona NAME`}
                             testId="review-request-personas-menu"
                         />
+                        <ReviewModelMenu
+                            model={model}
+                            url={url}
+                            disabled={ask.isPending}
+                            onChange={setModel}
+                            testId="review-request-model-menu"
+                        />
                         <Button
                             variant="outline"
                             title={`canopy start ${url} --review`}
@@ -306,9 +334,15 @@ export function ReviewRequestStatus({
                     </span>
                 )}
             </div>
-            {request !== null && request.personas.length > 0 && (
+            {request !== null && (request.personas.length > 0 || request.model !== null) && (
                 <p className="text-sm" data-testid="review-request-personas">
-                    {reviewPersonasText(request.personas)}
+                    {request.personas.length > 0 && reviewPersonasText(request.personas)}
+                    {request.personas.length > 0 && request.model !== null && ' '}
+                    {request.model !== null && (
+                        <span data-testid="review-request-model">
+                            Its reviews run on <span className="font-mono text-xs">{request.model}</span>.
+                        </span>
+                    )}
                 </p>
             )}
             {request !== null && request.notes !== null && (

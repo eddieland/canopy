@@ -234,6 +234,18 @@ test('the review dialog in dark', async ({ page }) => {
     await expect(dialog).toHaveScreenshot('review-dialog-dark.png')
 })
 
+// The review dialog's reviewer opened, a model picked for this request alone, which its menu then names.
+test('the review dialog with a model chosen in dark', async ({ page }) => {
+    await openInDark(page, `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
+    await page.keyboard.press('r')
+    const dialog = page.getByTestId('review-dialog')
+    await dialog.getByRole('button', { name: 'Show reviewer' }).click()
+    await dialog.getByRole('button', { name: 'Model: default' }).click()
+    await page.getByRole('option', { name: 'anthropic/claude-opus-4-1@max' }).click()
+    await expect(dialog.getByRole('button', { name: 'Model: anthropic/claude-opus-4-1@max' })).toBeVisible()
+    await expect(dialog).toHaveScreenshot('review-dialog-model-dark.png')
+})
+
 // The interface is a quarter larger from a 2560px window. The images are of the operator's window, which already
 // uses the width (2xl), so a wider one's would only repeat them larger.
 test('the root size grows with the window', async ({ page }) => {

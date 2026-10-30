@@ -1579,9 +1579,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   description.
   A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
   to the config: `Clear the override`, or `Use the default`.
-- **A choice of model** (`src/components/ticket-models.tsx`) is the same menu over the models the runtime lists, read
-  as a row naming a model shows, so one gone is marked before the menu opens, else when it opens: the button, then
-  where it comes from in muted `text-xs`. On a ticket's page it shares one grid with
+- **A choice of model** (`ModelPicker`, `src/components/model-picker.tsx`) is the same menu over the models the
+  runtime lists, read as a row naming a model shows, so one gone is marked before the menu opens, else when it opens:
+  the button, then where it comes from in muted `text-xs`. A ticket's agents (`src/components/ticket-models.tsx`) and
+  a review request (`ReviewModelMenu`, `src/components/review-model.tsx`) build on the one picker. A review request's
+  is `Model` beside its personas, its button reading `default` in muted sans while none is picked and config's
+  reviewer's model named after it in muted `text-xs`, so it reads the list as it shows only once a model is picked;
+  its ghost button under the list is `Use the default`, and the pick is that request's alone. On a ticket's page it
+  shares one grid with
   the persona (`src/components/ticket-agents.tsx`): a row per agent, its name, its persona, then its model, under a
   muted `persona` and `model` heading, so the conversation under the panel stays in reach; a Work panel narrower than
   `@lg` puts each model under its persona. The persona's column is as wide as its widest, up to 45%, and the model
@@ -1624,16 +1629,17 @@ sliver beside four others; and its axis names short call numbers without measuri
   does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list, as compact as a ticket's
   `Start privately` (`StartTicket`): the PR's URL in a monospace field and an outline `Review` beside it, the form's
   submit, with the CLI's command on hover; under them the notes, always open since the operator often has some, then
-  `Show persona`, a `Disclosure`, beside a muted line naming the personas it will use, and a `Notice` saying its
+  `Show reviewer`, a `Disclosure`, beside a muted line naming the personas it will use, and the model once one is
+  picked, folding the personas menu and the model menu (A choice of model), and a `Notice` saying its
   review is a draft the operator may publish as their own, which a refusal replaces. On success the form opens the
   PR's page. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open request wears a
   `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its Pull request
   panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has. While none is
-  open on a PR the loop does not own (`loop_pr` false), the line's end holds the personas menu and an outline
-  `Review this PR`, `Review again` once the PR has a review or an ended request; the loop's own PR without a request
-  has no line. What either button did goes under it (`Notice`). Until its review starts, the reviews list has a
-  `requested` row for it, whose ticket's place names the PR's author in muted monospace once canopy has read the PR,
-  since it has no ticket.
+  open on a PR the loop does not own (`loop_pr` false), the line's end holds the personas menu, the model menu, and
+  an outline `Review this PR`, `Review again` once the PR has a review or an ended request; the loop's own PR without
+  a request has no line. A request's personas and its model, open or ended, are a line under it. What either button
+  did goes under it (`Notice`). Until its review starts, the reviews list has a `requested` row for it, whose
+  ticket's place names the PR's author in muted monospace once canopy has read the PR, since it has no ticket.
 - **A review** (`/pull-requests/reviews/$id`) is canopy's shadow PR review, kept in the journal (D114); on a PR the loop
   does not own it is also a draft the operator may publish, word for word, as their own (A review's draft). The page
   holds the review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Its

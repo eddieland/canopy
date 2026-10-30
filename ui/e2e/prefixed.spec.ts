@@ -768,7 +768,7 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
     await form.getByLabel('PR URL').fill(pr)
     await expect(form.getByTestId('review-request-submit')).toHaveAttribute('title', 'canopy start URL --review')
     // Its review is written in skeptic, as `--persona skeptic` asks: the persona is folded under the notes.
-    await form.getByRole('button', { name: 'Show persona' }).click()
+    await form.getByRole('button', { name: 'Show reviewer' }).click()
     await form.getByRole('button', { name: 'Persona: canopy (default)' }).click()
     await expect(page.getByRole('menuitemcheckbox', { name: 'skeptic' })).toHaveAccessibleDescription(
         /^Plans and reviews by naming the input that would break each claim/u,
@@ -776,13 +776,19 @@ test("a coworker's PR is requested from the reviews page and stopped from its ow
     await page.getByRole('menuitemcheckbox', { name: 'skeptic' }).click()
     await page.keyboard.press('Escape')
     await expect(form.getByRole('button', { name: 'Persona: skeptic' })).toBeVisible()
+    // On a model of its own, as `--model` asks, in place of config's.
+    await form.getByRole('button', { name: 'Model: default' }).click()
+    await page.getByRole('option', { name: 'anthropic/claude-sonnet-4-5 (default)' }).click()
+    await expect(form.getByRole('button', { name: 'Model: anthropic/claude-sonnet-4-5' })).toBeVisible()
     await form.getByTestId('review-request-submit').click()
     // It opens the PR's page, where the request waits on a tick. canopy only reviews it, so it has no ticket's title
     // to lead with.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#120')
     const request = page.getByTestId('review-request')
     await expect(request).toContainText('canopy reviews its head once')
-    await expect(request.getByTestId('review-request-personas')).toHaveText('Its review is written in skeptic.')
+    await expect(request.getByTestId('review-request-personas')).toHaveText(
+        'Its review is written in skeptic. Its reviews run on anthropic/claude-sonnet-4-5.',
+    )
     // It is in the reviews list, waiting on a tick to start its review, and on the pull requests page too.
     await page.goto('pull-requests/reviews')
     await expect(page.getByTestId('reviews').getByTestId(`requested-${pr}`)).toContainText('requested')
