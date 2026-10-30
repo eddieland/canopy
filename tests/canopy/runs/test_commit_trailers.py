@@ -5,14 +5,20 @@ the run's harness note, never rewritten.
 """
 
 import json
+import shutil
 from pathlib import Path
 
+import pytest
+
+from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import commit_and_push, trailers_on, worker_does
 from tests.canopy.scenario_helpers import Scenario, pushes
 from tests.conftest import GitPool, executable, git
 
 TRAILER = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
 BRANCH = "agent/PROJ-1-work"
+#: prek, a dev dependency for canopy's own hooks (prek.toml), found before a fixture puts the fakes first on PATH.
+PREK = shutil.which("prek")
 
 
 def test_git_adds_canopys_trailer_to_each_commit_a_worker_makes(scenario: Scenario, git_pool: GitPool) -> None:
@@ -63,6 +69,49 @@ def test_the_repositorys_own_hooks_still_run(scenario: Scenario, git_pool: GitPo
     run = scenario.run(worker=pushes())
     assert run.status == "done"
     assert ran.read_text().splitlines() == ["pre-commit", "prepare-commit-msg .git/COMMIT_EDITMSG message"]
+    assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER]]
+
+
+def test_the_repositorys_own_pre_push_reads_the_refs_git_hands_it(
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    """The pre-push canopy puts first hands on its arguments and its input, where Git LFS's reads what to push."""
+    got = tmp_path / "got"
+    for slot in git_pool.slots:
+        executable(slot / ".git" / "hooks" / "pre-push", f'#!/bin/sh\necho "$1" >"{got}"\ncat >>"{got}"\n')
+    run = scenario.run(worker=pushes())
+    assert run.status == "done"
+    remote, refs = got.read_text().splitlines()
+    assert remote == "origin"
+    local_ref, local_sha, remote_ref, _ = refs.split()
+    assert (local_ref, local_sha, remote_ref) == ("HEAD", git_pool.remote_head(BRANCH), f"refs/heads/{BRANCH}")
+
+
+@pytest.mark.skipif(PREK is None, reason="prek, a dev dependency, is not on PATH")
+def test_prek_installed_in_the_primary_clone_runs_in_a_worktree_slot(
+    scenario: Scenario,
+    worktree_pool: tuple[Path, list[Path]],
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    """The setup docs/HOOKS.md describes: one `prek install` in the primary clone, and each slot runs its hooks."""
+    primary, slots = worktree_pool
+    ran = tmp_path / "ran"
+    stages = ("pre-commit", "pre-push")
+    hooks = "".join(
+        f"  - id: {stage}\n    name: {stage}\n    entry: sh -c 'echo {stage} >>\"{ran}\"'\n    language: system\n"
+        f"    stages: [{stage}]\n    pass_filenames: false\n    always_run: true\n"
+        for stage in stages
+    )
+    for checkout in (primary, *slots):
+        (checkout / ".pre-commit-config.yaml").write_text(f"repos:\n- repo: local\n  hooks:\n{hooks}")
+    install = [str(PREK), "install", *(arg for stage in stages for arg in ("--hook-type", stage))]
+    assert SubprocessRunner().run(install, cwd=primary).ok
+    run = scenario.run(worker=pushes())
+    assert run.status == "done"
+    assert ran.read_text().splitlines() == list(stages)
     assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER]]
 
 
