@@ -356,7 +356,7 @@ setting or clearing one wakes the loop (§6), and its lapse is a gate. No agent 
 ticks and runs: it reaches every later run's prompt, so an agent steered by one ticket could write into every other's
 (TRUST_MODEL T1). A failed check a notice explains is held: the overseer waits rather than spend a `resume` (D030)
 until the check runs again, and asks for a rerun (§14) once the notice ends. The state block keeps an ended notice
-while a unit shows a failed check, or is not observed fresh and may.
+while a unit observed fresh shows a failed check newer than its `ci` cursor, the only kind a notice can hold.
 
 Open: whether a notice should name repositories. Every notice reaches every run until real use shows the need.
 

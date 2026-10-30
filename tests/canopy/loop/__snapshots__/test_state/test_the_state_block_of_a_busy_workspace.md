@@ -205,12 +205,6 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "set_at": "2026-10-16T09:00:00.000Z",
       "until": "2026-10-16T12:00:00.000Z",
       "in_force": true
-    },
-    {
-      "text": "The registry is down.",
-      "set_at": "2026-10-16T08:00:00.000Z",
-      "until": "2026-10-16T08:30:00.000Z",
-      "in_force": false
     }
   ],
   "attention": [
