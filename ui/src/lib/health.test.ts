@@ -1,0 +1,49 @@
+import { describe, expect, it } from 'vitest'
+
+import type { HealthCounts, HealthDay } from '@/api/types'
+import type { Clock } from '@/lib/clock'
+
+import { countSum, HEALTH_SERIES, healthBars, healthDayHint, healthLine, healthWindow } from './health'
+
+const H24: Clock = { hours: '24', zone: false }
+const NONE: HealthCounts = { overseer: 0, workers: 0, plans: 0, chores: 0, reviews: 0, tasks: 0 }
+
+function day(name: string, ended: Partial<HealthCounts>, failed: Partial<HealthCounts> = {}): HealthDay {
+    return { day: name, start: `${name}T00:00:00Z`, ended: { ...NONE, ...ended }, failed: { ...NONE, ...failed } }
+}
+
+describe('health', () => {
+    it('offers the week and 30 days, as canopy health reads them', () => {
+        expect(healthWindow({ days: '30' })).toEqual({ days: 30 })
+        expect(healthWindow({ days: 7 })).toEqual({ days: 7 })
+        expect(healthWindow({ days: '14' })).toBeUndefined()
+        expect(healthWindow({})).toBeUndefined()
+    })
+
+    it("says the window's state: how many of its ended runs failed", () => {
+        const week = [day('2026-10-07', { workers: 10, overseer: 2 }, { workers: 2 }), day('2026-10-08', { chores: 1 })]
+        expect(healthLine({ days: 7, per_day: week })).toBe('2 of 13 runs failed over 7 days')
+        expect(healthLine({ days: 30, per_day: [day('2026-10-08', {})] })).toBe('no run ended over 30 days')
+        expect(healthLine({ days: 7, per_day: [day('2026-10-08', { reviews: 1 })] })).toBe(
+            '0 of 1 run failed over 7 days',
+        )
+    })
+
+    it('says a day on hover with each kind that failed, by the legend', () => {
+        expect(healthDayHint(day('2026-10-07', { overseer: 4, workers: 8 }, { overseer: 1, workers: 2 }), H24)).toBe(
+            'Oct 7: 3 failed of 12 ended, overseer 1, workers 2',
+        )
+        expect(healthDayHint(day('2026-10-08', { tasks: 1 }), H24)).toBe('Oct 8: 0 failed of 1 ended')
+    })
+
+    it("draws each day's failed runs, by kind bottom up", () => {
+        const [bar] = healthBars([day('2026-10-07', { workers: 3, reviews: 1 }, { workers: 2, reviews: 1 })], H24)
+        expect([bar?.key, bar?.label, bar?.total, bar?.totalText]).toEqual(['2026-10-07', 'Oct 7', 3, '3'])
+        expect(bar?.segments.map((s) => s.key)).toEqual(HEALTH_SERIES.map((s) => s.key))
+        expect(bar?.segments.filter((s) => s.value > 0).map((s) => [s.key, s.value])).toEqual([
+            ['workers', 2],
+            ['reviews', 1],
+        ])
+        expect(countSum({ ...NONE, plans: 2, tasks: 1 })).toBe(3)
+    })
+})

@@ -108,7 +108,7 @@ describe('Nav', () => {
         ['Runs', '/runs', ['Runs', 'Ticks', 'Worktrees'], 'Runs'],
         ['Runs', '/runs/41', ['Runs', 'Ticks', 'Worktrees'], 'Runs'],
         ['Pull requests', '/pull-requests', ['Pull requests', 'Reviews'], 'Pull requests'],
-        ['Reports', '/reports?month=2026-08', ['Reports', 'Spend', 'Checklist'], 'Reports'],
+        ['Reports', '/reports?month=2026-08', ['Reports', 'Spend', 'Checklist', 'Health'], 'Reports'],
     ] as const)("opens %s's pages under it on %s, the section current", async (_, at, opened, page) => {
         await renderNav({ at, items: [] })
         expect(listed()).toEqual(opening(opened))
@@ -119,8 +119,9 @@ describe('Nav', () => {
         ['Ticks', '/runs/ticks', ['Runs', 'Ticks', 'Worktrees']],
         ['Worktrees', '/runs/worktrees', ['Runs', 'Ticks', 'Worktrees']],
         ['Reviews', '/pull-requests/reviews', ['Pull requests', 'Reviews']],
-        ['Spend', '/reports/spend?days=30', ['Reports', 'Spend', 'Checklist']],
-        ['Checklist', '/reports/checklist?days=14', ['Reports', 'Spend', 'Checklist']],
+        ['Spend', '/reports/spend?days=30', ['Reports', 'Spend', 'Checklist', 'Health']],
+        ['Checklist', '/reports/checklist?days=14', ['Reports', 'Spend', 'Checklist', 'Health']],
+        ['Health', '/reports/health?days=30', ['Reports', 'Spend', 'Checklist', 'Health']],
     ] as const)('marks %s current on its own page, not the section over it', async (page, at, opened) => {
         await renderNav({ at, items: [] })
         expect(listed()).toEqual(opening(opened))

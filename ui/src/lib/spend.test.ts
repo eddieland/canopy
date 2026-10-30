@@ -16,7 +16,6 @@ import {
     dayHint,
     dayLabel,
     dayName,
-    dearestDay,
     doneText,
     kindsOffered,
     comparedModels,
@@ -29,12 +28,12 @@ import {
     seriesCost,
     SERIES,
     shareText,
+    spendBars,
     spendLine,
     spendWindow,
+    unpricedText,
     toolRows,
     unreadShare,
-    windowId,
-    windowName,
     workspacePerRun,
 } from './spend'
 
@@ -128,17 +127,6 @@ describe('spend', () => {
         expect(dayLabel(hourOf(14), { hours: '24', zone: true })).toBe('14:00')
     })
 
-    it('finds the dearest day, the latest of equals, so its total is said over its bar', () => {
-        const week = [
-            day('2026-10-06', { total: 2 }),
-            day('2026-10-07', { total: 4.5 }),
-            day('2026-10-08', { total: 1 }),
-        ]
-        expect(dearestDay(week)).toBe(1)
-        expect(dearestDay([day('2026-10-07', { total: 3 }), day('2026-10-08', { total: 3 })])).toBe(1)
-        expect(dearestDay([day('2026-10-08', {})])).toBe(-1)
-    })
-
     it('takes only the windows the page offers, hours before days', () => {
         expect(spendWindow({ days: '30' })).toEqual({ days: 30 })
         expect(spendWindow({ days: 7 })).toEqual({ days: 7 })
@@ -149,13 +137,27 @@ describe('spend', () => {
         expect(spendWindow({})).toBeUndefined()
     })
 
-    it('names a window and gives it an id, in hours or in days', () => {
-        expect([windowName({ hours: 24 }), windowName({ days: 7 }), windowName({ days: 1 })]).toEqual([
-            '24 hours',
-            '7 days',
-            '1 day',
-        ])
-        expect([windowId({ hours: 24 }), windowId({ days: 30 })]).toEqual(['24h', '30'])
+    it('draws each day as a bar of its series, bottom up, the overseer less its idle ticks', () => {
+        const [bar] = spendBars([day('2026-10-07', { overseer: 1, idle: 0.25, workers: 2, total: 3 })], H24)
+        expect(bar?.key).toBe('2026-10-07')
+        expect(bar?.label).toBe('Oct 7')
+        expect([bar?.total, bar?.totalText]).toEqual([3, '$3.00'])
+        expect(bar?.segments.map((s) => [s.key, s.value])).toEqual(
+            SERIES.map((s) => [s.key, seriesCost({ ...NONE, overseer: 1, idle: 0.25, workers: 2, total: 3 }, s.key)]),
+        )
+        expect(bar?.segments.find((s) => s.key === 'overseer')?.value).toBe(0.75)
+        expect(spendBars([day('2026-10-08', {})], H24)[0]?.total).toBe(0)
+    })
+
+    it('says which ended runs reported no cost, or that every one did', () => {
+        expect(
+            unpricedText([
+                { kind: 'overseer', runs: 3, unpriced: 0 },
+                { kind: 'workers', runs: 4, unpriced: 1 },
+                { kind: 'chores', runs: 2, unpriced: 2 },
+            ]),
+        ).toBe('No cost reported: 1 of 4 worker runs, 2 of 2 chore runs.')
+        expect(unpricedText([{ kind: 'workers', runs: 4, unpriced: 0 }])).toBe('Every run that ended reported a cost.')
     })
 
     it('says a share as a whole percent', () => {
