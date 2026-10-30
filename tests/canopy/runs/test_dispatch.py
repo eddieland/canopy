@@ -71,7 +71,7 @@ def test_dispatch_leases_records_and_spawns(
         text = prompt.read_text()
         assert text.startswith("# canopy worker: implement")
         assert "{{" not in text
-        assert f"ticket PROJ-1 in {leased.slot_path}." in text
+        assert f"ticket PROJ-1 in {leased.slot_path}, and your branch is `agent/PROJ-1-add-login`." in text
         assert "This run works in one repository:\n- `repo` at `" + str(leased.slot_path) in text
         assert ": branch `agent/PROJ-1-add-login` from `main`; PR: not recorded; look up the PR for " in text
         assert '"prs":{"repo":"<url or null>"}' in text

@@ -489,12 +489,18 @@ def _run_agent(
     )
     if refused is not None:
         raise SetupError(refused)
-    title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
     # The model the run recorded, which its ticket's override may have chosen in place of config's (DESIGN §13).
     models = agent_models.of_run(ctx.config, template, run["model"])
-    snapshot = definitions.ensure(ctx.state_dir, ctx.config, models)
+    # The prompt's fixed instructions are its agent's body, in a snapshot every run of its kind shares (DESIGN §13).
+    bodies, message = definitions.run_prompt(prompt, template)
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config, models, bodies)
     command = ctx.config.runtime.worker_template(template)
-    rendered = render_command(command, prompt, snapshot, title)
+    rendered = render_command(
+        command,
+        message,
+        snapshot,
+        session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"])),
+    )
     argv = sandboxing.wrap(ctx.config.runtime, [s.repo for s in slots], "worker", rendered.argv, snapshot)
     if desked:
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), trees)

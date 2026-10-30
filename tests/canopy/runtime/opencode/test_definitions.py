@@ -10,6 +10,7 @@ from canopy.runtime import agents
 from canopy.runtime.opencode import definitions
 
 PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
+BODY_MARKER = "<!-- canopy: prompt -->\n"
 SKILL_MARKER = "    # canopy: skill rule\n"
 READS_MARKER = "  # canopy: tracker reads\n"
 ISSUES_MARKER = "  # canopy: github issue tools\n"
@@ -59,6 +60,7 @@ PLAIN = agents.Rules(
     artifacts=None,
     models={},
     chore_agents=(),
+    bodies={},
 )
 
 
@@ -139,6 +141,30 @@ def test_an_overseer_definition_without_a_marked_line_is_refused(marker: str) ->
     bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
     with pytest.raises(agents.DefinitionsError, match="no line"):
         definitions.render_overseer(bundled.replace(marker, ""), "# canopy overseer\n")
+
+
+def test_a_runs_fixed_instructions_replace_its_agents_stub_and_no_other_agents() -> None:
+    files = definitions.bundled()
+    rendered = definitions.render(files, replace(PLAIN, bodies={agents.WORKER: "\n# canopy worker\n\nWork.\n\n"}))
+    head, _, _ = files[f"agents/{agents.WORKER}.md"].decode().partition(BODY_MARKER)
+    assert rendered[f"agents/{agents.WORKER}.md"].decode() == f"{head}# canopy worker\n\nWork.\n"
+    private = files[f"agents/{agents.PRIVATE_WORKER}.md"].decode()
+    assert rendered[f"agents/{agents.PRIVATE_WORKER}.md"].decode() == private.replace(BODY_MARKER, "")
+
+
+@pytest.mark.parametrize("agent", agents.BODIED)
+def test_without_a_body_a_definition_keeps_its_stub_and_loses_only_the_marked_line(agent: str) -> None:
+    shipped = definitions.bundled()[f"agents/{agent}.md"].decode()
+    rendered = definitions.render(definitions.bundled(), PLAIN)[f"agents/{agent}.md"].decode()
+    assert BODY_MARKER in shipped
+    assert rendered == shipped.replace(BODY_MARKER, "")
+
+
+@pytest.mark.parametrize("agent", agents.BODIED)
+def test_a_definition_that_takes_a_body_without_its_marked_line_is_refused(agent: str) -> None:
+    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
+    with pytest.raises(agents.DefinitionsError, match="no line"):
+        definitions.render_body(bundled.replace(BODY_MARKER, ""), agent, "Work.\n")
 
 
 #: The agents whose tracker reads are rendered as the reviewer's, and the function that renders them.

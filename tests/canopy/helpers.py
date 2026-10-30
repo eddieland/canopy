@@ -116,7 +116,7 @@ PROMPT_VALUES = {
     "REVIEW_ANSWERS": "",
     "PLAN": None,
     "REASONS": "- `review`: review comments to address.",
-    "FOLLOW_UPS": prompts.follow_ups("PROJ-1", 5, ["repo"], needs_human="needs-human", labels=["agent-ready-alice"]),
+    "FOLLOW_UPS": prompts.follow_ups(5, ["repo"], needs_human="needs-human", labels=["agent-ready-alice"]),
     # How comments reach GitHub under `trust.review_replies = "post"`, the text the prompts held before (DESIGN §29).
     **replies.posted_values("In every comment and reply you post, start it with `CANOPY:` and a space.", "needs-human"),
 }
@@ -124,7 +124,6 @@ PROMPT_VALUES = {
 PRIVATE_PROMPT_VALUES = {
     **PROMPT_VALUES,
     "FOLLOW_UPS": prompts.follow_ups(
-        "PROJ-1",
         5,
         ["repo"],
         needs_human="needs-human",
