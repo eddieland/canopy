@@ -114,6 +114,7 @@ PROMPT_VALUES = {
     "PREVIOUS_RUNS": None,
     "REVIEW_FINDINGS": None,
     "REVIEW_ANSWERS": "",
+    "CHECKLIST": "",
     "PLAN": None,
     "REASONS": "- `review`: review comments to address.",
     "FOLLOW_UPS": prompts.follow_ups(5, ["repo"], needs_human="needs-human", labels=["agent-ready-alice"]),

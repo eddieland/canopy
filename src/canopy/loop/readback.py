@@ -17,13 +17,15 @@ from typing import TYPE_CHECKING, Annotated
 
 from pydantic import AfterValidator, Field, StrictInt, StrictStr
 
-from canopy.core import cards, chore_result, chore_view, config, contract, conversation, db, reports
+from canopy.core import cards, checklist_answers, chore_result, chore_view, config, contract, conversation, db, reports
 from canopy.core.vocab import Decider, RunStatus
 from canopy.infra.text import one_line
 from canopy.loop import attention
 from canopy.loop.render import chore_line, named, prs_of, result_of, spent
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from canopy.core import records
     from canopy.core.context import Context
 
@@ -140,6 +142,7 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
         lines.append(f"  harness: {said}")
     session = f"session {run['session_id']}" if run["session_id"] else "no session reported"
     lines.extend([f"  {session}{spent(run)}", f"  log {run['log_path']}"])
+    lines.extend(_checklist_lines(checklist_answers.of_run(ctx.conn, run_id)))
     # Its agent's progress, while it runs and its last once it ends (DESIGN §41).
     running = run["status"] == RunStatus.RUNNING
     standing = cards.of(run)
@@ -159,6 +162,23 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
     for m in messages:
         lines.extend(message_lines(m))
     return "\n".join(lines)
+
+
+def _checklist_lines(answers: Sequence[records.ChecklistAnswer]) -> list[str]:
+    """What a run answered of its repositories' checklists (DESIGN §42), an item a line; none for a run given no list.
+
+    A `held` item's reason is the worker's text, printed under it, indented, and made printable as a message is.
+
+    Returns:
+        The lines, under a heading.
+    """
+    if not answers:
+        return []
+    lines = ["\nChecklist:"]
+    for a in answers:
+        lines.append(f"  {a.repo}  {a.item}  {a.answer}")
+        lines.extend(f"    {line}" for line in conversation.printable(a.reason or "").splitlines())
+    return lines
 
 
 def read_chore(ctx: Context, request: ShowChore) -> str:
