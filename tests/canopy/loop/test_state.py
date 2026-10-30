@@ -226,6 +226,24 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
         assert rendered(canopy_env, ctx, tick_id, dry_run=True, running=1, leased=leased) == markdown_snapshot
 
 
+def test_the_state_block_shows_a_time_to_the_minute_and_text_as_written(canopy_env: CanopyEnv) -> None:
+    """A journal time drops its seconds, never rounding up; a text that holds one keeps it as it was written."""
+    ctx = context(canopy_env)
+    said = "CI is down until 2026-10-16T11:59:59.999Z."
+    ctx.conn.execute(
+        "INSERT INTO notices (body, set_at, channel, lapses_at) VALUES (?, ?, 'cli', ?)",
+        (said, f"{DAY}T09:41:59.999Z", stamp("12:00")),
+    )
+    with clock("10:00"):
+        tick_id = db.start_tick(ctx.conn, dry_run=False)
+    block = rendered(canopy_env, ctx, tick_id, dry_run=False, running=0, leased=[])
+    state = json.loads(block.split("```json\n", 1)[1].split("\n```", 1)[0])
+    assert state["notices"] == [
+        {"text": said, "set_at": f"{DAY}T09:41Z", "until": f"{DAY}T12:00Z", "in_force": True},
+    ]
+    assert state["now"] == f"{DAY}T10:00Z"
+
+
 def prompts(env: CanopyEnv, *names: str) -> None:
     """Write a prompt for each chore of `names`, where `chore_toml` names it."""
     for name in names:

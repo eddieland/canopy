@@ -11,7 +11,7 @@ did, never live state. The observations are live state as of their age, and your
 GitHub: decide from them (see "Observations"). In `tickets`, `chores`, and `reviews`, a key whose value would be null or
 an empty list or object is left out, at any depth: read an absent key as that, such as a cursor not yet set, a ticket's
 `last_run` before its first run, a private ticket's `new_operator_messages` with none new, a chore's `due_at` when it
-is due now, or a clean review's `findings`.
+is due now, or a clean review's `findings`. The block's times are UTC, to the minute, such as `2026-10-16T09:40Z`.
 
 ## Tools you have
 
@@ -83,7 +83,7 @@ You can do nothing else. If you want to, record a `skip` for the ticket with a `
      `attempts` has reached it in any unit the dispatch would name (a `resume` count includes old `fix-ci` runs), or
      `plan.attempts` has reached `plan.limit`, or a unit's `feedback_plan.attempts` its `feedback_plan.limits`,
      dispatch nothing and record `wait`: the harness raises `attempt_limit` for it.
-   - CI cooldown. While a unit's `ci_cooldown_until` is later than `now`, a `resume` whose only reason would be `ci`
+   - CI cooldown. While a unit's `ci_cooldown_until` is `now` or later, a `resume` whose only reason would be `ci`
      waits: record `wait`. A `resume` with another reason is not held, and takes the failed check along.
    - A failed run. When the ticket's `last_run` ended `crashed`, `unpushed`, `unknown`, `timeout`, or `failed` (and is
      not an old `needs-plan` run), the harness has it on the attention list: record `wait`, unless an authorized

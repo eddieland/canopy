@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
@@ -27,6 +28,9 @@ if TYPE_CHECKING:
     from canopy.loop.observations import ObservationsState, UnitObservation
     from canopy.reviews.view import ReviewsSection
     from canopy.runs.reconcile import Capacity
+
+#: A time as the journal writes it (`db.format_time`): a value that is one, and nothing else, shows its minute.
+_JOURNAL_TIME = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}):[0-9]{2}\.[0-9]{3}Z")
 
 
 class OverseerState(TypedDict):
@@ -438,19 +442,42 @@ def state_block(
             "```json",
             # Compact: every step of the tick re-reads the block, and it is about 29% fewer tokens than indented.
             json.dumps(
-                {
-                    **state,
-                    "tickets": _compact(state["tickets"]),
-                    **({"chores": _compact(state["chores"])} if "chores" in state else {}),
-                    **({"reviews": _by_unit(state["reviews"], state["tickets"])} if "reviews" in state else {}),
-                    "observations": rendered_observations(state["observations"], titles),
-                },
+                _to_the_minute(
+                    {
+                        **state,
+                        "tickets": _compact(state["tickets"]),
+                        **({"chores": _compact(state["chores"])} if "chores" in state else {}),
+                        **({"reviews": _by_unit(state["reviews"], state["tickets"])} if "reviews" in state else {}),
+                        "observations": rendered_observations(state["observations"], titles),
+                    },
+                ),
                 separators=(",", ":"),
             ),
             "```",
             "",
         ],
     )
+
+
+def _to_the_minute(value: object) -> object:
+    """`value` as the state block renders its times: each value that is a journal time, to the minute, as `...T09:40Z`.
+
+    The seconds are dropped, never rounded up. A string with a time among other text, such as a comment's body, a
+    `why`, or a cursor item's description, stays as it is; no tool takes a time back, so none is compared with the
+    journal's.
+
+    Returns:
+        A copy of `value` with those times shortened.
+    """
+    if isinstance(value, str):
+        time = _JOURNAL_TIME.fullmatch(value)
+        return f"{time[1]}Z" if time is not None else value
+    if isinstance(value, Mapping):
+        return {str(k): _to_the_minute(v) for k, v in cast("Mapping[object, object]", value).items()}
+    # A string is taken above: any other sequence is a JSON array.
+    if isinstance(value, Sequence):
+        return [_to_the_minute(v) for v in cast("Sequence[object]", value)]
+    return value
 
 
 def _name_cursors(tickets: list[TicketState], numbered: Mapping[int, records.ItemNumber]) -> list[TicketState]:
