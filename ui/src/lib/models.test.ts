@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
 import { mockRuns } from '@/api/mocks'
-import type { Run } from '@/api/types'
+import type { ModelsServed, Run } from '@/api/types'
 
-import { modelNames, pickerModel, ranOn, runModelIds, sameModel, unservedReason, withVariant } from './models'
+import { isUnread, modelNames, pickerModel, ranOn, runModelIds, sameModel, unservedReason, withVariant } from './models'
 
 const [RUNNING, BLOCKED] = mockRuns as [Run, Run]
 
@@ -73,6 +73,19 @@ describe('unservedReason', () => {
             'its session could not be read, tried again later (timed out)',
         )
         expect(unservedReason(BLOCKED.models ?? { status: 'unread', models: [], error: null })).toBeNull()
+    })
+})
+
+describe('isUnread', () => {
+    it.each([
+        ['running', true],
+        ['unread', true],
+        ['failed', true],
+        ['found', false],
+        ['missing', false],
+        ['no_session', false],
+    ] as const)('takes a session %s as unread: %s', (status: ModelsServed['status'], unread) => {
+        expect(isUnread({ status, models: [], error: null })).toBe(unread)
     })
 })
 

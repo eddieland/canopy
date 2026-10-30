@@ -78,10 +78,10 @@ describe('ConfigModels', () => {
         expect(await rows()).toEqual([
             ['worker', 'acme/deep-2'],
             ['planner', 'runtime default'],
-            ['reviewer', 'other/review-3 at high'],
+            ['reviewer', 'other/review-3@high'],
             ['overseer', 'runtime default'],
             ['chore', 'acme/fast-1every chore without a model of its own'],
-            ['chore:deps', 'acme/deep-2 at lowown model'],
+            ['chore:deps', 'acme/deep-2@lowown model'],
             ['chore:lint', 'acme/fast-1'],
             // config never gives an agent of the operator's own a model: its definition does.
             ['chore:sentry', 'triage, which chooses its own model in its definition'],
