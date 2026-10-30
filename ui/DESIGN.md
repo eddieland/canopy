@@ -117,9 +117,10 @@ Rules:
   where panels stand apart by their lightness alone), its depth (a soft shadow in the canvas's hue, a hard one with
   no blur, or, on black, where a shadow does nothing, the accent's glow), and its face (`--face`: interface text in
   Plex Sans, or in Plex Mono, as an editor sets it). Spacing, sizes, and layout never change with a palette, and
-  neither do the status colors; only the mono face reflows text, since it runs wider. The defaults take the soft
-  shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the nineties, and black no
-  edges, soft corners, and the glow.
+  neither do the status colors; only the mono face reflows text, since it runs wider, so it stays with the few palettes
+  that are an editor's own look: Gruvbox's sides and Monokai. The defaults take the soft shadow, Gruvbox's dark the
+  crisp corners, hard shadow, and mono face of an editor of the nineties, and black no edges, soft corners, and the
+  glow.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a hairline, a solid block with the active item inked in the canvas's
@@ -130,9 +131,9 @@ Rules:
   sit a few degrees round the wheel. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
   from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage.
   Every other palette picks from the same choices, so each reads as its own place: Gruvbox's light side as its dark
-  one, Solarized's sides crisp and flat, Monokai crisp with a neon aurora, Nord's light side soft under a fade
-  through Frost's blues, grey tight under one steel rule, and sage, Rosé Pine Dawn, forest, and plum soft, plum the
-  softest. Off-white lays its panels on the canvas like paper.
+  one, Solarized's sides crisp and flat, Monokai crisp and in mono under a neon aurora, Nord's light side soft under a
+  fade through Frost's blues, grey tight under one steel rule, and sage, Rosé Pine Dawn, forest, and plum soft, plum
+  the softest. Off-white lays its panels on the canvas like paper.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
