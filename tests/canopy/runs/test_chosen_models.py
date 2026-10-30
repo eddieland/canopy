@@ -351,9 +351,11 @@ def test_a_tickets_reviewer_override_reaches_its_reviews_alone(
     listed(opencode_state, MODEL, OTHER)
     scenario.operator("model", KEY, OTHER, "--agent", "reviewer")
     # A review of a PR with no ticket never takes it.
-    scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    assert scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN)).row.model is None
     assert ran_on(agent_log, "canopy-reviewer") is None
-    scenario.review(reviews(feature_commit(git_pool, tmp_path), ticket=KEY), reviewer=reviewer_reports(CLEAN))
+    # A review records the model it asked for as it starts, as a worker run does, and runs on what it recorded.
+    ticketed = reviews(feature_commit(git_pool, tmp_path), ticket=KEY)
+    assert scenario.review(ticketed, reviewer=reviewer_reports(CLEAN)).row.model == OTHER
     assert ran_on(agent_log, "canopy-reviewer") == OTHER
     # Nor does a worker's run: the override is the reviewer's alone.
     assert scenario.run(worker=pushes()).row["model"] is None
@@ -406,7 +408,7 @@ def test_a_reviewers_model_in_config_the_runtime_does_not_list_refuses_a_review_
     assert refused[0] == ("refused:model_missing", reason)
     assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
     listed(opencode_state, OTHER, MODEL)
-    scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    assert scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN)).row.model == MODEL
     assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 1
 
 

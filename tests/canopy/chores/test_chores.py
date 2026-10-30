@@ -594,6 +594,9 @@ def test_a_chore_with_a_model_of_its_own_runs_on_it(
             tick_starts(InlineRunner())
             assert main(["_chore", str(run_id)], runner=InlineRunner()) == 0
         assert present(chore_runs.get_chore_run(conn, run_id)).status == "ok"
+    # Each run records the model it asked for, the chore's own or `runtime.models.chore`.
+    asked = [present(chore_runs.get_chore_run(conn, run_id)).model for run_id in (1, 2)]
+    assert asked == ["acme/fake-model-2@high", "acme/fake-model-1"]
     triage, build_health = agent_runs(agent_log)
     assert triage["argv"][:3] == ["run", "--agent", "canopy-chore-triage"]
     snapshot = Path(triage["env"]["OPENCODE_CONFIG_DIR"])

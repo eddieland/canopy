@@ -338,8 +338,11 @@ def insert_run(
     lease: pools.Lease,
     pool: PoolKind,
     logs_dir: Path,
+    model: str | None = None,
 ) -> int | None:
     """Record task `task`'s run in the slot `lease` holds, logging to `<logs_dir>/<id>.log`, if the task still waits.
+
+    `model` is the one its private worker asks for (DESIGN §13), None for the runtime's default.
 
     Checked in the transaction that inserts it, so a `stop` that commits first starts nothing, and so does a run
     another tick already started.
@@ -369,6 +372,7 @@ def insert_run(
             started_at=db.now(),
             log_path="",
             message_id=sql.execute(conn, newest).fetchone()[0],
+            model=model,
         )
         run_id = int(run.run(conn).lastrowid or 0)
         log_path = str(logs_dir / f"{run_id}.log")
