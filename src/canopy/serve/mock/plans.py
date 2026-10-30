@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import plans, sql
+from canopy.core import plans, records
 
 if TYPE_CHECKING:
     import sqlite3
@@ -93,62 +93,53 @@ _PLAN_THREADS = (
 
 def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], root: Path) -> None:
     """Insert ABC-105, its two plan runs, their plans, and the comments on the second, and write each plan's file."""
-    sql.execute(
-        conn,
-        sql.insert(
-            "tickets",
-            key="ABC-105",
-            repo=str(root),
-            first_seen_at=at(-90),
-            last_seen_at=at(-8),
-            changed_at=at(-8),
-            title="Schedule report exports",
-            phase="plan_proposed",
-        ),
-    )
+    records.insert(
+        records.Ticket,
+        key="ABC-105",
+        repo=str(root),
+        first_seen_at=at(-90),
+        last_seen_at=at(-8),
+        changed_at=at(-8),
+        title="Schedule report exports",
+        phase="plan_proposed",
+    ).run(conn)
     for run_id, started, ended, summary in (
         (35, -60, -52, "A schedule menu and a job that emails the CSV."),
         (44, -30, -14, "A schedule menu, a job that emails a link to the CSV, and the owner's timezone."),
     ):
-        sql.execute(
-            conn,
-            sql.insert(
-                "runs",
-                id=run_id,
-                tick_id=1,
-                ticket_key="ABC-105",
-                kind="plan",
-                branch="",
-                started_at=at(started),
-                ended_at=at(ended),
-                status="done",
-                result_json=json.dumps({"status": "done", "summary": summary}),
-                log_path=str(state_dir / "runs" / f"{run_id}.log"),
-                private=0,
-                cost_usd=0.64,
-            ),
-        )
+        records.insert(
+            records.Run,
+            id=run_id,
+            tick_id=1,
+            ticket_key="ABC-105",
+            kind="plan",
+            branch="",
+            started_at=at(started),
+            ended_at=at(ended),
+            status="done",
+            result_json=json.dumps({"status": "done", "summary": summary}),
+            log_path=str(state_dir / "runs" / f"{run_id}.log"),
+            private=0,
+            cost_usd=0.64,
+        ).run(conn)
     for plan_id, run_id, text, status, created in (
         (1, 35, _FIRST_PLAN, "superseded", -52),
         (2, 44, _PLAN, "proposed", -14),
     ):
         written = plans.write(state_dir, "ABC-105", run_id, text)
-        sql.execute(
-            conn,
-            sql.insert(
-                "plans",
-                id=plan_id,
-                ticket_key="ABC-105",
-                run_id=run_id,
-                created_at=at(created),
-                status=status,
-                sha256=written.sha256,
-                size=written.size,
-            ),
-        )
+        records.insert(
+            records.Plan,
+            id=plan_id,
+            ticket_key="ABC-105",
+            run_id=run_id,
+            created_at=at(created),
+            status=status,
+            sha256=written.sha256,
+            size=written.size,
+        ).run(conn)
     for quote, prefix, suffix, body, minutes, resolved, replies in _PLAN_THREADS:
-        thread = sql.insert(
-            "plan_threads",
+        thread = records.insert(
+            records.PlanThread,
             ticket_key="ABC-105",
             quote=quote,
             prefix=prefix,
@@ -157,6 +148,6 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], ro
             created_at=at(minutes),
             resolved_at=at(minutes + 1) if resolved else None,
         ).returning("id")
-        thread_id = sql.execute(conn, thread).fetchone()[0]
+        thread_id = thread.run(conn).fetchone()[0]
         for reply in replies:
-            sql.execute(conn, sql.insert("plan_replies", thread_id=thread_id, body=reply, created_at=at(minutes + 2)))
+            records.insert(records.PlanReply, thread_id=thread_id, body=reply, created_at=at(minutes + 2)).run(conn)

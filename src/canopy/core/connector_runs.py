@@ -49,27 +49,24 @@ def record(
         The run's id.
     """
     with db.transaction(conn):
-        cur = sql.execute(
-            conn,
-            sql.insert(
-                "connector_runs",
-                tick_id=tick_id,
-                source=name,
-                kind=SourceKind(source.kind),
-                started_at=observed.started_at,
-                ended_at=observed.ended_at,
-                status=observed.status,
-                request=json.dumps(request.to_json()),
-                recorded=json.dumps(dict(sorted(observed.recorded.items()))),
-                refused=json.dumps(dict(sorted(observed.refused.items()))),
-                missed=observed.missed,
-                stderr=observed.stderr,
-                query_result=None if observed.query_result is None else json.dumps(list(observed.query_result)),
-                review_query_result=(
-                    None if observed.review_query_result is None else json.dumps(list(observed.review_query_result))
-                ),
+        cur = records.insert(
+            records.ConnectorRun,
+            tick_id=tick_id,
+            source=name,
+            kind=SourceKind(source.kind),
+            started_at=observed.started_at,
+            ended_at=observed.ended_at,
+            status=observed.status,
+            request=json.dumps(request.to_json()),
+            recorded=json.dumps(dict(sorted(observed.recorded.items()))),
+            refused=json.dumps(dict(sorted(observed.refused.items()))),
+            missed=observed.missed,
+            stderr=observed.stderr,
+            query_result=None if observed.query_result is None else json.dumps(list(observed.query_result)),
+            review_query_result=(
+                None if observed.review_query_result is None else json.dumps(list(observed.review_query_result))
             ),
-        )
+        ).run(conn)
     return int(cur.lastrowid or 0)
 
 
@@ -88,14 +85,12 @@ def failures(conn: sqlite3.Connection, tick_id: int) -> list[Failure]:
     Returns:
         A failure for each such run, its detail naming the source and what it missed, with the tail of its stderr.
     """
-    rows = records.fetch_all(
-        conn,
-        records.ConnectorRun,
-        sql.select("*")
-        .from_("connector_runs")
+    rows = (
+        records.select(records.ConnectorRun)
         .where("tick_id = ?", tick_id)
         .where("status != ?", ConnectorRunStatus.OK)
-        .order_by("source, id"),
+        .order_by("source, id")
+        .all(conn)
     )
     found: list[Failure] = []
     for run in rows:
@@ -147,19 +142,11 @@ def statuses(conn: sqlite3.Connection, config: Config, now: datetime) -> list[So
     found: list[SourceStatus] = []
     cutoff = now - timedelta(minutes=config.connect.max_age_minutes)
     for name, source in config.connect.named().items():
-        latest = records.fetch_one(
-            conn,
-            records.ConnectorRun,
-            sql.select("*").from_("connector_runs").where("source = ?", name).order_by("id DESC").limit(1),
-        )
+        latest = records.select(records.ConnectorRun).where("source = ?", name).order_by("id DESC").limit(1).one(conn)
         kind = SourceKind(source.kind)
         through = None
         if kind is SourceKind.ARTIFACTS:
-            feed = records.fetch_one(
-                conn,
-                records.ObservedFeed,
-                sql.select("*").from_("observed_feeds").where("source = ?", name),
-            )
+            feed = records.select(records.ObservedFeed).where("source = ?", name).one(conn)
             through = 0 if feed is None else feed.through
             times: list[str] = [] if feed is None or feed.read_at is None else [feed.read_at]
             never = 0 if times else 1

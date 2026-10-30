@@ -4,8 +4,9 @@ An upload and a removal write through the functions `canopy attach` and `canopy 
 their guards refuse them as they refuse the CLI's.
 """
 
-from canopy.core import attachments, conversation, db
+from canopy.core import conversation, db
 from canopy.core.context import Context
+from canopy.runs import attachments
 from tests.canopy.helpers import in_run
 from tests.canopy.web_helpers import refused, signed_in_client
 

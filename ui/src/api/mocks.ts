@@ -8,6 +8,7 @@ import type {
     Draft,
     FeedbackPlan,
     FeedbackPlanItem,
+    HostResources,
     PullRequestThreads,
     ReviewDraft,
     ReviewSummary,
@@ -54,6 +55,21 @@ export const mockRuns: Run[] = [
         worktrees: ['.treehouse/web-3f9c2a1b/1/web'],
         log_path: '/home/op/.canopy/runs/41.log',
         activity: { tool: 'bash', did: 'npm test -- login', at: '2026-10-08T12:27:00Z' },
+        card: {
+            summary: 'The SSO callback is in and its tests pass; wiring the login button next.',
+            now: 'running the login tests',
+            done: [{ step: 'add the SSO callback', proof: 'tests pass: 12/12' }],
+            next: ['wire the login button', 'push'],
+            stuck: null,
+            at: '2026-10-08T12:24:00Z',
+            calls_since: 3,
+            stale: false,
+            stale_at: '2026-10-08T12:34:00Z',
+            steps: [],
+            percent: null,
+            stage: null,
+            question: null,
+        },
         persona: 'canopy',
         persona_digest: '6c1f0a3e9b2d4c5a7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d',
         model: null,
@@ -82,6 +98,7 @@ export const mockRuns: Run[] = [
         worktrees: [],
         log_path: '/home/op/.canopy/runs/42.log',
         activity: null,
+        card: null,
         persona: null,
         persona_digest: null,
         model: null,
@@ -156,6 +173,7 @@ export const mockReviews: ReviewSummary[] = [
         news: false,
         seen: false,
         draft: null,
+        served: [],
     },
 ]
 
@@ -184,6 +202,7 @@ export const mockChores: ChoreSummary[] = [
             new_tokens: 11960,
             peak_context: 14400,
             log_path: '/home/op/.canopy/chore-runs/deps/2.log',
+            served: [],
         },
         due_at: '2026-10-08T14:00:00Z',
         findings: [
@@ -224,6 +243,7 @@ export function mockTaskRun(fields: Partial<TaskRun> = {}): TaskRun {
         new_tokens: 48210,
         peak_context: 61200,
         log_path: '.canopy/task-runs/1.log',
+        served: [],
         ...fields,
     }
 }
@@ -508,6 +528,43 @@ export function feedbackPlan(fields: Partial<FeedbackPlan> = {}): FeedbackPlan {
             }),
             feedbackPlanItem(),
         ],
+        ...fields,
+    }
+}
+
+const GIB = 1024 ** 3
+const MIB = 1024 ** 2
+
+/** The mock's machine (canopy/serve/mock/host.py), with any fields replaced: nothing on it under pressure. */
+export function mockHost(fields: Partial<HostResources> = {}): HostResources {
+    return {
+        hostname: 'build-box',
+        system: 'Linux 6.8.0',
+        machine: 'x86_64',
+        python: '3.13.1',
+        booted_at: '2026-09-29T08:30:00Z',
+        read_at: '2026-10-08T12:30:00Z',
+        cpu: { cores: 12, load: [2.41, 1.87, 1.52] },
+        memory: { total: 64 * GIB, available: 23 * GIB + 410 * MIB, swap_total: 8 * GIB, swap_free: 7 * GIB },
+        disks: [
+            {
+                holds: ['workspace', 'journal'],
+                path: '/home/operator/acme',
+                total: 931 * GIB,
+                free: 412 * GIB,
+                floor: 2 * GIB,
+            },
+            { holds: ['temp'], path: '/tmp', total: 32 * GIB, free: 27 * GIB + 300 * MIB, floor: null },
+        ],
+        process: {
+            pid: 48213,
+            started_at: '2026-10-08T09:18:00Z',
+            rss: 268 * MIB,
+            peak_rss: 412 * MIB,
+            threads: 19,
+            open_files: 61,
+            max_open_files: 65536,
+        },
         ...fields,
     }
 }

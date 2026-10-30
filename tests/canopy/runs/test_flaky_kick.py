@@ -4,23 +4,26 @@ import json
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 from unittest import mock
 
 from canopy.core import contract
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.notify import message
-from tests.canopy.helpers import KEY, WORKER_DONE, waits, worker_does
+from tests.canopy.helpers import KEY, READ_PR, WORKER_DONE, Called, messages, raises, waits, worker_does
 from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes
 from tests.conftest import GitPool, git
 
 BRANCH = "agent/PROJ-1-work"
+#: The PR a worker's result names, `WORKER_DONE`'s.
+PR = "https://example.test/pr/1"
 #: A `resume` worker's result that leaves a failed check as flaky, changing nothing.
 LEAVES_FLAKY = json.dumps(
     json.loads(WORKER_DONE) | {"branch": BRANCH, "summary": "unit-tests lost its runner", "flaky": True},
 )
 
 
-def resumes(*reasons: ResumeReason) -> list[str]:
+def resumes(*reasons: ResumeReason) -> Called:
     """The overseer resumes PROJ-1 for `reasons`."""
     return dispatches(kind=RunKind.RESUME, reasons=reasons)
 
@@ -58,9 +61,9 @@ def takes_runs(scenario: Scenario) -> None:
     scenario.configures(notify={"sinks": {"slack": {"cmd": "true", "events": ["runs"]}}})
 
 
-def told(scenario: Scenario) -> list[dict[str, object]]:
-    """The fields of each `ci.flaky` event in the outbox, in order."""
-    rows = scenario.conn.execute("SELECT fields FROM notify_events WHERE kind = 'ci.flaky' ORDER BY id")
+def told(scenario: Scenario, kind: str = "ci.flaky") -> list[dict[str, object]]:
+    """The fields of each `kind` event in the outbox, in order."""
+    rows = scenario.conn.execute("SELECT fields FROM notify_events WHERE kind = ? ORDER BY id", (kind,))
     return [json.loads(str(r["fields"])) for r in rows]
 
 
@@ -78,13 +81,30 @@ def test_without_kicks_a_flaky_check_is_left_to_the_operator(scenario: Scenario,
 def test_a_flaky_check_is_kicked_onto_the_base_until_the_head_has_had_its_kicks(
     scenario: Scenario,
     git_pool: GitPool,
+    github_state: Path,
 ) -> None:
     scenario.configures(trust={"max_flaky_kicks": 2})
-    scenario.run(worker=pushes())
+    # A PR the `vcs` source reads, so the overseer is listed the ticket (DESIGN §39), read within the hour.
+    scenario.configures("private", connect={"max_age_minutes": 60})
+    scenario.run(worker=pushes(prs={"repo": READ_PR}))
+    run_ids = iter(range(77, 80))
+
+    def red_again() -> Ran:
+        """A tick reads a new head of the PR whose check failed, and a `resume` leaves the failure as flaky."""
+        run_id = next(run_ids)
+        failed = {"name": "unit-tests", "status": "completed", "conclusion": "failure", "run_id": run_id}
+        github_state.write_text(
+            json.dumps({"prs": {READ_PR: {"pr": {"head_sha": f"abc{run_id:04d}"}, "checks": [failed]}}}),
+        )
+        scenario.tick(*waits(KEY, rationale="its check failed"))
+        scenario.time_passes(minutes=31)
+        leaves = json.loads(LEAVES_FLAKY) | {"pr": READ_PR}
+        return scenario.run(resumes(ResumeReason.CI), worker=worker_does(result=json.dumps(leaves)))
+
     heads = [git_pool.remote_head(BRANCH)]
     for name in ("m1", "m2"):
         main_moves(git_pool, name)
-        kicked = leaves_flaky(scenario)
+        kicked = red_again()
         assert kicked.status == "done", harness_note(kicked)
         assert contract.stored_object(kicked.row["result_json"])["kicked"] == ["repo"]
         head = git_pool.remote_head(BRANCH)
@@ -98,7 +118,7 @@ def test_a_flaky_check_is_kicked_onto_the_base_until_the_head_has_had_its_kicks(
     assert scenario.ticket_state()["last_run"]["kicked"] == ["repo"]
 
     main_moves(git_pool, "m3")
-    spent = leaves_flaky(scenario)
+    spent = red_again()
     assert spent.status == "done"
     assert git_pool.remote_head(BRANCH) == heads[-1]
     assert f"repo: not kicked: {BRANCH} has had 2 kick(s) since its work was pushed" in harness_note(spent)
@@ -225,3 +245,66 @@ def test_a_flaky_bit_from_a_run_not_sent_for_ci_tells_the_sinks_nothing(scenario
     scenario.run(worker=pushes())
     leaves_flaky(scenario, ResumeReason.REVIEW)
     assert told(scenario) == []
+
+
+def test_a_sink_with_the_default_groups_hears_of_each_forced_push(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(notify={"sinks": {"phone": {"cmd": "true"}}}, trust={"max_flaky_kicks": 1})
+    scenario.run(worker=pushes())
+    before = git_pool.remote_head(BRANCH)
+    main_moves(git_pool, "m")
+
+    kicked = leaves_flaky(scenario)
+    [fields] = told(scenario, "ci.kicked")
+    after = git_pool.remote_head(BRANCH)
+    assert before is not None
+    assert after is not None
+    assert fields == {
+        "ticket": KEY,
+        "run": kicked.id,
+        "repo": "repo",
+        "branch": BRANCH,
+        "pr": PR,
+        "from_head": before,
+        "to_head": after,
+        "kick": 1,
+        "limit": 1,
+    }
+    assert message.event_line("ci.kicked", fields) == (
+        f"! {KEY} run {kicked.id}: canopy force-pushed {BRANCH} in repo to rerun a check left as flaky (kick 1 of 1): "
+        f"{before[:12]} -> {after[:12]} {PR}"
+    )
+    # Out of kicks, nothing is pushed, so nothing is told; `ci.flaky` is in `runs`, which this sink does not take.
+    main_moves(git_pool, "m2")
+    leaves_flaky(scenario)
+    assert len(told(scenario, "ci.kicked")) == 1
+    assert told(scenario) == []
+
+
+def test_a_kick_whose_push_fails_tells_no_sink(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.configures(notify={"sinks": {"phone": {"cmd": "true"}}}, trust={"max_flaky_kicks": 1})
+    scenario.run(worker=pushes())
+    main_moves(git_pool, "m")
+    git_pool.reject_pushes()
+    leaves_flaky(scenario)
+    assert told(scenario, "ci.kicked") == []
+
+
+def test_a_batching_sink_hears_of_a_forced_push_at_once(
+    scenario: Scenario,
+    git_pool: GitPool,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "desk.txt"
+    desk = {"cmd": f"{sink_script} {out}", "batch_minutes": 30}
+    scenario.configures(notify={"sinks": {"desk": desk}}, trust={"max_flaky_kicks": 1})
+    scenario.run(worker=pushes())
+    main_moves(git_pool, "m")
+    scenario.time_passes(minutes=31)  # past the CI cooldown, before the first delivery opens the batch window
+    scenario.tick(raises("PROJ-9", "flaky_rerun"), *waits(KEY))
+    assert len(messages(out)) == 1
+
+    scenario.run(resumes(ResumeReason.CI), worker=worker_does(result=LEAVES_FLAKY))
+    scenario.tick(raises("PROJ-9", "flaky_rerun"), *waits(KEY))
+    [_, sent] = [json.loads(m) for m in messages(out)]
+    assert [e["kind"] for e in sent["events"]] == ["ci.kicked"]

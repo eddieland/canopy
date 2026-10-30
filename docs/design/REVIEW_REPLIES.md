@@ -71,7 +71,8 @@ authorized reply; canopy knows it instead by the id the post returned. The state
 operator sent through canopy as neither review feedback nor a go-ahead, and the `review` cursor (§7) passes them.
 
 The harness raises `drafts_waiting` (§14), the operator's alone, for each unit or ticket with a draft to send, until
-each is sent, dropped, or superseded, or the PR closes. It says when the threads could not be read, and holds nothing.
+each is sent, dropped, or superseded, or the PR closes. The list reads it from the drafts as they stand, so it shows
+once the run ends, not from the next tick. It says when the threads could not be read, and holds nothing.
 
 In place of a send, after the same checks, the operator may stage a PR's drafts: canopy opens one pending review holding
 them, and never submits it; the operator does, on GitHub. GitHub cannot keep a reaction pending, so a stage adds its

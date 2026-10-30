@@ -74,6 +74,9 @@ class TaskRun(Model):
     """The most tokens one of its model calls was sent; None when the runtime reported nothing."""
     log_path: str
     """Where its log is: from the workspace root when under it."""
+    served: list[str] = []
+    """The models its session names as having served it, as `provider/model`, the most costly first; empty until
+    canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served."""
 
 
 class TaskSummary(Model):
@@ -148,6 +151,10 @@ class TaskRunDetail(Model):
     """The tickets canopy recorded from its result."""
     models: ModelsServed
     """Which models served it."""
+    model: str | None = None
+    """The model canopy asked the runtime for, for its private worker (DESIGN §13, Each agent's model), as
+    `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a run from
+    before canopy recorded it."""
 
 
 class TaskReport(Model):

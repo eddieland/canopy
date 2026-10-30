@@ -64,7 +64,8 @@ class TickStatus(StrEnum):
 
     RUNNING = "running"
     OK = "ok"
-    # The overseer skipped the whole tick: it could not see the world (`mcp_unavailable`, `tracker_unsupported`).
+    # The overseer skipped the whole tick: it could not see the world (`mcp_unavailable`, `tracker_unsupported`). Kept
+    # for an older release's ticks: since config requires a `tracker` source, the overseer reads no server (DESIGN §39).
     SKIPPED = "skipped"
     # The server of the overseer's tools did not answer `initialize` (DESIGN §27), so the overseer did not run.
     CANOPY_UNAVAILABLE = "canopy_unavailable"

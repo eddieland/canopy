@@ -2,7 +2,8 @@
 name = "canopy-github"
 # From the latest v* tag, as canopy's is (D085), so every package canopy ships carries its version.
 dynamic = ["version"]
-description = "canopy's GitHub programs: read PRs and branches into canopy, and post the replies the operator approved."
+description = "canopy's GitHub programs: read PRs, branches, and issues into canopy; post what the operator approved."
+readme = "README.md"
 license = "MIT"
 authors = [{ name = "eddieland" }]
 keywords = ["canopy", "github", "graphql", "review"]

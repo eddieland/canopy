@@ -13,6 +13,7 @@ from rich.console import Console
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.core import (
+    cards,
     chore_result,
     chore_view,
     connector_runs,
@@ -23,10 +24,8 @@ from canopy.core import (
     notice,
     pause,
     reports,
-    review_requests,
     review_runs,
     run_models,
-    tasks,
 )
 from canopy.core.vocab import ReplyMode
 from canopy.infra import hangup, keys, lock
@@ -45,7 +44,8 @@ from canopy.loop.render import (
     spent,
 )
 from canopy.notify import deliver
-from canopy.runs import drafted
+from canopy.reviews import review_requests
+from canopy.runs import drafted, tasks
 
 if TYPE_CHECKING:
     import sqlite3
@@ -279,15 +279,31 @@ def _print_workers(ctx: Context) -> None:
         # What its worker reported so far (DESIGN §8): nothing until its first event, or ever without `--format json`.
         if r["session_id"]:
             click.echo(f"    session {r['session_id']}{spent(r)}{_doing(r)}")
+        _print_card(r, f"run:{r['id']}")
     # A review holds a slot and counts toward max_workers (DESIGN §21).
     for r in db.running_runs(ctx.conn, "review_runs"):
         where = f"  {r['slot_path']}" if r["slot_path"] else ""
         click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}{where}{persona_of(r)}")
+        _print_card(r, f"review:{r['id']}")
     # So does a task's run (DESIGN §36).
     for t in tasks.running(ctx.conn):
         click.echo(f"  task:{t.task_id}  run {t.id}  {attention.age(t.started_at)}  {t.slot_path}")
     if not busy:
         click.echo("  none")
+
+
+def _print_card(run: sqlite3.Row, ref: str) -> None:
+    """What a running run's progress says it does now, and when it last updated it (DESIGN §41), and what it asks you.
+
+    A run's progress is the operator's alone: nothing inside one of canopy's ticks or runs. Nothing before its update is
+    stale, unless it asks a question still waiting on you, which `ref`, the run's reference, answers.
+    """
+    if not conversation.is_operator():
+        return
+    standing = cards.of(run)
+    for line in (cards.doing(standing, str(run["started_at"])), cards.asking(standing, ref)):
+        if line is not None:
+            click.echo(f"    {line}")
 
 
 def _doing(run: sqlite3.Row) -> str:

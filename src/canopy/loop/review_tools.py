@@ -1,9 +1,9 @@
 """The overseer's review verbs (DESIGN §6, §21, §27, §34): start, hold off, or end a review, or revise its draft.
 
 A revision is of a review's draft, which the operator's note asks for. Each verb is a request (`loop.tools.Request`) and
-a function, which the `canopy review` commands and the MCP server (`loop.mcp`) both call, as they do the overseer's
-other verbs. A review or a revision the overseer asks for is recorded, and the tick starts it once the overseer's run
-has ended (`spawn_review`, `spawn_revision`, DESIGN §40).
+a function, which the MCP server (`loop.mcp`) calls, as it does the overseer's other verbs. A review or a revision the
+overseer asks for is recorded, and the tick starts it once the overseer's run has ended (`spawn_review`,
+`spawn_revision`, DESIGN §40).
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Annotated
 
 from pydantic import ConfigDict, Field, StrictInt, WithJsonSchema
 
-from canopy.core import conversation, db, recorded_runs, review_requests, review_revisions, review_runs
+from canopy.core import conversation, db, recorded_runs, review_revisions, review_runs
 from canopy.core.vocab import RecordedStatus
 from canopy.infra import logs
 from canopy.loop import attention
@@ -32,7 +32,7 @@ from canopy.loop.tools import (
     running_tick,
     truncate,
 )
-from canopy.reviews import grants, revise
+from canopy.reviews import grants, review_requests, revise
 from canopy.reviews import start as review_start
 
 if TYPE_CHECKING:
@@ -46,7 +46,7 @@ END_ACTION = "review:end"
 class ReviewRun(Request):
     """A review of a PR at a commit."""
 
-    # `repo` left out is the review guard's refusal, recorded as the command's is, so the request takes it.
+    # `repo` left out is the review guard's refusal, which the decisions record, so the request takes it.
     model_config = ConfigDict(json_schema_extra=required("repo"))
 
     #: The PR's URL, as an opaque string: the review's guards check it, and a refusal records it.
@@ -109,7 +109,7 @@ def review_run(ctx: Context, request: ReviewRun) -> Outcome[ReviewsStarted]:
     once the overseer's run has ended (DESIGN §40).
 
     Returns:
-        What the command prints, and the same as fields.
+        The tool's text, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or a guard refused the review, which is recorded.
@@ -153,7 +153,7 @@ def _review_one(
     """Record one review for the tick to start, or in a dry run check its guards and record the decision.
 
     Returns:
-        What the command prints of it, and the same as fields.
+        The tool's text of it, and the same as fields.
 
     Raises:
         Refusal: a guard refused it.
@@ -257,7 +257,7 @@ def review_wait(ctx: Context, request: ReviewWait) -> Outcome[ReviewWaitRecorded
     """Record that a PR is not to be reviewed now, and why.
 
     Returns:
-        What the command prints, and the same as fields.
+        The tool's text, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or reviews are off.
@@ -298,7 +298,7 @@ def review_end(ctx: Context, request: ReviewEnd) -> Outcome[ReviewEnded]:
     """End the operator's review request on a PR; in a dry run, record it and end nothing.
 
     Returns:
-        What the command prints, and the same as fields.
+        The tool's text, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or there is no open request to end, which is recorded.
@@ -343,7 +343,7 @@ def review_revise(ctx: Context, request: ReviewRevise) -> Outcome[RevisionStarte
     The tick starts the recorded one once the overseer's run has ended (DESIGN §40).
 
     Returns:
-        What the command prints, and the same as fields.
+        The tool's text, and the same as fields.
 
     Raises:
         Refused: Outside a running tick, or a guard refused the revision, which is recorded.

@@ -5,10 +5,10 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import db, personas, review_requests, review_revisions, review_runs
+from canopy.core import db, personas, review_revisions, review_runs
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
-from canopy.reviews import grants, settle
+from canopy.reviews import grants, review_requests, settle
 from canopy.reviews import start as review_start
 
 if TYPE_CHECKING:
@@ -49,7 +49,7 @@ class LatestReview(TypedDict):
 
     Of one of the loop's own PRs reviewed in each persona of `[personas] reviewers` (DESIGN §31), a `done` one stands
     for every persona's latest `done` review of its commit together: their kept findings, the gravest impact, and the
-    time the last of them ended.
+    number the last of them took. When it started and ended no decision reads, so neither is here.
     """
 
     run_id: int
@@ -62,8 +62,6 @@ class LatestReview(TypedDict):
     #: The findings canopy holds for the operator, rebuttals of a worker's decline and late ones, which no `resume`
     #: addresses.
     held_findings: int
-    started_at: str
-    ended_at: str | None
     #: The journal number the last of them took when it ended, which the `review` cursor names (DESIGN §35); None
     #: while it runs.
     number: int | None
@@ -113,7 +111,7 @@ class LatestRevision(TypedDict):
 class WantedRevision(TypedDict):
     """A review's draft the operator's note asks a revision of (DESIGN §34): never the note's or the draft's text."""
 
-    #: The review whose draft it is, which `canopy review revise --run` names.
+    #: The review whose draft it is, which the `review-revise` tool's `run` names.
     review_run: int
     pr: str
     #: The commit the review read, which the revision reads too.
@@ -199,14 +197,13 @@ def scoped(
     *,
     tickets: AbstractSet[str],
     prs: AbstractSet[str],
-    found: AbstractSet[str] | None,
+    found: AbstractSet[str],
 ) -> ReviewsSection:
     """Cut the state block's `reviews.prs` to the PRs the overseer may act on: no decision rests on another's review.
 
     Those are the PRs of the `tickets` it is listed, and their units' `prs`, those with the operator's open request,
-    and those the review query `found`, or every PR of no ticket when `found` is None, as it is while the overseer runs
-    the query itself (DESIGN §21). A PR a ticket done, stopped, or decided by the harness holds, an old request's, or
-    one the query no longer finds, is left out.
+    and those the review query `found` (DESIGN §21). A PR a ticket done, stopped, or decided by the harness holds, an
+    old request's, or one the query no longer finds, is left out.
 
     Returns:
         `section` with those PRs alone, in its order.
@@ -215,10 +212,7 @@ def scoped(
     kept = [
         pr
         for pr in section["prs"]
-        if pr["ticket"] in tickets
-        or pr["url"] in prs
-        or pr["url"] in requested
-        or (pr["url"] in found if found is not None else pr["ticket"] is None)
+        if pr["ticket"] in tickets or pr["url"] in prs or pr["url"] in requested or pr["url"] in found
     ]
     return {**section, "prs": kept}
 
@@ -307,7 +301,6 @@ def _latest(
             verdicts.append(stored.verdict)
         if stored is not None and stored.impact is not None:
             impacts.append(stored.impact)
-    ended = max((r.ended_at for r in reviews if r.ended_at is not None), default=None)
     numbers = [r.number for r in reviews if r.number is not None]
     return {
         "run_id": latest.id,
@@ -318,7 +311,5 @@ def _latest(
         "findings": kept,
         "dismissed_findings": dismissed_count,
         "held_findings": held_count,
-        "started_at": latest.started_at,
-        "ended_at": ended,
         "number": max(numbers, default=None),
     }

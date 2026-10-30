@@ -12,10 +12,11 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import chore_runs, db, pr_list, records, review_runs, sql
+from canopy.core import chore_runs, db, records, review_runs, sql
 from canopy.core.vocab import Phase, SeenKind, TickStatus
 from canopy.infra import resources
 from canopy.runtime.report import ToolUse, Usage
+from canopy.serve import pr_list
 from tests.canopy.helpers import DEAD_PID, journal_at, old_ticket, present, shipped_through, versions_after
 from tests.conftest import Journals
 
@@ -317,8 +318,6 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     tick = db.start_tick(conn, dry_run=True)
     db.touch_ticket(conn, "PROJ-1", "/repo")
     db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, cursors={"comment": "7"})
-    # With no tracker source, the comment cursor is the tracker's id, kept apart from the journal number.
-    db.set_ticket(conn, "PROJ-1", "/repo", cursors={"comment": "c-7"}, tracked=False)
     db.set_unit(conn, "PROJ-1", "/repo", "api", phase="ci_red", cursors={"ci": "9"})
     db.set_ticket(conn, "PROJ-2", "/repo", done=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks pending")
@@ -327,7 +326,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     row = present(db.get_tick(conn, stale))
     assert row.status == TickStatus.ABANDONED
     [ticket] = db.open_tickets(conn)
-    assert (ticket.key, ticket.phase, ticket.comment_cursor, ticket.last_comment_id) == ("PROJ-1", "ci_red", 7, "c-7")
+    assert (ticket.key, ticket.phase, ticket.comment_cursor) == ("PROJ-1", "ci_red", 7)
     [unit] = db.units(conn, "PROJ-1")
     assert (unit.repo, unit.phase, unit.ci_cursor, unit.branch) == ("api", "ci_red", 9, None)
     [decision] = db.decisions_for_tick(conn, tick)
@@ -352,7 +351,7 @@ def test_a_ticket_is_active_when_it_changes_not_when_a_tick_sets_what_it_already
     def active() -> tuple[str, str, str]:
         [ticket] = db.recent_tickets(conn, 5)
         [pr] = pr_list.pull_requests(conn, 5)
-        return ticket["last_seen_at"], ticket["active_at"], pr["active_at"]
+        return ticket["last_seen_at"], ticket["active_at"], pr.active_at
 
     with mock.patch.object(db, "now", autospec=True, return_value=at(0)):
         db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, title="Sign in")

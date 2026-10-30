@@ -14,13 +14,14 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.chores import history
-from canopy.core import commit_hooks, config, definitions, git_tools, plans, prompts, reports
+from canopy.core import cards, commit_hooks, config, definitions, git_tools, plans, prompts, reports
 from canopy.infra import resources
 from canopy.loop import mcp
 from canopy.runtime import agents, servers
 from canopy.runtime import definitions as runtime_definitions
 from canopy.runtime.implementation import Version
 from canopy.runtime.opencode import definitions as opencode_definitions
+from tests.canopy.helpers import APPROVE, TRACKER_POSTS
 from tests.conftest import CanopyEnv
 
 PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
@@ -635,6 +636,31 @@ def test_no_other_agent_may_call_canopys_git_tools(canopy_env: CanopyEnv, agent:
     assert [tool for tool in GIT_TOOLS if not _opencode_disabled(ruleset, tool)] == []
 
 
+#: The agents that keep a card through canopy's `status` tool (DESIGN §41).
+CARD_KEEPERS = {agents.WORKER, agents.PRIVATE_WORKER, agents.PLANNER, agents.REVIEWER}
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+@pytest.mark.parametrize("agent", sorted(CARD_KEEPERS))
+def test_workers_planners_and_reviewers_may_call_the_status_tool_by_name(
+    canopy_env: CanopyEnv,
+    agent: str,
+    provider: str,
+) -> None:
+    _set_provider(canopy_env, provider)
+    ruleset = _ruleset(canopy_env, agent)
+    assert _opencode_action(ruleset, cards.tool_name(), "*") == "allow"
+    # By name, never by a pattern: another tool of the server, or a server named like it, is no one's.
+    assert _opencode_action(ruleset, "canopy_run_status2", "*") == "deny"
+
+
+@pytest.mark.parametrize("provider", ["github", "jira"])
+@pytest.mark.parametrize("agent", sorted(set(runtime_definitions.agent_names()) - CARD_KEEPERS))
+def test_no_other_agent_may_call_the_status_tool(canopy_env: CanopyEnv, agent: str, provider: str) -> None:
+    _set_provider(canopy_env, provider)
+    assert _opencode_disabled(_ruleset(canopy_env, agent), cards.tool_name())
+
+
 #: The artifact store's tools as the runtime names them on a server called `louvre` (DESIGN §38), the feed among them.
 STORE_TOOLS = tuple(f"louvre_{tool}" for tool in (*config.ARTIFACT_TOOLS, "comment_feed"))
 #: The store's skill, which every definition denies but a publishing worker's.
@@ -778,26 +804,20 @@ def _opencode_disabled(ruleset: Iterable[tuple[str, str, str]], permission: str)
     return bool(matching) and matching[-1] == ("*", "deny")
 
 
-def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canopy_env: CanopyEnv) -> None:
+def test_the_overseer_definition_carries_its_prompt_and_no_trackers_skill(canopy_env: CanopyEnv) -> None:
     # The prompt is the agent's system prompt, cached across ticks; the tick's message is the state block (DESIGN §6).
+    # The `tracker` source reads the tracker, so the overseer has no skill for it (DESIGN §39).
     snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     text = (snapshot / "agents" / "canopy-overseer.md").read_text()
     bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
     head = opencode_definitions.render_temperature(bundled, "canopy-overseer", 0.1).split(PROMPT_MARKER)[0]
-    head = opencode_definitions.render_overseer_reads(head, config.DEFAULT_TRACKER_TOOLS["jira"], "jira")
-    # With the skill in its body, it has nothing to load (`"*": deny` among its skill rules, below).
+    # It has nothing to load (`"*": deny` among its skill rules, below).
     head = head.replace(SKILL_MARKER, f'{SKILL_MARKER}    "*": deny\n', 1)
     assert text.startswith(head)
-    body = text.removeprefix(head)
     prompt = prompts.render_overseer(config.load(canopy_env.root)).strip("\n")
-    assert body.startswith(
-        f"{prompt}\n\nThe skill `tracker-jira` follows, given here so that you need not load it.\n\n",
-    )
+    assert text.removeprefix(head) == f"{prompt}\n"
+    # The skill stays a skill, for the workers.
     skill = (resources.skills_dir() / "tracker-jira" / "SKILL.md").read_text()
-    assert body.endswith(skill.split("\n---\n", 1)[1].strip() + "\n")
-    assert "name: tracker-jira" not in body
-    assert "no prompt supplied" not in body
-    # The skill stays a skill too, for the workers.
     assert (snapshot / "skills" / "tracker-jira" / "SKILL.md").read_text() == skill
 
 
@@ -810,7 +830,7 @@ def test_an_overseer_override_makes_a_snapshot_of_its_own(canopy_env: CanopyEnv)
     snapshot = definitions.ensure(canopy_env.state_dir, cfg)
     assert snapshot != shipped
     text = (snapshot / "agents" / "canopy-overseer.md").read_text()
-    assert "\n---\n\n# my overseer\n\nDecide my way.\n\nThe skill `tracker-jira` follows" in text
+    assert text.endswith("\n---\n\n# my overseer\n\nDecide my way.\n")
     assert "# canopy overseer" not in text
     # The snapshot a run may be loading is never changed.
     assert "# canopy overseer" in (shipped / "agents" / "canopy-overseer.md").read_text()
@@ -822,6 +842,32 @@ def test_an_overseer_override_canopy_cannot_read_refuses_the_snapshot(canopy_env
     (overrides / "overseer.md").write_bytes(b"\xff\xfe not UTF-8")
     with pytest.raises(definitions.DefinitionsError, match="cannot read the overseer prompt"):
         definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
+
+
+#: A run's prompt as canopy renders one: fixed instructions, the marker, then the run's own.
+RUN_PROMPT = f"# canopy worker\n\nWork.\n\n{prompts.RUN_MARKER}\n\n## Run\n\nPROJ-1\n"
+
+
+def test_a_runs_fixed_instructions_are_its_agents_body_and_the_rest_its_message() -> None:
+    assert definitions.run_prompt(RUN_PROMPT, "opencode run --agent canopy-worker") == (
+        {agents.WORKER: "# canopy worker\n\nWork.\n"},
+        "## Run\n\nPROJ-1\n",
+    )
+
+
+@pytest.mark.parametrize("command", ["opencode run --agent my-worker", "my-agent --prompt"])
+def test_an_agent_canopy_does_not_ship_is_sent_the_whole_prompt(command: str) -> None:
+    # Its definition is the operator's, which canopy renders nothing into: the instructions travel in the message.
+    assert definitions.run_prompt(RUN_PROMPT, command) == ({}, "# canopy worker\n\nWork.\n\n## Run\n\nPROJ-1\n")
+
+
+def test_runs_with_one_body_share_a_snapshot_and_another_body_makes_its_own(canopy_env: CanopyEnv) -> None:
+    cfg = config.load(canopy_env.root)
+    shared = definitions.ensure(canopy_env.state_dir, cfg, bodies={agents.WORKER: "Work.\n"})
+    assert definitions.ensure(canopy_env.state_dir, cfg, bodies={agents.WORKER: "Work.\n"}) == shared
+    assert (shared / "agents" / f"{agents.WORKER}.md").read_text().endswith("\n---\n\nWork.\n")
+    other = definitions.ensure(canopy_env.state_dir, cfg, bodies={agents.WORKER: "Work harder.\n"})
+    assert len({shared, other, definitions.ensure(canopy_env.state_dir, cfg)}) == 3
 
 
 JIRA_CLI_READS = ("jira issue list *", "jira issue view *")
@@ -980,15 +1026,7 @@ UNASKED_GITHUB_TOOLS = (
     "github_assign_copilot_to_issue",
     "github_request_copilot_review",
 )
-#: The overseer's reads of GitHub: PRs, with their checks, reviews, and merge state; branches; and the signed-in user.
-OVERSEER_GITHUB_READS = {
-    "github_pull_request_read",
-    "github_list_pull_requests",
-    "github_search_pull_requests",
-    "github_list_branches",
-    "github_get_me",
-}
-#: Its reads of GitHub's issues, which are the tickets only when the tracker is GitHub.
+#: GitHub's reads of its issues, which are the tickets only when the tracker is GitHub.
 GITHUB_ISSUE_READS = {"github_issue_read", "github_list_issues", "github_search_issues"}
 
 
@@ -1040,19 +1078,13 @@ def test_a_chore_keeps_githubs_reads_and_loses_copilot(canopy_env: CanopyEnv) ->
     assert _opencode_disabled(ruleset, "github_assign_copilot_to_issue")
 
 
-@pytest.mark.parametrize(("provider", "issues"), [("jira", False), ("github", True)])
-def test_the_overseer_is_sent_only_the_github_reads_it_makes(
-    canopy_env: CanopyEnv,
-    provider: str,
-    *,
-    issues: bool,
-) -> None:
-    # Every write is denied (TRUST_MODEL T6), and every read its prompt has no use for: GitHub's issue reads too, but
-    # when the issues are the tickets.
+@pytest.mark.parametrize("provider", ["jira", "github"])
+def test_the_overseer_is_sent_no_github_tool(canopy_env: CanopyEnv, provider: str) -> None:
+    # Every tool of every server but canopy's is denied (TRUST_MODEL T6): the sources read the tracker and GitHub for
+    # it (DESIGN §39).
     _set_provider(canopy_env, provider)
     ruleset = _ruleset(canopy_env, agents.OVERSEER)
-    expected = OVERSEER_GITHUB_READS | (GITHUB_ISSUE_READS if issues else set())
-    assert {tool for tool in GITHUB_TOOLS if not _opencode_disabled(ruleset, tool)} == expected
+    assert {tool for tool in GITHUB_TOOLS if not _opencode_disabled(ruleset, tool)} == set()
 
 
 def _set_provider(canopy_env: CanopyEnv, provider: str) -> None:
@@ -1072,107 +1104,51 @@ JIRA_WRITES = (
 )
 
 
-def test_the_overseer_may_call_exactly_the_jira_read_tools(canopy_env: CanopyEnv) -> None:
-    # Allowed by name after the server's wildcard deny, so a write no pattern names fails closed (TRUST_MODEL T6).
-    ruleset = _ruleset(canopy_env, agents.OVERSEER)
-    jira = config.DEFAULT_TRACKER_TOOLS["jira"]
-    reads = {f"{jira.server}_{read}" for read in jira.allowed}
-    tools = (*reads, *(f"{jira.server}_{write}" for write in JIRA_WRITES), "atlassian_someWriteToolNoPatternNames")
-    assert {tool for tool in tools if not _opencode_disabled(ruleset, tool)} == reads
-
-
-@pytest.mark.parametrize(
-    ("tool", "allowed"),
-    [
-        ("linear_list_issues", True),
-        ("linear_get_issue", True),
-        ("linear_create_issue", False),
-        ("linear_update_issue", False),
-        ("github_list_issues", False),
-        ("github_issue_read", False),
-        ("github_pull_request_read", True),
-    ],
+#: Tools of servers the operator's runtime config may grant, named as OpenCode names them, `<server>_<tool>`: the
+#: tracker's, GitHub's, Slack's, a store's, and ones canopy knows nothing of, a `_` and a `-` in a name among them.
+OTHER_SERVERS_TOOLS = (
+    "atlassian_getJiraIssue",
+    "linear_list_issues",
+    "github_get_me",
+    "github_create_pull_request",
+    "slack_post_message",
+    "artifacts_artifact_publish",
+    "my-server_do-anything",
+    "my_server_read",
+    "canopyx_decide",
 )
-def test_the_overseer_keeps_a_trackers_read_that_a_github_pattern_matches(tool: str, *, allowed: bool) -> None:
-    # GitHub's issue reads are denied before the tracker's rules, so a tracker's own `list_issues` is allowed again.
-    bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
-    linear = agents.McpTools("linear", ("list_issues", "get_issue"))
-    rendered = opencode_definitions.render_overseer_reads(bundled, linear, "linear")
-    assert _opencode_disabled(_opencode_ruleset(rendered), tool) is not allowed
 
 
-def test_where_a_tracker_source_reads_the_overseer_may_call_no_tracker_tool_and_has_no_skill(
-    canopy_env: CanopyEnv,
-) -> None:
-    """It reads the journal for the tracker (DESIGN §39): no tool of the tracker's, no skill in its body or to load."""
-    canopy_env.write_private('[connect.sources.jira]\nkind = "tracker"\ncmd = "connector jira"\n')
+@pytest.mark.parametrize("provider", ["jira", "github"])
+def test_the_overseer_reaches_no_mcp_server_but_canopys_and_has_no_skill(canopy_env: CanopyEnv, provider: str) -> None:
+    """It reads the journal for both worlds (DESIGN §39, TRUST_MODEL T6): no server's tool is sent it but canopy's."""
+    _set_provider(canopy_env, provider)
     ruleset = _ruleset(canopy_env, agents.OVERSEER)
     jira = config.DEFAULT_TRACKER_TOOLS["jira"]
     tools = (*jira.allowed, *jira.create, *jira.pr_writes, "someToolNoPatternNames")
-    for tool in (*(f"{jira.server}_{tool}" for tool in tools), *GITHUB_ISSUE_READS):
+    for tool in (*(f"{jira.server}_{tool}" for tool in tools), *GITHUB_TOOLS, *OTHER_SERVERS_TOOLS):
         assert _opencode_disabled(ruleset, tool), tool
-    # GitHub's PRs are still read live, until the `vcs` source's observations are all it reads.
-    assert not _opencode_disabled(ruleset, "github_pull_request_read")
+    # canopy's own tools are its to call still, and the built-in tools it reads with.
+    for tool in (*CANOPY_TOOLS, "read", "grep", "glob"):
+        assert not _opencode_disabled(ruleset, tool), tool
+    # No server's resources either, which OpenCode asks `read` for: a file's read is not refused.
+    assert _opencode_action(ruleset, "read", "mcp:github:repo://acme/api/contents/README.md") == "deny"
+    assert _opencode_action(ruleset, "read", "/workspace/repo/README.md") == "allow"
     snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     text = (snapshot / "agents" / "canopy-overseer.md").read_text()
     assert "The skill `tracker-jira` follows" not in text
     assert f'{SKILL_MARKER}    "*": deny\n' in text
 
 
-@pytest.mark.parametrize("observed", [False, True])
-def test_on_a_github_tracker_a_tracker_source_leaves_the_overseer_its_reads_of_prs_alone(*, observed: bool) -> None:
-    bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
-    tools = agents.McpTools("github", ("issue_read", "list_issues", "pull_request_read", "create_pull_request"))
-    ruleset = _opencode_ruleset(opencode_definitions.render_overseer_reads(bundled, tools, "github", observed=observed))
-    assert not _opencode_disabled(ruleset, "github_pull_request_read")
-    assert not _opencode_disabled(ruleset, "github_list_branches")
-    for tool in ("github_issue_read", "github_list_issues", "github_search_issues"):
-        assert _opencode_disabled(ruleset, tool) is observed, tool
-    assert _opencode_disabled(ruleset, "github_create_pull_request")
-
-
-def test_where_a_tracker_source_reads_and_no_tracker_tools_are_known_githubs_issue_reads_are_denied() -> None:
-    bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
-    ruleset = _opencode_ruleset(opencode_definitions.render_overseer_reads(bundled, None, "linear", observed=True))
-    for tool in GITHUB_ISSUE_READS:
-        assert _opencode_disabled(ruleset, tool), tool
-    # With the server named, by config or a provider's defaults, it is denied whole, though no read tool is known.
-    named = opencode_definitions.render_overseer_reads(bundled, None, "linear", observed=True, server="linear")
-    ruleset = _opencode_ruleset(named)
-    for tool in ("linear_list_issues", "linear_create_issue", *GITHUB_ISSUE_READS):
-        assert _opencode_disabled(ruleset, tool), tool
-    assert not _opencode_disabled(ruleset, "github_pull_request_read")
-
-
-def test_a_tracker_source_denies_the_overseer_a_configured_server_with_no_read_tools(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_private(
-        '[tracker]\nmcp_server = "linear"\nread_tools = []\n\n'
-        '[connect.sources.linear]\nkind = "tracker"\ncmd = "connector linear"\n',
-    )
-    ruleset = _ruleset(canopy_env, agents.OVERSEER)
-    assert _opencode_disabled(ruleset, "linear_list_issues")
-
-
-@pytest.mark.parametrize("provider", ["github", "jira"])
-def test_no_tracker_read_tool_reopens_a_github_write(provider: str) -> None:
-    # The tracker's rules sit above the denials by name (D021): GitHub's read tools hold the PR writes a private worker
-    # needs, and an operator's `read_tools` may name anything.
-    bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
+def test_no_tracker_config_reopens_a_server_to_the_overseer(canopy_env: CanopyEnv) -> None:
+    # The operator's `read_tools` may name anything, a write among them: nothing of the tracker's is rendered into it.
     writes = ("create_pull_request", "update_pull_request", "add_reply_to_pull_request_comment", "issue_write")
-    for server in ("github", "atlassian"):
-        tools = agents.McpTools(server, writes)
-        ruleset = _opencode_ruleset(opencode_definitions.render_overseer_reads(bundled, tools, provider))
+    for server in ("github", "linear"):
+        names = ", ".join(f'"{write}"' for write in writes)
+        canopy_env.write_private(f'[tracker]\nmcp_server = "{server}"\nread_tools = [{names}]\n')
+        ruleset = _ruleset(canopy_env, agents.OVERSEER)
         for write in writes:
             assert _opencode_disabled(ruleset, f"{server}_{write}"), (server, write)
-
-
-def test_with_no_tracker_tools_known_the_overseer_keeps_the_trackers_and_githubs_issue_reads() -> None:
-    # Nothing is rendered: with no names to allow again, a pattern could take a read the overseer needs.
-    bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
-    assert opencode_definitions.render_overseer_reads(bundled, None, "linear") == bundled
-    ruleset = _opencode_ruleset(bundled)
-    for tool in ("linear_list_issues", "linear_get_issue", *GITHUB_ISSUE_READS):
-        assert not _opencode_disabled(ruleset, tool), tool
 
 
 def test_the_reviewer_may_call_exactly_the_jira_read_tools(canopy_env: CanopyEnv) -> None:
@@ -1293,8 +1269,8 @@ def test_workers_and_the_planner_lose_githubs_issue_tools_off_a_github_tracker_a
 #: The tracker's tools each agent's prompt names, by provider: a run must be sent each.
 JIRA = config.DEFAULT_TRACKER_TOOLS["jira"]
 JIRA_READS = frozenset(f"{JIRA.server}_{read}" for read in JIRA.allowed)
+#: The overseer's names none it may call: the sources read both worlds for it (DESIGN §39).
 PROMPT_TRACKER_TOOLS: dict[tuple[str, str], AbstractSet[str]] = {
-    (agents.OVERSEER, "jira"): JIRA_READS,
     (agents.WORKER, "jira"): JIRA_READS
     | {
         f"atlassian_{tool}" for tool in ("addCommentToJiraIssue", "editJiraIssue", "createJiraIssue", "createIssueLink")
@@ -1303,7 +1279,6 @@ PROMPT_TRACKER_TOOLS: dict[tuple[str, str], AbstractSet[str]] = {
     (agents.REVIEWER, "jira"): JIRA_READS,
     (agents.PLANNER, "jira"): JIRA_READS,
     (agents.CHORE, "jira"): JIRA_READS,
-    (agents.OVERSEER, "github"): GITHUB_ISSUE_READS,
     (agents.WORKER, "github"): GITHUB_ISSUE_READS | {"github_issue_write"},
     (agents.PRIVATE_WORKER, "github"): GITHUB_ISSUE_READS | {"github_issue_write"},
     (agents.REVIEWER, "github"): GITHUB_ISSUE_READS,
@@ -1312,7 +1287,6 @@ PROMPT_TRACKER_TOOLS: dict[tuple[str, str], AbstractSet[str]] = {
 }
 #: GitHub's tools each agent's prompt names for its PRs, whatever the tracker.
 PROMPT_GITHUB_TOOLS: dict[str, AbstractSet[str]] = {
-    agents.OVERSEER: OVERSEER_GITHUB_READS,
     agents.WORKER: {"github_pull_request_read", "github_create_pull_request", "github_update_pull_request"},
     agents.PRIVATE_WORKER: {"github_pull_request_read", "github_create_pull_request", "github_update_pull_request"},
     agents.REVIEWER: {"github_pull_request_read", "github_get_commit", "github_list_commits"},
@@ -1387,15 +1361,12 @@ def test_an_operators_read_tools_leave_the_private_worker_its_pr_tools(canopy_en
         assert _allowed(rules, f"github_{tool}") is (agent == agents.PRIVATE_WORKER), tool
 
 
-def test_the_overseer_has_no_todo_list_and_no_skill_tool_with_the_trackers_skill_in_its_body() -> None:
-    # The prompt has it load the tracker's skill by name only where canopy ships none, so the skill tool stays then.
+def test_the_overseer_has_no_todo_list_and_no_skill_tool() -> None:
+    # It reads no tracker, so it has no skill to load (DESIGN §39).
     bundled = (resources.agents_dir() / f"{agents.OVERSEER}.md").read_text()
-    with_skill = _opencode_ruleset(opencode_definitions.render_overseer(bundled, "Decide.\n", "The skill."))
-    without = _opencode_ruleset(opencode_definitions.render_overseer(bundled, "Decide.\n", None))
-    assert _opencode_disabled(with_skill, "todowrite")
-    assert _opencode_disabled(without, "todowrite")
-    assert _opencode_disabled(with_skill, "skill")
-    assert not _opencode_disabled(without, "skill")
+    ruleset = _opencode_ruleset(opencode_definitions.render_overseer(bundled, "Decide.\n"))
+    assert _opencode_disabled(ruleset, "todowrite")
+    assert _opencode_disabled(ruleset, "skill")
 
 
 @pytest.mark.parametrize(
@@ -1425,8 +1396,10 @@ def test_under_approve_workers_lose_the_tools_that_comment(
     assert _allowed(_rules_in(before), "github_add_reply_to_pull_request_comment")
     # The private worker's bash already denies every `gh` command but those that read a PR.
     assert _allowed(_rules_in(before, "bash"), "gh pr comment 7 --body x") is (agent == "canopy-worker")
-    tracker = '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n'
-    canopy_env.write_private('[trust]\nreview_replies = "approve"\n' + (tracker if tracker_posts else ""))
+    canopy_env.configure(
+        canopy_env.private_file,
+        {"trust": APPROVE, **({"connect": TRACKER_POSTS} if tracker_posts else {})},
+    )
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
     tools, bash = _rules_in(rendered), _rules_in(rendered, "bash")
     assert not _allowed(tools, "github_add_reply_to_pull_request_comment")

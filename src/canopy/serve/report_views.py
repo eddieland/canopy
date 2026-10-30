@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, monthly, runtime_sessions
+from canopy.core import db, runtime_sessions
+from canopy.serve import monthly
 from canopy.serve.schema.reports import (
     MonthlyReport,
     ReportKind,

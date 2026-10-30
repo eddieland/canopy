@@ -14,10 +14,5 @@ open.
 
 ### Open
 
-- Whether a tracker with no connector keeps the live-read procedure, with its provider skill and label claim,
-  or a `tracker` source is required. Recommended: required. The two shipped cover the operator's trackers, and the
-  contract is a page of Python for another. Required, it changes §3's and principle 5's "any tracker with an MCP
-  server", and §17. Until it is settled, such a tracker keeps the live reads: its tickets are `unobserved`, their
-  claims stay claims, and their `comment` cursors stay the tracker's ids (§7).
 - How many new items a subject shows before the rest are counted, set from the measurement's ticks. Ten until then,
   the conservative choice: a busy subject waits a tick rather than swelling every block.

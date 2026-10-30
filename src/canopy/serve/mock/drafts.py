@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, override
 
-from canopy.core import db, review_diff, sql
+from canopy.core import db, records, review_diff, sql
 from canopy.infra import procs
 from canopy.serve.mock.reviews import PR_88
 
@@ -152,53 +152,46 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
         "summary": "Answered the review: a failed search clears the spinner now, and the debounce stays at 250 ms.",
         "prs": {"web": PR_88},
     }
-    sql.execute(
-        conn,
-        sql.insert(
-            "runs",
-            id=RUN,
-            tick_id=1,
-            ticket_key="ABC-099",
-            kind="resume",
-            branch="agent/ABC-099-search",
-            started_at=at(_STARTED),
-            ended_at=at(_ENDED),
-            status="done",
-            result_json=json.dumps(result),
-            log_path=str(log_path),
-            private=0,
-            session_id=f"ses_mock{RUN}",
-            cost_usd=0.74,
-            tokens_input=29600,
-            tokens_output=4440,
-            tokens_cache_read=296000,
-            tokens_peak_context=44400,
-        ),
-    )
-    sql.execute(
-        conn,
-        sql.insert(
-            "run_slots",
-            run_id=RUN,
-            repo="web",
-            slot_path=slot,
-            lease_id="lease-45",
-            lease_holder="canopy:ABC-099",
-            base_branch="main",
-        ),
-    )
-    sql.execute(conn, sql.insert("run_reasons", run_id=RUN, reason="review"))
-    sql.execute(conn, sql.insert("run_replies", run_id=RUN, mode="approve", ticket_drafts=0))
+    records.insert(
+        records.Run,
+        id=RUN,
+        tick_id=1,
+        ticket_key="ABC-099",
+        kind="resume",
+        branch="agent/ABC-099-search",
+        started_at=at(_STARTED),
+        ended_at=at(_ENDED),
+        status="done",
+        result_json=json.dumps(result),
+        log_path=str(log_path),
+        private=0,
+        session_id=f"ses_mock{RUN}",
+        cost_usd=0.74,
+        tokens_input=29600,
+        tokens_output=4440,
+        tokens_cache_read=296000,
+        tokens_peak_context=44400,
+    ).run(conn)
+    records.insert(
+        records.RunSlot,
+        run_id=RUN,
+        repo="web",
+        slot_path=slot,
+        lease_id="lease-45",
+        lease_holder="canopy:ABC-099",
+        base_branch="main",
+    ).run(conn)
+    records.insert(records.RunReason, run_id=RUN, reason="review").run(conn)
+    records.insert(records.RunReplies, run_id=RUN, mode="approve", ticket_drafts=0).run(conn)
     kept = review_diff.run_path_for(log_path, "web")
     review_diff.keep(kept, DIFF)
     review_diff.keep_head(kept, SHA)
     _read(conn, at)
     for number, kind, comment, stance, text, edit, reaction in _DRAFTS:
         thread = next((t[0] for t in _THREADS if t[1] == comment), None)
-        found = sql.execute(
-            conn,
-            sql.insert(
-                "drafts",
+        found = (
+            records.insert(
+                records.Draft,
                 run_id=RUN,
                 number=number,
                 ticket_key="ABC-099",
@@ -212,21 +205,20 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], sl
                 basis=at(_STARTED),
                 created_at=at(_ENDED),
                 checked_at=at(-18),
-            ).returning("id"),
-        ).fetchone()
+            )
+            .returning("id")
+            .run(conn)
+            .fetchone()
+        )
         versions: list[tuple[int, str, str, str | None, str, str | None]] = [
             (1, text, "worker", None, at(_ENDED), reaction),
         ]
         if edit is not None:
             versions.append((2, edit, "operator", "web", at(-10), reaction))
-        sql.execute_many(
-            conn,
-            sql.insert_rows(
-                "draft_versions",
-                ("draft_id", "version", "body", "author", "channel", "created_at", "reaction"),
-            ),
-            [(found["id"], *v) for v in versions],
-        )
+        records.insert_rows(
+            records.DraftVersion,
+            ("draft_id", "version", "body", "author", "channel", "created_at", "reaction"),
+        ).many(conn, [(found["id"], *v) for v in versions])
 
 
 @dataclass
@@ -287,22 +279,19 @@ class GitHub(procs.SubprocessRunner):
         conn = db.connect(self.journal)
         try:
             with db.transaction(conn):
-                sql.execute(
-                    conn,
-                    sql.insert(
-                        "observed_reviews",
-                        pr_url=pr,
-                        item="review",
-                        id=pending["id"],
-                        author="op",
-                        bot=0,
-                        state="pending",
-                        created_at=None,
-                        body=str(request.get("body") or ""),
-                        url=None,
-                        observed_at=db.now(),
-                    ),
-                )
+                records.insert(
+                    records.ObservedReview,
+                    pr_url=pr,
+                    item="review",
+                    id=pending["id"],
+                    author="op",
+                    bot=0,
+                    state="pending",
+                    created_at=None,
+                    body=str(request.get("body") or ""),
+                    url=None,
+                    observed_at=db.now(),
+                ).run(conn)
                 for line in (line for line in lines if line["kind"] == "comment" and "comment" in line):
                     answered = (
                         sql.select(
@@ -338,7 +327,7 @@ class GitHub(procs.SubprocessRunner):
                         "resolved",
                         "observed_at",
                     )
-                    sql.execute(conn, sql.insert_from("observed_reviews", columns, answered))
+                    records.insert_from(records.ObservedReview, columns, answered).run(conn)
         finally:
             conn.close()
 
@@ -467,58 +456,49 @@ def _post(stdin: str) -> str:
 def _read(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
     """The reader's last whole read of PR 88, at the head run 45 pushed, after the run ended."""
     read_at = at(-18)
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_prs",
-            url=PR_88,
-            repository="acme/web",
-            number=88,
-            head_sha=SHA,
-            base_ref="main",
-            state="open",
-            draft=0,
-            mergeable="mergeable",
-            author="op",
-            observed_at=read_at,
-        ),
-    )
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_reviews",
-            pr_url=PR_88,
-            item="review",
-            id=_REVIEW,
-            author="alice",
-            bot=0,
-            state="changes_requested",
-            created_at=at(-48),
-            body="A couple of things before this goes in.",
-            url=f"{PR_88}#pullrequestreview-{_REVIEW}",
-            observed_at=read_at,
-        ),
-    )
+    records.insert(
+        records.ObservedPr,
+        url=PR_88,
+        repository="acme/web",
+        number=88,
+        head_sha=SHA,
+        base_ref="main",
+        state="open",
+        draft=0,
+        mergeable="mergeable",
+        author="op",
+        observed_at=read_at,
+    ).run(conn)
+    records.insert(
+        records.ObservedReview,
+        pr_url=PR_88,
+        item="review",
+        id=_REVIEW,
+        author="alice",
+        bot=0,
+        state="changes_requested",
+        created_at=at(-48),
+        body="A couple of things before this goes in.",
+        url=f"{PR_88}#pullrequestreview-{_REVIEW}",
+        observed_at=read_at,
+    ).run(conn)
     for thread, comment, author, path, line, resolved, minutes, body in _THREADS:
-        sql.execute(
-            conn,
-            sql.insert(
-                "observed_reviews",
-                pr_url=PR_88,
-                item="comment",
-                id=comment,
-                author=author,
-                bot=0,
-                created_at=at(minutes),
-                body=body,
-                url=f"{PR_88}#discussion_r{comment}",
-                review_id=_REVIEW,
-                thread_id=thread,
-                path=path,
-                line=line,
-                side="right",
-                outdated=int(line is None),
-                resolved=int(resolved),
-                observed_at=read_at,
-            ),
-        )
+        records.insert(
+            records.ObservedReview,
+            pr_url=PR_88,
+            item="comment",
+            id=comment,
+            author=author,
+            bot=0,
+            created_at=at(minutes),
+            body=body,
+            url=f"{PR_88}#discussion_r{comment}",
+            review_id=_REVIEW,
+            thread_id=thread,
+            path=path,
+            line=line,
+            side="right",
+            outdated=int(line is None),
+            resolved=int(resolved),
+            observed_at=read_at,
+        ).run(conn)

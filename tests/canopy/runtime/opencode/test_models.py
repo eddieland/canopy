@@ -90,16 +90,16 @@ broken/model
 """
 
 
-def test_with_variants_each_models_json_is_read_for_them() -> None:
+def test_with_variants_each_models_json_is_read_for_them_in_its_order() -> None:
     runner = printing(VERBOSE)
     assert models.listed(runner, cwd=Path("/ws"), variants=True) == ModelList(
         frozenset({"anthropic/claude-x", "local/qwen@2b", "openai/gpt-y", "broken/model"}),
         {
-            "anthropic/claude-x": frozenset({"high", "max"}),
-            "local/qwen@2b": frozenset(),
-            "openai/gpt-y": frozenset(),
+            "anthropic/claude-x": ("high", "max"),
+            "local/qwen@2b": (),
+            "openai/gpt-y": (),
             # JSON canopy cannot read lists none, and is no model's line.
-            "broken/model": frozenset(),
+            "broken/model": (),
         },
     )
     assert runner.ran == [(("opencode", "models", "--verbose"), Path("/ws"), models.TIMEOUT_SECONDS, True)]

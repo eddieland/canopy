@@ -76,9 +76,11 @@ sandboxed frame and checked against `text`, never markup.
 | `comment_create` | `artifact_id`, `anchor`, `body` | `thread_id`, `comment_id`, `seq` | yes |
 | `thread_resolve` | `thread_id`, `resolved` | `state` | yes |
 
-A tool's result is one JSON object, or for `comment_feed` one JSON object to a line. An origin filter matches an
-artifact whose origin holds every pair of it. A version omitted is the latest. The local store's `url` names a version,
-`canopy-artifacts:ID/N`, and opens nothing: it serves no page yet.
+A tool's result is one JSON object, or for `comment_feed` one JSON object to a line. The local store also lists each
+tool's result as its output schema, and returns it as structured content too, the same values, with `comment_feed`'s
+as one object, `{"changes": [...], "through": SEQ}`; a client that reads text alone loses nothing. An origin filter
+matches an artifact whose origin holds every pair of it. A version omitted is the latest. The local store's `url`
+names a version, `canopy-artifacts:ID/N`, and opens nothing: it serves no page yet.
 
 A refusal is a tool error whose text is `{"code": ..., "message": ...}`, with a code: `not_found`, `out_of_scope`
 (outside the token's namespace), `too_long`, `anchor_not_found`, `read_only`, or `invalid` (arguments the tool cannot

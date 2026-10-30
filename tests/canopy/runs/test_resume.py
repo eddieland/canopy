@@ -12,18 +12,29 @@ from pathlib import Path
 import pytest
 
 from canopy.core import contract, db
-from canopy.core.vocab import Decider, ResumeReason, RunKind
-from tests.canopy.helpers import KEY, WORKER_DONE, canopy, in_tick, present, unit_of, waits, worker_does
+from canopy.core.vocab import Decider, NumberedItem, ResumeReason, RunKind
+from tests.canopy.helpers import (
+    KEY,
+    READ_PR,
+    WORKER_DONE,
+    Called,
+    decisions,
+    in_tick,
+    present,
+    tracker_holds,
+    unit_of,
+    waits,
+    worker_does,
+)
+from tests.canopy.observation_helpers import number_of
 from tests.canopy.scenario_helpers import Scenario, asks, dispatches, fails, pushes
-from tests.conftest import CanopyEnv, GitPool, git
+from tests.conftest import TRACKER_SOURCE, CanopyEnv, GitPool, git
 
-LABEL = ("--label", "agent-ready-tester")
-RESUME = (*LABEL, "--kind", "resume")
 CI, REVIEW, CONFLICT = ResumeReason.CI, ResumeReason.REVIEW, ResumeReason.CONFLICT
 CHECK = "Check unit-tests failed on run 77: https://example.test/runs/77"
 
 
-def resumes(*reasons: ResumeReason) -> list[str]:
+def resumes(*reasons: ResumeReason) -> Called:
     """The overseer resumes PROJ-1 for `reasons`."""
     return dispatches(kind=RunKind.RESUME, reasons=reasons)
 
@@ -77,10 +88,10 @@ def test_a_red_check_resumes_the_recorded_branch_with_the_checks_named(scenario:
     assert log.splitlines() == ["PROJ-1: fix the build", "PROJ-1: first", "initial"]
     prompt = resumed.prompt
     assert prompt.startswith("# canopy worker: resume")
-    assert '## Why you were resumed\n\n- `ci`: checks failed on the PR: fix them, as "Failed checks" below says.\n' in (
+    assert '## Why you were resumed\n\n- `ci`: checks failed on the PR: fix them, as "Failed checks" says.\n' in (
         prompt
     )
-    assert "## Failed checks\n\nWhen `ci` is among the reasons above" in prompt
+    assert "## Failed checks\n\nWhen `ci` is among the reasons, read the failing checks" in prompt
     assert "PR: https://example.test/pr/1." in prompt  # the implement worker reported it
     assert "This is attempt 1 of 6." in prompt
     assert CHECK in prompt
@@ -94,13 +105,13 @@ def test_a_red_check_and_a_review_comment_in_one_tick_make_one_run(scenario: Sce
         cursors={"ci": "77", "review": "4127"},
         context=f"{CHECK}, and address review comment 1501 by octocat on PR 1",
     )
-    ticked = scenario.tick(both, worker=pushes(message="PROJ-1: fix and address"))
-    assert ticked.actions == ["queried", "dispatch:resume"]
-    [run] = ticked.runs
+    run = scenario.run(both, worker=pushes(message="PROJ-1: fix and address"))
     assert (run.kind, run.status) == ("resume", "done")
     # One run, one push, for both; its reasons in the vocabulary's order, as the decision names them.
     assert run.reasons == (CI, REVIEW)
-    assert "for ci, review" in ticked.decisions[1].rationale
+    [(action, rationale)] = decisions(scenario.conn, int(run.row["tick_id"]))
+    assert action == "dispatch:resume"
+    assert "for ci, review" in rationale
     assert git("log", "--format=%s", "agent/PROJ-1-work", cwd=git_pool.origin).splitlines()[0] == (
         "PROJ-1: fix and address"
     )
@@ -110,13 +121,27 @@ def test_a_red_check_and_a_review_comment_in_one_tick_make_one_run(scenario: Sce
     assert "- `review`: review comments" in run.prompt
 
 
-def test_resume_prompt_points_at_the_reply_and_names_the_repliers(scenario: Scenario, git_pool: GitPool) -> None:
+def test_resume_prompt_points_at_the_reply_and_names_the_repliers(
+    scenario: Scenario,
+    git_pool: GitPool,
+    connector_state: Path,
+) -> None:
     scenario.configures(trust={"authorized_repliers": ["alice", "5b10ac"]})
     first = scenario.run(worker=asks("which API?"))
     assert first.status == "blocked"
 
+    # Alice answers on the ticket, and the tracker source reads her comment before the resume rests on it.
+    answer = {"kind": "comment", "ticket": KEY, "id": "10234", "author": "alice", "time": "2026-10-18T10:00:00Z"}
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"lines": [answer]}}))
+    tracker_holds(scenario.conn)
+    replied = str(number_of(scenario.conn, NumberedItem.COMMENT, "10234"))
     context = "Authorized reply: ticket comment 10234 by account alice"
-    resume = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REPLY], context=context)
+    resume = dispatches(
+        kind=RunKind.RESUME,
+        reasons=[ResumeReason.REPLY],
+        context=context,
+        cursors={"comment": replied},
+    )
     resumed = scenario.run(resume, worker=pushes())
     assert (resumed.kind, resumed.status, resumed.branch) == ("resume", "done", "agent/PROJ-1-work")
     # Nothing was pushed before, so the resume started from main.
@@ -157,7 +182,7 @@ def test_resuming_needs_a_recorded_branch(scenario: Scenario, treehouse_state: P
 
 
 def test_slug_is_for_implement_only(scenario: Scenario) -> None:
-    reason = "resume continues the ticket's recorded branch; slug (--slug) is for implement"
+    reason = "resume continues the ticket's recorded branch; slug is for implement"
     other = dispatches(kind=RunKind.RESUME, reasons=[CI], slug="other")
     assert scenario.refuses(other) == [("refused:bad_slug", reason)]
 
@@ -165,14 +190,14 @@ def test_slug_is_for_implement_only(scenario: Scenario) -> None:
 @pytest.mark.parametrize("mode", ["live", "dry run"])
 def test_fix_ci_is_refused_naming_resume(scenario: Scenario, mode: str) -> None:
     with_branch(scenario.conn)
-    fix_ci = canopy("dispatch", KEY, "--repo", "repo", *LABEL, "--kind", "fix-ci", "--context", CHECK)
-    reason = "fix-ci is retired: a resume fixes CI now; dispatch kind resume, reasons ci (--kind resume --reason ci)"
+    fix_ci = dispatches(kind=RunKind.FIX_CI, context=CHECK)
+    reason = "fix-ci is retired: a resume fixes CI now; dispatch kind resume, reasons ci"
     assert scenario.refuses(fix_ci, dry_run=mode == "dry run") == [("refused:bad_kind", reason)]
 
 
 @pytest.mark.parametrize("mode", ["live", "dry run"])
 def test_split_is_refused_naming_follow_ups(scenario: Scenario, mode: str) -> None:
-    split = canopy("dispatch", KEY, "--repo", "repo", *LABEL, "--kind", "split", "--context", "split it")
+    split = dispatches(kind=RunKind.SPLIT, context="split it")
     [(action, reason)] = scenario.refuses(split, dry_run=mode == "dry run")
     assert action == "refused:bad_kind"
     assert reason.startswith("split is retired: a worker files follow-up tickets now")
@@ -180,63 +205,62 @@ def test_split_is_refused_naming_follow_ups(scenario: Scenario, mode: str) -> No
 
 @pytest.mark.parametrize("mode", ["live", "dry run"])
 def test_needs_plan_is_refused_naming_plan(scenario: Scenario, mode: str) -> None:
-    triage = canopy("dispatch", KEY, "--repo", "repo", *LABEL, "--kind", "needs-plan", "--context", "is it trivial?")
+    triage = dispatches(kind=RunKind.NEEDS_PLAN, context="is it trivial?")
     reason = "needs-plan is retired: a ticket that needs a plan is planned; dispatch plan"
     assert scenario.refuses(triage, dry_run=mode == "dry run") == [("refused:bad_kind", reason)]
 
 
 @pytest.mark.parametrize(
-    ("args", "reason"),
+    ("move", "reason"),
     [
         (
-            (),
+            resumes(),
             (
-                "reasons is required for a resume (--reason): name why it runs, one or more of ci, review, reply, "
-                "conflict, no_pr, retarget"
+                "reasons is required for a resume: name why it runs, one or more of ci, review, reply, conflict, "
+                "no_pr, retarget"
             ),
         ),
         (
-            ("--reason", "review", "--cursor", "ci=7"),
-            "cursor ci (--cursor ci) is handled by a resume for ci: add ci to reasons (--reason ci)",
+            dispatches(kind=RunKind.RESUME, reasons=[REVIEW], cursors={"ci": "7"}),
+            "cursor ci is handled by a resume for ci: add ci to reasons",
         ),
         (
-            ("--reason", "ci", "--cursor", "review=4127"),
-            (
-                "cursor review (--cursor review) is handled by a resume for review: add review to reasons "
-                "(--reason review)"
-            ),
+            dispatches(kind=RunKind.RESUME, reasons=[CI], cursors={"review": "4127"}),
+            "cursor review is handled by a resume for review: add review to reasons",
         ),
         (
-            ("--reason", "ci", "--cursor", "comment=c1"),
-            "cursor comment (--cursor comment) is handled by a resume for reply: add reply to reasons (--reason reply)",
+            dispatches(kind=RunKind.RESUME, reasons=[CI], cursors={"comment": "1"}),
+            "cursor comment is handled by a resume for reply: add reply to reasons",
         ),
         (
-            ("--reason", "ci", "--cursor", "message=4"),
-            "cursor message (--cursor message) is handled by a resume for reply: add reply to reasons (--reason reply)",
+            dispatches(kind=RunKind.RESUME, reasons=[CI], cursors={"message": "4"}),
+            "cursor message is handled by a resume for reply: add reply to reasons",
         ),
         (
-            ("--reason", "retarget", "--base", "agent/PROJ-9-other"),
-            (
-                "reasons retarget (--reason retarget) is for a PR whose blocker merged, and base (--base) says it is "
-                "still open"
-            ),
+            dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.RETARGET], base="agent/PROJ-9-other"),
+            "reasons retarget is for a PR whose blocker merged, and base says it is still open",
         ),
     ],
 )
 def test_a_resume_names_why_it_runs_and_each_cursor_needs_its_reason(
     scenario: Scenario,
     treehouse_state: Path,
-    args: tuple[str, ...],
+    connector_state: Path,
+    move: Called,
     reason: str,
 ) -> None:
     with_branch(scenario.conn)
-    assert scenario.refuses(resumes() + list(args)) == [("refused:bad_reason", reason)]
+    # A comment the tracker source observed, the first item numbered: a cursor may name it (DESIGN §35).
+    said = {"kind": "comment", "ticket": KEY, "id": "c1", "author": "bob", "time": "2026-10-18T10:00:00Z"}
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"lines": [said]}}))
+    tracker_holds(scenario.conn)
+    assert scenario.refuses(move) == [("refused:bad_reason", reason)]
     assert not treehouse_state.exists()  # refused before leasing
 
 
 def test_a_reason_is_for_resume_only(scenario: Scenario) -> None:
     assert scenario.refuses(dispatches(reasons=[CI])) == [
-        ("refused:bad_reason", "reasons (--reason) say why a resume runs; they are for resume only"),
+        ("refused:bad_reason", "reasons say why a resume runs; they are for resume only"),
     ]
 
 
@@ -328,24 +352,38 @@ def test_a_fix_ci_prompt_override_refuses_every_resume_and_says_so(
     assert scenario.run(resumes(REVIEW), worker=pushes()).status == "done"
 
 
-def test_cursors_advance_only_when_the_worker_starts(scenario: Scenario, git_pool: GitPool) -> None:
+def test_cursors_advance_only_when_the_worker_starts(
+    scenario: Scenario,
+    git_pool: GitPool,
+    connector_state: Path,
+) -> None:
     conn = scenario.conn
     scenario.configures(capacity={"max_workers": 1})
-    scenario.starts(dispatches(cursors={"comment": "c1"}))
-    cursors = {"comment": "c2", "review": "4127"}
+    said = [
+        {"kind": "comment", "ticket": key, "id": ident, "author": "bob", "time": "2026-10-18T10:00:00Z"}
+        for key, ident in (("PROJ-1", "c1"), ("PROJ-2", "c2"))
+    ]
+    connector_state.write_text(json.dumps({TRACKER_SOURCE: {"lines": said}}))
+    tracker_holds(conn, "PROJ-1", "PROJ-2")
+    c1, c2 = (
+        number_of(conn, NumberedItem.COMMENT, ident, subject=key) for key, ident in (("PROJ-1", "c1"), ("PROJ-2", "c2"))
+    )
+    scenario.starts(dispatches(cursors={"comment": str(c1)}))
+    cursors = {"comment": str(c2), "review": "4127"}
     assert scenario.refuses(dispatches("PROJ-2", cursors=cursors)) == [
         ("refused:capacity", "1 of 1 workers are running"),
     ]
     rows = {r["key"]: r for r in conn.execute("SELECT * FROM tickets")}
-    assert rows["PROJ-1"]["last_comment_id"] == "c1"
-    assert rows["PROJ-2"]["last_comment_id"] is None
+    assert rows["PROJ-1"]["comment_cursor"] == c1
+    assert rows["PROJ-2"]["comment_cursor"] is None
     assert db.units(conn, "PROJ-2") == []  # nor its review cursor, nor a unit at all
 
 
 def test_state_block_shows_attempts_the_cooldown_and_a_resumes_reasons(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.run(worker=pushes())
     old_fix_ci(scenario.conn, ended=datetime.now(UTC) - timedelta(hours=2))
-    fix = scenario.run(resumes(CI, CONFLICT), worker=pushes())
+    # Its PR one the `vcs` source reads, so the overseer is listed the ticket (DESIGN §39).
+    fix = scenario.run(resumes(CI, CONFLICT), worker=pushes(prs={"repo": READ_PR}))
     scenario.tick(*waits("PROJ-1", rationale="the CI cooldown holds"))
     state = scenario.state()
     [ticket] = state["tickets"]
@@ -364,7 +402,8 @@ def test_state_block_shows_attempts_the_cooldown_and_a_resumes_reasons(scenario:
 def test_a_resume_that_leaves_a_flaky_check_tells_the_overseer_one_bit(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.run(worker=pushes())
     summary = "Left unit-tests: the runner was lost before any test ran. Run 77 of main lost one the same way."
-    flaky = json.loads(WORKER_DONE) | {"branch": "agent/PROJ-1-work", "summary": summary, "flaky": True}
+    # On a PR the `vcs` source reads, so the overseer is listed the ticket (DESIGN §39).
+    flaky = json.loads(WORKER_DONE) | {"branch": "agent/PROJ-1-work", "pr": READ_PR, "summary": summary, "flaky": True}
     left = scenario.run(resumes(CI), worker=worker_does(result=json.dumps(flaky)))
     assert left.status == "done"  # it pushed nothing, and needed to push nothing
     assert contract.stored_object(left.row["result_json"])["flaky"] is True
@@ -375,7 +414,7 @@ def test_a_resume_that_leaves_a_flaky_check_tells_the_overseer_one_bit(scenario:
     assert summary not in json.dumps(scenario.state())
 
     # From a run that was not sent for a failed check, the bit means nothing, and the block leaves it out.
-    scenario.run(resumes(REVIEW), worker=pushes(flaky=True))
+    scenario.run(resumes(CONFLICT), worker=pushes(flaky=True, prs={"repo": READ_PR}))
     scenario.tick(*waits("PROJ-1", rationale="nothing new"))
     assert "flaky" not in scenario.ticket_state("PROJ-1")["last_run"]
 
@@ -387,34 +426,54 @@ def test_grant_of_fix_ci_is_refused_naming_resume(scenario: Scenario) -> None:
     assert scenario.conn.execute("SELECT count(*) FROM attempt_grants").fetchone()[0] == 0
 
 
-def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(scenario: Scenario, git_pool: GitPool) -> None:
+def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(
+    scenario: Scenario,
+    git_pool: GitPool,
+    github_state: Path,
+) -> None:
     """M3 acceptance, against the fakes, as M56 left it.
 
     An overseer that asks for a resume for CI every tick, as a PR whose checks keep failing would make it, gets one run
-    per cooldown window and none past `max_resume_attempts`.
+    per cooldown window and none past `max_resume_attempts`. The PR is one the `vcs` source reads (DESIGN §39), and
+    each tick it reads a new head there whose check failed, which the overseer's resume names.
     """
     scenario.configures(policy={"max_resume_attempts": 2})
-    scenario.tick(dispatches(), worker=pushes())
+    scenario.tick(dispatches(), worker=pushes(prs={"repo": READ_PR}))
+    named: list[int] = []
 
-    fix = dispatches(kind=RunKind.RESUME, reasons=[CI], context="checks failed", cursors={"ci": "1"})
-    ticked = scenario.tick(fix, worker=pushes())
+    def fails_again() -> Called:
+        """A push makes a new head on the PR, whose check fails; returns the overseer's resume for CI, naming it."""
+        run_id = 77 + len(named)
+        failed = {"name": "unit-tests", "status": "completed", "conclusion": "failure", "run_id": run_id}
+        github_state.write_text(
+            json.dumps({"prs": {READ_PR: {"pr": {"head_sha": f"abc{run_id:04d}"}, "checks": [failed]}}}),
+        )
+        named.append(number_of(scenario.conn, NumberedItem.CHECK_RUN, run_id, subject=READ_PR))
+        return dispatches(kind=RunKind.RESUME, reasons=[CI], context="checks failed", cursors={"ci": str(named[-1])})
+
+    ticked = scenario.tick(fails_again(), worker=pushes(prs={"repo": READ_PR}))
     assert ticked.actions == ["queried", "dispatch:resume"]
     assert [r.status for r in ticked.runs] == ["done"]
     # Every further tick inside the window is refused, however often the overseer asks. The tick itself is fine.
     for _ in range(2):
-        assert scenario.tick(fix).actions == ["queried", "refused:cooldown"]
+        assert scenario.tick(fails_again()).actions == ["queried", "refused:cooldown"]
 
     scenario.time_passes(minutes=31)
-    ticked = scenario.tick(fix, worker=pushes())
+    ticked = scenario.tick(fails_again(), worker=pushes(prs={"repo": READ_PR}))
     assert ticked.actions == ["queried", "dispatch:resume"]
     assert [r.status for r in ticked.runs] == ["done"]
-    # That was the last attempt: the limit refuses, whether or not the window has passed, and raises attention.
-    assert scenario.tick(fix).actions == ["queried", "refused:attempt_limit", "attention:attempt_limit"]
-    scenario.time_passes(minutes=31)
-    # No source reads the ticket, so the harness keeps the item, as it raises it again before the overseer runs.
-    raised = scenario.tick(fix)
-    assert raised.actions == ["attention:attempt_limit", "queried", "refused:attempt_limit", "attention:attempt_limit"]
-    assert raised.decisions[0].decider is Decider.HARNESS
+    # That was the last attempt: the limit refuses, whether or not the window has passed, and raises attention. The
+    # harness raises it first, from its cause, a new failure past the limit, before the overseer runs.
+    for _ in range(2):
+        raised = scenario.tick(fails_again())
+        assert raised.actions == [
+            "attention:attempt_limit",
+            "queried",
+            "refused:attempt_limit",
+            "attention:attempt_limit",
+        ]
+        assert raised.decisions[0].decider is Decider.HARNESS
+        scenario.time_passes(minutes=31)
 
     assert [r["kind"] for r in scenario.conn.execute("SELECT kind FROM runs ORDER BY id")] == [
         "implement",
@@ -423,7 +482,7 @@ def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(scenario
     ]
     assert scenario.attention() == [("PROJ-1", "attempt_limit")]
     # Advanced by the dispatches that started, not by the refused ones.
-    assert unit_of(scenario.conn, "PROJ-1").ci_cursor == 1
+    assert unit_of(scenario.conn, "PROJ-1").ci_cursor == named[3]
 
 
 def test_status_shows_a_resumes_reasons_beside_its_kind(scenario: Scenario, git_pool: GitPool) -> None:

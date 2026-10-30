@@ -22,18 +22,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import (
-    artifact_authority,
-    conversation,
-    db,
-    item_numbers,
-    observe,
-    personas,
-    plans,
-    records,
-    review_runs,
-    sql,
-)
+from canopy.core import conversation, db, item_numbers, observe, personas, plans, records, review_runs, sql
 from canopy.core import review_result as result
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.core.vocab import (
@@ -53,6 +42,7 @@ from canopy.core.workspace import CheckRole
 from canopy.loop import attention, harness
 from canopy.reviews import start as review_start
 from canopy.reviews.start import DISPATCH_ACTION as REVIEW_ACTION
+from canopy.runs import artifact_authority, drafts
 
 if TYPE_CHECKING:
     import sqlite3
@@ -118,12 +108,17 @@ class Derived:
     phases: Sequence[Phase] = ()
     #: The stale or missing observation the subject depends on; None when it was derived.
     stale: str | None = None
-    #: Whether `stale` is the `tracker` source's: a ticket's own observation, or a blocker's, old or never made. False
-    #: for what no source observes, and for what the `vcs` source left stale.
+    #: Whether `stale` is the `tracker` source's: a ticket's own observation, its comments, or a blocker's, old or never
+    #: made. False for what no source observes, and for what the `vcs` source left stale.
     stale_tracker: bool = False
+    #: Whether `stale` is the `vcs` source's, which the overseer reads no GitHub beside (DESIGN §39): a unit's PR or
+    #: branches, the ticket's branches, or an open blocker's PR, old or never read.
+    stale_vcs: bool = False
     #: On the ticket's own, unless stale: whether it is a candidate (§17), and whether the tracker said it is closed.
     candidate: bool | None = None
     closed: bool | None = None
+    #: Whether `stale` is what no source reads at all, so no read will come: a unit's URL that names no PR.
+    unobserved: bool = False
 
 
 def derive(ctx: Context, now: datetime) -> list[Derived]:
@@ -158,7 +153,7 @@ def record(conn: sqlite3.Connection, tick_id: int, derived: Iterable[Derived]) -
     ]
     columns = ("tick_id", "ticket_key", "repo", "candidate", "closed", "phases", "stale")
     with db.transaction(conn):
-        sql.execute_many(conn, sql.insert_rows("derivations", columns), rows)
+        records.insert_rows(records.Derivation, columns).many(conn, rows)
 
 
 def recorded(conn: sqlite3.Connection, tick_id: int) -> list[Derived]:
@@ -167,13 +162,11 @@ def recorded(conn: sqlite3.Connection, tick_id: int) -> list[Derived]:
     Returns:
         Each ticket's own row, then its units', by key.
     """
-    rows = records.fetch_all(
-        conn,
-        records.Derivation,
-        sql.select("*")
-        .from_("derivations")
+    rows = (
+        records.select(records.Derivation)
         .where("tick_id = ?", tick_id)
-        .order_by("ticket_key, repo IS NOT NULL, repo"),
+        .order_by("ticket_key, repo IS NOT NULL, repo")
+        .all(conn)
     )
     return [
         Derived(
@@ -199,11 +192,11 @@ def record_overseer(conn: sqlite3.Connection, tick_id: int) -> None:
         .from_("ticket_units")
         .where("ticket_key = derivations.ticket_key AND repo = derivations.repo")
     )
-    sql.execute(
-        conn,
-        sql.update("derivations")
+    (
+        records.update(records.Derivation)
         .set_to("overseer_phase = CASE WHEN repo IS NULL THEN ({}) ELSE ({}) END", ticket, unit)
-        .where("tick_id = ?", tick_id),
+        .where("tick_id = ?", tick_id)
+        .run(conn)
     )
 
 
@@ -232,13 +225,11 @@ def compare(conn: sqlite3.Connection, tick_id: int) -> list[Compared]:
     Returns:
         One comparison per ticket the tick derived, by key.
     """
-    rows = records.fetch_all(
-        conn,
-        records.Derivation,
-        sql.select("*")
-        .from_("derivations")
+    rows = (
+        records.select(records.Derivation)
         .where("tick_id = ?", tick_id)
-        .order_by("ticket_key, repo IS NOT NULL, repo"),
+        .order_by("ticket_key, repo IS NOT NULL, repo")
+        .all(conn)
     )
     by_ticket: dict[str, list[records.Derivation]] = {}
     for row in rows:
@@ -296,17 +287,15 @@ def fresh_repos(
         Their names.
     """
     fresh = {repo for repo, found in branches.items() if any(db.parse_time(b.observed_at) >= cutoff for b in found)}
-    runs = records.fetch_all(
-        conn,
-        records.ConnectorRun,
-        sql.select("*")
-        .from_("connector_runs")
+    runs = (
+        records.select(records.ConnectorRun)
         .where(
             "kind = ? AND status = ? AND ended_at >= ?",
             SourceKind.VCS,
             ConnectorRunStatus.OK,
             db.format_time(cutoff),
-        ),
+        )
+        .all(conn)
     )
     for run in runs:
         asked = json.loads(run.request)
@@ -439,14 +428,16 @@ class _World:
     prs: Mapping[str, records.ObservedPr]
     checks: Mapping[str, Sequence[records.ObservedCheck]]
     reviews: Mapping[str, Sequence[records.ObservedReview]]
+    #: What the operator sent through canopy on each PR (`drafts.sent_by_pr`), never feedback.
+    sent: Mapping[str, Mapping[str, Sequence[int]]]
     branches: Mapping[str, Sequence[records.ObservedBranch]]
     #: The repositories whose branches were read whole since the cutoff.
     fresh_repos: AbstractSet[str]
     units_of: Mapping[str, Sequence[records.TicketUnit]]
     running: AbstractSet[str]
+    #: The tickets the journal has marked done.
+    done: AbstractSet[str]
     latest_runs: Mapping[str, records.Run]
-    #: Whether a `tracker` source observes tickets at all.
-    tracked: bool
     _review_runs: dict[str, list[records.ReviewRun]] = field(default_factory=dict[str, list[records.ReviewRun]])
 
     @classmethod
@@ -455,20 +446,21 @@ class _World:
         cutoff = now - timedelta(minutes=config.connect.max_age_minutes)
         stopped = set(conversation.stopped(conn))
         tickets = {t.key: t for t in db.open_tickets(conn) if t.key not in stopped}
-        keys = sorted(set(tickets) | (set(_query_result(conn)) - stopped - _done(conn)))
+        done = _done(conn)
+        keys = sorted(set(tickets) | (set(_query_result(conn)) - stopped - done))
         comments: dict[str, list[records.ObservedComment]] = {}
         query = sql.select("*").from_("observed_comments").where_in("ticket", keys).order_by("commented_at, id")
         for c in records.fetch_all(conn, records.ObservedComment, query):
             comments.setdefault(c.ticket, []).append(c)
         checks: dict[str, list[records.ObservedCheck]] = {}
-        for c in records.fetch_all(conn, records.ObservedCheck, sql.select("*").from_("observed_checks")):
+        for c in records.select(records.ObservedCheck).all(conn):
             checks.setdefault(c.pr_url, []).append(c)
         reviews: dict[str, list[records.ObservedReview]] = {}
         query = sql.select("*").from_("observed_reviews").order_by("pr_url, created_at, id")
         for r in records.fetch_all(conn, records.ObservedReview, query):
             reviews.setdefault(r.pr_url, []).append(r)
         branches: dict[str, list[records.ObservedBranch]] = {}
-        for b in records.fetch_all(conn, records.ObservedBranch, sql.select("*").from_("observed_branches")):
+        for b in records.select(records.ObservedBranch).all(conn):
             branches.setdefault(b.repository, []).append(b)
         running = {str(r["ticket_key"]) for r in db.running_runs(conn, "runs")}
         return cls(
@@ -477,20 +469,18 @@ class _World:
             cutoff=cutoff,
             keys=keys,
             tickets=tickets,
-            observed={
-                t.key: t
-                for t in records.fetch_all(conn, records.ObservedTicket, sql.select("*").from_("observed_tickets"))
-            },
+            observed={t.key: t for t in records.select(records.ObservedTicket).all(conn)},
             comments=comments,
-            prs={p.url: p for p in records.fetch_all(conn, records.ObservedPr, sql.select("*").from_("observed_prs"))},
+            prs={p.url: p for p in records.select(records.ObservedPr).all(conn)},
             checks=checks,
             reviews=reviews,
+            sent=drafts.sent_by_pr(conn),
             branches=branches,
             fresh_repos=fresh_repos(conn, branches, cutoff),
             units_of=db.all_units(conn),
             running=running,
+            done=done,
             latest_runs=db.latest_runs(conn),
-            tracked=any(s.kind == SourceKind.TRACKER for s in config.connect.named().values()),
         )
 
     # A ticket's own row
@@ -503,16 +493,16 @@ class _World:
         """
         journal = self.tickets.get(key)
         private = conversation.is_started(conversation.start_of(self.ctx.conn, key))
+        seen: records.ObservedTicket | None = None
         if private:
             candidate, closed, blockers_open = True, False, False
         else:
             stale = self._ticket_stale(key)
             if stale is not None:
-                return Derived(key, None, stale=stale, stale_tracker=self.tracked)
+                return Derived(key, None, stale=stale, stale_tracker=True)
             seen = self.observed[key]
             closed = seen.state is TicketState.CLOSED
-            labels = {label["name"] for label in labels_of(seen)}
-            candidate = not closed and bool(labels & set(self.ctx.config.tracker.labels))
+            candidate = self._queued(seen)
             blockers_open = any(self.observed[b].state is TicketState.OPEN for b in blockers_of(seen))
         if closed:
             return Derived(key, None, candidate=False, closed=True)
@@ -526,19 +516,23 @@ class _World:
         if candidate and not running:
             branch = self._has_branch(key, journal)
             if branch is None:
-                return Derived(key, None, stale=self._branches_stale())
+                return Derived(key, None, stale=self._branches_stale(), stale_vcs=True)
             if not branch:
+                # Only a ticket with no branch of its own may be stacked, so only its row reads a blocker's PR.
+                if seen is not None and (stale := self._blocker_prs_stale(seen)) is not None:
+                    return Derived(key, None, stale=stale, stale_vcs=True)
                 phases.append(Phase.BLOCKED if blockers_open else Phase.READY)
         return Derived(key, None, _in_order(phases), candidate=candidate, closed=False)
 
     def _ticket_stale(self, key: str) -> str | None:
-        """Say what a public ticket's row depends on that is stale or missing: its observation, or a blocker's.
+        """Say what a public ticket's row rests on that is stale or missing: its observation, a blocker's, or comments.
+
+        Comments are recorded only of a ticket canopy holds (§30), and a candidate's rows read them: one read before
+        canopy held it, such as one the query found that was read as another's blocker, waits for a read since.
 
         Returns:
             What, or None when everything it depends on is fresh.
         """
-        if not self.tracked:
-            return "no tracker source observes tickets"
         seen = self.observed.get(key)
         stale = self._age(key, seen)
         if stale is not None or seen is None:
@@ -547,13 +541,44 @@ class _World:
             stale = self._age(f"blocker {blocker}", self.observed.get(blocker))
             if stale is not None:
                 return stale
+        held = self.tickets.get(key)
+        if self._queued(seen) and (held is None or held.first_seen_at > seen.observed_at):
+            return f"comments of {key} not observed since canopy first held it"
         return None
+
+    def _queued(self, seen: records.ObservedTicket) -> bool:
+        """Whether an observed ticket is open and carries a queue label: a public candidate (§17).
+
+        Returns:
+            True if it is.
+        """
+        labels = {label["name"] for label in labels_of(seen)}
+        return seen.state is not TicketState.CLOSED and bool(labels & set(self.ctx.config.tracker.labels))
 
     def _age(self, what: str, seen: records.ObservedTicket | records.ObservedPr | None) -> str | None:
         if seen is None:
             return f"{what} never observed"
         if db.parse_time(seen.observed_at) < self.cutoff:
             return f"{what} last observed {seen.observed_at}"
+        return None
+
+    def _blocker_prs_stale(self, seen: records.ObservedTicket) -> str | None:
+        """Say which PR of an open blocker, one the journal has not marked done, the `vcs` source left stale (§39).
+
+        Whether to stack on it, and how a ticket stacked on it goes on, is read from that PR (§10), which the overseer
+        reads no longer.
+
+        Returns:
+            What, or None when each such PR is fresh.
+        """
+        for blocker in blockers_of(seen):
+            if self.observed[blocker].state is not TicketState.OPEN or blocker in self.done:
+                continue
+            for unit in self.units_of.get(blocker, []):
+                if unit.pr_url is not None and observe.is_pr_url(unit.pr_url):
+                    stale = self._age(f"blocker {blocker}'s PR {unit.pr_url}", self.prs.get(unit.pr_url))
+                    if stale is not None:
+                        return stale
         return None
 
     def _needs_human(self, key: str, record: records.Ticket | None, *, private: bool) -> list[Phase]:
@@ -645,9 +670,8 @@ class _World:
             if unit is not None and unit.pr_url is not None:
                 found.append(self._pr_unit(key, repo, unit, unit.pr_url))
             elif repo not in self.fresh_repos:
-                found.append(
-                    Derived(key, repo, stale=f"branches of {repo} not observed since {db.format_time(self.cutoff)}"),
-                )
+                stale = f"branches of {repo} not observed since {db.format_time(self.cutoff)}"
+                found.append(Derived(key, repo, stale=stale, stale_vcs=True))
             else:
                 branch = self._branch_in(repo, key, record)
                 found.append(Derived(key, repo, (Phase.PUSHED_NO_PR,) if branch is not None else ()))
@@ -660,11 +684,11 @@ class _World:
             The unit's row.
         """
         if not observe.is_pr_url(url):
-            return Derived(key, repo, stale=f"{url} is not a PR's URL, so it is not observed")
+            return Derived(key, repo, stale=f"{url} is not a PR's URL, so it is not observed", unobserved=True)
         pr = self.prs.get(url)
         stale = self._age(url, pr)
         if stale is not None or pr is None:
-            return Derived(key, repo, stale=stale)
+            return Derived(key, repo, stale=stale, stale_vcs=True)
         if pr.state is PrState.MERGED:
             return Derived(key, repo, (Phase.MERGED,))
         if pr.state is not PrState.OPEN:
@@ -673,9 +697,12 @@ class _World:
         if observe.conflicts(pr):
             phases.append(Phase.CONFLICTED)
         ci, passed = self._ci(repo, pr, unit)
+        feedback, waiting = self._feedback(key, pr, unit)
+        if Phase.CI_RUNNING in ci and self._waited_on_ci(waiting):
+            ci.remove(Phase.CI_RUNNING)
         phases.extend(ci)
         approved = _approved(self.reviews.get(url, []))
-        phases.extend(self._feedback(key, pr, unit))
+        phases.extend(feedback)
         if passed and not approved:
             phases.append(Phase.GREEN_UNREVIEWED)
             if self.ctx.config.review.agent_prs and not self._reviewed(key, url, pr.head_sha):
@@ -707,14 +734,21 @@ class _World:
             phases.append(Phase.CI_RED)
         return phases, not pending and all(c.conclusion in observe.PASSED for c in ci)
 
-    def _feedback(self, key: str, pr: records.ObservedPr, unit: records.TicketUnit) -> list[Phase]:
+    def _feedback(
+        self,
+        key: str,
+        pr: records.ObservedPr,
+        unit: records.TicketUnit,
+    ) -> tuple[list[Phase], list[int]]:
         """Derive the review rows (DESIGN §7, D089): feedback past the unit's `review` cursor, by whom it is from.
 
         Feedback is a review that says something, or a review comment; an approval is not feedback. What the PR's own
-        author writes is not either: canopy's workers post as the operator, who opens the PR.
+        author writes is not either: canopy's workers post as the operator, who opens the PR. Nor is what the operator
+        sent through canopy, known by its id whoever opened the PR.
 
         Returns:
-            The rows that hold of `review_findings`, `changes_requested`, and `untrusted_review`.
+            The rows that hold of `review_findings`, `changes_requested`, and `untrusted_review`, and the journal
+            numbers of the items behind the first two, which a worker may address.
         """
         cursor = unit.review_cursor
         trusted = {t.lower() for t in self.ctx.config.trust.trusted_reviewers}
@@ -724,8 +758,10 @@ class _World:
             for r in self.reviews.get(pr.url, [])
             if is_feedback(r)
             and (pr.author is None or (r.author or "").lower() != pr.author.lower())
+            and not drafts.was_sent(r, self.sent)
             and item_numbers.newer(r.number, cursor)
         ]
+        waiting = [r.number for r in new if (r.author or "").lower() in trusted and r.number is not None]
         if any((r.author or "").lower() in trusted for r in new):
             found.append(Phase.CHANGES_REQUESTED)
         operator = self._operator_times(key)
@@ -735,10 +771,26 @@ class _World:
         reviewed = self._findings(pr, cursor) if self.ctx.config.review.agent_prs else []
         if reviewed and CANOPY_REVIEWER in trusted:
             found.append(Phase.REVIEW_FINDINGS)
+            waiting.extend(r.number for r in reviewed if r.number is not None)
         # Untrusted, canopy's review waits on the operator as anyone's does (DESIGN §21).
         elif any(not any(at > (r.ended_at or r.started_at) for at in operator) for r in reviewed):
             found.append(Phase.UNTRUSTED_REVIEW)
-        return found
+        return found, waiting
+
+    def _waited_on_ci(self, numbers: Collection[int]) -> bool:
+        """Whether the feedback numbered `numbers` has waited long enough on pending checks (DESIGN §7).
+
+        It waits `policy.feedback_ci_wait_minutes` from when a source first observed the oldest of it, so a queue of
+        builds holds a trusted reviewer's feedback no longer than that.
+
+        Returns:
+            True once it has; False for no feedback.
+        """
+        seen = item_numbers.named(self.ctx.conn, numbers).values()
+        if not seen:
+            return False
+        first = min(db.parse_time(n.numbered_at) for n in seen)
+        return self.now - first >= timedelta(minutes=self.ctx.config.policy.feedback_ci_wait_minutes)
 
     def _operator_times(self, key: str) -> list[str]:
         record = self.tickets.get(key)
