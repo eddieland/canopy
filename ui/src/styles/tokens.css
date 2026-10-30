@@ -126,6 +126,17 @@
     --rave-dark: oklch(0.16 0.03 275);
 
     --radius: 0.5rem;
+
+    /* Each palette's character beyond color (ui/DESIGN.md, "Palettes"): its corners (`--radius`, above), the edge a
+     * panel or what floats draws, and its depth. Depth is used sparingly: a faint lift under a panel, a shadow under
+     * what floats over the page (a menu, a card, a dialog, a toast), and one under the primary action. Each shadow is
+     * drawn in the palette's own text color, so it carries the canvas's hue. */
+    --edge: var(--border);
+    --depth-panel: 0 1px 2px oklch(from var(--foreground) l c h / 0.06);
+    --depth-float:
+        0 12px 32px -12px oklch(from var(--foreground) l c h / 0.24),
+        0 2px 6px oklch(from var(--foreground) l c h / 0.08);
+    --depth-action: 0 1px 2px oklch(from var(--accent) l c h / 0.35);
 }
 
 .dark {
@@ -215,6 +226,15 @@
     --buddy-ghost-vex-core: oklch(0.97 0.05 40);
 
     --rave-dark: oklch(0.08 0.02 275);
+
+    /* In the dark, a shadow is the canvas at a quarter of its lightness, and a panel's lift catches a little light on
+     * its top edge. */
+    --depth-panel:
+        inset 0 1px 0 oklch(1 0 0 / 0.035), 0 10px 24px -16px oklch(from var(--background) calc(l * 0.25) c h);
+    --depth-float:
+        0 20px 48px -8px oklch(from var(--background) calc(l * 0.25) c h),
+        0 4px 12px oklch(from var(--background) calc(l * 0.25) c h / 0.8);
+    --depth-action: inset 0 1px 0 oklch(1 0 0 / 0.22), 0 4px 12px -4px oklch(from var(--accent) l c h / 0.5);
 }
 
 /* The light theme's other palettes: the neutrals change, what is drawn in them, and the accent; every other hue is
@@ -355,6 +375,15 @@
     --status-stopped: oklch(0.72 0 0);
     --spend-dry-run: oklch(0.55 0 0);
     --context-carried: oklch(0.55 0 0);
+
+    /* A shadow does nothing on black, so its depth is light: panels draw no edge and stand apart by a step of
+     * lightness, and what floats and the primary action wear the accent's glow. Its corners are soft. */
+    --radius: 0.75rem;
+    --edge: transparent;
+    --depth-panel: none;
+    --depth-float:
+        0 0 0 1px oklch(from var(--accent) l c h / 0.45), 0 8px 32px -6px oklch(from var(--accent) l c h / 0.4);
+    --depth-action: 0 2px 18px -2px oklch(from var(--accent) l c h / 0.6);
 }
 
 /* Solarized's dark base tones: base03 the canvas, base02 raised, base1 the text, base0 muted, and its blue the accent.
@@ -393,6 +422,13 @@
     --status-stopped: oklch(0.74 0.035 76);
     --spend-dry-run: oklch(0.62 0.02 70);
     --context-carried: oklch(0.62 0.02 70);
+
+    /* A code editor of the nineties: crisp corners, and a hard shadow with no blur under what floats and the primary
+     * action. Panels sit flat on the canvas. */
+    --radius: 0.1875rem;
+    --depth-panel: none;
+    --depth-float: 4px 4px 0 oklch(0.1 0 0);
+    --depth-action: 3px 3px 0 oklch(0.1 0 0);
 }
 
 /* Forest: a deep green canvas, the dark side of Sage, and heather for an accent, as Sage wears: a lake blue read as
@@ -535,6 +571,13 @@
 
     --color-rave-dark: var(--rave-dark);
 
+    /* A palette's edge and depth (ui/DESIGN.md, "Palettes"): `border-edge` on a panel or what floats, `shadow-panel`,
+     * `shadow-float`, and `shadow-action` for the lift each wears. */
+    --color-edge: var(--edge);
+    --shadow-panel: var(--depth-panel);
+    --shadow-float: var(--depth-float);
+    --shadow-action: var(--depth-action);
+
     /*
      * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names
      * above. shadcn's own `accent` (a hover tint) is NOT aliased: here `accent` is the one brand color.
@@ -552,9 +595,10 @@
     --color-destructive: var(--status-failed);
 
     /* The radius scale (ui/DESIGN.md, "Shape and space"): md for panels and buttons, sm for chips and nav items, xs
-     * for a mark smaller than a line of text, a checkbox or a slot's square. */
-    --radius-xs: calc(var(--radius) - 4px);
-    --radius-sm: calc(var(--radius) - 2px);
+     * for a mark smaller than a line of text, a checkbox or a slot's square. A palette sets `--radius`, so the small
+     * steps stop at square below a crisp one, and xs at 6px above a soft one, where a checkbox would turn round. */
+    --radius-xs: clamp(0px, calc(var(--radius) - 4px), 6px);
+    --radius-sm: max(0px, calc(var(--radius) - 2px));
     --radius-md: var(--radius);
     --radius-lg: calc(var(--radius) + 2px);
 
