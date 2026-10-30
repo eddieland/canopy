@@ -28,7 +28,9 @@ path.
 A sixth is the planner's (DESIGN §25, ROADMAP M44), with the shipped `canopy-planner` definition's own rules. It may
 write `.canopy-new-plan.md` at its desk's root and nothing else: not through the desk's links, not the copy of the plan
 it replaces, and nothing beside the desk. Its `edit` rules come after its MCP patterns, since `*edit*` matches the edit
-tool's own name; in the other order the edit tool is taken away altogether.
+tool's own name; in the other order the edit tool is taken away altogether. Its grep and glob, given a link as their
+path, must reach the worktree: OpenCode's search does not follow the links in a desk, so the prompts send it through
+one.
 
 A seventh asks OpenCode what it offers each of canopy's shipped agents (DESIGN §13), through `opencode debug`, which
 needs no model: that each is read without an error, and that the chore and the reviewer, which may push nothing, are
@@ -385,6 +387,48 @@ def test_a_planner_writes_its_plan_file_and_nothing_else(tmp_path: Path, *, work
     calls = tool_calls(result.stdout)
     for needle in ("edited-marker", str(outside)):
         assert attempted(calls, needle), f"the model never tried {needle}\n" + report
+
+
+PLANNER_SEARCH_PROMPT = """\
+Do these steps in order, one tool call each. If a step is refused, note it and go on to the next step.
+1. Use your grep tool with the path api to search for the regular expression canary_[a-z]+, and print what it finds.
+2. Use your glob tool with the path api to find files matching **/*.py, and print what it finds.
+Finally print exactly one line: canary finished
+"""
+
+
+@requires_canary
+def test_a_planner_greps_and_globs_through_its_desks_links(tmp_path: Path) -> None:
+    """The planner's prompts send its searches through a desk's links: they must reach the worktree."""
+    runner = SubprocessRunner()
+    workspace = tmp_path / "acme"
+    slot = workspace / ".treehouse" / "api-pool" / "1" / "api"
+    (slot / "src").mkdir(parents=True)
+    assert runner.run(["git", "init", "-q", str(slot)]).ok
+    (slot / "src" / "lilac_module.py").write_text("canary_heliotrope = 1\n")
+    desk = workspace / "desks" / "PROJ-1"
+    desk.mkdir(parents=True)
+    (desk / "api").symlink_to(Path("../../.treehouse/api-pool/1/api"), target_is_directory=True)
+    # The shipped rules, with a canary's body, as for the planner's edits above.
+    frontmatter = (resources.agents_dir() / "canopy-planner.md").read_text().split("---")[1]
+    body = "You are a permission canary in a test. Follow the user's steps exactly and do nothing else.\n"
+    definitions_dir = tmp_path / "definitions"
+    (definitions_dir / "agents").mkdir(parents=True)
+    (definitions_dir / "agents" / "canopy-planner-canary.md").write_text(f"---{frontmatter}---\n{body}")
+
+    argv = ["opencode", "run", "--agent", "canopy-planner-canary", "--format", "json"]
+    if CANARY_MODEL:
+        argv += ["-m", CANARY_MODEL]
+    env = {"OPENCODE_CONFIG_DIR": str(definitions_dir)}
+    result = runner.run([*argv, PLANNER_SEARCH_PROMPT], cwd=desk, env=env, timeout=600)
+
+    report = f"exit {result.returncode}\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+    assert not result.timed_out, "the run blocked\n" + report
+    errors = runtime_errors(result.stdout)
+    failed = "OpenCode failed before the canary ran, so this is not a result: " + "; ".join(errors)
+    assert not errors, failed + "\n" + report
+    assert "canary_heliotrope" in result.stdout, "a grep through the desk's link found nothing\n" + report
+    assert "lilac_module.py" in result.stdout, "a glob through the desk's link found nothing\n" + report
 
 
 def tool_calls(stdout: str) -> list[str]:
