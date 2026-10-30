@@ -1084,13 +1084,18 @@ sliver beside four others; and its axis names short call numbers without measuri
   A ticket's page description is its state, not what public or private means: the running run, a question waiting,
   its plan's status, and when it was last active, `run:41 running · plan waiting on you · active 38m ago`
   (`ticketDescription`).
-- **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble as wide as its
-  words, up to 42rem and never past 85% of the panel, so the other side keeps a gutter at any width:
+- **A conversation** is a column of messages, each a head line over a bubble. The head leads with who, in sans
+  `font-medium` `foreground`, then what (kind, run, what it answers, how) and its chips in muted mono; its id and age
+  are a readout at the end away from the bubble's square corner. A tracker comment's head is its author `on the
+  tracker`, the comment's id and when it was written in its tip. A message that carries on the one before it (the same
+  speaker, kind, run, and channel, within five minutes, answering nothing) keeps only its chips and readout, and sits
+  closer under it. A bubble is as wide as its words, up to 42rem and never past 85% of the panel, so the other side
+  keeps a gutter at any width:
   `surface-raised` for a worker's report or a question answered, a hairline on `surface` for a tracker comment, quoted
   since it is data from outside the loop, the `status-blocked` tint at 8% with a `status-blocked/40` hairline for the
   question still open, the one amber bubble, a dashed hairline with muted text for canopy's note on what a tick did,
   and the accent's tint at 18% for the operator's own words, which sit on the right, their head line mirrored. A
-  bubble's corner nearest its side is square, and its head's age sits at the end away from that corner.
+  bubble's corner nearest its side is square.
   The question still open carries a `waiting on you` chip in `status-blocked`. A forgotten ticket's conversation
   (`TicketThread`) shows what came after the latest forget. At the oldest end, each forget heads the attempt it ended:
   a muted line saying when and how, with the branch and PRs it dropped under it, and that attempt's messages folded

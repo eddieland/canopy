@@ -8,7 +8,6 @@ import { LinkedText } from '@/components/linked-text'
 import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import { TaskRunLink } from '@/components/task-link'
-import { Timestamp } from '@/components/timestamp'
 import { awaitsTick } from '@/lib/acknowledged'
 import { messageAnchor, messageRef } from '@/lib/refs'
 import { useClock } from '@/lib/clock'
@@ -98,9 +97,10 @@ export function Conversation({
     return (
         <ol className="stagger flex flex-col gap-3 p-3" data-testid="conversation">
             {!newestFirst && lead}
-            {messages.map((message) => (
+            {messages.map((message, index) => (
                 <Bubble
                     key={message.id}
+                    grouped={continues(messages[index - 1], message)}
                     id={messageAnchor(message.id)}
                     data-testid={messageAnchor(message.id)}
                     data-source={message.source}
@@ -110,6 +110,7 @@ export function Conversation({
                     head={
                         <Head
                             message={message}
+                            grouped={continues(messages[index - 1], message)}
                             task={task}
                             waiting={message.id === waiting}
                             unread={unread.test(message) ? unread : null}
@@ -139,9 +140,8 @@ function InstructionBubble({ instruction }: { instruction: Instruction }) {
             tone={TONE.reply}
             body={instruction.body}
             head={
-                <HeadLine at={instruction.at} operator>
-                    <span className="readout">{instruction.ref}</span>
-                    <span className="text-foreground">you</span>
+                <HeadLine name={instruction.ref} at={instruction.at} operator>
+                    <Who>you</Who>
                     <span>instruction via {instruction.channel}</span>
                 </HeadLine>
             }
@@ -149,23 +149,48 @@ function InstructionBubble({ instruction }: { instruction: Instruction }) {
     )
 }
 
+// How close in time a message follows the one before for the two to read as one turn.
+const TURN_MS = 5 * 60 * 1000
+
+/**
+ * Whether a message carries on the turn before it, `previous`: the same speaker saying the same kind of thing in the
+ * same run and channel, within a few minutes. Its head then drops who and what, as a chat stacks one person's lines.
+ * Never a message that answers another, whose head says which, nor a tracker comment: two may be two coworkers'.
+ */
+function continues(previous: Message | undefined, message: Message): boolean {
+    return (
+        previous !== undefined &&
+        message.source !== 'tracker' &&
+        previous.source === message.source &&
+        previous.kind === message.kind &&
+        previous.channel === message.channel &&
+        message.answers === null &&
+        previous.run_id === message.run_id &&
+        previous.task_run_id === message.task_run_id &&
+        Math.abs(Date.parse(message.at) - Date.parse(previous.at)) <= TURN_MS
+    )
+}
+
 /**
  * One message: its head line over its bubble, which is as wide as its words, up to a measure that leaves the other
- * side a gutter at any panel's width, so the operator's own stay on the right however narrow the panel.
+ * side a gutter at any panel's width, so the operator's own stay on the right however narrow the panel. A message
+ * that carries on the turn before it (`grouped`) sits closer under it.
  */
 function Bubble({
     operator,
     tone,
     head,
     body,
+    grouped = false,
     ...props
-}: { operator: boolean; tone: string; head: ReactNode; body: string } & ComponentProps<'li'>) {
+}: { operator: boolean; tone: string; head: ReactNode; body: string; grouped?: boolean } & ComponentProps<'li'>) {
     return (
         <li
             {...props}
             className={cn(
                 'flex max-w-[min(42rem,85%)] flex-col gap-1 [--enter:pop]',
                 operator ? 'origin-top-right items-end self-end' : 'origin-top-left items-start self-start',
+                grouped && '-mt-1.5',
             )}
         >
             {head}
@@ -182,8 +207,22 @@ function Bubble({
     )
 }
 
-/** A bubble's head line: what it says, then its age at the outer edge, mirrored on the operator's side. */
-function HeadLine({ at, operator, children }: { at: string; operator: boolean; children: ReactNode }) {
+/**
+ * A bubble's head line: who and what, led by who, then its chips; its name (`#4`) and age a readout at the outer edge,
+ * mirrored on the operator's side. The name comes first in the markup, so a screen reader and the page's text read it
+ * first, as the message is referred to by it.
+ */
+function HeadLine({
+    name,
+    at,
+    operator,
+    children,
+}: {
+    name: string
+    at: string
+    operator: boolean
+    children: ReactNode
+}) {
     const clock = useClock()
     return (
         <div
@@ -192,54 +231,74 @@ function HeadLine({ at, operator, children }: { at: string; operator: boolean; c
                 operator && 'justify-end',
             )}
         >
+            <span className={cn('flex items-center gap-1.5', operator ? 'order-first mr-auto' : 'order-last ml-auto')}>
+                <span className="readout">{name}</span>
+                <span aria-hidden>·</span>
+                <Age at={at} variant="ago" />
+                <span className="sr-only">{localTime(at, clock)}</span>
+            </span>
             {children}
-            <Age at={at} variant="ago" className={operator ? 'order-first mr-auto' : 'ml-auto'} />
-            <span className="sr-only">{localTime(at, clock)}</span>
         </div>
     )
 }
 
+/** Who wrote a message: the head line's anchor, in the interface's face rather than the data's. */
+function Who({ children }: { children: ReactNode }) {
+    return <span className="font-sans font-medium text-foreground">{children}</span>
+}
+
 function Head({
     message,
+    grouped,
     task,
     waiting,
     unread,
     seen,
 }: {
     message: Message
+    grouped: boolean
     task: number | undefined
     waiting: boolean
     unread: Pending | null
     seen: boolean
 }) {
+    const clock = useClock()
     const comment = message.comment
+    const cut = comment?.truncated === true ? ', truncated' : ''
     return (
-        <HeadLine at={message.at} operator={message.source === 'operator'}>
-            <span className="readout">{messageRef(message.id)}</span>
-            <span className="text-foreground">{WHO[message.source]}</span>
-            {comment ? (
-                <span>
-                    comment {comment.id} by {comment.author}, written <Timestamp at={comment.at} />
-                    {comment.truncated ? ', truncated' : ''}
-                </span>
+        <HeadLine name={messageRef(message.id)} at={message.at} operator={message.source === 'operator'}>
+            {grouped ? null : comment ? (
+                <>
+                    <Who>{comment.author}</Who>
+                    <span title={`comment ${comment.id}, written ${localTime(comment.at, clock)}${cut}`}>
+                        on the tracker{cut}
+                        {/* The tip is the pointer's; a screen reader is told the same. */}
+                        <span className="sr-only">
+                            , comment {comment.id}, written {localTime(comment.at, clock)}
+                        </span>
+                    </span>
+                </>
             ) : (
-                <span>
-                    {message.kind}
-                    {message.run_id !== null && (
-                        <>
-                            {' ('}
-                            <RunLink id={message.run_id} />)
-                        </>
-                    )}
-                    {task !== undefined && message.task_run_id !== null && (
-                        <>
-                            {' ('}
-                            <TaskRunLink task={task} run={message.task_run_id} />)
-                        </>
-                    )}
-                    {message.answers === null ? '' : ` answering ${messageRef(message.answers)}`}
-                    {message.source === 'operator' ? ` via ${message.channel}` : ''}
-                </span>
+                <>
+                    <Who>{WHO[message.source]}</Who>
+                    <span>
+                        {message.kind}
+                        {message.run_id !== null && (
+                            <>
+                                {' ('}
+                                <RunLink id={message.run_id} />)
+                            </>
+                        )}
+                        {task !== undefined && message.task_run_id !== null && (
+                            <>
+                                {' ('}
+                                <TaskRunLink task={task} run={message.task_run_id} />)
+                            </>
+                        )}
+                        {message.answers === null ? '' : ` answering ${messageRef(message.answers)}`}
+                        {message.source === 'operator' ? ` via ${message.channel}` : ''}
+                    </span>
+                </>
             )}
             {comment && <Chip>data, authorizes nothing</Chip>}
             {waiting && <Chip tone="blocked">waiting on you</Chip>}
