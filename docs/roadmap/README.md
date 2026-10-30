@@ -94,7 +94,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M55. Trivial work skips its plan](M55-trivial-work-skips-its-plan.md): deferred 2026-10-20.
 - [M56. Fixing CI is part of resume](M56-fixing-ci-is-part-of-resume.md): done 2026-10-29.
 - [M57. A clock for running agents](M57-a-clock-for-running-agents.md): in progress.
-- [M58. canopy chooses each agent's model](M58-canopy-chooses-the-workers-model.md): in progress.
+- [M58. canopy chooses each agent's model](M58-canopy-chooses-the-workers-model.md): done 2026-10-29.
 - [M59. Lessons edited, with their history](M59-lessons-edited-with-their-history.md): done 2026-10-29.
 - [M60. Personas](M60-personas.md): done 2026-10-29.
 - [M61. One-off tasks](M61-one-off-tasks.md): in progress.

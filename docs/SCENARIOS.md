@@ -103,6 +103,10 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   toy workspace (TOY_REPOS) file a follow-up. Expect the sink to hear `follow_ups.filed` naming it once, and the
   follow-up to sit undispatched with no labels. Label it: expect the overseer to dispatch it as any ticket, its PR to
   land for review, and its worker to file no follow-up of its own.
+- **S69. A model dropped after it was set** (M58). Set one labeled ticket's worker model from its page to a model
+  `opencode models` lists, then take that model's provider out of OpenCode's config. Expect the ticket's next dispatch
+  refused `model_missing`, with its attention item, no slot leased and no attempt spent, and no run on the default.
+  Put the provider back: expect the next tick to dispatch it on the chosen model, and its session's record to agree.
 
 ### Several repositories
 

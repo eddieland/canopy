@@ -292,10 +292,10 @@ judges high impact is called out to the operator; its size alone is not, since s
 
 ### R23. Override a ticket's model
 
-Partial (M58, §13, Each agent's model): each agent's default model is set in `[runtime.models]`, and the operator alone
+Built (M58, §13, Each agent's model): each agent's default model is set in `[runtime.models]`, and the operator alone
 overrides it per ticket (`canopy model`, or the ticket's page), checked against the runtime's list. A run records the
 model it asked for and the models that served it, spend splits by model, and a template's `--model` is refused, so a
-session runs the model asked for or fails before its first call. M58's live checks remain.
+session runs the model asked for or fails before its first call.
 Written down 2026-10-19, from issue #418. The operator wants to try a model change on one ticket before
 every worker takes it, by running that ticket's workers on another model and comparing the result. Today a worker's
 model is OpenCode's default unless the operator's command template names one, which then applies to every worker run,
