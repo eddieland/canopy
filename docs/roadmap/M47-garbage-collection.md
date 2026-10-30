@@ -12,5 +12,5 @@ Learned: closed on real use, stages 2 to 4 built against the fakes at the operat
 passed its check, and none of S59, S60, S62, or S65 run; they are in SCENARIOS. So §26's defaults stay as proposed,
 unmeasured. git's maintenance refuses both tasks at once in a clone with no pack, and skips one whose lock another
 holds without saying so, so `--git` runs each task alone and looks for the lock itself.
-Next: the dry run counts memory's text past `memory_days`, but the pass removes none of it yet (§26, M50). Whether
+Next: the dry run counts memory's text past `memory_days`, but the pass removes none of it yet (§26). Whether
 the pass runs `--git` on its own, weekly, waits on S65 (§26, Open).

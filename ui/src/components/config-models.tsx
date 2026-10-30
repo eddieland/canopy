@@ -10,9 +10,7 @@ import { Notice } from '@/components/notice'
 import { PanelLoading } from '@/components/panel'
 import { Chip } from '@/components/status'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
-
-/** What a row says when config chooses no model: the runtime picks its own. */
-export const RUNTIME_DEFAULT = 'runtime default'
+import { RUNTIME_DEFAULT } from '@/lib/models'
 
 /**
  * The model config chooses for each of canopy's agents and each chore (DESIGN §13, §19), read only: a row each, its

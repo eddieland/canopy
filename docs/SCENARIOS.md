@@ -103,6 +103,10 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   toy workspace (TOY_REPOS) file a follow-up. Expect the sink to hear `follow_ups.filed` naming it once, and the
   follow-up to sit undispatched with no labels. Label it: expect the overseer to dispatch it as any ticket, its PR to
   land for review, and its worker to file no follow-up of its own.
+- **S69. A model dropped after it was set** (M58). Set one labeled ticket's worker model from its page to a model
+  `opencode models` lists, then take that model's provider out of OpenCode's config. Expect the ticket's next dispatch
+  refused `model_missing`, with its attention item, no slot leased and no attempt spent, and no run on the default.
+  Put the provider back: expect the next tick to dispatch it on the chosen model, and its session's record to agree.
 
 ### Several repositories
 
@@ -264,6 +268,10 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   overseer's `decisions` per row of §7's phase table, counted by distinct situation as well as by decision
   (2026-10-15 F26), each disagreement read and attributed (the rationale says which side was right), and what the
   connectors cost, in calls and seconds per tick, from `connector_runs`. M37 closes against it.
+- **S69. The overseer reads the journal, measured** (M37). After a day of `canopy loop` against the real queue,
+  re-measure with MEASUREMENTS' prompt (Re-measuring). Expect tool-result tokens per tick at a tenth of the first day's
+  median (about 14k), and no action missed over the day, checked against the derivation as M36's agreement counts are.
+  Record the numbers in `MEASUREMENTS.md`.
 
 ## Retired
 
