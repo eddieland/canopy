@@ -1171,7 +1171,7 @@ class Paths(Section):
     #: The operator's checklists, each `<repo>.md` for the mapped repository of that name: the rules a worker run
     #: that pushes there is asked to hold its diff to (DESIGN §42).
     checklists: Annotated[UserPath | None, Scope.PRIVATE] = None
-    #: A clone of the operator's own repository, at its top level: each live tick exports every plan of the workspace
+    #: A clone of the operator's own repository, at its top level: a live tick exports every plan of the workspace
     #: into `<it>/<workspace>/`, commits, and pushes to its upstream (DESIGN §25). Private, since it sends every plan's
     #: text where it points (TRUST_MODEL T6).
     plan_archive: Annotated[UserPath | None, Scope.PRIVATE] = None
@@ -1188,6 +1188,10 @@ class Paths(Section):
     #: Whether `plan_archive` also takes the operator's comments on each ticket's plans, with the passages they quote
     #: and their replies. Private, as `plan_archive` is: comments are the operator's own words.
     plan_archive_comments: Annotated[StrictBool, Scope.PRIVATE] = True
+    #: The least time between archives to `plan_archive`, timed from its last commit there (DESIGN §25): a live tick
+    #: sooner than that leaves the plans for a later one, unless the archive is not all pushed. 0 archives every tick.
+    #: Private, as `plan_archive` is: it sets how often the operator's remote is pushed to.
+    plan_archive_every_minutes: Annotated[Count, Scope.PRIVATE] = 360
 
 
 class Personas(Section):
