@@ -196,8 +196,9 @@ Rules:
   window's name is the label. What is working is every agent run running,
   worker runs, reviews of PRs, chore runs, and task runs alike, then the worker runs waiting on the operator's answer,
   each oldest first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the
-  PR, the chore, the task run's `task:N#M`), how long it has run (or `waiting on you` in `status-blocked`), and under it
-  the ticket's title, the review's reference and ticket, `chore run #N`, or the task's first line, opening the run's
+  PR, the chore, the task run's `task:N#M`, in medium weight), how long it has run (or `waiting on you` in
+  `status-blocked`, the whole row on a question's tint so it shows from across the room), and under it, in sans, the
+  ticket's title, the review's reference and ticket, `chore run #N`, or the task's first line, opening the run's
   page; at most four, then `+N more` to the page of
   the ones left out, or the runs page for a mix, so the sticky part fits an 800px window. The
   spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in two rows: the window's name

@@ -119,7 +119,7 @@ function WorkingRow({ item }: { item: RailItem }) {
                     to="/runs/$id"
                     params={{ id: String(run.id) }}
                     title={`${runRef(run.id)} ${run.kind}`}
-                    className={ROW}
+                    className={row(run.state)}
                     data-testid={`rail-run-${run.id}`}
                 >
                     <RowHead state={run.state} subject={run.ticket_key} started={run.started_at} />
@@ -139,7 +139,7 @@ function WorkingRow({ item }: { item: RailItem }) {
                     to="/pull-requests/reviews/$id"
                     params={{ id: String(review.id) }}
                     title={`${reviewRef(review.id)} of ${pr}`}
-                    className={ROW}
+                    className={row(review.state)}
                     data-testid={`rail-review-${review.id}`}
                 >
                     <RowHead state={review.state} subject={pr} started={review.started_at} />
@@ -158,7 +158,7 @@ function WorkingRow({ item }: { item: RailItem }) {
                     to="/chores/$name/runs/$id"
                     params={{ name: chore, id: String(run.id) }}
                     title={choreRunRef(chore, run.id)}
-                    className={ROW}
+                    className={row(run.state)}
                     data-testid={`rail-chore-${chore}`}
                 >
                     <RowHead state={run.state} subject={chore} started={run.started_at} />
@@ -173,7 +173,7 @@ function WorkingRow({ item }: { item: RailItem }) {
                     to="/tasks/$id/runs/$run"
                     params={{ id: String(task.id), run: String(run.id) }}
                     title={taskRunRef(task.id, run.id)}
-                    className={ROW}
+                    className={row(run.state)}
                     data-testid={`rail-task-${task.id}`}
                 >
                     <RowHead state={run.state} subject={taskRunRef(task.id, run.id)} started={run.started_at} />
@@ -187,15 +187,23 @@ function WorkingRow({ item }: { item: RailItem }) {
     }
 }
 
-// A working row's link: its head line over what goes under it.
-const ROW = 'flex flex-col gap-0.5 rounded-sm px-2.5 py-1.5 hover:bg-surface-raised'
+/**
+ * A working row's link: its head line over what goes under it. One waiting on the operator wears the tint a question
+ * does, so it shows from across the room.
+ */
+function row(state: RunState): string {
+    return cn(
+        'flex flex-col gap-0.5 rounded-sm px-2.5 py-1 hover:bg-surface-raised',
+        state === 'blocked' && 'bg-status-blocked/8',
+    )
+}
 
 /** A working row's head line: its dot, what it works on, and how long it has run, or `waiting on you`. */
 function RowHead({ state, subject, started }: { state: RunState; subject: string; started: string }) {
     return (
         <span className="flex items-center gap-2 font-mono text-xs">
             <RunDot state={state} />
-            <span className="min-w-0 truncate text-foreground">{subject}</span>
+            <span className="min-w-0 truncate font-medium text-foreground">{subject}</span>
             <span className="ml-auto shrink-0">
                 {state === 'blocked' ? (
                     <span className="font-sans whitespace-nowrap text-status-blocked">waiting on you</span>
@@ -228,9 +236,12 @@ function PhaseLine({ run }: { run: Run }) {
     )
 }
 
-/** The line under a review's or a chore run's head line, where a worker run's ticket title and a task's text go. */
+/**
+ * The line under a review's or a chore run's head line, where a worker run's ticket title and a task's text go, in the
+ * same sans as theirs.
+ */
 function Under({ children }: { children: string }) {
-    return <span className="min-w-0 truncate pl-4 font-mono text-xs text-muted-foreground">{children}</span>
+    return <span className="min-w-0 truncate pl-4 text-xs text-muted-foreground">{children}</span>
 }
 
 /**
@@ -360,7 +371,7 @@ function RailSection({
         >
             <div className="flex items-center justify-between px-2.5 pb-1.5">
                 <span className="panel-label">{label}</span>
-                {count !== undefined && <span className="readout text-2xs text-muted-foreground">{count}</span>}
+                {count !== undefined && <span className="readout text-xs text-muted-foreground">{count}</span>}
             </div>
             {children}
         </section>
