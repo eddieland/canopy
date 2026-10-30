@@ -784,6 +784,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/models/overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the tickets' model overrides
+         * @description Every ticket with a model the operator chose for one of its agents, by ticket, then agent.
+         *
+         *     An override outlasts `canopy forget` and covers each run of its agent until it is cleared, so the settings page
+         *     lists them all: a canary left on a costly model spends where no other page shows it.
+         */
+        get: operations["listModelOverrides"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/personas": {
         parameters: {
             query?: never;
@@ -5212,6 +5235,34 @@ export type components = {
             variants: {
                 [key: string]: string[];
             };
+        };
+        /**
+         * ModelOverride
+         * @description A ticket's model override for one of its agents, as `canopy model KEY` lists it (DESIGN §13).
+         */
+        ModelOverride: {
+            /** @description The agent it covers. */
+            agent: components["schemas"]["ModelAgent"];
+            /**
+             * Model
+             * @description The model, as `provider/model`, without its variant.
+             */
+            model: string;
+            /**
+             * Set At
+             * @description When the operator set it.
+             */
+            set_at: string;
+            /**
+             * Ticket
+             * @description The ticket's key.
+             */
+            ticket: string;
+            /**
+             * Variant
+             * @description The variant it runs at; None for the model's default.
+             */
+            variant: string | null;
         };
         /**
          * ModelRequest
@@ -12888,6 +12939,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listModelOverrides: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelOverride"][];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */

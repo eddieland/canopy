@@ -56,6 +56,21 @@ class ModelRequest(Model):
     None clears the override, as `--clear` does."""
 
 
+class ModelOverride(Model):
+    """A ticket's model override for one of its agents, as `canopy model KEY` lists it (DESIGN §13)."""
+
+    ticket: str
+    """The ticket's key."""
+    agent: ModelAgent
+    """The agent it covers."""
+    model: str
+    """The model, as `provider/model`, without its variant."""
+    variant: str | None = None
+    """The variant it runs at; None for the model's default."""
+    set_at: str
+    """When the operator set it."""
+
+
 class ModelList(Model):
     """The models the runtime lists to run an agent on, as `canopy models` prints them: what the operator may choose."""
 

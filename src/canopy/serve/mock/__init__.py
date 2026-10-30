@@ -44,7 +44,7 @@ from canopy.core import (
 )
 from canopy.core.context import db_path
 from canopy.core.items import Item
-from canopy.core.vocab import RunKind, RunStatus
+from canopy.core.vocab import OverrideKind, RunKind, RunStatus
 from canopy.infra import resources
 from canopy.runtime.report import ModelList
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
@@ -133,7 +133,7 @@ authorized_repliers = ["mock-operator"]
 trusted_reviewers = ["canopy:review", "lint-bot"]
 
 [runtime.models]
-# Only the agents no ticket's page shows, so the settings page has models to name and each ticket keeps the default.
+# Only the agents no ticket's page shows, so the settings page has models to name and a ticket keeps the default.
 overseer = "anthropic/claude-sonnet-4-5"
 chore = "anthropic/claude-haiku-4-5"
 
@@ -1096,7 +1096,8 @@ def _models(conn: sqlite3.Connection) -> None:
     """Which models served the agent runs that ended, as their sessions were read once they had (DESIGN §13).
 
     Run 39 switched models partway, so its page splits its cost; the reviewer runs on a model of its own. Run 40's read
-    failed and waits to be tried again, chore run 2's session is no longer kept, and run 42 is not read yet.
+    failed and waits to be tried again, chore run 2's session is no longer kept, and run 42 is not read yet. ABC-100's
+    worker has an override, a canary at a variant, which the settings page lists.
     """
     reads = (
         # table, run, status, error
@@ -1134,6 +1135,16 @@ def _models(conn: sqlite3.Connection) -> None:
         ("review_runs", 4, "openai/gpt-5", 11, 0.24),
     )
     records.insert_rows(records.RunModel, ("run_table", "run_id", "model", "replies", "cost_usd")).many(conn, served)
+    # ABC-100's worker stays on a model of its own until it is cleared, so the settings page lists one override.
+    records.insert(
+        records.TicketOverride,
+        ticket_key="ABC-100",
+        agent="worker",
+        kind=OverrideKind.MODEL,
+        value="anthropic/claude-opus-4-1@high",
+        channel="cli",
+        set_at=at(-600),
+    ).run(conn)
 
 
 # What each kind's first model call was sent on T0's day, before the run's id adds a little, and the share of it read

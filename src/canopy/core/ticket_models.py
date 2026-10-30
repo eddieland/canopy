@@ -70,6 +70,18 @@ def override(conn: sqlite3.Connection, ticket: str, agent: Agent) -> str | None:
     return found.value if found is not None else None
 
 
+def overrides(conn: sqlite3.Connection) -> list[records.TicketOverride]:
+    """Return every ticket's model override, by ticket, then by agent in `AGENTS`' order.
+
+    The settings page lists them, since one outlasts `canopy forget` and spends until it is cleared.
+
+    Returns:
+        Each override, one per ticket and agent.
+    """
+    found = records.select(records.TicketOverride).where("kind = ?", OverrideKind.MODEL).all(conn)
+    return sorted(found, key=lambda o: (o.ticket_key, AGENTS.index(o.agent) if o.agent in AGENTS else len(AGENTS)))
+
+
 def models_for(conn: sqlite3.Connection, config: Config, ticket: str, agent: Agent) -> dict[str, str]:
     """Return `[runtime.models]` with `ticket`'s override for `agent`, if it has one, in the place of config's whole.
 

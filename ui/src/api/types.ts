@@ -75,6 +75,8 @@ export type AgentPersona = Schemas['AgentPersona']
 export type AgentModel = Schemas['AgentModel']
 /** The models the runtime lists, as `canopy models` prints them (DESIGN §13): what the operator may choose from. */
 export type ModelList = Schemas['ModelList']
+/** A ticket's model override for one of its agents, in force until cleared (DESIGN §13). */
+export type ModelOverride = Schemas['ModelOverride']
 /** The model config chooses for each of canopy's agents and each chore, and the files that set them (DESIGN §13). */
 export type ConfigModels = Schemas['ConfigModels']
 /** The model `[runtime.models]` chooses for one of canopy's agents, or none: the runtime's default. */

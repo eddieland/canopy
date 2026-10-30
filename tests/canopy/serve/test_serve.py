@@ -1208,6 +1208,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/pull-request/threads",
         "/api/personas",
         "/api/models",
+        "/api/models/overrides",
         "/api/skills",
         "/api/runs/{run_id}/drafts/{number}/edit",
         "/api/runs/{run_id}/drafts/{number}/drop",

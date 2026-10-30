@@ -120,8 +120,13 @@ chore = "anthropic/claude-haiku-4-5"
 The panel only reads. The line under it names the file to edit: the user file serves every workspace, and
 `.canopy/config.toml` this one alone; the workspace file can't choose a model, since a model is what your spend buys
 and which provider sees the code. It shows what the loop runs on, so an edit appears after **Reload**, and applies from
-each agent's next run; a run already going keeps its model. One ticket's override is set on
-[its page](tickets#choosing-a-model) and never shows here. **Show the runtime's models** lists what you can name, as
+each agent's next run; a run already going keeps its model.
+
+One ticket's override is set on [its page](tickets#choosing-a-model), and **Tickets with an override** lists every one:
+the ticket, the agent, and the model it runs on instead. An override outlasts `canopy forget` and holds until you clear
+it, so this is where a canary you forgot on the expensive model turns up, before the invoice does.
+
+**Show the runtime's models** lists what you can name, each model with its variants after it (`@high`), as
 `canopy models` prints it, read only when you open it, since asking starts the runtime; canopy then keeps that list
 for five minutes, or until the loop reads its config again.
 
