@@ -356,7 +356,7 @@ def seed(directory: Path) -> Backend:
             tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
             _first_calls(ctx.conn)
             _attachments(ctx.conn)
-            # Last, so the messages their approvals wrote take ids after every other fixture's.
+            # Last but `_every_kind`, so the messages their approvals wrote take ids after every other fixture's.
             feedback_plans.seed_states(
                 ctx.conn,
                 ws.state_dir,
@@ -365,9 +365,52 @@ def seed(directory: Path) -> Backend:
                 repo=str(root),
                 slot=slot_path(root, "mobile", 1),
             )
+            _every_kind(ctx.conn)
         reviews.drafts(ctx.conn, at)
     transcripts.write(ws.state_dir, T0)
     return backend
+
+
+def _every_kind(conn: sqlite3.Connection) -> None:
+    """Give ABC-103's conversation every kind a message can be, so its screenshot shows each bubble (DESIGN §22).
+
+    It already holds a question, the operator's reply a tick has read, and a report. This adds canopy's note on a tick,
+    a tracker comment, and a reply no tick has read yet: last of every fixture, so its id is past the latest tick's.
+    """
+    records.insert(
+        records.Message,
+        subject_kind="ticket",
+        subject_id="ABC-103",
+        at=at(-119),
+        source="canopy",
+        kind="note",
+        channel="tick",
+        body="Tick 1 read message 2 and decided nothing about ABC-103.",
+        answers=2,
+    ).run(conn)
+    records.insert(
+        records.Message,
+        subject_kind="ticket",
+        subject_id="ABC-103",
+        at=at(-100),
+        source="tracker",
+        kind="comment",
+        channel="tracker",
+        body="QA signed off on the v2 invoices in staging. Ship it once the PR is green.",
+        comment_id="10002",
+        author="557058:ann",
+        commented_at=at(-101),
+    ).run(conn)
+    records.insert(
+        records.Message,
+        subject_kind="ticket",
+        subject_id="ABC-103",
+        at=at(-30),
+        source="operator",
+        kind="reply",
+        channel="web",
+        body="Also drop the v1 webhook handler while you are in there.",
+    ).run(conn)
 
 
 def _attachments(conn: sqlite3.Connection) -> None:

@@ -284,7 +284,7 @@ test('forget asks for the key typed out, then forgets the branch and PR', async 
     await expect(thread.getByTestId('forgotten')).toContainText('dropped branch agent/ABC-103-billing-v2, acme/web#91')
     await expect(thread.getByRole('link', { name: 'acme/web#91', exact: true })).toBeVisible()
     await expect(earlier).toHaveCount(0)
-    await thread.getByRole('button', { name: 'Show 3 earlier messages' }).click()
+    await thread.getByRole('button', { name: 'Show 6 earlier messages' }).click()
     await expect(earlier).toBeVisible()
 })
 
