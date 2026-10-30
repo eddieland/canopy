@@ -110,8 +110,9 @@ path = "hatch_build.py"
 exclude = ["ui/node_modules", "ui/dist", "ui/test-results", "ui/playwright-report"]
 
 # The public demo over mock data (D122): Vercel installs canopy from uv.lock, whose wheel bundles the UI, and serves
-# this app. vercel.json sets the framework and deploys main only, no previews of other branches; vercel-ignore.sh
-# skips a build when nothing the demo serves changed since the last deploy.
+# this app. vercel.json sets the framework and turns deployments off, of main too, so pull requests get no Vercel
+# check; set `git.deploymentEnabled` to `{"**": false, "main": true}` to deploy main again. vercel-ignore.sh skips a
+# build when nothing the demo serves changed since the last deploy.
 [tool.vercel]
 entrypoint = "vercel_app:app"
 
