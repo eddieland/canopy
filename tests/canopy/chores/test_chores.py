@@ -123,6 +123,21 @@ def test_without_chores_nothing_about_them_reaches_the_overseer(
         ]
 
 
+def test_a_chore_never_run_reaches_the_overseer_without_its_empty_keys(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    treehouse_state: Path,
+    agent_log: Path,
+) -> None:
+    """A null or empty value is left out of `chores`, as of `tickets`; false stays, read as often as true (#1528)."""
+    tracker_holds(canopy_env.journal())
+    with overseer_does(*waits(KEY), chore_waits("build-health", "not now")):
+        assert main(["tick", "--dry-run"]) == 0
+    assert state_block(agent_log)["chores"] == [
+        {"name": "build-health", "every_minutes": 120, "when": "Weekdays only.", "due": True, "running": False},
+    ]
+
+
 def test_max_chores_zero_turns_every_chore_off(
     canopy_env: CanopyEnv,
     chores: Path,
