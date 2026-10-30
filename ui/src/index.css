@@ -677,6 +677,29 @@
     }
 }
 
+/* The jack-o'-lantern beside Sprig in its season (src/components/season.tsx): its candle gutters, never flashing. */
+@keyframes buddy-candle {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    30% {
+        opacity: 0.8;
+    }
+    45% {
+        opacity: 0.95;
+    }
+    70% {
+        opacity: 0.75;
+    }
+}
+
+@utility animate-buddy-candle {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-candle 2.6s ease-in-out infinite;
+    }
+}
+
 @utility animate-buddy-blink {
     transform-box: fill-box;
     transform-origin: center;

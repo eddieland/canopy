@@ -126,6 +126,16 @@ describe('Buddy', () => {
         expect(localStorage.getItem(STORAGE_KEY)).toBe('off')
     })
 
+    it("stands a jack-o'-lantern beside Sprig at Halloween, and nothing on an ordinary day", async () => {
+        await renderBuddy('/attention')
+        expect(screen.queryByTestId('buddy-season')).toBeNull()
+        cleanup()
+
+        vi.setSystemTime(new Date(2026, 9, 30, 12))
+        await renderBuddy('/attention')
+        expect(screen.getByTestId('buddy-season').dataset['season']).toBe('halloween')
+    })
+
     describe("with the Ghost in Sprig's place", () => {
         it('goes by its own name and speaks in its own voice', async () => {
             act(() => setCompanion('ghost'))
