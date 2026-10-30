@@ -268,7 +268,8 @@ export function RailSpend() {
  * The rail's foot, on two lines: the version canopy serves, with the width to itself, cut short only past a long
  * build's hash, opening the releases on GitHub in a new tab; and under it two buttons alike, the guide, the operator's
  * documentation, bundled with that version, and Settings, which the operator opens too seldom to take a place in the
- * nav. Always at the window's foot, however long the page.
+ * nav. Settings goes under the guide where they do not fit side by side, in a palette that sets every line in its
+ * mono. Always at the window's foot, however long the page.
  */
 export function RailFooter() {
     const meta = useQuery(metaQuery).data
@@ -288,7 +289,7 @@ export function RailFooter() {
             >
                 {meta === undefined ? '' : `canopy ${meta.version}`}
             </a>
-            <div className="flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
                 <FooterLink to="/guide" title="How the web UI works, a page each" testId="rail-guide">
                     <BookOpen aria-hidden />
                     Guide
@@ -325,6 +326,7 @@ function FooterLink({
             data-testid={testId}
             className={cn(
                 'flex h-7 items-center gap-1.5 rounded-md bg-surface-raised px-2.5 text-sm text-foreground',
+                'whitespace-nowrap',
                 'transition-colors outline-none hover:bg-surface focus-visible:ring-2 focus-visible:ring-ring',
                 '[&_svg]:size-3.5',
             )}

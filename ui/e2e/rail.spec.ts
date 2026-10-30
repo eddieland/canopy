@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { NOW, settled, signIn, spentInWindows, storeTheme } from './helpers.ts'
+import { NOW, settled, signIn, spentInWindows, storePalette, storeTheme } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(NOW)
@@ -122,4 +122,22 @@ test('the version stays at the window foot on a page longer than the window', as
     await expect(version).toBeInViewport()
     const box = await page.getByTestId('rail-footer').boundingBox()
     expect(box === null ? 0 : Math.round(box.y + box.height)).toBe(600)
+})
+
+test("the foot's buttons stay inside the rail in a palette that sets every line in its mono", async ({ page }) => {
+    await storeTheme(page, 'dark')
+    await storePalette(page, 'dark', 'monokai')
+    await page.goto('attention')
+    await settled(page)
+    const footer = await page
+        .getByTestId('rail-footer')
+        .evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect)
+    for (const testId of ['rail-guide', 'rail-settings']) {
+        const button = page.getByTestId(testId)
+        const box = await button.evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect)
+        expect(box.left).toBeGreaterThanOrEqual(footer.left)
+        expect(box.right).toBeLessThanOrEqual(footer.right)
+        // Its label whole, not cut short.
+        expect(await button.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+    }
 })
