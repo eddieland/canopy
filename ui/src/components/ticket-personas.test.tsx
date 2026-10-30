@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { api } from '@/api/client'
 import type { AgentPersona, PersonaList } from '@/api/types'
 
-import { TicketPersonas } from './ticket-personas'
+import { TicketAgents } from './ticket-agents'
 
 const NAMES = ['canopy', 'explainer', 'minimalist', 'skeptic']
 const PERSONAS: AgentPersona[] = [
@@ -66,7 +66,8 @@ afterEach(() => {
 function renderPersonas(personas: AgentPersona[] = PERSONAS) {
     return render(
         <QueryClientProvider client={new QueryClient()}>
-            <TicketPersonas ticketKey="ABC-1" personas={personas} names={NAMES} />
+            {/* Its rows alone, without models beside them. */}
+            <TicketAgents ticketKey="ABC-1" personas={personas} names={NAMES} models={[]} />
         </QueryClientProvider>,
     )
 }
@@ -76,7 +77,7 @@ function openMenu(name: string) {
     return screen.getByRole('menu')
 }
 
-describe('TicketPersonas', () => {
+describe('PersonaChoice', () => {
     it("shows each agent's next persona and where it comes from, in the CLI's words", () => {
         renderPersonas()
         const rows = screen.getAllByRole('definition').map((row) => row.textContent)

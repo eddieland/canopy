@@ -180,7 +180,10 @@ describe('TicketModels', () => {
         )
         const rows = screen.getAllByTestId('ticket-model')
         expect(rows.map((row) => within(row).queryByRole('status') !== null)).toEqual([false, false, true])
-        expect(rows.at(-1)?.textContent).toMatch(/^acme\/deep-2this ticket's overridesaved: /u)
+        // In place of where the model comes from, so the row grows no longer for it.
+        expect(rows.at(-1)?.textContent).toMatch(/^acme\/deep-2saved: /u)
+        // The focus back on the trigger the choice was made from, as it was before the list opened.
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'reviewer model: acme/deep-2' }))
         expect(sent).toEqual([
             { method: 'GET', path: '/api/models', body: null },
             { method: 'POST', path: '/api/tickets/ABC-1/models', body: { agent: 'reviewer', model: 'acme/deep-2' } },
@@ -467,15 +470,19 @@ describe('TicketModels', () => {
         fireEvent.click(await within(list).findByRole('option', { name: 'acme/deep-2' }))
         const pending = await screen.findByRole('button', { name: 'reviewer model: acme/deep-2…' })
         expect(pending.getAttribute('aria-busy')).toBe('true')
-        expect(screen.getByRole('button', { name: 'worker model: acme/deep-2' }).hasAttribute('disabled')).toBe(true)
+        // Still focusable, so the focus the list hands back stays on it, but it opens nothing until the save is done.
+        expect(pending.getAttribute('aria-disabled')).toBe('true')
+        expect(pending.hasAttribute('disabled')).toBe(false)
+        expect(document.activeElement).toBe(pending)
+        fireEvent.click(pending)
+        expect(screen.queryByRole('listbox')).toBeNull()
         replies[0]?.(Response.json(CHOSEN))
         expect(await screen.findByRole('status')).toBeDefined()
-        expect(screen.getByRole('button', { name: 'reviewer model: acme/deep-2' }).getAttribute('aria-busy')).toBe(
-            'false',
-        )
+        const saved = screen.getByRole('button', { name: 'reviewer model: acme/deep-2' })
+        expect([saved.getAttribute('aria-busy'), saved.getAttribute('aria-disabled')]).toEqual(['false', 'false'])
     })
 
-    it('names the agent and the guard of a refusal', async () => {
+    it('names the guard of a refusal in the row of the agent it refused', async () => {
         answer = Response.json(
             { detail: { guard: 'unknown_model', reason: 'OpenCode does not list the model acme/fast-1' } },
             { status: 409 },
@@ -483,9 +490,20 @@ describe('TicketModels', () => {
         renderModels()
         const list = openPicker('reviewer model: runtime default')
         fireEvent.click(await within(list).findByRole('option', { name: 'acme/fast-1' }))
-        expect((await screen.findByRole('alert')).textContent).toBe(
-            'reviewer: refused (unknown_model): OpenCode does not list the model acme/fast-1',
-        )
+        const alert = await screen.findByRole('alert')
+        expect(alert.textContent).toBe('refused (unknown_model): OpenCode does not list the model acme/fast-1')
+        expect(screen.getAllByRole('definition').map((row) => row.contains(alert))).toEqual([false, false, true])
+    })
+
+    it('names a long id whole on hover, which its trigger and the list end in an ellipsis', async () => {
+        const long = 'openrouter/anthropic/claude-opus-4.1-20250805-preview'
+        listed = Response.json({ models: [long], variants: { [long]: ['high'] }, error: null })
+        renderModels([{ ...AT_HIGH, model: `${long}@high` }])
+        const trigger = screen.getByRole('button', { name: `planner model: ${long}@high` })
+        expect(trigger.getAttribute('title')).toBe(`${long}@high`)
+        const list = openPicker(`planner model: ${long}@high`)
+        expect(pinned(list).getAttribute('title')).toBe(`${long}@high`)
+        expect((await offered(list)).map((o) => o.getAttribute('title'))).toEqual([long, `${long}@high`])
     })
 
     it('shows nothing for a ticket the server sent no models for', () => {
