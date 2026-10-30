@@ -128,8 +128,8 @@ A fresh ticket says whether it is a `candidate`, which canopy decided from its l
 does. One that is not carries only its key and `why`, `not labeled` or `closed`: decide it from that, and do not read
 it. A fresh candidate carries:
 
-- its `title`, `state`, `labels` (each with `added_at`, where the tracker dates it), `blockers` with each one's state,
-  and its `body` until it has a unit;
+- its `title`, left out when it is the same as its ticket's `title` in `tickets`, its `state`, `labels` (each with
+  `added_at`, where the tracker dates it), `blockers` with each one's state, and its `body` until it has a unit;
 - `comments`: those past its `comment` cursor, oldest first, each with its `number`, `id`, `author`, time (`at`), and
   `body` (cut at a bound; `truncated` when it was), and two marks canopy set: `authorized`, its author is an authorized
   replier, and `worker`, it carries the workers' marks (see "Workers' comments");
