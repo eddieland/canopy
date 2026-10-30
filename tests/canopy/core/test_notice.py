@@ -216,24 +216,37 @@ def test_the_state_block_carries_the_notice_in_force_and_drops_one_ended_with_no
 
 @pytest.mark.usefixtures("git_pool")
 @pytest.mark.parametrize(
-    ("conclusion", "kept"),
-    [pytest.param("failure", True, id="a failed check"), pytest.param("success", False, id="none failed")],
+    ("conclusion", "covered", "kept"),
+    [
+        pytest.param("failure", False, True, id="a failed check"),
+        pytest.param("failure", True, False, id="one the ci cursor covers"),
+        pytest.param("success", False, False, id="none failed"),
+    ],
 )
 def test_an_ended_notice_stays_in_the_state_block_while_a_fresh_pr_shows_a_failed_check(
     scenario: Scenario,
     github_state: Path,
     conclusion: str,
+    covered: bool,  # noqa: FBT001  (a parametrized fixture)
     kept: bool,  # noqa: FBT001  (a parametrized fixture)
 ) -> None:
     with_a_pr(scenario, approve=False)
     scenario.operator("notice", OUTAGE)
     scenario.operator("notice", "--clear")
-    github_shows(github_state, checks=[{**FEEDBACK_RED, "conclusion": conclusion}])
+    # A check run, so the journal numbers it and a cursor can name it (DESIGN §35).
+    github_shows(github_state, checks=[{**FEEDBACK_RED, "conclusion": conclusion, "run_id": 11}])
     scenario.tick(*waits(KEY), dry_run=True)
     [unit] = scenario.state()["observations"]["tickets"][0]["units"]
     assert unit["observed"] == "fresh"
-    # Only a failed check can be held, until a newer run of it exists (DESIGN §8). A PR not observed fresh may show
-    # one, so it keeps the notice too: the busy workspace's snapshot shows it (tests/canopy/loop/test_state.py).
+    if covered:
+        # A `resume` already passed the check: one a notice holds leaves the `ci` cursor short of it (§8).
+        [failed] = unit["checks"]["failed"]
+        scenario.conn.execute("UPDATE ticket_units SET ci_cursor = ?", (failed["number"],))
+        scenario.tick(*waits(KEY), dry_run=True)
+        assert scenario.ticket_state()["units"][0]["cursors"]["ci"] == failed["number"]
+    # Only a failed check newer than its unit's `ci` cursor can be held, until a newer run of it exists (DESIGN §8). A
+    # PR not observed fresh shows none, so it keeps no notice: the busy workspace's snapshot shows it
+    # (tests/canopy/loop/test_state.py).
     assert [n["text"] for n in scenario.state().get("notices", [])] == ([OUTAGE] if kept else [])
 
 
