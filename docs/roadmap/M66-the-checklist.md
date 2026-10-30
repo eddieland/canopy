@@ -35,12 +35,13 @@ missed. Three stages, in order, each in its own PRs; stage 3 waits on stage 2's 
   the hold in the slot's own git directory with the time and `CANOPY_RUN_ID`: a push of the same run within a window
   goes through, one after it is held again, and a marker of another run, left in a slot it outlived, counts for nothing.
   In the clock's last stretch, by `CANOPY_DEADLINE`, it prints the list and lets the push through, asking for the fix
-  pushed again (D116). The worker prompts gain a sentence saying a push may be held, that a held push is pushed again
-  once the list is answered, unlike a rejected one, and what `checklist` holds; the result contract gains it, validated:
-  per repository and item, `pass`, `fixed`, `held` with a `reason`, or `n/a`; an item or a repository the run's lists do
-  not hold is dropped, and a reminded run with no `checklist` is recorded unanswered. `canopy show-run` and the run's
-  page show the answers; `canopy checklist` (and a web UI view) counts per repository and item reminded, pass, fixed,
-  held, and unanswered, over a period, and `--repo` narrows it to one. No attention item.
+  pushed again (D116); so it does when it cannot write the marker, which would otherwise hold every push. The worker
+  prompts gain a sentence saying a push may be held, that a held push is pushed again once the list is answered, unlike
+  a rejected one, and what `checklist` holds; the result contract gains it, validated: per repository and item, `pass`,
+  `fixed`, `held` with a `reason`, or `n/a`; an item or a repository the run's lists do not hold is dropped, and a
+  reminded run with no `checklist` is recorded unanswered. `canopy show-run` and the run's page show the answers;
+  `canopy checklist` (and a web UI view) counts per repository and item reminded, pass, fixed, held, and unanswered,
+  over a period, and `--repo` narrows it to one. No attention item.
 - **Stage 2, the measurement.** Two weeks of real use in `MEASUREMENTS.md`: per repository and item, the counts above,
   and the nits of that item that still reached a human reviewer's comment on canopy's PRs, counted by the operator
   from the PRs. An
@@ -79,15 +80,15 @@ missed. Three stages, in order, each in its own PRs; stage 3 waits on stage 2's 
   canopy's hooks: a push held and nothing sent, the list in git's output, a commit chained before it made; the push
   after it sent and the repository's own `pre-push` run with its refs; a push from a script held; nothing to send not
   held; a marker of another run, or past the window, holding again; the clock's last stretch printing the list and
-  pushing; a joint run's slots each held with their own list; a missing or overlong file holding nothing; and canopy's
-  marks still on each commit. A fake worker that pushes is held, pushes again, and answers, and its answers show on the
-  run; a result without `checklist` after a hold is recorded unanswered; an unknown item or repository is dropped; a run
-  in a repository without a list gets no file and is not held; with trailer and prefix off, a run with a list is still
-  held; a list the harness cannot read refuses `bad_prompt`, and a list in the workspace file is a config error; the
-  overseer, a planner, a reviewer, and a chore get no file; a sandboxed run reads the file and writes the marker, and
-  cannot write the file (the sandbox's tests); the counts per repository and item; `test_prompt_sizes.py` for the
-  prompts, `test_frozen.py` for the answer type, and `core/test_db.py` and `test_records.py` for where the answers are
-  kept.
+  pushing; a joint run's slots each held with their own list; a missing or overlong file holding nothing; a marker it
+  cannot write letting the push through with the list; and canopy's marks still on each commit. A fake worker that
+  pushes is held, pushes again, and answers, and its answers show on the run; a result without `checklist` after a hold
+  is recorded unanswered; an unknown item or repository is dropped; a run in a repository without a list gets no file
+  and is not held; with trailer and prefix off, a run with a list is still held; a list the harness cannot read refuses
+  `bad_prompt`, and a list in the workspace file is a config error; the overseer, a planner, a reviewer, and a chore get
+  no file; a sandboxed run reads the file and writes the marker, and cannot write the file (the sandbox's tests); the
+  counts per repository and item; `test_prompt_sizes.py` for the prompts, `test_frozen.py` for the answer type, and
+  `core/test_db.py` and `test_records.py` for where the answers are kept.
 
 Accept: Stage 0's list read by the operator, before stage 1 starts. Live, once stage 1 is built: a worker on a toy
 ticket with a deliberate hit on two items has its push held, as its transcript shows, fixes both, and pushes once, so
