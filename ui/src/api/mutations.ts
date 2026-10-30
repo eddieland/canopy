@@ -141,19 +141,22 @@ export async function grantLimit(ticketKey: string | null, limit: Limit): Promis
 }
 
 /**
- * `canopy start URL --review --notes TEXT --persona NAME`: canopy reviews a PR it does not own, once, at its head, its
- * reviewer given the notes, once in each of `personas`, or in `[personas] reviewer`'s when none. Nothing posts on the
- * PR until the operator publishes its draft; the next tick reviews it.
+ * `canopy start URL --review --notes TEXT --persona NAME --model M`: canopy reviews a PR it does not own, once, at its
+ * head, its reviewer given the notes, once in each of `personas`, or in `[personas] reviewer`'s when none, each on
+ * `model`, or the reviewer's when null. Nothing posts on the PR until the operator publishes its draft; the next tick
+ * reviews it.
  */
 export async function requestReview(
     url: string,
     notes = '',
     personas: readonly string[] = [],
+    model: string | null = null,
 ): Promise<ReviewRequested> {
     return unwrap(
         await api.POST('/api/pull-request/start', {
             params: { query: { url } },
-            body: { notes, personas: [...personas] },
+            // No model is config's, and leaves an open request's as it was.
+            body: { notes, personas: [...personas], ...(model === null ? {} : { model }) },
         }),
     )
 }

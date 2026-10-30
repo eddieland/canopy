@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mockRuns } from '@/api/mocks'
 import type { Run } from '@/api/types'
 
-import { modelNames, ranOn, runModelIds, sameModel, unservedReason, withVariant } from './models'
+import { modelNames, pickerModel, ranOn, runModelIds, sameModel, unservedReason, withVariant } from './models'
 
 const [RUNNING, BLOCKED] = mockRuns as [Run, Run]
 
@@ -32,6 +32,19 @@ describe('modelNames', () => {
         ])
         const alone = modelNames(['github-copilot/claude-sonnet-4.5', 'github-copilot/gpt-5'])
         expect([...alone.values()]).toEqual(['claude-sonnet-4.5', 'gpt-5'])
+    })
+})
+
+describe('pickerModel', () => {
+    it('sets a variant apart as canopy reads one, never a dated id', () => {
+        expect(pickerModel(null)).toEqual({ model: null, variant: null })
+        expect(pickerModel('acme/deep-2')).toEqual({ model: 'acme/deep-2', variant: null })
+        expect(pickerModel('acme/deep-2@high')).toEqual({ model: 'acme/deep-2@high', variant: 'high' })
+        expect(pickerModel('vendor/claude-x@20250101')).toEqual({ model: 'vendor/claude-x@20250101', variant: null })
+        expect(pickerModel('vendor/claude-x@20250101@max')).toEqual({
+            model: 'vendor/claude-x@20250101@max',
+            variant: 'max',
+        })
     })
 })
 
