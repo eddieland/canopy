@@ -8,10 +8,10 @@ Each tick's message is the harness's state block: the time, whether this is a dr
 repositories, the tracker's labels and query, running workers, the journal's view of each ticket and its units, and
 `observations`, what canopy's connectors last read of the tracker and GitHub. The journal is a cache of what the loop
 did, never live state. The observations are live state as of their age, and your only view of the tracker and
-GitHub: decide from them (see "Observations"). In `tickets` and `reviews`, a key whose value would be null or an empty
-list or object is left out, at any depth: read an absent key as that, such as a cursor not yet set, a ticket's
-`last_run` before its first run, a private ticket's `new_operator_messages` with none new, or a clean review's
-`findings`.
+GitHub: decide from them (see "Observations"). In `tickets`, `chores`, and `reviews`, a key whose value would be null or
+an empty list or object is left out, at any depth: read an absent key as that, such as a cursor not yet set, a ticket's
+`last_run` before its first run, a private ticket's `new_operator_messages` with none new, a chore's `due_at` when it
+is due now, or a clean review's `findings`.
 
 ## Tools you have
 

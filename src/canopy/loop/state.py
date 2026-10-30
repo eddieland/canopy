@@ -439,6 +439,7 @@ def state_block(
                 {
                     **state,
                     "tickets": _compact(state["tickets"]),
+                    **({"chores": _compact(state["chores"])} if "chores" in state else {}),
                     **({"reviews": _by_unit(state["reviews"], state["tickets"])} if "reviews" in state else {}),
                     "observations": rendered_observations(state["observations"]),
                 },
@@ -574,10 +575,11 @@ def _notice(held: Notice, now: datetime) -> NoticeState:
 
 
 def _compact(value: object) -> object:
-    """`value` as the state block renders a ticket or `reviews`: every key, at any depth, left out whose value is empty.
+    """`value` as the state block renders a ticket, a chore, or `reviews`: every key, at any depth, left out if empty.
 
-    Empty is null, or an empty list or object, so a cursor not yet set, a plan with no `newest`, and a private ticket's
-    `new_operator_messages` with none new are absent rather than spelled out. False and zero stay: a plan's and a
+    Empty is null, or an empty list or object, so a cursor not yet set, a plan with no `newest`, a private ticket's
+    `new_operator_messages` with none new, and a chore's `latest_run` before its first run are absent rather than
+    spelled out. False and zero stay: a plan's and a
     feedback plan's flags are read as false as often as true, and an attempt count is compared with its limit.
 
     Returns:

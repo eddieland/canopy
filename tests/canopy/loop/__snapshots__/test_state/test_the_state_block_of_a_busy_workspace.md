@@ -184,11 +184,8 @@ This is a dry run. `canopy_dispatch` checks its guards and records what it would
       "name": "build-health",
       "every_minutes": 120,
       "when": "Weekdays only.",
-      "due_at": null,
       "due": true,
-      "running": false,
-      "latest_run": null,
-      "findings": []
+      "running": false
     }
   ],
   "reviews": {
