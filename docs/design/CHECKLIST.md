@@ -42,9 +42,10 @@ refs git hands it, which it hands on to the repository's own hook. The push afte
 own `pre-push` with it, so a worker is held once and never kept from pushing; the hook marks when it held, and in which
 run, in the slot's own git directory, since a slot outlives its run, and a push after a long stretch of work is held
 again. Near the deadline, in the clock's last stretch (§33), it holds nothing, since a held push then risks the run
-ending `unpushed`: it prints the list and lets the push through, asking for the fix pushed again, which D116 allows. A
-joint run's slots are each held on their own, each with its repository's list. A push the remote will refuse is held
-first, as git runs the hook before it learns that; the next is git's rejection, which a worker never retries (§8).
+ending `unpushed`: it prints the list and lets the push through, asking for the fix pushed again, which D116 allows. So
+it does when it cannot write its marker, since a hold it could not mark would hold every push. A joint run's slots are
+each held on their own, each with its repository's list. A push the remote will refuse is held first, as git runs the
+hook before it learns that; the next is git's rejection, which a worker never retries (§8).
 
 The list reaches the hook as the operator's answer reaches a running agent (§41): a file in the run's answers
 directory, which a sandboxed run may read and not write, and canopy points a worker's git at its hooks whenever the run
