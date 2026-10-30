@@ -200,9 +200,9 @@ Rules:
   the ticket's title, the review's reference and ticket, `chore run #N`, or the task's first line, opening the run's
   page; at most four, then `+N more` to the page of
   the ones left out, or the runs page for a mix, so the sticky part fits an 800px window. The
-  spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, on one line, each cost in a
-  small readout after its window's name, so the block takes a line's height (a cost too long to share it puts the 30
-  days under the 24 hours): it is shown
+  spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in two rows: the window's name
+  on the left, its cost right-aligned in a readout, so the figures line up at four digits as at one. The 30 days is
+  the headline, a step larger and medium weight under the 24 hours' `text-xs`, both in `foreground`: it is shown
   nowhere else, but for the lifetime total Sprig's hats and the Ghost's shells are bought with (Fun, below). The
   footer is two lines, the version, a link out to canopy's releases on GitHub, with the width to itself and cut
   short only past a long build's hash, then the guide and Settings as two filled pills alike, `foreground` on
