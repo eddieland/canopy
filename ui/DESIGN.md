@@ -1075,8 +1075,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   dropping its own.
 - **The reply form is always open** (`ReplyForm`), on every ticket and every chore, never folded under a `Disclosure`: a
   note for the next worker is as likely as an answer to a question, and a click to reach the box hides where the
-  operator writes. Its label names the message it answers while a question waits, and its placeholder speaks of an
-  untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree. On a
+  operator writes. Its label names the message it answers while a question waits, and on a ticket the form then
+  wears the open question's tint and hairline, its label in `status-blocked`, so the question and the box answering it
+  read as a pair (a task's page draws the same band around it). Its placeholder speaks of an untrusted review only
+  while one waits. Focused, the box takes the accent's 8% tint, the operator's side. Its count of characters shows
+  only past 80% of the bound. It is the form's rule, so the ticket's page and its attention item agree. On a
   public ticket it says what a reply is for and where it goes, `For its next worker, as an instruction. It stays in
   canopy, never on the ticket.`, as the ticket's `public` chip says on hover and to a screen reader, where its comments
   stay on the tracker.
