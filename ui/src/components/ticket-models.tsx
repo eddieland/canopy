@@ -15,10 +15,8 @@ import { sameModel } from '@/lib/models'
 import { failedText, MODEL_SOURCES, modelName, modelText } from '@/lib/outcomes'
 import { cn } from '@/lib/utils'
 
-/** A choice the menu makes: a model, or null to clear the ticket's override. */
+/** A choice the menu made, while it saves: a model, or null to clear the ticket's override. */
 interface Choice {
-    /** The agent the choice is for. */
-    agent: AgentModel['agent']
     /** The model, as `provider/model` or `provider/model@variant`, or null to clear the override. */
     model: string | null
 }
@@ -40,14 +38,8 @@ const VARIANT_GONE = 'variant no longer listed; its next run is refused'
 
 /**
  * The model each of a ticket's agents runs on at its next run (DESIGN §13), and where that comes from: a row for its
- * workers, its planner, and its reviewer, laid out as `TicketPersonas` lays out their personas, each a menu that sets
- * the ticket's override to one of the models the runtime lists, read when the menu opens, or clears it, as
- * `canopy model KEY MODEL --agent AGENT` and `--clear` do, each model at its default or at one of the variants the
- * runtime lists for it. The runtime's default names no model, so a row on it names the one that served the agent's
- * latest run once its session is read, as does a row whose runs went to another. A choice saved is confirmed in its
- * row, in place, until the ticket's models change again, saying so when it sets aside config's variant. A model or
- * variant the runtime no longer lists refuses the agent's next run rather than run it on another: its menu's trigger
- * is in the blocked color once the list says so.
+ * workers, its planner, and its reviewer, each a `ModelChoice`, as an attention item shows them. The ticket's page lays
+ * them out beside the personas instead (`TicketAgents`).
  */
 export function TicketModels({
     ticketKey,
@@ -58,81 +50,103 @@ export function TicketModels({
     models: readonly AgentModel[]
     className?: string
 }) {
+    if (models.length === 0) {
+        return null
+    }
+    return (
+        <div className={className} data-testid="ticket-models">
+            <Fields className="pb-1.5">
+                {models.map((m) => (
+                    <Field key={m.agent} label={`${m.agent} model`}>
+                        <ModelChoice ticketKey={ticketKey} current={m} models={models} />
+                    </Field>
+                ))}
+            </Fields>
+        </div>
+    )
+}
+
+/**
+ * One agent's model at its next run: a menu that sets the ticket's override to one of the models the runtime lists,
+ * read when the menu opens, or clears it, as `canopy model KEY MODEL --agent AGENT` and `--clear` do, each model at its
+ * default or at one of the variants the runtime lists for it, then where the model comes from. The runtime's default
+ * names no model, so a row on it names the one that served the agent's latest run once its session is read, as does a
+ * row whose runs went to another. A choice saved is confirmed in place of where the model comes from, so nothing
+ * moves, until the ticket's `models` change again, saying so when it sets aside
+ * config's variant; a choice refused says why under the row. A model or variant the runtime no longer lists refuses
+ * the agent's next run rather than run it on another: its menu's trigger is in the blocked color once the list says so.
+ */
+export function ModelChoice({
+    ticketKey,
+    current,
+    models,
+}: {
+    ticketKey: string
+    current: AgentModel
+    models: readonly AgentModel[]
+}) {
     const client = useQueryClient()
     const seen = seenOf(models)
     const [said, setSaid] = useState<Said | null>(null)
     if (said !== null && seen !== said.seen) {
         // The read the choice set off brings it in, and the confirmation stays; a change after that is news it no
         // longer speaks for, and so is one that is not the choice.
-        const arrived = models.find((m) => m.agent === said.now.agent)
-        const caughtUp = !said.settled && arrived !== undefined && sameChoice(arrived, said.now)
+        const caughtUp = !said.settled && sameChoice(current, said.now)
         setSaid(caughtUp ? { ...said, seen, settled: true } : null)
     }
     const choose = useMutation({
-        mutationFn: ({ agent, model }: Choice) => chooseTicketModel(ticketKey, agent, model),
+        mutationFn: (model: string | null) => chooseTicketModel(ticketKey, current.agent, model),
         onMutate: () => setSaid(null),
         onSuccess: (now) => {
             setSaid({ now, seen, settled: false })
             void client.invalidateQueries({ queryKey: keys.ticket(ticketKey) })
         },
     })
-    if (models.length === 0) {
-        return null
-    }
-    // The choice being saved, while the server reads the runtime's list again to check it, for up to 30 seconds.
-    const saving = choose.isPending ? choose.variables : undefined
+    // Until the ticket is read again, the row shows what the server answered rather than what it had.
+    const row = said !== null && !said.settled ? said.now : current
+    // A session names a variant other than the model's default with it, so either may be the row's.
+    const served =
+        row.last_served === null || (row.model !== null && sameModel(row.model, row.last_served))
+            ? null
+            : row.last_served
     return (
-        <div className={className} data-testid="ticket-models">
-            <Fields className="pb-1.5">
-                {models.map((m) => {
-                    const confirmed = said?.now.agent === m.agent ? said : null
-                    // Until the ticket is read again, the row shows what the server answered rather than what it had.
-                    const row = confirmed !== null && !confirmed.settled ? confirmed.now : m
-                    // A session names a variant other than the model's default with it, so either may be the row's.
-                    const served =
-                        row.last_served === null || (row.model !== null && sameModel(row.model, row.last_served))
-                            ? null
-                            : row.last_served
-                    return (
-                        <Field key={m.agent} label={`${m.agent} model`}>
-                            <span className="flex flex-wrap items-baseline gap-x-2" data-testid="ticket-model">
-                                <ModelPicker
-                                    current={row}
-                                    saving={saving?.agent === m.agent ? saving : undefined}
-                                    disabled={choose.isPending}
-                                    onChoose={(model) => choose.mutate({ agent: m.agent, model })}
-                                />
-                                {/* The default's button already says where it comes from. */}
-                                {row.source !== 'default' && (
-                                    <span className="text-xs text-muted-foreground">{MODEL_SOURCES[row.source]}</span>
-                                )}
-                                {confirmed !== null && (
-                                    <output className="inline-flex items-baseline gap-1 text-xs text-status-done">
-                                        <Check aria-hidden className="size-3 self-center" />
-                                        saved
-                                        <span className="sr-only">: {modelText(ticketKey, confirmed.now)}</span>
-                                        {/* What the sentence before says, to the eye, as the CLI puts it. */}
-                                        {confirmed.now.dropped_variant !== null && (
-                                            <span aria-hidden className="text-muted-foreground">
-                                                (config&apos;s variant{' '}
-                                                <span className="font-mono">{confirmed.now.dropped_variant}</span> no
-                                                longer applies)
-                                            </span>
-                                        )}
-                                    </output>
-                                )}
-                                {served !== null && (
-                                    <span className="text-xs text-muted-foreground">
-                                        last served <span className="font-mono">{served}</span>
-                                    </span>
-                                )}
-                            </span>
-                        </Field>
+        <>
+            <span className="flex flex-wrap items-baseline gap-x-2" data-testid="ticket-model">
+                <ModelPicker
+                    current={row}
+                    // The choice being saved, while the server reads the runtime's list again to check it, for up to
+                    // 30 seconds.
+                    saving={choose.isPending ? { model: choose.variables ?? null } : undefined}
+                    onChoose={(model) => choose.mutate(model)}
+                />
+                {said === null ? (
+                    // The default's button already says where it comes from.
+                    row.source !== 'default' && (
+                        <span className="text-xs text-muted-foreground">{MODEL_SOURCES[row.source]}</span>
                     )
-                })}
-            </Fields>
-            <Notice error={choose.error} subject={choose.variables?.agent} className="px-3 pb-3" />
-        </div>
+                ) : (
+                    // In place of where the model comes from, which the sentence a screen reader is told says.
+                    <output className="inline-flex items-baseline gap-1 text-xs text-status-done">
+                        <Check aria-hidden className="size-3 self-center" />
+                        saved
+                        <span className="sr-only">: {modelText(ticketKey, said.now)}</span>
+                        {/* What the sentence before says, to the eye, as the CLI puts it. */}
+                        {said.now.dropped_variant !== null && (
+                            <span aria-hidden className="text-muted-foreground">
+                                (config&apos;s variant <span className="font-mono">{said.now.dropped_variant}</span> no
+                                longer applies)
+                            </span>
+                        )}
+                    </output>
+                )}
+                {served !== null && (
+                    <span className="min-w-0 truncate text-xs text-muted-foreground" title={served}>
+                        last served <span className="font-mono">{served}</span>
+                    </span>
+                )}
+            </span>
+            <Notice error={choose.error} className="pt-1" />
+        </>
     )
 }
 
@@ -142,17 +156,17 @@ export function TicketModels({
  * variants under it in the runtime's order, with the model chosen now pinned at the top and checked wherever it is,
  * whatever sets it. What is typed finds each row by its own id alone, the pinned one set aside, so a variant typed
  * and Enter picks the first model at that variant. Picking one sets the ticket's override and closes the list;
- * `Clear the override`, below the list rather than in it, so a long list never scrolls it away, clears it.
+ * `Clear the override`, below the list rather than in it, so a long list never scrolls it away, clears it. The trigger
+ * ends a long id in an ellipsis, the whole of it on hover, and stays in the keyboard's reach while a choice saves, so
+ * the focus comes back to it once the list closes; it opens nothing until the save is done.
  */
 function ModelPicker({
     current,
     saving,
-    disabled,
     onChoose,
 }: {
     current: AgentModel
     saving: Choice | undefined
-    disabled: boolean
     onChoose: (model: string | null) => void
 }) {
     const [open, setOpen] = useState(false)
@@ -179,6 +193,9 @@ function ModelPicker({
     }
 
     function openChange(now: boolean) {
+        if (now && saving !== undefined) {
+            return
+        }
         setOpen(now)
         // Each opening starts from the whole list, as cmdk's own field does.
         setSearch('')
@@ -187,27 +204,33 @@ function ModelPicker({
     return (
         <Popover open={open} onOpenChange={openChange}>
             <PopoverTrigger asChild>
+                {/* Not `disabled` while it saves, which would drop the focus the list hands back to it. */}
                 <Button
                     variant="outline"
                     size="xs"
-                    disabled={disabled}
+                    aria-disabled={saving !== undefined}
                     aria-busy={saving !== undefined}
                     aria-label={`${current.agent} model: ${shown}${refusal === null ? '' : `, ${refusal}`}`}
-                    title={refusal ?? undefined}
+                    title={refusal === null ? shown : `${shown}: ${refusal}`}
                     className={cn(
+                        'max-w-full aria-disabled:opacity-50',
                         // The `xs` button is monospace of its own, as an id is.
                         !named && 'font-sans text-muted-foreground',
                         refusal !== null && 'border-status-blocked/40 text-status-blocked',
                     )}
                 >
-                    {saving === undefined && id !== null && current.variant !== null ? (
-                        <span>
-                            {id}
-                            <span className={cn(refusal === null && 'text-muted-foreground')}>@{current.variant}</span>
-                        </span>
-                    ) : (
-                        shown
-                    )}
+                    <span className="truncate">
+                        {saving === undefined && id !== null && current.variant !== null ? (
+                            <>
+                                {id}
+                                <span className={cn(refusal === null && 'text-muted-foreground')}>
+                                    @{current.variant}
+                                </span>
+                            </>
+                        ) : (
+                            shown
+                        )}
+                    </span>
                     <ChevronDown aria-hidden />
                 </Button>
             </PopoverTrigger>
@@ -229,7 +252,8 @@ function ModelPicker({
                                     value="current"
                                     checked={current.model !== null}
                                     disabled={current.model === null || refusal !== null}
-                                    title={refusal ?? undefined}
+                                    title={refusal ?? modelName(current.model)}
+                                    note={refusal ?? sourceOf(current.source)}
                                     // An override chosen again is the same override: nothing to save.
                                     onSelect={() =>
                                         current.source === 'ticket' ? setOpen(false) : choose(current.model)
@@ -237,9 +261,6 @@ function ModelPicker({
                                 >
                                     <span className={cn(current.model === null && 'font-sans text-muted-foreground')}>
                                         {modelName(current.model)}
-                                    </span>
-                                    <span className="font-sans text-muted-foreground">
-                                        {refusal ?? sourceOf(current.source)}
                                     </span>
                                 </ModelItem>
                             </CommandGroup>
@@ -275,11 +296,9 @@ function ModelPicker({
                                             checked={model === current.model}
                                             onSelect={() => choose(model)}
                                             label={each.length === 0 ? undefined : `${model} (default)`}
+                                            note={each.length === 0 ? undefined : '(default)'}
                                         >
                                             {model}
-                                            {each.length > 0 && (
-                                                <span className="font-sans text-muted-foreground">(default)</span>
-                                            )}
                                         </ModelItem>,
                                         ...each.map((atVariant) => (
                                             <ModelItem
@@ -324,7 +343,10 @@ function ModelPicker({
     )
 }
 
-/** A model in the picker's list, with a check at its left while it is the one chosen now. */
+/**
+ * A model in the picker's list, with a check at its left while it is the one chosen now: its id, ending in an ellipsis
+ * when it is too long for the list, then a muted `note` after it, or under it when the two do not fit on a line.
+ */
 function ModelItem({
     value,
     checked,
@@ -332,6 +354,7 @@ function ModelItem({
     title,
     onSelect,
     label,
+    note,
     className,
     children,
 }: {
@@ -341,6 +364,7 @@ function ModelItem({
     title?: string
     onSelect: () => void
     label?: string
+    note?: string
     className?: string
     children: ReactNode
 }) {
@@ -348,7 +372,8 @@ function ModelItem({
         <CommandItem
             value={value}
             disabled={disabled}
-            title={title}
+            // The whole id, which a long one's ellipsis hides.
+            title={title ?? value}
             onSelect={onSelect}
             aria-checked={checked}
             aria-label={label}
@@ -357,7 +382,10 @@ function ModelItem({
             <span className="flex size-4 items-center justify-center">
                 {checked && <Check aria-hidden className="size-4 text-accent" />}
             </span>
-            <span className="flex flex-wrap gap-x-2 truncate">{children}</span>
+            <span className="flex min-w-0 flex-wrap gap-x-2">
+                <span className="truncate">{children}</span>
+                {note !== undefined && <span className="font-sans text-muted-foreground">{note}</span>}
+            </span>
         </CommandItem>
     )
 }
