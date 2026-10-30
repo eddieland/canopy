@@ -170,6 +170,27 @@ def write(answers: Path, lists: Iterable[Checklist]) -> None:
         logs.write_private(target, f"{found.text}\n")
 
 
+def given(answers: Path, repos: Iterable[str]) -> list[Checklist]:
+    """Return the list of each of `repos` that the answers directory at `answers` holds: those the run was given.
+
+    Read back as `write` left them, bounded and checked when they were read from the operator's files, in a directory
+    only the harness writes, so a run's answers are held to the lists it heard, not to those files as they stand now.
+
+    Returns:
+        The lists, in `repos`' order; none for a repository whose file is gone or does not parse.
+    """
+    lists: list[Checklist] = []
+    for repo in repos:
+        path = file_of(answers, repo)
+        if not path.is_file():
+            continue
+        try:
+            lists.append(Checklist(repo, *parse(f"the checklist of {repo} at {path}", path.read_text("utf-8"))))
+        except (OSError, UnicodeDecodeError, ChecklistError):
+            continue
+    return lists
+
+
 def _read(repo: str, path: Path) -> str:
     """Return a list's text, refusing a file canopy would not put in a run.
 

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import (
     agent_models,
+    checklist_answers,
     checklists,
     conversation,
     db,
@@ -1335,13 +1336,16 @@ def _render(
         Refusal: `bad_prompt`, when the prompt file cannot be read or does not render, or a list of one of `repos` the
             run would hear cannot be used (§42).
     """
+    lists: list[checklists.Checklist] = []
     if checklists.reminded(kind):
-        # Read now only to refuse a list canopy cannot use: the run reads its lists again as it starts, into its answers
-        # directory, and never runs without them.
+        # Read now to refuse a list canopy cannot use, and to tell the worker what a held push is and how to answer:
+        # the run reads its lists again as it starts, into its answers directory, and never runs without them.
         try:
-            checklists.for_repos(ctx.config, repos)
+            lists = checklists.for_repos(ctx.config, repos)
         except checklists.ChecklistError as e:
             raise Refusal("bad_prompt", str(e)) from e
+    # Follows the result line, as memory's contract does; nothing for a run that hears no list.
+    values = {**values, checklist_answers.CHECKLIST: checklist_answers.contract_text(lists)}
     remembered = memory.render(ctx.conn, ctx.config, key=key, kind=kind, repos=repos)
     if remembered is not None:
         values = {**values, **remembered.values}

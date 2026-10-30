@@ -412,6 +412,21 @@ class FindingAnswer(StrEnum):
     DECLINED = "declined"
 
 
+class ItemAnswer(StrEnum):
+    """What a reminded worker answered of an item of its repository's checklist, `checklist_answers.answer` (§42)."""
+
+    #: The diff holds to the item as it was.
+    PASS = "pass"  # noqa: S105  (an answer, not a credential)
+    #: The diff failed the item, and the run committed the fix.
+    FIXED = "fixed"
+    #: The diff fails the item, and the run left it so, for a reason it gives, which a human reviewer reads.
+    HELD = "held"
+    #: The item is not about anything the diff changes.
+    NA = "n/a"
+    #: The run's result answered nothing of it that canopy could record: no `checklist`, or an answer it refused.
+    UNANSWERED = "unanswered"
+
+
 class HoldKind(StrEnum):
     """Why the harness holds a review's finding for the operator, `review_holds.kind` (DESIGN §21)."""
 

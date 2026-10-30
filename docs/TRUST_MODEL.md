@@ -318,7 +318,9 @@ Controls:
   list is bounded at 16 KiB and refuses the characters that hide text, as a persona does, and one canopy cannot use
   refuses the run, never runs it without the list. A list asks a worker to hold its own diff to rules; it changes no
   guard, extends no run, and holds no slot (T3). Anything the agent reads can print a `[canopy]` line that looks like
-  the hook's, and a forged one can only ask the agent to check its own diff against a list it already holds.
+  the hook's, and a forged one can only ask the agent to check its own diff against a list it already holds. The
+  worker's answers, its result's `checklist`, are its own words: held to the ids of the lists it was given, bounded,
+  recorded for the operator to read, and put in no agent's prompt; a refused one's note names only the operator's ids.
 - Each agent's model (DESIGN §13, M58), and the variant it runs at, is the operator's choice alone: `runtime.models`
   and a chore's `model`, both private (T7), which canopy writes into the agent's definition, or for one ticket's worker,
   planner, or reviewer an override of the model, at one of its variants or none, set with `canopy model` or the

@@ -104,5 +104,7 @@ fix costs no CI run. The operator put the hold in canopy's own `pre-push` hook, 
 MEASUREMENTS "2026-10-30: where M66's checklist can hold a worker's push". Stage 1 started 2026-10-30 at the operator's
 ask, the list being theirs to write for their own repositories: `paths.checklists` is read, parsed, and handed to a
 worker run that may push, each repository's to its own file, and canopy's `pre-push` holds the worker's first push of a
-stretch in each slot for that slot's list, also with no mark to add; the prompts' sentence, the answers, and their
-counts are next.
+stretch in each slot for that slot's list, also with no mark to add. The worker prompts tell a run given a list that a
+held push is pushed again once, unlike a rejected one, and how to answer; the result's `checklist` is validated against
+the lists the run was given, and every item of each is recorded in `checklist_answers`, `unanswered` where the result
+answered nothing canopy could keep, the same day. Showing the answers on the run and their counts are next.

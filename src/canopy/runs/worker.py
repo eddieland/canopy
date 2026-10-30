@@ -33,6 +33,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, S
 from canopy.core import (
     agent_models,
     cards,
+    checklist_answers,
     checklists,
     commit_hooks,
     contract,
@@ -206,6 +207,8 @@ class Outcome:
     follow_ups: follow_ups.Checked | None = None
     #: What a resume's worker answered of the review findings it was handed, checked (DESIGN §21).
     answers: review_answers.Checked | None = None
+    #: What a run given its repositories' checklists answered of each item, checked; None for a run given none (§42).
+    checklist: checklist_answers.Checked | None = None
     #: Whether the worker left a failed check flaky, and the branches the harness kicked to rerun it (DESIGN §23).
     kicks: flaky_kick.Kicks = field(default_factory=flaky_kick.Kicks)
 
@@ -332,13 +335,15 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
     That is its memory (§28), drafts (§29), and the follow-ups it filed (§18), with the event that tells the sinks of
     them, and the event that tells them it left a check flaky (§23), so a run reconcile closed first writes none. So
     are its answers to review findings (§21), but only from a run that ended `done` or `blocked`: one that did not
-    finish its work cannot say what it fixed.
+    finish its work cannot say what it fixed. Its answers to its checklists are recorded however it ended (§42): a run
+    that heard a list and answered nothing is the count of `unanswered` the operator weighs an item by.
     """
     run_id = int(run["id"])
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
     drafts.record_run(ctx.conn, run_id, outcome.drafts)
     if outcome.status in (RunStatus.DONE, RunStatus.BLOCKED):
         review_answers.record(ctx.conn, run_id, outcome.answers)
+    checklist_answers.record(ctx.conn, run_id, outcome.checklist)
     if outcome.follow_ups is not None and outcome.follow_ups.recorded:
         key = str(run["ticket_key"])
         recorded = follow_ups.record(ctx.conn, outcome.follow_ups, parent=key, run_id=run_id)
@@ -861,9 +866,12 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     # So are the tickets it filed, recorded whatever its status, a timeout's included: they exist in the tracker, and
     # a side output must not cost the run its PRs (DESIGN §18).
     filed = _check_follow_ups(ctx, run, follow_ups.parse(text)) if parsed is not None else None
-    filed_note = filed.note() if filed is not None else ""
     answered = _check_answers(ctx, run, text) if parsed is not None else None
-    answered_note = answered.note() if answered is not None else ""
+    # An item of a list the run heard that a valid result does not answer is `unanswered`, a timeout's included.
+    listed = checklist_answers.check(
+        checklist_answers.parse(text) if parsed is not None else None,
+        checklists.given(_answers(ctx, run), [s.repo for s in slots]),
+    )
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
@@ -880,7 +888,15 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         # A run that tampered with its slot records no follow-up: what it reported is named, and needs a label (§18).
         filed = filed.refusing("the run rewrote its slot's git") if filed is not None else None
         note = "; ".join(n for n in [*notes, filed.note() if filed is not None else ""] if n)
-        return Outcome(RunStatus.CRASHED, parsed, note, memory=remembered, drafts=drafted, follow_ups=filed)
+        return Outcome(
+            RunStatus.CRASHED,
+            parsed,
+            note,
+            memory=remembered,
+            drafts=drafted,
+            follow_ups=filed,
+            checklist=listed,
+        )
     objects = _objects(ctx, run)
     if tidy.used(objects):
         # A sandboxed worker's commits are only in the run's object directory (DESIGN §8).
@@ -912,7 +928,8 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     committed += kicks.notes
     _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
-    notes = "; ".join(n for n in [note, *committed, filed_note, answered_note] if n)
+    said = [checked.note() for checked in (filed, answered, listed) if checked is not None]
+    notes = "; ".join(n for n in [note, *committed, *said] if n)
     return Outcome(
         status,
         parsed,
@@ -922,6 +939,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         drafts=drafted,
         follow_ups=filed,
         answers=answered,
+        checklist=listed,
         kicks=kicks,
     )
 
