@@ -97,8 +97,12 @@ its branch's CI runs once, and its run's page shows `fixed` on those and `pass` 
 list; a worker in a repository without a list is not held; and two weeks of real use are in `MEASUREMENTS.md` as stage 2
 says, with the operator's call on stage 3 recorded on the `Status:` line.
 
-Status: not started. Designed 2026-10-29 (DESIGN §42); the operator chose the reminder over the review as the first
+Status: in progress. Designed 2026-10-29 (DESIGN §42); the operator chose the reminder over the review as the first
 stage the same day, on the evidence that standing instructions already emphasize these rules and workers miss them.
 Made a list per repository 2026-10-30, at the operator's ask, and the reminder held before the push the same day, so a
 fix costs no CI run. The operator put the hold in canopy's own `pre-push` hook, not the plugin, the same day, on
-MEASUREMENTS "2026-10-30: where M66's checklist can hold a worker's push".
+MEASUREMENTS "2026-10-30: where M66's checklist can hold a worker's push". Stage 1 started 2026-10-30 at the operator's
+ask, the list being theirs to write for their own repositories: `paths.checklists` is read, parsed, and handed to a
+worker run that may push, each repository's to its own file, and canopy's `pre-push` holds the worker's first push of a
+stretch in each slot for that slot's list, also with no mark to add; the prompts' sentence, the answers, and their
+counts are next.

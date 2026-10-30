@@ -90,7 +90,15 @@ def _check_name(value: str) -> str:
     return value
 
 
-def _impact_path(value: str) -> str:
+def impact_path(value: str) -> str:
+    """Check `value` as a path or pattern from a repository's root, as `high_impact_paths` and a checklist's take them.
+
+    Returns:
+        `value`, unchanged.
+
+    Raises:
+        ValueError: it is not one.
+    """
     # Compared with the paths git names, which are from the root, by whole components (`canopy.reviews.impact`). A part
     # may hold `*` and `?`, or be `**`. `[`, `]`, and `\` are refused, so no entry is read as a class or an escape its
     # author did not mean, or meant one this does not read.
@@ -133,7 +141,7 @@ class _RepoTable(_Table):
     # The role of each check named, by its exact name; every other check is CI (DESIGN §30).
     checks: dict[Annotated[StrictStr, AfterValidator(_check_name)], CheckRole] = {}
     # Paths whose change makes a review high impact, beside CI's workflows, which no entry removes (DESIGN §21).
-    high_impact_paths: tuple[Annotated[StrictStr, AfterValidator(_impact_path)], ...] = ()
+    high_impact_paths: tuple[Annotated[StrictStr, AfterValidator(impact_path)], ...] = ()
 
     @model_validator(mode="before")
     @classmethod

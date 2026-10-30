@@ -312,8 +312,9 @@ on the host. A command named in that directory's config still runs (§24, Git st
 
 A worker's own git runs canopy's hooks, from the snapshot (§13), in place of the repository's: `prepare-commit-msg`
 adds canopy's trailers and the operator's subject prefix, if set, but not to a `fixup!`, `squash!`, or `amend!` subject,
-which `--autosquash` matches; and each hook then runs the repository's own of its name, so the operator's hooks run as
-before. Step 5 names a pushed commit that lacks either in the run's note, and never rewrites it (TRUST_MODEL T5).
+which `--autosquash` matches; `pre-push` holds a worker's first push for its repository's checklist (§42); and each
+hook then runs the repository's own of its name, so the operator's hooks run as before. Step 5 names a pushed commit
+that lacks either in the run's note, and never rewrites it (TRUST_MODEL T5).
 
 Worker result contract, one JSON line, the last of the worker's text (§13); `prs` maps each repository the run worked
 in to its PR, and `pr_titles` is optional and for display only. An `implement` or `resume` may add `"created"`, the

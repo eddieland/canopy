@@ -311,6 +311,14 @@ Controls:
   characters that hide text from a person who reads it, as a lesson does. A run whose persona's file is gone or past
   its bounds is refused, never run in canopy's voice instead, and a prompt override without `{{PERSONA}}` serves only
   a run in canopy's own voice.
+- The checklists (DESIGN §42, ROADMAP M66) are operator text too: a list per repository, `<repo>.md` in
+  `paths.checklists`, private (T7), never read from a repository's checkout, which a PR could rewrite. Before a worker
+  run that may push starts, the harness writes its repositories' lists to the run's answers directory, which only the
+  operator's side writes (§41), and canopy's `pre-push` prints a slot's list when it holds the worker's push (T4). A
+  list is bounded at 16 KiB and refuses the characters that hide text, as a persona does, and one canopy cannot use
+  refuses the run, never runs it without the list. A list asks a worker to hold its own diff to rules; it changes no
+  guard, extends no run, and holds no slot (T3). Anything the agent reads can print a `[canopy]` line that looks like
+  the hook's, and a forged one can only ask the agent to check its own diff against a list it already holds.
 - Each agent's model (DESIGN §13, M58), and the variant it runs at, is the operator's choice alone: `runtime.models`
   and a chore's `model`, both private (T7), which canopy writes into the agent's definition, or for one ticket's worker,
   planner, or reviewer an override of the model, at one of its variants or none, set with `canopy model` or the
@@ -568,6 +576,13 @@ Controls now:
   tool, and catches its own errors. A repository's own plugins already load in the same process (T7). The answers
   directory is the run's own, in the state directory beside its other files, made before the agent starts and removed
   once it ends; a sandboxed run may read it and nothing else of the state directory, and write none of it (§24).
+- canopy's git hooks, from the same snapshot, run in every worker's git (T5). Their `pre-push` holds a worker's first
+  push of a stretch for its repository's checklist (DESIGN §42): it reads one more file, the slot's list in the run's
+  answers directory, which the run cannot write, and writes one marker, the run's id and the time, in the slot's own
+  git directory, which a sandboxed run may write and nothing on the host reads. The push it holds is only delayed: the
+  next of the same run goes through, the repository's own `pre-push` with it, and none is held in the run's last
+  stretch (§33). What it cannot read or write lets the push through. It is a reminder, not a guard: `--no-verify`
+  skips it, as it skips the repository's own hooks.
 - `runtime.setup_cmd` (DESIGN §9) runs on the host in each slot of a worker run, after the run's branch is checked out
   and before the worker starts. It runs that branch's code, which a worker wrote (install scripts, generators), outside
   the agent runtime's permissions. It is private (T7), and the code is what the worker's own shell runs a moment
@@ -600,9 +615,9 @@ Controls now:
   run whose repositories disagree. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
   files: not `~/.ssh`, other repositories, `~/.config/canopy`, or the workspace's `.canopy/`. It writes only its
-  worktrees, its slot's own HEAD, index, and reflog, a per-run object directory and temp directory, and the runtime's
-  data: no ref another slot shares, and no hook, git config, `.git` link, or `commondir` that git on the host later
-  reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
+  worktrees, its slot's own HEAD, index, reflog, and checklist marker, a per-run object directory and temp directory,
+  and the runtime's data: no ref another slot shares, and no hook, git config, `.git` link, or `commondir` that git on
+  the host later reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
   permissions stay as defense in depth.
 - The overseer has a role of its own, `overseer`, for `overseer_cmd` and the server of canopy's tools its runtime
   starts inside the same sandbox (DESIGN §24, §27). Every run the overseer asks for starts outside that sandbox,
@@ -656,7 +671,9 @@ but must be distinguishable:
   never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
   private), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
   that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can
-  neither turn it off nor rename it.
+  neither turn it off nor rename it. The worker's environment points git at canopy's hooks also in a run with a
+  checklist and no mark to add, since their `pre-push` holds the push for the list (T4, DESIGN §42); what they add to a
+  commit is the marks alone, none in such a run.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
   the ticket key, and its branch the prefix.
 - `decisions` and `runs` tables are a complete local audit log of what the
@@ -883,8 +900,8 @@ carries their version. Unlike build scripts a worker runs (T4), this file is rea
 worktree and before any agent starts. If it could set the runtime commands, the overseer's bash allows,
 `notify.cmd`, chores, the review query, the connectors and how old an observation may be before a dispatch on it is
 refused, prompt paths, capacity, queue labels, authorized repliers, agent memory's tiers, the agents' personas or
-models, or which agents publish artifacts and whose comments on them count, one commit would be enough to run
-commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers their
+models, the checklists, or which agents publish artifacts and whose comments on them count, one commit would be enough
+to run commands on operators' machines, raise their spend, send what workers read off the machine, or pick who steers their
 workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
