@@ -19,9 +19,15 @@ from tests.canopy.helpers import (
     READ_PR,
     planner_does,
     present,
+    raises,
     waits,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, raises, sets_phase
+from tests.canopy.scenario_helpers import (
+    Scenario,
+    dispatches,
+    pushes,
+    sets_phase,
+)
 from tests.conftest import GitPool
 
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"

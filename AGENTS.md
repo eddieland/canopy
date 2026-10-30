@@ -250,18 +250,20 @@ If code and the design disagree, the design doc wins until a decision entry says
   (what each fake agent run saw), and `canopy_env` (a workspace of one repository, `repo`, and a user config in a temp
   directory, with HOME pointed there; commands that name a repository pass `--repo repo`; `append_user` and
   `append_shared` add to its config files). Each fake's docstring lists the env vars and state keys it reads. The fake
-  agent can run commands (`FAKE_AGENT_COMMANDS`), which is how a test plays an overseer calling `canopy decide`. Beside
-  them are the plain helpers every test may need: `git`, and `executable` for a script a test puts on a path.
+  agent can call canopy's tools through the server its inline config names (`FAKE_AGENT_TOOLS`), which is how a test
+  plays an overseer calling `canopy_decide`, and run commands (`FAKE_AGENT_COMMANDS`). Beside them are the plain
+  helpers every test may need: `git`, and `executable` for a script a test puts on a path.
 - What two test modules share lives in one place, never in a test module: `tests/canopy/conftest.py` for fixtures
   (`conn`, the workspace's journal; `ctx`; the web UI's mock `backend`; `ws`; `notified` and `sink_script`, notification
   commands that record what they are sent), `tests/canopy/helpers.py` for helpers (`in_tick`, with `ends_ok=True` for a
   tick that ends as the block does; `in_run`; `decisions`, `last_tick`, `dispatch_and_run`, `messages`; `present`, for a
-  row the test knows is there; and scripting the fake agents: `overseer_does(canopy(...))`, `worker_does(sleep=60)`,
-  `chore_reports`), and `web_helpers.py`, `review_helpers.py`, and `scenario_helpers.py` beside it. A test module
-  imports from no other; `tests/canopy/test_layers.py` fails otherwise. Look there before writing a helper, and move one
-  there once a second module needs it. A test that plays an overseer, a worker, or another agent scripts it through
-  those helpers, not by patching its `FAKE_*` variables itself; `test_procs.py`, which tests the runner rather than a
-  role, sets them directly.
+  row the test knows is there; the overseer's moves, each a call of one of its tools, `decides`, `waits`, `raises`,
+  `ticket_sets`, or any `calls(...)`, which `overseer_calls` makes in this process; and scripting the fake agents:
+  `overseer_does(decides(KEY))`, `worker_does(sleep=60)`, `chore_reports`), and `web_helpers.py`, `review_helpers.py`,
+  and `scenario_helpers.py` beside it. A test module imports from no other; `tests/canopy/test_layers.py` fails
+  otherwise. Look there before writing a helper, and move one there once a second module needs it. A test that plays
+  an overseer, a worker, or another agent scripts it through those helpers, not by patching its `FAKE_*` variables
+  itself; `test_procs.py`, which tests the runner rather than a role, sets them directly.
 - A test that tells a ticket's story, ticks and runs and the operator's commands in turn, tells it through the
   `scenario` fixture (`scenario_helpers.py`): `scenario.tick(dispatches(kind=RunKind.RESUME, ...), worker=pushes())`
   checks the tick's exit and waits for the runs it started, and `scenario.run(...)` runs one without the overseer. The
@@ -282,10 +284,11 @@ If code and the design disagree, the design doc wins until a decision entry says
   role its agent plays, and a review the same way, `scenario.starts_review(reviews(...))`, until the test says it
   `finishes()` or `dies()`, rather than an agent left to sleep or a row with a made-up pid.
   The operator is played whole too: `scenario.operator("grant", KEY, "fix-ci", code=1)` is a command canopy refuses,
-  and it, a tick, and a refusal give back what canopy printed (`.out`, `.err`; a tick's or a refusal's `.printed`),
-  read from the move rather than from `capsys`. So is one of the overseer's commands outside a tick it runs:
-  `scenario.overseer("ticket", "set", KEY, "--phase", "approved", code=2)`, in a tick of its own, or in one shared
-  with the others inside `with scenario.ticking():`. A key the story drops is set to None,
+  and it and a tick give back what canopy printed (`.out`, `.err`; a tick's `.printed`), and a refusal what it said,
+  read from the move rather than from `capsys`. So is one of the overseer's calls outside a tick it runs:
+  `scenario.overseer(ticket_sets(KEY, phase="approved"), error=True)`, in a tick of its own, or in one shared with
+  the others inside `with scenario.ticking():`, giving back what it came back with (`.text`, `.error`). A key the
+  story drops is set to None,
   `configures(notify={"sinks": {"slack": None}})`, and a worker that sends drafts `sends_drafts([...])`.
   A story in the workspace of two repositories, `api` and `web`, is told the same way through `ws_scenario`, whose
   pools are seeded: each dispatch names its repositories, `dispatches(repo=("api", "web"))`, and a joint run's worker

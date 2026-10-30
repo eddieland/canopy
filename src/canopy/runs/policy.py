@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 # A unit: a ticket key and a repository name; None for a slot recorded with no repository name.
 Unit = tuple[str, str | None]
 
-# The kinds that work in a unit, and every kind `canopy dispatch` takes. Typed as str, since the counts below key on
+# The kinds that work in a unit, and every kind the `dispatch` tool takes. Typed as str, since the counts below key on
 # `runs.kind` as read; a `click.Choice` takes them as `str(kind)`, since click matches an enum by its name. `fix-ci` is
 # none of them: its old runs and grants count as `resume`'s (`counted_as`). Nor are `split` and `needs-plan`, retired
 # too: their old runs count per ticket, and nothing dispatches them.

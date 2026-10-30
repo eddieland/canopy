@@ -10,7 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import cards, db, hostgit
 from canopy.core.vocab import TickStatus
 from canopy.infra.procs import SubprocessRunner
@@ -19,6 +18,7 @@ from tests.canopy.helpers import (
     DEAD_PID,
     InlineRunner,
     in_tick,
+    overseer_calls,
     pool,
     present,
     slot_of,
@@ -45,8 +45,8 @@ WORKER = (
 def dispatch(conn: sqlite3.Connection, runner: InlineRunner) -> int:
     tracker_holds(conn)
     with in_tick(conn) as tick_id:
-        args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-        assert main([*args, "--slug", "work"], runner=runner) == 0
+        said = overseer_calls(dispatches(slug="work"), runner=runner)
+        assert not said.error, said.text
         tick_starts(runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         return int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])

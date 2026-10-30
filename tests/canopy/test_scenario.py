@@ -2,7 +2,6 @@
 
 import json
 import os
-import shlex
 import sys
 import tomllib
 from datetime import timedelta
@@ -20,8 +19,11 @@ from tests.canopy.helpers import (
     UNOBSERVED_ITEM,
     InlineRunner,
     agent_runs,
+    decides,
     last_tick,
     present,
+    raises,
+    ticket_sets,
     waits,
 )
 from tests.canopy.review_helpers import CLEAN, PR, head, reviewer_reports
@@ -32,7 +34,6 @@ from tests.canopy.scenario_helpers import (
     dispatches,
     fails,
     pushes,
-    raises,
     reviews,
     sends_drafts,
 )
@@ -52,7 +53,10 @@ def test_the_story_tells_each_move_and_what_canopy_did_with_it(scenario: Scenari
     assert scenario.told().splitlines() == [
         "1. run 1, implement of PROJ-1: done: did it",
         "2. run 2, resume of PROJ-1 for ci: done: did it",
-        "3. tick 3 refuses canopy dispatch PROJ-1 --repo repo --kind resume --label agent-ready-tester --reason ci",
+        (
+            '3. tick 3 refuses canopy_dispatch {"key": "PROJ-1", "kind": "resume", "repos": ["repo"], '
+            '"label": "agent-ready-tester", "reasons": ["ci"]}'
+        ),
         f"     PROJ-1 refused:cooldown: a resume for CI alone in PROJ-1 in repo may run again after {held}",
         "4. 1:30:00 passes",
         "5. an earlier tick saw PROJ-2",
@@ -94,7 +98,10 @@ def test_a_held_run_is_at_work_until_the_story_says_what_becomes_of_it(scenario:
     left.dies()
     assert scenario.told().splitlines() == [
         "1. run 1, implement of PROJ-1: at work",
-        "2. tick 2 refuses canopy dispatch PROJ-1 --repo repo --kind implement --label agent-ready-tester",
+        (
+            '2. tick 2 refuses canopy_dispatch {"key": "PROJ-1", "kind": "implement", "repos": ["repo"], '
+            '"label": "agent-ready-tester"}'
+        ),
         "     PROJ-1 refused:running: run 1 is already working PROJ-1",
         "3. run 1, implement of PROJ-1: done: did it",
         "4. tick 3, exits 0: ok: 4 decisions: attention:unobserved_pr=1, dispatch:implement=1, queried=1, wait=1",
@@ -228,7 +235,7 @@ def test_a_story_in_two_repositories_names_them_and_a_joint_worker_pushes_in_eac
     ws: Ws,
 ) -> None:
     both = ("api", "web")
-    assert dispatches(repo=both)[:6] == ["canopy", "dispatch", "PROJ-1", "--repo", "api", "--repo"]
+    assert dispatches(repo=both).arguments["repos"] == ["api", "web"]
     joint = ws_scenario.run(dispatches(repo=both), worker=pushes(repos=both))
     assert (joint.status, joint.branch) == ("done", "agent/PROJ-1-work")
     assert all(ws.remote_head(name, "agent/PROJ-1-work") is not None for name in both)
@@ -257,7 +264,7 @@ def reviews_on(scenario: Scenario) -> None:
 def test_a_review_is_a_move_and_so_is_one_canopy_refuses(scenario: Scenario, git_pool: GitPool) -> None:
     reviews_on(scenario)
     sha = head(git_pool)
-    assert reviews(sha, ticket="PROJ-1")[-2:] == ["--ticket", "PROJ-1"]
+    assert reviews(sha, ticket="PROJ-1").arguments["ticket"] == "PROJ-1"
 
     reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(CLEAN))
     assert (reviewed.status, reviewed.row.sha, reviewed.row.pr_url) == ("done", sha, PR)
@@ -269,7 +276,7 @@ def test_a_review_is_a_move_and_so_is_one_canopy_refuses(scenario: Scenario, git
     # What canopy noted of the report is told with it.
     noted = "reported low impact, but review.low_impact is not set; recorded as normal"
     assert review_step == f"2. review run 1 of {PR} at {sha[:7]}: done: clean: Nothing found.: {noted}"
-    assert refused_step == f"3. tick 2 refuses {shlex.join(reviews(sha))}"
+    assert refused_step == f"3. tick 2 refuses {reviews(sha)}"
 
 
 def test_a_review_held_at_work_runs_until_the_story_says_what_becomes_of_it(
@@ -290,7 +297,7 @@ def test_a_review_held_at_work_runs_until_the_story_says_what_becomes_of_it(
     _, at_work, refused, done, _, _ = [line for line in scenario.told().splitlines() if line[0].isdigit()]
     assert (at_work, refused) == (
         f"2. review run 1 of {PR} at {sha[:7]}: at work",
-        f"3. tick 2 refuses {shlex.join(reviews(sha))}",
+        f"3. tick 2 refuses {reviews(sha)}",
     )
     assert done.startswith(f"4. review run 1 of {PR} at {sha[:7]}: done: clean")
     assert (
@@ -329,40 +336,43 @@ def test_a_key_set_to_none_is_dropped_and_the_story_says_so(scenario: Scenario) 
     assert scenario.story[-1] == "the user file sets no notify.sinks.log, policy.max_resume_attempts = 2"
 
 
-def test_a_refusal_gives_back_its_tick_its_decisions_whole_and_what_it_printed(scenario: Scenario) -> None:
+def test_a_refusal_gives_back_its_tick_its_decisions_whole_and_what_it_said(scenario: Scenario) -> None:
     refused = scenario.refuses(dispatches(repo="nope"))
     assert refused == [("refused:unknown_repo", "'nope' is not a repository in this workspace (repo)")]
     assert refused.tick == last_tick(scenario.conn).id
     [decision] = refused.decisions
     assert (decision.tick_id, decision.ticket_key) == (refused.tick, "PROJ-1")
-    assert "dispatch refused (unknown_repo)" in refused.printed.err
+    assert "dispatch refused (unknown_repo)" in refused.said.text
     # A list's own methods make a plain one of what was decided.
     assert refused[:1] == [("refused:unknown_repo", "'nope' is not a repository in this workspace (repo)")]
 
 
-def test_the_overseer_runs_a_command_in_a_tick_of_its_own_or_in_one_held_open(scenario: Scenario) -> None:
-    refused = scenario.overseer("ticket", "set", "PROJ-1", "--phase", "conflicted", "--repo", "nope", code=1)
-    assert "'nope' is not a repository" in refused.err
+def test_the_overseer_calls_a_tool_in_a_tick_of_its_own_or_in_one_held_open(scenario: Scenario) -> None:
+    refused = scenario.overseer(ticket_sets("PROJ-1", phase="conflicted", repo="nope"), error=True)
+    assert "'nope' is not a repository" in refused.text
     with scenario.ticking() as tick_id:
-        scenario.overseer("attention", "PROJ-1", "needs_human", "--detail", "one")
-        scenario.overseer("attention", "PROJ-2", "needs_human", "--detail", "two")
+        scenario.overseer(raises("PROJ-1", "needs_human", "one"))
+        scenario.overseer(raises("PROJ-2", "needs_human", "two"))
     # Both raised in the one tick, which ended ok, so both are on the attention list.
     assert scenario.attention() == [("PROJ-1", "needs_human"), ("PROJ-2", "needs_human")]
     steps = [line for line in scenario.told().splitlines() if line[0].isdigit()]
+    raised = 'canopy_attention {"key": "PROJ-%d", "reason": "needs_human", "detail": "%s"}'
     assert steps[1:] == [
-        f"2. tick {tick_id} begins, for the overseer's commands",
-        f"3. the overseer runs canopy attention PROJ-1 needs_human --detail one in tick {tick_id}, which exits 0",
-        f"4. the overseer runs canopy attention PROJ-2 needs_human --detail two in tick {tick_id}, which exits 0",
+        f"2. tick {tick_id} begins, for the overseer's calls",
+        f"3. the overseer calls {raised % (1, 'one')} in tick {tick_id}, which comes back an answer",
+        f"4. the overseer calls {raised % (2, 'two')} in tick {tick_id}, which comes back an answer",
         f"5. tick {tick_id} ends ok",
     ]
+    with pytest.raises(AssertionError, match="canopy_attention came back an answer, not a tool error"):
+        scenario.overseer(raises("PROJ-1", "needs_human", "three"), error=True)
 
 
 def test_the_overseer_acts_in_a_dry_run_tick_as_in_any_other(scenario: Scenario) -> None:
     with scenario.ticking(dry_run=True) as tick_id:
         # Still running while the block lasts, so the test may look at it.
         assert present(db.get_tick(scenario.conn, tick_id)).ended_at is None
-        scenario.overseer("decide", "PROJ-1", "wait", "--rationale", "dry")
+        scenario.overseer(decides("PROJ-1", rationale="dry"))
     assert present(db.get_tick(scenario.conn, tick_id)).dry_run
-    scenario.overseer("decide", "PROJ-2", "wait", "--rationale", "dry too", dry_run=True)
+    scenario.overseer(decides("PROJ-2", rationale="dry too"), dry_run=True)
     assert present(db.get_tick(scenario.conn, last_tick(scenario.conn).id)).dry_run
-    assert scenario.story[0] == f"dry-run tick {tick_id} begins, for the overseer's commands"
+    assert scenario.story[0] == f"dry-run tick {tick_id} begins, for the overseer's calls"

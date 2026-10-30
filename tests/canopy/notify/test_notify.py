@@ -24,18 +24,27 @@ from tests.canopy.helpers import (
     KEY,
     READ_PR,
     WORKER_DONE,
+    Called,
     InlineRunner,
     Script,
-    canopy,
     chore_reports,
+    chore_runs,
+    chore_waits,
     in_tick,
     messages,
+    overseer_calls,
+    raises,
     tick_starts,
+    ticket_sets,
     waits,
     with_events,
     worker_does,
 )
-from tests.canopy.scenario_helpers import Scenario, asks, dispatches, raises
+from tests.canopy.scenario_helpers import (
+    Scenario,
+    asks,
+    dispatches,
+)
 from tests.conftest import CanopyEnv, GitPool
 
 #: The line an overseer that gave up ends on, in place of the one that ends a tick.
@@ -56,7 +65,7 @@ def done_with_no_pr() -> Script:
     return worker_does(result=json.dumps({k: v for k, v in json.loads(WORKER_DONE).items() if k != "pr"}))
 
 
-def needing_reviewers(*keys: str) -> list[list[str]]:
+def needing_reviewers(*keys: str) -> list[Called]:
     """The overseer raises each of `keys` on the attention list, an item it records every tick its cause holds."""
     return [raises(key, "flaky_rerun") for key in keys]
 
@@ -178,7 +187,7 @@ def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sin
 
 def titled(key: str, title: str, scenario: Scenario) -> None:
     """Record `key`'s title, as an overseer does once it has read the ticket, in a tick of its own."""
-    scenario.overseer("ticket", "set", key, "--title", title)
+    scenario.overseer(ticket_sets(key, title=title))
 
 
 def test_without_sinks_no_event_is_recorded(scenario: Scenario, git_pool: GitPool) -> None:
@@ -694,12 +703,12 @@ def test_chore_runs_reach_a_sink_that_takes_chores(scenario: Scenario, sink_scri
     scenario.configures(chores={"check": check})
     out = tmp_path / "chores.txt"
     add_sink(scenario, sink_script, "s", out, format="text", events=["chores"])
-    scenario.tick(canopy("chore", "wait", "check", "--rationale", "not needed yet"))
+    scenario.tick(chore_waits("check", "not needed yet"))
     chore: dict[str, object] = {"status": "ok", "summary": "all clear", "findings": []}
     # The chore's result stays set through the next tick, as the overseer's does.
     with chore_reports(chore):
         with in_tick(scenario.conn, ends_ok=True):
-            assert main(["chore", "run", "check"], runner=InlineRunner()) == 0
+            assert not overseer_calls(chore_runs("check"), runner=InlineRunner()).error
             tick_starts(InlineRunner())
             assert main(["_chore", "1"], runner=InlineRunner()) == 0
         scenario.tick()

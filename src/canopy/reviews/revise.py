@@ -1,4 +1,4 @@
-"""`canopy review revise`: a revision of a review's draft on the operator's notes (DESIGN §34).
+"""The `review-revise` tool's revision of a review's draft on the operator's notes (DESIGN §34).
 
 A revision is a review run at the commit the review read, of a PR the loop does not own, which reads the PR and the
 draft, writes nothing anywhere, and reports a new version. Only a note of the operator's newer than the draft's newest
@@ -189,7 +189,7 @@ def _draft(ctx: Context, run_id: int) -> tuple[records.ReviewRun, records.Review
     if review is None or review.revises is not None:
         raise start.Refusal(
             "unknown",
-            f"there is no review run {run_id} with a draft to revise; --run names the review",
+            f"there is no review run {run_id} with a draft to revise; run names the review",
         )
     draft = review_drafts.of_review(ctx.conn, run_id)
     if draft is None:

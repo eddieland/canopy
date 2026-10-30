@@ -8,11 +8,12 @@ from pathlib import Path
 
 import pytest
 
+from canopy.cli.main import main
 from canopy.core import db, personas
 from canopy.core.config import load
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.serve import views
-from tests.canopy.helpers import KEY, context, personas_dir, planner_does, pool_statuses
+from tests.canopy.helpers import KEY, context, in_tick, personas_dir, planner_does, pool_statuses
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import GitPool
@@ -162,12 +163,16 @@ def test_an_override_takes_the_place_of_the_agents_persona_in_config(scenario: S
     assert said == f"{KEY}'s planner runs write in skeptic from their next run: [personas].\n"
 
 
-def test_canopy_persona_refuses_an_unknown_persona_and_inside_a_run(scenario: Scenario) -> None:
+def test_canopy_persona_refuses_an_unknown_persona_and_inside_a_run(
+    scenario: Scenario,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     err = scenario.operator("persona", KEY, "lenient", code=1).err
     assert "persona refused (unknown_persona): persona lenient has no file among canopy's own" in err
     # No agent chooses a persona, its own ticket's least of all (TRUST_MODEL T1).
-    err = scenario.overseer("persona", KEY, "skeptic", "--agent", "reviewer", code=1).err
-    assert "persona refused (inside_run): CANOPY_TICK_ID is set" in err
+    with in_tick(scenario.conn, ends_ok=True):
+        assert main(["persona", KEY, "skeptic", "--agent", "reviewer"]) == 1
+    assert "persona refused (inside_run): CANOPY_TICK_ID is set" in capsys.readouterr().err
     assert scenario.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
     # A PR's is its review request's, named by its URL alone.
     err = scenario.operator("persona", "repo#7", "skeptic", code=1).err
@@ -244,7 +249,10 @@ def test_canopy_start_and_plan_choose_the_persona_of_the_run_they_ask_for(
     assert again.row["persona"] == "explainer"
 
 
-def test_a_next_runs_persona_is_refused_unknown_or_inside_a_run_and_starts_nothing(scenario: Scenario) -> None:
+def test_a_next_runs_persona_is_refused_unknown_or_inside_a_run_and_starts_nothing(
+    scenario: Scenario,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     err = scenario.operator("start", KEY, "--persona", "lenient", code=1).err
     assert "start refused (unknown_persona): persona lenient has no file among canopy's own" in err
     assert scenario.conn.execute("SELECT count(*) FROM starts").fetchone()[0] == 0
@@ -257,8 +265,9 @@ def test_a_next_runs_persona_is_refused_unknown_or_inside_a_run_and_starts_nothi
     usage = scenario.operator("persona", KEY, "skeptic", "--next", "--agent", "reviewer", code=2).err
     assert "--next is for a ticket's workers or planner" in usage
     assert "--next takes NAME, or --clear" in scenario.operator("persona", KEY, "--next", code=2).err
-    err = scenario.overseer("persona", KEY, "skeptic", "--next", code=1).err
-    assert "persona refused (inside_run)" in err
+    with in_tick(scenario.conn, ends_ok=True):
+        assert main(["persona", KEY, "skeptic", "--next"]) == 1
+    assert "persona refused (inside_run)" in capsys.readouterr().err
     assert scenario.conn.execute("SELECT count(*) FROM next_run_personas").fetchone()[0] == 0
 
 
