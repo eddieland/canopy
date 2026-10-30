@@ -2,8 +2,8 @@
 
 Reads only. Over the same window as `canopy spend` (whole local days, today's so far included, by start): how many of
 each kind's runs ended each way and what they cost, the newest of those that ended other than as they should, the
-overseer's asks a guard refused, by guard. It is what a chore that looks at canopy itself reads, beside `canopy
-spend`, to say which failures recur and what they cost.
+overseer's asks a guard refused, by guard, and, for the web UI's health page, how many ended and failed each day. It is
+what a chore that looks at canopy itself reads, beside `canopy spend`, to say which failures recur and what they cost.
 """
 
 from __future__ import annotations
@@ -132,6 +132,23 @@ class Health:
     refusals: Sequence[Refusal] = ()
 
 
+@dataclass(frozen=True)
+class Day:
+    """One local day of the window: how many of each kind's runs that started in it ended, and how many failed.
+
+    Every kind in `spend.KINDS` is in both, 0 for none; a run still running has not ended any way yet.
+    """
+
+    #: The day, `YYYY-MM-DD`, as `spend.local_day` names it.
+    day: str
+    #: When it starts: its local midnight, a journal time.
+    start: str
+    #: Each kind's runs that ended, by kind.
+    ended: Mapping[Kind, int]
+    #: Each kind's runs that ended in a failed status (`Outcome.failed`), by kind.
+    failed: Mapping[Kind, int]
+
+
 def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:
     """How the runs of the last `days` local days ended, today's so far included, and what guards refused.
 
@@ -154,6 +171,36 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:
         failures=failures[:FAILURES],
         refusals=refusals,
     )
+
+
+def by_day(conn: sqlite3.Connection, now: datetime, days: int) -> list[Day]:
+    """How many runs of the last `days` local days ended, and failed, each day, by kind, over `report`'s window.
+
+    Returns:
+        Every day of the window, oldest first, a day with nothing in it among them.
+    """
+    start, end = spend.window(now, days)
+    starts = spend.day_starts(start, days)
+    since = db.format_time(start)
+    until = db.format_time(end)
+    ended: dict[str, dict[Kind, int]] = {day: dict.fromkeys(spend.KINDS, 0) for day in starts}
+    failed: dict[str, dict[Kind, int]] = {day: dict.fromkeys(spend.KINDS, 0) for day in starts}
+    with db.read_snapshot(conn):
+        for kind in spend.KINDS:
+            counted = (
+                sql.select("{} AS day, status, count(*)", spend.DAY)
+                .from_("({})", _ROWS[kind])
+                .where("started_at >= ? AND started_at < ? AND status != 'running'", since, until)
+                .group_by("day, status")
+            )
+            for day, status, runs in sql.execute(conn, counted):
+                # A day the clock puts outside the window's names is in none of them, as `spend` leaves it.
+                if str(day) not in ended:
+                    continue
+                ended[str(day)][kind] += int(runs)
+                if str(status) in _FAILED[kind]:
+                    failed[str(day)][kind] += int(runs)
+    return [Day(day=day, start=at, ended=ended[day], failed=failed[day]) for day, at in starts.items()]
 
 
 # One kind's ended runs in the window, by sort and status. A run still running has not ended any way yet.

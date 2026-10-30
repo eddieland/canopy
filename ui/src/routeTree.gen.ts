@@ -26,6 +26,7 @@ import { Route as PullRequestsIndexRouteImport } from './routes/pull-requests.in
 import { Route as PullRequestsPrRouteImport } from './routes/pull-requests.pr'
 import { Route as ReportsIndexRouteImport } from './routes/reports.index'
 import { Route as ReportsChecklistRouteImport } from './routes/reports.checklist'
+import { Route as ReportsHealthRouteImport } from './routes/reports.health'
 import { Route as ReportsSpendRouteImport } from './routes/reports.spend'
 import { Route as ReviewsIndexRouteImport } from './routes/reviews.index'
 import { Route as ReviewsIdRouteImport } from './routes/reviews.$id'
@@ -133,6 +134,11 @@ const ReportsIndexRoute = ReportsIndexRouteImport.update({
 const ReportsChecklistRoute = ReportsChecklistRouteImport.update({
   id: '/reports/checklist',
   path: '/reports/checklist',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsHealthRoute = ReportsHealthRouteImport.update({
+  id: '/reports/health',
+  path: '/reports/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsSpendRoute = ReportsSpendRouteImport.update({
@@ -267,6 +273,7 @@ export interface FileRoutesByFullPath {
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
   '/reports/checklist': typeof ReportsChecklistRoute
+  '/reports/health': typeof ReportsHealthRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
@@ -309,6 +316,7 @@ export interface FileRoutesByTo {
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
   '/reports/checklist': typeof ReportsChecklistRoute
+  '/reports/health': typeof ReportsHealthRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
@@ -352,6 +360,7 @@ export interface FileRoutesById {
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
   '/reports/checklist': typeof ReportsChecklistRoute
+  '/reports/health': typeof ReportsHealthRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
@@ -396,6 +405,7 @@ export interface FileRouteTypes {
     | '/guide/$page'
     | '/pull-requests/pr'
     | '/reports/checklist'
+    | '/reports/health'
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
@@ -438,6 +448,7 @@ export interface FileRouteTypes {
     | '/guide/$page'
     | '/pull-requests/pr'
     | '/reports/checklist'
+    | '/reports/health'
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
@@ -480,6 +491,7 @@ export interface FileRouteTypes {
     | '/guide/$page'
     | '/pull-requests/pr'
     | '/reports/checklist'
+    | '/reports/health'
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
@@ -523,6 +535,7 @@ export interface RootRouteChildren {
   GuidePageRoute: typeof GuidePageRoute
   PullRequestsPrRoute: typeof PullRequestsPrRoute
   ReportsChecklistRoute: typeof ReportsChecklistRoute
+  ReportsHealthRoute: typeof ReportsHealthRoute
   ReportsSpendRoute: typeof ReportsSpendRoute
   ReviewsIdRoute: typeof ReviewsIdRoute
   RunsIdRoute: typeof RunsIdRoute
@@ -671,6 +684,13 @@ declare module '@tanstack/react-router' {
       path: '/reports/checklist'
       fullPath: '/reports/checklist'
       preLoaderRoute: typeof ReportsChecklistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports/health': {
+      id: '/reports/health'
+      path: '/reports/health'
+      fullPath: '/reports/health'
+      preLoaderRoute: typeof ReportsHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports/spend': {
@@ -851,6 +871,7 @@ const rootRouteChildren: RootRouteChildren = {
   GuidePageRoute: GuidePageRoute,
   PullRequestsPrRoute: PullRequestsPrRoute,
   ReportsChecklistRoute: ReportsChecklistRoute,
+  ReportsHealthRoute: ReportsHealthRoute,
   ReportsSpendRoute: ReportsSpendRoute,
   ReviewsIdRoute: ReviewsIdRoute,
   RunsIdRoute: RunsIdRoute,

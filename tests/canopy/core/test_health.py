@@ -9,7 +9,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import health
-from tests.canopy.helpers import earlier
+from tests.canopy.helpers import earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
 
 NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
@@ -228,3 +228,55 @@ def test_canopy_health_json_is_the_report(canopy_env: CanopyEnv, capsys: pytest.
 def test_canopy_health_reads_at_most_a_year(canopy_env: CanopyEnv) -> None:
     assert main(["health", "--days", "0"]) == 2
     assert main(["health", "--days", "367"]) == 2
+
+
+def test_by_day_counts_each_kinds_ended_and_failed_runs_on_its_local_day(tmp_path: Path, journals: Journals) -> None:
+    """Each day of the window counts the runs that started on it and ended, and the failed among them, by kind."""
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_failures(conn, NOW)
+    found = health.by_day(conn, NOW, 7)
+    assert [d.day for d in found] == [f"2026-10-0{n}" for n in range(2, 9)]
+    assert found[0].start == "2026-10-02T00:00:00.000Z"
+    ended = {d.day: {k: n for k, n in d.ended.items() if n} for d in found}
+    failed = {d.day: {k: n for k, n in d.failed.items() if n} for d in found}
+    # Nothing before the window, nothing still running; a worker that asked a question ended but did not fail.
+    assert ended == {
+        "2026-10-02": {},
+        "2026-10-03": {},
+        "2026-10-04": {},
+        "2026-10-05": {},
+        "2026-10-06": {"overseer": 2, "workers": 1},
+        "2026-10-07": {"overseer": 2, "workers": 1, "chores": 1},
+        "2026-10-08": {"workers": 2, "chores": 1, "reviews": 1},
+    }
+    assert failed == {
+        "2026-10-02": {},
+        "2026-10-03": {},
+        "2026-10-04": {},
+        "2026-10-05": {},
+        "2026-10-06": {},
+        "2026-10-07": {"overseer": 1, "workers": 1},
+        "2026-10-08": {"workers": 1, "chores": 1, "reviews": 1},
+    }
+    # Every kind is counted on every day, 0 for none, and the days add up to the outcomes.
+    assert all(set(d.ended) == set(d.failed) == set(health.spend.KINDS) for d in found)
+    outcomes = health.report(conn, NOW, 7).outcomes
+    assert sum(sum(d.ended.values()) for d in found) == sum(o.runs for o in outcomes)
+    assert sum(sum(d.failed.values()) for d in found) == sum(o.runs for o in outcomes if o.failed)
+
+
+def test_by_day_of_an_empty_window_lists_each_day_at_nothing(tmp_path: Path, journals: Journals) -> None:
+    """A window with no runs still lists its days, each at 0."""
+    conn = journals.open(tmp_path / "canopy.db")
+    found = health.by_day(conn, NOW, 3)
+    assert [d.day for d in found] == ["2026-10-06", "2026-10-07", "2026-10-08"]
+    assert all(not any(d.ended.values()) and not any(d.failed.values()) for d in found)
+
+
+def test_by_day_counts_a_run_on_the_local_day_it_started(tmp_path: Path, journals: Journals) -> None:
+    """A run at 02:00 UTC is the evening before in New York, and counts on that day."""
+    conn = journals.open(tmp_path / "canopy.db")
+    tick(conn, "2026-10-08T02:00:00.000Z", "overseer_failed")
+    with in_zone("America/New_York"):
+        found = health.by_day(conn, NOW, 2)
+    assert [(d.day, d.failed["overseer"]) for d in found] == [("2026-10-07", 1), ("2026-10-08", 0)]

@@ -966,6 +966,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get how the last days' runs ended
+         * @description Each kind's runs by how they ended, the newest failures, what the guards refused, and each day's failures.
+         */
+        get: operations["getHealthReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/monthly": {
         parameters: {
             query?: never;
@@ -4326,6 +4346,232 @@ export type components = {
              * @description The unit's repository; may be left out when the ticket has had runs in one repository only.
              */
             repo?: string | null;
+        };
+        /**
+         * HealthCounts
+         * @description A count of runs by kind, 0 for a kind with none.
+         */
+        HealthCounts: {
+            /**
+             * Chores
+             * @description Chore runs.
+             */
+            chores: number;
+            /**
+             * Overseer
+             * @description Ticks.
+             */
+            overseer: number;
+            /**
+             * Plans
+             * @description Plan runs, old triage runs before a plan among them.
+             */
+            plans: number;
+            /**
+             * Reviews
+             * @description Review runs.
+             */
+            reviews: number;
+            /**
+             * Tasks
+             * @description The operator's one-off tasks' runs.
+             */
+            tasks: number;
+            /**
+             * Workers
+             * @description Worker runs.
+             */
+            workers: number;
+        };
+        /**
+         * HealthDay
+         * @description One local day of the window: the runs that started in it and ended, and the failed among them.
+         */
+        HealthDay: {
+            /**
+             * Day
+             * @description The day, `YYYY-MM-DD`, in the local time of the machine canopy runs on.
+             */
+            day: string;
+            /** @description The runs that ended, by kind. */
+            ended: components["schemas"]["HealthCounts"];
+            /** @description The runs that ended in a failed status, by kind. */
+            failed: components["schemas"]["HealthCounts"];
+            /**
+             * Start
+             * Format: date-time
+             * @description When it starts: its local midnight, so a page can write it in its own zone.
+             */
+            start: string;
+        };
+        /**
+         * HealthFailure
+         * @description One run of the window that ended in a failed status, the newest first.
+         */
+        HealthFailure: {
+            /**
+             * Chore
+             * @description The chore a chore's run ran; None for the other kinds.
+             */
+            chore: string | null;
+            /**
+             * Cost Usd
+             * @description What it cost, in US dollars; None when it reported none.
+             */
+            cost_usd: number | null;
+            /**
+             * Id
+             * @description The tick's id for the overseer, and the run's otherwise: a chore's, a review's, or a task's run's own.
+             */
+            id: number;
+            /** @description The kind of run. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Note
+             * @description The tick's summary, or the run's harness note or else its summary, on one line and cut: an agent wrote some of
+             *     it, so it is text, never markup.
+             */
+            note: string;
+            /**
+             * Pr Url
+             * @description The PR a review read; None for the other kinds.
+             */
+            pr_url: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             * @description When it started.
+             */
+            started_at: string;
+            /**
+             * Status
+             * @description How it ended.
+             */
+            status: string;
+            /**
+             * Task Id
+             * @description The task a task's run was of; None for the other kinds.
+             */
+            task_id: number | null;
+            /**
+             * Ticket
+             * @description The ticket a worker's or a plan's run was on; None for the other kinds.
+             */
+            ticket: string | null;
+            /**
+             * What
+             * @description Its sort, as `HealthOutcome.what`.
+             */
+            what: string;
+        };
+        /**
+         * HealthOutcome
+         * @description How many of one kind's runs, of one sort, ended in one status in the window, and what they cost.
+         */
+        HealthOutcome: {
+            /**
+             * Cost Usd
+             * @description What they cost, in US dollars; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /**
+             * Failed
+             * @description Whether the status is one a run of the kind ends in when it did not do what it was started for.
+             */
+            failed: boolean;
+            /** @description The kind of run. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Runs
+             * @description How many ended so.
+             */
+            runs: number;
+            /**
+             * Status
+             * @description How they ended, as the journal records it.
+             */
+            status: string;
+            /**
+             * What
+             * @description Its sort: `live`, `dry run`, or `no overseer` for a tick, the run's kind for a worker or a plan, the chore's
+             *     name, `review`, or `task`.
+             */
+            what: string;
+        };
+        /**
+         * HealthRefusal
+         * @description How often a guard refused what a tick asked for in the window.
+         */
+        HealthRefusal: {
+            /**
+             * Decisions
+             * @description How many decisions it refused.
+             */
+            decisions: number;
+            /**
+             * Guard
+             * @description The guard, as the decision names it: `capacity`, `cooldown`.
+             */
+            guard: string;
+            /**
+             * Last Tick
+             * @description The latest of them.
+             */
+            last_tick: number;
+            /**
+             * Ticks
+             * @description In how many ticks.
+             */
+            ticks: number;
+        };
+        /**
+         * HealthReport
+         * @description How the last days' runs ended, the newest failures, what the guards refused, and each day's counts.
+         */
+        HealthReport: {
+            /**
+             * Days
+             * @description How many local days the window holds, today's so far included.
+             */
+            days: number;
+            /**
+             * Failures
+             * @description The newest first, at most twenty.
+             */
+            failures: components["schemas"]["HealthFailure"][];
+            /**
+             * Outcomes
+             * @description By kind in a fixed order, overseer, workers, plans, chores, reviews, tasks, then by sort and status.
+             */
+            outcomes: components["schemas"]["HealthOutcome"][];
+            /**
+             * Per Day
+             * @description Every day of the window, oldest first.
+             */
+            per_day: components["schemas"]["HealthDay"][];
+            /**
+             * Refusals
+             * @description The most frequent first.
+             */
+            refusals: components["schemas"]["HealthRefusal"][];
+            /**
+             * Since
+             * Format: date-time
+             * @description When the window starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Unpriced
+             * @description How many of each kind's ended runs reported no cost, as the spend page counts them: a tick that ran no overseer
+             *     cost nothing, and is never among them.
+             */
+            unpriced: components["schemas"]["SpendUnpriced"][];
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: local midnight after today.
+             */
+            until: string;
         };
         /**
          * HostHistory
@@ -13735,6 +13981,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChecklistCounts"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getHealthReport: {
+        parameters: {
+            query?: {
+                /** @description How many local days to read, today's so far included: 1 to 366. */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HealthReport"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

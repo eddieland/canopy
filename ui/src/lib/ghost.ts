@@ -142,6 +142,13 @@ export const GHOST_TIPS = {
         'Field report: unanswered means the worker went quiet on comms. The Vanguard frowns upon it.',
         "Dear Traveler, nobody gives a Ghost a checklist. I check everything anyway. It's a lifestyle.",
     ],
+    '/reports/health': [
+        "Eyes up, Guardian. Failures, by the day. I've seen worse raids.",
+        'Field report: a guard refused the overseer. Shaxx would call that discipline.',
+        "Scanning... a crashed run. No Light left in it. Can't revive that one.",
+        'Grimoire: a timeout is a run that waited out the Darkness. The Darkness won.',
+        "Dear Traveler, a worker that asked a question didn't fail. It just needed a Ghost.",
+    ],
     '/runs/ticks/': [
         "Eyes up, Guardian. Between two ticks there's a tock. Nobody has survived seeing one.",
         'Grimoire: an idle tick is the overseer looking at everything and choosing a nap.',

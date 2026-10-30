@@ -35,7 +35,13 @@ const TONE: Record<BreakdownPart['kind'], string> = {
 
 // A page under a section, which opens under its item while the section is shown.
 interface SubPage {
-    to: '/runs/ticks' | '/runs/worktrees' | '/pull-requests/reviews' | '/reports/spend' | '/reports/checklist'
+    to:
+        | '/runs/ticks'
+        | '/runs/worktrees'
+        | '/pull-requests/reviews'
+        | '/reports/spend'
+        | '/reports/checklist'
+        | '/reports/health'
     label: string
     hint: string
 }
@@ -91,8 +97,8 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
         to: '/reports',
         icon: ChartColumn,
         hint:
-            'What canopy cost and got done month by month, what agent runs cost each day, and how workers answered ' +
-            'your checklists',
+            'What canopy cost and got done month by month, what agent runs cost each day and how they ended, ' +
+            'and how workers answered your checklists',
         pages: [
             {
                 to: '/reports/spend',
@@ -103,6 +109,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
                 to: '/reports/checklist',
                 label: 'Checklist',
                 hint: "How workers answered each repository's checklist, item by item, over the last days",
+            },
+            {
+                to: '/reports/health',
+                label: 'Health',
+                hint: "How the last days' runs ended, the newest failures, and what the guards refused",
             },
         ],
     },

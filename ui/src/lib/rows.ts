@@ -122,6 +122,21 @@ export const ROW_COLUMNS = {
         ['age', AGE, 5],
     ],
     /**
+     * A failed run on the health page: how it ended, its own id (a tick's, a worker's or a plan's run, a chore's run, a
+     * review, a task's run), what it was about, its sort, its note, its cost, and when it started.
+     */
+    failure: [
+        // A long status (`overseer failed`) is cut to fit, as a tick's is.
+        ['state', '6rem'],
+        // Room for `chore:deps#12`; a chore's longer name is cut to fit.
+        ['id', '7rem'],
+        ['subject', '9rem', 3],
+        ['kind', '7rem', 2],
+        ['title', FREE],
+        ['cost', COST, 1],
+        ['age', AGE, 4],
+    ],
+    /**
      * A chore: its name, its line in `canopy status`'s words, and its open findings, whose column holds
      * `12 open findings · 10 dismissed` on one line.
      */

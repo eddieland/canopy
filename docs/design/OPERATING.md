@@ -54,7 +54,8 @@ and the sessions outside canopy beside the kinds, so a month's total is all agen
 beside what each month landed: a ticket the loop marked done as merged, with its worker runs, the comments and reviews
 people other than its PR's author left, and how long it took. The journal keeps no merge time and no phase history, so
 a ticket lands when the loop marks it done, and its review wait runs from its first worker run that ended `done`; the
-page says so, rather than pass a proxy off as GitHub's own clock. The spend page, by day, sits under it.
+page says so, rather than pass a proxy off as GitHub's own clock. The spend page, by day, sits under it, and the
+health page, `canopy health`'s report over the same local days with each day's failed runs by kind.
 
 `spend.monthly_budget_usd` is what the operator means a local calendar month of agent spend to cost: canopy's runs and
 the runtime's sessions outside canopy (§13, Every session's spend), canopy's share shown beside the whole. `canopy
