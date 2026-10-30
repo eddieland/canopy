@@ -23,7 +23,7 @@ import sqlite3
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
@@ -34,7 +34,7 @@ from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import checklists, commit_hooks, conversation, db
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
 from canopy.loop import mcp
@@ -95,6 +95,10 @@ LINGERER = "987.654321"
 TIMEOUT = 3.0
 # What every sandboxed command prints first, so an attempt that fails because nothing ran fails the test instead.
 RAN = "canary-ran"
+#: The slot's repository's checklist, as canopy writes it to the run's answers directory (DESIGN §42).
+LIST = "## general-types\n\nA parameter takes the most general type its body needs.\n"
+#: The first line of what canopy's `pre-push` prints when it holds a push.
+HELD = "[canopy] Push held, not rejected: nothing was sent."
 
 
 @dataclass(frozen=True)
@@ -107,6 +111,10 @@ class Canary:
     home: Path
     state_dir: Path
     objects: Path
+    #: The run's answers directory, which canopy passes every worker run, holding the slot's repository's list.
+    answers: Path
+    #: canopy's snapshot, as a command template's `{definitions_dir}` names it, holding its git hooks.
+    snapshot: Path
     primary: Path
     slot: Path
     other: Path
@@ -122,6 +130,11 @@ class Canary:
     def own(self) -> Path:
         return self.common / "worktrees" / self.slot.name
 
+    @property
+    def listed(self) -> Path:
+        """The slot's repository's list in the answers directory, where canopy's `pre-push` reads it."""
+        return checklists.file_of(self.answers, "repo")
+
     def run(
         self,
         script: str,
@@ -129,16 +142,21 @@ class Canary:
         role: str = "worker",
         tmpdir: str | None = None,
         timeout: float | None = None,
+        reads: Sequence[Path] = (),
+        variables: Mapping[str, str] | None = None,
     ) -> procs.Result:
         """Run `sh -c script` in the slot as `role`, through the wrapper and srt, and check that it started.
 
-        A chore runs in its default directory instead, a review in its own directory, which links to the slot as
-        `checkout`, as canopy lays them out, and the overseer in the root of its workspace. `tmpdir`, when given, is
-        the TMPDIR the wrapper runs with, in place of the fixture's short one.
+        A worker gets the run's object and answers directories, as canopy passes them. A chore runs in its default
+        directory instead, a review in its own directory, which links to the slot as `checkout`, as canopy lays them
+        out, and the overseer in the root of its workspace. `tmpdir`, when given, is the TMPDIR the wrapper runs with,
+        in place of the fixture's short one. `reads` are the wrapper's `--read` paths, and `variables` more of the
+        command's environment.
         """
-        argv = [str(WRAPPER), role, "--", "sh", "-c", f"echo {RAN}\n{script}", "sh", *args]
+        read = [arg for path in reads for arg in ("--read", str(path))]
+        argv = [str(WRAPPER), role, *read, "--", "sh", "-c", f"echo {RAN}\n{script}", "sh", *args]
         cwd = self.slot
-        env: dict[str, str] = {"CANOPY_GIT_OBJECTS": str(self.objects)}
+        env: dict[str, str] = {"CANOPY_GIT_OBJECTS": str(self.objects), "CANOPY_ANSWERS": str(self.answers)}
         if role == "chore":
             cwd = self.state_dir / "chores" / "canary"
             env = {}
@@ -154,6 +172,7 @@ class Canary:
             env = {}
         if tmpdir is not None:
             env["TMPDIR"] = tmpdir
+        env |= variables or {}
         done = SubprocessRunner().run(argv, cwd=cwd, env=env, timeout=timeout)
         assert done.stdout.startswith(f"{RAN}\n"), done.stderr
         return done
@@ -201,6 +220,15 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iter
     (canopy_env.state_dir / "config.toml").write_text(f"# {PLANTED}\n")
     objects = canopy_env.state_dir / "runs" / "1.objects"
     objects.mkdir(parents=True)
+    answers = canopy_env.state_dir / "runs" / "1.answers"
+    (answers / checklists.DIR).mkdir(parents=True, mode=0o700)
+    checklists.file_of(answers, "repo").write_text(LIST)
+    snapshot = canopy_env.state_dir / "runtime" / "0123abcd"
+    for rel, data in commit_hooks.files().items():
+        hook = snapshot / rel
+        hook.parent.mkdir(parents=True, exist_ok=True)
+        hook.write_bytes(data)
+        hook.chmod(0o555)
 
     primary = home / "src" / "repo"
     primary.mkdir(parents=True)
@@ -219,6 +247,8 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iter
             home=home,
             state_dir=canopy_env.state_dir,
             objects=objects,
+            answers=answers,
+            snapshot=snapshot,
             primary=primary,
             slot=slot,
             other=other,
@@ -583,6 +613,65 @@ def test_a_repository_a_tool_makes_keeps_its_own_objects(canary: Canary) -> None
     assert SubprocessRunner().run(["git", "cat-file", "-e", head], cwd=canary.slot, env=in_objects).ok
 
 
+def test_a_worker_reads_its_checklist(canary: Canary) -> None:
+    """A positive control: the slot's list in the run's answers directory, which canopy's `pre-push` reads, is there."""
+    done = canary.run('cat "$1"', str(canary.listed))
+
+    assert done.ok, done.stderr
+    assert done.stdout.split("\n", 1)[1] == LIST
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        pytest.param('echo pwned >> "$1/repo.md"', id="append"),
+        pytest.param('echo pwned > "$1/repo.md"', id="overwrite"),
+        pytest.param('echo pwned > "$1/c" && mv -f "$1/c" "$1/repo.md"', id="replace"),
+        pytest.param('rm -f "$1/repo.md"', id="remove"),
+        pytest.param('echo pwned > "$1/other.md"', id="another-repositorys"),
+        pytest.param('mv "$1" "$1.gone"; mkdir -p "$1" && echo pwned > "$1/repo.md"', id="the-directory"),
+    ],
+)
+def test_a_worker_cannot_write_or_replace_its_checklist(canary: Canary, script: str) -> None:
+    """The list is the operator's instructions (T1): a run that wrote it would choose what its own push is held for."""
+    before = tree(canary.answers)
+
+    canary.run(script, str(canary.listed.parent))
+
+    assert tree(canary.answers) == before
+
+
+def test_canopys_hook_holds_a_sandboxed_workers_push_and_marks_the_hold_in_the_slots_git_directory(
+    canary: Canary,
+) -> None:
+    """A worker's git inside the sandbox runs canopy's `pre-push`: it holds the first push and lets the next through.
+
+    The hook reads the slot's list and writes its marker in the slot's own git directory, outside the slot's working
+    tree (DESIGN §42, TRUST_MODEL T4). A marker it could not write would let every push through, so a sandboxed run
+    would never be held. The remote is a bare repository in the slot, which the run may write.
+    """
+    remote = canary.slot / "remote.git"
+    git("init", "--quiet", "--bare", str(remote), cwd=canary.slot)
+    hooks = commit_hooks.env(canary.snapshot, commit_hooks.NONE, os.environ, {canary.slot: canary.listed})
+    variables = {**hooks, conversation.RUN_ID_ENV: "1"}
+    push = 'git push --quiet "$1" HEAD:refs/heads/work'
+    commit_and_push = f"git commit --quiet --allow-empty -m work && {push}"
+
+    held = canary.run(commit_and_push, str(remote), reads=[canary.snapshot], variables=variables)
+
+    assert held.returncode != 0
+    assert HELD in held.stderr
+    assert f"\n\n{LIST}" in held.stderr
+    assert not SubprocessRunner().run(["git", "rev-parse", "--verify", "--quiet", "refs/heads/work"], cwd=remote).ok
+    assert (canary.own / commit_hooks.HOLD_MARKER).read_text().split()[0] == "1"
+
+    sent = canary.run(push, str(remote), reads=[canary.snapshot], variables=variables)
+
+    assert sent.ok, sent.stderr
+    assert "[canopy]" not in sent.stderr
+    assert git("rev-parse", "refs/heads/work", cwd=remote) == git("rev-parse", "HEAD", cwd=canary.slot)
+
+
 def test_a_worker_runs_under_the_system_temp_directory(canary: Canary) -> None:
     """A positive control: the wrapper's run directory, under canopy's TMPDIR, leaves srt room for its sockets.
 
@@ -678,6 +767,11 @@ def refused(done: procs.Result, route: str) -> bool:
     if route == VIA_PROXY:
         return SRT_REFUSAL in done.stdout
     return done.returncode in {CURL_NO_HOST, CURL_NO_CONNECTION}
+
+
+def tree(root: Path) -> dict[str, bytes | None]:
+    """Each path under `root`, with a file's bytes, or None for a directory."""
+    return {str(p.relative_to(root)): p.read_bytes() if p.is_file() else None for p in sorted(root.rglob("*"))}
 
 
 def lingering() -> bool:
