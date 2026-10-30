@@ -191,11 +191,11 @@ Rules:
   then a small box on `surface` at the page's top left. It moves the focus to the page's `main`, so the next Tab is the
   page's own first stop rather than the rail's search, a dozen nav items, its runs, and its spend. It moves the focus
   by script: `#main` under the base path would be another page's address.
-- **The rail** holds, top to bottom: the search box, the nav, what is working now, the spend, and a footer
-  (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
-  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Tasks, Pull requests), then what they
-  check now and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav item
-  is height the sticky part has none to spare of in an 800px window. The pages under a section (Runs' Ticks and
+- **The rail** holds two groups (`src/components/shell/rail.tsx`): at its top, the search box, the nav, and what is
+  working now; at its foot, the spend, then a footer. The nav lists the sections by how often the operator opens them
+  (`SECTIONS` in `src/lib/sections.ts`): what they work in first (Attention, Tickets, Tasks, Pull requests), then what
+  they check now and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav
+  item is height the sticky part has none to spare of in an 800px window. The pages under a section (Runs' Ticks and
   Worktrees, Pull requests' Reviews, Reports' Spend) open under its item while it is the section shown, so the rail
   says where a page is: `text-sm` rows of `h-7`, `muted-foreground`, their labels in line with the section's, on a 1px
   hairline in its color down its icon's middle. Elsewhere they stay folded, so the nav keeps its eight rows. The strip
@@ -213,13 +213,15 @@ Rules:
   spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in two rows: the window's name
   on the left, its cost right-aligned in a readout, so the figures line up at four digits as at one. The 30 days is
   the headline, a step larger and medium weight under the 24 hours' `text-xs`, both in `foreground`: it is shown
-  nowhere else, but for the lifetime total Sprig's hats and the Ghost's shells are bought with (Fun, below). The
-  footer is two lines, the version, a link out to canopy's releases on GitHub, with the width to itself and cut
-  short only past a long build's hash, then the guide and Settings as two filled pills alike, `foreground` on
-  `surface-raised` with no border, in the rail's body size, so they stand out from the version's print, with a little
-  room under them so they do not sit on the window's edge. It sits at the foot of the sticky column, so at the
-  window's foot however long the page; in a window too short for the rest, the part above it scrolls on its own. The
-  room left between the blocks and the footer is Sprig's (Fun, below).
+  nowhere else, but for the lifetime total Sprig's hats and the Ghost's shells are bought with (Fun, below). It sits
+  right on the footer's hairline, a readout at the rail's base. The footer is two lines, the version, a link out to
+  canopy's releases on GitHub, in `muted-foreground` so it does not compete with the buttons, with the width to itself
+  and cut short only past a long build's hash, then the guide and Settings as two filled pills alike, `foreground` on
+  `surface-raised` with no border, in the rail's body size, so they stand out from the version's print, splitting the
+  hairline's width evenly, edge to edge, with a little room under them so they do not sit on the window's edge. A
+  quieter pair was too hard to find. The foot sits at the foot of the sticky column, so at the window's foot however
+  long the page; in a window too short for the rest, the top scrolls on its own. The room left between the two groups
+  is one gap, and Sprig's slot (Fun, below): it stands on the foot.
 - **Narrower than `lg`, the rail is a strip** (`useRailMode`), since a narrow window is under it and a whole
   rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to a
   screen reader, each count one number on its icon's corner, Attention's in its most severe item's color. A button
@@ -548,9 +550,9 @@ the rules it all keeps; what each one does is written in its code. None of it is
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
   something; its room stays, so nothing beside it moves. The fit is measured as the layout changes (`useFits` in
   `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in. Three exceptions, all the
-  operator's call: Sprig may stand over the foot of the rail's spend by 40px rather than step out, offering tips there
-  only when clicked; the rave covers the whole page, taking no pointer, hidden from a screen reader, not printed; and
-  2048 opens over the page as a dialog, only when typed, and Escape puts it away.
+  operator's call: Sprig may stand over the foot of the rail's working runs by 40px rather than step out, offering tips
+  there only when clicked; the rave covers the whole page, taking no pointer, hidden from a screen reader, not printed;
+  and 2048 opens over the page as a dialog, only when typed, and Escape puts it away.
 - **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`, `rave-dark`) or the accent,
   never a status color, so nothing in it reads as a run's state.
 - **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and counters.
