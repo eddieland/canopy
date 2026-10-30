@@ -212,7 +212,7 @@ Rules:
   the ones left out, or the runs page for a mix, so the sticky part fits an 800px window. The
   spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in two rows: the window's name
   on the left, its cost right-aligned in a readout, so the figures line up at four digits as at one. The 30 days is
-  the headline, a step larger and medium weight under the 24 hours' `text-xs`, both in `foreground`: it is shown
+  the headline, a step larger under the 24 hours' `text-xs`, both in the regular weight and `foreground`: it is shown
   nowhere else, but for the lifetime total Sprig's hats and the Ghost's shells are bought with (Fun, below). It sits
   right on the footer's hairline, a readout at the rail's base. The footer is two lines, the version, a link out to
   canopy's releases on GitHub, in `muted-foreground` so it does not compete with the buttons, with the width to itself

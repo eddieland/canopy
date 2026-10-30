@@ -248,7 +248,8 @@ function Under({ children }: { children: string }) {
  * The top of the rail's foot, a readout at its base standing on the footer's hairline, in two rows: what the last 24
  * hours and then the last 30 days cost, each window's name on the left, standing for the block's label, and its cost on
  * the right, so the figures line up however many digits they have. The 30 days, the figure the operator watches, is the
- * larger. Either opens the spend page over its own window: the 24 hours by the hour, or the 30 days by the day.
+ * larger, in the same weight as the 24 hours. Either opens the spend page over its own window: the 24 hours by the
+ * hour, or the 30 days by the day.
  */
 export function RailSpend() {
     const spend = useQuery(spendQuery).data
@@ -437,7 +438,7 @@ function Spent({
                 <Skeleton className="h-4 w-14 self-center" />
             ) : (
                 <span
-                    className={cn('readout text-right text-foreground', headline ? 'text-sm font-medium' : 'text-xs')}
+                    className={cn('readout text-right text-foreground', headline ? 'text-sm' : 'text-xs')}
                     data-testid={`rail-spend-${label}`}
                 >
                     <Cost usd={cost} />
