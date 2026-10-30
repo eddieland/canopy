@@ -89,9 +89,7 @@ test('the rail shows the spend of the last day and the last 30, and the version 
     )
 })
 
-test("the rail's spend at an operator's figures: two rows, the costs right-aligned, the 30 days the larger", async ({
-    page,
-}) => {
+test("the rail's spend at an operator's figures: two rows set alike, the costs right-aligned", async ({ page }) => {
     await spentInWindows(page, 412.07, 3118.94)
     await storeTheme(page, 'dark')
     await page.goto('attention')
