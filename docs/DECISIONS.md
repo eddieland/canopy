@@ -532,7 +532,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Why: the operator (2026-10-20) found that M55's triage judged too few tickets trivial for its runs to save what they
   cost, while the planner has read the ticket and the code already, at no run of its own (#1050).
 - Rejected: a cheaper agent judging trivial work before the plan, with its verdict waiving it (M55, built and removed).
-- Revisit: when ROADMAP's deferred list's trigger for M55 fires.
+- Revisit: when the spend page shows plan runs on tickets the operator calls trivial costing enough that a cheaper
+  judge would pay for its own runs.
 
 ## D127. A web write needs no CLI verb when no command would use it
 

@@ -280,10 +280,10 @@ change in CI makes the plan stale, and canopy plans again, once the PR has gone 
 
 ### R22. Skip the plan for trivial work
 
-Deferred by the operator (M55, 2026-10-20): in use, triage judged too few tickets trivial for its runs to save what they
-cost, so it was removed, and every ticket `policy.plan` plans is planned, trivial or not; the operator still skips one
-ticket's plan with `canopy plan KEY --skip` (D126). The approval half is met another way (§25, 2026-10-20): under
-`policy.planner_may_approve` the planner may say its plan needs no review, so the plan run stays and the click goes.
+Built another way (M55, §25): under `policy.planner_may_approve` the planner may say its plan needs no review, so the
+plan run stays and the operator's click goes. The cheaper judge before the plan was built and removed: it judged too few
+tickets trivial for its runs to save what they cost, so every ticket `policy.plan` plans is planned, trivial or not; the
+operator still skips one ticket's plan with `canopy plan KEY --skip` (D126).
 Written down 2026-10-17. With plans on (R18, R21), an obvious change
 still costs a planner run and the operator's approval. As an option, a smaller, cheaper agent should judge a change
 trivial, without the operator having to say what that means (2026-10-19), and let it go ahead unplanned, without asking
