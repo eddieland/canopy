@@ -86,7 +86,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M47. Garbage collection](M47-garbage-collection.md): in progress.
 - [M48. The overseer's tools over MCP](M48-the-overseers-tools-over-mcp.md): in progress.
 - [M49. Config per workspace](M49-config-per-workspace.md): done 2026-10-17.
-- [M50. Agent memory, opt-in](M50-agent-memory-opt-in.md): in progress.
+- [M50. Agent memory, opt-in](M50-agent-memory-opt-in.md): done 2026-10-30.
 - [M51. The loop, detached](M51-the-loop-detached.md): done 2026-10-17.
 - [M52. Memory's verbs from the web UI](M52-memorys-verbs-from-the-web-ui.md): done 2026-10-20.
 - [M53. Review replies the operator sends](M53-review-replies-the-operator-sends.md): done 2026-10-29.
