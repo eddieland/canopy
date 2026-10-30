@@ -123,6 +123,9 @@ Rules:
   or glowing), and the nav's highlight (a tint and a hairline, a solid block with the active item inked in the canvas's
   color, or a tint with the icon lit). Each form takes the room the default does, so a switch moves nothing; the
   defaults keep the first of each, Gruvbox's dark the second, and black the third.
+  A palette may tune its section colors too, never their hues, which say what each page is for: muted toward a
+  scheme's own set, or turned up. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
+  from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
