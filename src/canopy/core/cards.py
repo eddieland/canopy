@@ -188,7 +188,10 @@ class Card(BaseModel):
     summary: Annotated[StrictStr, Field(max_length=MAX_SUMMARY), AfterValidator(_line)] = Field(
         description="Where the work stands, in one or two sentences, for someone who skipped the transcript.",
     )
-    now: Line = Field(description="What you are doing this moment.")
+    now: Line = Field(
+        description="What you are doing this moment. With `steps`, what is under way within the working step, such as "
+        '"reading the review comments", not its title again.',
+    )
     done: tuple[Done, ...] = Field(
         default=(),
         max_length=MAX_STEPS,

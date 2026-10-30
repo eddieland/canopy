@@ -112,6 +112,12 @@ describe('RunProgress steps', () => {
         ])
     })
 
+    it("leaves out what it does now under the working step when that only says the step's title again", () => {
+        render(<RunProgress card={{ ...STEPS, now: 'Wire the login button.' }} running />)
+        const items = screen.getAllByRole('listitem').map((item) => item.textContent)
+        expect(items[1]).toBe('workingwire the login button · web')
+    })
+
     it('folds what it wrote is done and next under the steps, which say where it stands', () => {
         render(<RunProgress card={STEPS} running />)
         expect(screen.queryByText('tests pass: 12/12')).toBeNull()
