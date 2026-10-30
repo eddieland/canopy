@@ -862,12 +862,13 @@ export type paths = {
         put?: never;
         /**
          * Ask for a PR to be reviewed
-         * @description `canopy start URL --review --notes TEXT --persona NAME`: review a PR the loop does not own, once, at its head.
+         * @description `canopy start URL --review --notes TEXT --persona NAME --model M`: review a PR the loop does not own, once.
          *
-         *     It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in, its reviewer
-         *     given the notes, once in each persona chosen (DESIGN §21, §31). Notes or personas on a PR already requested replace
-         *     its request's. Refused as the CLI refuses it: `reviews_off`, `bad_notes`, `unknown_persona`, `bad_persona`,
-         *     `bad_pr`, and `loop_pr`.
+         *     It reviews nothing now: the next tick does, at the PR's head, in whichever of the workspace's repositories the PR
+         *     is in, its reviewer given the notes, once in each persona chosen, on the model chosen (DESIGN §13, §21, §31). Notes,
+         *     personas, or a model on a PR already requested replace its request's. Refused as the CLI refuses it:
+         *     `reviews_off`, `bad_notes`, `unknown_persona`, `bad_persona`, `bad_pr`, `loop_pr`, `no_reviewer`,
+         *     `unknown_model`, and `model_list_failed`.
          */
         post: operations["startPullRequestReview"];
         delete?: never;
@@ -7009,6 +7010,11 @@ export type components = {
              */
             ended_at: string | null;
             /**
+             * Model
+             * @description The model its reviews run on, `provider/model[@variant]`; None for the reviewer's own.
+             */
+            model: string | null;
+            /**
              * Notes
              * @description The operator's notes for the reviewer, which its prompt carries; None when the request has none.
              */
@@ -7022,9 +7028,15 @@ export type components = {
         };
         /**
          * ReviewRequestBody
-         * @description A review request's notes and personas, as `canopy start URL --review --notes TEXT --persona NAME` gives them.
+         * @description A review request's notes, personas, and model, as `canopy start URL --review` gives them.
          */
         ReviewRequestBody: {
+            /**
+             * Model
+             * @description The model its reviews run on, as `provider/model`, one `GET /models` lists, or `provider/model@variant` at one
+             *     of its variants; None is the reviewer's own, and leaves an open request's model as it was.
+             */
+            model?: string | null;
             /**
              * Notes
              * @description What the reviewer should know or look at closely. Bounded again in code at 4000 characters, after stripping;

@@ -48,6 +48,7 @@ from canopy.loop import attention, readback
 from canopy.loop.render import phase_of
 from canopy.reviews import grants, review_requests
 from canopy.runs import feedback_items, feedback_plans, halt, policy
+from canopy.runtime import models as runtime_models
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -181,6 +182,11 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
     help="The persona of the run this starts, alone: its first worker's, its planner's with --plan, or its review's. "
     "With --review, give it again for a review in each, side by side.",
 )
+@click.option(
+    "--model",
+    metavar="MODEL",
+    help="With --review: the model its reviews run on, provider/model[@variant]. Default: the reviewer's.",
+)
 @click.option("--plan", is_flag=True, help="Plan it first: its implement waits on a plan you approve.")
 @click.pass_context
 def cmd_start(
@@ -190,6 +196,7 @@ def cmd_start(
     review: bool,
     notes: str | None,
     chosen: tuple[str, ...],
+    model: str | None,
     plan: bool,
 ) -> int:
     """Work a ticket privately, or with --review have canopy review someone else's PR.
@@ -210,16 +217,20 @@ def cmd_start(
     hands its reviewer what you want it to know, such as what the author asked for or the part that worries you; on a
     PR already requested, they replace the request's notes. --persona NAME, one `canopy personas` lists, is the voice
     its review is written in; given more than once, canopy reviews the PR once in each, side by side, and each review
-    keeps its own draft. On a PR already requested, they replace the request's personas.
+    keeps its own draft. On a PR already requested, they replace the request's personas. --model MODEL, one
+    `canopy models` lists, is the model every review the request makes runs on, in place of the reviewer's in
+    [runtime.models] or the ticket's override; on a PR already requested, it replaces the request's model.
     """
     _operator("start")
     subject = _ref(ref, "start")
     if notes is not None and not review:
         raise click.UsageError("--notes is for a PR's review, with --review")
+    if model is not None and not review:
+        raise click.UsageError("--model is for a PR's review, with --review; a ticket's is `canopy model KEY MODEL`")
     if review:
         if plan:
             raise click.UsageError("--plan is for a ticket; a PR's review has no plan")
-        return _start_review(click_ctx, subject, notes, chosen)
+        return _start_review(click_ctx, subject, notes, chosen, model)
     if len(chosen) > 1:
         raise click.UsageError("a ticket's run takes one --persona; several are for a PR's reviews, with --review")
     return _start_ticket(click_ctx, subject, chosen[0] if chosen else None, plan=plan)
@@ -260,16 +271,43 @@ def _start_ticket(click_ctx: click.Context, subject: Ref, persona: str | None, *
     return 0
 
 
-def _start_review(click_ctx: click.Context, subject: Ref, notes: str | None, chosen: tuple[str, ...]) -> int:
+def _start_review(
+    click_ctx: click.Context,
+    subject: Ref,
+    notes: str | None,
+    chosen: tuple[str, ...],
+    model: str | None,
+) -> int:
     ctx = open_context(click_ctx)
     try:
-        requested = review_requests.request(ctx.conn, ctx.config, subject, channel=CLI, notes=notes, chosen=chosen)
+        requested = review_requests.request(
+            ctx.conn,
+            ctx.config,
+            subject,
+            channel=CLI,
+            notes=notes,
+            chosen=chosen,
+            model=model,
+            listing=lambda variants: runtime_models.listed(
+                ctx.runner,
+                version=ctx.config.runtime.version,
+                cwd=ctx.workspace.root,
+                variants=variants,
+            ),
+        )
     except conversation.Refused as r:
         raise CliError(f"start refused ({r.guard}): {r.reason}") from None
     noted = requested.request.notes is not None
     logs.for_tick(None).info(
         "review requested",
-        extra={"pr": subject.id, "already": requested.already, "notes": noted, "personas": chosen, "channel": CLI},
+        extra={
+            "pr": subject.id,
+            "already": requested.already,
+            "notes": noted,
+            "personas": chosen,
+            "model": model,
+            "channel": CLI,
+        },
     )
     names = review_requests.personas_of(ctx.conn, requested.request.id)
     written = (
@@ -277,14 +315,18 @@ def _start_review(click_ctx: click.Context, subject: Ref, notes: str | None, cho
         if len(names) == 1
         else f"It is reviewed once in each of {', '.join(names)}, side by side."
     )
+    on = f"Its reviews run on {model}."
     if requested.already:
         replaced = " Its notes are replaced." if (notes or "").strip() else ""
         replaced += f" {written}" if chosen else ""
+        replaced += f" {on}" if model is not None else ""
         click.echo(f"{subject} was already requested for review.{replaced}")
         return 0
     click.echo(f"{subject} is requested for review. The next tick reviews its head, once. Nothing is posted on the PR.")
     if chosen:
         click.echo(written)
+    if model is not None:
+        click.echo(on)
     return 0
 
 
@@ -747,18 +789,7 @@ def _show_pr(ctx: Context, url: str) -> None:
     if request is None:
         click.echo("  no review request: reviewed as one of the loop's own PRs or a review.query match")
     else:
-        made = f"made {attention.age(request.created_at)} ago via {request.channel}"
-        if request.ended_at is None:
-            click.echo(f"  review request: {made}, open")
-        else:
-            click.echo(f"  review request: {made}, ended {attention.age(request.ended_at)} ago ({request.end_reason})")
-        chosen = review_requests.personas_of(ctx.conn, request.id)
-        if chosen:
-            click.echo(f"  {'persona' if len(chosen) == 1 else 'personas'}: {', '.join(chosen)}")
-        if request.notes is not None:
-            click.echo("  notes:")
-            for line in conversation.printable(request.notes).splitlines():
-                click.echo(f"    {line}")
+        _show_request(ctx, request)
     click.echo(f"\nReviews ({len(runs)}):")
     for r in runs:
         when = f"started {attention.age(r.started_at)} ago"
@@ -769,6 +800,23 @@ def _show_pr(ctx: Context, url: str) -> None:
         click.echo("  none yet")
     else:
         click.echo(f"\nRead one with `canopy review show {runs[0].id}`.")
+
+
+def _show_request(ctx: Context, request: records.ReviewRequest) -> None:
+    made = f"made {attention.age(request.created_at)} ago via {request.channel}"
+    if request.ended_at is None:
+        click.echo(f"  review request: {made}, open")
+    else:
+        click.echo(f"  review request: {made}, ended {attention.age(request.ended_at)} ago ({request.end_reason})")
+    chosen = review_requests.personas_of(ctx.conn, request.id)
+    if chosen:
+        click.echo(f"  {'persona' if len(chosen) == 1 else 'personas'}: {', '.join(chosen)}")
+    if request.model is not None:
+        click.echo(f"  model: {request.model}")
+    if request.notes is not None:
+        click.echo("  notes:")
+        for line in conversation.printable(request.notes).splitlines():
+            click.echo(f"    {line}")
 
 
 def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:

@@ -518,6 +518,8 @@ class ReviewRequest(Row):
     ended_at: str | None
     end_reason: str | None
     notes: str | None
+    #: The model the operator chose for its reviews, `provider/model[@variant]`; None for the reviewer's own.
+    model: str | None
 
 
 @dataclass(frozen=True)
