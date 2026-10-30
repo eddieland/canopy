@@ -35,7 +35,8 @@ have a little of the same: Gruvbox's light side matches its dark one, monospace 
 Monokai crisp and monospaced with a neon glow, Nord's light side a calm fade through its blues, Grey one steel-blue
 rule, Off-white panels lying on the page like paper, and Sage, Rosé Pine, Forest, and Plum round their corners, Plum
 most of all. Layout and sizes never change with a palette, so nothing moves when you switch, except under Gruvbox and
-Monokai, where monospace runs wider and a long line wraps a little sooner.
+Monokai, where monospace runs wider and a long line wraps a little sooner. Their text is drawn a step smaller to make
+up some of the width; every line keeps its height, so nothing shifts up or down.
 
 ## Time
 
