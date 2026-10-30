@@ -558,6 +558,8 @@ a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.
 - A page's blocks rise in one after another (`stagger` on the page column), and so do the attention list's rows, the
   Working rows, and a conversation's bubbles. Any other list's rows arrive with their panel, as one block. A row or
   bubble the stream adds later rises in on its own. A bubble pops (`[--enter:pop]`) from the corner nearest its side.
+  A reply's `seen` pops in once (`animate-receipt`) when a tick reads it while the page shows it, never on a page that
+  opens on it already read.
 - Counter values are odometers (`RollingNumber`): each digit rolls to its new value, the units first, and rolls up from
   zero when the counter first shows. The value is in the text once, for screen readers and tests; the digits are
   drawn by CSS.
@@ -1076,29 +1078,40 @@ sliver beside four others; and its axis names short call numbers without measuri
   dropping its own.
 - **The reply form is always open** (`ReplyForm`), on every ticket and every chore, never folded under a `Disclosure`: a
   note for the next worker is as likely as an answer to a question, and a click to reach the box hides where the
-  operator writes. Its label names the message it answers while a question waits, and its placeholder speaks of an
-  untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree. On a
+  operator writes. Its label names the message it answers while a question waits, and on a ticket the form then
+  wears the open question's tint and hairline, its label in `status-blocked`, so the question and the box answering it
+  read as a pair (a task's page draws the same band around it). Its placeholder speaks of an untrusted review only
+  while one waits. Focused, the box takes the accent's 8% tint, the operator's side. Its count of characters shows
+  only past 80% of the bound. It is the form's rule, so the ticket's page and its attention item agree. On a
   public ticket it says what a reply is for and where it goes, `For its next worker, as an instruction. It stays in
   canopy, never on the ticket.`, as the ticket's `public` chip says on hover and to a screen reader, where its comments
   stay on the tracker.
   A ticket's page description is its state, not what public or private means: the running run, a question waiting,
   its plan's status, and when it was last active, `run:41 running · plan waiting on you · active 38m ago`
   (`ticketDescription`).
-- **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
-  wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, a dashed
-  hairline with muted text for canopy's note on what a tick did, and the accent's tint for the operator's own words,
-  which sit on the right. A bubble's corner nearest its side is square.
+- **A conversation** is a column of messages, each a head line over a bubble. The head leads with who, in sans
+  `font-medium` `foreground`, then what (kind, run, what it answers, how) and its chips in muted mono; its id and age
+  are a readout at the end away from the bubble's square corner. A tracker comment's head is its author `on the
+  tracker`, the comment's id and when it was written in its tip. A message that carries on the one before it (the same
+  speaker, kind, run, and channel, within five minutes, answering nothing) keeps only its chips and readout, and sits
+  closer under it. A bubble is as wide as its words, up to 42rem and never past 85% of the panel, so the other side
+  keeps a gutter at any width:
+  `surface-raised` for a worker's report or a question answered, a hairline on `surface` for a tracker comment, quoted
+  since it is data from outside the loop, the `status-blocked` tint at 8% with a `status-blocked/40` hairline for the
+  question still open, the one amber bubble, a dashed hairline with muted text for canopy's note on what a tick did,
+  and the accent's tint at 18% for the operator's own words, which sit on the right, their head line mirrored. A
+  bubble's corner nearest its side is square.
   The question still open carries a `waiting on you` chip in `status-blocked`. A forgotten ticket's conversation
   (`TicketThread`) shows what came after the latest forget. At the oldest end, each forget heads the attempt it ended:
   a muted line saying when and how, with the branch and PRs it dropped under it, and that attempt's messages folded
   under `Show N earlier messages`, a `Disclosure`, and dimmed, since the loop no longer reads them. Only the latest
   says the loop reads what came after. The panel's count is of the messages after the latest forget.
-  Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
+  Bodies are rich text (below), on a 24px line (`leading-6`): always text, but for their URLs. An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
-  (`src/lib/acknowledged.ts`), and a plain `seen` chip once one has, so a reply never goes unacknowledged; an
-  `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the next tick, and so
-  does a `plan_review` item whose plan waits on the operator no more (approved, skipped, or changes asked); Waiting
-  on you counts neither. While a run works the ticket, the conversation ends on it (starts on
+  (`src/lib/acknowledged.ts`), and a `seen` chip with a check, in the accent, once one has, so a reply never goes
+  unacknowledged; an `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the
+  next tick, and so does a `plan_review` item whose plan waits on the operator no more (approved, skipped, or changes
+  asked); Waiting on you counts neither. While a run works the ticket, the conversation ends on it (starts on
   it, flipped newest first), on the worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`,
   `working now` in `status-running`, its `run:N` link, its kind, its latest tool call (`RunDoing`, below), its cost
   so far, and for how long. It comes from the runs on the stream, so it rises in when the run starts, follows what it
@@ -1234,13 +1247,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   until turned on, across reloads (`src/lib/pretty-output.ts`), as a list keeps its order; a run's keeps it for the
   page alone.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
-  summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
-  `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` (at `text-xs`) and
-  **strong** inline.
+  summary, a decision's rationale, and a conversation's message: line breaks kept, `-` and `1.` lists (nested by
+  indent), `#` headings as a `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and
+  `code` (at `text-xs`) and **strong** inline.
   It reads nothing else: other markup, a labelled link's included, stays characters. Every piece is React text, and
   its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
-  A conversation's bubbles keep their own `whitespace-pre-wrap`.
+  A conversation's bubbles lay out their bodies with it too, their line breaks kept, since the operator and the
+  workers break lines on purpose; on a raised bubble its code sits on `background`.
 - **The guide** (`/guide/PAGE`, `src/lib/guide.ts`, `GuideText`) is the operator's documentation, a page each, as
   Markdown in `src/guide/` (docs/design/CONVERSATIONS.md §22), laid out as a documentation site rather than in panels.
   On the left, the pages by group (`SOURCES`), each group a heading over its pages on a hairline, the page shown in
