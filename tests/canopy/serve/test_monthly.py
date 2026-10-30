@@ -78,13 +78,14 @@ def said(
     *,
     state: str | None,
     bot: bool = False,
+    pr: str = PR,
 ) -> None:
-    """A comment, or a review when `state` is given, on `PR`."""
+    """A comment, or a review when `state` is given, on `pr`."""
     item = "comment" if state is None else "review"
     conn.execute(
         "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, thread_id, "
         "observed_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'b', ?, ?)",
-        (PR, item, number, author, int(bot), state, created, None if state else f"t{number}", at(10, 8)),
+        (pr, item, number, author, int(bot), state, created, None if state else f"t{number}", at(10, 8)),
     )
 
 
@@ -259,3 +260,29 @@ def test_a_landed_tickets_waits_run_on_githubs_times_where_the_reader_kept_them(
     [landed] = monthly.months(conn, NOW, 1, state_dir=STATE_DIR)[0].landed
     assert (landed.merged_at, landed.to_land) == (None, timedelta(days=6, hours=1))
     assert (landed.awaiting_review_at, landed.review_wait) == (None, timedelta(days=1, hours=4))
+
+
+def test_a_landed_tickets_pr_without_githubs_times_waits_on_the_proxy_beside_one_with_them(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """A PR read before canopy kept its times counts its reviews from the proxy, beside a PR read after."""
+    conn = journals.open(tmp_path / "canopy.db")
+    t = tick(conn, at(9, 28), 1.0)
+    ticket(conn, "PROJ-1")
+    web = "https://github.com/acme/web/pull/3"
+    run(conn, t, "PROJ-1", at(9, 28, 10), ended=at(9, 28, 11), pr=PR)
+    run(conn, t, "PROJ-1", at(9, 28, 12), ended=at(9, 28, 13), pr=web)
+    conn.execute(
+        "INSERT INTO observed_prs (url, repository, number, state, draft, author, observed_at, ready_at, merged_at) "
+        "VALUES (?, 'acme/api', 7, 'merged', 0, 'operator', ?, ?, ?), "
+        "(?, 'acme/web', 3, 'merged', 0, 'operator', ?, NULL, NULL)",
+        (PR, at(10, 8), at(9, 29, 12), at(10, 3, 15), web, at(10, 8)),
+    )
+    said(conn, 1, "dana", at(9, 28, 15), state="approved", pr=web)
+    said(conn, 2, "gina", at(10, 3, 12), state="approved")
+    decide(conn, t, "PROJ-1", at(10, 4, 11))
+
+    [landed] = monthly.months(conn, NOW, 1, state_dir=STATE_DIR)[0].landed
+    # The web PR's review counts, from the first worker run that ended done; not only the api PR's, from its ready.
+    assert landed.review_wait == timedelta(hours=4)

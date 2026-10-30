@@ -510,10 +510,13 @@ def _ticket(
     # Each PR's start, as GitHub says: a review of it asked for once ready, or its ready time.
     starts = {p.url: db.parse_time(start) for p in prs if (start := p.review_requested_at or p.ready_at) is not None}
     awaiting = min(starts.values(), default=None)
-    # Without GitHub's times, every PR of the ticket is ready when its first worker run ends `done`.
+    # Without GitHub's times, a PR of the ticket is ready when its first worker run ends `done`.
     ready = next((r.ended_at for r in work if r.status == RunStatus.DONE and r.ended_at is not None), None)
-    waited_from = awaiting or ready
-    first_review = _first_review(judged, starts or dict.fromkeys((r.pr_url for r in judged), ready))
+    # Each PR starts on GitHub's clock where the reader kept it, else on the proxy: a PR read before canopy kept its
+    # times still counts its reviews beside one read after.
+    begun = {url: starts.get(url) or ready for url in {p.url for p in prs} | {r.pr_url for r in judged}}
+    waited_from = min((start for start in begun.values() if start is not None), default=None)
+    first_review = _first_review(judged, begun)
     return Landed(
         key=key,
         title=title,
