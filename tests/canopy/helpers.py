@@ -322,6 +322,11 @@ def live_run(env: CanopyEnv, ctx: Context, key: str) -> int:
     return run_id
 
 
+def minute(stamp: str) -> str:
+    """`stamp`, a time the journal wrote, as the overseer's state block shows it: to the minute, its seconds dropped."""
+    return f"{db.parse_time(stamp):%Y-%m-%dT%H:%M}Z"
+
+
 def earlier(now: datetime, days: float, hours: float = 0) -> str:
     """The time `days` and `hours` before `now`, as the journal writes it."""
     return db.format_time(now - timedelta(days=days, hours=hours))

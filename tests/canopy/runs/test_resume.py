@@ -20,6 +20,7 @@ from tests.canopy.helpers import (
     Called,
     decisions,
     in_tick,
+    minute,
     present,
     tracker_holds,
     unit_of,
@@ -392,7 +393,7 @@ def test_state_block_shows_attempts_the_cooldown_and_a_resumes_reasons(scenario:
     # The old fix-ci run is a resume attempt; its kind is in none of the counts.
     assert unit["attempts"] == {"implement": 1, "resume": 2}
     until = fix.ended_at + timedelta(minutes=30)
-    assert unit["ci_cooldown_until"] == db.format_time(until)
+    assert unit["ci_cooldown_until"] == minute(db.format_time(until))
     assert ticket["last_run"]["reasons"] == ["ci", "conflict"]
     assert state["policy"]["max_resume_attempts"] == 6
     assert state["policy"]["ci_cooldown_minutes"] == 30
