@@ -356,7 +356,7 @@ def seed(directory: Path) -> Backend:
             tasks.seed(ctx.conn, ws.state_dir, at, lambda repo, n: slot_path(root, repo, n))
             _first_calls(ctx.conn)
             _attachments(ctx.conn)
-            # Last, so the messages their approvals wrote take ids after every other fixture's.
+            # Last but `_every_kind`, so the messages their approvals wrote take ids after every other fixture's.
             feedback_plans.seed_states(
                 ctx.conn,
                 ws.state_dir,

@@ -194,7 +194,7 @@ def test_a_note_from_the_web_is_recorded_as_the_cli_records_one_and_the_next_pro
     assert c.post(url, json=body, headers={"origin": headers["origin"]}).status_code == 403
     first = c.post(url, json=body, headers=headers).json()
     again = c.post(url, json=body, headers=headers).json()
-    # After the mock's 16 messages, the last two its feedback plans' approvals wrote.
+    # After the mock's 19 messages, the last three ABC-103's note, comment, and reply (`_every_kind`).
     assert first == {"message_id": 20, "answers": None, "new": True}
     assert again == {**first, "new": False}
     unknown = c.post("/api/chores/nope/replies", json=body, headers=headers)
