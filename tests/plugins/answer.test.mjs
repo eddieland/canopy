@@ -93,10 +93,13 @@ test("a file that is no answer of canopy's tells nothing", async () => {
     assert.equal((await after(hooks, builtin())).output, "ok");
 });
 
-test("a run that keeps no progress, or names no answers directory, has no answer job", async () => {
+test("a run whose progress asks nothing, or that names no answers directory, has no answer job", async () => {
     await answered("B", "remove it now");
     process.env.CANOPY_RUN_ID = "chore-3";
     assert.equal((await canopy.server({}))["tool.execute.after"], undefined);
+    // A task's run keeps progress, so the nudge has its hook, but asks nothing, so it is told no answer.
+    process.env.CANOPY_RUN_ID = "task-3";
+    assert.equal((await after(await canopy.server({}), builtin())).output, "ok");
     process.env.CANOPY_RUN_ID = "review-7";
     delete process.env.CANOPY_ANSWERS;
     assert.equal((await after(await canopy.server({}), builtin())).output, "ok");

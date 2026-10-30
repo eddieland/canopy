@@ -310,7 +310,7 @@ def reviewer(
         **servers.env(served, version=ctx.config.runtime.version, cwd=ctx.ws.root.absolute()),
     }
     # An eval's review keeps no card, so it is asked nothing (DESIGN §21).
-    if cards.RUN_ID_RE.fullmatch(run):
+    if cards.may_ask(run):
         answers = cards.answers_dir(ctx.state_dir, run)
         cards.make_answers(answers)
         env[cards.ANSWERS_ENV] = str(answers)

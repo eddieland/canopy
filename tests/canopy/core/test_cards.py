@@ -67,6 +67,23 @@ def test_only_a_completed_status_call_that_validates_is_a_card() -> None:
     assert cards.read_call(status(CARD, tool="other_status")) is None
 
 
+def test_a_tasks_run_keeps_a_card_but_asks_no_question_on_it(tmp_path: Path) -> None:
+    """Its card is read as any run's, but one that asks a question is not; nor has it an answers directory (§36)."""
+    asking = {**CARD, "question": {"ask": "Which?", "options": ["a", "b"], "recommend": "A"}}
+    assert cards.read_call(status(asking)) is not None
+    assert cards.read_call(status(asking), may_ask=False) is None
+    assert cards.read_call(status(CARD), may_ask=False) == cards.Card.model_validate(CARD)
+    assert [bool(cards.RUN_ID_RE.fullmatch(r)) for r in ("7", "review-7", "task-7", "chore-7")] == [
+        True,
+        True,
+        True,
+        False,
+    ]
+    assert [cards.may_ask(r) for r in ("7", "review-7", "task-7", "chore-7")] == [True, True, False, False]
+    with pytest.raises(ValueError, match="names no run whose card may ask"):
+        cards.answers_dir(tmp_path, "task-7")
+
+
 @pytest.fixture
 def running(conn: sqlite3.Connection, tmp_path: Path) -> int:
     """A running run of PROJ-1."""

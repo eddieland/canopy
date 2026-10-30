@@ -15,7 +15,7 @@ import click
 from canopy.cli import attachments as attachments_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
-from canopy.core import conversation, plans
+from canopy.core import cards, conversation, plans
 from canopy.core.items import age
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
@@ -197,6 +197,20 @@ def _show_run(ctx: Context, run: records.TaskRun) -> None:
         click.echo(f"    report {path}{_report_state(run, plans.read(path))}")
     session = f"session {run.session_id}" if run.session_id else "no session reported"
     click.echo(f"    {session}, log {run.log_path}")
+    # Its worker's progress, while it runs and its last once it ends: the operator's alone, never shown inside one of
+    # canopy's ticks or runs (DESIGN §41). A task's asks no question, so `ref` names no run to answer.
+    running = run.status is RunStatus.RUNNING
+    standing = cards.of(run)
+    if conversation.is_operator() and (standing.card is not None or running):
+        found = cards.lines(
+            standing,
+            started_at=run.started_at,
+            running=running,
+            timeout_minutes=ctx.config.runtime.worker_timeout_minutes,
+            ref=f"task:{run.task_id}",
+        )
+        for line in found:
+            click.echo(f"  {line}")
 
 
 def _show_tickets(ctx: Context, task: records.Task) -> None:

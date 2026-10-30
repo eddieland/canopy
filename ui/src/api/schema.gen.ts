@@ -8792,6 +8792,11 @@ export type components = {
              */
             branch: string;
             /**
+             * @description Its worker's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none. A task's
+             *     asks no question.
+             */
+            card: components["schemas"]["RunCard"] | null;
+            /**
              * Cost Usd
              * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.
              */
