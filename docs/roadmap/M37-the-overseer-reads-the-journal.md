@@ -7,9 +7,9 @@ code before §8's other guards, refused `unauthorized`, `unobserved`, `stale`, o
 numbers; and the `mirror` tool is gone, each comment a source observes recorded in its ticket's conversation in code.
 
 Status: done 2026-10-30.
-Learned: closed by the operator on real use before the Accept's live re-measurement ran, which is SCENARIOS S69; it was
-built ahead of M36's measurement, at the operator's word. Since M39 the overseer's definition denies every MCP server
-but canopy's, so "no MCP call on a tick whose observations are fresh" holds by construction, and a `tracker` source is
-required.
+Learned: closed by the operator on real use before the Accept's live re-measurement ran, which is SCENARIOS S69, and
+before M36's measurement it checks against (S68, the derivation against the overseer); it was built ahead of that
+measurement, at the operator's word. Since M39 the overseer's definition denies every MCP server but canopy's, so "no
+MCP call on a tick whose observations are fresh" holds by construction, and a `tracker` source is required.
 Next: M38 to M40 build on the observations and the claims. Open for the operator: how many new items a subject shows
 before the rest are counted (`MAX_NEW_ITEMS`, 10).

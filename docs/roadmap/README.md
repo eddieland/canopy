@@ -72,7 +72,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M33. Spend by what it bought](M33-spend-by-what-it-bought.md): done 2026-10-14.
 - [M34. A cacheable overseer prompt](M34-a-cacheable-overseer-prompt.md): done 2026-10-15.
 - [M35. Temporary notices to workers](M35-temporary-notices-to-workers.md): done 2026-10-15.
-- [M36. Connectors: the world observed into the journal, in shadow](M36-connectors-in-shadow.md): in progress.
+- [M36. Connectors: the world observed into the journal, in shadow](M36-connectors-in-shadow.md): done 2026-10-29.
 - [M37. The overseer reads the journal](M37-the-overseer-reads-the-journal.md): done 2026-10-30.
 - [M38. The harness decides what needs no judgment](M38-the-harness-decides.md): in progress.
 - [M39. A tick without the overseer](M39-a-tick-without-the-overseer.md): in progress.
@@ -82,7 +82,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M43. Publishing a review on someone else's PR](M43-publishing-a-review.md): done 2026-10-22.
 - [M44. Plans before implementing](M44-plans-before-implementing.md): done 2026-10-17.
 - [M45. canopy's own worktree pools, replacing treehouse in stages](M45-canopys-own-worktree-pools.md): in progress.
-- [M46. Workers file follow-up tickets](M46-workers-file-follow-up-tickets.md): in progress.
+- [M46. Workers file follow-up tickets](M46-workers-file-follow-up-tickets.md): done 2026-10-29.
 - [M47. Garbage collection](M47-garbage-collection.md): in progress.
 - [M48. The overseer's tools over MCP](M48-the-overseers-tools-over-mcp.md): in progress.
 - [M49. Config per workspace](M49-config-per-workspace.md): done 2026-10-17.
@@ -96,7 +96,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M57. A clock for running agents](M57-a-clock-for-running-agents.md): in progress.
 - [M58. canopy chooses each agent's model](M58-canopy-chooses-the-workers-model.md): in progress.
 - [M59. Lessons edited, with their history](M59-lessons-edited-with-their-history.md): done 2026-10-29.
-- [M60. Personas](M60-personas.md): in progress.
+- [M60. Personas](M60-personas.md): done 2026-10-29.
 - [M61. One-off tasks](M61-one-off-tasks.md): in progress.
 - [M62. Artifacts, and comments on them back to the ticket](M62-artifacts.md): in progress.
 - [M63. Attachments on tickets and tasks](M63-attachments.md): in progress.

@@ -99,6 +99,10 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
 - **S12. Stacked tickets** (M4, M56). Two tickets, the second blocked by the first. Expect the second to wait, then be
   dispatched with `--base` on the first's branch once its PR is open and green. Then merge the first: expect a
   `resume (retarget)` for the second, without `--base`, that points its PR at the repository's base branch.
+- **S68. A follow-up, labeled and landed** (M46). With a sink configured, let a worker on a labeled ticket in the
+  toy workspace (TOY_REPOS) file a follow-up. Expect the sink to hear `follow_ups.filed` naming it once, and the
+  follow-up to sit undispatched with no labels. Label it: expect the overseer to dispatch it as any ticket, its PR to
+  land for review, and its worker to file no follow-up of its own.
 
 ### Several repositories
 
@@ -231,6 +235,11 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   Once M48 gives the overseer `canopy _mcp`, expect its eleven tools, about 2.3k tokens (F55), and `bash` gone if its
   rules deny it whole. Then let `canopy loop` run a week and expect no run or tick whose transcript shows a
   call to a tool it was not offered (`tool not found`).
+- **S68. The derivation against the overseer** (M36, closed on real use 2026-10-29). Run `canopy loop` a day with
+  both connectors against the real queue. Record in `MEASUREMENTS.md` the agreement between `derivations` and the
+  overseer's `decisions` per row of §7's phase table, counted by distinct situation as well as by decision
+  (2026-10-15 F26), each disagreement read and attributed (the rationale says which side was right), and what the
+  connectors cost, in calls and seconds per tick, from `connector_runs`. M37 closes against it.
 - **S69. The overseer reads the journal, measured** (M37). After a day of `canopy loop` against the real queue,
   re-measure with MEASUREMENTS' prompt (Re-measuring). Expect tool-result tokens per tick at a tenth of the first day's
   median (about 14k), and no action missed over the day, checked against the derivation as M36's agreement counts are.
