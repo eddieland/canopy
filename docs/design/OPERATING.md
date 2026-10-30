@@ -377,9 +377,10 @@ promises:
   records each model that wrote a run's replies, a variant other than its default named with it, and what they cost;
   for a run more than one model served, also which wrote each reply, keyed as the log's events key each call.
   `canopy spend` breaks each kind's cost down by model, and the web UI names each run's models on its page, and a
-  split run's on its transcript, at each call where the model changed. A read never fails a run or a tick; a session
-  the runtime no longer keeps leaves its run unattributed, or as a read before found it, and a failed read is tried
-  again later, a few times at most.
+  split run's on its transcript, at each call where the model changed. One read of that breakdown narrows to a
+  ticket, beside the workspace's, so a model tried on one ticket's workers reads against what it costs elsewhere. A
+  read never fails a run or a tick; a session the runtime no longer keeps leaves its run unattributed, or as a read
+  before found it, and a failed read is tried again later, a few times at most.
 - **canopy's choice is the one made.** canopy writes the model, and its variant, into the agent's rendered
   definition, so each set of models gets its own snapshot (D040); a chore with a model of its own runs a copy of the
   chore's definition made for it. A template's model or variant option would override it unseen, so any `runtime`

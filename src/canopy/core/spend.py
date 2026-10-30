@@ -10,14 +10,16 @@ And what each kind of run's first model call was sent, by the definitions snapsh
 how often it started cold; and by week, each chore's and each model's apart, with how much of it was read from the cache
 and where the runtime's version or the snapshot changed. And what each kind's tool calls put into its context, by tool:
 the reads that each later model call reads again. And what each kind spent on each model, as the runs' own sessions
-say (§13). And the local calendar month so far against the operator's monthly budget, which nothing enforces. And what
-every session the runtime keeps cost, canopy's apart from the rest, as the runtime's record says (`runtime_sessions`). A
-figure of all spend, the month's against its budget and `spent_since`'s, is canopy's runs and the sessions outside
-canopy together: canopy's own sessions are its runs, so they are counted once.
+say (§13), the workspace's or one ticket's beside it. And the local calendar month so far against the operator's
+monthly budget, which nothing enforces. And what every session the runtime keeps cost, canopy's apart from the rest,
+as the runtime's record says (`runtime_sessions`). A figure of all spend, the month's against its budget and
+`spent_since`'s, is canopy's runs and the sessions outside canopy together: canopy's own sessions are its runs, so they
+are counted once.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import statistics
 from collections import Counter
@@ -74,6 +76,8 @@ _TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {
 }
 #: Every kind of agent run by its table and the condition on the table's rows, the overseer's ticks included.
 KIND_TABLES: Mapping[Kind, tuple[_Table, sql.Fragment]] = {"overseer": ("ticks", _EVERY), **_TABLES}
+# The run tables whose rows name a ticket: a worker's or a plan's run, and a review's of the ticket's PR.
+_TICKET_TABLES: AbstractSet[_Table] = frozenset({"runs", "review_runs"})
 #: The budget whole, as a percentage of it: the alert always sent.
 FULL = 100
 # About how many characters make a token: what a tool's result is counted in, as an estimate of its tokens.
@@ -303,6 +307,11 @@ class ModelSpend:
     runs: int
     replies: int
     cost_usd: float | None
+    #: For a row narrowed to a ticket (`models`), the workspace's runs of its kind on its model in the window, the
+    #: ticket's among them, to compare with; None for a row of the whole workspace.
+    workspace_runs: int | None = None
+    #: What those runs spent on the model, as `cost_usd` counts it; None as `workspace_runs` is.
+    workspace_cost_usd: float | None = None
 
 
 @dataclass(frozen=True)
@@ -511,10 +520,18 @@ def hour_window(now: datetime, hours: int) -> tuple[datetime, datetime]:
     return this_hour - timedelta(hours=hours - 1), this_hour + timedelta(hours=1)
 
 
-def breakdown(conn: sqlite3.Connection, now: datetime, days: int, *, state_dir: Path) -> Breakdown:
+def breakdown(
+    conn: sqlite3.Connection,
+    now: datetime,
+    days: int,
+    *,
+    state_dir: Path,
+    ticket: str | None = None,
+) -> Breakdown:
     """What the last `days` local days cost, today's so far included, by day, by kind, and by what the ticks bought.
 
     `state_dir` is the workspace's: a session of the runtime's that ran in it is canopy's (`runtime_sessions.spend`).
+    `ticket` narrows `models` alone to that ticket's runs, as `models` does; every other figure is the workspace's.
 
     Returns:
         The breakdown; a window with nothing in it lists each day with no costs.
@@ -524,10 +541,17 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int, *, state_dir: 
     each = [first + timedelta(days=i) for i in range(days)]
     starts = {day.isoformat(): db.format_time(_midnight(day)) for day in each}
     buckets = _Buckets(expression=_DAY, starts=starts, name_of=local_day)
-    return _breakdown(conn, start, end, buckets, state_dir=state_dir, days=days)
+    return _breakdown(conn, start, end, buckets, state_dir=state_dir, days=days, ticket=ticket)
 
 
-def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int, *, state_dir: Path) -> Breakdown:
+def breakdown_hours(
+    conn: sqlite3.Connection,
+    now: datetime,
+    hours: int,
+    *,
+    state_dir: Path,
+    ticket: str | None = None,
+) -> Breakdown:
     """What the last `hours` clock hours cost, the current one's so far included, by local hour, as `breakdown` does.
 
     An hour the clock goes back over is one local hour twice, so the window lists it once, with both in it.
@@ -540,7 +564,7 @@ def breakdown_hours(conn: sqlite3.Connection, now: datetime, hours: int, *, stat
     for at in (start + timedelta(hours=i) for i in range(hours)):
         starts.setdefault(_local_hour(at), db.format_time(at))
     buckets = _Buckets(expression=_HOUR, starts=starts, name_of=lambda stamp: _local_hour(db.parse_time(stamp)))
-    return _breakdown(conn, start, end, buckets, state_dir=state_dir, hours=hours)
+    return _breakdown(conn, start, end, buckets, state_dir=state_dir, hours=hours, ticket=ticket)
 
 
 def costs(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) -> Costs:
@@ -595,6 +619,7 @@ def _breakdown(
     state_dir: Path,
     days: int | None = None,
     hours: int | None = None,
+    ticket: str | None = None,
 ) -> Breakdown:
     since = db.format_time(start)
     # Bounded at the window's end too, so a row the clock puts after today is in no figure rather than in some.
@@ -627,7 +652,7 @@ def _breakdown(
         pull_requests = _pull_requests(conn, since, until)
         calls = _first_call_rows(conn, since, until)
         tools = _tools(conn, since, until)
-        models = _models(conn, since, until)
+        by_model = models(conn, since, until, ticket=ticket)
         sessions = runtime_sessions.spend(conn, since, until, state_dir=state_dir)
     for row in rows:
         day = by_day.setdefault(row.day, {})
@@ -658,7 +683,7 @@ def _breakdown(
         first_calls=_first_calls(calls),
         tools=tools,
         hours=hours,
-        models=models,
+        models=by_model,
         sessions=sessions,
         first_call_weeks=_first_call_weeks(calls),
     )
@@ -1102,45 +1127,88 @@ def _tools_of(kind: Kind, since: str, until: str) -> sql.Select:
     )
 
 
-# Each kind's spend by model in the window, from its runs that started in it; then those of its runs no session named a
-# model for, under None.
-def _models(conn: sqlite3.Connection, since: str, until: str) -> list[ModelSpend]:
+def models(
+    conn: sqlite3.Connection,
+    since: str,
+    until: str,
+    *,
+    ticket: str | None = None,
+    kind: Kind | None = None,
+) -> list[ModelSpend]:
+    """What each kind's runs that started in `[since, until)`, each a journal time, spent on each model (§13).
+
+    As a breakdown's `models` lists them, the kinds in `KINDS` order and each kind's models the most costly first, its
+    runs no session named a model for last. `kind` keeps one kind's rows. `ticket` keeps that ticket's runs, its
+    workers', plans', and reviews', since no other kind's run names a ticket; each row then carries the workspace's
+    runs of its kind on its model too, the ticket's among them, so a model the ticket was moved to reads against what
+    it costs everywhere else.
+
+    Returns:
+        A row per kind and model; none for a kind with no runs in the window.
+    """
     found: list[ModelSpend] = []
-    for kind in KINDS:
-        found.extend(
-            ModelSpend(kind=kind, model=str(model), runs=int(runs), replies=int(replies), cost_usd=float(cost))
-            for model, runs, replies, cost in sql.execute(conn, _named_models(kind, since, until))
-        )
-        [(runs, cost)] = sql.execute(conn, _unnamed_models(kind, since, until)).fetchall()
-        if runs:
-            found.append(ModelSpend(kind=kind, model=None, runs=int(runs), replies=0, cost_usd=cost))
+    with db.read_snapshot(conn):
+        for each in KINDS if kind is None else (kind,):
+            if ticket is None:
+                found.extend(_models_of(conn, each, since, until, None))
+            elif KIND_TABLES[each][0] in _TICKET_TABLES:
+                workspace = {m.model: m for m in _models_of(conn, each, since, until, None)}
+                found.extend(_beside(m, workspace.get(m.model)) for m in _models_of(conn, each, since, until, ticket))
     return found
 
 
+# One kind's spend by model in the window, from its runs that started in it, `ticket`'s alone when one is given; then
+# those of its runs no session named a model for, under None.
+def _models_of(conn: sqlite3.Connection, kind: Kind, since: str, until: str, ticket: str | None) -> list[ModelSpend]:
+    found = [
+        ModelSpend(kind=kind, model=str(model), runs=int(runs), replies=int(replies), cost_usd=float(cost))
+        for model, runs, replies, cost in sql.execute(conn, _named_models(kind, since, until, ticket))
+    ]
+    [(runs, cost)] = sql.execute(conn, _unnamed_models(kind, since, until, ticket)).fetchall()
+    if runs:
+        found.append(ModelSpend(kind=kind, model=None, runs=int(runs), replies=0, cost_usd=cost))
+    return found
+
+
+# A ticket's row with the workspace's for the same kind and model beside it. The ticket's runs are among the
+# workspace's, read in the same snapshot, so there is always one.
+def _beside(row: ModelSpend, workspace: ModelSpend | None) -> ModelSpend:
+    if workspace is None:
+        return row
+    return dataclasses.replace(row, workspace_runs=workspace.runs, workspace_cost_usd=workspace.cost_usd)
+
+
 # One kind's spend by model in a window, read as `_tools_of` reads `run_tools`: the run table leads, by its `_spent`
-# index, and `run_models` is read by its key's prefix.
-def _named_models(kind: Kind, since: str, until: str) -> sql.Select:
+# index, and `run_models` is read by its key's prefix. With a ticket, only the runs naming it.
+def _named_models(kind: Kind, since: str, until: str, ticket: str | None = None) -> sql.Select:
     table, which = KIND_TABLES[kind]
     return (
         sql.select("m.model, count(*), SUM(m.replies), SUM(m.cost_usd)")
         .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
         .where("{}", which)
+        .where("{}", _of_ticket(ticket))
         .group_by("m.model")
         .order_by("SUM(m.cost_usd) DESC, m.model")
     )
 
 
 # One kind's runs in a window that no session named a model for, and what they reported they cost.
-def _unnamed_models(kind: Kind, since: str, until: str) -> sql.Select:
+def _unnamed_models(kind: Kind, since: str, until: str, ticket: str | None = None) -> sql.Select:
     table, which = KIND_TABLES[kind]
     return (
         sql.select("count(*), SUM(r.cost_usd)")
         .from_("{} r", sql.name(table))
         .where("r.started_at >= ? AND r.started_at < ?", since, until)
         .where("{}", which)
+        .where("{}", _of_ticket(ticket))
         .where("NOT EXISTS (SELECT 1 FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)", table)
     )
+
+
+# The condition keeping a run table's rows, `r`, that name `ticket`; every row for None.
+def _of_ticket(ticket: str | None) -> sql.Fragment:
+    return _EVERY if ticket is None else sql.frag("r.ticket_key = ?", ticket)
 
 
 # Whether a first call started cold: it read less than half of what it was sent from the cache, where a warm one reads

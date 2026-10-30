@@ -7971,7 +7971,8 @@ export type components = {
              * Models
              * @description What each kind spent on each model, a row per kind and model: the kinds in a fixed order, overseer, workers,
              *     plans, chores, reviews, tasks, each kind's models the most costly first, and its runs no session named a model for
-             *     last.
+             *     last. Asked for a ticket, its runs alone, its workers', plans', and reviews', each row with the workspace's beside
+             *     it; every other figure is the workspace's still.
              * @default []
              */
             models: components["schemas"]["SpendModel"][];
@@ -8237,6 +8238,17 @@ export type components = {
              * @description How many of those runs it wrote a reply of: a run on two models counts under each.
              */
             runs: number;
+            /**
+             * Workspace Cost Usd
+             * @description What those runs spent on the model, as `cost_usd` counts it; None as `workspace_runs` is.
+             */
+            workspace_cost_usd: number | null;
+            /**
+             * Workspace Runs
+             * @description For a row narrowed to a ticket, the workspace's runs of its kind on its model in the window, the ticket's among
+             *     them, to compare with; None for a row of the whole workspace.
+             */
+            workspace_runs: number | null;
         };
         /**
          * SpendMonth
@@ -9414,6 +9426,13 @@ export type components = {
              * @description Its work in each repository.
              */
             units: components["schemas"]["Unit"][];
+            /**
+             * Worker Models
+             * @description What its worker runs that started in the last 30 local days spent on each model, each beside the workspace's
+             *     worker runs on the same model: Spend's By model for it, at 30 days, narrowed to workers.
+             * @default []
+             */
+            worker_models: components["schemas"]["SpendModel"][];
         };
         /**
          * TicketForget
@@ -16067,6 +16086,8 @@ export interface operations {
                 days?: number | null;
                 /** @description How many clock hours to read, by the hour, the current one so far included: 1 to 168. Not with days. */
                 hours?: number | null;
+                /** @description A ticket's key: its spend by model is that ticket's runs alone, each beside the workspace's. Every other figure is the workspace's still. */
+                ticket?: string | null;
             };
             header?: never;
             path?: never;

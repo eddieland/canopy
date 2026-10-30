@@ -106,7 +106,12 @@ rail's. Then:
   before canopy read models, and it shrinks while the loop idles. Click a model to see [its runs](runs#the-runs-page),
   of the kind the table shows, or of every kind under **all**. The overseer's models aren't links: the runs page lists
   ticks apart, under Ticks, and not by model. This is the table to read before and after you change a model in your
-  config.
+  config, which moves the whole workspace. To try one on a single ticket first, read that ticket's line instead
+  ([Choosing a model](tickets#choosing-a-model)): its link opens this table narrowed to the ticket, its key in the
+  header, on its **workers** rather than **all**, so the reviewer's model doesn't mix in. Each row then counts the
+  ticket's own runs and adds **workspace per run**, what every run of that kind on that model cost each, the ticket's
+  included. **all** brings its plan and review runs back, and **every ticket** drops the ticket again. Only this table
+  narrows: the rest of the page is still the whole workspace's.
 - **By tool**: which tools put the most into the runs' context, by the characters their calls returned, every kind
   summed or one kind's, with the same filter. Every later model call of the run reads those again, so a chatty tool
   costs more than once. The filters stay put when you switch the window, so you can watch the workers' `bash` habit
