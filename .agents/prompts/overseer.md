@@ -600,9 +600,9 @@ If the state block has no `notices` key, skip this section.
 `notices` are the operator's notices to workers, newest first: each says something passing has gone wrong outside the
 work, such as an outage of an artifact registry or a service CI needs, with when it was set (`set_at`), until when it
 was or is in force (`until`), and whether it is in force now (`in_force`). One no longer in force is listed only while
-a unit shows a failed check or is not `fresh`, since only a failed check can be held. Every worker, review, and chore
-dispatched while one is in force hears it in its own prompt, so never pass it on in `context`. A notice changes how
-you read a failed check, and nothing else.
+a `fresh` unit shows a failed check newer than its `ci` cursor, since only such a check can be held. Every worker,
+review, and chore dispatched while one is in force hears it in its own prompt, so never pass it on in `context`. A
+notice changes how you read a failed check, and nothing else.
 
 - A unit's failed check is held when its run started between a notice's `set_at` and `until`, and that notice explains
   the failure. Whether it does is your judgment from the check's output and the notice's words: a dependency download

@@ -341,7 +341,7 @@ def state_block(
         return summary
 
     listed = [ticket_summary(t) for t in tickets]
-    shown = _notices(notices, now, observations)
+    shown = _notices(notices, now, listed, observations)
     state: OverseerState = {
         "repository": str(repo_root),
         "workspace": {
@@ -552,22 +552,37 @@ def _by_unit(reviews: ReviewsSection, tickets: Sequence[TicketState]) -> object:
     return _compact({**reviews, "prs": prs})
 
 
-def _notices(notices: Iterable[Notice], now: datetime, observations: ObservationsState) -> list[NoticeState]:
-    """The notices the overseer reads: each in force, and each ended while a check it may hold could stand.
+def _notices(
+    notices: Iterable[Notice],
+    now: datetime,
+    listed: Sequence[TicketState],
+    observations: ObservationsState,
+) -> list[NoticeState]:
+    """The notices the overseer reads: each in force, and each ended while a check it may hold is in front of it.
 
     A check a notice held stays held after the notice ends, until a newer run of it exists (DESIGN §8), so an ended
-    notice matters while some unit shows a failed check at its head, or is not observed fresh and so may have one.
+    notice matters while some unit observed fresh shows a failed check at its head newer than the unit's `ci` cursor:
+    a held check leaves the cursor short of it, and one at or behind the cursor is a `resume`'s already. A unit not
+    observed fresh shows the overseer no checks, and a dispatch resting on it is refused `stale`; the block keeps the
+    notice again on the tick a fresh read shows such a check.
 
     Returns:
         Those notices, newest first, as the state block carries them.
     """
-    held = any(_may_hold(u) for t in observations["tickets"] for u in t.get("units", []))
+    cursors = {(t["key"], u["repo"]): u["cursors"].get("ci") for t in listed for u in t["units"]}
+    held = any(
+        _may_hold(u, cursors.get((t["key"], u["repo"]))) for t in observations["tickets"] for u in t.get("units", [])
+    )
     return [_notice(n, now) for n in notices if held or n.in_force(now)]
 
 
-def _may_hold(unit: UnitObservation) -> bool:
+def _may_hold(unit: UnitObservation, cursor: str | int | None) -> bool:
+    # A unit the block does not list has no cursor here, so any failed check of it may be held.
     checks = unit.get("checks")
-    return unit["observed"] != "fresh" or (checks is not None and bool(checks["failed"]))
+    if unit["observed"] != "fresh" or checks is None:
+        return False
+    at = cursor if isinstance(cursor, int) else None
+    return any(item_numbers.newer(c["number"], at) for c in checks["failed"])
 
 
 def _notice(held: Notice, now: datetime) -> NoticeState:

@@ -108,7 +108,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
                 db.set_start(conn, conversation.TICKET, key, status=StartStatus.STARTED, channel="cli")
             db.set_start(conn, conversation.TICKET, "PROJ-3", status=StartStatus.STOPPED, channel="cli")
         db.set_ticket(conn, "PROJ-4", root, title="Tidy the CLI help")
-        # The earlier notice lapsed, and is kept: PROJ-1's PR is not observed fresh, so it may show a check it holds.
+        # The earlier notice lapsed, and is left out: PROJ-1's PR is not observed fresh, so it shows no check to hold.
         conn.executemany(
             "INSERT INTO notices (body, set_at, channel, lapses_at) VALUES (?, ?, 'cli', ?)",
             [
