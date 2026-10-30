@@ -2,8 +2,9 @@
 
 import pytest
 
-from canopy.core import db, monthly, runtime_sessions
+from canopy.core import db, runtime_sessions
 from canopy.runtime.report import SessionPage, SessionSpend
+from canopy.serve import monthly
 from canopy.serve.backend import Backend
 from canopy.serve.mock import T0, history
 from tests.canopy.web_helpers import client

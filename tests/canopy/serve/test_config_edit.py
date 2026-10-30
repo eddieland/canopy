@@ -4,18 +4,20 @@ Only the keys it lists, within their bounds, trust settings only toward stricter
 its comments kept, and a reload asked for after.
 """
 
+import enum
 import json
 import os
 import threading
 from collections.abc import Mapping
 from pathlib import Path
+from typing import get_args
 from unittest import mock
 
 import httpx2
 import tomlkit
 from fastapi.testclient import TestClient
 
-from canopy.core import conversation
+from canopy.core import config, conversation
 from canopy.core.context import Context
 from canopy.loop import reread
 from canopy.serve import config_edit
@@ -84,6 +86,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "kind": "limit",
         "bound": 32,
         "looser": "higher",
+        "choices": [],
     }
     assert key(found, "policy.max_resume_attempts")["source"] == "workspace"
     assert key(found, "policy.max_implement_attempts")["source"] == "default"
@@ -94,6 +97,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "kind": "limit",
         "bound": 2,
         "looser": "lower",
+        "choices": [],
     }
     assert key(found, "capacity.repo_slots")["value"] == {"repo": 3}
     assert key(found, "trust.trusted_reviewers") | {"value": None} == {
@@ -103,6 +107,16 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "kind": "stricter",
         "bound": None,
         "looser": None,
+        "choices": [],
+    }
+    assert key(found, "policy.planner_may_approve") == {
+        "name": "policy.planner_may_approve",
+        "value": "off",
+        "source": "default",
+        "kind": "stricter",
+        "bound": None,
+        "looser": None,
+        "choices": ["lenient", "normal", "strict", "off"],
     }
     assert found["private_file"] == str(canopy_env.private_file)
     assert found["user_file"] == str(canopy_env.user_file)
@@ -247,14 +261,23 @@ def test_each_refusal_leaves_the_files_as_they_were(ctx: Context, canopy_env: Ca
         ({"loop.interval_minutes": 1}, "past_bound"),
         ({"policy.ci_cooldown_minutes": 0}, "past_bound"),
         ({"spend.monthly_budget_usd": 10001}, "past_bound"),
+        ({"capacity.max_tasks": 17}, "past_bound"),
+        ({"policy.max_follow_ups": 21}, "past_bound"),
+        ({"policy.feedback_quiet_minutes": 1}, "past_bound"),
+        ({"loop.min_free_disk_mib": 0}, "past_bound"),
+        ({"runtime.worker_timeout_minutes": 241}, "past_bound"),
+        ({"runtime.overseer_timeout_minutes": 61}, "past_bound"),
         ({"trust.rebase": True}, "not_stricter"),
         ({"trust.commit_trailer": False}, "not_stricter"),
+        ({"trust.max_flaky_kicks": 1}, "not_stricter"),
         ({"trust.trusted_reviewers": ["alice", "lint-bot", "mallory"]}, "not_stricter"),
         ({"trust.authorized_repliers": ["mallory"]}, "not_stricter"),
         ({"capacity.max_workers": -1}, "config_invalid"),
         ({"capacity.max_workers": "many"}, "config_invalid"),
         ({"capacity.max_workers": True}, "config_invalid"),
         ({"policy.stacking": "always"}, "config_invalid"),
+        ({"policy.planner_may_approve": "never"}, "config_invalid"),
+        ({"runtime.review_timeout_minutes": 0}, "config_invalid"),
         ({"capacity.slots_per_repo": None}, "config_invalid"),
         ({"spend.monthly_budget_usd": 0}, "config_invalid"),
         ({"spend.monthly_budget_usd": None}, "config_invalid"),
@@ -304,6 +327,58 @@ def test_a_trust_setting_may_be_made_stricter(ctx: Context, canopy_env: CanopyEn
     assert refused(save(c, headers, {"policy.stacking": "auto"})).startswith("not_stricter: ")
 
 
+def test_each_choice_lists_every_value_the_loader_takes() -> None:
+    """A choice the loader gained would be refused as no stricter, and one it lost offered for nothing."""
+    for editable in config_edit.EDITABLE:
+        if not editable.choices:
+            continue
+        annotation = config.SPECS[editable.name].field.annotation
+        if isinstance(annotation, type) and issubclass(annotation, enum.Enum):
+            values = {str(member.value) for member in annotation}
+        else:
+            values = {str(v) for v in get_args(annotation)}
+        assert set(editable.choices) == values, editable.name
+
+
+def test_a_choice_moves_only_later_and_a_count_only_down(ctx: Context, canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private(
+        COMMENTED.replace(
+            "rebase = false",
+            'rebase = false\nreview_replies = "post"\nmax_flaky_kicks = 2\n\n[policy]\nplanner_may_approve = "lenient"',
+        ),
+    )
+    c, headers = signed_in_client(ctx)
+
+    saved = save(
+        c,
+        headers,
+        {
+            "policy.planner_may_approve": "normal",
+            "policy.plan": "approve",
+            "policy.feedback_plan": "approve",
+            "trust.review_replies": "approve",
+            "trust.max_flaky_kicks": 1,
+        },
+    ).json()
+
+    assert {(c["name"], json.dumps(c["new"])) for c in saved["changed"]} == {
+        ("policy.planner_may_approve", '"normal"'),
+        ("policy.plan", '"approve"'),
+        ("policy.feedback_plan", '"approve"'),
+        ("trust.review_replies", '"approve"'),
+        ("trust.max_flaky_kicks", "1"),
+    }
+    for changes in (
+        {"policy.planner_may_approve": "lenient"},
+        {"policy.plan": "off"},
+        {"policy.feedback_plan": "off"},
+        {"trust.review_replies": "post"},
+        {"trust.max_flaky_kicks": 2},
+    ):
+        assert refused(save(c, headers, changes)).startswith("not_stricter: "), changes
+    assert save(c, headers, {"policy.planner_may_approve": "off", "trust.max_flaky_kicks": 0}).status_code == 200
+
+
 def test_a_limit_the_file_set_past_its_bound_may_still_be_lowered(ctx: Context, canopy_env: CanopyEnv) -> None:
     canopy_env.write_user(user_toml().replace("[paths]", "[capacity]\nmax_workers = 40\n\n[paths]"))
     c, headers = signed_in_client(ctx)
@@ -323,6 +398,7 @@ def test_a_monthly_budget_may_be_set_raised_to_its_ceiling_and_lowered(ctx: Cont
         "kind": "limit",
         "bound": 10000,
         "looser": "higher",
+        "choices": [],
     }
 
     assert save(c, headers, {"spend.monthly_budget_usd": 300}).status_code == 200
@@ -343,6 +419,7 @@ def test_the_budget_s_alerts_are_set_whole_to_anything_the_loader_takes(ctx: Con
         "kind": "free",
         "bound": None,
         "looser": None,
+        "choices": [],
     }
 
     assert save(c, headers, {"spend.budget_alerts": [80, 50]}).status_code == 200

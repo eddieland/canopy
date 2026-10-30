@@ -11,9 +11,9 @@
  *
  * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
- * others set only the neutrals, over the default's: off-white, Solarized, Nord, Gruvbox, sage, and Rosé Pine Dawn for
- * light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized, Gruvbox, forest, plum, and
- * Monokai for dark.
+ * others set the neutrals and the accent over the default's: off-white, Solarized, Nord, Gruvbox, sage, and
+ * Rosé Pine Dawn for light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized, Gruvbox,
+ * forest, plum, and Monokai for dark.
  */
 
 :root {
@@ -126,6 +126,23 @@
     --rave-dark: oklch(0.16 0.03 275);
 
     --radius: 0.5rem;
+
+    /* Each palette's character beyond color (ui/DESIGN.md, "Palettes"): its corners (`--radius`, above), the edge a
+     * panel or what floats draws, and its depth. Depth is used sparingly: a faint lift under a panel, a shadow under
+     * what floats over the page (a menu, a card, a dialog, a toast), and one under the primary action. Each shadow is
+     * drawn in the palette's own text color, so it carries the canvas's hue. */
+    --edge: var(--border);
+    --depth-panel: 0 1px 2px oklch(from var(--foreground) l c h / 0.06);
+    --depth-float:
+        0 12px 32px -12px oklch(from var(--foreground) l c h / 0.24),
+        0 2px 6px oklch(from var(--foreground) l c h / 0.08);
+    --depth-action: 0 1px 2px oklch(from var(--accent) l c h / 0.35);
+
+    /* The face interface text is set in: Plex Sans, or the mono data is set in (`--face-mono`), for an editor that
+     * sets everything in it. Both are bundled and preloaded, so a palette that switches never paints in a fallback
+     * face. */
+    --face: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
+    --face-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
 .dark {
@@ -215,11 +232,22 @@
     --buddy-ghost-vex-core: oklch(0.97 0.05 40);
 
     --rave-dark: oklch(0.08 0.02 275);
+
+    /* In the dark, a shadow is the canvas at a quarter of its lightness, and a panel's lift catches a little light on
+     * its top edge. */
+    --depth-panel:
+        inset 0 1px 0 oklch(1 0 0 / 0.035), 0 10px 24px -16px oklch(from var(--background) calc(l * 0.25) c h);
+    --depth-float:
+        0 20px 48px -8px oklch(from var(--background) calc(l * 0.25) c h),
+        0 4px 12px oklch(from var(--background) calc(l * 0.25) c h / 0.8);
+    --depth-action: inset 0 1px 0 oklch(1 0 0 / 0.22), 0 4px 12px -4px oklch(from var(--accent) l c h / 0.5);
 }
 
-/* The light theme's other palettes: only the neutrals change, and what is drawn in them; every hue is lavender's.
- * Off-white is a warm paper, its surfaces never quite white. */
+/* The light theme's other palettes: the neutrals change, what is drawn in them, and the accent; every other hue is
+ * lavender's. Off-white is a warm paper, its surfaces never quite white, and its accent a fountain pen's blue ink. */
 :root[data-light-palette='off-white']:not(.dark) {
+    --accent: oklch(0.47 0.14 258);
+    --ring: oklch(0.47 0.14 258 / 0.55);
     --background: oklch(0.96 0.008 85);
     --surface: oklch(0.99 0.005 85);
     --surface-raised: oklch(0.952 0.01 85);
@@ -230,12 +258,20 @@
     --status-stopped: oklch(0.47 0.02 70);
     --spend-dry-run: oklch(0.6 0.015 80);
     --context-carried: oklch(0.6 0.015 80);
+
+    /* Paper: each panel a sheet lying on the desk, its lift a little deeper than the default's, its corners a touch
+     * tighter. */
+    --radius: 0.375rem;
+    --depth-panel:
+        0 1px 0 oklch(from var(--foreground) l c h / 0.05), 0 2px 6px -2px oklch(from var(--foreground) l c h / 0.12);
 }
 
-/* Solarized's light base tones: base2 the canvas, base3 a surface, base02 the text, base01 muted. The two bases are a
- * little lighter than Solarized's own, and base01 darker, so the status and section hues still read at 4.5:1 on
- * them. */
+/* Solarized's light base tones: base2 the canvas, base3 a surface, base02 the text, base01 muted, and its blue the
+ * accent. The two bases are a little lighter than Solarized's own, and base01 and the blue darker, so the status and
+ * section hues still read at 4.5:1 on them, and white on the blue. */
 :root[data-light-palette='solarized']:not(.dark) {
+    --accent: oklch(0.48 0.13 245);
+    --ring: oklch(0.48 0.13 245 / 0.55);
     --background: oklch(0.948 0.026 92);
     --surface: oklch(0.988 0.02 90);
     --surface-raised: oklch(0.962 0.026 91);
@@ -246,10 +282,17 @@
     --status-stopped: oklch(0.45 0.028 219);
     --spend-dry-run: oklch(0.6 0.02 205);
     --context-carried: oklch(0.6 0.02 205);
+
+    /* An editor's scheme: crisp corners, and panels flat on the canvas. */
+    --radius: 0.25rem;
+    --depth-panel: none;
 }
 
-/* Nord's Snow Storm: nord6 the canvas, nord5 raised, nord4 the hairlines, nord0 the text, nord3 muted. */
+/* Nord's Snow Storm: nord6 the canvas, nord5 raised, nord4 the hairlines, nord0 the text, nord3 muted, and Frost's
+ * nord10 the accent, a shade darker so white reads on it. */
 :root[data-light-palette='nord']:not(.dark) {
+    --accent: oklch(0.48 0.09 254);
+    --ring: oklch(0.48 0.09 254 / 0.55);
     --background: oklch(0.951 0.007 261);
     --surface: oklch(0.99 0.003 261);
     --surface-raised: oklch(0.962 0.008 262);
@@ -260,11 +303,25 @@
     --status-stopped: oklch(0.43 0.035 264);
     --spend-dry-run: oklch(0.6 0.02 262);
     --context-carried: oklch(0.6 0.02 262);
+
+    /* Snow and frost: soft corners, and the aurora a calm fade through Frost's blues rather than every section's
+     * color. */
+    --radius: 0.625rem;
+    --aurora-image: linear-gradient(
+        90deg,
+        oklch(0.62 0.06 220),
+        oklch(0.56 0.08 245),
+        oklch(0.48 0.09 254),
+        oklch(0.62 0.06 220)
+    );
 }
 
 /* Gruvbox light: bg0 the canvas, bg0_h a surface, bg1 the hairlines, fg1 the text, gray muted; the bases a shade
- * lighter than Gruvbox's own, as Solarized's are. */
+ * lighter than Gruvbox's own, as Solarized's are. The accent is its faded purple, a touch lighter so done reads in a
+ * selected row, rather than its orange, which would pass for blocked. */
 :root[data-light-palette='gruvbox']:not(.dark) {
+    --accent: oklch(0.5 0.12 344);
+    --ring: oklch(0.5 0.12 344 / 0.55);
     --background: oklch(0.958 0.05 96);
     --surface: oklch(0.985 0.035 101);
     --surface-raised: oklch(0.968 0.05 96);
@@ -275,10 +332,40 @@
     --status-stopped: oklch(0.47 0.023 63);
     --spend-dry-run: oklch(0.59 0.02 70);
     --context-carried: oklch(0.59 0.02 70);
+
+    /* As its dark side: crisp corners, a hard shadow with no blur, every line in its mono, the stepped aurora, the
+     * name on a block of its yellow, and the nav's highlight a solid block. */
+    --radius: 0.1875rem;
+    --face: var(--face-mono);
+    --depth-panel: none;
+    --depth-float: 4px 4px 0 oklch(from var(--foreground) l c h / 0.85);
+    --depth-action: 3px 3px 0 oklch(from var(--foreground) l c h / 0.85);
+    --aurora-height: 0.25rem;
+    --aurora-image: linear-gradient(
+        90deg,
+        var(--section-attention) 0 12.5%,
+        var(--section-tickets) 0 25%,
+        var(--section-tasks) 0 37.5%,
+        var(--section-pull-requests) 0 50%,
+        var(--section-runs) 0 62.5%,
+        var(--section-chores) 0 75%,
+        var(--section-reports) 0 87.5%,
+        var(--section-memory) 0
+    );
+    --wordmark-image: linear-gradient(var(--section-reports), var(--section-reports));
+    --wordmark-clip: border-box;
+    --wordmark-ink: var(--surface);
+    --wordmark-frame: 0 0 0 0.25em var(--section-reports);
+    --nav-block: 1;
+    --nav-hairline: 0;
+    --nav-on-ink: var(--surface);
 }
 
-/* Sage: a soft green canvas, the light side of Forest. */
+/* Sage: a soft green canvas, the light side of Forest, with heather for an accent, since a green one would
+ * pass for running. */
 :root[data-light-palette='sage']:not(.dark) {
+    --accent: oklch(0.5 0.14 318);
+    --ring: oklch(0.5 0.14 318 / 0.55);
     --background: oklch(0.952 0.016 150);
     --surface: oklch(0.992 0.005 150);
     --surface-raised: oklch(0.963 0.014 150);
@@ -289,11 +376,17 @@
     --status-stopped: oklch(0.46 0.03 160);
     --spend-dry-run: oklch(0.6 0.02 155);
     --context-carried: oklch(0.6 0.02 155);
+
+    /* A garden: soft, rounded corners. */
+    --radius: 0.75rem;
 }
 
-/* Rosé Pine Dawn: base the canvas, surface a surface, highlight med the hairlines, text the text, and subtle muted.
- * The canvas is a shade darker than Rosé Pine's own, and subtle a step darker, so every hue reads at 4.5:1. */
+/* Rosé Pine Dawn: base the canvas, surface a surface, highlight med the hairlines, text the text, subtle muted, and
+ * love the accent. The canvas is a shade darker than Rosé Pine's own, subtle a step darker, and love darker still, so
+ * every hue reads at 4.5:1 and white reads on love. */
 :root[data-light-palette='rose-pine']:not(.dark) {
+    --accent: oklch(0.5 0.12 3);
+    --ring: oklch(0.5 0.12 3 / 0.55);
     --background: oklch(0.952 0.013 72);
     --surface: oklch(0.987 0.011 77);
     --surface-raised: oklch(0.962 0.013 68);
@@ -304,11 +397,17 @@
     --status-stopped: oklch(0.47 0.046 291);
     --spend-dry-run: oklch(0.6 0.025 291);
     --context-carried: oklch(0.6 0.025 291);
+
+    /* Dawn: soft, rounded corners, and the nav's highlight a tint with no hairline. */
+    --radius: 0.75rem;
+    --nav-hairline: 0;
 }
 
-/* The dark theme's grey palette, Mailroom's neutrals. Muted text is a step further from the canvas than Mailroom drew
- * it, and stopped one more, to read on its own tint as well. */
+/* The dark theme's grey palette, Mailroom's neutrals, with a steel blue accent. Muted text is a step further from the
+ * canvas than Mailroom drew it, and stopped one more, to read on its own tint as well. */
 .dark[data-dark-palette='grey'] {
+    --accent: oklch(0.75 0.1 232);
+    --ring: oklch(0.75 0.1 232 / 0.5);
     --background: oklch(0.169 0.004 286);
     --surface: oklch(0.206 0.006 286);
     --surface-raised: oklch(0.254 0.007 286);
@@ -320,10 +419,16 @@
     --status-stopped: oklch(0.72 0.015 286);
     --spend-dry-run: oklch(0.6 0.01 286);
     --context-carried: oklch(0.58 0.01 286);
+
+    /* The mailroom: tight corners, and the aurora one rule in its steel blue, quiet as the rest of it. */
+    --radius: 0.375rem;
+    --aurora-image: linear-gradient(var(--accent), var(--accent));
 }
 
-/* Black: a near-black canvas, kind to an OLED screen, and colorless neutrals over it. */
+/* Black: a near-black canvas, kind to an OLED screen, colorless neutrals over it, and an ultraviolet accent. */
 .dark[data-dark-palette='black'] {
+    --accent: oklch(0.72 0.18 300);
+    --ring: oklch(0.72 0.18 300 / 0.5);
     --background: oklch(0.13 0 0);
     --surface: oklch(0.17 0 0);
     --surface-raised: oklch(0.215 0 0);
@@ -335,11 +440,38 @@
     --status-stopped: oklch(0.72 0 0);
     --spend-dry-run: oklch(0.55 0 0);
     --context-carried: oklch(0.55 0 0);
+
+    /* A shadow does nothing on black, so its depth is light: panels draw no edge and stand apart by a step of
+     * lightness, and what floats and the primary action wear the accent's glow. Its corners are soft. */
+    --radius: 0.75rem;
+    --edge: transparent;
+    /* Its aurora blooms like neon, and its name glows; the nav's highlight is a tint with no hairline, its icon lit. */
+    --aurora-bloom: blur(6px);
+    --aurora-bloom-opacity: 1;
+    --wordmark-glow: drop-shadow(0 0 6px oklch(from var(--accent) l c h / 0.6));
+    --nav-hairline: 0;
+    --nav-on-glow: drop-shadow(0 0 6px currentColor);
+    /* Its section colors at full voltage: the same hues, as vivid as the screen draws them. */
+    --section-attention: oklch(0.72 0.22 2);
+    --section-tickets: oklch(0.76 0.16 242);
+    --section-tasks: oklch(0.89 0.21 120);
+    --section-pull-requests: oklch(0.72 0.22 305);
+    --section-runs: oklch(0.68 0.19 275);
+    --section-chores: oklch(0.79 0.18 52);
+    --section-reports: oklch(0.89 0.18 98);
+    --section-memory: oklch(0.86 0.12 215);
+    --depth-panel: none;
+    --depth-float:
+        0 0 0 1px oklch(from var(--accent) l c h / 0.45), 0 8px 32px -6px oklch(from var(--accent) l c h / 0.4);
+    --depth-action: 0 2px 18px -2px oklch(from var(--accent) l c h / 0.6);
 }
 
-/* Solarized's dark base tones: base03 the canvas, base02 raised, base1 the text and base0 muted. The bases are a step
- * darker than Solarized's own, and the text brighter, so the status and section hues still read at 4.5:1 on them. */
+/* Solarized's dark base tones: base03 the canvas, base02 raised, base1 the text, base0 muted, and its blue the accent.
+ * The bases are a step darker than Solarized's own, and the text and the blue brighter, so the status and section hues
+ * still read at 4.5:1 on them. */
 .dark[data-dark-palette='solarized'] {
+    --accent: oklch(0.7 0.13 245);
+    --ring: oklch(0.7 0.13 245 / 0.5);
     --background: oklch(0.187 0.049 220);
     --surface: oklch(0.208 0.05 220);
     --surface-raised: oklch(0.229 0.052 220);
@@ -351,11 +483,18 @@
     --status-stopped: oklch(0.76 0.02 205);
     --spend-dry-run: oklch(0.63 0.03 215);
     --context-carried: oklch(0.63 0.03 215);
+
+    /* An editor's scheme: crisp corners, and panels flat on the canvas. */
+    --radius: 0.25rem;
+    --depth-panel: none;
 }
 
-/* Gruvbox dark: bg0_h the canvas, bg0 a surface, bg1 raised, bg2 the hairlines, fg the text, gray muted. The bases are
- * a step darker than Gruvbox's own, so the status and section hues still read at 4.5:1 on them. */
+/* Gruvbox dark: bg0_h the canvas, bg0 a surface, bg1 raised, bg2 the hairlines, fg the text, gray muted, and its
+ * bright purple the accent, as light wears the faded one. The bases are a step darker than Gruvbox's own, so the status
+ * and section hues still read at 4.5:1 on them. */
 .dark[data-dark-palette='gruvbox'] {
+    --accent: oklch(0.75 0.1 350);
+    --ring: oklch(0.75 0.1 350 / 0.5);
     --background: oklch(0.171 0.005 220);
     --surface: oklch(0.207 0 90);
     --surface-raised: oklch(0.274 0.007 49);
@@ -367,10 +506,53 @@
     --status-stopped: oklch(0.74 0.035 76);
     --spend-dry-run: oklch(0.62 0.02 70);
     --context-carried: oklch(0.62 0.02 70);
+
+    /* A code editor of the nineties: crisp corners, and a hard shadow with no blur under what floats and the primary
+     * action. Panels sit flat on the canvas, and every line of text is in its mono. */
+    --radius: 0.1875rem;
+    --face: var(--face-mono);
+    /* Its aurora is a stepped bar of solid blocks, an editor's status line; its name sits on a block of its yellow; the
+     * nav's highlight is a solid block, the active item inked in the canvas's color, with no hairline. */
+    --aurora-height: 0.25rem;
+    --aurora-image: linear-gradient(
+        90deg,
+        var(--section-attention) 0 12.5%,
+        var(--section-tickets) 0 25%,
+        var(--section-tasks) 0 37.5%,
+        var(--section-pull-requests) 0 50%,
+        var(--section-runs) 0 62.5%,
+        var(--section-chores) 0 75%,
+        var(--section-reports) 0 87.5%,
+        var(--section-memory) 0
+    );
+    --wordmark-image: linear-gradient(var(--section-reports), var(--section-reports));
+    --wordmark-clip: border-box;
+    --wordmark-ink: var(--background);
+    --wordmark-frame: 0 0 0 0.25em var(--section-reports);
+    --nav-block: 1;
+    --nav-hairline: 0;
+    --nav-on-ink: var(--background);
+    /* Its section colors are Gruvbox's own faded set, each in its section's hue family, a few degrees toward
+     * Gruvbox's own shades: purple turned toward violet, so Pull requests is not the accent, and blue toward the sky,
+     * so Tickets is not done's. */
+    --section-attention: oklch(0.72 0.13 5);
+    --section-tickets: oklch(0.72 0.06 230);
+    --section-tasks: oklch(0.78 0.15 115);
+    --section-pull-requests: oklch(0.72 0.09 320);
+    --section-runs: oklch(0.68 0.06 260);
+    --section-chores: oklch(0.74 0.15 52);
+    --section-reports: oklch(0.84 0.15 85);
+    --section-memory: oklch(0.78 0.07 190);
+    --depth-panel: none;
+    --depth-float: 4px 4px 0 oklch(0.1 0 0);
+    --depth-action: 3px 3px 0 oklch(0.1 0 0);
 }
 
-/* Forest: a deep green canvas, the dark side of Sage. */
+/* Forest: a deep green canvas, the dark side of Sage, and heather for an accent, as Sage wears: a lake blue read as
+ * the Tickets section, and a green one would pass for running. */
 .dark[data-dark-palette='forest'] {
+    --accent: oklch(0.77 0.12 320);
+    --ring: oklch(0.77 0.12 320 / 0.5);
     --background: oklch(0.17 0.02 165);
     --surface: oklch(0.205 0.024 165);
     --surface-raised: oklch(0.25 0.028 165);
@@ -382,10 +564,15 @@
     --status-stopped: oklch(0.74 0.03 155);
     --spend-dry-run: oklch(0.6 0.02 160);
     --context-carried: oklch(0.6 0.02 160);
+
+    /* Under the trees: soft, rounded corners. */
+    --radius: 0.75rem;
 }
 
-/* Plum: a dark wine-purple canvas, warmer than indigo. */
+/* Plum: a dark wine-purple canvas, warmer than indigo, and an orchid accent in its own hue, as indigo's is. */
 .dark[data-dark-palette='plum'] {
+    --accent: oklch(0.76 0.14 330);
+    --ring: oklch(0.76 0.14 330 / 0.5);
     --background: oklch(0.17 0.025 340);
     --surface: oklch(0.205 0.03 340);
     --surface-raised: oklch(0.25 0.035 340);
@@ -397,12 +584,20 @@
     --status-stopped: oklch(0.75 0.035 340);
     --spend-dry-run: oklch(0.6 0.025 340);
     --context-carried: oklch(0.6 0.025 340);
+
+    /* Velvet: the softest corners, the nav's highlight a tint with no hairline, and the name glowing faintly orchid. */
+    --radius: 0.875rem;
+    --nav-hairline: 0;
+    --wordmark-glow: drop-shadow(0 0 5px oklch(from var(--accent) l c h / 0.45));
 }
 
-/* Monokai: its olive-grey background the canvas, the line highlight the hairlines, its off-white the text, and the
- * comment color muted. The bases are a step darker than Monokai's own, and the comment color brighter, so the status
- * and section hues still read at 4.5:1. */
+/* Monokai: its olive-grey background the canvas, the line highlight the hairlines, its off-white the text, the
+ * comment color muted, and its pink the accent. The bases are a step darker than Monokai's own, and the comment color
+ * brighter, so the status and section hues still read at 4.5:1; the pink is a touch softer, so the canvas reads on
+ * it, and turned toward magenta, so a link beside a failed run is not taken for it. */
 .dark[data-dark-palette='monokai'] {
+    --accent: oklch(0.72 0.2 352);
+    --ring: oklch(0.72 0.2 352 / 0.5);
     --background: oklch(0.18 0.009 115);
     --surface: oklch(0.212 0.01 115);
     --surface-raised: oklch(0.255 0.012 110);
@@ -414,6 +609,15 @@
     --status-stopped: oklch(0.76 0.029 97);
     --spend-dry-run: oklch(0.62 0.02 100);
     --context-carried: oklch(0.62 0.02 100);
+
+    /* A neon editor: crisp corners, every line in its mono, the aurora blooming and the name glowing pink, and the
+     * active icon lit. */
+    --radius: 0.25rem;
+    --face: var(--face-mono);
+    --aurora-bloom: blur(6px);
+    --aurora-bloom-opacity: 1;
+    --wordmark-glow: drop-shadow(0 0 6px oklch(from var(--accent) l c h / 0.6));
+    --nav-on-glow: drop-shadow(0 0 6px currentColor);
 }
 
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */
@@ -501,6 +705,13 @@
 
     --color-rave-dark: var(--rave-dark);
 
+    /* A palette's edge and depth (ui/DESIGN.md, "Palettes"): `border-edge` on a panel or what floats, `shadow-panel`,
+     * `shadow-float`, and `shadow-action` for the lift each wears. */
+    --color-edge: var(--edge);
+    --shadow-panel: var(--depth-panel);
+    --shadow-float: var(--depth-float);
+    --shadow-action: var(--depth-action);
+
     /*
      * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names
      * above. shadcn's own `accent` (a hover tint) is NOT aliased: here `accent` is the one brand color.
@@ -518,9 +729,10 @@
     --color-destructive: var(--status-failed);
 
     /* The radius scale (ui/DESIGN.md, "Shape and space"): md for panels and buttons, sm for chips and nav items, xs
-     * for a mark smaller than a line of text, a checkbox or a slot's square. */
-    --radius-xs: calc(var(--radius) - 4px);
-    --radius-sm: calc(var(--radius) - 2px);
+     * for a mark smaller than a line of text, a checkbox or a slot's square. A palette sets `--radius`, so the small
+     * steps stop at square below a crisp one, and xs at 6px above a soft one, where a checkbox would turn round. */
+    --radius-xs: clamp(0px, calc(var(--radius) - 4px), 6px);
+    --radius-sm: max(0px, calc(var(--radius) - 2px));
     --radius-md: var(--radius);
     --radius-lg: calc(var(--radius) + 2px);
 
@@ -528,6 +740,7 @@
     --text-2xs: 0.6875rem;
     --text-2xs--line-height: 1rem;
 
-    --font-sans: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
-    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+    /* A palette sets the face interface text is in (`--face`, above). */
+    --font-sans: var(--face);
+    --font-mono: var(--face-mono);
 }

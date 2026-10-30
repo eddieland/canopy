@@ -15,10 +15,10 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import chore_result, db, pr_list
+from canopy.core import chore_result, db
 from canopy.core.context import Context
 from canopy.loop import attention, web
-from canopy.serve import chore_views, live, pull_requests, reviews, spend_views, tick_views, views
+from canopy.serve import chore_views, live, pr_list, pull_requests, reviews, spend_views, tick_views, views
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from canopy.serve.mock import history as serve_history
@@ -88,7 +88,7 @@ def test_the_stream_reads_the_same_lists_over_a_long_history(backend: Backend) -
     # The mock's seven of the day, newest first, the two it landed in October, its feedback plans' seven of eight days
     # before, the rest it landed, then the history's newest.
     landed = [t.key for t in sorted(serve_history.TICKETS, key=lambda t: t.done_at, reverse=True)]
-    newest = ["ABC-101", "ABC-104", "ABC-102", "ABC-105", "ABC-099", "ABC-100", "ABC-103", *landed[:2]]
+    newest = ["ABC-101", "ABC-104", "ABC-102", "ABC-105", "ABC-099", "ABC-103", "ABC-100", *landed[:2]]
     newest += ["ABC-136", "ABC-135", "ABC-134", "ABC-133", "ABC-132", "ABC-131", "ABC-130", *landed[2:], "OLD-0"]
     assert [t.key for t in tickets.tickets[: len(newest)]] == newest
     assert len(tickets.tickets) == views.TICKETS
@@ -159,7 +159,8 @@ def test_the_pull_requests_are_what_weighing_every_one_finds(journals: Journals,
             for repo in ("api", "web"):
                 url = owned.pop() if owned and rnd.random() < 0.6 else None
                 conn.execute(
-                    "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, ?, 'b', ?, 'p')",
+                    "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) "
+                    "VALUES (?, ?, 'b', ?, 'ci_red')",
                     (key, repo, url),
                 )
         for _ in range(25):
@@ -171,10 +172,11 @@ def test_the_pull_requests_are_what_weighing_every_one_finds(journals: Journals,
                 (rnd.choice(urls), start, ended, "running" if ended is None else "done"),
             )
     for limit in range(1, len(urls) + 2):
-        found = [tuple(r) for r in pr_list.pull_requests(conn, limit)]
+        found = [dataclasses.astuple(r) for r in pr_list.pull_requests(conn, limit)]
         assert found == every_pull_request(conn, limit), limit
     for url in urls:
-        assert [tuple(r) for r in pr_list.pull_requests(conn, 1, url=url)] == every_pull_request(conn, 1, url=url)
+        found = [dataclasses.astuple(r) for r in pr_list.pull_requests(conn, 1, url=url)]
+        assert found == every_pull_request(conn, 1, url=url)
 
 
 def test_a_findings_start_is_read_back_once(backend: Backend) -> None:

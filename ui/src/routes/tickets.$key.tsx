@@ -23,11 +23,10 @@ import { PullRequestLink } from '@/components/pull-request-link'
 import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, Word } from '@/components/status'
+import { TicketAgents } from '@/components/ticket-agents'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
 import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLinks } from '@/components/ticket-links'
-import { TicketModels } from '@/components/ticket-models'
-import { TicketPersonas } from '@/components/ticket-personas'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
@@ -180,20 +179,14 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         <CostTotalRow cost={cost} />
                     </Fields>
                     {/* Who its runs write as and what they run on, from the next: yours to choose, here or with */}
-                    {/* `canopy persona` and `canopy model`. Side by side once the panel has room, each agent's */}
-                    {/* model level with its persona, so the conversation under the panel stays in reach. */}
-                    <div className="grid border-t @3xl:grid-cols-2">
-                        <TicketPersonas
-                            ticketKey={ticket.key}
-                            personas={detail.personas}
-                            names={detail.persona_names}
-                        />
-                        <TicketModels
-                            ticketKey={ticket.key}
-                            models={detail.models}
-                            className="border-t @3xl:border-t-0 @3xl:border-l"
-                        />
-                    </div>
+                    {/* `canopy persona` and `canopy model`, each agent's model level with its persona. */}
+                    <TicketAgents
+                        ticketKey={ticket.key}
+                        personas={detail.personas}
+                        names={detail.persona_names}
+                        models={detail.models}
+                        className="border-t"
+                    />
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
                     reply before Stop or Forget, as on its attention item. */}

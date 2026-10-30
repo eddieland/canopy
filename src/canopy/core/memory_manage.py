@@ -52,7 +52,7 @@ def forget(conn: sqlite3.Connection, memory_id: int) -> tuple[records.Memory, Sc
             its body is already gone.
     """
     conversation.check_operator()
-    found = records.fetch_one(conn, records.Memory, sql.select("*").from_("memories").where("id = ?", memory_id))
+    found = records.select(records.Memory).where("id = ?", memory_id).one(conn)
     if found is None:
         raise conversation.Refused("unknown", f"no memory has id {memory_id}")
     if found.body is None:
@@ -99,18 +99,18 @@ def _scrub(conn: sqlite3.Connection, where: sql.Composable, *, why: str) -> Scru
     sql.execute(conn, _SECURE_DELETE[1])
     try:
         with db.transaction(conn):
-            cur = sql.execute(
-                conn,
-                sql.update("memories")
+            cur = (
+                records.update(records.Memory)
                 .set(body=None, status=MemoryStatus.INVALID, why=why)
                 .set_to("invalidated_at = coalesce(invalidated_at, ?)", db.now())
                 .where("body IS NOT NULL")
-                .where("{}", where),
+                .where("{}", where)
+                .run(conn)
             )
             count = cur.rowcount
             # The index's triggers marked the deleted words; merging its segments drops them, and frees the pages
-            # that held them for `secure_delete` to zero.
-            sql.execute(conn, sql.insert("memories_fts", memories_fts=sql.frag("'optimize'")))
+            # that held them for `secure_delete` to zero. FTS5 takes the command as an INSERT: no row type's write.
+            sql.execute(conn, sql.insert("memories_fts", memories_fts=sql.frag("'optimize'")))  # noqa: TID251
     finally:
         sql.execute(conn, _SECURE_DELETE[before])
     busy = int(sql.execute(conn, sql.frag("PRAGMA wal_checkpoint(TRUNCATE)")).fetchone()[0])
@@ -173,40 +173,37 @@ def promote(
     with db.transaction(conn):
         old = next((m for m in memory.active_lessons(conn) if m.key == source.key), None)
         if old is not None:
-            sql.execute(conn, sql.update("memories").set(status=MemoryStatus.SUPERSEDED).where("id = ?", old.id))
+            records.update(records.Memory).set(status=MemoryStatus.SUPERSEDED).where("id = ?", old.id).run(conn)
         pinned_at = old.pinned_at if old is not None else None
-        cur = sql.execute(
-            conn,
-            sql.insert(
-                "memories",
-                scope=MemoryScope.LESSON,
-                repo=repo if repo is not None else source.repo,
-                key=source.key,
-                body=body,
-                status=MemoryStatus.ACTIVE,
-                author=MemoryAuthor.OPERATOR,
-                supersedes=old.id if old is not None else None,
-                promoted_from=source.id,
-                created_at=stamp,
-                approved_at=stamp,
-                review_at=_review_at(now, pinned_at),
-                pinned_at=pinned_at,
-            ),
-        )
+        cur = records.insert(
+            records.Memory,
+            scope=MemoryScope.LESSON,
+            repo=repo if repo is not None else source.repo,
+            key=source.key,
+            body=body,
+            status=MemoryStatus.ACTIVE,
+            author=MemoryAuthor.OPERATOR,
+            supersedes=old.id if old is not None else None,
+            promoted_from=source.id,
+            created_at=stamp,
+            approved_at=stamp,
+            review_at=_review_at(now, pinned_at),
+            pinned_at=pinned_at,
+        ).run(conn)
         lesson_id = int(cur.lastrowid or 0)
         if old is not None:
-            sql.execute(
-                conn,
-                sql.update("memories")
+            (
+                records.update(records.Memory)
                 .set(why=f"superseded by lesson {lesson_id}", invalidated_at=stamp)
-                .where("id = ?", old.id),
+                .where("id = ?", old.id)
+                .run(conn)
             )
         if source.scope is MemoryScope.PROPOSAL:
-            sql.execute(
-                conn,
-                sql.update("memories")
+            (
+                records.update(records.Memory)
                 .set(status=MemoryStatus.SUPERSEDED, why=f"promoted to lesson {lesson_id}", invalidated_at=stamp)
-                .where("id = ?", source.id),
+                .where("id = ?", source.id)
+                .run(conn)
             )
     lesson = memory.get(conn, lesson_id)
     if lesson is None:
@@ -237,12 +234,12 @@ def reject(conn: sqlite3.Connection, config: Config, proposal_id: int) -> record
         Refused: (`inside_run`), (`off`), (`unknown`), or (`not_pending`), as `promote` does.
     """
     proposal = _pending(conn, config, proposal_id)
-    sql.execute(
-        conn,
-        sql.update("memories")
+    (
+        records.update(records.Memory)
         .set(status=MemoryStatus.INVALID, why="rejected", invalidated_at=db.now())
         .where("id = ?", proposal.id)
-        .where("status = ?", MemoryStatus.PENDING),
+        .where("status = ?", MemoryStatus.PENDING)
+        .run(conn)
     )
     return proposal
 
@@ -261,9 +258,11 @@ def renew(conn: sqlite3.Connection, config: Config, lesson_id: int) -> str | Non
     """
     found = _in_force(conn, config, lesson_id)
     due = _review_at(datetime.now(UTC), found.pinned_at)
-    sql.execute(
-        conn,
-        sql.update("memories").set(review_at=due, wrong_at=None, wrong_run_id=None).where("id = ?", lesson_id),
+    (
+        records.update(records.Memory)
+        .set(review_at=due, wrong_at=None, wrong_run_id=None)
+        .where("id = ?", lesson_id)
+        .run(conn)
     )
     return due
 
@@ -284,7 +283,7 @@ def pin(conn: sqlite3.Connection, config: Config, lesson_id: int) -> str:
     if found.pinned_at is not None:
         raise conversation.Refused("pinned", f"lesson {lesson_id} is pinned already, since {found.pinned_at}")
     stamp = db.now()
-    sql.execute(conn, sql.update("memories").set(pinned_at=stamp, review_at=None).where("id = ?", lesson_id))
+    records.update(records.Memory).set(pinned_at=stamp, review_at=None).where("id = ?", lesson_id).run(conn)
     return stamp
 
 
@@ -302,7 +301,7 @@ def unpin(conn: sqlite3.Connection, config: Config, lesson_id: int) -> str:
     if found.pinned_at is None:
         raise conversation.Refused("not_pinned", f"lesson {lesson_id} is not pinned")
     due = db.format_time(datetime.now(UTC) + timedelta(days=memory.REVIEW_DAYS))
-    sql.execute(conn, sql.update("memories").set(pinned_at=None, review_at=due).where("id = ?", lesson_id))
+    records.update(records.Memory).set(pinned_at=None, review_at=due).where("id = ?", lesson_id).run(conn)
     return due
 
 
@@ -370,31 +369,28 @@ def edit(
     stamp = db.format_time(now)
     with db.transaction(conn):
         # Out of force first: the journal holds one lesson in force under a key.
-        sql.execute(conn, sql.update("memories").set(status=MemoryStatus.SUPERSEDED).where("id = ?", old.id))
-        cur = sql.execute(
-            conn,
-            sql.insert(
-                "memories",
-                scope=MemoryScope.LESSON,
-                repo=serves,
-                key=old.key,
-                body=body,
-                status=MemoryStatus.ACTIVE,
-                author=MemoryAuthor.OPERATOR,
-                supersedes=old.id,
-                promoted_from=old.id,
-                created_at=stamp,
-                approved_at=stamp,
-                review_at=_review_at(now, old.pinned_at),
-                pinned_at=old.pinned_at,
-            ),
-        )
+        records.update(records.Memory).set(status=MemoryStatus.SUPERSEDED).where("id = ?", old.id).run(conn)
+        cur = records.insert(
+            records.Memory,
+            scope=MemoryScope.LESSON,
+            repo=serves,
+            key=old.key,
+            body=body,
+            status=MemoryStatus.ACTIVE,
+            author=MemoryAuthor.OPERATOR,
+            supersedes=old.id,
+            promoted_from=old.id,
+            created_at=stamp,
+            approved_at=stamp,
+            review_at=_review_at(now, old.pinned_at),
+            pinned_at=old.pinned_at,
+        ).run(conn)
         new_id = int(cur.lastrowid or 0)
-        sql.execute(
-            conn,
-            sql.update("memories")
+        (
+            records.update(records.Memory)
             .set(why=f"edited into lesson {new_id}", invalidated_at=stamp)
-            .where("id = ?", old.id),
+            .where("id = ?", old.id)
+            .run(conn)
         )
     lesson = memory.get(conn, new_id)
     if lesson is None:

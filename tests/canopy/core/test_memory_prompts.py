@@ -28,7 +28,7 @@ PROMPTS = [
 ]
 VALUES = {
     **PROMPT_VALUES,
-    "AUTHORIZATION": prompts.plan_authorization("PROJ-1", ["agent-ready-alice"], private=False),
+    "AUTHORIZATION": prompts.plan_authorization(["agent-ready-alice"], private=False),
     "PLAN_FILE": ".canopy-plan.md",
     "PLAN_OUT": ".canopy-new-plan.md",
     "MAX_PLAN_CHARS": "100,000",

@@ -50,6 +50,8 @@ import {
     namedModels,
     outcome,
     sentTokens,
+    settingsOf,
+    settingSubject,
     shownOutput,
     signed,
     startOf,
@@ -61,7 +63,7 @@ import {
     TRANSCRIPT_BUDGET,
     wroteTokens,
 } from '@/lib/transcript'
-import type { CallDecision, ModelCall as Call } from '@/lib/transcript'
+import type { CallDecision, CallSetting, ModelCall as Call } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
 // What a row marks with no search: one stable value, as a default prop must be.
@@ -525,7 +527,8 @@ function When({ at, start }: { at: string | null; start: string | null }) {
 /**
  * A tool call: one line, its name, what it did, and how it ended (refused, or what it printed when that is short),
  * that opens to its input and its output or error. A `decide` call opens to its decisions first, each on a line of
- * its own with its rationale, as several recorded together are hard to read apart in their input.
+ * its own with its rationale, and a `ticket-set` call to its settings, each on a line of its own with what it sets, as
+ * several recorded together are hard to read apart in their input.
  */
 function Tool({
     entry,
@@ -544,6 +547,7 @@ function Tool({
     const failed = verdict !== 'done'
     const did = summary(entry)
     const decisions = decisionsOf(entry)
+    const settings = decisions === null ? settingsOf(entry) : null
     return (
         <li data-testid="transcript-tool" className={cn(targeted && 'bg-accent/14')}>
             <details open={open} className="group">
@@ -591,6 +595,7 @@ function Tool({
                 <RowGrid kind="transcript" className="pb-3">
                     <RowLine from="text" className="flex flex-col gap-2">
                         {decisions !== null && <Decisions decisions={decisions} words={words} />}
+                        {settings !== null && <Settings settings={settings} words={words} />}
                         <Block label="input" words={words}>
                             {entry.input}
                         </Block>
@@ -898,6 +903,44 @@ function Decisions({ decisions, words }: { decisions: readonly CallDecision[]; w
                         <span className="min-w-0 flex-1 break-words">
                             <MarkedText text={d.rationale} words={words} />
                         </span>
+                    </li>
+                ))}
+            </ol>
+        </div>
+    )
+}
+
+/**
+ * A `ticket-set` call's settings, in the order given: each its ticket, or unit, then what it sets: its phase, `done`,
+ * each cursor with the newest item it passes, and the title.
+ */
+function Settings({ settings, words }: { settings: readonly CallSetting[]; words: readonly string[] }) {
+    return (
+        <div className="flex flex-col gap-1">
+            <span className="panel-label">{settings.length === 1 ? 'setting' : `${settings.length} settings`}</span>
+            <ol className="flex flex-col gap-1 rounded-sm border bg-background p-2 text-xs">
+                {/* A call's settings never reorder, and its keys may repeat in one the harness refused. */}
+                {settings.map((s, i) => (
+                    <li key={i} className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="shrink-0 font-mono">
+                            <MarkedText text={settingSubject(s)} words={words} />
+                        </span>
+                        {s.phase !== null && (
+                            <span className="shrink-0 font-mono text-muted-foreground">
+                                <MarkedText text={s.phase} words={words} />
+                            </span>
+                        )}
+                        {s.done && <span className="shrink-0 font-mono text-muted-foreground">done</span>}
+                        {s.cursors.map(([name, value]) => (
+                            <span key={name} className="shrink-0 font-mono text-muted-foreground">
+                                <MarkedText text={`${name} ${value}`} words={words} />
+                            </span>
+                        ))}
+                        {s.title !== null && (
+                            <span className="min-w-0 flex-1 break-words">
+                                <MarkedText text={s.title} words={words} />
+                            </span>
+                        )}
                     </li>
                 ))}
             </ol>

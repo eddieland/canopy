@@ -1,4 +1,4 @@
-"""`canopy review revise`: a revision of a review's draft on the operator's notes (DESIGN §34).
+"""The `review-revise` tool's revision of a review's draft on the operator's notes (DESIGN §34).
 
 A revision is a review run at the commit the review read, of a PR the loop does not own, which reads the PR and the
 draft, writes nothing anywhere, and reports a new version. Only a note of the operator's newer than the draft's newest
@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import db, personas, prompts, recorded_runs, review_drafts, review_revisions, review_runs
+from canopy.core import agent_models, db, personas, prompts, recorded_runs, review_drafts, review_revisions, review_runs
 from canopy.core import review_result as result
 from canopy.core.conversation import printable
 from canopy.core.vocab import RecordedKind, ReviewDraftStatus
@@ -103,6 +103,8 @@ def begin(ctx: Context, *, tick_id: int, run_id: int, spawning: int | None = Non
         target = _guard(ctx, run_id, spawning=spawning)
         persona = _persona(ctx, target.review)
         review = target.review
+        # A revision has no ticket, so no override reaches it: config's reviewer, as a review of a PR with none takes.
+        model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.review_cmd)
         revision = review_runs.insert_review_run(
             ctx.conn,
             tick_id=tick_id,
@@ -115,6 +117,7 @@ def begin(ctx: Context, *, tick_id: int, run_id: int, spawning: int | None = Non
             persona=persona.name,
             persona_digest=persona.digest,
             revises=(target.draft.id, target.version.number),
+            model=model.name if model is not None else None,
         )
         # The diff the draft sits on is the review's, from the base it read.
         lease = start.lease_slot(ctx, revision, target.repo, base=review.base_branch)
@@ -186,7 +189,7 @@ def _draft(ctx: Context, run_id: int) -> tuple[records.ReviewRun, records.Review
     if review is None or review.revises is not None:
         raise start.Refusal(
             "unknown",
-            f"there is no review run {run_id} with a draft to revise; --run names the review",
+            f"there is no review run {run_id} with a draft to revise; run names the review",
         )
     draft = review_drafts.of_review(ctx.conn, run_id)
     if draft is None:

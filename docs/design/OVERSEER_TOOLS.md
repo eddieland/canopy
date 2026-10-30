@@ -7,8 +7,8 @@ runs through bash. Sections are numbered across the whole design; the [README](R
 ## 27. The overseer's tools
 
 The overseer acts through MCP tools canopy serves, not by running `canopy` in a shell: it has no shell but the
-commands the operator names in `runtime.allow_bash` (§13), never canopy's own. The CLI's overseer verbs stay, sharing
-the tools' functions, until nothing needs them (ROADMAP M48).
+commands the operator names in `runtime.allow_bash` (§13), never canopy's own. Its verbs are tools alone: the CLI has
+no command for them.
 
 ### Why
 
@@ -18,9 +18,9 @@ the tools' functions, until nothing needs them (ROADMAP M48).
   runs is decided by quoting. A tool call's arguments are JSON fields, with nothing to quote, expand, or end early.
 - Each verb is its own tool name, so spend by tool (§11) splits the overseer's calls by verb.
 
-Workers are out of scope: what they report is read
-from their final line after they exit (§8), so nothing a worker writes reaches the journal while it runs, and a tool a
-worker could call mid-run would end that.
+Workers are out of scope: what they report is read from their final line after they exit (§8). A worker's, planner's,
+or reviewer's one tool of canopy's own, `status` (§41), writes nothing: the harness records its update from the call in
+the events the agent prints, so nothing a worker writes reaches the journal but what canopy observes it print.
 
 ### The server
 
@@ -29,11 +29,11 @@ and living as long as that run. It opens no socket, so it is not a listener (TRU
 nothing outside the overseer's process tree can reach it. It serves tools and nothing else. Rejected: the `mcp` SDK, a
 runtime dependency with its own async stack and HTTP transports, for the few methods canopy can speak itself.
 
-- Each call sees and writes exactly what the same CLI call would, one call at a time, and checks that
-  `CANOPY_TICK_ID` names a running tick (D020). With `CANOPY_RUN_ID` set, the server lists no tools and refuses every
-  call, as the operator's commands refuse inside a run (§22).
-- A guard's refusal or an invalid input is a tool error with the text the CLI prints, which the model reads and goes
-  on. It never logs an argument's free text, which may echo a tracker's or a reviewer's.
+- Each call is one verb, one call at a time, and checks that `CANOPY_TICK_ID` names a running tick (D020). With
+  `CANOPY_RUN_ID` set, the server lists no tools and refuses every call, as the operator's commands refuse inside a run
+  (§22).
+- A guard's refusal or an invalid input is a tool error whose text names the field or the guard, which the model
+  reads and goes on. It never logs an argument's free text, which may echo a tracker's or a reviewer's.
 - It writes nothing to stderr, which OpenCode never reads, so output there cannot block it mid-call.
 - A run a tool asks for is recorded, and the tick starts it once the overseer's run has ended (§40), so none is the
   server's descendant, which OpenCode kills when that run ends.
@@ -63,17 +63,16 @@ name; every other definition denies them. Workers keep their shell, for git's wr
 
 ### The tools
 
-One tool per overseer verb, named for its command with hyphens for spaces: `dispatch`, `decide`, `queried`,
-`attention`, `ticket-set`, `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and
-`chore-wait`. The overseer sees them as `canopy_dispatch` and so on.
+One tool per overseer verb, its words joined by hyphens: `dispatch`, `decide`, `attention`,
+`ticket-set`, `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and `chore-wait`. The overseer
+sees them as `canopy_dispatch` and so on.
 No tool name holds an underscore: OpenCode joins server and tool with one, so `canopy_ticket_set` could also come from
 a server named `canopy_ticket`, and the later would replace the earlier. No tool reads the pool or the observations:
 the state block already holds them, and a claim on them, such as a dispatch's label or a cursor, is a field its tool
-and command check alike (§7).
+checks (§7).
 
-Each input refuses an unknown field and is the tool's schema. The bounds §6 lists move into those inputs, and the
-commands validate through the same inputs, so a tool and its command cannot drift apart. A tool's result is the text its
-command prints, and what it did as structured content, such as the id of a run it started, held to the output schema
+Each input refuses an unknown field and is the tool's schema, and holds the bounds §6 lists. A tool's result is text
+the model reads, and what it did as structured content, such as the id of a run it started, held to the output schema
 it is listed with. A refusal carries the text alone.
 
 ### How the overseer gets them
@@ -86,8 +85,8 @@ it is listed with. A refusal carries the text alone.
 - The overseer's definition denies `canopy_*`, then allows each tool by exact name: an allow by pattern would also
   match another server whose name starts `canopy_`, a chore's or the git tools' among them. Its bash rules deny every
   command but those `runtime.allow_bash` names. Every other definition denies `canopy_*`, and a chore's then allows
-  its own tools by name, and the reviewer's and the planner's their git tools, last, since the last matching rule wins
-  (D021).
+  its own tools by name, the reviewer's and the planner's their git tools, and theirs and the workers' `status` (§41),
+  last, since the last matching rule wins (D021).
 - The shadowing check (§13) refuses a workspace config that names an MCP server `canopy` (TRUST_MODEL T7): merging keeps
   keys canopy's entry leaves out, so the workspace could set the environment of canopy's own interpreter. It can still
   add servers under other names, and plugins.
@@ -125,5 +124,5 @@ D124 holds that canopy serves MCP itself, over stdio only.
 
 ### Open
 
-- Structured results: JSON a tool returns instead of the CLI's text, once no command prints the same thing.
+- Structured results: JSON as a tool's text, in place of the prose it returns, which is all OpenCode 1's model reads.
 - A validate-only `check_result` tool for workers, once workers are measured losing runs to results that do not parse.

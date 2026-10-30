@@ -2,10 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "fastapi",
   "git": {
-    "deploymentEnabled": {
-      "**": false,
-      "main": true
-    }
+    "deploymentEnabled": false
   },
   "ignoreCommand": "sh vercel-ignore.sh"
 }

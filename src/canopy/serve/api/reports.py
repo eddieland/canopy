@@ -9,8 +9,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from canopy.core import monthly
-from canopy.serve import report_views
+from canopy.serve import monthly, report_views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.reports import MonthlyReport
 

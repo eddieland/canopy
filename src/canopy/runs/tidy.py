@@ -15,8 +15,9 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import attachments, hostgit, plans
+from canopy.core import hostgit, plans
 from canopy.infra import procs
+from canopy.runs import attachments
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

@@ -23,6 +23,7 @@ from tests.canopy.helpers import (
     commands_run,
     commit_and_push,
     in_tick,
+    overseer_calls,
     planner_does,
     present,
     tick_starts,
@@ -87,7 +88,8 @@ def dispatched_then(scenario: Scenario, between: Callable[[], object], *commands
     """
     conn, runner = scenario.conn, InlineRunner()
     with worker_does(*commands), in_tick(conn) as tick_id:
-        assert main(dispatches()[1:], runner=runner) == 0
+        said = overseer_calls(dispatches(), runner=runner)
+        assert not said.error, said.text
         tick_starts(runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         between()

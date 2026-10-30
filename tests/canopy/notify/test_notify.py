@@ -21,17 +21,30 @@ from canopy.notify import journal as notify_journal
 from canopy.notify import message
 from canopy.runtime.report import SessionPage, SessionSpend
 from tests.canopy.helpers import (
+    KEY,
+    READ_PR,
+    WORKER_DONE,
+    Called,
     InlineRunner,
-    canopy,
+    Script,
     chore_reports,
+    chore_runs,
+    chore_waits,
     in_tick,
     messages,
+    overseer_calls,
+    raises,
     tick_starts,
+    ticket_sets,
     waits,
     with_events,
     worker_does,
 )
-from tests.canopy.scenario_helpers import Scenario, asks, dispatches, raises
+from tests.canopy.scenario_helpers import (
+    Scenario,
+    asks,
+    dispatches,
+)
 from tests.conftest import CanopyEnv, GitPool
 
 #: The line an overseer that gave up ends on, in place of the one that ends a tick.
@@ -47,9 +60,14 @@ def json_messages(out: Path) -> list[dict[str, Any]]:
     return [json.loads(m) for m in messages(out)]
 
 
-def needing_reviewers(*keys: str) -> list[list[str]]:
-    """The overseer raises each of `keys` on the attention list as needing a reviewer."""
-    return [raises(key, "needs_author") for key in keys]
+def done_with_no_pr() -> Script:
+    """The worker reports its ticket done with no PR, so its unit raises no `unobserved_pr` the sink would hear of."""
+    return worker_does(result=json.dumps({k: v for k, v in json.loads(WORKER_DONE).items() if k != "pr"}))
+
+
+def needing_reviewers(*keys: str) -> list[Called]:
+    """The overseer raises each of `keys` on the attention list, an item it records every tick its cause holds."""
+    return [raises(key, "flaky_rerun") for key in keys]
 
 
 @pytest.mark.parametrize(
@@ -101,21 +119,21 @@ def test_notify_cmd_is_the_sink_named_default(scenario: Scenario, sink_script: P
     conn = scenario.conn
     conn.execute(
         "INSERT INTO notifications (sink, fingerprint, ticket_key, reason, repo, sent_at) "
-        "VALUES ('default', ?, 'PROJ-3', 'needs_author', NULL, 'x')",
-        (fingerprint("PROJ-3", "needs_author"),),
+        "VALUES ('default', ?, 'PROJ-3', 'flaky_rerun', NULL, 'x')",
+        (fingerprint("PROJ-3", "flaky_rerun"),),
     )
     out = tmp_path / "notified.txt"
     scenario.configures(notify={"cmd": f"{sink_script} {out}"})
     scenario.tick(*needing_reviewers("PROJ-3"))
     assert messages(out) == []
     rows = [tuple(r) for r in conn.execute("SELECT sink, ticket_key, reason FROM notifications")]
-    assert rows == [("default", "PROJ-3", "needs_author")]
+    assert rows == [("default", "PROJ-3", "flaky_rerun")]
 
     # Renamed to a sink of its own, it is new there and hears about every open item once.
     scenario.configures(notify={"cmd": None, "sinks": {"mine": {"format": "text", "cmd": f"{sink_script} {out}"}}})
     scenario.tick(*needing_reviewers("PROJ-3"))
     [message] = messages(out)
-    assert "+ PROJ-3 needs_author: PROJ-3 detail\n" in message
+    assert "+ PROJ-3 flaky_rerun: PROJ-3 detail\n" in message
     assert [tuple(r) for r in conn.execute("SELECT sink FROM notifications")] == [("mine",)]
 
 
@@ -138,7 +156,7 @@ def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sin
             "ticket": "PROJ-9",
             "title": None,  # not named yet
             "repo": None,
-            "reason": "needs_author",
+            "reason": "flaky_rerun",
             "detail": "PROJ-9 detail",
             "since": message["attention"]["added"][0]["since"],
             "ui": None,  # a tick run by hand serves no web UI to link to
@@ -160,7 +178,7 @@ def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sin
     assert ended["line"].startswith("< PROJ-1 run 1 implement ended blocked: x question: Should the retry")
     assert message["omitted"] == 0
     assert message["digest"] is None
-    assert message["text"].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-9 needs_author: PROJ-9 detail\n> ")
+    assert message["text"].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-9 flaky_rerun: PROJ-9 detail\n> ")
 
     # Delivered events are not sent again.
     scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
@@ -169,7 +187,7 @@ def test_a_json_sink_hears_about_runs(scenario: Scenario, git_pool: GitPool, sin
 
 def titled(key: str, title: str, scenario: Scenario) -> None:
     """Record `key`'s title, as an overseer does once it has read the ticket, in a tick of its own."""
-    scenario.overseer("ticket", "set", key, "--title", title)
+    scenario.overseer(ticket_sets(key, title=title))
 
 
 def test_without_sinks_no_event_is_recorded(scenario: Scenario, git_pool: GitPool) -> None:
@@ -216,11 +234,11 @@ def test_loop_failing_and_recovered_are_sent_once_each(scenario: Scenario, sink_
     out = tmp_path / "phone.txt"
     add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
     for _ in range(5):
-        scenario.tick(result=GAVE_UP, code=1)
+        scenario.tick(*waits(KEY), result=GAVE_UP, code=1)
     [failing] = messages(out)
     assert failing.startswith("canopy: 1 event\n! loop failing: 3 ticks in a row ended other than ok; latest tick 3 ")
-    scenario.tick()
-    scenario.tick()
+    scenario.tick(*waits(KEY))
+    scenario.tick(*waits(KEY))
     listing = f"Full list: {scenario.env.state_dir / 'attention.md'}\n"
     assert messages(out)[1] == f"canopy: 1 event\n! loop recovered after 5 failed ticks\n{listing}"
     assert len(messages(out)) == 2
@@ -231,7 +249,7 @@ def test_a_long_failing_streak_is_one_streak(scenario: Scenario, sink_script: Pa
     out = tmp_path / "phone.txt"
     add_sink(scenario, sink_script, "phone", out, format="text", events=["loop"])
     for _ in range(3):
-        scenario.tick(result=GAVE_UP, code=1)
+        scenario.tick(*waits(KEY), result=GAVE_UP, code=1)
     assert len(messages(out)) == 1
     conn = scenario.conn
     # The events alone age past pruning, not the ticks of the streak. An event's time is its `at`.
@@ -240,10 +258,10 @@ def test_a_long_failing_streak_is_one_streak(scenario: Scenario, sink_script: Pa
         "INSERT INTO ticks (started_at, ended_at, status) VALUES (?, ?, 'overseer_failed')",
         [(db.now(), db.now())] * 1100,
     )
-    scenario.tick(result=GAVE_UP, code=1)
-    scenario.tick(result=GAVE_UP, code=1)
+    scenario.tick(*waits(KEY), result=GAVE_UP, code=1)
+    scenario.tick(*waits(KEY), result=GAVE_UP, code=1)
     assert len(messages(out)) == 1
-    scenario.tick()
+    scenario.tick(*waits(KEY))
     assert "! loop recovered after 1105 failed ticks\n" in messages(out)[1]
 
 
@@ -396,17 +414,17 @@ def test_a_digest_arrives_on_its_interval_even_when_quiet(
 ) -> None:
     out = tmp_path / "digest.txt"
     add_sink(scenario, sink_script, "daily", out, format="text", events=[], digest_every_minutes=60)
-    scenario.tick()
+    scenario.tick(*waits(KEY))
     [first] = messages(out)
     assert first.startswith("canopy digest\nDigest since ")
     assert (
         ": 1 ticks (ok 1)\n  nothing ran\n  spent: none reported\n  nothing needs you\n  workers running: 0\n" in first
     )
-    scenario.tick()
+    scenario.tick(*waits(KEY))
     assert len(messages(out)) == 1  # not due again yet
     scenario.time_passes(minutes=61)
     [earlier] = scenario.conn.execute("SELECT last_digest_at FROM notify_sinks").fetchone()
-    scenario.tick()
+    scenario.tick(*waits(KEY))
     second = messages(out)[1]
     assert f"Digest since {earlier}: 2 ticks (ok 2)" in second
 
@@ -421,12 +439,12 @@ def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
     add_sink(scenario, sink_script, "slack", out, events=["attention", "runs"], batch_minutes=30)
     scenario.tick(*needing_reviewers("PROJ-9"))  # the first delivery goes at once
     assert len(messages(out)) == 1
-    scenario.run(worker=worker_does())
+    scenario.run(worker=done_with_no_pr())
     scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
     assert len(messages(out)) == 1  # held: a run started and ended, and nothing needs the operator
     assert "  slack  last delivered " in scenario.operator("status").out
 
-    scenario.run(dispatches("PROJ-2"), worker=worker_does())
+    scenario.run(dispatches("PROJ-2"), worker=done_with_no_pr())
     scenario.time_passes(minutes=31)
     # PROJ-9 resolved meanwhile: resolving is not urgent either, but the window is over.
     scenario.tick(*waits("PROJ-1", "PROJ-2", "PROJ-9"))
@@ -453,14 +471,14 @@ def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held
     out = tmp_path / "slack.txt"
     add_sink(scenario, sink_script, "slack", out, events=["attention", "runs"], batch_minutes=30)
     scenario.tick(*needing_reviewers("PROJ-9"))
-    scenario.run(worker=worker_does())
+    scenario.run(worker=done_with_no_pr())
     scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
     assert len(messages(out)) == 1
     attention = needing_reviewers("PROJ-9")
     if urgent == "blocked":
         scenario.run(dispatches("PROJ-2"), worker=asks("Which?"))
     else:
-        scenario.run(dispatches("PROJ-2"), worker=worker_does())
+        scenario.run(dispatches("PROJ-2"), worker=done_with_no_pr())
         attention.append(raises("PROJ-8", "multi_repo"))
     scenario.tick(*attention, *waits("PROJ-1", "PROJ-2"))
     [_, sent] = json_messages(out)
@@ -502,7 +520,7 @@ def test_a_batching_sink_hears_another_sink_failing_at_once_with_what_it_held(
     add_sink(scenario, sink_script, "desk", desk, events=["attention", "loop", "runs"], batch_minutes=30)
     Path(f"{down}.exit").write_text("1")
     scenario.tick(*needing_reviewers("PROJ-9"))
-    scenario.run(worker=worker_does())
+    scenario.run(worker=done_with_no_pr())
     scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))
     assert len(messages(desk)) == 1  # the runs are held
     scenario.tick(*needing_reviewers("PROJ-9"), *waits("PROJ-1"))  # alerts' third failure in a row
@@ -536,7 +554,8 @@ def test_a_digest_says_what_its_runs_cost_by_kind(
     out = tmp_path / "digest.txt"
     add_sink(scenario, sink_script, "daily", out, events=[], digest_every_minutes=60)
     with_events(scenario.env, "canopy-worker")
-    scenario.run(worker=worker_does())  # two model calls at 0.125
+    # Two model calls at 0.125, and a PR the `vcs` source reads, so the overseer is listed the ticket (DESIGN §39).
+    scenario.run(worker=worker_does(result=json.dumps(json.loads(WORKER_DONE) | {"pr": READ_PR})))
     scenario.tick(*waits("PROJ-1"))
 
     [message] = json_messages(out)
@@ -556,7 +575,7 @@ def test_a_digest_names_the_sessions_outside_canopy_last(
     mine = SessionSpend("ses_mine", None, "/home/me/notes", ms, ms, 1.5, 1, 1, 0, 0, 0)
     runtime_sessions.record(scenario.conn, SessionPage("found", (mine,), cursor=(ms, "ses_mine")))
     chore_cost(scenario.conn, 0.5)
-    scenario.tick()
+    scenario.tick(*waits(KEY))
 
     [message] = json_messages(out)
     spent = message["digest"]["spend"]
@@ -684,12 +703,12 @@ def test_chore_runs_reach_a_sink_that_takes_chores(scenario: Scenario, sink_scri
     scenario.configures(chores={"check": check})
     out = tmp_path / "chores.txt"
     add_sink(scenario, sink_script, "s", out, format="text", events=["chores"])
-    scenario.tick(canopy("chore", "wait", "check", "--rationale", "not needed yet"))
+    scenario.tick(chore_waits("check", "not needed yet"))
     chore: dict[str, object] = {"status": "ok", "summary": "all clear", "findings": []}
     # The chore's result stays set through the next tick, as the overseer's does.
     with chore_reports(chore):
         with in_tick(scenario.conn, ends_ok=True):
-            assert main(["chore", "run", "check"], runner=InlineRunner()) == 0
+            assert not overseer_calls(chore_runs("check"), runner=InlineRunner()).error
             tick_starts(InlineRunner())
             assert main(["_chore", "1"], runner=InlineRunner()) == 0
         scenario.tick()

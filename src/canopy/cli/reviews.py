@@ -1,4 +1,4 @@
-"""`canopy review`: `run`, `wait`, `end`, and `revise` for the overseer; `show`, `noise`, `eval`, and drafts, for you.
+"""`canopy review`: `show`, `noise`, `eval`, and drafts, for you. The overseer starts reviews through its tools (§27).
 
 The detached `_review` does one review run (DESIGN §21), or one revision of a review's draft (§34). A review of a PR
 the loop does not own is a draft of a review on that PR (§34): `draft` shows it as it would post, `edit` changes it,
@@ -19,22 +19,12 @@ from typing import TYPE_CHECKING, assert_never
 
 import click
 
-from canopy.cli.common import CliError, Group, OverseerCommand, leave_the_tick, open_context
-from canopy.cli.params import EVAL_CASE, PERSONA, PR_URL, REPO, TICKET_KEY, TextType, verb
-from canopy.core import (
-    conversation,
-    db,
-    records,
-    review_drafts,
-    review_drafts_manage,
-    review_requests,
-    review_revisions,
-    sql,
-)
+from canopy.cli.common import CliError, leave_the_tick, open_context
+from canopy.cli.params import EVAL_CASE, PERSONA
+from canopy.core import conversation, db, records, review_drafts, review_drafts_manage, review_revisions
 from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs
-from canopy.loop import review_tools
 from canopy.reviews import evals, execute, findings, noise, view
 
 if TYPE_CHECKING:
@@ -46,70 +36,9 @@ if TYPE_CHECKING:
 CLI = "cli"
 
 
-@click.group("review", cls=Group)
+@click.group("review")
 def review_group() -> None:
-    """Review PRs: `run`, `wait`, `end`, and `revise` are the overseer's; `show` is how you read what reviews found."""
-
-
-@review_group.command("run", cls=OverseerCommand)
-@click.option("--pr", "pr", required=True, metavar="URL", help="The PR's https:// URL, as an opaque string.")
-@click.option("--sha", required=True, metavar="SHA", help="The full head commit you read on the PR just now.")
-@click.option("--ticket", type=TICKET_KEY, help="The ticket of one of the loop's own PRs.")
-@click.option("--repo", type=REPO, help="The PR's repository, by its name in the map. Required.")
-@click.option("--context", type=TextType(), help="What the reviewer should look at first. Never quoted text.")
-@click.pass_context
-def cmd_review_run(
-    click_ctx: click.Context,
-    *,
-    pr: str,
-    sha: str,
-    ticket: str | None,
-    repo: str | None,
-    context: str | None,
-) -> int:
-    """Start a review of the PR at URL, at commit SHA, if its guards allow one now."""
-    return verb(
-        click_ctx,
-        review_tools.review_run,
-        review_tools.ReviewRun,
-        pr=pr,
-        sha=sha,
-        ticket=ticket,
-        repo=repo,
-        context=context,
-    )
-
-
-@review_group.command("wait", cls=OverseerCommand)
-@click.option("--pr", "pr", required=True, type=PR_URL, help="The PR's https:// URL.")
-@click.option("--ticket", type=TICKET_KEY, help="The ticket of one of the loop's own PRs.")
-@click.option(
-    "--rationale",
-    required=True,
-    type=TextType(),
-    help="Why not now, such as checks still running, or a draft.",
-)
-@click.pass_context
-def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, rationale: str) -> int:
-    """Record that the PR at URL is not to be reviewed now, and why."""
-    return verb(click_ctx, review_tools.review_wait, review_tools.ReviewWait, pr=pr, ticket=ticket, rationale=rationale)
-
-
-@review_group.command("end", cls=OverseerCommand)
-@click.option("--pr", "pr", required=True, type=PR_URL, help="The requested PR's https:// URL.")
-@click.option("--reason", required=True, type=click.Choice(review_requests.OVERSEER_REASONS), help="What you read.")
-@click.pass_context
-def cmd_review_end(click_ctx: click.Context, *, pr: str, reason: str) -> int:
-    """End the operator's review request on the PR at URL: it merged or closed first, or is in no repository here."""
-    return verb(click_ctx, review_tools.review_end, review_tools.ReviewEnd, pr=pr, reason=reason)
-
-
-@review_group.command("revise", cls=OverseerCommand)
-@click.option("--run", "run_id", required=True, type=click.IntRange(min=1), help="The review whose draft to revise.")
-@click.pass_context
-def cmd_review_revise(click_ctx: click.Context, *, run_id: int) -> int:
-    """Start a revision of the draft of review RUN, which the operator's note asks for, if its guards allow one now."""
-    return verb(click_ctx, review_tools.review_revise, review_tools.ReviewRevise, run=run_id)
+    """Read what canopy's reviews found, and the drafts of reviews of PRs the loop does not own."""
 
 
 @review_group.command("show")
@@ -124,7 +53,8 @@ def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
     ctx = open_context(click_ctx)
     if run_id is not None:
         try:
-            click.echo(findings.described(ctx.conn, run_id))
+            limit = ctx.config.runtime.review_timeout_minutes
+            click.echo(findings.described(ctx.conn, run_id, card=conversation.is_operator(), timeout_minutes=limit))
         except findings.Unusable as e:
             raise CliError(str(e)) from None
         # Seen once shown to the operator. Inside one of canopy's own runs it marks nothing, and a review still running
@@ -402,11 +332,7 @@ def _print_standing(conn: sqlite3.Connection, draft: records.ReviewDraft) -> Non
         click.echo(f"  Review run {revising.id} is revising it on your notes.")
     elif draft.status is ReviewDraftStatus.WAITING and review_revisions.pending(conn, draft.id):
         click.echo("  Your note asks for a revision: the next tick starts one.")
-    pr = records.fetch_one(
-        conn,
-        records.ObservedPr,
-        sql.select("*").from_("observed_prs").where("url = ?", draft.pr_url),
-    )
+    pr = records.select(records.ObservedPr).where("url = ?", draft.pr_url).one(conn)
     if pr is not None and pr.head_sha and not draft.sha.startswith(pr.head_sha):
         click.echo(f"  The PR is at {pr.head_sha} now: its comments would show as outdated, on the commit it read.")
 
@@ -427,7 +353,7 @@ def _by(version: review_drafts.Version) -> str:
 @click.argument("run_id", type=click.IntRange(min=1))
 @click.pass_context
 def cmd_review_process(click_ctx: click.Context, run_id: int) -> int:
-    """Do one review run. Started by `canopy review run`, detached; not for people or agents."""
+    """Do one review run. Started by a tick, detached; not for people or agents."""
     leave_the_tick()
     ctx = open_context(click_ctx)
     try:

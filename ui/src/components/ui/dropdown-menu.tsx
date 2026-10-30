@@ -1,6 +1,6 @@
 // shadcn/ui DropdownMenu, Radix base, ported by hand; see button.tsx. Only the parts the UI uses: no sub-menus.
-// shadcn's `bg-accent` focus tint is `surface-raised` here (DESIGN.md), it has no shadow but its hairline, and it does
-// not animate, so it opens as fast as the links it holds.
+// shadcn's `bg-accent` focus tint is `surface-raised` here (DESIGN.md), it floats in its palette's edge and shadow,
+// and it does not animate, so it opens as fast as the links it holds.
 import { Check } from 'lucide-react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 import type { ComponentProps } from 'react'
@@ -33,8 +33,8 @@ function DropdownMenuContent({
                 sideOffset={sideOffset}
                 className={cn(
                     'z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-32 overflow-x-hidden',
-                    'overflow-y-auto rounded-md border bg-surface p-1 text-foreground',
-                    'origin-(--radix-dropdown-menu-content-transform-origin)',
+                    'overflow-y-auto rounded-md border border-edge bg-surface p-1 text-foreground shadow-float',
+                    'origin-(--radix-dropdown-menu-content-transform-origin) animate-float-in',
                     className,
                 )}
                 {...props}

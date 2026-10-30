@@ -70,18 +70,21 @@ dozen. When every screenshot differs, check the browser before the change.
   the shared ones in its `__init__.py`, and each feature's in a module of its own. To change a shape, change the
   pydantic model, run `npm run gen:api`, and commit both. Import types from `src/api/types.ts`.
 - **One place per query.** Keys and fetchers live in `src/api/queries.ts`; components call `useQuery(xQuery)`.
-- **Live data comes from the stream, not polling.** No `refetchInterval`, but for the worktrees. Server pushes arrive
-  through
+- **Live data comes from the stream, not polling.** No `refetchInterval`, but for the worktrees and the host's
+  resources. Server pushes arrive through
   `useEventStream` (`src/api/live.ts`, `src/hooks/use-live-updates.ts`): a list arrives whole and is written with
   `setQueryData`; `ticket.changed` marks that ticket's query stale, which refetches only if a page shows it, as
   `task.changed` does a task's and its reports, and
   `chores.updated` marks every chore's (a new note changes the list it carries); `tick.updated` marks the ticks, a
   tick's page, and the ticket shown. A new
   event type is a pydantic model in the `StreamEvent` union, a case in `applyStreamEvent`, and a check in
-  `parseStreamEvent`. The worktrees are the one query not on the stream, since each read runs `treehouse status` and
+  `parseStreamEvent`. The worktrees are one query not on the stream, since each read runs `treehouse status` and
   briefly takes every pool's lock: `runs.updated` marks them stale when the running runs' worktrees change, the page's
-  Read again button refetches them, and they refetch every 10 seconds while a page shows them in a visible tab, the
-  one `refetchInterval`.
+  Read again button refetches them, and they refetch every 10 seconds while a page shows them in a visible tab. The
+  host's resources (`hostQuery`), which the header's readout shows on every page, are the other: none of them is in
+  the journal, and a read is a few small files, so they refetch every 10 seconds while the tab is visible, as the
+  system page's graphs' readings (`hostSamplesQuery`), which the server keeps in memory, and its processes
+  (`hostProcessesQuery`) do while it is open.
 - **Writes are mutations in `src/api/mutations.ts`.** Each calls the same server function as the CLI's verb, or, for
   what no command would do, a core function of its own with its guards, which TRUST_MODEL T8 names (D127); the
   client adds the session's token (`writeToken` in `src/api/client.ts`). A refusal is an `ApiError` with its `guard`;

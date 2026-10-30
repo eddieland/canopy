@@ -9,7 +9,18 @@ from typing import Unpack
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.review_drafts import Comment
-from tests.canopy.helpers import Behavior, Called, InlineRunner, in_tick, present, reported, scripted, tick_starts
+from tests.canopy.helpers import (
+    Behavior,
+    Called,
+    InlineRunner,
+    calls,
+    in_tick,
+    overseer_calls,
+    present,
+    reported,
+    scripted,
+    tick_starts,
+)
 from tests.conftest import GitPool, git
 
 # A PR the loop opened.
@@ -51,23 +62,23 @@ OFF_DIFF = "`tests/test_retry.py:3`\n\nno tests\n\nAdd one."
 
 def run_inline(
     conn: sqlite3.Connection,
-    *args: str,
+    *,
     sha: str,
     pr: str = PR,
     runner: InlineRunner | None = None,
+    **fields: object,
 ) -> int:
-    """Start a review in its own tick and do its `_review` in this process, as the detached one would."""
+    """Start a review of `pr` at `sha` in its own tick and do its `_review` in this process, as the detached one would.
+
+    `fields` are the `review-run` tool's others, `ticket` and `context`.
+    """
     with in_tick(conn, ends_ok=True):
-        assert main(review(*args, sha=sha, pr=pr), runner=InlineRunner()) == 0
+        said = overseer_calls(calls("canopy_review-run", pr=pr, sha=sha, repo="repo", **fields), runner=InlineRunner())
+        assert not said.error, said.text
         tick_starts(InlineRunner())
         run_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
         assert main(["_review", str(run_id)], runner=runner or InlineRunner()) == 0
     return run_id
-
-
-def review(*args: str, sha: str, pr: str = PR) -> list[str]:
-    """`canopy review run` of `pr` at `sha` in `repo`."""
-    return ["review", "run", "--pr", pr, "--sha", sha, "--repo", "repo", *args]
 
 
 @contextmanager

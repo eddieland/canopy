@@ -34,7 +34,7 @@ export function sourceText(key: ConfigKey): string {
 /** How far the page may take a limit, or that a trust setting only gets stricter. */
 export function boundText(key: ConfigKey): string {
     if (key.kind === 'stricter') {
-        return 'stricter only'
+        return typeof key.value === 'number' ? 'only fewer from here' : 'stricter only'
     }
     if (key.kind === 'free') {
         return 'percentages, comma separated; 100% is always sent'
@@ -76,8 +76,8 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
             }
             continue
         }
-        if (key.kind === 'stricter' && !Array.isArray(draft)) {
-            // A switch, or `policy.stacking`'s choice: sent as picked.
+        if (key.kind === 'stricter' && (typeof draft === 'boolean' || key.choices.length > 0)) {
+            // A switch, or a choice such as `policy.stacking`'s: sent as picked.
             if (draft !== key.value) {
                 changes[key.name] = draft as ConfigValue
             }
@@ -180,12 +180,14 @@ export interface ConfigGroup {
 export const CONFIG_GROUPS: ConfigGroup[] = [
     {
         title: 'Capacity',
-        blurb: 'How much runs at once on this machine, and how many reviews a day.',
+        blurb: 'How much runs at once on this machine, how many reviews a day, and the free disk a tick needs.',
         keys: [
             { name: 'capacity.max_workers', label: 'Workers at once' },
             { name: 'capacity.max_chores', label: 'Chore runs at once' },
             { name: 'capacity.max_reviews', label: 'Review runs at once' },
+            { name: 'capacity.max_tasks', label: 'Task runs at once' },
             { name: 'capacity.max_reviews_per_day', label: 'Reviews a day' },
+            { name: 'loop.min_free_disk_mib', label: 'Free disk a tick needs to dispatch, in MiB' },
         ],
     },
     {
@@ -198,12 +200,19 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
     },
     {
         title: 'Attempts',
-        blurb: 'How many runs a ticket or PR gets before it waits for you, and the pause before a resume for red CI.',
+        blurb:
+            'How many runs a ticket, PR, or draft gets before it waits for you, the follow-ups one run may file, ' +
+            'and the pauses before a resume for red CI and before a feedback plan.',
         keys: [
             { name: 'policy.max_implement_attempts', label: 'Implement runs per unit' },
             { name: 'policy.max_resume_attempts', label: 'Resume runs per unit' },
+            { name: 'policy.max_plan_attempts', label: 'Plan runs per ticket' },
+            { name: 'policy.max_feedback_plan_attempts', label: 'Feedback plan runs per unit' },
             { name: 'policy.max_reviews_per_pr', label: 'Review runs per PR' },
+            { name: 'policy.max_revisions_per_draft', label: "Revisions of a review's draft" },
+            { name: 'policy.max_follow_ups', label: 'Follow-up tickets from one run' },
             { name: 'policy.ci_cooldown_minutes', label: 'Minutes before a resume for red CI' },
+            { name: 'policy.feedback_quiet_minutes', label: 'Quiet minutes before a feedback plan' },
         ],
     },
     {
@@ -221,6 +230,16 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
         keys: [
             { name: 'loop.interval_minutes', label: 'Minutes between ticks' },
             { name: 'loop.idle_max_minutes', label: 'Longest wait when idle, in minutes' },
+            { name: 'loop.min_gap_minutes', label: 'Least minutes from one tick to the next' },
+        ],
+    },
+    {
+        title: 'Timeouts',
+        blurb: 'How long one run may take before canopy stops it. A longer run may spend more.',
+        keys: [
+            { name: 'runtime.worker_timeout_minutes', label: 'Worker run, in minutes' },
+            { name: 'runtime.review_timeout_minutes', label: 'Review run, in minutes' },
+            { name: 'runtime.overseer_timeout_minutes', label: 'Overseer tick, in minutes' },
         ],
     },
     {
@@ -234,13 +253,24 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
         ],
     },
     {
-        title: 'Trust',
-        blurb: 'Only stricter from here: loosening one, or adding a name, is an edit to the file.',
+        title: 'Plans',
+        blurb: 'Which work waits on a plan you approve. Only stricter from here: easing one is an edit to the file.',
         keys: [
-            { name: 'policy.stacking', label: 'Never stack a branch on another' },
+            { name: 'policy.plan', label: 'Before a ticket is implemented' },
+            { name: 'policy.feedback_plan', label: 'Before a resume acts on review feedback' },
+            { name: 'policy.planner_may_approve', label: 'How readily a planner may approve its own plan' },
+        ],
+    },
+    {
+        title: 'Trust',
+        blurb: 'Only stricter from here: loosening one, adding a name, or raising a count is an edit to the file.',
+        keys: [
+            { name: 'policy.stacking', label: 'Stack a branch on its blocker' },
             { name: 'trust.authorized_repliers', label: 'Who may answer a worker' },
             { name: 'trust.trusted_reviewers', label: 'Whose review a worker acts on unasked' },
+            { name: 'trust.review_replies', label: 'Workers post their replies, or draft them for you' },
             { name: 'trust.rebase', label: 'Workers rebase and push with a lease' },
+            { name: 'trust.max_flaky_kicks', label: 'Reruns of checks judged flaky, per pushed head' },
             { name: 'trust.commit_trailer', label: 'Workers add a Co-authored-by trailer' },
         ],
     },

@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import db, drafts, drafts_manage, records, sql
+from canopy.core import db, records, sql
 from canopy.core.vocab import DraftKind
+from canopy.runs import drafts, drafts_manage
 from canopy.serve.schema.draft import (
     Draft,
     DraftFromPlan,
@@ -81,14 +82,12 @@ def of_ticket(conn: sqlite3.Connection, key: str) -> list[Draft]:
     Returns:
         At most `TICKET_DRAFTS`, the newest run's first.
     """
-    found = records.fetch_all(
-        conn,
-        records.Draft,
-        sql.select("*")
-        .from_("drafts")
+    found = (
+        records.select(records.Draft)
         .where("ticket_key = ?", key)
         .where("kind = ?", DraftKind.TICKET)
         .order_by("run_id DESC, number")
-        .limit(TICKET_DRAFTS),
+        .limit(TICKET_DRAFTS)
+        .all(conn)
     )
     return [draft(conn, d) for d in found]

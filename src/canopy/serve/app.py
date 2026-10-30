@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 
-from canopy.serve import api, mock
+from canopy.serve import api, host, mock
 from canopy.serve.api import deps, refs
 from canopy.serve.audit import Audit
 from canopy.serve.guard import Guard
@@ -33,11 +33,14 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         # Mock data changes now and then, so the stream has something to show (mock/).
-        task = asyncio.create_task(mock.changes(backend, options.mock_event_seconds)) if backend.mock else None
+        tasks = [asyncio.create_task(mock.changes(backend, options.mock_event_seconds))] if backend.mock else []
+        # The system resources page's graphs: the machine read every few seconds from now, into memory (host.py).
+        if backend.sampling:
+            tasks.append(asyncio.create_task(host.sampling(backend.read_host, backend.samples)))
         try:
             yield
         finally:
-            if task is not None:
+            for task in tasks:
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
                     await task

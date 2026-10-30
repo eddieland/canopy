@@ -10,13 +10,15 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from canopy.core import db, drafts_manage
+from canopy.core import db
 from canopy.core.vocab import Reaction
 from canopy.infra import resources
+from canopy.runs import drafts_manage
 from tests.canopy.helpers import (
     APPROVE,
     DRAFTS_PR,
     KEY,
+    TRACKER_POSTS,
     all_drafts,
     comment,
     context,
@@ -210,8 +212,7 @@ def test_a_pr_the_journal_knows_nothing_of_is_not_found_and_a_bad_url_refused(ca
 @pytest.mark.usefixtures("git_pool")
 def test_a_tickets_own_draft_is_on_its_page_and_sent_from_there(scenario: Scenario, github_state: Path) -> None:
     issue = "https://github.com/acme/api/issues/1"
-    issues = {"kind": "tracker", "post_cmd": "canopy-post-github"}
-    scenario.configures("private", trust=APPROVE, connect={"sources": {"issues": issues}})
+    scenario.configures("private", trust=APPROVE, connect=TRACKER_POSTS)
     github_has(github_state)
     ticket = {"on": "ticket", "url": issue, "text": "Which base should this target?"}
     run = scenario.run(dispatches(slug="work"), worker=sends_drafts([ticket]))

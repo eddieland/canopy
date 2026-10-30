@@ -147,8 +147,10 @@ export const PAGE_GUIDES = {
     '/reports/spend': 'reports#the-spend-page',
     '/memory': 'memory',
     '/search': 'overview#search',
+    '/system': 'overview#system-resources',
     '/settings': 'settings',
     '/settings_/limits': 'settings#limits-and-trust',
+    '/settings_/skills': 'settings#skills',
 } as const satisfies Record<
     Exclude<
         keyof FileRoutesById,

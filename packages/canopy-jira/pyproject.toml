@@ -3,6 +3,7 @@ name = "canopy-jira"
 # From the latest v* tag, as canopy's is (D085), so every package canopy ships carries its version.
 dynamic = ["version"]
 description = "canopy's Jira connector: read Jira Cloud's tickets and comments into canopy's journal."
+readme = "README.md"
 license = "MIT"
 authors = [{ name = "eddieland" }]
 keywords = ["canopy", "jira", "connector", "tracker"]

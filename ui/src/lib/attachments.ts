@@ -1,6 +1,6 @@
 import { ApiError } from '@/api/client'
 
-/** An attachment's name, as runs see it: a plain file name, as `canopy.core.attachments.NAME_RE` has it. */
+/** An attachment's name, as runs see it: a plain file name, as `canopy.runs.attachments.NAME_RE` has it. */
 const NAME_RE = /^(?=[A-Za-z0-9._-]{1,100}$)[A-Za-z0-9][A-Za-z0-9._-]*$/u
 const KIB = 1024
 

@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from canopy.core import conversation, db, drafts, feedback_items, feedback_plans, plans, workspace
+from canopy.core import conversation, db, plans, workspace
 from canopy.core.config import load
 from canopy.core.vocab import (
     DraftStatus,
@@ -24,6 +24,7 @@ from canopy.core.vocab import (
     RunStatus,
 )
 from canopy.infra import resources
+from canopy.runs import drafts, feedback_items, feedback_plans
 from tests.canopy.helpers import (
     DRAFTS_PR,
     KEY,
@@ -1093,7 +1094,8 @@ def test_a_failed_check_and_a_conflict_are_items_planned_approved_and_left_by_nu
     # Left out by number, as a review item is, and named by number and id.
     approved = scenario.operator("plan", KEY, "--approve", "--leave", "3")
     assert f"Left out, for the next plan: item 3 (id {conflict})." in approved.out
-    resume = scenario.run(RESUME, worker=pushes())
+    # It pushes to the PR it was resumed on, which the `vcs` source goes on reading (DESIGN §39).
+    resume = scenario.run(RESUME, worker=pushes(prs={"repo": PR}))
     assert resume.status == RunStatus.DONE
     assert f"1. id 501, on {PR}: change\n2. id {build}, a failed check on {PR}: change\n" in resume.prompt
     assert f"They left out its item 3 (id {conflict})" in resume.prompt
