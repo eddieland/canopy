@@ -64,6 +64,20 @@ interface NavSetup {
     reviews: ReviewSummary[] | undefined
 }
 
+// The nav's sections, in its order, with no pages open under any.
+const SECTIONS = ['Attention', 'Tickets', 'Tasks', 'Pull requests', 'Runs', 'Chores', 'Reports', 'Memory']
+
+// The nav's links with the pages under one section open: the section, then its pages.
+function opening([section, ...pages]: readonly string[]): string[] {
+    const at = SECTIONS.indexOf(section ?? '')
+    return [...SECTIONS.slice(0, at + 1), ...pages, ...SECTIONS.slice(at + 1)]
+}
+
+// Every link the nav lists, in its order.
+function listed(): (string | null)[] {
+    return screen.getAllByRole('link').map((link) => link.textContent)
+}
+
 // The links the nav marks as the page shown.
 function current(): string[] {
     return screen
@@ -76,14 +90,55 @@ describe('Nav', () => {
     it.each([
         ['a ticket', '/tickets/ABC-102', 'Tickets'],
         ['a PR', '/pull-requests/pr?url=x', 'Pull requests'],
-        ['a review', '/pull-requests/reviews/4', 'Pull requests'],
         ['a chore', '/chores/deps', 'Chores'],
-        ['a tick', '/runs/ticks/12', 'Runs'],
+        ['a run', '/runs/41', 'Runs'],
         ['the runs list', '/runs', 'Runs'],
         ['the memory page', '/memory', 'Memory'],
     ] as const)("keeps its section current on %s's page", async (_, at, section) => {
         await renderNav({ at, items: [] })
         expect(current()).toEqual([section])
+    })
+
+    it('keeps the pages under a section folded while another is shown, so it lists its eight sections', async () => {
+        await renderNav({ at: '/tickets/ABC-102', items: [] })
+        expect(listed()).toEqual(SECTIONS)
+    })
+
+    it.each([
+        ['Runs', '/runs', ['Runs', 'Ticks', 'Worktrees'], 'Runs'],
+        ['Runs', '/runs/41', ['Runs', 'Ticks', 'Worktrees'], 'Runs'],
+        ['Pull requests', '/pull-requests', ['Pull requests', 'Reviews'], 'Pull requests'],
+        ['Reports', '/reports?month=2026-08', ['Reports', 'Spend'], 'Reports'],
+    ] as const)("opens %s's pages under it on %s, the section current", async (_, at, opened, page) => {
+        await renderNav({ at, items: [] })
+        expect(listed()).toEqual(opening(opened))
+        expect(current()).toEqual([page])
+    })
+
+    it.each([
+        ['Ticks', '/runs/ticks', ['Runs', 'Ticks', 'Worktrees']],
+        ['Worktrees', '/runs/worktrees', ['Runs', 'Ticks', 'Worktrees']],
+        ['Reviews', '/pull-requests/reviews', ['Pull requests', 'Reviews']],
+        ['Spend', '/reports/spend?days=30', ['Reports', 'Spend']],
+    ] as const)('marks %s current on its own page, not the section over it', async (page, at, opened) => {
+        await renderNav({ at, items: [] })
+        expect(listed()).toEqual(opening(opened))
+        expect(current()).toEqual([page])
+    })
+
+    it.each([
+        ['a tick', '/runs/ticks/12', 'Ticks'],
+        ['a review', '/pull-requests/reviews/4', 'Reviews'],
+        ["a review's run", '/pull-requests/reviews/4/run', 'Reviews'],
+    ] as const)("marks the page it is under current on %s's page", async (_, at, page) => {
+        await renderNav({ at, items: [] })
+        expect(current()).toEqual([page])
+    })
+
+    it('opens no pages under a section in a compact nav, so the section stays current on them', async () => {
+        await renderNav({ at: '/runs/ticks/12', items: [], compact: true })
+        expect(listed()).toEqual(SECTIONS)
+        expect(current()).toEqual(['Runs'])
     })
 
     it('marks no section on a page in none', async () => {
