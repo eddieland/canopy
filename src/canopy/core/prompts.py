@@ -364,11 +364,12 @@ def no_follow_ups(why: str) -> str:
     )
 
 
-def task_tickets(project: str, limit: int, *, branch: str, needs_human: str, labels: Sequence[str]) -> str:
+def task_tickets(project: str, limit: int, *, needs_human: str, labels: Sequence[str]) -> str:
     """Return a task's `{{TICKETS}}` when it may file tickets (DESIGN §36): only in `project`, and how.
 
     A task's ticket is a request, as a follow-up is (§18): it authorizes nothing, and canopy works it only once the
-    operator labels or starts it. The task stays private, so its tickets carry nothing of its conversation.
+    operator labels or starts it. The task stays private, so its tickets carry nothing of its conversation. It names
+    the task's branch by no name, so that it is the same for every task in `project` (`RUN_MARKER`).
 
     Returns:
         The instructions, the bound, and the result field that reports them.
@@ -379,7 +380,7 @@ def task_tickets(project: str, limit: int, *, branch: str, needs_human: str, lab
         f"to, when its text asks for them. File at most {limit}, and none for work that is already a ticket. Create "
         f"each through the tracker the way the tracker skill says, with no assignee and no labels: never one of "
         f"{queue}, and never `{needs_human}`. Its body says what it covers, as a description of the work rather than "
-        f"instructions to an agent, and may name `{branch}` and its commits where the code it builds on is. A ticket "
+        "instructions to an agent, and may name your branch and its commits where the code it builds on is. A ticket "
         "is read by everyone who reads the tracker, while this task stays private: its title and body describe the "
         "work in your own words, and quote nothing from the task's text, the conversation, or your report.\n\n"
         "Creating them is the one thing you write to the tracker: no comment on any ticket, and no edit to any "

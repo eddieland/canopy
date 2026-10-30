@@ -959,6 +959,19 @@ def agent_runs(agent_log: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in agent_log.read_text().splitlines()]
 
 
+def told(run: Mapping[str, Any]) -> str:
+    """What fake agent run `run`, as the fake logged it, was told: its definition's body, then its message.
+
+    The tests' templates pass the prompt last, and the snapshot as OpenCode's config directory, whose definition of the
+    agent holds the prompt's fixed instructions as its body (DESIGN §13).
+    """
+    argv = run["argv"]
+    agent = argv[argv.index("--agent") + 1]
+    definition = Path(run["env"]["OPENCODE_CONFIG_DIR"]) / "agents" / f"{agent}.md"
+    body = definition.read_text().rpartition("\n---\n")[2].lstrip("\n")
+    return f"{body}\n{argv[-1]}"
+
+
 def has_deadline(run: Mapping[str, Any], minutes: int, *, before: float, after: float) -> bool:
     """Whether agent run `run`, as the fake agent logged it, had a deadline `minutes` after its start.
 
