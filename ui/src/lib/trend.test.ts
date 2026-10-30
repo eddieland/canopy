@@ -11,7 +11,11 @@ function sample(seconds: number, load: number | null): HostSample {
     return {
         at: new Date(T0 + seconds * 1000).toISOString(),
         load,
+        cpu_busy: null,
         memory_used: null,
+        swap_used: null,
+        memory_stalled: null,
+        io_stalled: null,
         rss: null,
         disks: [],
     }

@@ -22,6 +22,15 @@ type DiskUse = Annotated[
 ]
 
 
+class CpuTime(Model):
+    """The time the machine's processors have spent since it started, summed over every core, in seconds."""
+
+    busy: float
+    """The time they spent on work: everything but idle and waiting on a disk."""
+    total: float
+    """All their time, busy or not."""
+
+
 class Cpu(Model):
     """The machine's processors and how busy they are."""
 
@@ -29,6 +38,9 @@ class Cpu(Model):
     """How many processors this process may run on; None when the operating system does not say."""
     load: list[float] | None
     """The load averages over the last 1, 5, and 15 minutes; None where the operating system keeps none."""
+    time: CpuTime | None
+    """Their time since the machine started, which two readings measure how busy they were between; None where only
+    Linux's `/proc/stat` says."""
 
 
 class Memory(Model):
@@ -42,6 +54,16 @@ class Memory(Model):
     """All of its swap; None where only Linux's `/proc/meminfo` says."""
     swap_free: int | None
     """The swap not in use; None where only Linux's `/proc/meminfo` says."""
+
+
+class Stalls(Model):
+    """How much of the last ten seconds at least one process waited, as a share of it: Linux's pressure stalls."""
+
+    memory: float | None
+    """Waiting for memory to be freed; None where Linux's `/proc/pressure` does not say, as off Linux or on an older
+    kernel."""
+    io: float | None
+    """Waiting on a disk; None where Linux's `/proc/pressure` does not say."""
 
 
 class Disk(Model):
@@ -98,6 +120,8 @@ class HostResources(Model):
     """Its processors."""
     memory: Memory
     """Its memory."""
+    stalled: Stalls
+    """How much processes waited for memory and on disks."""
     disks: list[Disk]
     """Each filesystem canopy writes to, the workspace's first; one that could not be read is left out."""
     process: LoopProcess
@@ -120,8 +144,17 @@ class HostSample(Model):
     """When it was read."""
     load: float | None
     """The load average over the last minute; None where the operating system keeps none."""
+    cpu_busy: float | None
+    """The share of the processors' time busy since the reading before, 1.0 every core the whole time; None at the
+    first reading, or where only Linux's `/proc/stat` says."""
     memory_used: int | None
     """The memory not available to a new process, in bytes; None where only Linux's `/proc/meminfo` says."""
+    swap_used: int | None
+    """The swap in use, in bytes; None where only Linux's `/proc/meminfo` says."""
+    memory_stalled: float | None
+    """The share of the last ten seconds a process waited for memory; None where `/proc/pressure` does not say."""
+    io_stalled: float | None
+    """The share of the last ten seconds a process waited on a disk; None where `/proc/pressure` does not say."""
     rss: int | None
     """The memory the loop's process held, in bytes; None where only Linux's `/proc` says."""
     disks: list[DiskSample]
