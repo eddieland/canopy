@@ -16,7 +16,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db, prompts, records, run_models, spend, sql
+from canopy.core import cards, config, conversation, db, prompts, records, run_models, spend, sql
 from canopy.core.context import Context
 from canopy.core.items import Item
 from canopy.core.vocab import Decider, RunStatus
@@ -29,6 +29,7 @@ from tests.canopy.helpers import (
     KEY,
     InlineRunner,
     agent_runs,
+    calls,
     commit_and_push,
     has_deadline,
     in_run,
@@ -404,6 +405,37 @@ def test_a_task_run_s_models_and_tool_calls_are_recorded_as_it_ends(
         ("anthropic/claude-x", 1, 0.25),
     ]
     assert [(t.tool, t.runs, t.calls) for t in spent.tools if t.kind == "tasks"] == [("bash", 1, 1)]
+
+
+def test_a_task_run_keeps_its_workers_progress_but_never_a_question(
+    capsys: pytest.CaptureFixture[str],
+    canopy_env: CanopyEnv,
+    inline: Context,
+    agent_log: Path,
+) -> None:
+    """Its worker posts its progress through canopy's `status` tool, as a worker does, and asks nothing (DESIGN §41)."""
+    with_events(canopy_env, "canopy-worker-private")
+    progress = {"summary": "Timed the build; the cache is cold.", "now": "warming the cache", "next": ["push"]}
+    question = {"ask": "Which cache?", "options": ["local", "remote"], "recommend": "B"}
+    status = cards.tool_name()
+    submit()
+    [started] = start(inline)
+    with private_worker_does(
+        ["true"],
+        result=DONE,
+        tools=[calls(status, **progress), calls(status, **progress, question=question)],
+    ):
+        run = run_task(inline, started.run_id)
+    # The server refused the question: the first update is recorded, and both calls and the command counted since.
+    [made] = [[(t["name"], t["error"]) for t in r["tools"]] for r in agent_runs(agent_log)]
+    assert made == [(status, False), (status, True)]
+    standing = cards.of(run)
+    assert (standing.card, standing.calls_since, run.card_asked_at) == (cards.Card.model_validate(progress), 2, None)
+    capsys.readouterr()
+    assert operator("show", "task:1") == 0
+    shown = capsys.readouterr().out
+    assert "\n    last progress, updated " in shown
+    assert "\n      now: warming the cache\n      next: push\n" in shown
 
 
 def test_commits_the_worker_left_unpushed_are_pushed_once(inline: Context, git_pool: GitPool) -> None:

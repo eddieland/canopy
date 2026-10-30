@@ -1121,8 +1121,8 @@ def test_the_git_server_takes_absolute_checkouts_and_serves_nothing_else() -> No
     assert {"S", "GIT_DIR"} <= runner.unset
 
 
-# A worker's, planner's, or reviewer's run: `canopy _mcp --status` serves it its card's one tool, which writes nothing
-# (DESIGN §41).
+# A worker's, planner's, reviewer's, or task's run: `canopy _mcp --status` serves it its card's one tool, which writes
+# nothing (DESIGN §41).
 
 #: A card the status tool takes.
 CARD: Mapping[str, object] = {
@@ -1133,7 +1133,7 @@ CARD: Mapping[str, object] = {
 }
 
 
-@pytest.mark.parametrize("run", ["7", "review-3"])
+@pytest.mark.parametrize("run", ["7", "review-3", "task-1"])
 def test_a_workers_or_a_reviews_run_is_served_its_status_tool_alone(overseen: CanopyEnv, run: str) -> None:
     conn = overseen.journal()
     before = recorded(conn)
@@ -1167,14 +1167,31 @@ def test_a_workers_or_a_reviews_run_is_served_its_status_tool_alone(overseen: Ca
     assert recorded(conn) == before
 
 
-@pytest.mark.parametrize("run", [None, "chore-2", "task-1", "7x", "review-"])
+@pytest.mark.parametrize("run", [None, "chore-2", "task-", "7x", "review-"])
 def test_the_status_tool_is_served_nowhere_else(overseen: CanopyEnv, run: str | None) -> None:
     with in_run(run) if run is not None else contextlib.nullcontext():
         served = mcp_session(LIST_TOOLS, tool_call("status", **CARD), status=True)
     assert served.listed() == []
     text, error = served.said(2)
     assert error
-    assert text.startswith("status refused: CANOPY_RUN_ID names no worker's, planner's, or review's run")
+    assert text.startswith("status refused: CANOPY_RUN_ID names no worker's, planner's, review's, or task's run")
+
+
+def test_a_tasks_run_asks_no_question_in_its_card(overseen: CanopyEnv) -> None:
+    """A task's run's card that asks a question is refused, and one that asks none is taken, as a worker's is."""
+    question = {"ask": "Which flag?", "options": ["old", "new"], "recommend": "B"}
+    with in_run("task-1"):
+        served = mcp_session(
+            tool_call("status", **CARD, question=question),
+            tool_call("status", **CARD),
+            status=True,
+        )
+    text, error = served.said(1)
+    assert (text.startswith("status refused: a task's run asks no question here"), error) == (True, True)
+    assert served.said(2)[1] is False
+    with in_run("7"):
+        asked = mcp_session(tool_call("status", **CARD, question=question), status=True)
+    assert asked.said(1)[1] is False
 
 
 def test_the_status_server_serves_nothing_else() -> None:

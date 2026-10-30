@@ -89,8 +89,8 @@ test("a result that cannot take the line is asked again on the next call", async
     assert.equal(said, `ok\n${ASKED.replace("20 tool calls", "21 tool calls")}`);
 });
 
-test("a run that keeps no progress, or names none, gets no nudge", async () => {
-    for (const run of [undefined, "chore-2", "task-1", "try:build-health", "7x", "review-"]) {
+test("a run that keeps no progress, or names none, gets no nudge; a review's and a task's do", async () => {
+    for (const run of [undefined, "chore-2", "task-", "try:build-health", "7x", "review-"]) {
         if (run === undefined) {
             delete process.env.CANOPY_RUN_ID;
         } else {
@@ -99,10 +99,12 @@ test("a run that keeps no progress, or names none, gets no nudge", async () => {
         const hooks = await canopy.server({});
         assert.equal(hooks["tool.execute.after"], undefined, String(run));
     }
-    process.env.CANOPY_RUN_ID = "review-3";
-    const reviewer = await canopy.server({});
-    await calls(reviewer, 19);
-    assert.equal((await after(reviewer, builtin())).output, `ok\n${ASKED}`);
+    for (const run of ["review-3", "task-1"]) {
+        process.env.CANOPY_RUN_ID = run;
+        const hooks = await canopy.server({});
+        await calls(hooks, 19);
+        assert.equal((await after(hooks, builtin())).output, `ok\n${ASKED}`, run);
+    }
 });
 
 test("under OpenCode 2, the line goes first in the result's content", async () => {

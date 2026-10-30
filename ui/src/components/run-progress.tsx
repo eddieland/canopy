@@ -18,11 +18,11 @@ import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 /**
- * A running worker's, planner's, or reviewer's progress, in its own words (DESIGN §41), whole: its summary, how much of
- * its steps is done as a meter, a question it asks you, then its work as one checklist, the steps when it named any and
- * what is done, what it does now, and what is next when it did not, then what it works around. `freshness` leads with
- * when it last wrote an update; a page that says so in a panel's header (`ProgressFreshness`) leaves it out. `answers`,
- * the run or review it is, lets the page answer its question. Agent text, rendered as text.
+ * A running worker's, planner's, reviewer's, or task's progress, in its own words (DESIGN §41), whole: its summary, how
+ * much of its steps is done as a meter, a question it asks you, then its work as one checklist, the steps when it named
+ * any and what is done, what it does now, and what is next when it did not, then what it works around. `freshness`
+ * leads with when it last wrote an update; a page that says so in a panel's header (`ProgressFreshness`) leaves it out.
+ * `answers`, the run or review it is, lets the page answer its question. Agent text, rendered as text.
  */
 export function RunProgress({
     card,
@@ -73,10 +73,11 @@ export function RunProgress({
 }
 
 /**
- * A run's or review's progress as a panel of its own, which leads its page: `Progress` while the run runs, `Last
- * progress` once it ended, when it last wrote an update on the header's right, then the progress whole.
+ * A run's, review's, or task run's progress as a panel of its own, which leads its page: `Progress` while the run runs,
+ * `Last progress` once it ended, when it last wrote an update on the header's right, then the progress whole. `answers`
+ * lets the page answer its question; a task's run asks none, so its page names no target.
  */
-export function ProgressPanel({ card, running, answers }: { card: RunCard; running: boolean; answers: AnswerTarget }) {
+export function ProgressPanel({ card, running, answers }: { card: RunCard; running: boolean; answers?: AnswerTarget }) {
     return (
         <Panel data-testid="progress-panel">
             <PanelHeader label={running ? 'Progress' : 'Last progress'}>

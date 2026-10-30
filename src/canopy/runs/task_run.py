@@ -24,6 +24,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
 from canopy.core import (
     agent_models,
+    cards,
     commit_hooks,
     contract,
     conversation,
@@ -42,7 +43,7 @@ from canopy.infra import logs, procs, stopping
 from canopy.runs import attachments, checkpoint, follow_ups, task_tickets, tasks, tidy
 from canopy.runs import task_starts as starts
 from canopy.runs.checkpoint import SetupError
-from canopy.runtime import project_config, stdout
+from canopy.runtime import project_config, servers, stdout
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -436,6 +437,10 @@ def _run_agent(
     out.flush()
     objects = starts.objects_dir(Path(run.log_path))
     env = {conversation.RUN_ID_ENV: f"{RUN_ID_PREFIX}{run.id}", tidy.OBJECTS_ENV: str(objects)}
+    # It says where its work stands through canopy's `status` tool, which writes nothing, and asks no question there:
+    # its question is its final line's, which a reply to the task answers (DESIGN §36, §41).
+    served = {cards.SERVER: cards.SERVER_COMMAND}
+    env |= servers.env(served, version=ctx.config.runtime.version, cwd=ctx.workspace.root.absolute())
     env |= commit_hooks.env(snapshot, marks, os.environ)
     done = ctx.runner.run(
         argv,

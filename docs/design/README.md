@@ -119,8 +119,8 @@ not go in the middle of the sequence.
 - [The overseer per decision](OVERSEER_PER_DECISION.md): one overseer run for each subject left to judgment, and the
   runs it asks for, which the tick starts outside its process tree.
   - [40. The overseer per decision](OVERSEER_PER_DECISION.md#40-the-overseer-per-decision)
-- [Where a running agent stands](PROGRESS.md): the progress a running worker, planner, or reviewer keeps of where its
-  work stands, for the operator.
+- [Where a running agent stands](PROGRESS.md): the progress a running worker, planner, reviewer, or one-off task's
+  worker keeps of where its work stands, for the operator.
   - [41. Where a running agent stands](PROGRESS.md#41-where-a-running-agent-stands)
 - [The operator's checklist](CHECKLIST.md): the operator's rules no linter checks, asked of a worker's diff before
   it finishes, and of a PR by a second review when that is not enough.

@@ -1,9 +1,9 @@
 # Where a running agent stands
 
-Part of the canopy design, normative like all of it: the progress a running worker, planner, or reviewer keeps of
-where its work stands, for the operator. Sections are numbered across the whole design; the [README](README.md) has the
-map. Previous: [The overseer per decision](OVERSEER_PER_DECISION.md). Next:
-[The operator's checklist](CHECKLIST.md).
+Part of the canopy design, normative like all of it: the progress a running worker, planner, reviewer, or one-off task's
+worker keeps of where its work stands, for the operator. Sections are numbered across the whole design; the
+[README](README.md) has the map. Previous: [The overseer per decision](OVERSEER_PER_DECISION.md). Next: [The operator's
+checklist](CHECKLIST.md).
 
 ## 41. Where a running agent stands
 
@@ -13,19 +13,18 @@ stands, and the operator reads that instead of the transcript.
 
 ### Progress
 
-Every worker, planner, and reviewer run gets one tool, `status`, from canopy's server `canopy_run` (`canopy _mcp
---status`), allowed by exact name in their definitions and denied to every other agent (§27). Each call is an update, the
-whole of its progress, and replaces the last: a summary for someone who skipped the transcript, what the agent does
-now, what is done with the proof of each, what is next, and, optionally, what is in its way that it works around. Each
-field is bounded, plain text, one line.
+Every worker, planner, reviewer, and one-off task (§36) run gets one tool, `status`, from canopy's server `canopy_run`
+(`canopy _mcp --status`), allowed by exact name in their definitions and denied to every other agent (§27). Each call is
+an update, the whole of its progress, and replaces the last: a summary for someone who skipped the transcript, what the
+agent does now, what is done with the proof of each, what is next, and, optionally, what is in its way that it works
+around. Each field is bounded, plain text, one line.
 
 The server validates a call and writes nothing; it lists its tool only where `CANOPY_RUN_ID` names a worker's,
-planner's, or review's run. The harness records the update from the call in the events it already reads as the agent
-prints them (§8), held to the same input, so nothing the agent writes reaches the journal but what canopy observes it
-print, as with its spend: a call the server refused, or one that does not validate, records nothing. A run without the
-runtime's events keeps no progress, nor does a one-off task's run (§36), which is never given the server. The run
-counts the tool calls its agent ends, so an update is as old as the time and the calls since it, and the run keeps its
-last progress once it ends.
+planner's, review's, or task's run. The harness records the update from the call in the events it already reads as the
+agent prints them (§8), held to the same input, so nothing the agent writes reaches the journal but what canopy observes
+it print, as with its spend: a call the server refused, or one that does not validate, records nothing. A run without
+the runtime's events keeps no progress. The run counts the tool calls its agent ends, so an update is as old as the time
+and the calls since it, and the run keeps its last progress once it ends.
 
 ### Steps
 
@@ -38,11 +37,13 @@ each step was first seen working, on the update before, and one working longer t
 ### Questions while working
 
 An update may ask the operator a question the agent can work around meanwhile, as the Progress plugin's "Work around"
-mode does: the question, two to five options lettered from A, and the one it recommends and works toward. One it
-cannot work around stays a `blocked` final line (§8). A question is as old as the first update that asked it, and the
-updates after it that ask the same keep it and its answer; another question starts over. The operator answers with one
-of its letters, `canopy reply run:ID` or `review:ID` or the run's progress in the web UI, only while the run runs, and
-a later letter replaces it. An answer is a letter, not words: the agent's own options are all an answer can choose among.
+mode does: the question, two to five options lettered from A, and the one it recommends and works toward. One it cannot
+work around stays a `blocked` final line (§8). A task's run asks none, and the server refuses its update that does: its
+question is its final line's, which a reply to the task answers (§36). A question is as old as the first update that
+asked it, and the updates after it that ask the same keep it and its answer; another question starts over. The operator
+answers with one of its letters, `canopy reply run:ID` or `review:ID` or the run's progress in the web UI, only while
+the run runs, and a later letter replaces it. An answer is a letter, not words: the agent's own options are all an
+answer can choose among.
 
 The answer reaches the agent on its next tool call, as the clock's line does (§33): canopy writes it to a file in the
 run's answers directory, made before the agent starts and removed once it ends, which `CANOPY_ANSWERS` names and a
@@ -52,11 +53,11 @@ own options (TRUST_MODEL T1).
 
 ### Staleness
 
-canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a worker's, planner's, or review's run, it
-counts each session's tool calls since its last `status` call, and after a number of them adds one `[canopy]` line to
-that call's result asking for an update, once per lapse, so the agent is asked between calls and never mid-thought. It
-keeps the count and whether it asked, and nothing else, as the clock keeps whether it has warned. A forged line can only
-ask for an update, so it fails safe, as the clock's do (§33).
+canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a worker's, planner's, review's, or task's
+run, it counts each session's tool calls since its last `status` call, and after a number of them adds one `[canopy]`
+line to that call's result asking for an update, once per lapse, so the agent is asked between calls and never
+mid-thought. It keeps the count and whether it asked, and nothing else, as the clock keeps whether it has warned. A
+forged line can only ask for an update, so it fails safe, as the clock's do (§33).
 
 A run's progress is shown to the operator and never put in another agent's prompt, so neither the overseer's cache
 (§6) nor its trust in worker text changes (TRUST_MODEL T1). Nothing in its progress extends a run or holds a slot (T3).

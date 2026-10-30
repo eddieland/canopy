@@ -23,6 +23,7 @@ from canopy.core import (
     memory,
     notice,
     pause,
+    records,
     reports,
     review_runs,
     run_models,
@@ -288,11 +289,12 @@ def _print_workers(ctx: Context) -> None:
     # So does a task's run (DESIGN §36).
     for t in tasks.running(ctx.conn):
         click.echo(f"  task:{t.task_id}  run {t.id}  {attention.age(t.started_at)}  {t.slot_path}")
+        _print_card(t, f"task:{t.task_id}")
     if not busy:
         click.echo("  none")
 
 
-def _print_card(run: sqlite3.Row, ref: str) -> None:
+def _print_card(run: sqlite3.Row | records.TaskRun, ref: str) -> None:
     """What a running run's progress says it does now, and when it last updated it (DESIGN §41), and what it asks you.
 
     A run's progress is the operator's alone: nothing inside one of canopy's ticks or runs. Nothing before its update is
@@ -301,7 +303,7 @@ def _print_card(run: sqlite3.Row, ref: str) -> None:
     if not conversation.is_operator():
         return
     standing = cards.of(run)
-    for line in (cards.doing(standing, str(run["started_at"])), cards.asking(standing, ref)):
+    for line in (cards.doing(standing, str(records.columns(run)["started_at"])), cards.asking(standing, ref)):
         if line is not None:
             click.echo(f"    {line}")
 

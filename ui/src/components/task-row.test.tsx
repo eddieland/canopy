@@ -1,8 +1,8 @@
 import { cleanup, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { mockTaskRun, mockTasks } from '@/api/mocks'
-import type { TaskRun, TaskSummary } from '@/api/types'
+import { mockRuns, mockTaskRun, mockTasks } from '@/api/mocks'
+import type { RunCard, TaskRun, TaskSummary } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
 import { TaskRow, TaskRunRow } from './task-row'
@@ -18,6 +18,15 @@ function task(id: number): TaskSummary {
         throw new Error(`no mock task:${String(id)}`)
     }
     return found
+}
+
+/** The progress the mock running worker's run keeps: a task's run keeps its own alike. */
+function progress(): RunCard {
+    const card = mockRuns[0]?.card
+    if (card === undefined || card === null) {
+        throw new Error('the mock running run keeps no progress')
+    }
+    return card
 }
 
 /** The row `task` renders, in a list as the page has it. */
@@ -89,6 +98,15 @@ describe('TaskRunRow', () => {
         expect(within(shown).getByRole('link', { name: 'acme/web#97' }).getAttribute('href')).toBe(
             '/pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F97',
         )
+    })
+
+    it("shows a running run's progress on one line, and an ended run's not", async () => {
+        const card = { ...progress(), now: 'measuring the checkout bundle' }
+        const running = await runRow(mockTaskRun({ id: 4, status: 'running', state: 'running', ended_at: null, card }))
+        expect(within(running).getByTestId('run-progress-line').textContent).toMatch(/^measuring the checkout bundle/u)
+        cleanup()
+        const ended = await runRow(mockTaskRun({ id: 5, card }))
+        expect(within(ended).queryByTestId('run-progress-line')).toBeNull()
     })
 
     it("names itself as a link to the run's page", async () => {

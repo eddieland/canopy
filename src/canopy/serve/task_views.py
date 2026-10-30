@@ -76,15 +76,23 @@ def task_detail(ctx: Context, task_id: int) -> TaskDetail | None:
     latest = runs[-1] if runs else None
     return TaskDetail(
         task=_summary(ctx, task, latest, waiting=waiting, asked=asked, runs=len(runs), served=served),
-        runs=[task_run(r, root, served[r.id]) for r in runs],
+        runs=[task_run(r, root, served[r.id], timeout_minutes=_timeout(ctx)) for r in runs],
         messages=[message(m) for m in tasks.messages_of(ctx.conn, task_id)],
         tickets=[_ticket(t) for t in task_tickets.of_task(ctx.conn, task_id)],
         attachments=views.attachments_of(ctx, conversation.Ref(conversation.TASK, str(task_id))),
     )
 
 
-def task_run(row: records.TaskRun, root: Path, served: Sequence[str] = ()) -> TaskRun:
+def task_run(
+    row: records.TaskRun,
+    root: Path,
+    served: Sequence[str] = (),
+    *,
+    timeout_minutes: int | None = None,
+) -> TaskRun:
     """One task run's row, its log's path from the workspace `root`, `served` the models its session named.
+
+    `timeout_minutes`, the run's time limit, says when a working step of its progress is stuck; with None, none is.
 
     Returns:
         The run as the API sends it.
@@ -106,6 +114,7 @@ def task_run(row: records.TaskRun, root: Path, served: Sequence[str] = ()) -> Ta
         peak_context=row.tokens_peak_context,
         log_path=shown_path(row.log_path, root),
         served=list(served),
+        card=views.card(row, running=row.status is RunStatus.RUNNING, timeout_minutes=timeout_minutes),
     )
 
 
@@ -122,7 +131,12 @@ def task_run_detail(ctx: Context, task_id: int, run_id: int) -> TaskRunDetail | 
     question = lines(str(stored.get("question") or "")) if row.status is RunStatus.BLOCKED else ""
     return TaskRunDetail(
         task_id=task_id,
-        run=task_run(row, ctx.workspace.root, run_models.served_by(ctx.conn, "task_runs", [row.id])[row.id]),
+        run=task_run(
+            row,
+            ctx.workspace.root,
+            run_models.served_by(ctx.conn, "task_runs", [row.id])[row.id],
+            timeout_minutes=_timeout(ctx),
+        ),
         summary=lines(str(stored.get("summary") or "")) or None,
         question=question or None,
         note=lines(str(stored.get("harness") or "")) or None,
@@ -205,7 +219,9 @@ def _summary(
         stopped_at=db.parse_time(task.stopped_at) if task.stopped_at else None,
         standing=_standing(found),
         question_id=asked.get(task.id),
-        latest=task_run(latest, ctx.workspace.root, served.get(latest.id, ())) if latest is not None else None,
+        latest=task_run(latest, ctx.workspace.root, served.get(latest.id, ()), timeout_minutes=_timeout(ctx))
+        if latest is not None
+        else None,
         runs=runs,
     )
 
@@ -236,3 +252,12 @@ def _ticket(row: records.TaskTicket) -> TaskTicket:
 def _run_of(conn: sqlite3.Connection, task_id: int, run_id: int) -> records.TaskRun | None:
     row = tasks.get_run(conn, run_id)
     return row if row is not None and row.task_id == task_id else None
+
+
+def _timeout(ctx: Context) -> int:
+    """A task run's time limit, the worker's, which says when a working step of its progress is stuck.
+
+    Returns:
+        `runtime.worker_timeout_minutes`.
+    """
+    return ctx.config.runtime.worker_timeout_minutes
