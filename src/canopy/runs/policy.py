@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import conversation, db, sql
+from canopy.core import conversation, db, records, sql
 from canopy.core.vocab import ResumeReason, RunKind
 
 if TYPE_CHECKING:
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 # A unit: a ticket key and a repository name; None for a slot recorded with no repository name.
 Unit = tuple[str, str | None]
 
-# The kinds that work in a unit, and every kind `canopy dispatch` takes. Typed as str, since the counts below key on
+# The kinds that work in a unit, and every kind the `dispatch` tool takes. Typed as str, since the counts below key on
 # `runs.kind` as read; a `click.Choice` takes them as `str(kind)`, since click matches an enum by its name. `fix-ci` is
 # none of them: its old runs and grants count as `resume`'s (`counted_as`). Nor are `split` and `needs-plan`, retired
 # too: their old runs count per ticket, and nothing dispatches them.
@@ -199,10 +199,14 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
         raise conversation.Refused("unknown_repo", f"{key} has had no runs in {repo}")
     # The limit is read in the grant's own write transaction, so it counts this grant and none committed after it.
     with db.transaction(conn):
-        sql.execute(
-            conn,
-            sql.insert("attempt_grants", ticket_key=key, repo=repo, kind=kind, runs=runs, granted_at=db.now()),
-        )
+        records.insert(
+            records.AttemptGrant,
+            ticket_key=key,
+            repo=repo,
+            kind=kind,
+            runs=runs,
+            granted_at=db.now(),
+        ).run(conn)
         granted = grants(conn).get(unit(key, repo), {})
         if kind == FEEDBACK_PLAN:
             done = feedback_plan_attempts(conn).get(unit(key, repo), 0)
@@ -238,7 +242,7 @@ def grant_ticket(conn: sqlite3.Connection, config: Config, key: str, kind: str, 
         raise conversation.Refused("unknown", f"canopy has no record of {key}, so it has no attempts to grant past")
     # Read in the grant's own transaction, as `grant` reads its limit.
     with db.transaction(conn):
-        sql.execute(conn, sql.insert("ticket_grants", ticket_key=key, kind=kind, runs=runs, granted_at=db.now()))
+        records.insert(records.TicketGrant, ticket_key=key, kind=kind, runs=runs, granted_at=db.now()).run(conn)
         return TicketGranted(runs=ticket_attempts(conn, kind).get(key, 0), limit=ticket_limit(conn, config, key, kind))
 
 

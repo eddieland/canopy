@@ -46,7 +46,7 @@ CLOSED_RATIONALE = "closed"
 # tick would name the new release on ticks the old code ran.
 CANOPY_VERSION = version("canopy")
 
-# `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
+# The cursors the `ticket-set` tool names, and the column each one updates. The comment cursor is the ticket's; the
 # review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a ticket's,
 # over journal message ids (DESIGN §22); the rest are journal numbers (§35).
 TICKET_CURSORS: Mapping[str, LiteralString] = {"comment": "comment_cursor", "message": "last_message_id"}
@@ -192,7 +192,7 @@ def transaction(conn: sqlite3.Connection) -> Generator[None]:
     """Run the block in a `BEGIN IMMEDIATE` transaction; roll back if it raises.
 
     Inside a transaction already, the block runs in that one, which commits or rolls back with it: so a call that
-    writes several records together, as a `ticket set` of several tickets does, can wrap writes that open their own.
+    writes several records together, as a `ticket-set` of several tickets does, can wrap writes that open their own.
     """
     if conn.in_transaction:
         yield
@@ -237,7 +237,9 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
             _check_no_live_runs(conn)
         for m in pending:
             conn.executescript(m.path.read_text())
-            sql.execute(conn, sql.insert("schema_migrations", version=m.version, name=m.name).or_ignore())
+            # The migrations' own ledger, which no row type reads: it is written before any table it would check.
+            ledger = sql.insert("schema_migrations", version=m.version, name=m.name)  # noqa: TID251
+            sql.execute(conn, ledger.or_ignore())
             applied_now.append(m.version)
     return applied_now
 
@@ -293,10 +295,13 @@ def record_event(conn: sqlite3.Connection, event: Event) -> int:
     Returns:
         The new `notify_events` row's id.
     """
-    cur = sql.execute(
-        conn,
-        sql.insert("notify_events", grp=event.group, kind=event.kind, at=now(), fields=json.dumps(dict(event.fields))),
-    )
+    cur = records.insert(
+        records.NotifyEvent,
+        grp=event.group,
+        kind=event.kind,
+        at=now(),
+        fields=json.dumps(dict(event.fields)),
+    ).run(conn)
     return rowid(cur)
 
 
@@ -323,13 +328,18 @@ def start_tick(conn: sqlite3.Connection, *, dry_run: bool) -> int:
     Returns:
         The new tick's id.
     """
-    cur = sql.execute(conn, sql.insert("ticks", started_at=now(), dry_run=int(dry_run), canopy_version=CANOPY_VERSION))
+    cur = records.insert(records.Tick, started_at=now(), dry_run=int(dry_run), canopy_version=CANOPY_VERSION).run(conn)
     return rowid(cur)
+
+
+def set_tick_model(conn: sqlite3.Connection, tick_id: int, model: str | None) -> None:
+    """Record the model tick `tick_id`'s overseer asks for as it starts (DESIGN §13); None for the runtime's default."""
+    records.update(records.Tick).set(model=model).where("id = ?", tick_id).run(conn)
 
 
 def finish_tick(conn: sqlite3.Connection, tick_id: int, status: TickStatus, summary: str) -> None:
     """Close a tick with its final status and summary."""
-    sql.execute(conn, sql.update("ticks").set(ended_at=now(), status=status, summary=summary).where("id = ?", tick_id))
+    records.update(records.Tick).set(ended_at=now(), status=status, summary=summary).where("id = ?", tick_id).run(conn)
 
 
 def set_tick_read(conn: sqlite3.Connection, tick_id: int) -> None:
@@ -338,25 +348,27 @@ def set_tick_read(conn: sqlite3.Connection, tick_id: int) -> None:
     Every message up to it was there to see, and every run that started or ended before it.
     """
     newest = sql.select("coalesce(max(id), 0)").from_("messages")
-    sql.execute(
-        conn,
-        sql.update("ticks").set(message_id=sql.frag("({})", newest), read_at=now()).where("id = ?", tick_id),
+    (
+        records.update(records.Tick)
+        .set(message_id=sql.frag("({})", newest), read_at=now())
+        .where("id = ?", tick_id)
+        .run(conn)
     )
 
 
 def set_tick_loop(conn: sqlite3.Connection, tick_id: int, *, idle: bool, woken_by: str) -> None:
     """Record what the loop knew about a tick it ran: whether it was idle, and what ended the wait before it (§6)."""
-    sql.execute(conn, sql.update("ticks").set(idle=int(idle), woken_by=woken_by).where("id = ?", tick_id))
+    records.update(records.Tick).set(idle=int(idle), woken_by=woken_by).where("id = ?", tick_id).run(conn)
 
 
 def set_tick_query(conn: sqlite3.Connection, tick_id: int, *, due: bool) -> None:
     """Record whether a tick's state block told the overseer to run the tracker query (§7, Spacing the query)."""
-    sql.execute(conn, sql.update("ticks").set(query_due=int(due)).where("id = ?", tick_id))
+    records.update(records.Tick).set(query_due=int(due)).where("id = ?", tick_id).run(conn)
 
 
 def set_tick_overseer(conn: sqlite3.Connection, tick_id: int, *, ran: bool) -> None:
     """Record whether a tick runs its overseer: not when it is halted, nor when nothing is left to it (DESIGN §39)."""
-    sql.execute(conn, sql.update("ticks").set(overseer_ran=int(ran)).where("id = ?", tick_id))
+    records.update(records.Tick).set(overseer_ran=int(ran)).where("id = ?", tick_id).run(conn)
 
 
 def last_query_at(conn: sqlite3.Connection) -> str | None:
@@ -466,11 +478,11 @@ def abandon_unfinished_ticks(conn: sqlite3.Connection) -> list[int]:
     running = sql.select("id").from_("ticks").where("status = ?", TickStatus.RUNNING)
     ids = [int(r[0]) for r in sql.execute(conn, running)]
     abandon = (
-        sql.update("ticks")
+        records.update(records.Tick)
         .set(ended_at=sql.ROW, status=TickStatus.ABANDONED, summary="the tick process exited without finishing")
         .where("id = ?", sql.ROW)
     )
-    sql.execute_many(conn, abandon, [(now(), i) for i in ids])
+    sql.execute_many(conn, abandon.statement, [(now(), i) for i in ids])
     return ids
 
 
@@ -501,12 +513,16 @@ def last_tick(conn: sqlite3.Connection) -> records.Tick | None:
 def touch_ticket(conn: sqlite3.Connection, key: str, repo: str) -> None:
     """Record that `key` was seen now, creating its row on first sight."""
     ts = now()
-    sql.execute(
-        conn,
-        sql.insert("tickets", key=key, repo=repo, first_seen_at=ts, last_seen_at=ts, changed_at=ts).on_conflict(
-            "(key) DO UPDATE SET last_seen_at = excluded.last_seen_at",
-        ),
-    )
+    records.insert(
+        records.Ticket,
+        key=key,
+        repo=repo,
+        first_seen_at=ts,
+        last_seen_at=ts,
+        changed_at=ts,
+    ).on_conflict(
+        "(key) DO UPDATE SET last_seen_at = excluded.last_seen_at",
+    ).run(conn)
 
 
 def change_ticket(conn: sqlite3.Connection, key: str, column: TicketChange, value: sql.Value) -> None:
@@ -514,12 +530,12 @@ def change_ticket(conn: sqlite3.Connection, key: str, column: TicketChange, valu
 
     So a tick that sets what was already there is no activity on the web UI's lists (DESIGN §22).
     """
-    sql.execute(
-        conn,
-        sql.update("tickets")
+    (
+        records.update(records.Ticket)
         .set_to("{} = ?", sql.name(column), value)
         .set(changed_at=now())
-        .where("key = ? AND {} IS NOT ?", key, sql.name(column), value),
+        .where("key = ? AND {} IS NOT ?", key, sql.name(column), value)
+        .run(conn)
     )
 
 
@@ -542,17 +558,14 @@ def set_ticket(
             change_ticket(conn, key, "title", title)
         for name, value in (cursors or {}).items():
             cursor = sql.name(TICKET_CURSORS[name])
-            sql.execute(conn, sql.update("tickets").set_to("{} = ?", cursor, value).where("key = ?", key))
+            records.update(records.Ticket).set_to("{} = ?", cursor, value).where("key = ?", key).run(conn)
         if done:
             change_ticket(conn, key, "done", 1)
 
 
 def _ensure_unit(conn: sqlite3.Connection, key: str, unit: str) -> None:
     """Create `key`'s unit in repository `unit` if it has none. Call inside a transaction."""
-    sql.execute(
-        conn,
-        sql.insert("ticket_units", ticket_key=key, repo=unit).on_conflict("(ticket_key, repo) DO NOTHING"),
-    )
+    records.insert(records.TicketUnit, ticket_key=key, repo=unit).on_conflict("(ticket_key, repo) DO NOTHING").run(conn)
 
 
 def set_unit(
@@ -572,26 +585,23 @@ def set_unit(
     with transaction(conn):
         touch_ticket(conn, key, repo)
         _ensure_unit(conn, key, unit)
-        the_unit = sql.update("ticket_units").where("ticket_key = ? AND repo = ?", key, unit)
+        the_unit = records.update(records.TicketUnit).where("ticket_key = ? AND repo = ?", key, unit)
         changes: tuple[tuple[Literal["phase", "pr_url"], str | None], ...] = (("phase", phase), ("pr_url", pr_url))
         for column, value in changes:
             if value is None:
                 continue
             change = the_unit.set_to("{} = ?", sql.name(column), value).where("{} IS NOT ?", sql.name(column), value)
-            if sql.execute(conn, change).rowcount:
-                sql.execute(conn, sql.update("tickets").set(changed_at=now()).where("key = ?", key))
+            if change.run(conn).rowcount:
+                records.update(records.Ticket).set(changed_at=now()).where("key = ?", key).run(conn)
         for name, value in (cursors or {}).items():
-            sql.execute(conn, the_unit.set_to("{} = ?", sql.name(UNIT_CURSORS[name]), value))
+            the_unit.set_to("{} = ?", sql.name(UNIT_CURSORS[name]), value).run(conn)
 
 
 def set_pr_title(conn: sqlite3.Connection, pr_url: str, title: str) -> None:
     """Record `title` as the PR's own title, replacing any earlier one: for display, never as truth (DESIGN §22)."""
-    sql.execute(
-        conn,
-        sql.insert("pr_titles", pr_url=pr_url, title=title, updated_at=now()).on_conflict(
-            "(pr_url) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at",
-        ),
-    )
+    records.insert(records.PrTitle, pr_url=pr_url, title=title, updated_at=now()).on_conflict(
+        "(pr_url) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at",
+    ).run(conn)
 
 
 def pr_titles(conn: sqlite3.Connection, pr_urls: Collection[str]) -> dict[str, str]:
@@ -698,14 +708,21 @@ def claim_run(conn: sqlite3.Connection, table: RunTable, run_id: int, pid: int) 
         True if `pid` now holds the run; False if the run is not running or another pid holds it.
     """
     claim = (
-        sql.update(table).set(pid=pid).where("id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)", run_id, pid)
+        records.update(records.of_table(table))
+        .set(pid=pid)
+        .where("id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)", run_id, pid)
     )
-    return sql.execute(conn, claim).rowcount == 1
+    return claim.run(conn).rowcount == 1
 
 
 def set_agent_pid(conn: sqlite3.Connection, table: RunTable, run_id: int, pid: int) -> None:
     """Record the pid, and so the process group, of the agent a run in `table` started: a worker, chore, or reviewer."""
-    sql.execute(conn, sql.update(table).set_to("{} = ?", sql.name(AGENT_PID[table]), pid).where("id = ?", run_id))
+    (
+        records.update(records.of_table(table))
+        .set_to("{} = ?", sql.name(AGENT_PID[table]), pid)
+        .where("id = ?", run_id)
+        .run(conn)
+    )
 
 
 def set_run_report(
@@ -754,9 +771,8 @@ def finish_run(
         if closed and table == "review_runs" and status == "done":
             # A revision of a review's draft is no review: it answers no request (DESIGN §34).
             its_pr = sql.select("pr_url").from_("review_runs").where("id = ? AND revises IS NULL", run_id)
-            sql.execute(
-                conn,
-                sql.update("review_requests")
+            (
+                records.update(records.ReviewRequest)
                 .set(ended_at=now())
                 .set_to("end_reason = 'reviewed'")
                 .where("ended_at IS NULL AND pr_url = ({})", its_pr)
@@ -765,7 +781,8 @@ def finish_run(
                     "AND NOT EXISTS (SELECT 1 FROM review_runs r WHERE r.pr_url = review_requests.pr_url "
                     "AND r.persona = p.persona AND r.status = 'done' AND r.revises IS NULL "
                     "AND r.started_at >= review_requests.created_at))",
-                ),
+                )
+                .run(conn)
             )
         if closed and event is not None:
             record_event(conn, event)
@@ -778,7 +795,7 @@ def _number_review_run(conn: sqlite3.Connection, run_id: int) -> None:
     """Give a review run that just ended its journal number, what a `review` cursor names of it (DESIGN §35)."""
     run = sql.execute(conn, sql.select("pr_url, ended_at").from_("review_runs").where("id = ?", run_id)).fetchone()
     number = item_numbers.take(conn, NumberedItem.REVIEW_RUN, str(run[0]), run_id, at=str(run[1]))
-    sql.execute(conn, sql.update("review_runs").set(number=number).where("id = ?", run_id))
+    records.update(records.ReviewRun).set(number=number).where("id = ?", run_id).run(conn)
 
 
 def _close_run(
@@ -794,11 +811,11 @@ def _close_run(
         True if this call closed the run.
     """
     close = (
-        sql.update(table)
+        records.update(records.of_table(table))
         .set(ended_at=now(), status=status, result_json=result_json)
         .where("id = ? AND status = 'running'", run_id)
     )
-    return sql.execute(conn, close).rowcount == 1
+    return close.run(conn).rowcount == 1
 
 
 # Runs and decisions
@@ -847,8 +864,8 @@ def insert_run(
     with transaction(conn):
         if check is not None:
             check()
-        run = sql.insert(
-            "runs",
+        run = records.insert(
+            records.Run,
             tick_id=tick_id,
             ticket_key=key,
             kind=kind,
@@ -862,18 +879,17 @@ def insert_run(
             persona_digest=persona_digest,
             model=model,
         )
-        run_id = rowid(sql.execute(conn, run))
+        run_id = rowid(run.run(conn))
         record_persona_text(conn, persona_digest, persona_text)
-        sql.execute(conn, sql.update("runs").set(log_path=str(runs_dir / f"{run_id}.log")).where("id = ?", run_id))
-        sql.execute_many(
+        records.update(records.Run).set(log_path=str(runs_dir / f"{run_id}.log")).where("id = ?", run_id).run(conn)
+        records.insert_rows(
+            records.RunSlot,
+            ("run_id", "repo", "slot_path", "lease_id", "lease_holder", "base_branch", "pool"),
+        ).many(
             conn,
-            sql.insert_rows(
-                "run_slots",
-                ("run_id", "repo", "slot_path", "lease_id", "lease_holder", "base_branch", "pool"),
-            ),
             [(run_id, s.repo, str(s.slot_path), s.lease_id, s.lease_holder, s.base_branch, s.pool) for s in slots],
         )
-        sql.execute_many(conn, sql.insert_rows("run_reasons", ("run_id", "reason")), [(run_id, r) for r in reasons])
+        records.insert_rows(records.RunReason, ("run_id", "reason")).many(conn, [(run_id, r) for r in reasons])
         event = started(run_id) if started is not None else None
         if event is not None:
             record_event(conn, event)
@@ -881,12 +897,14 @@ def insert_run(
             rendered(run_id)
         if not works_units:
             return run_id
-        sql.execute(conn, sql.update("tickets").set(branch=branch).where("key = ?", key))
+        records.update(records.Ticket).set(branch=branch).where("key = ?", key).run(conn)
         for slot in slots:
             _ensure_unit(conn, key, slot.repo)
-            sql.execute(
-                conn,
-                sql.update("ticket_units").set(branch=branch).where("ticket_key = ? AND repo = ?", key, slot.repo),
+            (
+                records.update(records.TicketUnit)
+                .set(branch=branch)
+                .where("ticket_key = ? AND repo = ?", key, slot.repo)
+                .run(conn)
             )
     return run_id
 
@@ -933,7 +951,7 @@ def get_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
 
 def set_slot_link(conn: sqlite3.Connection, run_id: int, repo: str, link: bytes | None) -> None:
     """Record what a run's slot's `.git` file held when `_run` started (DESIGN §8)."""
-    sql.execute(conn, sql.update("run_slots").set(git_link=link).where("run_id = ? AND repo = ?", run_id, repo))
+    records.update(records.RunSlot).set(git_link=link).where("run_id = ? AND repo = ?", run_id, repo).run(conn)
 
 
 def finish_ticket_run(
@@ -1031,14 +1049,14 @@ def set_run_progress(
     Its session always; what it has spent so far when `usage` is given; and its latest tool call when `did` is, as
     `(tool, what it did)`, stamped now.
     """
-    running = sql.update("runs").where("id = ? AND status = 'running'", run_id)
+    running = records.update(records.Run).where("id = ? AND status = 'running'", run_id)
     with transaction(conn):
-        sql.execute(conn, running.set(session_id=session_id))
+        running.set(session_id=session_id).run(conn)
         if usage is not None:
-            sql.execute(conn, running.set_to(_SPENT, *_spent(usage)))
+            running.set_to(_SPENT, *_spent(usage)).run(conn)
         if did is not None:
             tool, what = did
-            sql.execute(conn, running.set(activity_tool=tool, activity=what, activity_at=now()))
+            running.set(activity_tool=tool, activity=what, activity_at=now()).run(conn)
 
 
 def set_progress(
@@ -1053,11 +1071,11 @@ def set_progress(
 
     Its session always, and what it has spent so far when `usage` is given. Nothing changes for one not running.
     """
-    running = sql.update(table).where("id = ? AND status = 'running'", row_id)
+    running = records.update(records.of_table(table)).where("id = ? AND status = 'running'", row_id)
     with transaction(conn):
-        sql.execute(conn, running.set(session_id=session_id))
+        running.set(session_id=session_id).run(conn)
         if usage is not None:
-            sql.execute(conn, running.set_to(_SPENT, *_spent(usage)))
+            running.set_to(_SPENT, *_spent(usage)).run(conn)
 
 
 def usage_of(row: sqlite3.Row | records.Row) -> Usage | None:
@@ -1102,18 +1120,17 @@ def _set_report(
     # Only with a report: a template of the operator's that prints plain text may not load the snapshot at all.
     loaded = digest if session_id is not None or usage is not None else None
     report = (
-        sql.update(table)
+        records.update(records.of_table(table))
         .set(session_id=session_id)
         .set_to(_SPENT, *spent)
         .set(definitions_digest=loaded)
         .where("id = ?", row_id)
     )
     with transaction(conn):
-        sql.execute(conn, report)
-        sql.execute(conn, sql.delete("run_tools").where("run_table = ? AND run_id = ?", table, row_id))
-        sql.execute_many(
+        report.run(conn)
+        records.delete(records.RunTool).where("run_table = ? AND run_id = ?", table, row_id).run(conn)
+        records.insert_rows(records.RunTool, ("run_table", "run_id", "tool", "calls", "errors", "result_chars")).many(
             conn,
-            sql.insert_rows("run_tools", ("run_table", "run_id", "tool", "calls", "errors", "result_chars")),
             [(table, row_id, t.tool, t.calls, t.errors, t.result_chars) for t in tools],
         )
 
@@ -1227,8 +1244,8 @@ def record_decision(
     Returns:
         The new decision's id.
     """
-    decision = sql.insert(
-        "decisions",
+    decision = records.insert(
+        records.Decision,
         tick_id=tick_id,
         ticket_key=key,
         action=action,
@@ -1240,7 +1257,7 @@ def record_decision(
         kept=kept,
         item=item,
     )
-    return rowid(sql.execute(conn, decision))
+    return rowid(decision.run(conn))
 
 
 def record_persona_text(conn: sqlite3.Connection, digest: str | None, text: str | None) -> None:
@@ -1251,7 +1268,7 @@ def record_persona_text(conn: sqlite3.Connection, digest: str | None, text: str 
     """
     if digest is None or text is None:
         return
-    sql.execute(conn, sql.insert("persona_texts", digest=digest, text=text, recorded_at=now()).or_ignore())
+    records.insert(records.PersonaText, digest=digest, text=text, recorded_at=now()).or_ignore().run(conn)
 
 
 def persona_text(conn: sqlite3.Connection, digest: str) -> str | None:
@@ -1389,8 +1406,8 @@ def insert_message(
         recorded = comment_message(conn, subject_kind, subject_id, comment.id)
         if recorded is not None:
             return recorded.id
-    message = sql.insert(
-        "messages",
+    message = records.insert(
+        records.Message,
         subject_kind=subject_kind,
         subject_id=subject_id,
         at=now(),
@@ -1407,7 +1424,7 @@ def insert_message(
         truncated=int(comment.truncated) if comment else 0,
         task_run_id=task_run_id,
     )
-    return rowid(sql.execute(conn, message))
+    return rowid(message.run(conn))
 
 
 def comment_message(
@@ -1486,8 +1503,8 @@ def set_start(
     ts = now()
     match status:
         case StartStatus.STARTED:
-            start = sql.insert(
-                "starts",
+            start = records.insert(
+                records.Start,
                 subject_kind=subject_kind,
                 subject_id=subject_id,
                 status=sql.frag("'started'"),
@@ -1497,15 +1514,15 @@ def set_start(
                 "(subject_kind, subject_id) DO UPDATE SET status = 'started', started_at = excluded.started_at, "
                 "stopped_at = NULL, channel = excluded.channel",
             )
-            sql.execute(conn, start)
+            start.run(conn)
         case StartStatus.STOPPED:
             stop = (
-                sql.update("starts")
+                records.update(records.Start)
                 .set_to("status = 'stopped'")
                 .set(stopped_at=ts, channel=channel)
                 .where("subject_kind = ? AND subject_id = ?", subject_kind, subject_id)
             )
-            sql.execute(conn, stop)
+            stop.run(conn)
         case _:
             assert_never(status)
 
@@ -1679,8 +1696,8 @@ def set_seen(conn: sqlite3.Connection, kind: SeenKind, subjects: Iterable[str], 
     at = now()
     new: list[str] = []
     for subject in subjects:
-        mark = sql.insert("seen", kind=kind, subject=subject, at=at, channel=channel)
-        if sql.execute(conn, mark.on_conflict("(kind, subject) DO NOTHING")).rowcount > 0:
+        mark = records.insert(records.Seen, kind=kind, subject=subject, at=at, channel=channel)
+        if mark.on_conflict("(kind, subject) DO NOTHING").run(conn).rowcount > 0:
             new.append(subject)
     return new
 
@@ -1705,13 +1722,13 @@ def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: s
         sql.select("max(id)").from_("messages").where("subject_kind = ? AND subject_id = ?", SUBJECT_TICKET, key)
     )
     forget = (
-        sql.update("tickets")
+        records.update(records.Ticket)
         .set_to("branch = NULL, phase = NULL, needs_human_since = NULL, done = 0")
         .set(forgotten_at=ts, changed_at=ts)
         .set(forgotten_run_id=sql.frag("({})", last_run), forgotten_message_id=sql.frag("({})", last_message))
         .where("key = ?", key)
     )
-    sql.execute(conn, forget)
+    forget.run(conn)
     forgotten = (
         sql.select(
             "key, forgotten_at, ?, forgotten_run_id, forgotten_message_id, ?, ?",
@@ -1723,19 +1740,19 @@ def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: s
         .where("key = ?", key)
     )
     columns = ("ticket_key", "at", "channel", "run_id", "message_id", "branch", "prs")
-    sql.execute(conn, sql.insert_from("forgets", columns, forgotten))
-    sql.execute(conn, sql.delete("ticket_units").where("ticket_key = ?", key))
-    sql.execute(
-        conn,
-        sql.update("plans")
+    records.insert_from(records.Forget, columns, forgotten).run(conn)
+    records.delete(records.TicketUnit).where("ticket_key = ?", key).run(conn)
+    (
+        records.update(records.Plan)
         .set(status=PlanStatus.SUPERSEDED)
-        .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
+        .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED)
+        .run(conn)
     )
-    sql.execute(
-        conn,
-        sql.update("feedback_plans")
+    (
+        records.update(records.FeedbackPlan)
         .set(status=PlanStatus.SUPERSEDED)
-        .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED),
+        .where("ticket_key = ? AND status != ?", key, PlanStatus.SUPERSEDED)
+        .run(conn)
     )
 
 

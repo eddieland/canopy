@@ -121,13 +121,16 @@ export function AppShell() {
                 <div className="grid h-dvh grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
                     <header
                         data-testid="app-header"
-                        className="relative z-10 flex items-center justify-between gap-4 border-b bg-surface/85 px-4"
+                        className={cn(
+                            'relative z-10 flex items-center justify-between gap-4 border-b border-edge bg-surface/85',
+                            'px-4',
+                        )}
                     >
                         {/* The aurora: a hairline through the nav's colors, in its order, along the header's foot,
                         over its border. */}
                         <span
                             aria-hidden
-                            className="aurora pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90"
+                            className="aurora pointer-events-none absolute inset-x-0 -bottom-px opacity-90"
                         />
                         <div className="flex items-center gap-2.5">
                             <LiveMark stream={stream.status} />
@@ -157,7 +160,7 @@ export function AppShell() {
                         stays at the window's foot however long the page; the part above it scrolls on its own in a
                         window too short. The room left between them is Sprig's, when it is on. */}
                         {mode === 'full' && (
-                            <aside className="border-r bg-surface/60">
+                            <aside className="border-r border-edge bg-surface/60">
                                 <div
                                     className={cn(
                                         'sticky top-0 flex h-[calc(100dvh-3rem)] flex-col',
@@ -169,7 +172,7 @@ export function AppShell() {
                             </aside>
                         )}
                         {mode === 'strip' && (
-                            <aside className="border-r bg-surface/60" data-testid="rail-strip">
+                            <aside className="border-r border-edge bg-surface/60" data-testid="rail-strip">
                                 <div className="sticky top-0 flex flex-col items-center pt-2 print:static">
                                     <RailButton />
                                     <div className="w-full">

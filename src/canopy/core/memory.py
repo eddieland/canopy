@@ -301,20 +301,13 @@ def record_rendered(conn: sqlite3.Connection, run_id: int, rendered: Rendered) -
 
     Call inside the transaction that inserts the run (`db.insert_run`), so a run and what it read are one fact.
     """
-    sql.execute(
-        conn,
-        sql.insert(
-            "run_memory",
-            run_id=run_id,
-            ticket_notes=rendered.modes.ticket_notes,
-            proposals=rendered.modes.proposals,
-        ),
-    )
-    sql.execute_many(
-        conn,
-        sql.insert_rows("memory_reads", ("run_id", "memory_id")),
-        [(run_id, i) for i in rendered.ids],
-    )
+    records.insert(
+        records.RunMemory,
+        run_id=run_id,
+        ticket_notes=rendered.modes.ticket_notes,
+        proposals=rendered.modes.proposals,
+    ).run(conn)
+    records.insert_rows(records.MemoryRead, ("run_id", "memory_id")).many(conn, [(run_id, i) for i in rendered.ids])
 
 
 def run_memory(conn: sqlite3.Connection, run_id: int) -> records.RunMemory | None:
@@ -415,11 +408,11 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
         slots = sql.execute(conn, sql.select("repo").from_("run_slots").where("run_id = ?", run_id))
         repos = {str(r["repo"]) for r in slots}
         _write_proposals(conn, writing, fields.proposals, repos)
-    sql.execute(
-        conn,
-        sql.update("run_memory")
+    (
+        records.update(records.RunMemory)
         .set(refused=json.dumps([r.as_json() for r in writing.refused]))
-        .where("run_id = ?", run_id),
+        .where("run_id = ?", run_id)
+        .run(conn)
     )
     log = logs.for_tick(writing.tick_id)
     for r in writing.refused:
@@ -446,16 +439,18 @@ def _mark_wrong(conn: sqlite3.Connection, writing: _Writing, wrong: Sequence[rec
     for m in wrong:
         if m.scope is MemoryScope.LESSON:
             # The operator's word: a run's report raises `lesson_wrong`, and only the operator retires it.
-            sql.execute(
-                conn,
-                sql.update("memories").set(wrong_at=stamp, wrong_run_id=writing.run_id).where("id = ?", m.id),
+            (
+                records.update(records.Memory)
+                .set(wrong_at=stamp, wrong_run_id=writing.run_id)
+                .where("id = ?", m.id)
+                .run(conn)
             )
         else:
-            sql.execute(
-                conn,
-                sql.update("memories")
+            (
+                records.update(records.Memory)
                 .set(status=MemoryStatus.INVALID, why=f"wrong, says run {writing.run_id}", invalidated_at=stamp)
-                .where("id = ?", m.id),
+                .where("id = ?", m.id)
+                .run(conn)
             )
 
 
@@ -466,9 +461,8 @@ def _mark_used(conn: sqlite3.Connection, used: Sequence[records.Memory]) -> None
     for m in used:
         # A lesson in use is pushed back from review: one that helps keeps being served without the operator's look. A
         # pinned one is never due, so it keeps no review date to push.
-        sql.execute(
-            conn,
-            sql.update("memories")
+        (
+            records.update(records.Memory)
             .set(last_used_at=stamp)
             .set_to("use_count = use_count + 1")
             .set_to(
@@ -477,14 +471,17 @@ def _mark_used(conn: sqlite3.Connection, used: Sequence[records.Memory]) -> None
                 MemoryScope.LESSON,
                 review,
             )
-            .where("id = ?", m.id),
+            .where("id = ?", m.id)
+            .run(conn)
         )
 
 
 def _mark_cited(conn: sqlite3.Connection, run_id: int, cited: MemoryCited, memories: Sequence[records.Memory]) -> None:
     # Beside the count, so a memory names the runs that relied on it, and a run's page what it relied on.
-    marked = sql.update("memory_reads").set(cited=cited).where("run_id = ?", run_id).where("memory_id = ?", sql.ROW)
-    sql.execute_many(conn, marked, [(m.id,) for m in memories])
+    marked = (
+        records.update(records.MemoryRead).set(cited=cited).where("run_id = ?", run_id).where("memory_id = ?", sql.ROW)
+    )
+    sql.execute_many(conn, marked.statement, [(m.id,) for m in memories])
 
 
 def _drop_notes(conn: sqlite3.Connection, writing: _Writing, value: JsonValue, shown: Iterable[records.Memory]) -> None:
@@ -494,12 +491,12 @@ def _drop_notes(conn: sqlite3.Connection, writing: _Writing, value: JsonValue, s
         note = rendered.get(entry) if isinstance(entry, str) else None
         if note is None:
             continue
-        sql.execute(
-            conn,
-            sql.update("memories")
+        (
+            records.update(records.Memory)
             .set(status=MemoryStatus.INVALID, why=f"dropped by run {writing.run_id}", invalidated_at=stamp)
             .where("id = ?", note.id)
-            .where("status = ?", MemoryStatus.ACTIVE),
+            .where("status = ?", MemoryStatus.ACTIVE)
+            .run(conn)
         )
 
 
@@ -549,30 +546,27 @@ def _write_note(conn: sqlite3.Connection, writing: _Writing, key: str, text: str
     stamp = db.now()
     if replaced is not None:
         # Before the insert: the index holds one active note per ticket and key.
-        sql.execute(conn, sql.update("memories").set(status=MemoryStatus.SUPERSEDED).where("id = ?", replaced.id))
-    cur = sql.execute(
-        conn,
-        sql.insert(
-            "memories",
-            scope=MemoryScope.TICKET,
-            ticket_key=writing.ticket_key,
-            key=key,
-            body=text,
-            status=MemoryStatus.ACTIVE,
-            author=MemoryAuthor.WORKER,
-            run_id=writing.run_id,
-            tick_id=writing.tick_id,
-            head=writing.head,
-            supersedes=replaced.id if replaced is not None else None,
-            created_at=stamp,
-        ),
-    )
+        records.update(records.Memory).set(status=MemoryStatus.SUPERSEDED).where("id = ?", replaced.id).run(conn)
+    cur = records.insert(
+        records.Memory,
+        scope=MemoryScope.TICKET,
+        ticket_key=writing.ticket_key,
+        key=key,
+        body=text,
+        status=MemoryStatus.ACTIVE,
+        author=MemoryAuthor.WORKER,
+        run_id=writing.run_id,
+        tick_id=writing.tick_id,
+        head=writing.head,
+        supersedes=replaced.id if replaced is not None else None,
+        created_at=stamp,
+    ).run(conn)
     if replaced is not None:
-        sql.execute(
-            conn,
-            sql.update("memories")
+        (
+            records.update(records.Memory)
             .set(why=f"superseded by note {cur.lastrowid}", invalidated_at=stamp)
-            .where("id = ?", replaced.id),
+            .where("id = ?", replaced.id)
+            .run(conn)
         )
 
 
@@ -611,23 +605,20 @@ def _write_proposal(conn: sqlite3.Connection, writing: _Writing, key: str, text:
     for found in [*waiting, *active_lessons(conn)]:
         if found.body is not None and normalized(found.body) == same:
             raise TextRefused(f"it repeats {found.scope} {found.id}")
-    sql.execute(
-        conn,
-        sql.insert(
-            "memories",
-            scope=MemoryScope.PROPOSAL,
-            ticket_key=writing.ticket_key,
-            repo=repo,
-            key=key,
-            body=text,
-            status=MemoryStatus.PENDING,
-            author=MemoryAuthor.WORKER,
-            run_id=writing.run_id,
-            tick_id=writing.tick_id,
-            head=writing.head,
-            created_at=db.now(),
-        ),
-    )
+    records.insert(
+        records.Memory,
+        scope=MemoryScope.PROPOSAL,
+        ticket_key=writing.ticket_key,
+        repo=repo,
+        key=key,
+        body=text,
+        status=MemoryStatus.PENDING,
+        author=MemoryAuthor.WORKER,
+        run_id=writing.run_id,
+        tick_id=writing.tick_id,
+        head=writing.head,
+        created_at=db.now(),
+    ).run(conn)
 
 
 def end_ticket_notes(conn: sqlite3.Connection, key: str, why: str) -> int:
@@ -636,13 +627,13 @@ def end_ticket_notes(conn: sqlite3.Connection, key: str, why: str) -> int:
     Returns:
         How many notes it invalidated.
     """
-    cur = sql.execute(
-        conn,
-        sql.update("memories")
+    cur = (
+        records.update(records.Memory)
         .set(status=MemoryStatus.INVALID, why=why, invalidated_at=db.now())
         .where("scope = ?", MemoryScope.TICKET)
         .where("ticket_key = ?", key)
-        .where("status = ?", MemoryStatus.ACTIVE),
+        .where("status = ?", MemoryStatus.ACTIVE)
+        .run(conn)
     )
     return cur.rowcount
 
@@ -1009,7 +1000,7 @@ def lessons_digest(conn: sqlite3.Connection, repos: Collection[str] | None, *, c
     intro = (
         "Lessons the operator promoted for every run in this workspace, from what earlier workers proposed. They are "
         "the operator's words, instructions as if the operator had said them to you, except where one conflicts with "
-        "an obligation below or anything else this prompt requires: the prompt comes first. They reach nobody else: "
+        "an obligation or anything else this prompt requires: the prompt comes first. They reach nobody else: "
         "never quote, paraphrase, or mention them on the ticket, a PR, or in a commit message."
     )
     body = [_lesson_entry(m) for m in kept] or ["None: the operator has promoted no lesson yet."]

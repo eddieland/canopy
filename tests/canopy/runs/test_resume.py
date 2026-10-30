@@ -17,7 +17,7 @@ from tests.canopy.helpers import (
     KEY,
     READ_PR,
     WORKER_DONE,
-    canopy,
+    Called,
     decisions,
     in_tick,
     present,
@@ -30,13 +30,11 @@ from tests.canopy.observation_helpers import number_of
 from tests.canopy.scenario_helpers import Scenario, asks, dispatches, fails, pushes
 from tests.conftest import TRACKER_SOURCE, CanopyEnv, GitPool, git
 
-LABEL = ("--label", "agent-ready-tester")
-RESUME = (*LABEL, "--kind", "resume")
 CI, REVIEW, CONFLICT = ResumeReason.CI, ResumeReason.REVIEW, ResumeReason.CONFLICT
 CHECK = "Check unit-tests failed on run 77: https://example.test/runs/77"
 
 
-def resumes(*reasons: ResumeReason) -> list[str]:
+def resumes(*reasons: ResumeReason) -> Called:
     """The overseer resumes PROJ-1 for `reasons`."""
     return dispatches(kind=RunKind.RESUME, reasons=reasons)
 
@@ -90,10 +88,10 @@ def test_a_red_check_resumes_the_recorded_branch_with_the_checks_named(scenario:
     assert log.splitlines() == ["PROJ-1: fix the build", "PROJ-1: first", "initial"]
     prompt = resumed.prompt
     assert prompt.startswith("# canopy worker: resume")
-    assert '## Why you were resumed\n\n- `ci`: checks failed on the PR: fix them, as "Failed checks" below says.\n' in (
+    assert '## Why you were resumed\n\n- `ci`: checks failed on the PR: fix them, as "Failed checks" says.\n' in (
         prompt
     )
-    assert "## Failed checks\n\nWhen `ci` is among the reasons above" in prompt
+    assert "## Failed checks\n\nWhen `ci` is among the reasons, read the failing checks" in prompt
     assert "PR: https://example.test/pr/1." in prompt  # the implement worker reported it
     assert "This is attempt 1 of 6." in prompt
     assert CHECK in prompt
@@ -184,7 +182,7 @@ def test_resuming_needs_a_recorded_branch(scenario: Scenario, treehouse_state: P
 
 
 def test_slug_is_for_implement_only(scenario: Scenario) -> None:
-    reason = "resume continues the ticket's recorded branch; slug (--slug) is for implement"
+    reason = "resume continues the ticket's recorded branch; slug is for implement"
     other = dispatches(kind=RunKind.RESUME, reasons=[CI], slug="other")
     assert scenario.refuses(other) == [("refused:bad_slug", reason)]
 
@@ -192,14 +190,14 @@ def test_slug_is_for_implement_only(scenario: Scenario) -> None:
 @pytest.mark.parametrize("mode", ["live", "dry run"])
 def test_fix_ci_is_refused_naming_resume(scenario: Scenario, mode: str) -> None:
     with_branch(scenario.conn)
-    fix_ci = canopy("dispatch", KEY, "--repo", "repo", *LABEL, "--kind", "fix-ci", "--context", CHECK)
-    reason = "fix-ci is retired: a resume fixes CI now; dispatch kind resume, reasons ci (--kind resume --reason ci)"
+    fix_ci = dispatches(kind=RunKind.FIX_CI, context=CHECK)
+    reason = "fix-ci is retired: a resume fixes CI now; dispatch kind resume, reasons ci"
     assert scenario.refuses(fix_ci, dry_run=mode == "dry run") == [("refused:bad_kind", reason)]
 
 
 @pytest.mark.parametrize("mode", ["live", "dry run"])
 def test_split_is_refused_naming_follow_ups(scenario: Scenario, mode: str) -> None:
-    split = canopy("dispatch", KEY, "--repo", "repo", *LABEL, "--kind", "split", "--context", "split it")
+    split = dispatches(kind=RunKind.SPLIT, context="split it")
     [(action, reason)] = scenario.refuses(split, dry_run=mode == "dry run")
     assert action == "refused:bad_kind"
     assert reason.startswith("split is retired: a worker files follow-up tickets now")
@@ -207,46 +205,40 @@ def test_split_is_refused_naming_follow_ups(scenario: Scenario, mode: str) -> No
 
 @pytest.mark.parametrize("mode", ["live", "dry run"])
 def test_needs_plan_is_refused_naming_plan(scenario: Scenario, mode: str) -> None:
-    triage = canopy("dispatch", KEY, "--repo", "repo", *LABEL, "--kind", "needs-plan", "--context", "is it trivial?")
+    triage = dispatches(kind=RunKind.NEEDS_PLAN, context="is it trivial?")
     reason = "needs-plan is retired: a ticket that needs a plan is planned; dispatch plan"
     assert scenario.refuses(triage, dry_run=mode == "dry run") == [("refused:bad_kind", reason)]
 
 
 @pytest.mark.parametrize(
-    ("args", "reason"),
+    ("move", "reason"),
     [
         (
-            (),
+            resumes(),
             (
-                "reasons is required for a resume (--reason): name why it runs, one or more of ci, review, reply, "
-                "conflict, no_pr, retarget"
+                "reasons is required for a resume: name why it runs, one or more of ci, review, reply, conflict, "
+                "no_pr, retarget"
             ),
         ),
         (
-            ("--reason", "review", "--cursor", "ci=7"),
-            "cursor ci (--cursor ci) is handled by a resume for ci: add ci to reasons (--reason ci)",
+            dispatches(kind=RunKind.RESUME, reasons=[REVIEW], cursors={"ci": "7"}),
+            "cursor ci is handled by a resume for ci: add ci to reasons",
         ),
         (
-            ("--reason", "ci", "--cursor", "review=4127"),
-            (
-                "cursor review (--cursor review) is handled by a resume for review: add review to reasons "
-                "(--reason review)"
-            ),
+            dispatches(kind=RunKind.RESUME, reasons=[CI], cursors={"review": "4127"}),
+            "cursor review is handled by a resume for review: add review to reasons",
         ),
         (
-            ("--reason", "ci", "--cursor", "comment=1"),
-            "cursor comment (--cursor comment) is handled by a resume for reply: add reply to reasons (--reason reply)",
+            dispatches(kind=RunKind.RESUME, reasons=[CI], cursors={"comment": "1"}),
+            "cursor comment is handled by a resume for reply: add reply to reasons",
         ),
         (
-            ("--reason", "ci", "--cursor", "message=4"),
-            "cursor message (--cursor message) is handled by a resume for reply: add reply to reasons (--reason reply)",
+            dispatches(kind=RunKind.RESUME, reasons=[CI], cursors={"message": "4"}),
+            "cursor message is handled by a resume for reply: add reply to reasons",
         ),
         (
-            ("--reason", "retarget", "--base", "agent/PROJ-9-other"),
-            (
-                "reasons retarget (--reason retarget) is for a PR whose blocker merged, and base (--base) says it is "
-                "still open"
-            ),
+            dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.RETARGET], base="agent/PROJ-9-other"),
+            "reasons retarget is for a PR whose blocker merged, and base says it is still open",
         ),
     ],
 )
@@ -254,7 +246,7 @@ def test_a_resume_names_why_it_runs_and_each_cursor_needs_its_reason(
     scenario: Scenario,
     treehouse_state: Path,
     connector_state: Path,
-    args: tuple[str, ...],
+    move: Called,
     reason: str,
 ) -> None:
     with_branch(scenario.conn)
@@ -262,13 +254,13 @@ def test_a_resume_names_why_it_runs_and_each_cursor_needs_its_reason(
     said = {"kind": "comment", "ticket": KEY, "id": "c1", "author": "bob", "time": "2026-10-18T10:00:00Z"}
     connector_state.write_text(json.dumps({TRACKER_SOURCE: {"lines": [said]}}))
     tracker_holds(scenario.conn)
-    assert scenario.refuses(resumes() + list(args)) == [("refused:bad_reason", reason)]
+    assert scenario.refuses(move) == [("refused:bad_reason", reason)]
     assert not treehouse_state.exists()  # refused before leasing
 
 
 def test_a_reason_is_for_resume_only(scenario: Scenario) -> None:
     assert scenario.refuses(dispatches(reasons=[CI])) == [
-        ("refused:bad_reason", "reasons (--reason) say why a resume runs; they are for resume only"),
+        ("refused:bad_reason", "reasons say why a resume runs; they are for resume only"),
     ]
 
 
@@ -449,7 +441,7 @@ def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(
     scenario.tick(dispatches(), worker=pushes(prs={"repo": READ_PR}))
     named: list[int] = []
 
-    def fails_again() -> list[str]:
+    def fails_again() -> Called:
         """A push makes a new head on the PR, whose check fails; returns the overseer's resume for CI, naming it."""
         run_id = 77 + len(named)
         failed = {"name": "unit-tests", "status": "completed", "conclusion": "failure", "run_id": run_id}

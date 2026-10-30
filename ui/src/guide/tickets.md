@@ -53,7 +53,7 @@ Below:
   repository), what the ticket has cost so far, and the persona each of its agents writes in next and the model it
   runs on. See [Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model). Once more than
   one model has served the ticket, a line under its total cost splits it by model, with `none` for runs whose
-  sessions canopy hasn't read: the canary's bill, itemized.
+  sessions canopy hasn't read: the override's bill, itemized.
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
@@ -155,9 +155,9 @@ pick another.
 
 ## Choosing a model
 
-Beside the personas, or under them when the panel is narrow, a row for each of the same three agents names the model
-its next run goes to, then where that comes from, as the persona rows do: **this ticket's override** or
-`[runtime.models]` in your config. When
+Beside each agent's persona, or under it when the panel is narrow, its row names the model its next run goes to, then
+where that comes from, as the persona does: **this ticket's override** or `[runtime.models]` in your config. An id
+long enough to come through a gateway or two ends in an ellipsis; hover it for the whole thing. When
 nothing sets one, the button just says **runtime default**, which is honest but names nothing you could look up. So
 once canopy has read the session of that agent's latest run on this ticket, the row adds **last served** and the model
 that actually answered. It shows on any row whose last run went somewhere other than the button says, such as the run
@@ -174,22 +174,24 @@ first id that holds what you typed, not the model you already have. If the runti
 red and offers **Read again**; until it answers, the only thing you can do is clear the override, since canopy won't
 take a model it can't look up. Picking one saves it after checking it against that list, asked again first if the list
 lacks your pick, so a provider you set up a minute ago isn't turned away for being newer than the list. The button shows
-your pick with a trailing `…` until it's saved, then a green **saved** beside it, in the row itself so nothing below
-jumps. It stays until the ticket's models change again.
+your pick with a trailing `…` until it's saved, then a green **saved** where it says where the model comes from, so
+nothing below jumps, and the keyboard's focus is back on the button you started from. It stays until the ticket's
+models change again; a pick canopy refuses says why in that agent's row.
 The override holds for every run of that agent on this ticket, a `resume` after review comments included, until you pick
-**Clear the override**, below the list, where no amount of scrolling hides it. That is the canary: one ticket on the new
-model, the rest on the one you trust, and [the spend page](reports#the-spend-page) splits what each cost by model once
-they ran. Each run names the model it asked for while it works, then the model that served it, and both when they
-differ, on its page and in the ticket's Runs panel, so a canary ticket reads straight down the panel and you can check
-the canary actually sang.
+**Clear the override**, below the list, where no amount of scrolling hides it. One ticket can run on a different model
+from the rest, and [the spend page](reports#the-spend-page) splits what each cost by model once they ran. Each run
+names the model it asked for while it works, then the model that served it, and both when they differ, on its page and
+in the ticket's Runs panel, so a ticket with an override reads straight down the panel and you can check it really ran
+on what you picked.
 
 Under each model sit the variants the runtime lists for it, in the runtime's order, `@high` and the like for a reasoning
-effort; the model's own row, marked **(default)**, is the effort it runs at when no variant is named. So the canary you
-most likely want first, the same model at another effort, is one pick away, as `canopy model KEY openai/gpt-5@high` sets
-it: type `high` to see every model that has one, each named whole, and Enter takes the first. A variant on the button
-follows the model's id, muted. An override replaces your config's model whole, variant included: over a config of
-`openai/gpt-5@high`, picking `openai/gpt-5` itself runs it at the model's default, and the confirmation says config's
-variant no longer applies, lest the canary come back mysteriously cheaper and you credit the model.
+effort; the model's own row, marked **(default)**, is the effort it runs at when no variant is named. So the override
+you most likely want first, the same model at another effort, is one pick away, as
+`canopy model KEY openai/gpt-5@high` sets it: type `high` to see every model that has one, each named whole, and Enter
+takes the first. A variant on the button follows the model's id, muted. An override replaces your config's model whole,
+variant included: over a config of `openai/gpt-5@high`, picking `openai/gpt-5` itself runs it at the model's default,
+and the confirmation says config's variant no longer applies, lest the ticket come back mysteriously cheaper and you
+credit the model.
 
 The overseer and chores work on no one ticket, so they take only their model in `[runtime.models]`. If a model the
 override names drops off the runtime's list before the next run, that run is refused rather than sent to another

@@ -16,7 +16,7 @@ The rows it decides are `ROWS`: only those it reads from its own journal alone, 
 evidence gate). A row that rests on what a connector observed joins them only by a PR citing the measurement that shows
 the derivation right on it; no switch in config turns one on.
 
-Whatever the overseer records about a ticket the harness decided, through a tool or its command, is refused `decided`
+Whatever the overseer records about a ticket the harness decided, through any of its tools, is refused `decided`
 (`loop.tools`), and the duties check owes it nothing about one (§6). A cursor the harness moves, past what needs no
 handling or what its own run handles (`loop.harness_cursors`), is its decision too, `CURSOR_ACTION`, but decides
 nothing about the ticket.
@@ -48,7 +48,7 @@ CURSOR_ACTION = "cursor"
 class Row:
     """A row of §7 the harness decides: what it records for it, and on which tickets."""
 
-    #: What it records, as `canopy decide` would.
+    #: What it records, as the overseer's `decide` would.
     action: str
     #: Why, the decision's rationale.
     why: str

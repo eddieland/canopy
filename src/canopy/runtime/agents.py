@@ -20,6 +20,10 @@ PLANNER = "canopy-planner"
 REVIEWER = "canopy-reviewer"
 OVERSEER = "canopy-overseer"
 CHORE = "canopy-chore"
+#: The agents whose definition takes, as its body, the fixed instructions of the prompt a run of it is started with,
+#: above the prompt's run marker (DESIGN §13): rendered into a snapshot for the run, so every run of one kind shares the
+#: system prompt the provider caches. Another agent gets the whole prompt as its message.
+BODIED = (WORKER, PRIVATE_WORKER, PLANNER, REVIEWER)
 #: What a chore's own copy of `CHORE` is named after: a chore with a model of its own runs `canopy-chore-<chore>`,
 #: rendered as `CHORE` is but for its model (DESIGN §19, §13). No other agent's name starts so.
 CHORE_COPY_PREFIX = f"{CHORE}-"
@@ -115,6 +119,9 @@ class Rules:
     models: Mapping[str, Model]
     #: The chores' own copies of `CHORE` by name (`chore_agent`), each rendered as `CHORE` is, then with its own model.
     chore_agents: Sequence[str]
+    #: The body of each of `BODIED` by name, for a run whose prompt has fixed instructions: they replace the stub its
+    #: definition holds. An agent not named keeps the stub, which takes the whole prompt as the run's message.
+    bodies: Mapping[str, str]
 
 
 #: How much of an MCP server's tools an agent is offered: every one, only some, or none.

@@ -31,8 +31,9 @@ A tick reads `running` while it works, and ends:
 
 The line under the title says how the tick ended, how many decisions it recorded, and what woke it: the timer, your
 reply, a run ending, **Tick now**, and so on. The **Tick** panel leads with its summary, then when it ran and for how
-long, what it spent, the model its overseer ran on, and the version of canopy that ran it, laid out as a run's page
-is. The version is the one to check when a decision looks like the work of a release you thought you'd upgraded past.
+long, what it spent, the model its overseer ran on, the one `runtime.models.overseer` asked for until its session is
+read, and the version of canopy that ran it, laid out as a run's page is. The version is the one to check when a
+decision looks like the work of a release you thought you'd upgraded past.
 
 The buttons at the right of the title step to the tick before and after this one, dry runs included, so the ticks
 around an old one are a click away rather than an edit to the URL. At either end the button stays, greyed out; on the

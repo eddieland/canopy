@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import sql
+from canopy.core import records
 
 if TYPE_CHECKING:
     import sqlite3
@@ -34,15 +34,12 @@ class Write:
 
 def record(conn: sqlite3.Connection, write: Write) -> None:
     """Add `write` to the journal's `web_writes`."""
-    sql.execute(
-        conn,
-        sql.insert(
-            "web_writes",
-            at=write.at,
-            method=write.method,
-            path=write.path,
-            code=write.code,
-            client=write.client,
-            session=write.session,
-        ),
-    )
+    records.insert(
+        records.WebWrite,
+        at=write.at,
+        method=write.method,
+        path=write.path,
+        code=write.code,
+        client=write.client,
+        session=write.session,
+    ).run(conn)

@@ -11,12 +11,15 @@ operator has not named the trailer themselves.
 import json
 from pathlib import Path
 
+import pytest
+
+from canopy.cli.main import main
 from canopy.core import definitions
 from canopy.core.config import load
 from canopy.core.vocab import ResumeReason, RunKind
-from tests.canopy.helpers import KEY, agent_runs, listed, planner_does, pool_statuses, trailers_on
+from tests.canopy.helpers import KEY, Called, agent_runs, in_tick, listed, planner_does, pool_statuses, trailers_on
 from tests.canopy.review_helpers import CLEAN, feature_commit, head, reviewer_reports
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
+from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool
 
 MODEL = "acme/fake-model-1"
@@ -24,6 +27,13 @@ OTHER = "acme/fake-model-2"
 PLAN = dispatches(kind=RunKind.PLAN)
 #: A resume that needs no cursor and no review: its PR conflicts with its base.
 RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
+
+
+def snapshot_of(scenario: Scenario, run: Ran) -> str:
+    """The digest of the snapshot made for `run`: the config it ran under, and its prompt's body (DESIGN §13)."""
+    cfg = load(scenario.env.root, scenario.env.user_file)
+    bodies, _ = definitions.run_prompt(run.prompt, cfg.runtime.worker_cmd)
+    return definitions.digest(cfg, bodies=bodies)
 
 
 def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(
@@ -37,7 +47,7 @@ def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(
     run = scenario.run(worker=pushes())
     assert run.row["model"] == MODEL
     # What the run records is what it ran on: the snapshot made for the config it ran under names the model.
-    digest = definitions.digest(load(scenario.env.root, scenario.env.user_file))
+    digest = snapshot_of(scenario, run)
     snapshot = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest
     assert f'\nmodel: "{MODEL}"\n' in (snapshot / "agents" / "canopy-worker.md").read_text()
     # The list is read in the workspace root, not in the run's slot, whose own runtime config could change it: at the
@@ -141,7 +151,7 @@ def test_a_run_at_a_variant_records_it_and_its_definition_names_it(
     scenario.configures(runtime={"models": {"worker": f"{MODEL}@high"}})
     run = scenario.run(worker=pushes())
     assert run.row["model"] == f"{MODEL}@high"
-    digest = definitions.digest(load(scenario.env.root, scenario.env.user_file))
+    digest = snapshot_of(scenario, run)
     worker = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest / "agents" / "canopy-worker.md"
     assert f'\nmodel: "{MODEL}"\nvariant: "high"\n' in worker.read_text()
     # The variants are read only when one is chosen: the runtime drops one its model lacks without a word.
@@ -238,6 +248,7 @@ def test_an_override_takes_the_place_of_the_agents_model_in_config(
 def test_canopy_model_refuses_a_model_not_listed_an_unknown_agent_and_inside_a_run(
     scenario: Scenario,
     opencode_state: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     listed(opencode_state, OTHER)
     err = scenario.operator("model", KEY, MODEL, code=1).err
@@ -257,11 +268,14 @@ def test_canopy_model_refuses_a_model_not_listed_an_unknown_agent_and_inside_a_r
     assert "model refused (unsupported)" in scenario.operator("model", "chore:deps", OTHER, code=1).err
     # No agent chooses a model, the overseer's own ticket's least of all (TRUST_MODEL T1), and the list is not read.
     before = calls(opencode_state)
-    err = scenario.overseer("model", KEY, OTHER, "--agent", "reviewer", code=1).err
-    assert "model refused (inside_run): CANOPY_TICK_ID is set" in err
+    with in_tick(scenario.conn, ends_ok=True):
+        assert main(["model", KEY, OTHER, "--agent", "reviewer"]) == 1
+    assert "model refused (inside_run): CANOPY_TICK_ID is set" in capsys.readouterr().err
     assert calls(opencode_state) == before
-    # Nor a dispatch: it has no model flag.
-    assert "No such option '--model'" in scenario.overseer(*dispatches()[1:], "--model", OTHER, code=2).err
+    # Nor a dispatch: it takes no model.
+    move = dispatches()
+    refused = scenario.overseer(Called(move.name, {**move.arguments, "model": OTHER}), error=True)
+    assert "model: Extra inputs are not permitted" in refused.text
     opencode_state.write_text(json.dumps({"exit": 1, "stderr": "Error: something broke\n"}))
     err = scenario.operator("model", KEY, OTHER, code=1).err
     assert err == (
@@ -351,9 +365,11 @@ def test_a_tickets_reviewer_override_reaches_its_reviews_alone(
     listed(opencode_state, MODEL, OTHER)
     scenario.operator("model", KEY, OTHER, "--agent", "reviewer")
     # A review of a PR with no ticket never takes it.
-    scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    assert scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN)).row.model is None
     assert ran_on(agent_log, "canopy-reviewer") is None
-    scenario.review(reviews(feature_commit(git_pool, tmp_path), ticket=KEY), reviewer=reviewer_reports(CLEAN))
+    # A review records the model it asked for as it starts, as a worker run does, and runs on what it recorded.
+    ticketed = reviews(feature_commit(git_pool, tmp_path), ticket=KEY)
+    assert scenario.review(ticketed, reviewer=reviewer_reports(CLEAN)).row.model == OTHER
     assert ran_on(agent_log, "canopy-reviewer") == OTHER
     # Nor does a worker's run: the override is the reviewer's alone.
     assert scenario.run(worker=pushes()).row["model"] is None
@@ -406,7 +422,7 @@ def test_a_reviewers_model_in_config_the_runtime_does_not_list_refuses_a_review_
     assert refused[0] == ("refused:model_missing", reason)
     assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
     listed(opencode_state, OTHER, MODEL)
-    scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    assert scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN)).row.model == MODEL
     assert scenario.conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 1
 
 

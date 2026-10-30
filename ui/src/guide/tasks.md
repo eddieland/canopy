@@ -96,8 +96,8 @@ under the panel is the whole policy: all of it is throwaway until you give it a 
 A run's page is a worker run's page with the task in its trail: its title is `task:N#M` and your text's first line,
 and under it how the run ended. **Run** has the whole of what it said, never cut to a line, and its question when it
 asked one; for a run that failed, the call it ended on; the harness's note when canopy decided how it ended; the PRs it
-named and the tickets it filed; when it ran, what it spent and on which models; its branch, the commit it pushed, and
-its log.
+named and the tickets it filed; when it ran, what it spent and on which models, the one canopy asked for first, as a
+worker run's page names them; its branch, the commit it pushed, and its log.
 
 Under it is the **transcript**, the session's events read from the run's log: what the worker wrote, each tool call
 with its input and output, and what each model call cost, with the context chart one click away, as on a run's page.

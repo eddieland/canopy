@@ -17,6 +17,7 @@ from canopy.core import (
     db,
     definitions,
     personas,
+    prompts,
     records,
     review_answers,
     review_diff,
@@ -33,10 +34,10 @@ from canopy.loop import attention
 from canopy.reviews import grants, waiting
 from canopy.serve import pr_list
 from tests.canopy.helpers import (
+    Called,
     InlineRunner,
     agent_runs,
     calls,
-    canopy,
     decisions,
     granted_meanwhile,
     has_deadline,
@@ -45,10 +46,14 @@ from tests.canopy.helpers import (
     lifelock_left,
     logged,
     messages,
+    overseer_calls,
     personas_dir,
     pool_statuses,
     present,
+    raises,
     tick_starts,
+    ticket_sets,
+    told,
     tools_of,
     waits,
     with_events,
@@ -62,7 +67,7 @@ from tests.canopy.review_helpers import (
     review_decisions,
     reviewer_reports,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, review_waits, reviews
 from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv, GitPool, git
 
@@ -94,7 +99,8 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         reviewer_reports(FINDINGS, ["git", "-C", "checkout", "rev-parse", "HEAD"], ["pwd"]),
     ):
         before = time.time()
-        assert main(reviews(sha, ticket="PROJ-1", context="Start with src/retry.py")[1:]) == 0
+        said = overseer_calls(reviews(sha, ticket="PROJ-1", context="Start with src/retry.py"))
+        assert not said.error, said.text
         tick_starts()
         deadline = time.monotonic() + 30
         row = review_runs.get_review_run(conn, 1)
@@ -123,13 +129,15 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         assert rationale.startswith(f"review run 1: {sha} in ")
         assert rationale.endswith("; context=Start with src/retry.py")
 
-        prompt = reviewer["argv"][3]
+        # Its fixed instructions are its agent's body, which ends with the contract; it is sent the run's own.
+        prompt = told(reviewer)
         assert prompt.startswith("# canopy reviewer\n")
-        assert f"- Checkout: `{run_dir / 'checkout'}` is the repository at that commit." in prompt
+        assert reviewer["argv"][3].startswith("## Run\n\nThis is review 1 of at most ")
+        assert f"- Checkout: `{run_dir / 'checkout'}`" in reviewer["argv"][3]
         assert "Post nothing anywhere" in prompt
         assert "canopy-review" not in prompt
         assert "None: never report `low`." in prompt
-        assert prompt.rstrip().endswith(result.CONTRACT)
+        assert prompt.index(result.CONTRACT) < prompt.index("\n## Run\n")
 
 
 def test_a_review_hears_the_notice_in_force(reviewing: CanopyEnv, scenario: Scenario, git_pool: GitPool) -> None:
@@ -190,6 +198,32 @@ def test_a_review_runs_in_the_reviewers_persona_and_records_it(
     c, _ = signed_in_client(ctx)
     got = c.get(f"/api/reviews/{reviewed.id}").json()
     assert (got["persona"], got["persona_digest"]) == ("skeptic", skeptic.digest)
+
+
+def test_reviews_share_their_reviewers_body_and_snapshot_and_are_sent_only_their_own(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    # DESIGN §13: the fixed instructions are the reviewer's body, the same for every review, whatever its commit,
+    # checkout, or round.
+    first = scenario.review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
+    second = scenario.review(
+        reviews(feature_commit(git_pool, tmp_path), ticket="PROJ-1"),
+        reviewer=reviewer_reports(CLEAN),
+    )
+    runs = agent_runs(scenario.agent_log)
+    assert len(runs) == 2
+    assert runs[0]["env"]["OPENCODE_CONFIG_DIR"] == runs[1]["env"]["OPENCODE_CONFIG_DIR"]
+    bodies = {prompts.split(r.prompt).body for r in (first, second)}
+    assert len(bodies) == 1
+    [body] = bodies
+    assert body is not None
+    for reviewed, run in zip((first, second), runs, strict=True):
+        assert reviewed.row.sha not in body
+        assert run["argv"][3] == prompts.split(reviewed.prompt).message
+        assert f"- Commit: `{reviewed.row.sha}`" in run["argv"][3]
 
 
 def test_a_tickets_reviewer_override_reaches_its_reviews_alone(
@@ -270,7 +304,8 @@ def test_the_reviewer_prompt(
         reviewer_instructions(scenario, "A migration without a test that applies it is a finding.\n")
         command = reviews("b" * 40, ticket="PROJ-1", context="Start with src/retry.py")
     with in_tick(scenario.conn):
-        assert main(command[1:], runner=InlineRunner()) == 0
+        said = overseer_calls(command, runner=InlineRunner())
+        assert not said.error, said.text
         tick_starts(InlineRunner())
     prompt = (reviewing.state_dir / "reviews" / "1.prompt").read_text()
     assert prompt.replace(str(reviewing.state_dir), "/state") == markdown_snapshot
@@ -279,9 +314,9 @@ def test_the_reviewer_prompt(
 @pytest.mark.parametrize(
     ("pr", "sha", "reason"),
     [
-        ("http://x.test/pull/1", "a" * 40, "pr (--pr) must be the PR's plain https:// URL"),
-        (PR, "abc", "sha (--sha) must be the full head commit"),
-        (PR, "A" * 40, "sha (--sha) must be the full head commit"),
+        ("http://x.test/pull/1", "a" * 40, "pr must be the PR's plain https:// URL"),
+        (PR, "abc", "sha must be the full head commit"),
+        (PR, "A" * 40, "sha must be the full head commit"),
     ],
 )
 def test_bad_pr(reviewing: CanopyEnv, scenario: Scenario, pr: str, sha: str, reason: str) -> None:
@@ -435,9 +470,9 @@ def test_a_dry_run_counts_its_reviews(reviewing: CanopyEnv, scenario: Scenario) 
         mock.patch.object(procs.SubprocessRunner, "spawn", autospec=True) as spawn,
         scenario.ticking(dry_run=True) as tick_id,
     ):
-        scenario.overseer(*reviews("a" * 40)[1:])
-        scenario.overseer(*reviews("a" * 40)[1:], code=1)
-        scenario.overseer(*reviews("a" * 40, f"{PR}0")[1:], code=1)
+        scenario.overseer(reviews("a" * 40))
+        scenario.overseer(reviews("a" * 40), error=True)
+        scenario.overseer(reviews("a" * 40, f"{PR}0"), error=True)
         assert [d[2:] for d in review_decisions(conn, tick_id)] == [
             ("dispatch:review", f"dry run: not dispatched; would review {'a' * 40}"),
             ("refused:running", "this dry run already reviewed this PR"),
@@ -530,7 +565,7 @@ def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
 
 @pytest.mark.parametrize("phase", ["review_pending", "review_findings"])
 def test_the_review_phases_are_a_units(reviewing: CanopyEnv, scenario: Scenario, phase: str) -> None:
-    scenario.overseer("ticket", "set", "PROJ-1", "--repo", "repo", "--phase", phase)
+    scenario.overseer(ticket_sets("PROJ-1", repo="repo", phase=phase))
     [unit] = db.units(scenario.conn, "PROJ-1")
     assert unit.phase == phase
 
@@ -615,13 +650,13 @@ def test_the_state_block_shows_reviewed_prs(reviewing: CanopyEnv, scenario: Scen
     assert latest["findings"] == ["retry never stops"]
     # The run took its journal number when it ended: the overseer passes it as the unit's review cursor.
     assert latest["number"] is not None
-    scenario.overseer("ticket", "set", "PROJ-1", "--repo", "repo", "--cursor", f"review={latest['number']}")
+    scenario.overseer(ticket_sets("PROJ-1", repo="repo", cursors={"review": str(latest["number"])}))
     assert "comment" not in latest
 
 
 def test_attention_about_a_pr_without_a_ticket(reviewing: CanopyEnv, scenario: Scenario) -> None:
     scenario.tick(
-        canopy("attention", "--pr", PR, "flaky_rerun", "--detail", "build failed again on rerun"),
+        raises(None, "flaky_rerun", "build failed again on rerun", pr=PR),
         *waits("PROJ-1"),
     )
     conn = scenario.conn
@@ -630,8 +665,10 @@ def test_attention_about_a_pr_without_a_ticket(reviewing: CanopyEnv, scenario: S
     ]
     assert f"pr:{PR}  attention:flaky_rerun" in scenario.operator("decisions").out
     with scenario.ticking() as tick_id:
-        scenario.overseer("attention", "flaky_rerun", "--detail", "x", code=2)
-        scenario.overseer("attention", "--pr", "http://plain", "flaky_rerun", "--detail", "x", code=2)
+        unnamed = scenario.overseer(raises(None, "flaky_rerun", "x"), error=True)
+        assert "key or pr is required" in unnamed.text
+        plain = scenario.overseer(raises(None, "flaky_rerun", "x", pr="http://plain"), error=True)
+        assert "pr: must be a plain https:// URL" in plain.text
     assert review_decisions(conn, tick_id) == []
 
 
@@ -639,10 +676,10 @@ def test_review_wait_records_a_plain_pr_url_and_refuses_anything_else(reviewing:
     conn = scenario.conn
     with scenario.ticking() as tick_id:
         for bad in ("http://x.test/pull/1", "javascript:alert(1)", f"{PR}/{'x' * 300}"):
-            refused = scenario.overseer("review", "wait", "--pr", bad, "--rationale", "draft", code=2)
-            assert "must be a plain https:// URL" in refused.err
+            refused = scenario.overseer(review_waits(bad, "draft"), error=True)
+            assert "pr: must be a plain https:// URL" in refused.text
         assert review_decisions(conn, tick_id) == []
-        scenario.overseer("review", "wait", "--pr", PR, "--rationale", "draft")
+        scenario.overseer(review_waits(PR, "draft"))
         assert review_decisions(conn, tick_id) == [(None, PR, "wait", "draft")]
 
 
@@ -766,7 +803,7 @@ def resume(
     *reasons: ResumeReason,
     cursors: dict[str, str] | None = None,
     context: str | None = None,
-) -> list[str]:
+) -> Called:
     """The overseer dispatches a `resume` of PROJ-1 for review feedback, and for `reasons` besides (DESIGN §8)."""
     return dispatches(
         kind=RunKind.RESUME,
@@ -826,7 +863,7 @@ def test_a_review_run_goes_only_to_a_resume_of_its_own_ticket(
         (resume(failed), f"review run {failed} ended failed with no findings to address"),
         (
             dispatches(review_run=of_ticket),
-            "review_run (--review-run) names findings for a resume to address; it is for resume only",
+            "review_run names findings for a resume to address; it is for resume only",
         ),
     ]:
         assert scenario.refuses(command) == [("refused:bad_review", why)]
@@ -899,26 +936,23 @@ def test_a_review_of_a_stacked_pr_runs_from_the_branch_it_merges_into(
     git("commit", "--quiet", "-m", "backoff", cwd=seed)
     git("push", "--quiet", str(git_pool.origin), "stacked", cwd=seed)
     sha = present(git_pool.remote_head("stacked"))
-    sql.execute(
-        scenario.conn,
-        sql.insert(
-            "observed_prs",
-            url=PR,
-            repository="acme/api",
-            number=7,
-            head_sha=sha,
-            base_ref="feature",
-            draft=False,
-            observed_at=db.now(),
-            labels="[]",
-        ),
-    )
+    records.insert(
+        records.ObservedPr,
+        url=PR,
+        repository="acme/api",
+        number=7,
+        head_sha=sha,
+        base_ref="feature",
+        draft=False,
+        observed_at=db.now(),
+        labels="[]",
+    ).run(scenario.conn)
     reads = [calls("canopy_git_merge-base", base="origin/feature", head="HEAD")]
     reviewed = scenario.review(reviews(sha), reviewer=reviewer_reports(CLEAN, tools=reads))
     assert (reviewed.status, reviewed.row.base_branch) == ("done", "feature"), reviewed.printed.out
     [changed] = present(review_diff.read(review_diff.path_for(reviewed.row.log_path))).files
     assert changed.path == "backoff.py"
-    assert "- Base: the PR merges into `feature`, which is `origin/feature` in the checkout." in reviewed.prompt
+    assert "- Base: `feature`" in reviewed.prompt
     [reviewer] = agent_runs(scenario.agent_log)
     [fork] = reviewer["tools"]
     assert (fork["error"], fork["text"]) == (False, parent)
@@ -1070,7 +1104,7 @@ def test_review_noise_counts_findings_by_severity_persona_and_model_and_why_each
     scenario.operator("dismiss", ref, "3", "--reason", "intentional")
     scenario.operator("dismiss", ref, "4", "--reason", "out_of_scope")
     # As a dismissal from before canopy asked why.
-    sql.execute(scenario.conn, sql.update("review_dismissals").set(reason=None).where("finding = ?", 3))
+    records.update(records.ReviewDismissal).set(reason=None).where("finding = ?", 3).run(scenario.conn)
 
     found = json.loads(scenario.operator("review", "noise", "--json").out)
     assert found["reviews"] == 1
@@ -1450,13 +1484,13 @@ def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
     assert scenario.refuses(reviews(sha, other, ticket="PROJ-1")) == [
         (
             "refused:not_ours",
-            f"PROJ-1's unit in repo did not open {other}; ticket (--ticket) is only for the loop's own PR",
+            f"PROJ-1's unit in repo did not open {other}; ticket is only for the loop's own PR",
         ),
     ]
     assert scenario.refuses(reviews(sha, ticket="PROJ-2")) == [
         (
             "refused:not_ours",
-            f"PROJ-2's unit in repo did not open {PR}; ticket (--ticket) is only for the loop's own PR",
+            f"PROJ-2's unit in repo did not open {PR}; ticket is only for the loop's own PR",
         ),
     ]
     own = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(FINDINGS)).id

@@ -19,7 +19,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import cards, config, db, definitions, run_models, workspace
+from canopy.core import cards, config, db, definitions, prompts, run_models, workspace
 from canopy.core.vocab import RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
@@ -35,6 +35,7 @@ from tests.canopy.helpers import (
     private_worker_does,
     scripted,
     slot_of,
+    ticket_sets,
     tools_of,
     tools_printed,
     unit_of,
@@ -66,7 +67,10 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     assert w["cwd"] == slot_of(scenario.conn, run.id).slot_path
     # No CANOPY_TICK_ID: a worker cannot act as the overseer.
     # CANOPY_RUN_ID: the operator's commands refuse inside the run (DESIGN §22).
-    snapshot = definitions.ensure(scenario.env.state_dir, config.load(scenario.env.root))
+    # The snapshot made for the config and the prompt's fixed instructions (DESIGN §13).
+    cfg = config.load(scenario.env.root)
+    bodies, _ = definitions.run_prompt(run.prompt, cfg.runtime.worker_cmd)
+    snapshot = definitions.ensure(scenario.env.state_dir, cfg, bodies=bodies)
     # CANOPY_GIT_OBJECTS: the run's object directory, for a sandbox wrapper (DESIGN §8).
     objects = scenario.env.state_dir / "runs" / f"{run.id}.objects"
     # CANOPY_DEADLINE: the moment its timeout fires, for the clock in the snapshot (DESIGN §33).
@@ -88,7 +92,7 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
     argv = w["argv"]
     assert isinstance(argv, list)
     assert argv[:4] == ["run", "--agent", "canopy-worker", "--title=PROJ-1 implement"]
-    assert argv[4] == run.prompt
+    assert argv[4] == prompts.split(run.prompt).message
 
     slot = Path(slot_of(scenario.conn, run.id).slot_path)
     # Detached: the worker pushed HEAD to the branch, which started from origin/main.
@@ -160,7 +164,7 @@ def test_the_session_title_names_the_ticket_and_its_title(
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker --title={title} {prompt}"
     scenario.configures(runtime={"worker_cmd": template})
     if title is not None:
-        scenario.overseer("ticket", "set", "PROJ-1", "--title", title)
+        scenario.overseer(ticket_sets("PROJ-1", title=title))
     scenario.run(worker=pushes())
     [w] = agent_runs(scenario.agent_log)
     argv = w["argv"]
@@ -180,7 +184,7 @@ def test_a_worker_template_that_places_no_prompt_gets_it_on_stdin(scenario: Scen
     assert run.status == "done"
     [w] = agent_runs(scenario.agent_log)
     assert w["argv"] == ["run", "--agent", "canopy-worker", "--log-level", "INFO"]
-    assert w["stdin"] == run.prompt
+    assert w["stdin"] == prompts.split(run.prompt).message
 
 
 def test_the_worker_runs_between_the_prefix_and_the_suffix(scenario: Scenario, git_pool: GitPool) -> None:

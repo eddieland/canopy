@@ -22,11 +22,11 @@ from canopy.runs import reconcile
 from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import (
     BRANCH,
-    LABEL,
     InlineRunner,
     commit_and_push,
     in_run,
     in_tick,
+    overseer_calls,
     present,
     running_run,
     tick_starts,
@@ -34,6 +34,7 @@ from tests.canopy.helpers import (
     worker_does,
 )
 from tests.canopy.helpers import context as loop_context
+from tests.canopy.scenario_helpers import dispatches
 from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv, git, user_toml
 
@@ -42,10 +43,6 @@ def use(canopy_env: CanopyEnv, backend: str, *, slots: str = "") -> None:
     """Name `backend` in the operator's user file, and declare `slots`, lines of `[capacity.repo_slots]`, if any."""
     declared = f"\n[capacity.repo_slots]\n{slots}\n" if slots else ""
     canopy_env.write_user(user_toml() + f'\n[pools]\nbackend = "{backend}"\n' + declared)
-
-
-def implement(repo: str) -> list[str]:
-    return ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "implement", "--repo", repo]
 
 
 def context(ws: Ws, canopy_env: CanopyEnv, conn: sqlite3.Connection) -> Context:
@@ -106,7 +103,7 @@ def test_under_canopy_a_run_leases_from_canopy_s_pool_and_its_slot_goes_back_the
     runner = InlineRunner()
     tracker_holds(conn)
     with worker_does(*commit_and_push(BRANCH)), in_tick(conn) as tick_id:
-        assert main(implement("api"), runner=runner) == 0
+        assert not overseer_calls(dispatches(repo="api"), runner=runner).error
         tick_starts(runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         [slot] = db.run_slots(conn, 1)
@@ -133,7 +130,7 @@ def test_a_lease_goes_back_to_the_pool_that_made_it_after_a_switch(
     runner = InlineRunner()
     tracker_holds(conn)
     with worker_does(*commit_and_push(BRANCH)), in_tick(conn) as tick_id:
-        assert main(implement("api"), runner=runner) == 0
+        assert not overseer_calls(dispatches(repo="api"), runner=runner).error
         tick_starts(runner)
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         [slot] = db.run_slots(conn, 1)

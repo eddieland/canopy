@@ -17,7 +17,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, conversation, db, definitions, outbox
-from canopy.core.vocab import ResumeReason, RunKind, RunStatus, StartStatus
+from canopy.core.vocab import Phase, ResumeReason, RunKind, RunStatus, StartStatus
 from canopy.infra import procs, resources
 from canopy.loop import attention, repeat
 from canopy.runtime import agents
@@ -34,6 +34,7 @@ from tests.canopy.helpers import (
     commit_and_push,
     console,
     context,
+    decides,
     decisions,
     dispatch_in_tick,
     journal_at,
@@ -44,11 +45,12 @@ from tests.canopy.helpers import (
     pool,
     present,
     private_worker_does,
+    ticket_sets,
     versions_after,
     wait_for_run,
     waits,
 )
-from tests.canopy.scenario_helpers import Scenario, dispatches, fails, pushes
+from tests.canopy.scenario_helpers import Scenario, dispatches, fails, pushes, sets_phase
 from tests.conftest import CanopyEnv, GitPool, Journals
 
 
@@ -69,7 +71,9 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(scenario: S
     argv = worker["argv"]
     assert isinstance(argv, list)
     assert "canopy-worker-private" in argv
-    assert "# canopy private worker: implement" in str(argv[-1])
+    # Its fixed instructions are its agent's body; it is sent the run's own (DESIGN §13).
+    assert run.prompt.startswith("# canopy private worker: implement")
+    assert str(argv[-1]).startswith(f"## Run\n\nYou are working ticket {KEY} in ")
     assert run.status == "blocked"
     [report, question] = db.messages_of(conn, conversation.TICKET, KEY, 10)
     assert (report.kind, report.body, report.run_id) == ("report", "half done", run.id)
@@ -250,7 +254,7 @@ def test_run_reads_the_start_record_again_before_the_worker_starts(
 ) -> None:
     assert operator("start", KEY) == 0
     runner = InlineRunner()
-    assert dispatch_in_tick(conn, "--kind", "implement", runner=runner).code == 0
+    assert not dispatch_in_tick(conn, dispatches(label=None), runner=runner).said.error
     assert operator("stop", KEY) == 0
     run = last_run(conn)
     assert main(["_run", str(run["id"])], runner=runner) == 0
@@ -271,7 +275,7 @@ def test_a_public_run_does_not_start_once_the_ticket_is_started_privately(
     conn: sqlite3.Connection,
 ) -> None:
     runner = InlineRunner()
-    assert dispatch_in_tick(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner).code == 0
+    assert not dispatch_in_tick(conn, dispatches(), runner=runner).said.error
     assert operator("start", KEY) == 0
     run = last_run(conn)
     assert run["private"] == 0
@@ -483,7 +487,7 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(s
     ]
     assert "awaiting_reply" not in private
     # A handled message moves the cursor past it.
-    scenario.overseer("ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={question + 1}")
+    scenario.overseer(ticket_sets(KEY, repo="repo", cursors={"message": str(question + 1)}))
     ticket = present(db.get_ticket(conn, KEY))
     assert conversation.state_section(conn, ticket) == {
         "started_at": private["started_at"],
@@ -511,8 +515,8 @@ def test_a_stopped_ticket_is_named_in_the_state_block_by_key_alone(scenario: Sce
 
 
 def test_a_message_cursor_is_a_message_id(scenario: Scenario) -> None:
-    refused = scenario.overseer("ticket", "set", KEY, "--repo", "repo", "--cursor", "message=c-1", code=2)
-    assert "a message cursor is a message id" in refused.err
+    refused = scenario.overseer(ticket_sets(KEY, repo="repo", cursors={"message": "c-1"}), error=True)
+    assert "a message cursor is a message id" in refused.text
 
 
 def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(scenario: Scenario) -> None:
@@ -531,12 +535,12 @@ def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(scenari
     assert phase_line() == "not seen by a tick yet"
     assert summary() == (None, None)
 
-    scenario.overseer("decide", KEY, "wait", "--rationale", "blocked_by: PROJ-2")
+    scenario.overseer(decides(KEY, rationale="blocked_by: PROJ-2"))
     assert phase_line() == "not recorded, last decision wait"
     assert summary() == (None, "wait")
     assert "phase not recorded, last decision wait;" in scenario.operator("show", KEY).out
 
-    scenario.overseer("ticket", "set", KEY, "--phase", "blocked")
+    scenario.overseer(sets_phase(KEY, Phase.BLOCKED))
     assert phase_line() == "blocked"
     assert summary() == ("blocked", "wait")
 

@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import db, sql, workspace
+from canopy.core import db, records, sql, workspace
 from canopy.core.vocab import Phase, RunKind, RunStatus
 
 if TYPE_CHECKING:
@@ -447,68 +447,56 @@ def seed(conn: sqlite3.Connection, root: Path) -> None:
         for said in ticket.said:
             said_id += 1
             _said(conn, ticket, said_id, said)
-        sql.execute(
-            conn,
-            sql.insert(
-                "decisions",
-                tick_id=1,
-                created_at=db.format_time(ticket.done_at),
-                ticket_key=ticket.key,
-                repo=None if ticket.closed else ticket.repo,
-                pr=None if ticket.closed else ticket.url,
-                action="done",
-                rationale=db.CLOSED_RATIONALE if ticket.closed else f"merged: {ticket.url}",
-            ),
-        )
+        records.insert(
+            records.Decision,
+            tick_id=1,
+            created_at=db.format_time(ticket.done_at),
+            ticket_key=ticket.key,
+            repo=None if ticket.closed else ticket.repo,
+            pr=None if ticket.closed else ticket.url,
+            action="done",
+            rationale=db.CLOSED_RATIONALE if ticket.closed else f"merged: {ticket.url}",
+        ).run(conn)
 
 
 def _ticket(conn: sqlite3.Connection, root: Path, ticket: Ticket) -> None:
     done = db.format_time(ticket.done_at)
-    sql.execute(
-        conn,
-        sql.insert(
-            "tickets",
-            key=ticket.key,
-            repo=str(root),
-            first_seen_at=db.format_time(ticket.started - timedelta(hours=1)),
-            last_seen_at=done,
-            changed_at=done,
-            title=ticket.title,
-            phase=Phase.BLOCKED if ticket.closed else Phase.MERGED,
-            branch=ticket.branch if ticket.runs else None,
-            done=1,
-        ),
-    )
+    records.insert(
+        records.Ticket,
+        key=ticket.key,
+        repo=str(root),
+        first_seen_at=db.format_time(ticket.started - timedelta(hours=1)),
+        last_seen_at=done,
+        changed_at=done,
+        title=ticket.title,
+        phase=Phase.BLOCKED if ticket.closed else Phase.MERGED,
+        branch=ticket.branch if ticket.runs else None,
+        done=1,
+    ).run(conn)
     if ticket.closed:
         return
-    sql.execute(
-        conn,
-        sql.insert(
-            "ticket_units",
-            ticket_key=ticket.key,
-            repo=ticket.repo,
-            branch=ticket.branch,
-            pr_url=ticket.url,
-            phase=Phase.MERGED,
-        ),
-    )
+    records.insert(
+        records.TicketUnit,
+        ticket_key=ticket.key,
+        repo=ticket.repo,
+        branch=ticket.branch,
+        pr_url=ticket.url,
+        phase=Phase.MERGED,
+    ).run(conn)
     title = f"{ticket.key}: {ticket.title}"
-    sql.execute(conn, sql.insert("pr_titles", pr_url=ticket.url, title=title, updated_at=done))
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_prs",
-            url=ticket.url,
-            repository=f"acme/{ticket.repo}",
-            number=ticket.pr,
-            base_ref="main",
-            state="merged",
-            draft=0,
-            author="op",
-            observed_at=done,
-            title=title,
-        ),
-    )
+    records.insert(records.PrTitle, pr_url=ticket.url, title=title, updated_at=done).run(conn)
+    records.insert(
+        records.ObservedPr,
+        url=ticket.url,
+        repository=f"acme/{ticket.repo}",
+        number=ticket.pr,
+        base_ref="main",
+        state="merged",
+        draft=0,
+        author="op",
+        observed_at=done,
+        title=title,
+    ).run(conn)
 
 
 def _run(conn: sqlite3.Connection, root: Path, run_id: int, ticket: Ticket, run: Run) -> None:
@@ -521,52 +509,50 @@ def _run(conn: sqlite3.Connection, root: Path, run_id: int, ticket: Ticket, run:
     cost = run.cost_usd
     sent, hit = _first_call(run.kind, started)
     read = round(sent * hit)
-    sql.execute(
-        conn,
-        sql.insert(
-            "runs",
-            id=run_id,
-            tick_id=1,
-            ticket_key=ticket.key,
-            kind=run.kind,
-            branch=ticket.branch,
-            started_at=db.format_time(started),
-            ended_at=db.format_time(started + timedelta(minutes=run.minutes)),
-            status=run.status,
-            result_json=json.dumps(result),
-            log_path=str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "runs" / f"{run_id}.log"),
-            session_id=f"ses_mock{run_id}",
-            cost_usd=cost,
-            tokens_input=int(cost * 40_000),
-            tokens_output=int(cost * 6_000),
-            tokens_reasoning=int(cost * 2_000),
-            tokens_cache_read=int(cost * _CACHE_READ_PER_USD[started.month]),
-            tokens_cache_write=int(cost * 8_000),
-            tokens_peak_context=int(cost * 60_000),
-            tokens_first_call=sent,
-            tokens_first_cache_write=sent - read,
-            tokens_first_cache_read=read,
-            definitions_digest=SNAPSHOT if started >= _SNAPSHOT_FROM else FIRST_SNAPSHOT,
-        ),
-    )
+    records.insert(
+        records.Run,
+        id=run_id,
+        tick_id=1,
+        ticket_key=ticket.key,
+        kind=run.kind,
+        branch=ticket.branch,
+        started_at=db.format_time(started),
+        ended_at=db.format_time(started + timedelta(minutes=run.minutes)),
+        status=run.status,
+        result_json=json.dumps(result),
+        log_path=str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "runs" / f"{run_id}.log"),
+        session_id=f"ses_mock{run_id}",
+        cost_usd=cost,
+        tokens_input=int(cost * 40_000),
+        tokens_output=int(cost * 6_000),
+        tokens_reasoning=int(cost * 2_000),
+        tokens_cache_read=int(cost * _CACHE_READ_PER_USD[started.month]),
+        tokens_cache_write=int(cost * 8_000),
+        tokens_peak_context=int(cost * 60_000),
+        tokens_first_call=sent,
+        tokens_first_cache_write=sent - read,
+        tokens_first_cache_read=read,
+        definitions_digest=SNAPSHOT if started >= _SNAPSHOT_FROM else FIRST_SNAPSHOT,
+    ).run(conn)
     read_at = db.format_time(started + timedelta(minutes=run.minutes + 1))
-    sql.execute(
-        conn,
-        sql.insert(
-            "run_model_reads",
-            run_table="runs",
-            run_id=run_id,
-            status="found",
-            attempts=1,
-            read_at=read_at,
-            runtime_version=RUNTIME if started >= _RUNTIME_FROM else FIRST_RUNTIME,
-        ),
-    )
+    records.insert(
+        records.RunModelRead,
+        run_table="runs",
+        run_id=run_id,
+        status="found",
+        attempts=1,
+        read_at=read_at,
+        runtime_version=RUNTIME if started >= _RUNTIME_FROM else FIRST_RUNTIME,
+    ).run(conn)
     replies = max(1, round(cost * 30))
-    sql.execute(
-        conn,
-        sql.insert("run_models", run_table="runs", run_id=run_id, model=run.model, replies=replies, cost_usd=cost),
-    )
+    records.insert(
+        records.RunModel,
+        run_table="runs",
+        run_id=run_id,
+        model=run.model,
+        replies=replies,
+        cost_usd=cost,
+    ).run(conn)
 
 
 # What a run's first model call was sent, and the share of it read from the cache.
@@ -598,16 +584,13 @@ def _said(conn: sqlite3.Connection, ticket: Ticket, n: int, said: Said) -> None:
             "outdated": 0,
             "resolved": 1,
         }
-    sql.execute(
-        conn,
-        sql.insert(
-            "observed_reviews",
-            pr_url=url,
-            author=said.author,
-            bot=0,
-            created_at=db.format_time(ticket.started + timedelta(hours=said.hours)),
-            body=said.body,
-            observed_at=db.format_time(ticket.done_at),
-            **values,
-        ),
-    )
+    records.insert(
+        records.ObservedReview,
+        pr_url=url,
+        author=said.author,
+        bot=0,
+        created_at=db.format_time(ticket.started + timedelta(hours=said.hours)),
+        body=said.body,
+        observed_at=db.format_time(ticket.done_at),
+        **values,
+    ).run(conn)

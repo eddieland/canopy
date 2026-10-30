@@ -134,6 +134,7 @@ def task_run_detail(ctx: Context, task_id: int, run_id: int) -> TaskRunDetail | 
             ended=row.ended_at is not None,
             session_id=row.session_id or None,
         ),
+        model=row.model,
     )
 
 

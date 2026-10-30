@@ -1061,7 +1061,7 @@ def test_the_mock_journal_covers_every_run_state_and_message_source(ui: Path, ba
         for key in ("ABC-101", "ABC-102", "ABC-103")
         for m in c.get(f"/api/tickets/{key}").json()["messages"]
     }
-    assert sources == {"worker", "operator", "tracker"}
+    assert sources == {"worker", "operator", "tracker", "canopy"}
 
 
 def test_the_development_server_serves_mock_data_only() -> None:

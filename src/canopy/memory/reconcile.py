@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import db, memory, sql
+from canopy.core import db, memory, records
 from canopy.core.vocab import MemoryScope, MemoryStatus
 
 if TYPE_CHECKING:
@@ -20,13 +20,13 @@ def run(ctx: Context, log: logs.TickAdapter) -> int:
         How many expired.
     """
     cutoff = db.format_time(datetime.now(UTC) - timedelta(days=memory.PROPOSAL_DAYS))
-    cur = sql.execute(
-        ctx.conn,
-        sql.update("memories")
+    cur = (
+        records.update(records.Memory)
         .set(status=MemoryStatus.INVALID, why="expired", invalidated_at=db.now())
         .where("scope = ?", MemoryScope.PROPOSAL)
         .where("status = ?", MemoryStatus.PENDING)
-        .where("created_at < ?", cutoff),
+        .where("created_at < ?", cutoff)
+        .run(ctx.conn)
     )
     if cur.rowcount:
         log.info("proposals expired", extra={"count": cur.rowcount})

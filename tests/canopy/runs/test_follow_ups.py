@@ -18,6 +18,7 @@ from tests.canopy.helpers import (
     in_tick,
     present,
     private_worker_does,
+    ticket_sets,
     waits,
     worker_does,
 )
@@ -110,7 +111,7 @@ def test_each_refused_entry_is_recorded_nowhere_named_in_the_note_and_on_the_att
     assert item.ticket_key == KEY
     assert item.detail.startswith(f"run:{run.id} reported PROJ-1, PROJ-9, OTHER-3, PROJ-16, 1 other entry, which")
     assert "worked only with a queue label" in item.detail
-    scenario.overseer("ticket", "set", KEY, "--done")
+    scenario.overseer(ticket_sets(KEY, done=True))
     scenario.tick(*waits("PROJ-9"))
     assert (KEY, follow_ups.REASON) not in scenario.attention()
 
@@ -162,7 +163,7 @@ def test_a_follow_up_authorizes_nothing_and_canopy_tells_the_operator_once(
     assert len(told(scenario)) == 1
     # Nothing dispatches it without a label: it is a request.
     assert scenario.refuses(dispatches(FOLLOW_UP, label=None)) == [
-        ("refused:unauthorized", f"label is required (--label): name the queue label you read on {FOLLOW_UP}"),
+        ("refused:unauthorized", f"label is required: name the queue label you read on {FOLLOW_UP}"),
     ]
 
 

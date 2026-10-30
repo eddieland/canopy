@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
 
-from canopy.core import db, runtime_sessions, sql
+from canopy.core import db, records, runtime_sessions
 from canopy.core.vocab import SessionsRead
 from canopy.runtime import sessions
 from canopy.runtime.implementation import Version
@@ -58,7 +58,7 @@ def found(*spent: SessionSpend, skipped: int = 0) -> SessionPage:
 def ran_in(conn: sqlite3.Connection, session_id: str) -> None:
     """Record a tick whose overseer ran in session `session_id`."""
     tick_id = db.start_tick(conn, dry_run=False)
-    sql.execute(conn, sql.update("ticks").set(session_id=session_id).where("id = ?", tick_id))
+    records.update(records.Tick).set(session_id=session_id).where("id = ?", tick_id).run(conn)
 
 
 def test_a_page_is_recorded_with_each_sessions_models_and_the_cursor_after_it(conn: sqlite3.Connection) -> None:

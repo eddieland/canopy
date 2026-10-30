@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import sql, workspace
+from canopy.core import records, workspace
 
 if TYPE_CHECKING:
     import sqlite3
@@ -51,38 +51,32 @@ def seed(conn: sqlite3.Connection, root: Path, at: Callable[[int], str], chore: 
         (4, "build-health", -10, None, "running", None, 0.05),
     )
     for run_id, name, started, ended, status, result, cost in chore_runs:
-        sql.execute(
-            conn,
-            sql.insert(
-                "chore_runs",
-                id=run_id,
-                tick_id=1,
-                chore=name,
-                started_at=at(started),
-                ended_at=at(ended) if ended is not None else None,
-                status=status,
-                result_json=json.dumps(result) if result is not None else None,
-                log_path=str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "chore-runs" / name / f"{run_id}.log"),
-                session_id=f"ses_chore{run_id}",
-                cost_usd=cost,
-                tokens_input=int(cost * 40_000),
-                tokens_output=int(cost * 6_000),
-                tokens_cache_read=int(cost * 400_000),
-                tokens_peak_context=int(cost * 60_000),
-            ),
-        )
-    sql.execute(
-        conn,
-        sql.insert(
-            "messages",
-            id=8,
-            subject_kind="chore",
-            subject_id=chore,
-            at=at(-300),
-            source="operator",
-            kind="reply",
-            channel="cli",
-            body="Leave out the docs site's lockfile: it is never deployed.",
-            submission="mock-note-8",
-        ),
-    )
+        records.insert(
+            records.ChoreRun,
+            id=run_id,
+            tick_id=1,
+            chore=name,
+            started_at=at(started),
+            ended_at=at(ended) if ended is not None else None,
+            status=status,
+            result_json=json.dumps(result) if result is not None else None,
+            log_path=str(root.absolute() / workspace.WORKSPACE_STATE_DIR / "chore-runs" / name / f"{run_id}.log"),
+            session_id=f"ses_chore{run_id}",
+            cost_usd=cost,
+            tokens_input=int(cost * 40_000),
+            tokens_output=int(cost * 6_000),
+            tokens_cache_read=int(cost * 400_000),
+            tokens_peak_context=int(cost * 60_000),
+        ).run(conn)
+    records.insert(
+        records.Message,
+        id=8,
+        subject_kind="chore",
+        subject_id=chore,
+        at=at(-300),
+        source="operator",
+        kind="reply",
+        channel="cli",
+        body="Leave out the docs site's lockfile: it is never deployed.",
+        submission="mock-note-8",
+    ).run(conn)

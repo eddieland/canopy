@@ -15,8 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.cli.main import main
-from canopy.core import db, plans, sql
+from canopy.core import db, plans, records
 from canopy.core.vocab import Decider, RunStatus, TickStatus
 from canopy.loop import attention, harness_items, phases
 from tests.canopy.helpers import (
@@ -27,11 +26,11 @@ from tests.canopy.helpers import (
     context,
     decisions,
     in_tick,
-    mcp_session,
     messages,
     operator,
+    overseer_calls,
+    raises,
     running_run,
-    tool_call,
     waits,
 )
 from tests.canopy.observation_helpers import (
@@ -215,9 +214,11 @@ def plan_changed(env: CanopyEnv, conn: sqlite3.Connection) -> None:
 def queue_stuck(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     """The PR's build passed two hours ago, and its merge queue's status still waits, as CI."""
     green(env, conn)
-    sql.execute(
-        conn,
-        sql.update("observed_check_runs").set(observed_at=db.format_time(NOW - timedelta(hours=2))).everything(),
+    (
+        records.update(records.ObservedCheckRun)
+        .set(observed_at=db.format_time(NOW - timedelta(hours=2)))
+        .everything()
+        .run(conn)
     )
     check(conn, "merge-queue", "queued", None, run_id=12)
 
@@ -638,17 +639,13 @@ def test_the_overseer_is_refused_an_item_the_harness_raises(
 ) -> None:
     held(canopy_env, conn, KEY)
     conn.commit()
-    for through in ("command", "tool"):
-        with in_tick(conn) as tick_id:
-            if through == "command":
-                assert main(["attention", KEY, reason, "--detail", "d"]) == 1
-            else:
-                said = mcp_session(tool_call("attention", key=KEY, reason=reason, detail="d")).said()
-                assert said.error
-                assert "refused (raised)" in said.text
-            [(action, why)] = decisions(conn, tick_id)
-        assert action == "refused:raised"
-        assert why == f"the harness raises {reason} itself while its cause holds, and ends it when the cause is gone"
+    with in_tick(conn) as tick_id:
+        said = overseer_calls(raises(KEY, reason, "d"))
+        assert said.error
+        assert "refused (raised)" in said.text
+        [(action, why)] = decisions(conn, tick_id)
+    assert action == "refused:raised"
+    assert why == f"the harness raises {reason} itself while its cause holds, and ends it when the cause is gone"
     assert attention.current(conn) == []
 
 
@@ -656,5 +653,5 @@ def test_the_overseer_still_records_an_item_of_judgment(canopy_env: CanopyEnv, c
     held(canopy_env, conn, KEY)
     conn.commit()
     with in_tick(conn) as tick_id:
-        assert main(["attention", KEY, "needs_author", "--detail", "asks about intent"]) == 0
+        assert not overseer_calls(raises(KEY, "needs_author", "asks about intent")).error
     assert decisions(conn, tick_id) == [("attention:needs_author", "asks about intent")]

@@ -1,4 +1,4 @@
-"""`canopy review run`: guards, a slot, the reviewer's prompt, and the detached `canopy _review` (DESIGN §21).
+"""The `review-run` tool's reviews: guards, a slot, the reviewer's prompt, and the detached `_review` (DESIGN §21).
 
 A review is keyed by its PR and commit, and by its persona when the operator chose several for the PR (`due`, §31).
 The guards hold one `done` review per commit, a per-PR limit (the policy's plus the operator's grants, `grants.py`),
@@ -230,7 +230,7 @@ def start(
         repo = _guard(ctx, request, spawning=spawning)
         # Fixed before the run is recorded, so a persona or model that cannot be used costs the PR none of its reviews.
         persona = _persona(ctx, request)
-        _check_model(ctx, request)
+        model = _check_model(ctx, request)
         attempt = len(review_runs.review_runs_of(ctx.conn, request.pr)) + 1
         run_id = review_runs.insert_review_run(
             ctx.conn,
@@ -244,6 +244,7 @@ def start(
             persona=persona.name,
             persona_digest=persona.digest,
             persona_text=persona.text,
+            model=model,
         )
         lease = lease_slot(ctx, run_id, repo, base=_base(ctx.conn, request.pr))
         with returned_on_failure(ctx, repo, lease):
@@ -385,12 +386,15 @@ def _persona(ctx: Context, request: Request) -> personas.Persona:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
 
 
-def _check_model(ctx: Context, request: Request) -> None:
-    """Refuse a review whose reviewer's model the runtime does not list, looked up now (DESIGN §13).
+def _check_model(ctx: Context, request: Request) -> str | None:
+    """Return the model a review's reviewer asks for, refused unless the runtime lists it, looked up now (DESIGN §13).
 
     The model is the review's ticket's override for the reviewer, else the one `runtime.models` chooses for the agent
-    `runtime.review_cmd` runs, as the review renders it; a PR with no ticket takes config's. It is never fallen back
-    from, as a worker's dispatch is not.
+    `runtime.review_cmd` runs; a PR with no ticket takes config's. The run records it and renders what it recorded. It
+    is never fallen back from, as a worker's dispatch is not.
+
+    Returns:
+        The model as the run records it, `provider/model` or `provider/model@variant`, or None when none is chosen.
 
     Raises:
         Refusal: `model_missing` or `model_list_failed`, with its attention item, as a worker's dispatch refuses.
@@ -401,7 +405,7 @@ def _check_model(ctx: Context, request: Request) -> None:
         models = ticket_models.models_for(ctx.conn, ctx.config, key, "reviewer")
     model = agent_models.of_template(models, ctx.config.runtime.review_cmd)
     if model is None:
-        return
+        return None
     chosen = "in runtime.models"
     if key is not None and ticket_models.override(ctx.conn, key, "reviewer") == model.name:
         chosen = f"for {key}'s reviewer runs (`canopy model {key} --agent reviewer`)"
@@ -409,6 +413,7 @@ def _check_model(ctx: Context, request: Request) -> None:
         agent_models.check(ctx.runner, ctx.workspace.root, model, version=ctx.config.runtime.version, chosen=chosen)
     except agent_models.ModelError as e:
         raise Refusal(e.guard, e.reason, attention=e.guard) from e
+    return model.name
 
 
 def _reviewers_persona(ctx: Context, name: str) -> personas.Persona:
@@ -624,17 +629,16 @@ def split_planned(
 def _check_ours(ctx: Context, request: Request, repo: str) -> None:
     """`not_ours`: a review names a ticket only for the PR that ticket's unit in `repo` opened.
 
-    The overseer's `--ticket` is a claim; the unit's PR is the journal's record of what the loop opened, from the worker
+    The overseer's `ticket` is a claim; the unit's PR is the journal's record of what the loop opened, from the worker
     that opened it. Checked here, a review's purpose is settled once, as it starts.
 
     Raises:
-        Refusal: (`not_ours`) `--ticket` names a ticket whose unit in `repo` has not opened the PR.
+        Refusal: (`not_ours`) `ticket` names a ticket whose unit in `repo` has not opened the PR.
     """
     if request.ticket is not None and not review_runs.is_unit_pr(ctx.conn, request.ticket, request.pr, repo=repo):
         raise Refusal(
             "not_ours",
-            f"{request.ticket}'s unit in {repo} did not open {request.pr}; ticket (--ticket) is only for the loop's "
-            "own PR",
+            f"{request.ticket}'s unit in {repo} did not open {request.pr}; ticket is only for the loop's own PR",
         )
 
 
@@ -794,11 +798,11 @@ def _check_shape(request: Request) -> None:
         Refusal: (`bad_pr`) the URL is not a plain https:// URL, the commit is not a full sha, or the key is invalid.
     """
     if not contract.plain_url(request.pr, MAX_PR_URL):
-        raise Refusal("bad_pr", f"pr (--pr) must be the PR's plain https:// URL, at most {MAX_PR_URL} characters")
+        raise Refusal("bad_pr", f"pr must be the PR's plain https:// URL, at most {MAX_PR_URL} characters")
     if SHA_RE.fullmatch(request.sha) is None:
-        raise Refusal("bad_pr", "sha (--sha) must be the full head commit: 40 or 64 lowercase hex characters")
+        raise Refusal("bad_pr", "sha must be the full head commit: 40 or 64 lowercase hex characters")
     if request.ticket is not None and KEY_RE.fullmatch(request.ticket) is None:
-        raise Refusal("bad_pr", f"ticket (--ticket) must match {KEY_RE.pattern}")
+        raise Refusal("bad_pr", f"ticket must match {KEY_RE.pattern}")
 
 
 def check_repo(ctx: Context, repo: str | None) -> str:
@@ -813,7 +817,7 @@ def check_repo(ctx: Context, repo: str | None) -> str:
     ws = ctx.workspace
     names = ", ".join(r.name for r in ws.repos) or "none yet"
     if repo is None:
-        raise Refusal("unknown_repo", f"repo is required (--repo): name the PR's repository ({names})")
+        raise Refusal("unknown_repo", f"repo is required: name the PR's repository ({names})")
     found = ws.repo(repo)
     if found is None:
         raise Refusal("unknown_repo", f"{repo!r} is not a repository in this workspace ({names})")

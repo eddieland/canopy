@@ -17,6 +17,15 @@ value the vocabulary does not hold is refused where the row is read, not where s
 Every journal table has a row type. A query that reads some of a table's columns, computes some, or joins in another's
 reads them as a `View`: a frozen dataclass defined beside it, a field per column it returns, read through `fetch_all` or
 `fetch_one` and converted and checked as a row type's are.
+
+A write starts from the row type too, and is held to it where the statement is built, before anything runs:
+
+    records.insert(records.Tick, started_at=now, status=TickStatus.RUNNING, dry_run=True).run(conn)
+    [run] = records.update(records.Run).set(status=RunStatus.OK).where("id = ?", run_id).returned(conn)
+
+Each column it names must be one of the row type's fields, and each value one that field would read back, so a
+misspelled column or a word outside a vocabulary is refused in canopy's code, not left for the column's CHECK, if it
+has one, or for a later read. `returned` reads back the rows a write made, changed, or removed, as the row type.
 """
 
 from __future__ import annotations
@@ -25,7 +34,7 @@ import functools
 import sqlite3
 import types
 import typing
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import Field, asdict, dataclass, fields, replace
 from enum import StrEnum
 from typing import Any, ClassVar, LiteralString
@@ -115,7 +124,7 @@ class View(Record):
 
 
 class RowError(Exception):
-    """A query's columns, or a value in one, do not fit the row type it was read as."""
+    """A query's columns, or a value in one, do not fit the row type it was read as or written through."""
 
 
 @dataclass(frozen=True)
@@ -158,6 +167,9 @@ class Tick(Row):
     #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
     #: canopy kept it.
     tokens_first_cache_read: int | None
+    #: The model canopy chose for its overseer, from `runtime.models` (DESIGN §13), as it asked the runtime for it;
+    #: None when it chose none, when the overseer did not run, and on a tick from before canopy recorded it.
+    model: str | None
 
 
 @dataclass(frozen=True)
@@ -269,6 +281,10 @@ class ChoreRun(Row):
     #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
     #: canopy kept it.
     tokens_first_cache_read: int | None
+    #: The model canopy chose for its agent, the chore's own `model` or `runtime.models`' (DESIGN §13), as it asked the
+    #: runtime for it; None when it chose none or the chore runs an agent of the operator's own, and on a run from
+    #: before canopy recorded it.
+    model: str | None
 
 
 @dataclass(frozen=True)
@@ -356,6 +372,9 @@ class ReviewRun(Row):
     card_asked_at: str | None
     card_answer: str | None
     card_answered_at: str | None
+    #: The model canopy chose for its reviewer, its ticket's override or `runtime.models`' (DESIGN §13), as it asked
+    #: the runtime for it; None when it chose none, and on a run from before canopy recorded it.
+    model: str | None
 
 
 @dataclass(frozen=True)
@@ -427,6 +446,9 @@ class TaskRun(Row):
     #: What its first model call read from the cache; None where `tokens_first_call` is, and on a run from before
     #: canopy kept it.
     tokens_first_cache_read: int | None
+    #: The model canopy chose for its private worker, from `runtime.models` (DESIGN §13), as it asked the runtime for
+    #: it; None when it chose none, and on a run from before canopy recorded it.
+    model: str | None
 
 
 @dataclass(frozen=True)
@@ -1866,6 +1888,72 @@ def select[R: Row](row_type: type[R], alias: LiteralString | None = None) -> Que
     return Query(row_type, sql.select("{}", _selected(row_type, alias or row_type.TABLE)).from_("{}", source))
 
 
+# These writes, and their kin below, are the only callers of `sql`'s write builders: TID251 bans them elsewhere.
+def insert[R: Row](row_type: type[R], **values: sql.Arg) -> Insert[R]:
+    """Start an INSERT of one row into `row_type`'s table: a column per keyword, each a value or a piece of SQL.
+
+    Each keyword must name one of its fields, and each value must be one that field would read back: a vocabulary's
+    member for a vocabulary field, 0 or 1 for a flag, None only for a `| None` field. A piece of SQL, or a `ROW`, is
+    left for SQLite to judge.
+
+    Returns:
+        The statement, to `run`, or to run with `returned` for the row it wrote.
+    """
+    _check_values(row_type, values)
+    per_row = tuple(column for column, value in values.items() if isinstance(value, sql.PerRow))
+    return Insert(row_type, sql.insert(row_type.TABLE, **values), per_row)  # noqa: TID251
+
+
+def insert_rows[R: Row](row_type: type[R], columns: Sequence[LiteralString]) -> Insert[R]:
+    """Start an INSERT into `row_type`'s table of a `ROW` per column, for `Insert.many` to run once per row.
+
+    Returns:
+        The statement.
+    """
+    _check_columns(row_type, columns)
+    return Insert(row_type, sql.insert_rows(row_type.TABLE, columns), tuple(columns))  # noqa: TID251
+
+
+def insert_from[R: Row](row_type: type[R], columns: Sequence[LiteralString], rows: sql.Composable) -> Insert[R]:
+    """Start an INSERT into `row_type`'s `columns` of the rows a SELECT returns, a value per column in order.
+
+    Returns:
+        The statement.
+    """
+    _check_columns(row_type, columns)
+    return Insert(row_type, sql.insert_from(row_type.TABLE, columns, rows))  # noqa: TID251
+
+
+def update[R: Row](row_type: type[R]) -> Update[R]:
+    """Start an UPDATE of `row_type`'s table, whose `set` holds each column and value to its fields, as `insert` does.
+
+    Returns:
+        The statement.
+    """
+    return Update(row_type, sql.update(row_type.TABLE))  # noqa: TID251
+
+
+def delete[R: Row](row_type: type[R]) -> Delete[R]:
+    """Start a DELETE from `row_type`'s table.
+
+    Returns:
+        The statement.
+    """
+    return Delete(row_type, sql.delete(row_type.TABLE))  # noqa: TID251
+
+
+def of_table(table: LiteralString) -> type[Row]:
+    """The row type of the journal table named `table`, for a write to a table chosen at run time from a `Literal`.
+
+    Returns:
+        The row type.
+
+    Raises:
+        KeyError: No row type names `table`.
+    """
+    return _row_types()[table]
+
+
 def fetch_all[R: Record](conn: sqlite3.Connection, record_type: type[R], query: sql.Composable) -> list[R]:
     """Run `query`, a statement built with `sql`, and build each row it returns as `record_type`.
 
@@ -1991,6 +2079,304 @@ class Query[R: Row]:
             The first row it matched, or None when it matched none.
         """
         return fetch_one(conn, self.row_type, self.statement)
+
+
+@dataclass(frozen=True)
+class Insert[R: Row]:
+    """An INSERT into one table, its columns and values held to its row type: `insert` and its kin start one.
+
+    Only `sql` renders SQL (D125), so `run` runs it through `sql.execute`, and a `{}` takes its `statement`.
+    """
+
+    #: The row type of the table it writes.
+    row_type: type[R]
+    statement: sql.Insert
+    #: The columns a `ROW` fills, in the order `many` binds them.
+    per_row: tuple[str, ...] = ()
+
+    def or_ignore(self) -> Insert[R]:
+        """Make it INSERT OR IGNORE.
+
+        Returns:
+            The statement so.
+        """
+        return replace(self, statement=self.statement.or_ignore())
+
+    def or_replace(self) -> Insert[R]:
+        """Make it INSERT OR REPLACE.
+
+        Returns:
+            The statement so.
+        """
+        return replace(self, statement=self.statement.or_replace())
+
+    def on_conflict(self, action: LiteralString, *args: sql.Arg) -> Insert[R]:
+        """Add an upsert clause: `(columns) DO NOTHING`, or `(columns) DO UPDATE SET ...`.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, statement=self.statement.on_conflict(action, *args))
+
+    def returning(self, columns: LiteralString, *args: sql.Arg) -> Insert[R]:
+        """Add a RETURNING of `columns`, for a cursor to read; `returned` reads the whole row instead.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, statement=self.statement.returning(columns, *args))
+
+    def run(self, conn: sqlite3.Connection) -> sqlite3.Cursor:
+        """Run it on `conn`.
+
+        Returns:
+            The cursor, for its row count, its last row's id, or a RETURNING's rows.
+        """
+        return sql.execute(conn, self.statement)
+
+    def returned(self, conn: sqlite3.Connection) -> list[R]:
+        """Run it on `conn`, returning each row it wrote.
+
+        Returns:
+            The rows, as the row type: none for a row it ignored on a conflict.
+
+        Raises:
+            ValueError: It already returns columns of its own.
+        """
+        return _returned(conn, self.row_type, self.statement)
+
+    def many(self, conn: sqlite3.Connection, rows: Iterable[Sequence[sql.Value]]) -> sqlite3.Cursor:
+        """Run it on `conn` once for each of `rows`, each a value per `ROW` column, held to its field as `insert` is.
+
+        Returns:
+            The cursor.
+
+        Raises:
+            ValueError: A `ROW` is somewhere other than a column's value, so a row's values cannot be checked.
+        """
+        built = self.statement.fragment()
+        if sum(isinstance(p, sql.PerRow) for p in built.params) != len(self.per_row):
+            msg = f"an INSERT into {self.row_type.TABLE} binds a ROW that is not a column's value"
+            raise ValueError(msg)
+        return sql.execute_many(conn, self.statement, (self._checked(row) for row in rows))
+
+    def _checked(self, row: Sequence[sql.Value]) -> Sequence[sql.Value]:
+        if len(row) == len(self.per_row):
+            _check_values(self.row_type, dict(zip(self.per_row, row, strict=True)))
+        # A row of the wrong length goes on for `sql.execute_many` to refuse.
+        return row
+
+
+@dataclass(frozen=True)
+class Update[R: Row]:
+    """An UPDATE of one table, each column it sets held to its row type, as `insert`'s are: `update` starts one.
+
+    `run` runs it; one with a `ROW` in it runs as its `statement`, through `sql.execute_many`.
+    """
+
+    #: The row type of the table it writes.
+    row_type: type[R]
+    statement: sql.Update
+
+    def set(self, **values: sql.Arg) -> Update[R]:
+        """Set a column per keyword to a value or a piece of SQL.
+
+        Returns:
+            The statement with them.
+        """
+        _check_values(self.row_type, values)
+        return replace(self, statement=self.statement.set(**values))
+
+    def set_to(self, assignment: LiteralString, *args: sql.Arg) -> Update[R]:
+        """Add an assignment written in SQL, such as `failures = failures + 1`.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, statement=self.statement.set_to(assignment, *args))
+
+    def where(self, condition: LiteralString, *args: sql.Arg) -> Update[R]:
+        """Add a condition, ANDed with any already there.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, statement=self.statement.where(condition, *args))
+
+    def where_in(self, column: LiteralString, values: Collection[sql.Value]) -> Update[R]:
+        """Add `column IN (...)` of `values`, ANDed with any condition already there.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, statement=self.statement.where_in(column, values))
+
+    def where_not_in(self, column: LiteralString, values: Collection[sql.Value]) -> Update[R]:
+        """Add `column NOT IN (...)` of `values`, ANDed with any condition already there.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, statement=self.statement.where_not_in(column, values))
+
+    def everything(self) -> Update[R]:
+        """Update every row: an UPDATE with no condition is refused unless it says so.
+
+        Returns:
+            The statement so.
+        """
+        return replace(self, statement=self.statement.everything())
+
+    def returning(self, columns: LiteralString, *args: sql.Arg) -> Update[R]:
+        """Add a RETURNING of `columns`, for a cursor to read; `returned` reads the whole rows instead.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, statement=self.statement.returning(columns, *args))
+
+    def run(self, conn: sqlite3.Connection) -> sqlite3.Cursor:
+        """Run it on `conn`.
+
+        Returns:
+            The cursor, for its row count, its last row's id, or a RETURNING's rows.
+        """
+        return sql.execute(conn, self.statement)
+
+    def returned(self, conn: sqlite3.Connection) -> list[R]:
+        """Run it on `conn`, returning each row it changed, as it is now.
+
+        Returns:
+            The rows, as the row type.
+
+        Raises:
+            ValueError: It already returns columns of its own.
+        """
+        return _returned(conn, self.row_type, self.statement)
+
+
+@dataclass(frozen=True)
+class Delete[R: Row]:
+    """A DELETE from one table: `delete` starts one, and `run` runs it."""
+
+    #: The row type of the table it writes.
+    row_type: type[R]
+    statement: sql.Delete
+
+    def where(self, condition: LiteralString, *args: sql.Arg) -> Delete[R]:
+        """Add a condition, ANDed with any already there.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, statement=self.statement.where(condition, *args))
+
+    def where_in(self, column: LiteralString, values: Collection[sql.Value]) -> Delete[R]:
+        """Add `column IN (...)` of `values`, ANDed with any condition already there.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, statement=self.statement.where_in(column, values))
+
+    def where_not_in(self, column: LiteralString, values: Collection[sql.Value]) -> Delete[R]:
+        """Add `column NOT IN (...)` of `values`, ANDed with any condition already there.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, statement=self.statement.where_not_in(column, values))
+
+    def everything(self) -> Delete[R]:
+        """Delete every row: a DELETE with no condition is refused unless it says so.
+
+        Returns:
+            The statement so.
+        """
+        return replace(self, statement=self.statement.everything())
+
+    def returning(self, columns: LiteralString, *args: sql.Arg) -> Delete[R]:
+        """Add a RETURNING of `columns`, for a cursor to read; `returned` reads the whole rows instead.
+
+        Returns:
+            The statement with it.
+        """
+        return replace(self, statement=self.statement.returning(columns, *args))
+
+    def run(self, conn: sqlite3.Connection) -> sqlite3.Cursor:
+        """Run it on `conn`.
+
+        Returns:
+            The cursor, for its row count, its last row's id, or a RETURNING's rows.
+        """
+        return sql.execute(conn, self.statement)
+
+    def returned(self, conn: sqlite3.Connection) -> list[R]:
+        """Run it on `conn`, returning each row it deleted, as it was.
+
+        Returns:
+            The rows, as the row type.
+
+        Raises:
+            ValueError: It already returns columns of its own.
+        """
+        return _returned(conn, self.row_type, self.statement)
+
+
+def _returned[R: Row](
+    conn: sqlite3.Connection,
+    row_type: type[R],
+    statement: sql.Insert | sql.Update | sql.Delete,
+) -> list[R]:
+    """Run a write to `row_type`'s table with a RETURNING of each of its columns, and read what it returns.
+
+    Returns:
+        The rows, as the row type.
+
+    Raises:
+        ValueError: The write already returns columns of its own.
+    """
+    if statement.returns is not None:
+        msg = f"this write to {row_type.TABLE} already returns columns of its own"
+        raise ValueError(msg)
+    return fetch_all(conn, row_type, statement.returning("{}", _selected(row_type, row_type.TABLE)))
+
+
+def _check_columns(row_type: type[Row], columns: Iterable[str]) -> None:
+    """Refuse a column `row_type` has no field for.
+
+    Raises:
+        RowError: One of `columns` is not a field of `row_type`.
+    """
+    unknown = [c for c in columns if c not in _converters(row_type)]
+    if unknown:
+        raise RowError(f"{row_type.TABLE} has no column {', '.join(unknown)}")
+
+
+def _check_values(row_type: type[Row], values: Mapping[str, sql.Arg]) -> None:
+    """Refuse a column `row_type` has no field for, or a value its field would not read back.
+
+    A piece of SQL, or a `ROW`, is not a value here: SQLite judges what it comes to.
+
+    Raises:
+        RowError: A column is not a field of `row_type`, or a value does not fit its field.
+    """
+    _check_columns(row_type, values)
+    converters = _converters(row_type)
+    for column, value in values.items():
+        if not isinstance(value, sql.Composable | sql.PerRow):
+            converters[column](value)
+
+
+# Cached: the row types are all defined once this module is imported.
+@functools.cache
+def _row_types() -> Mapping[str, type[Row]]:
+    """Each journal table's row type, by its table: the ones defined here, not a test's own.
+
+    Returns:
+        The row types.
+    """
+    return {t.TABLE: t for t in Row.__subclasses__() if t.__module__ == __name__}
 
 
 # Cached: a row type's columns never change, and a query of them is started on every read.

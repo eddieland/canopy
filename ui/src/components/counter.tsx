@@ -14,7 +14,7 @@ const RULE: Record<Tone, string> = {
     blocked: 'border-t-status-blocked',
     failed: 'border-t-status-failed',
     stopped: 'border-t-status-stopped',
-    plain: 'border-t-border',
+    plain: 'border-t-edge',
 }
 
 // And the wash under it: the rule's color fading down into the surface, so a counter reads by color at a glance.
@@ -48,8 +48,8 @@ export function Counter({
     return (
         <div
             className={cn(
-                'flex min-w-0 flex-col gap-1.5 rounded-md border border-t-2 bg-surface px-4 py-3',
-                'bg-linear-to-b to-transparent to-70%',
+                'flex min-w-0 flex-col gap-1.5 rounded-md border border-t-2 border-edge bg-surface px-4 py-3',
+                'bg-linear-to-b to-transparent to-70% shadow-panel',
                 RULE[tone],
                 WASH[tone],
             )}

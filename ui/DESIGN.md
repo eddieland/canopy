@@ -33,6 +33,8 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `accent`, `accent-foreground` | The one accent: active nav item, links, primary buttons, focus, live. |
 | `ring` | Focus outlines (the accent, translucent). |
 | `scrollbar` | Every scrollbar's thumb, on a clear track: `muted-foreground`, translucent. Set once on the root. |
+| `edge` | A panel's and a float's outline: `border` by default, clear where a palette draws none. |
+| `depth-panel`, `-float`, `-action` | The palette's shadows, as `shadow-panel`, `shadow-float`, and `shadow-action`. |
 | `status-running` | A run working. Pulses. |
 | `status-blocked` | A run that asked a question, and anything else waiting on the operator. |
 | `status-stopped` | A run the operator stopped. |
@@ -110,6 +112,25 @@ Rules:
   colors, as Gruvbox wears its purple, not its orange, and a green canvas never takes a green accent. A scheme whose
   bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts` measures
   every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
+  A palette sets its character too, beyond color, from a few closed choices, in the same rule, so a component still
+  never knows which it is on: its corners (`--radius`: crisp, the default, or soft), its `edge` (a hairline, or none,
+  where panels stand apart by their lightness alone), and its depth (a soft shadow in the canvas's hue, a hard one with
+  no blur, or, on black, where a shadow does nothing, the accent's glow). Spacing, sizes, and layout never change
+  with a palette, and neither do the status colors. The defaults take the soft shadow, Gruvbox's dark the crisp
+  corners and hard shadow of an editor of the nineties, and black no edges, soft corners, and the glow.
+  A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
+  hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
+  or glowing), and the nav's highlight (a tint and a hairline, a solid block with the active item inked in the canvas's
+  color, or a tint with the icon lit). Each form takes the room the default does, so a switch moves nothing; the
+  defaults keep the first of each, Gruvbox's dark the second, and black the third.
+  A palette may tune its section colors too, muted toward a scheme's own set or turned up, but each keeps its hue's
+  family, which says what its page is for: a rose stays a rose, a gold a gold, though a scheme's own shade of it may
+  sit a few degrees round the wheel. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
+  from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage.
+  Every other palette picks from the same choices, so each reads as its own place: Gruvbox's light side as its dark
+  one, Solarized's sides crisp and flat, Monokai crisp with a neon aurora, Nord's light side soft under a fade
+  through Frost's blues, grey tight under one steel rule, and sage, Rosé Pine Dawn, forest, and plum soft, plum the
+  softest. Off-white lays its panels on the canvas like paper.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
@@ -137,10 +158,17 @@ Rules:
 
 ## Shape and space
 
-- Hairlines: 1px `border` everywhere. No shadows except `shadow-xs` on a pressed segment.
+- Hairlines: 1px `border` everywhere inside a panel. A panel, and what floats over the page, draws its palette's
+  `edge` instead, a hairline but where the palette draws none.
+- Depth is used sparingly, in three places and nowhere else: a faint lift under a panel and a counter
+  (`shadow-panel`), a shadow under what floats over the page, a menu, a card, a tip, a dialog, a toast, the rail's
+  sheet, and the settings' save bar (`shadow-float`), and one under the primary action, the default button
+  (`shadow-action`). Each is the palette's (Palettes, under Tokens), so its form changes with it, and nothing inside
+  a panel casts one but a pressed segment's `shadow-xs`.
 - Radius: `rounded-md` (8px) for panels, buttons, and fields, `rounded-sm` (6px) for chips and nav items, `rounded-xs`
-  (4px) for a mark smaller than a line of text, a checkbox or a slot's square. The scale is in `tokens.css`; no
-  arbitrary radius (`rounded-[4px]`), which `npm run lint` refuses.
+  (4px) for a mark smaller than a line of text, a checkbox or a slot's square, at the default palettes' `--radius`. A
+  palette may set its own, and the scale follows it. The scale is in `tokens.css`; no arbitrary radius
+  (`rounded-[4px]`), which `npm run lint` refuses.
 - The shell: a 3rem header, a 13rem side nav, content capped at `max-w-[112rem]` with `p-6` and `gap-6` between
   blocks.
   The header stays put and only what is under it scrolls (`page-scroll`), so the header spans the window's width
@@ -653,6 +681,14 @@ side.
   for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
   output that was never recorded is `none`; a PR canopy only reviews has as its ticket `none: canopy only reviews it`
   (`NO_TICKET` in `src/lib/words.ts`). A list with no rows is an `Empty`, not a `None`.
+- **A model** (`src/lib/models.ts`) is named one way on every page: its id, `provider/model@variant`, in monospace, a
+  variant after `@` (`withVariant`), never `at high`. A dense list, a runs list or a cost split, drops the provider
+  (`modelNames`), unless two of its models would then read alike, and gives the whole id in the tip; a picker, a field,
+  or a table of models names it whole, as a gateway (`github-copilot/`) can serve its maker's models under the same
+  name. No model is muted sans, never monospace, since it is no id: `runtime default` (`RUNTIME_DEFAULT`) where nothing
+  sets one; `unread` (`UNREAD`) for a run whose session canopy has not read, why in its tip; and `None` with why for one
+  read that named none. A model takes no status color, but one the runtime no longer lists, `status-blocked`, since it
+  refuses the next run.
 - **`Input`**, **`Textarea`**, and **`SearchField`** (`src/components/input.tsx`): every text field, on
   `surface-raised` with a hairline and the accent's focus ring. An `Input` is one height everywhere, `h-9`, a form's,
   beside its default buttons; a number is an `Input` too. A field to search or filter with is a `SearchField`: a
@@ -763,7 +799,7 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **A link's page at a glance is a hover card** (`HoverCard` in `src/components/ui/hover-card.tsx`): more than a tip
   holds, a few rows of what the page it opens shows, as each header readout shows its page (`ReadoutCard`). It opens
   on hover after half a second, as a tip does, and on the keyboard's focus, and stays while the pointer moves onto
-  it; a tap follows the link. Like a tip it is on `surface` with a hairline, no shadow and no motion, its rows
+  it; a tap follows the link. Like a tip it is on `surface` with its edge and floating shadow and no motion, its rows
   `text-xs` under `panel-label`s. Nothing in it is found only there: it is a preview of the page, never a place to act.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): every list
   in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
@@ -1516,24 +1552,26 @@ sliver beside four others; and its axis names short call numbers without measuri
   A persona canopy would refuse is disabled, with why on hover. The menu ends, after a hairline, with what goes back
   to the config: `Clear the override`, or `Use the default`.
 - **A choice of model** (`src/components/ticket-models.tsx`) is the same menu over the models the runtime lists, read
-  when it opens, in a row per agent laid out as the persona rows are: `worker model`, then the button, then where it
-  comes from in muted `text-xs`, beside the persona rows once the Work panel is `@3xl`, so each agent's model is level
-  with its persona and the conversation under the panel stays in reach, and under them in a narrower one. A model's id
-  is monospace; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
+  when it opens: the button, then where it comes from in muted `text-xs`. On a ticket's page it shares one grid with
+  the persona (`src/components/ticket-agents.tsx`): a row per agent, its name, its persona, then its model, under a
+  muted `persona` and `model` heading, so the conversation under the panel stays in reach; a Work panel narrower than
+  `@lg` puts each model under its persona. The persona's column is as wide as its widest, up to 45%, and the model
+  takes the rest. A model's id is monospace, and a long one ends in an ellipsis, on the button and in the list, whole
+  on hover; the runtime's default names none, so its button reads `runtime default` in muted sans, and a muted
   `last served` names the model that served the agent's latest read run when it is not the button's. A variant on the
   button follows the model's id, muted. Each model's variants are items of their own under it, indented, in the
   runtime's order, each `@variant` to the eye and named whole for a screen reader; a model with variants is marked a
   muted `(default)`. The field finds each item by its own id alone, and sets the pinned item aside while it holds
   anything, so Enter takes the first id found; a variant whose model is hidden shows its model's id before it, muted.
   `Clear the override` is a ghost button under the list, out of its scroll. A choice saved is confirmed in its row, a
-  `saved` in `status-done`, so nothing below moves, until the ticket's models change after it; one that sets aside
-  config's variant says so after it in muted text. The menu offers only what the server would take: the model chosen
-  now, when
-  it is not one, is a disabled item with why in muted text after it (`no longer listed; its next run is refused`,
-  `variant no longer listed; its next run is refused`), and a model or variant gone from the list marks its trigger in
-  `status-blocked`. A list that cannot be read says why in `status-failed`, offers no model, and has a
-  `Read again` item. While a choice saves, its trigger names it with a trailing `…` and is `aria-busy`; a refusal's
-  `Notice` names the agent before its guard.
+  `saved` in `status-done` in place of where the model comes from, so nothing below moves, until the ticket's models
+  change after it; one that sets aside config's variant says so after it in muted text. The menu offers only what the
+  server would take: the model chosen now, when it is not one, is a disabled item with why in muted text after it
+  (`no longer listed; its next run is refused`, `variant no longer listed; its next run is refused`), and a model or
+  variant gone from the list marks its trigger in `status-blocked`. A list that cannot be read says why in
+  `status-failed`, offers no model, and has a `Read again` item. While a choice saves, its trigger names it with a
+  trailing `…` and is `aria-busy` and `aria-disabled`, never `disabled`, so the focus the list hands back stays on it;
+  a refusal's `Notice` is in its agent's row.
 - **Attachments** (`src/components/attachments.tsx`, DESIGN §22) are a section with a `panel-label` heading, under the
   verbs at the foot of a ticket's or a task's conversation, beside the reply that says what to do with them: each file a
   row of its name in monospace, its size muted, and a ghost `icon-xs` ✕ named `Remove NAME`; an outline `xs` **Attach a

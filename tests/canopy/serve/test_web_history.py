@@ -88,7 +88,7 @@ def test_the_stream_reads_the_same_lists_over_a_long_history(backend: Backend) -
     # The mock's seven of the day, newest first, the two it landed in October, its feedback plans' seven of eight days
     # before, the rest it landed, then the history's newest.
     landed = [t.key for t in sorted(serve_history.TICKETS, key=lambda t: t.done_at, reverse=True)]
-    newest = ["ABC-101", "ABC-104", "ABC-102", "ABC-105", "ABC-099", "ABC-100", "ABC-103", *landed[:2]]
+    newest = ["ABC-101", "ABC-104", "ABC-102", "ABC-105", "ABC-099", "ABC-103", "ABC-100", *landed[:2]]
     newest += ["ABC-136", "ABC-135", "ABC-134", "ABC-133", "ABC-132", "ABC-131", "ABC-130", *landed[2:], "OLD-0"]
     assert [t.key for t in tickets.tickets[: len(newest)]] == newest
     assert len(tickets.tickets) == views.TICKETS

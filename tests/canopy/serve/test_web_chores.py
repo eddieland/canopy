@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 
 from canopy.chores import start
-from canopy.core import chore_runs, chore_view, conversation, db
+from canopy.core import chore_runs, chore_view, conversation, db, records
 from canopy.serve import mock
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import json_block
@@ -89,6 +89,14 @@ def test_a_chore_runs_page_names_the_models_that_served_it_or_why_it_cannot(back
     # The runtime no longer keeps run 2's session, and run 4 is still running.
     assert c.get(f"/api/chores/{mock.CHORE}/runs/2").json()["models"]["status"] == "missing"
     assert c.get("/api/chores/build-health/runs/4").json()["models"]["status"] == "running"
+
+
+def test_a_chore_runs_page_names_the_model_its_agent_asked_for(backend: Backend) -> None:
+    c = client(None, backend)
+    assert c.get(f"/api/chores/{mock.CHORE}/runs/1").json()["model"] is None
+    with backend.open() as ctx:
+        records.update(records.ChoreRun).set(model="anthropic/claude-haiku-4-5").where("id = ?", 1).run(ctx.conn)
+    assert c.get(f"/api/chores/{mock.CHORE}/runs/1").json()["model"] == "anthropic/claude-haiku-4-5"
 
 
 def test_a_chores_runs_name_the_models_that_served_them_so_the_runs_page_lists_them_by_model(
@@ -194,8 +202,8 @@ def test_a_note_from_the_web_is_recorded_as_the_cli_records_one_and_the_next_pro
     assert c.post(url, json=body, headers={"origin": headers["origin"]}).status_code == 403
     first = c.post(url, json=body, headers=headers).json()
     again = c.post(url, json=body, headers=headers).json()
-    # After the mock's 16 messages, the last two its feedback plans' approvals wrote.
-    assert first == {"message_id": 17, "answers": None, "new": True}
+    # After the mock's 19 messages, the last three ABC-103's note, comment, and reply (`_every_kind`).
+    assert first == {"message_id": 20, "answers": None, "new": True}
     assert again == {**first, "new": False}
     unknown = c.post("/api/chores/nope/replies", json=body, headers=headers)
     assert (unknown.status_code, unknown.json()["detail"]["guard"]) == (409, "unknown")
@@ -211,13 +219,13 @@ def test_a_note_from_the_web_is_recorded_as_the_cli_records_one_and_the_next_pro
     notes: list[dict[str, Any]] = json_block(prompt)["operator_notes"]
     assert [(n["id"], n["note"]) for n in notes] == [
         (8, "Leave out the docs site's lockfile: it is never deployed."),
-        (17, NOTE),
+        (20, NOTE),
     ]
 
     # The list the stream sends changes with the note, so a page showing the chore reads it again.
     [_, deps] = c.get("/api/chores").json()
-    assert deps["latest_note_id"] == 17
-    assert [n["id"] for n in c.get("/api/chores/deps").json()["notes"]] == [8, 17]
+    assert deps["latest_note_id"] == 20
+    assert [n["id"] for n in c.get("/api/chores/deps").json()["notes"]] == [8, 20]
 
 
 def test_a_finding_dismissed_from_the_web_leaves_the_attention_list_as_the_cli_dismisses_it(backend: Backend) -> None:
