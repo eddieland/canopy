@@ -106,10 +106,10 @@ Reload. If the file changed since the page read it, the save is refused rather t
 
 Which model each agent runs on, as `[runtime.models]` chooses it: a row each for the worker (both workers, and a
 task's runs), the planner, the reviewer, the overseer, and `chore`, which covers every chore without a model of its
-own, then a row for each chore. Each row names the model and the variant it runs at, `provider/model@high` in the file,
-or says `runtime default` when nothing sets one and the runtime picks, which is a choice, just not yours. A chore with
-a `model` in its own table is marked **own model**; one whose command runs an agent of your own names that agent
-instead, since its own definition chooses (see [chores](chores#setting-one-up)).
+own, then a row for each chore. Each row names the model at the variant it runs at, `provider/model@high`, as the file
+spells it, or says `runtime default` when nothing sets one and the runtime picks, which is a choice, just not yours.
+A chore with a `model` in its own table is marked **own model**; one whose command runs an agent of your own names
+that agent instead, since its own definition chooses (see [chores](chores#setting-one-up)).
 
 ```toml
 [runtime.models]

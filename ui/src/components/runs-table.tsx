@@ -24,7 +24,7 @@ import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { costText } from '@/lib/cost-total'
-import { modelNames, runModelIds, sameModel, UNREAD, unservedReason } from '@/lib/models'
+import { isUnread, modelNames, runModelIds, sameModel, UNREAD, unservedReason } from '@/lib/models'
 import { choreRunRef } from '@/lib/refs'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { rowLineFrom } from '@/lib/rows'
@@ -440,8 +440,8 @@ function namesModel(run: Run): boolean {
  * whole in its tip with its cost. A run the model canopy asked for served none of says `asked Y ≠ X`, asked first;
  * one it served alongside another marks only the count of the others, `+1`, in the foreground, the rest muted: worth
  * knowing, not waiting on the operator, so no status color (`sameModel` takes `X@variant` asked and `X` served alike).
- * Until its session is read, the model canopy asked for, else `model unread`, why in its tip; a run with no session
- * to read names no model.
+ * Until its session is read, the model canopy asked for, else `model unread`, why in its tip, and `model none` once a
+ * read named none, the word in muted sans as no id; a run with no session to read names no model.
  */
 function RunModel({ run, names, className }: { run: Run; names: ModelNames; className?: string }) {
     const name = (id: string) => names.get(id) ?? id
@@ -461,12 +461,12 @@ function RunModel({ run, names, className }: { run: Run; names: ModelNames; clas
         if (why === null || run.models?.status === 'no_session') {
             return null
         }
-        // A session read, or gone, that named no model; else one canopy has not read yet, or could not.
-        const known = run.models?.status === 'found' || run.models?.status === 'missing'
+        // A session canopy has not read yet, or could not; else one read, or gone, that named no model.
+        const unread = run.models !== null && isUnread(run.models)
         return (
             <Tip fact={`none: ${why}`} mono>
                 <span className={cn('text-muted-foreground', className)} data-testid="run-model">
-                    model {known ? 'none' : UNREAD}
+                    model <span className="font-sans">{unread ? UNREAD : 'none'}</span>
                 </span>
             </Tip>
         )

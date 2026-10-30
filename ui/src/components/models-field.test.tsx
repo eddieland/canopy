@@ -44,8 +44,14 @@ describe('ModelsField', () => {
     })
 
     it.each([
-        ['running', 'none: read from its session once it ends'],
-        ['unread', "none: not read yet: a tick reads a few ended runs' sessions"],
+        ['running', 'read from its session once it ends'],
+        ['unread', "not read yet: a tick reads a few ended runs' sessions"],
+    ] as const)('says a run that is %s is unread, why on hover', (status, why) => {
+        renderModels({ status, models: [], error: null })
+        expect(screen.getByText('unread').getAttribute('title')).toBe(why)
+    })
+
+    it.each([
         ['no_session', 'none: it reported no session to read'],
         ['missing', 'none: the runtime no longer keeps its session'],
     ] as const)('says why a run that is %s names no model', (status, said) => {
@@ -127,9 +133,10 @@ describe('ModelsField', () => {
         expect(screen.queryByText(/asked anthropic/u)).toBeNull()
     })
 
-    it('gives why a read failed on hover', () => {
+    it('says a run whose read failed is unread, why it failed on hover', () => {
         renderModels({ status: 'failed', models: [], error: 'the runtime timed out after 30s' })
-        const said = screen.getByText('none: its session could not be read, tried again later')
-        expect(said.getAttribute('title')).toBe('the runtime timed out after 30s')
+        expect(screen.getByText('unread').getAttribute('title')).toBe(
+            'its session could not be read, tried again later (the runtime timed out after 30s)',
+        )
     })
 })

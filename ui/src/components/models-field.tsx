@@ -2,15 +2,16 @@ import type { ModelsServed } from '@/api/types'
 import { Cost } from '@/components/cost'
 import { Field } from '@/components/fields'
 import { None } from '@/components/none'
-import { FAILED_READ, sameModel, unservedReason } from '@/lib/models'
+import { isUnread, sameModel, UNREAD, unservedReason } from '@/lib/models'
 import { cn } from '@/lib/utils'
 
 /**
  * A Run panel's `model` field, under `spent`: each model that wrote the run's replies, as its session says (DESIGN
  * §13), its replies on hover. A run split between models gives each its share of the cost, the most costly first;
  * one model's cost is `spent` already. Until canopy reads the session, a few ended runs each tick, or when it cannot,
- * says why, muted. For a run that records the model canopy `asked` for, it says `asked X` until then instead, why
- * none served yet on hover. Once read, a run the model asked for served none of reads `asked Y ≠ served X`, and one it
+ * says `unread`, why on hover; a session read, or gone, that names none says `none` and why: both muted sans, as no
+ * id. For a run that records the model canopy `asked` for, it says `asked X` until then instead, why none served yet
+ * on hover. Once read, a run the model asked for served none of reads `asked Y ≠ served X`, and one it
  * served alongside another marks only the other `≠`: in the field's own color, since a model other than the one asked
  * for is worth knowing, not waiting on the operator. `X@variant` asked and `X` served are the same (`sameModel`).
  */
@@ -25,10 +26,10 @@ export function ModelsField({ models, asked = null }: { models: ModelsServed; as
 function Models({ models, asked }: { models: ModelsServed; asked: string | null }) {
     const reason = unservedReason(models)
     if (reason !== null) {
-        if (models.status === 'failed' && asked === null) {
+        if (asked === null && isUnread(models)) {
             return (
-                <span className="text-muted-foreground" title={models.error ?? undefined}>
-                    none: {FAILED_READ}
+                <span className="font-sans text-muted-foreground" title={reason}>
+                    {UNREAD}
                 </span>
             )
         }
@@ -75,7 +76,7 @@ function Models({ models, asked }: { models: ModelsServed; asked: string | null 
 /** Why no model is named as having served a run; or, when canopy `asked` for one, that model, the why on hover. */
 function NoneServed({ asked, reason }: { asked: string | null; reason: string }) {
     if (asked === null) {
-        return <None reason={reason} />
+        return <None reason={reason} className="font-sans" />
     }
     return (
         <span className="readout" title={`none served: ${reason}`}>

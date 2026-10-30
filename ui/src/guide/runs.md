@@ -82,8 +82,9 @@ while it runs. **spent** gives its cost, the tokens it used, and its peak contex
 digests had it edited between them. **model** names the model that wrote its replies, as the runtime's own record of the
 session says, so it is right even when a template's option or the runtime's default picked it rather than you. A run
 that switched models partway lists each with its share of the cost. The runtime prints no model while a run works, so
-canopy reads the session as the run ends, and any it missed while the loop waits between ticks; until then, or once the
-runtime has forgotten the session, the field says why it names none. When canopy chose the run's model, from
+canopy reads the session as the run ends, and any it missed while the loop waits between ticks; until then, or if the
+read failed, the field says `unread`, with why on hover. Once the runtime has forgotten the session, or the session
+made no model call, it says `none` and why. When canopy chose the run's model, from
 `[runtime.models]` or the ticket's override, the field says `asked` and that model instead, from the moment it starts,
 with why none served yet on hover. Once the session is read, a run the model asked for served none of reads
 `asked Y ≠ served X`, and one it served alongside another marks the other with a `≠`, its tip saying it wasn't asked

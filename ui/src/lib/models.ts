@@ -85,6 +85,15 @@ export function unservedReason(models: ModelsServed): string | null {
 }
 
 /**
+ * Whether canopy has yet to read a run's session for its models: while it runs, until a tick reads it, or after a read
+ * that failed, as a page then says `unread` (`UNREAD`), why in its tip, rather than `none`, kept for a read that named
+ * none.
+ */
+export function isUnread(models: ModelsServed): boolean {
+    return models.status === 'running' || models.status === 'unread' || models.status === 'failed'
+}
+
+/**
  * How a list names each of `ids`, models as `provider/model[@variant]`: without its provider (`claude-opus-4-1`),
  * unless another provider's model in the list has the same name, which keeps its whole id. A list of runs then reads
  * short, and never names two models alike.
