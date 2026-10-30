@@ -455,10 +455,12 @@ class ReviewRequest(Model):
     """The operator's notes for the reviewer, which its prompt carries; None when the request has none."""
     personas: list[str] = []
     """The personas it is reviewed in, one review each, in the order chosen; none for `[personas] reviewer`'s."""
+    model: str | None = None
+    """The model its reviews run on, `provider/model[@variant]`; None for the reviewer's own."""
 
 
 class ReviewRequestBody(Model):
-    """A review request's notes and personas, as `canopy start URL --review --notes TEXT --persona NAME` gives them."""
+    """A review request's notes, personas, and model, as `canopy start URL --review` gives them."""
 
     notes: Annotated[str, Field(max_length=20_000)] = ""
     """What the reviewer should know or look at closely. Bounded again in code at 4000 characters, after stripping;
@@ -466,6 +468,9 @@ class ReviewRequestBody(Model):
     personas: Annotated[list[Annotated[str, Field(max_length=40)]], Field(max_length=10)] = []
     """The personas to review it in, one review each, side by side, each one `GET /personas` lists; none is
     `[personas] reviewer`'s, and leaves an open request's personas as they were."""
+    model: Annotated[str | None, Field(max_length=200)] = None
+    """The model its reviews run on, as `provider/model`, one `GET /models` lists, or `provider/model@variant` at one
+    of its variants; None is the reviewer's own, and leaves an open request's model as it was."""
 
 
 class ReviewRequested(Model):

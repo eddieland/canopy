@@ -355,8 +355,8 @@ registered; they, and what OpenCode does with a plugin, are §33.
 ### Each agent's model
 
 Built: each agent's default in `[runtime.models]`, a chore's own model, variants, the ticket's override from
-`canopy model` or the ticket's page, the check of a model and its variant before every run the loop starts and a
-tick's overseer, and recording what served (REQUIREMENTS R23).
+`canopy model` or the ticket's page, a review request's model, the check of a model and its variant before every run
+the loop starts and a tick's overseer, and recording what served (REQUIREMENTS R23).
 
 The operator wants to override one ticket's model, running its workers on another and comparing what they did and cost,
 and to choose each agent's model on its own, such as a reviewer on another model than the worker's (§21). The design
@@ -364,7 +364,9 @@ promises:
 
 - **The operator alone chooses.** A run's model is its ticket's override for its agent, else that agent's default in
   `[runtime.models]`, else the runtime's default, fixed when the run starts; a chore's own `model` comes before the
-  chore's default (§19). A model may name the variant it runs at, such as a reasoning effort, as
+  chore's default (§19). A review request may name a model for its reviews, in every persona, which comes before
+  the ticket's override, as the more specific and more recent ask (§21), and is checked as the override is. A model
+  may name the variant it runs at, such as a reasoning effort, as
   `provider/model@variant`. `runtime.models` is private (T7): a model
   is what the operator's spend buys, and its provider is sent the ticket and the code. The override is set only by the
   operator's `canopy model` or the ticket's page, through one function refused inside an agent run (T1); the

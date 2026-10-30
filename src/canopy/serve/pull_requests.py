@@ -87,7 +87,7 @@ def review_request(conn: sqlite3.Connection, row: records.ReviewRequest) -> Revi
     """A review request as the API shows it.
 
     Returns:
-        The request: when and where it was made, its notes and personas, and when and why it ended, if it has.
+        The request: when and where it was made, its notes, personas, and model, and when and why it ended.
     """
     return ReviewRequest.model_validate(
         {
@@ -97,6 +97,7 @@ def review_request(conn: sqlite3.Connection, row: records.ReviewRequest) -> Revi
             "end_reason": row.end_reason,
             "notes": row.notes,
             "personas": review_requests.personas_of(conn, row.id),
+            "model": row.model,
         },
     )
 

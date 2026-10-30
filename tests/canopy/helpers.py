@@ -1014,6 +1014,21 @@ def agent_runs(agent_log: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in agent_log.read_text().splitlines()]
 
 
+def ran_on(agent_log: Path, agent: str = "canopy-worker") -> str | None:
+    """The model the definition of the latest run of `agent` names, as it loaded it; None when it names none.
+
+    A variant it names follows the model's id after an `@`, as config spells it.
+    """
+    run = [r for r in agent_runs(agent_log) if f"--agent {agent}" in " ".join(r["argv"])][-1]
+    text = (Path(run["env"]["OPENCODE_CONFIG_DIR"]) / "agents" / f"{agent}.md").read_text()
+    found = [line for line in text.splitlines() if line.startswith("model: ")]
+    variant = [line for line in text.splitlines() if line.startswith("variant: ")]
+    if not found:
+        return None
+    model = json.loads(found[0].removeprefix("model: "))
+    return f"{model}@{json.loads(variant[0].removeprefix('variant: '))}" if variant else model
+
+
 def told(run: Mapping[str, Any]) -> str:
     """What fake agent run `run`, as the fake logged it, was told: its definition's body, then its message.
 

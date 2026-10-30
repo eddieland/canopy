@@ -352,7 +352,9 @@ request is a journal fact, at most one open per PR, ended by a `done` review, by
 closed, or in no cloned repository, or by the operator. A request may carry the operator's notes, which its reviewer's
 prompt carries; a prompt override that drops them fails to render. A request may name several personas (§31): one
 `review-run` starts a review in each still owed one, side by side, each counting against the per-PR limit and
-keeping its own draft, and the request ends once each has a `done` review. A requested review is the overseer's first
+keeping its own draft, and the request ends once each has a `done` review. A request may name the model its reviews
+run on, in place of the reviewer's (§13), so a coworker's PR, which has no ticket to override, can get a stronger or
+cheaper reviewer once without a config edit. A requested review is the overseer's first
 start of a tick, ahead of every worker and every other review, since the operator asked for it by hand. Starting work on
 a coworker's PR is refused, so a review never turns into work on someone else's branch. Requests are refused inside a
 run: a request authorizes a review as `review.query` does, so an agent steered by a PR's text could otherwise aim the

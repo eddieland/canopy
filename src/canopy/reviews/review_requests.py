@@ -8,8 +8,9 @@ PR's repository when it runs the review, as it does for `review.query`'s matches
 review of its PR ends `done`, in each of its personas if it has any (`db.finish_run`), or when the `review-run` tool
 refuses `reviewed` for it (`answered`); the overseer ends one whose PR merged or closed first, or is in none of the
 workspace's repositories (`end`). At most one request per PR is open. A request may carry the operator's notes, which
-the reviewer's prompt carries (`reviews.start`), and the personas it is reviewed in, in place of `[personas] reviewer`'s
-(DESIGN §31), which only the operator chooses (`request`, `choose_persona`).
+the reviewer's prompt carries (`reviews.start`), the personas it is reviewed in, in place of `[personas] reviewer`'s
+(DESIGN §31), which only the operator chooses (`request`, `choose_persona`), and the model its reviews run on, in place
+of the reviewer's (DESIGN §13), which `reviews.start` checks again as each review starts.
 """
 
 from __future__ import annotations
@@ -17,14 +18,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, conversation, db, personas, records, sql
+from canopy.core import agent_models, contract, conversation, db, personas, records, sql, ticket_models
+from canopy.runtime import agents, invocation
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterable, Sequence
+    from collections.abc import Callable, Iterable, Sequence
 
     from canopy.core.config import Config
     from canopy.core.review_result import ReviewResult
+    from canopy.runtime.report import ModelList
 
 #: `review_runs.purpose` of a review that answers the operator's request, rather than one the loop started on its own.
 PURPOSE = "request"
@@ -145,13 +148,17 @@ def request(
     channel: str,
     notes: str | None = None,
     chosen: Sequence[str] = (),
+    model: str | None = None,
+    listing: Callable[[bool], ModelList] | None = None,
 ) -> Requested:
     """Ask for the PR `ref` names to be reviewed at its head, through `channel`, with `notes`. Operator only.
 
     `notes` is what the operator wants the reviewer to know, stripped; blank is none. `chosen` are the personas it is
-    reviewed in, one review each, in place of `[personas] reviewer`'s one (DESIGN §31). On a request already open,
-    notes or personas replace its own, and none leaves them as they were. A review already running keeps the prompt
-    it started with.
+    reviewed in, one review each, in place of `[personas] reviewer`'s one (DESIGN §31). `model` is the one every
+    review it makes runs on, in place of the reviewer's (DESIGN §13); `listing` reads the models the runtime lists, as
+    `ticket_models.choose` reads them, and is needed only with a model. On a request already open, notes, personas, or
+    a model replace its own, and none leaves them as they were. A review already running keeps the prompt and model it
+    started with.
 
     Returns:
         The PR's open request, and whether one was already open.
@@ -160,7 +167,9 @@ def request(
         Refused: `inside_run` inside one of canopy's own ticks or runs; `reviews_off` when `capacity.max_reviews` is 0;
             `bad_notes` for notes over `MAX_NOTES` characters; `unknown_persona` or `bad_persona` for a persona a run
             could not use; `bad_pr` for a subject that is not a PR's plain https:// URL; `loop_pr` for a PR a ticket's
-            run pushed to, which `review.agent_prs` covers.
+            run pushed to, which `review.agent_prs` covers; `no_reviewer` for a model when `runtime.review_cmd` runs
+            no reviewer of canopy's to give it to; `unknown_model` for a model the runtime does not list, or a variant
+            the model does not, and `model_list_failed` when its list cannot be read.
         RuntimeError: the request was not there to read back once written.
     """
     conversation.check_operator()
@@ -178,16 +187,24 @@ def request(
             "loop_pr",
             f"{url} is one of the loop's own PRs, a ticket's unit's; `review.agent_prs` reviews those",
         )
+    _check_model(config, model, listing)
     with db.transaction(conn):
         found = open_request(conn, url)
-        if found is not None and said is not None:
-            records.update(records.ReviewRequest).set(notes=said).where("id = ?", found.id).run(conn)
-            found = open_request(conn, url)
         if found is not None:
+            replaced = {name: value for name, value in (("notes", said), ("model", model)) if value is not None}
+            if replaced:
+                records.update(records.ReviewRequest).set(**replaced).where("id = ?", found.id).run(conn)
             if names:
                 _set_personas(conn, found.id, names)
-            return Requested(request=found, already=True)
-        records.insert(records.ReviewRequest, pr_url=url, created_at=db.now(), channel=channel, notes=said).run(conn)
+            return Requested(request=open_request(conn, url) or found, already=True)
+        records.insert(
+            records.ReviewRequest,
+            pr_url=url,
+            created_at=db.now(),
+            channel=channel,
+            notes=said,
+            model=model,
+        ).run(conn)
         made = open_request(conn, url)
         if made is not None and names:
             _set_personas(conn, made.id, names)
@@ -325,6 +342,27 @@ def has_news(run: records.ReviewRun, found: ReviewResult | None) -> bool:
     if run.ended_at is None or found is None or found.verdict is None:
         return False
     return found.verdict == "findings" or run.purpose == PURPOSE
+
+
+def _check_model(config: Config, model: str | None, listing: Callable[[bool], ModelList] | None) -> None:
+    """Refuse a model for a request's reviews that no reviewer of canopy's would run on, or the runtime does not list.
+
+    None, the reviewer's own, is never refused.
+
+    Raises:
+        Refused: `no_reviewer`, `unknown_model`, or `model_list_failed`.
+        ValueError: no `listing` was given to look the model up in.
+    """
+    if model is None:
+        return
+    if invocation.agent_of(config.runtime.review_cmd) != agents.REVIEWER:
+        raise conversation.Refused(
+            "no_reviewer",
+            f"runtime.review_cmd runs no {agents.REVIEWER}, so a model has no reviewer to choose for",
+        )
+    if listing is None:
+        raise ValueError("a request's model is looked up in the runtime's list, and none was given")
+    ticket_models.check(model, listing(agent_models.parse(model).variant is not None))
 
 
 def _set_personas(conn: sqlite3.Connection, request_id: int, names: Iterable[str]) -> None:

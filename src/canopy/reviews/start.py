@@ -389,9 +389,10 @@ def _persona(ctx: Context, request: Request) -> personas.Persona:
 def _check_model(ctx: Context, request: Request) -> str | None:
     """Return the model a review's reviewer asks for, refused unless the runtime lists it, looked up now (DESIGN §13).
 
-    The model is the review's ticket's override for the reviewer, else the one `runtime.models` chooses for the agent
-    `runtime.review_cmd` runs; a PR with no ticket takes config's. The run records it and renders what it recorded. It
-    is never fallen back from, as a worker's dispatch is not.
+    The model is the one the PR's open review request chose (`canopy start URL --review --model`), else the review's
+    ticket's override for the reviewer, else the one `runtime.models` chooses for the agent `runtime.review_cmd` runs;
+    a PR with neither takes config's. The run records it and renders what it recorded. It is never fallen back from,
+    as a worker's dispatch is not.
 
     Returns:
         The model as the run records it, `provider/model` or `provider/model@variant`, or None when none is chosen.
@@ -403,11 +404,16 @@ def _check_model(ctx: Context, request: Request) -> str | None:
     models = ctx.config.runtime.models
     if key is not None:
         models = ticket_models.models_for(ctx.conn, ctx.config, key, "reviewer")
+    asked = review_requests.open_request(ctx.conn, request.pr)
+    if asked is not None and asked.model is not None:
+        models = {**models, "reviewer": asked.model}
     model = agent_models.of_template(models, ctx.config.runtime.review_cmd)
     if model is None:
         return None
     chosen = "in runtime.models"
-    if key is not None and ticket_models.override(ctx.conn, key, "reviewer") == model.name:
+    if asked is not None and asked.model is not None:
+        chosen = f"for {request.pr}'s review request (`canopy start {request.pr} --review --model`)"
+    elif key is not None and ticket_models.override(ctx.conn, key, "reviewer") == model.name:
         chosen = f"for {key}'s reviewer runs (`canopy model {key} --agent reviewer`)"
     try:
         agent_models.check(ctx.runner, ctx.workspace.root, model, version=ctx.config.runtime.version, chosen=chosen)
