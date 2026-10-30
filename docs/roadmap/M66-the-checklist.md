@@ -45,7 +45,8 @@ missed. Three stages, in order, each in its own PRs; stage 3 waits on stage 2's 
   and item, `pass`, `fixed`, `held` with a `reason`, or `n/a`; an item or a repository the run's lists do not hold is
   dropped, and a reminded run with no `checklist` is recorded unanswered. `canopy show-run` and the run's page show the
   answers; `canopy checklist` (and a web UI view) counts per repository and item reminded, pass, fixed, held, and
-  unanswered, over a period, and `--repo` narrows it to one. No attention item.
+  unanswered, over a period, and `--repo` narrows it to one. No attention item. Stage 1 starts once the operator has
+  chosen where the hold lives (the Status line); the plugin's hold here is one of the two the measurement weighs.
 - **Stage 2, the measurement.** Two weeks of real use in `MEASUREMENTS.md`: per repository and item, the counts above,
   and the nits of that item that still reached a human reviewer's comment on canopy's PRs, counted by the operator
   from the PRs. An
@@ -101,4 +102,4 @@ Status: not started. Designed 2026-10-29 (DESIGN §42); the operator chose the r
 stage the same day, on the evidence that standing instructions already emphasize these rules and workers miss them.
 Made a list per repository 2026-10-30, at the operator's ask, and the reminder held before the push the same day, so a
 fix costs no CI run. Where the hold lives, canopy's plugin or canopy's own `pre-push` hook, waits on the operator's call
-on the measurement of 2026-10-30 (MEASUREMENTS).
+on MEASUREMENTS "2026-10-30: where M66's checklist can hold a worker's push".
