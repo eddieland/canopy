@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import type { ComponentProps, ReactNode } from 'react'
 
 import { tickQuery } from '@/api/queries'
 import type { Message } from '@/api/types'
@@ -94,39 +95,30 @@ export function Conversation({
         <ol className="stagger flex flex-col gap-3 p-3" data-testid="conversation">
             {!newestFirst && lead}
             {messages.map((message) => (
-                <li
+                <Bubble
                     key={message.id}
                     id={messageAnchor(message.id)}
                     data-testid={messageAnchor(message.id)}
                     data-source={message.source}
-                    className={cn(
-                        'flex w-full max-w-2xl flex-col gap-1 [--enter:pop]',
-                        message.source === 'operator' ? 'origin-top-right self-end' : 'origin-top-left',
-                    )}
-                >
-                    <Head
-                        message={message}
-                        task={task}
-                        waiting={message.id === waiting}
-                        unread={unread.test(message) ? unread : null}
-                        seen={
-                            ticked &&
-                            pending === undefined &&
-                            message.source === 'operator' &&
-                            acknowledged !== undefined &&
-                            !awaitsTick(message, acknowledged)
-                        }
-                    />
-                    <p
-                        className={cn(
-                            'rounded-md px-3 py-2 text-sm break-words whitespace-pre-wrap',
-                            message.source === 'operator' ? 'rounded-tr-xs' : 'rounded-tl-xs',
-                            TONE[message.kind],
-                        )}
-                    >
-                        <LinkedText text={message.body} pullRequests />
-                    </p>
-                </li>
+                    operator={message.source === 'operator'}
+                    tone={TONE[message.kind]}
+                    body={message.body}
+                    head={
+                        <Head
+                            message={message}
+                            task={task}
+                            waiting={message.id === waiting}
+                            unread={unread.test(message) ? unread : null}
+                            seen={
+                                ticked &&
+                                pending === undefined &&
+                                message.source === 'operator' &&
+                                acknowledged !== undefined &&
+                                !awaitsTick(message, acknowledged)
+                            }
+                        />
+                    }
+                />
             ))}
             {newestFirst && lead}
         </ol>
@@ -135,24 +127,71 @@ export function Conversation({
 
 /** A task's instruction, as the operator's own words are drawn: on their side, in the accent's tint. */
 function InstructionBubble({ instruction }: { instruction: Instruction }) {
-    const clock = useClock()
     return (
-        <li
+        <Bubble
             data-testid="instruction"
             data-source="operator"
-            className="flex w-full max-w-2xl origin-top-right flex-col gap-1 self-end [--enter:pop]"
+            operator
+            tone={TONE.reply}
+            body={instruction.body}
+            head={
+                <HeadLine at={instruction.at} operator>
+                    <span className="readout">{instruction.ref}</span>
+                    <span className="text-foreground">you</span>
+                    <span>instruction via {instruction.channel}</span>
+                </HeadLine>
+            }
+        />
+    )
+}
+
+/**
+ * One message: its head line over its bubble, which is as wide as its words, up to a measure that leaves the other
+ * side a gutter at any panel's width, so the operator's own stay on the right however narrow the panel.
+ */
+function Bubble({
+    operator,
+    tone,
+    head,
+    body,
+    ...props
+}: { operator: boolean; tone: string; head: ReactNode; body: string } & ComponentProps<'li'>) {
+    return (
+        <li
+            {...props}
+            className={cn(
+                'flex max-w-[min(42rem,85%)] flex-col gap-1 [--enter:pop]',
+                operator ? 'origin-top-right items-end self-end' : 'origin-top-left items-start self-start',
+            )}
         >
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted-foreground">
-                <span className="readout">{instruction.ref}</span>
-                <span className="text-foreground">you</span>
-                <span>instruction via {instruction.channel}</span>
-                <Age at={instruction.at} variant="ago" className="ml-auto" />
-                <span className="sr-only">{localTime(instruction.at, clock)}</span>
-            </div>
-            <p className="rounded-md rounded-tr-xs bg-accent/12 px-3 py-2 text-sm break-words whitespace-pre-wrap">
-                <LinkedText text={instruction.body} pullRequests />
+            {head}
+            <p
+                className={cn(
+                    'w-fit max-w-full rounded-md px-3 py-2 text-sm break-words whitespace-pre-wrap',
+                    operator ? 'rounded-tr-xs' : 'rounded-tl-xs',
+                    tone,
+                )}
+            >
+                <LinkedText text={body} pullRequests />
             </p>
         </li>
+    )
+}
+
+/** A bubble's head line: what it says, then its age at the outer edge, mirrored on the operator's side. */
+function HeadLine({ at, operator, children }: { at: string; operator: boolean; children: ReactNode }) {
+    const clock = useClock()
+    return (
+        <div
+            className={cn(
+                'flex w-full flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted-foreground',
+                operator && 'justify-end',
+            )}
+        >
+            {children}
+            <Age at={at} variant="ago" className={operator ? 'order-first mr-auto' : 'ml-auto'} />
+            <span className="sr-only">{localTime(at, clock)}</span>
+        </div>
     )
 }
 
@@ -169,10 +208,9 @@ function Head({
     unread: Pending | null
     seen: boolean
 }) {
-    const clock = useClock()
     const comment = message.comment
     return (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted-foreground">
+        <HeadLine at={message.at} operator={message.source === 'operator'}>
             <span className="readout">{messageRef(message.id)}</span>
             <span className="text-foreground">{WHO[message.source]}</span>
             {comment ? (
@@ -211,8 +249,6 @@ function Head({
                     <Chip>seen</Chip>
                 </span>
             )}
-            <Age at={message.at} variant="ago" className="ml-auto" />
-            <span className="sr-only">{localTime(message.at, clock)}</span>
-        </div>
+        </HeadLine>
     )
 }
