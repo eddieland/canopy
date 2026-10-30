@@ -84,6 +84,21 @@ class TickStatus(StrEnum):
     ABANDONED = "abandoned"
 
 
+class OverseerRunStatus(StrEnum):
+    """How a tick's run of the overseer ended, `overseer_runs.status` (DESIGN §40)."""
+
+    #: Not yet ended.
+    RUNNING = "running"
+    #: It printed its done line, and left no duty undone.
+    OK = "ok"
+    #: It did not start, timed out, exited non-zero, or printed no done line, or its tick raised while it ran.
+    FAILED = "failed"
+    #: It ended well, and left a duty undone (DESIGN §6 step 5).
+    UNDONE = "undone"
+    #: Its tick's process died while it ran; the next tick closed it.
+    ABANDONED = "abandoned"
+
+
 class RunKind(StrEnum):
     """What a worker run does, `runs.kind` (DESIGN §8)."""
 

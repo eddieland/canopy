@@ -71,8 +71,13 @@ through an intermediate, and config takes a `canopy-sandbox` prefix on `overseer
 conservatively, for the operator to change: a run's decision recorded as it starts,
 not at the ask; the tick's spawns all after its last run; within a rank of §7's order the harness's first, and every
 chore after every run, the overseer's before the harness's; and a run's model looked up again at the spawn, so the
-runtime's list is read twice. Left: stage 1's live check, and stage 2, whose build waits on M39 and is taken only if
-M39's re-measurement shows the state block's size dominating what the overseer spends. Chosen conservatively for stage
+runtime's list is read twice. Stage 2 started 2026-10-30 at the operator's word, ahead of M39's re-measurement, as
+stage 1 went ahead of M39. Built (2026-10-30): a tick records each overseer run (`overseer_runs`, migration 0113), today
+its one, given the whole block, its subject none, with how it ended (`ok`, `failed` and why, `undone` naming the duties,
+or `abandoned`), its session, the model asked for, and its cost; `ticks` keeps writing its own columns, so no reader
+moved, and the migration back-fills a run for each past tick that ran its overseer, ending as its tick did. Chosen
+conservatively, for the operator to change: the models that served a run are still read under its tick, which holds
+while a tick makes one run. Left: stage 1's live check, and the rest of stage 2. Chosen conservatively for stage
 2: runs one at a time, every run on the overseer's one model, a subject of new work waited by the harness with no run
 once capacity is out, and a tick with a failed run closing `overseer_failed`. Open for the operator: spawning a run's
 asks as soon as it ends (recommended: not until a tick's length is measured to delay work); runs in parallel

@@ -2,8 +2,9 @@
 
 A live tick starts the operator's queued one-off tasks after reconcile, in code, before the overseer (DESIGN §36). The
 runs the overseer asks for are recorded, and the tick starts them once its run has ended, with the harness's own
-(`spawns.py`, DESIGN §40); one it did not start is closed unstarted as it closes, or by the next tick if it died. A
-tick that closes `ok` notes, on each ticket, what it did about the operator's messages it read (`acknowledge.py`).
+(`spawns.py`, DESIGN §40); one it did not start is closed unstarted as it closes, or by the next tick if it died. Its
+overseer's run is recorded as it starts and as it ends (`core/overseer_runs.py`). A tick that closes `ok` notes, on
+each ticket, what it did about the operator's messages it read (`acknowledge.py`).
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from canopy.core import (
     hostgit,
     item_numbers,
     notice,
+    overseer_runs,
     plans,
     pools,
     progress,
@@ -376,6 +378,7 @@ def _feedback_plans(
 def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome:
     applied = db.migrate(ctx.conn, resources.migrations_dir())
     abandoned = db.abandon_unfinished_ticks(ctx.conn)
+    overseer_runs.close_abandoned(ctx.conn)
     # A run a dead tick recorded and did not start is never started: this tick decides again (DESIGN §40).
     unstarted = recorded_runs.close_unstarted(ctx.conn)
     tick_id = db.start_tick(ctx.conn, dry_run=dry_run)
@@ -390,6 +393,8 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
         _record_overseer(ctx, tick_id, log)
         # Whatever the tick did not start, because it ended early, belongs to it alone.
         recorded_runs.close_unstarted(ctx.conn, tick_id=tick_id)
+        # An overseer run still running when its tick closes, because the tick raised, failed with it.
+        overseer_runs.close_running(ctx.conn, tick_id, summary)
         db.finish_tick(ctx.conn, tick_id, status, summary)
         spent = usage.spent() if usage is not None else {}
         log.info("tick finished", extra={"status": status, "summary": summary, **spent})
@@ -484,7 +489,9 @@ def _steps(
     undone = duties.undone(ctx.conn, tick_id, owed)
     if undone:
         log.error("overseer left duties undone", extra={"undone": undone, "dry_run": dry_run})
-        return finish(TickStatus.OVERSEER_FAILED, f"{prefix}overseer left duties undone: {'; '.join(undone)}", usage)
+        failure = f"overseer left duties undone: {'; '.join(undone)}"
+        overseer_runs.left_undone(ctx.conn, tick_id, failure)
+        return finish(TickStatus.OVERSEER_FAILED, f"{prefix}{failure}", usage)
     actions = Counter(d.action for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
     # Closing `ok` acknowledges the operator's messages the tick read, so each ticket's conversation says what the tick
@@ -505,14 +512,19 @@ def _overseer(
 ) -> tuple[str | None, Usage | None]:
     """Run the overseer on the state block `rendered`, unless it leaves the overseer nothing to judge (DESIGN §39).
 
+    The run is recorded as it starts, given the whole block, and closed as it ends (DESIGN §40).
+
     Returns:
         Why it failed, or None, and what it cost if the runtime reported it; None and None when it did not run.
     """
     if not rendered.left:
         log.info("overseer not run: the harness left it nothing to judge", extra={"dry_run": dry_run})
         return None, None
+    run_id = overseer_runs.start(ctx.conn, tick_id)
     # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
-    return _run_overseer(ctx, tick_id, rendered.block, rendered.title, dry_run=dry_run, log=log)
+    failure, usage = _run_overseer(ctx, tick_id, run_id, rendered.block, rendered.title, dry_run=dry_run, log=log)
+    overseer_runs.end(ctx.conn, run_id, failure)
+    return failure, usage
 
 
 def _harness_cursors(ctx: Context, tick_id: int, log: logs.TickAdapter, *, dry_run: bool) -> None:
@@ -866,13 +878,14 @@ def _initialized(out: str) -> bool:
 def _run_overseer(
     ctx: Context,
     tick_id: int,
+    run_id: int,
     block: str,
     title: str,
     *,
     dry_run: bool,
     log: logs.TickAdapter,
 ) -> tuple[str | None, Usage | None]:
-    """Run `overseer_cmd` with the state block `block` as its prompt, and `title` as its `{title}`.
+    """Run `overseer_cmd` as run `run_id`, with the state block `block` as its prompt, and `title` as its `{title}`.
 
     Output goes to `<state_dir>/ticks/<id>.log` as the overseer prints it, its stderr after it once it ends, and the
     block to `<id>.prompt` beside it first, for the transcript's first model call (DESIGN §22). What its events report
@@ -897,6 +910,7 @@ def _run_overseer(
     # What the definitions just rendered hold for it, as `_check_model` found it listed.
     model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.overseer_cmd)
     db.set_tick_model(ctx.conn, tick_id, model.name if model is not None else None)
+    overseer_runs.set_model(ctx.conn, run_id, model.name if model is not None else None)
     argv = command.argv
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     # Its tools, in its process's environment alone (DESIGN §27). A call may take as long as the overseer may: a
@@ -960,6 +974,7 @@ def _run_overseer(
         digest=definitions_dir.name,
         tools=output.tools,
     )
+    overseer_runs.report(ctx.conn, run_id, output.session_id, output.usage)
     if result.timed_out:
         failure = f"overseer timed out after {timeout_minutes} minutes"
     elif result.returncode != 0:
