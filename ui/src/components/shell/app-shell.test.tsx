@@ -63,7 +63,7 @@ async function renderShell(session: Session | undefined, at = '/attention') {
     const router = createRouter({
         routeTree: root.addChildren([
             createRoute({ getParentRoute: () => root, path: '/attention', component: () => <h1>What needs you</h1> }),
-            createRoute({ getParentRoute: () => root, path: '/runs', component: () => <h1>Runs</h1> }),
+            createRoute({ getParentRoute: () => root, path: '/workspace', component: () => <h1>Workspace</h1> }),
         ]),
         history: createMemoryHistory({ initialEntries: [at] }),
     })
@@ -132,7 +132,7 @@ describe('AppShell', () => {
         it('shows the nav as a strip, and opens the whole rail over the page from its button', async () => {
             stubWidth(false)
             await renderShell(SIGNED_IN)
-            expect(screen.getByRole('link', { name: 'Runs' })).toBeDefined()
+            expect(screen.getByRole('link', { name: 'Workspace' })).toBeDefined()
             expect(screen.queryByRole('searchbox')).toBeNull()
 
             fireEvent.click(screen.getByRole('button', { name: 'Open the rail' }))
@@ -156,11 +156,11 @@ describe('AppShell', () => {
 
             const sheet = screen.getByRole('dialog', { name: 'Rail' })
             await act(async () => {
-                fireEvent.click(within(sheet).getByRole('link', { name: 'Runs' }))
+                fireEvent.click(within(sheet).getByRole('link', { name: 'Workspace' }))
                 await Promise.resolve()
             })
             expect(screen.queryByRole('dialog', { name: 'Rail' })).toBeNull()
-            expect(router.state.location.pathname).toBe('/runs')
+            expect(router.state.location.pathname).toBe('/workspace')
         })
 
         it('closes the rail when a search is sent from it', async () => {

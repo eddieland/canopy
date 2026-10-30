@@ -60,7 +60,7 @@ test("a ticket's conversation ends on the run working it now, and only while one
     await expect(working).toContainText('working now')
     await expect(working).toContainText('implement')
     await working.getByRole('link', { name: 'run:41' }).click()
-    await expect(page).toHaveURL(/\/runs\/41$/u)
+    await expect(page).toHaveURL(/\/workspace\/runs\/41$/u)
 
     await page.goto('tickets/ABC-103')
     await settled(page)

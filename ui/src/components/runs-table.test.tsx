@@ -43,7 +43,7 @@ describe('RunsTable', () => {
     it('names each run’s ticket and opens its page, and the run’s own', async () => {
         await renderRuns([RUNNING])
         expect(screen.getByRole('link', { name: 'ABC-101' }).getAttribute('href')).toBe('/tickets/ABC-101')
-        expect(screen.getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/runs/41')
+        expect(screen.getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/workspace/runs/41')
         expect(screen.getByText('Sign in with SSO')).toBeDefined()
     })
 

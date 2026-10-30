@@ -8,10 +8,10 @@ import { openRepoPicker, plan, select } from './helpers.ts'
 test('the app works under a path prefix', async ({ page }) => {
     await page.goto('')
     await expect(page).toHaveURL(/\/canopy\/attention$/u)
-    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/canopy\/runs$/u)
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Workspace' }).click()
+    await expect(page).toHaveURL(/\/canopy\/workspace$/u)
     await page.reload()
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Workspace')
 })
 
 test('stream events update the cache without refetching', async ({ page }) => {
@@ -21,7 +21,7 @@ test('stream events update the cache without refetching', async ({ page }) => {
             fetches.push(new URL(request.url()).pathname)
         }
     })
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await expect(page.getByTestId('stream-status')).toHaveAttribute('data-status', 'open')
 
     // The mock journal adds a cent to run 41's cost every 250 ms: the page must follow it.
@@ -339,7 +339,7 @@ test('settings sets a notice to workers, every page shows it, and its banner edi
     await expect(banner.getByText(/^Every run dispatched until /u)).toHaveAttribute('title', /from the web UI$/u)
 
     // The notice is the journal's: another page reads it back, as the next dispatch does.
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await expect(banner).toBeVisible()
 
     // Edit opens its words in place; saving sets the edited notice in place of the old one.
@@ -728,7 +728,7 @@ test('a long conversation scrolled away from its end stays put as a message arri
 
 test("R opens Review a PR from any page, which requests a review and lands on the PR's page", async ({ page }) => {
     const pr = 'https://github.com/acme/web/pull/121'
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
     await page.keyboard.press('r')
     const dialog = page.getByRole('dialog', { name: 'Review a PR' })

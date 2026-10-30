@@ -35,10 +35,10 @@ from review queues to end-of-life runtimes.
 
 A chore runs about no ticket, so it gets no worktree and no branch. You define one as `[chores.NAME]` in
 `.canopy/config.toml` (or `~/.config/canopy/config.toml`, for every workspace), with a prompt and how often it may run,
-and set `capacity.max_chores` above 0. Open the prompt with a heading, `# Dependency advisories`: it's the chore's
-title on [Runs](/runs) and its runs' pages, as a ticket's title is a worker run's. The overseer decides when a due
-chore runs, each tick, within the hours you allowed it. The schedule is a floor, not an alarm clock: "at most every
-120 minutes" means no sooner, not on the dot.
+and set `capacity.max_chores` above 0. Open the prompt with a heading, `# Dependency advisories`: it's the chore's title
+on Runs, under [Workspace](/workspace), and its runs' pages, as a ticket's title is a worker run's. The overseer decides
+when a due chore runs, each tick, within the hours you allowed it. The schedule is a floor, not an alarm clock: "at most
+every 120 minutes" means no sooner, not on the dot.
 
 A chore runs on `runtime.models.chore` unless its table sets a `model` of its own, spelled the same way,
 `provider/model@variant` included; canopy runs it on a copy of its chore agent made for that model. A chore whose

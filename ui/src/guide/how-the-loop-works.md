@@ -9,7 +9,7 @@ The loop runs in ticks. A tick tidies up after the last one (a worker that died 
 returned), then runs the overseer, an agent that reads the world fresh: your tracker and GitHub, through the agent
 runtime's MCP servers, and the worktree pools. For each ticket it works out where things stand and decides what comes
 next: start a worker, wait, skip, or put something on the attention list. Every one of those is a decision, recorded
-with the overseer's reasons, and the [ticks page](ticks#the-ticks-page) under Runs shows them all.
+with the overseer's reasons, and the [ticks page](ticks#the-ticks-page) under Workspace shows them all.
 
 Some of that needs no judgment, and canopy decides it in code before the overseer starts: a ticket whose worker is
 still running waits, and a chore with no `when` runs when it comes due. When that leaves the overseer nothing at all,
@@ -62,8 +62,8 @@ Every run has a timeout, and near it, each tool call tells the agent how many mi
 what it has rather than losing it with its slot. That's advice: the timeout is still what ends the run.
 
 Reviews and chores are runs too, of their own kinds, with their own pages: a review reads one PR at one commit and
-reports findings, and a chore is recurring work no ticket asked for. [Runs](/runs) lists them beside the workers;
-[Pull requests and reviews](pull-requests) and [Chores](chores) cover them.
+reports findings, and a chore is recurring work no ticket asked for. Runs, under [Workspace](/workspace), lists them
+beside the workers; [Pull requests and reviews](pull-requests) and [Chores](chores) cover them.
 
 ## Phases
 

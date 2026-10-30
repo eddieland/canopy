@@ -18,7 +18,7 @@ test('settings picks a 12-hour clock and the time zone, and every page reads its
     await expect(sample).toHaveText(/ \d{1,2}:\d{2} [AP]M \S+$/u)
 
     // A run's `when` field reads on the same clock, and keeps it after a reload.
-    await page.goto('runs/39')
+    await page.goto('workspace/runs/39')
     await settled(page)
     const main = page.getByRole('main')
     await expect(main.getByText(/^\S+ \d{1,2} \d{1,2}:\d{2} [AP]M \S+$/u).first()).toBeVisible()

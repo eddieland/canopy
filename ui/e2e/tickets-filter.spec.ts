@@ -40,7 +40,7 @@ test('a filter by where a ticket stands keeps the tickets standing there, in the
 })
 
 test('the text filter keeps the tickets whose key or title holds every word, and Back leaves it', async ({ page }) => {
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await page.goto('tickets?show=open')
     await settled(page)
     const field = page.getByRole('searchbox', { name: 'Filter tickets by key or title' })
@@ -58,7 +58,7 @@ test('the text filter keeps the tickets whose key or title holds every word, and
 
     // Each keystroke replaced the entry: Back leaves the page, not the last word typed.
     await page.goBack()
-    await expect(page).toHaveURL(/\/runs$/u)
+    await expect(page).toHaveURL(/\/workspace\/runs$/u)
 })
 
 test('a text filter in the URL fills the field and filters the list on load', async ({ page }) => {

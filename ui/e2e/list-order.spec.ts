@@ -31,7 +31,7 @@ test("a list's order flips from its header, keeps across a reload, and leaves ot
     expect(await testIds(messages)).toEqual(['message-5', 'message-4'])
 
     // The ticks keep their own order, newest first.
-    await page.goto('runs/ticks')
+    await page.goto('workspace/ticks')
     await settled(page)
     await expect(page.getByTestId('order-ticks')).toHaveText('newest first')
     expect(await testIds(page.getByTestId('ticks').locator('> li'))).toEqual(['tick-2', 'tick-1'])

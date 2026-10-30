@@ -98,7 +98,7 @@ describe('InlineCode', () => {
 
     it('links the runs harness text names to their pages', async () => {
         await renderRouted(<InlineCode text="run:40 (fix-ci) ended failed; log runs/40.log" />)
-        expect(screen.getByRole('link', { name: 'run:40' }).getAttribute('href')).toBe('/runs/40')
+        expect(screen.getByRole('link', { name: 'run:40' }).getAttribute('href')).toBe('/workspace/runs/40')
         expect(screen.getAllByRole('link')).toHaveLength(1)
     })
 

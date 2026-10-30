@@ -10,7 +10,7 @@ occaecat **cupidatat non proident**, sunt in culpa qui officia deserunt mollit a
 [sed perspiciatis](consectetur) unde omnis iste natus error sit voluptatem.
 
 - **Accusantium**: doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis.
-- **Quasi architecto**: beatae vitae dicta sunt explicabo, in [nemo enim](/runs) ipsam voluptatem quia voluptas sit
+- **Quasi architecto**: beatae vitae dicta sunt explicabo, in [nemo enim](/workspace) ipsam voluptatem quia voluptas sit
   aspernatur aut odit aut fugit.
   - Sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.
 - **Neque porro**: quisquam est, qui dolorem ipsum quia dolor sit amet.

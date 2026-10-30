@@ -242,7 +242,7 @@ describe('LiveReadouts', () => {
             fireEvent.click(screen.getByRole('link', { name: 'tick:12 · 3m ago' }))
             await Promise.resolve()
         })
-        expect(router.state.location.pathname).toBe('/runs/ticks/12')
+        expect(router.state.location.pathname).toBe('/workspace/ticks/12')
     })
 
     it.each([

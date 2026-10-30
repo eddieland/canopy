@@ -59,7 +59,7 @@ const TEXT = [
     'status-done',
     'status-failed',
     'section-attention',
-    'section-runs',
+    'section-workspace',
     'section-tickets',
     'section-tasks',
     'section-pull-requests',

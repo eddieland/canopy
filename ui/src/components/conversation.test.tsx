@@ -66,7 +66,7 @@ describe('Conversation', () => {
     it('heads each message, in order, with who wrote it, its kind, its run, what it answers, and how', async () => {
         await renderRouted(<Conversation messages={[QUESTION, REPLY, LATER]} />, { client: knowing(5) })
         expect(screen.getAllByRole('listitem').map((li) => li.textContent.slice(0, 2))).toEqual(['#3', '#4', '#5'])
-        expect(within(item(3)).getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/runs/41')
+        expect(within(item(3)).getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/workspace/runs/41')
         expect(within(item(3)).getByText(/^question \(/u)).toBeDefined()
         expect(within(item(4)).getByText('you')).toBeDefined()
         expect(within(item(4)).getByText('reply answering #3 via web')).toBeDefined()

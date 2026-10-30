@@ -60,7 +60,7 @@ test('the window switches from the toggle, and idle spend is its own series with
     const ticks = page.getByTestId('spend-idle-tick-list')
     await expect(ticks.getByTestId(/^tick-\d+$/u)).toHaveCount(1)
     await ticks.getByRole('link', { name: 'tick:2' }).click()
-    await expect(page).toHaveURL(/\/runs\/ticks\/2$/u)
+    await expect(page).toHaveURL(/\/workspace\/ticks\/2$/u)
 })
 
 test("each series has one name in the totals, the legend, and the table, and the description is the window's", async ({
@@ -308,7 +308,7 @@ test("a model's row opens the runs page on the runs of its kind it served", asyn
     await page.goto('reports/spend?model_kind=workers')
     await settled(page)
     await page.getByTestId('spend-model-table').getByRole('link', { name: 'anthropic/claude-opus-4-1' }).click()
-    await expect(page).toHaveURL(/\/runs\?model=anthropic(%2F|\/)claude-opus-4-1&kind=worker$/u)
+    await expect(page).toHaveURL(/\/workspace\/runs\?model=anthropic(%2F|\/)claude-opus-4-1&kind=worker$/u)
     // Run 39, which switched from opus to sonnet partway, and the seven opus served in the spring (history.py).
     await expect(page.getByTestId('runs-count')).toHaveText('8')
     await expect(page.getByTestId('run-39')).toBeVisible()
@@ -317,7 +317,7 @@ test("a model's row opens the runs page on the runs of its kind it served", asyn
     const models = page.getByRole('listbox', { name: 'Models' })
     await expect(models.getByRole('option', { name: 'openai/gpt-5' })).toBeVisible()
     await models.getByRole('option', { name: 'every model' }).click()
-    await expect(page).toHaveURL(/\/runs\?kind=worker$/u)
+    await expect(page).toHaveURL(/\/workspace\/runs\?kind=worker$/u)
     await expect(page.getByRole('button', { name: 'Filter by model: every model' })).toBeVisible()
 })
 
@@ -326,7 +326,7 @@ test("under every kind, a model's row opens its runs of every kind, a review's a
     await settled(page)
     // The mock's reviewer runs on gpt-5, which served no worker.
     await page.getByTestId('spend-model-table').getByRole('link', { name: 'openai/gpt-5' }).click()
-    await expect(page).toHaveURL(/\/runs\?model=openai(%2F|\/)gpt-5$/u)
+    await expect(page).toHaveURL(/\/workspace\/runs\?model=openai(%2F|\/)gpt-5$/u)
     await expect(page.getByText(/no recent runs on/u)).toHaveCount(0)
     await expect(page.getByRole('link', { name: 'review:4' })).toBeVisible()
 })

@@ -37,7 +37,7 @@ test.describe('in a narrow window', () => {
     })
 
     test('the runs list keeps when each run happened, and lets its cost go', async ({ page }) => {
-        await page.goto('runs')
+        await page.goto('workspace/runs')
         await settled(page)
         const row = page.getByTestId('run-41').first()
         await expect(row.getByText('for 30m')).toBeInViewport({ ratio: 1 })
@@ -64,7 +64,7 @@ test.describe('in a narrow window', () => {
     test('the worktrees list lets what holds a slot go before its branch is cut, and keeps its age', async ({
         page,
     }) => {
-        await page.goto('runs/worktrees')
+        await page.goto('workspace/worktrees')
         await settled(page)
         const row = page.getByTestId('worktree-1').first()
         const branch = row.getByText('agent/ABC-104-retry-queue', { exact: true })
@@ -91,7 +91,7 @@ test.describe('in a narrow window', () => {
     })
 
     test("an age's local time opens on the keyboard's focus", async ({ page }) => {
-        await page.goto('runs')
+        await page.goto('workspace/runs')
         await settled(page)
         const row = page.getByTestId('run-41').first()
         const age = row.getByText('for 30m')
@@ -108,7 +108,7 @@ test.describe('in a narrow window', () => {
         await page.goto('tickets')
         await settled(page)
         const strip = page.getByTestId('rail-strip')
-        await expect(strip.getByRole('link', { name: 'Runs' })).toBeVisible()
+        await expect(strip.getByRole('link', { name: 'Workspace' })).toBeVisible()
         await expect(strip.getByTestId('nav-attention-count')).toHaveText(/^11/u)
         await expect(page.getByTestId('rail-working')).toHaveCount(0)
 
@@ -122,7 +122,7 @@ test.describe('in a narrow window', () => {
 
         // A link followed leaves the page the sheet covered: it closes.
         await sheet.getByTestId('rail-run-41').click()
-        await expect(page).toHaveURL(/\/runs\/41$/u)
+        await expect(page).toHaveURL(/\/workspace\/runs\/41$/u)
         await expect(sheet).toHaveCount(0)
     })
 
@@ -173,7 +173,7 @@ test.describe('on a touch screen', () => {
     test.use({ viewport: HALF, hasTouch: true })
 
     test("a tap opens an age's local time, and another closes it", async ({ page }) => {
-        await page.goto('runs')
+        await page.goto('workspace/runs')
         await settled(page)
         const age = page.getByTestId('run-41').first().getByText('for 30m')
         const local = await hoverTime(page, '2026-10-08T12:00:00Z')
@@ -214,7 +214,7 @@ for (const width of [HALF.width, 1024]) {
 test("the worktrees counters stand four across or two by two, by the pane's width, never three and one", async ({
     page,
 }) => {
-    await page.goto('runs/worktrees')
+    await page.goto('workspace/worktrees')
     await settled(page)
     const counters = page.getByTestId('pool-counters').locator(':scope > *')
     await expect(counters).toHaveCount(4)
@@ -235,7 +235,7 @@ test("the worktrees counters stand four across or two by two, by the pane's widt
 })
 
 test("a slot's ticket and run stay whole beside a long run kind, which is cut instead", async ({ page }) => {
-    await page.goto('runs/worktrees')
+    await page.goto('workspace/worktrees')
     await settled(page)
     const row = page.getByTestId('pool-web').getByTestId('worktree-2')
     const ticket = row.getByRole('link', { name: 'ABC-104', exact: true })

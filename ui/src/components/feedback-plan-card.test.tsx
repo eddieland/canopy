@@ -43,7 +43,7 @@ describe('WroteFeedbackPlan', () => {
     const WROTE: FeedbackPlanWritten = { id: 7, pr_urls: [PR], status: 'waiting' }
 
     it('links the plan to the PR page at the plan, names the PR, and says where the plan stands', async () => {
-        await renderRouted(<WroteFeedbackPlan plan={WROTE} />, { at: '/runs/46' })
+        await renderRouted(<WroteFeedbackPlan plan={WROTE} />, { at: '/workspace/runs/46' })
         const field = screen.getByTestId('run-feedback-plan')
         expect(screen.getByRole('link', { name: 'feedback-plan:7' }).getAttribute('href')).toBe(PR_PAGE)
         expect(screen.getByRole('link', { name: 'acme/web#88' })).toBeTruthy()

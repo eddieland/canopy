@@ -26,8 +26,8 @@ test('the light switch starts the rave over every page, and it lasts until flipp
     expect(await animation(rave)).toBe('rave-switch')
 
     // It takes no pointer: the page under it works as ever, and the rave goes along.
-    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' }).click()
-    await expect(page).toHaveURL(/\/runs$/u)
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Workspace' }).click()
+    await expect(page).toHaveURL(/\/workspace$/u)
     await expect(rave).toBeVisible()
     await page.reload()
     await settled(page)

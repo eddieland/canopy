@@ -20,13 +20,13 @@ test('the rail lists what is working now, the running runs, chore runs, and task
     await expect(working.getByRole('link').nth(1)).toContainText('ABC-101')
     await expect(working.getByRole('link').nth(2)).toContainText('task:6#6')
     await expect(working.getByRole('link').nth(3)).toContainText('ABC-104')
-    await expect(working.getByRole('link', { name: '+1 more' })).toHaveAttribute('href', /\/runs$/u)
+    await expect(working.getByRole('link', { name: '+1 more' })).toHaveAttribute('href', /\/workspace\/runs$/u)
     await expect(page.getByTestId('rail-run-41')).toContainText('Sign in with SSO')
     await expect(page.getByTestId('rail-chore-build-health')).toContainText('chore run #4')
     await expect(page.getByTestId('rail-task-6')).toContainText("Add a dark launch screen to match the app's theme.")
 
     await page.getByTestId('rail-run-41').click()
-    await expect(page).toHaveURL(/\/runs\/41$/u)
+    await expect(page).toHaveURL(/\/workspace\/runs\/41$/u)
     await expect(page.getByTestId('rail-run-41')).toBeVisible()
 
     await page.getByTestId('rail-chore-build-health').click()
@@ -64,7 +64,7 @@ test('the nav lists the sections by how often the operator opens them, and the f
         'Tickets',
         'Tasks',
         /^Pull requests/u,
-        'Runs',
+        'Workspace',
         'Chores',
         'Reports',
         /^Memory/u,
@@ -78,7 +78,7 @@ test('the nav lists the sections by how often the operator opens them, and the f
 
 test('the rail shows the spend of the last day and the last 30, and the version at its foot', async ({ page }) => {
     const spend = (await (await page.request.get('api/spend')).json()) as { day: { cost_usd: number } }
-    await page.goto('runs/ticks')
+    await page.goto('workspace/ticks')
     await settled(page)
     await expect(page.getByTestId('rail-spend-24h')).toHaveText(`$${spend.day.cost_usd.toFixed(2)}`)
     await expect(page.getByTestId('rail-spend-30d')).toHaveText(/^\$\d+\.\d\d$/u)

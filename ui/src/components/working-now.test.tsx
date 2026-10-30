@@ -35,7 +35,7 @@ describe('WorkingNow', () => {
         await renderRouted(<WorkingNow ticketKey="ABC-101" />, { client: client([RUNNING, other, BLOCKED]) })
         expect(working()).toHaveLength(1)
         const run = within(screen.getByTestId('working-now'))
-        expect(run.getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/runs/41')
+        expect(run.getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/workspace/runs/41')
         expect(run.getByText('npm test -- login')).toBeDefined()
         expect(run.getByText('$0.42')).toBeDefined()
     })

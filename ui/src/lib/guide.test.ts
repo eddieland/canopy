@@ -75,8 +75,8 @@ describe('guideFor', () => {
     })
 
     it('opens a page at its top, or at the heading about the route', () => {
-        expect(guideFor('/runs/')).toEqual({ page: guidePage('runs'), hash: undefined })
-        expect(guideFor('/runs/$id')).toEqual({ page: guidePage('runs'), hash: 'a-runs-page' })
+        expect(guideFor('/workspace/runs/')).toEqual({ page: guidePage('runs'), hash: undefined })
+        expect(guideFor('/workspace/runs/$id')).toEqual({ page: guidePage('runs'), hash: 'a-runs-page' })
     })
 
     it('has none for the root, the guide, or no route at all', () => {
@@ -95,7 +95,7 @@ describe('guideTarget', () => {
             hash: 'a-session',
         })
         expect(guideTarget('#the-rail', 'overview')).toEqual({ kind: 'page', page: 'overview', hash: 'the-rail' })
-        expect(guideTarget('/runs', 'overview')).toEqual({ kind: 'section', to: '/runs' })
+        expect(guideTarget('/workspace', 'overview')).toEqual({ kind: 'section', to: '/workspace' })
         expect(guideTarget('https://example.com/a', 'overview')).toEqual({
             kind: 'web',
             href: 'https://example.com/a',

@@ -46,7 +46,7 @@ test("a review's commit copies whole, though the page shows its first 7 characte
 })
 
 test("a slot's copy buttons show only while its row is hovered, and copy its path and branch", async ({ page }) => {
-    await page.goto('runs/worktrees')
+    await page.goto('workspace/worktrees')
     await settled(page)
     const slot = page.getByTestId('pool-web').getByTestId('worktree-1')
     const branch = slot.getByRole('button', { name: 'Copy branch' })
@@ -63,7 +63,7 @@ test("a slot's copy buttons show only while its row is hovered, and copy its pat
 test("a run's worktree and log paths copy whole, though the page shows them from the workspace root", async ({
     page,
 }) => {
-    await page.goto('runs/41')
+    await page.goto('workspace/runs/41')
     const root = await workspaceRoot(page)
     await page.getByRole('button', { name: 'Copy worktree path' }).click()
     expect(await clipboard(page)).toBe(`${root}/.treehouse/web-3f9c2a1b/1/web`)
@@ -75,14 +75,14 @@ test("a run's paths have no copy button while the server's meta cannot be read, 
     page,
 }) => {
     await page.route('**/api/meta', (route) => route.abort())
-    await page.goto('runs/41')
+    await page.goto('workspace/runs/41')
     await expect(page.getByText('.canopy/runs/41.log')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Copy log path' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Copy worktree path' })).toHaveCount(0)
 })
 
 test("a session id copies from its run's row, its button showing only while the row is hovered", async ({ page }) => {
-    await page.goto('runs')
+    await page.goto('workspace/runs')
     await settled(page)
     const row = page.getByTestId('run-41')
     const copy = row.getByRole('button', { name: 'Copy session id' })
@@ -116,7 +116,7 @@ test("a chore run's log path copies whole, from its page and from its row", asyn
 })
 
 test("a tick's output path copies whole, though the page shows it from the workspace root", async ({ page }) => {
-    await page.goto('runs/ticks/2')
+    await page.goto('workspace/ticks/2')
     await page.getByRole('button', { name: 'Copy output path' }).click()
     expect(await clipboard(page)).toBe(`${await workspaceRoot(page)}/.canopy/ticks/2.log`)
 })

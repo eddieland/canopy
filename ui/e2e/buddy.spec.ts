@@ -138,7 +138,7 @@ test.describe('turned on', () => {
     test('Sprig has its own tip for a list and one of its items, and keeps it for another filter', async ({ page }) => {
         // A page loaded anew has no last tip to skip: picked at random, a run's could be the same one for anywhere.
         await fixRandom(page)
-        await page.goto('runs')
+        await page.goto('workspace/runs')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')
         await page.getByTestId('buddy-sprig').click()
@@ -151,18 +151,18 @@ test.describe('turned on', () => {
         })
         const filters = page.getByRole('navigation', { name: 'Filter by state' })
         await filters.getByRole('link', { name: 'waiting on you' }).click()
-        await expect(page).toHaveURL(/runs\?state=blocked$/u)
+        await expect(page).toHaveURL(/workspace\/runs\?state=blocked$/u)
         await expect(tip).toHaveText(shown ?? '')
         await expect(tip).toHaveAttribute('data-kept', '')
 
         // Closed, it stays closed on the same view.
         await page.getByTestId('buddy-close').click()
         await filters.getByRole('link', { name: 'all' }).click()
-        await expect(page).toHaveURL(/runs$/u)
+        await expect(page).toHaveURL(/workspace\/runs$/u)
         await expect(tip).toBeHidden()
 
         // A run's page is a view of its own, with a tip of its own.
-        await page.goto('runs/39')
+        await page.goto('workspace/runs/39')
         await settled(page)
         await page.getByTestId('buddy-sprig').click()
         await expect(tip).toBeVisible()
