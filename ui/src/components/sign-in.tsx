@@ -7,7 +7,7 @@ import { signIn } from '@/api/mutations'
 import { keys, unsentQuery } from '@/api/queries'
 import { Notice } from '@/components/notice'
 import { Input } from '@/components/input'
-import { Mark } from '@/components/shell/mark'
+import { Mark } from '@/components/mark'
 import { Button } from '@/components/ui/button'
 import { pageTitle } from '@/lib/page-title'
 
