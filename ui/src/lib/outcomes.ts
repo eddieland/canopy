@@ -38,6 +38,7 @@ import type {
 } from '@/api/types'
 import { currentClock } from '@/lib/clock'
 import { REACTION_LOOKS } from '@/lib/drafts'
+import { RUNTIME_DEFAULT } from '@/lib/models'
 import { taskRef } from '@/lib/refs'
 import { localTime } from '@/lib/time'
 import type { NewToast } from '@/lib/toasts'
@@ -158,7 +159,7 @@ export function personaText(ticketKey: string, now: AgentPersona): string {
 export const MODEL_SOURCES: Record<AgentModel['source'], string> = {
     ticket: "this ticket's override",
     config: '[runtime.models]',
-    default: 'runtime default',
+    default: RUNTIME_DEFAULT,
 }
 
 /** An agent's model as a ticket's page names it: its id, or the runtime's default when nothing sets one. */

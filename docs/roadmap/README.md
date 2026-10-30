@@ -73,7 +73,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M34. A cacheable overseer prompt](M34-a-cacheable-overseer-prompt.md): done 2026-10-15.
 - [M35. Temporary notices to workers](M35-temporary-notices-to-workers.md): done 2026-10-15.
 - [M36. Connectors: the world observed into the journal, in shadow](M36-connectors-in-shadow.md): done 2026-10-29.
-- [M37. The overseer reads the journal](M37-the-overseer-reads-the-journal.md): in progress.
+- [M37. The overseer reads the journal](M37-the-overseer-reads-the-journal.md): done 2026-10-30.
 - [M38. The harness decides what needs no judgment](M38-the-harness-decides.md): in progress.
 - [M39. A tick without the overseer](M39-a-tick-without-the-overseer.md): in progress.
 - [M40. The overseer per decision](M40-the-overseer-per-decision.md): in progress.
@@ -86,7 +86,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M47. Garbage collection](M47-garbage-collection.md): in progress.
 - [M48. The overseer's tools over MCP](M48-the-overseers-tools-over-mcp.md): in progress.
 - [M49. Config per workspace](M49-config-per-workspace.md): done 2026-10-17.
-- [M50. Agent memory, opt-in](M50-agent-memory-opt-in.md): in progress.
+- [M50. Agent memory, opt-in](M50-agent-memory-opt-in.md): done 2026-10-30.
 - [M51. The loop, detached](M51-the-loop-detached.md): done 2026-10-17.
 - [M52. Memory's verbs from the web UI](M52-memorys-verbs-from-the-web-ui.md): done 2026-10-20.
 - [M53. Review replies the operator sends](M53-review-replies-the-operator-sends.md): done 2026-10-29.
@@ -94,7 +94,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M55. Trivial work skips its plan](M55-trivial-work-skips-its-plan.md): deferred 2026-10-20.
 - [M56. Fixing CI is part of resume](M56-fixing-ci-is-part-of-resume.md): done 2026-10-29.
 - [M57. A clock for running agents](M57-a-clock-for-running-agents.md): done 2026-10-30.
-- [M58. canopy chooses each agent's model](M58-canopy-chooses-the-workers-model.md): in progress.
+- [M58. canopy chooses each agent's model](M58-canopy-chooses-the-workers-model.md): done 2026-10-29.
 - [M59. Lessons edited, with their history](M59-lessons-edited-with-their-history.md): done 2026-10-29.
 - [M60. Personas](M60-personas.md): done 2026-10-29.
 - [M61. One-off tasks](M61-one-off-tasks.md): in progress.
