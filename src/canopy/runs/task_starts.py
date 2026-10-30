@@ -208,7 +208,7 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
         # when the run started (DESIGN §36). None on a task's first run, which leaves the section out.
         "CONVERSATION": conversation.prompt_task_conversation(ctx.conn, task.id, run.message_id),
         "REPORT": tasks.REPORT,
-        "TICKETS": _tickets(ctx, task, run.branch),
+        "TICKETS": _tickets(ctx, task),
         # Those the task held when its run started, which `_task` copies into the slot (DESIGN §22).
         "ATTACHMENTS": prompts.attachments_note(
             lease.path / attachments.RUN_DIR,
@@ -235,7 +235,7 @@ def _ref(task: records.Task) -> conversation.Ref:
     return conversation.Ref(conversation.TASK, str(task.id))
 
 
-def _tickets(ctx: Context, task: records.Task, branch: str) -> str:
+def _tickets(ctx: Context, task: records.Task) -> str:
     """Return a task prompt's `{{TICKETS}}`: whether its worker may file tickets, only in its project, and how (§36).
 
     Returns:
@@ -249,7 +249,6 @@ def _tickets(ctx: Context, task: records.Task, branch: str) -> str:
     return prompts.task_tickets(
         task.project,
         limit,
-        branch=branch,
         needs_human=ctx.config.tracker.needs_human_label,
         labels=ctx.config.tracker.labels,
     )
