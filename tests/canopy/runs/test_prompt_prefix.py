@@ -12,7 +12,7 @@ import pytest
 from canopy.core import prompts
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.runtime import agents
-from tests.canopy.helpers import LABEL, commit_and_push, private_worker_does
+from tests.canopy.helpers import LABEL, commit_and_push, planner_does, private_worker_does
 from tests.canopy.scenario_helpers import Ran, Scenario, Worker, dispatches, pushes
 from tests.conftest import GitPool
 
@@ -119,3 +119,21 @@ def test_an_override_without_the_marker_is_sent_whole_with_the_definitions_stub(
     assert sent(agent_log, ran).message == ran.prompt
     assert ran.prompt.startswith("# canopy worker\n\nWork PROJ-1 for `agent-ready-tester`.")
     assert f"---\n\n{STUB}" in sent(agent_log, ran).definition(agents.WORKER)
+
+
+def test_two_plans_share_their_planners_body_and_snapshot(
+    scenario: Scenario,
+    git_pool: GitPool,
+    agent_log: Path,
+) -> None:
+    scenario.seen("PROJ-2")
+    first = scenario.run(dispatches("PROJ-1", kind=RunKind.PLAN), worker=planner_does(plan="# Plan: PROJ-1 one\n"))
+    second = scenario.run(dispatches("PROJ-2", kind=RunKind.PLAN), worker=planner_does(plan="# Plan: PROJ-2 two\n"))
+    assert body_of(first) == body_of(second)
+    assert "PROJ-1" not in body_of(first)
+    assert "desks" not in body_of(first)
+    for ran in (first, second):
+        assert sent(agent_log, ran).message == prompts.split(ran.prompt).message
+        assert sent(agent_log, ran).message.startswith(f"## Run\n\nYou are planning ticket {ran.key}, attempt 1 of ")
+    assert sent(agent_log, first).snapshot == sent(agent_log, second).snapshot
+    assert sent(agent_log, first).definition(agents.PLANNER).endswith(f"---\n\n{body_of(first)}")

@@ -59,7 +59,7 @@ def test_the_shipped_plan_prompt_renders_completely(canopy_env: CanopyEnv, *, pr
     cfg = load(canopy_env.root, canopy_env.user_file)
     values = {
         **PROMPT_VALUES,
-        "AUTHORIZATION": prompts.plan_authorization("PROJ-1", ["agent-ready-alice"], private=private),
+        "AUTHORIZATION": prompts.plan_authorization(["agent-ready-alice"], private=private),
         "PLAN_FILE": ".canopy-plan.md",
         "PLAN_OUT": ".canopy-new-plan.md",
         "MAX_PLAN_CHARS": "100,000",
@@ -68,10 +68,13 @@ def test_the_shipped_plan_prompt_renders_completely(canopy_env: CanopyEnv, *, pr
     text = prompts.render_worker(cfg, "plan", values, private=private)
     assert text.startswith("# canopy worker: plan\n")
     assert "{{" not in text
-    assert "If `/ws/desks/PROJ-1/.canopy-plan.md` exists, it is the plan this one replaces." in text
-    assert "as markdown to `/ws/desks/PROJ-1/.canopy-new-plan.md`" in text
+    assert "If `.canopy-plan.md` exists in your directory, it is the plan this one replaces." in text
+    assert "as markdown to `.canopy-new-plan.md` in your directory" in text
+    assert "You are planning ticket PROJ-1, attempt 1 of 2, in /ws/desks/PROJ-1." in text
     assert "at most 100,000 characters, a limit" in text
-    assert text.rstrip().endswith(
+    body = prompts.split(text).body
+    assert body is not None
+    assert body.rstrip().endswith(
         '{"status":"done|blocked|failed","summary":"<your report, line breaks sparingly>",'
         '"question":"<only when blocked>","effort":"small|medium|large"}',
     )

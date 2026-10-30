@@ -44,7 +44,7 @@ LESSON = "Run the API's tests with `make test-api`; plain `pytest` misses its fi
 HEADING = "## Lessons from the operator"
 VALUES = {
     **PROMPT_VALUES,
-    "AUTHORIZATION": prompts.plan_authorization(KEY, ["agent-ready-alice"], private=False),
+    "AUTHORIZATION": prompts.plan_authorization(["agent-ready-alice"], private=False),
     "PLAN_FILE": ".canopy-plan.md",
     "PLAN_OUT": ".canopy-new-plan.md",
     "MAX_PLAN_CHARS": "100,000",
