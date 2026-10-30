@@ -747,7 +747,8 @@ side.
   `panel-label` type, its figures right-aligned readouts. A row head that names something (a ticket, a tool) is its
   name in medium weight at the table's size, as `TicketTitle` sets a ticket's title, after its reference (a ticket's
   key, a PR) in its monospace link; a day or a group of ticks is in the table's own type. Its panel's header repeats
-  none of its rows.
+  none of its rows. Rows in groups (the checklist page's items, by repository) stay one table, so their columns line
+  up: a `tbody` per group, headed by a row whose `rowgroup` cell names it in the table's own type, medium weight.
 - **Figures** (the Spend page's totals) are a window's sums, not a count of what is now, so they are not `Counter`s:
   each a `panel-label` over a `text-lg` readout, in a grid inside their panel, with what a label counts on its hover.
   A `Counter` stays the attention and worktrees pages' count of the present, with its state's color.

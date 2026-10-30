@@ -24,6 +24,7 @@ from rich.console import Console
 
 from canopy.cli.main import main
 from canopy.core import (
+    checklist_answers,
     config,
     connector_runs,
     db,
@@ -37,8 +38,9 @@ from canopy.core import (
     sql,
     workspace,
 )
+from canopy.core.checklist_answers import Answer
 from canopy.core.context import Context
-from canopy.core.vocab import ConnectorRunStatus, SourceKind, TickStatus
+from canopy.core.vocab import ConnectorRunStatus, ItemAnswer, SourceKind, TickStatus
 from canopy.infra import logs, procs, resources
 from canopy.loop import connectors, mcp, spawns
 from canopy.runs import drafted
@@ -330,6 +332,30 @@ def minute(stamp: str) -> str:
 def earlier(now: datetime, days: float, hours: float = 0) -> str:
     """The time `days` and `hours` before `now`, as the journal writes it."""
     return db.format_time(now - timedelta(days=days, hours=hours))
+
+
+def answered(conn: sqlite3.Connection, started: str, repo: str, **answers: ItemAnswer) -> int:
+    """A worker run that started at `started` and answered `repo`'s items as `answers` says, `_` in an id for `-`."""
+    db.touch_ticket(conn, "PROJ-1", "/ws")
+    tick_id = db.start_tick(conn, dry_run=False)
+    run_id = db.insert_run(conn, tick_id=tick_id, key="PROJ-1", kind="implement", branch="", slots=[], runs_dir=Path())
+    records.update(records.Run).set(started_at=started).where("id = ?", run_id).run(conn)
+    given = [
+        Answer(repo, item.replace("_", "-"), a, "Its reason." if a is ItemAnswer.HELD else None)
+        for item, a in answers.items()
+    ]
+    checklist_answers.record(conn, run_id, checklist_answers.Checked(answers=tuple(given)))
+    return run_id
+
+
+def journal_of_answers(conn: sqlite3.Connection, now: datetime) -> None:
+    """Three runs in `api` and one in `web` over the last days, and one in `api` before a week's window."""
+    a = ItemAnswer
+    answered(conn, earlier(now, 9), "api", general_types=a.HELD, newspaper=a.HELD, doc_comments=a.HELD)
+    answered(conn, earlier(now, 2), "api", general_types=a.PASSED, newspaper=a.HELD, doc_comments=a.UNANSWERED)
+    answered(conn, earlier(now, 1), "api", general_types=a.FIXED, newspaper=a.NOT_APPLICABLE, doc_comments=a.PASSED)
+    answered(conn, earlier(now, 0), "web", no_any=a.HELD)
+    answered(conn, earlier(now, 0), "api", general_types=a.PASSED, newspaper=a.FIXED, doc_comments=a.UNANSWERED)
 
 
 @contextmanager

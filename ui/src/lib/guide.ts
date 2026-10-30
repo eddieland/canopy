@@ -145,6 +145,7 @@ export const PAGE_GUIDES = {
     '/runs/ticks/$id': 'ticks#a-ticks-page',
     '/reports/': 'reports',
     '/reports/spend': 'reports#the-spend-page',
+    '/reports/checklist': 'reports#the-checklist-page',
     '/memory': 'memory',
     '/search': 'overview#search',
     '/system': 'overview#system-resources',

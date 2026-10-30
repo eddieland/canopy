@@ -14,14 +14,12 @@ from typing import TYPE_CHECKING
 
 from canopy.cli import checklist
 from canopy.cli.main import main
-from canopy.core import checklist_answers, checklists, db, records
+from canopy.core import checklist_answers, checklists
 from canopy.core.checklist_answers import Answer
 from canopy.core.vocab import ItemAnswer
-from tests.canopy.helpers import earlier, in_zone
+from tests.canopy.helpers import in_zone, journal_of_answers
 
 if TYPE_CHECKING:
-    import sqlite3
-
     import pytest
     from syrupy.assertion import SnapshotAssertion
 
@@ -110,30 +108,6 @@ def test_the_contract_names_each_repository_with_a_list() -> None:
     text = checklist_answers.contract_text([API, WEB])
     assert text.startswith("\n\nThe operator keeps a checklist for `api`, `web`: rules no linter checks.")
     assert '"checklist":{"<repository>":' in text
-
-
-def answered(conn: sqlite3.Connection, started: str, repo: str, **answers: ItemAnswer) -> int:
-    """A worker run that started at `started` and answered `repo`'s items as `answers` says, `_` in an id for `-`."""
-    db.touch_ticket(conn, "PROJ-1", "/ws")
-    tick_id = db.start_tick(conn, dry_run=False)
-    run_id = db.insert_run(conn, tick_id=tick_id, key="PROJ-1", kind="implement", branch="", slots=[], runs_dir=Path())
-    records.update(records.Run).set(started_at=started).where("id = ?", run_id).run(conn)
-    given = [
-        Answer(repo, item.replace("_", "-"), a, "Its reason." if a is ItemAnswer.HELD else None)
-        for item, a in answers.items()
-    ]
-    checklist_answers.record(conn, run_id, checklist_answers.Checked(answers=tuple(given)))
-    return run_id
-
-
-def journal_of_answers(conn: sqlite3.Connection, now: datetime) -> None:
-    """Three runs in `api` and one in `web` over the last days, and one in `api` before a week's window."""
-    a = ItemAnswer
-    answered(conn, earlier(now, 9), "api", general_types=a.HELD, newspaper=a.HELD, doc_comments=a.HELD)
-    answered(conn, earlier(now, 2), "api", general_types=a.PASSED, newspaper=a.HELD, doc_comments=a.UNANSWERED)
-    answered(conn, earlier(now, 1), "api", general_types=a.FIXED, newspaper=a.NOT_APPLICABLE, doc_comments=a.PASSED)
-    answered(conn, earlier(now, 0), "web", no_any=a.HELD)
-    answered(conn, earlier(now, 0), "api", general_types=a.PASSED, newspaper=a.FIXED, doc_comments=a.UNANSWERED)
 
 
 def test_answers_are_counted_per_repository_and_item_over_the_window(tmp_path: Path, journals: Journals) -> None:

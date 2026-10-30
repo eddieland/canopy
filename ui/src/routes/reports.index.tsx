@@ -67,7 +67,7 @@ const HEAD = 'panel-label pb-1.5 pl-3 font-normal whitespace-nowrap'
  * What each local calendar month cost, in dollars and tokens, by kind and by model, and what it got done: the tickets
  * the loop landed, with their worker runs, PR comments, reviews, and how long they took. `?months=` is the span, 6 or
  * 24 (a year when absent), and `?month=` the month shown in detail, the latest when absent. The spend page, by day,
- * is under it, at `/reports/spend`.
+ * is under it, at `/reports/spend`, and the checklist's counts, by item, at `/reports/checklist`.
  */
 export const Route = createFileRoute('/reports/')({
     validateSearch: (search: Record<string, unknown>): ReportsSearch => ({
@@ -99,6 +99,13 @@ function ReportsPage() {
                             data-testid="reports-spend-link"
                         >
                             Spend by day
+                        </Link>
+                        <Link
+                            to="/reports/checklist"
+                            className="text-xs text-accent underline-offset-4 hover:underline"
+                            data-testid="reports-checklist-link"
+                        >
+                            Checklist
                         </Link>
                         <ToggleGroup
                             type="single"

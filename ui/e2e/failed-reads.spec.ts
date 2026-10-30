@@ -14,6 +14,7 @@ const PAGES = [
     { page: 'pull-requests/reviews/4', read: '**/api/reviews/4' },
     { page: 'reports', read: '**/api/reports/monthly*' },
     { page: 'reports/spend', read: '**/api/spend/breakdown*' },
+    { page: 'reports/checklist', read: '**/api/reports/checklist*' },
     { page: 'search?q=web', read: '**/api/search*' },
     { page: 'runs/worktrees', read: '**/api/worktrees' },
 ] as const
