@@ -34,6 +34,10 @@ for (const theme of THEMES) {
             }
             await page.goto(route)
             await settled(page)
+            if (route === 'tickets/ABC-101') {
+                // Its conversation ends on the run working it, which the stream's runs bring in after the page.
+                await expect(page.getByTestId('working-41')).toBeVisible()
+            }
             if (route === 'guide/overview') {
                 await expect(page.getByRole('heading', { level: 1 })).toHaveText('Lorem ipsum')
                 // Its code block is taken colored, once the grammar has loaded.
