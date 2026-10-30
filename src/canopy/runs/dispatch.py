@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import (
     agent_models,
+    checklists,
     conversation,
     db,
     memory,
@@ -1331,8 +1332,16 @@ def _render(
         comments' part, or None for a kind that comments nowhere.
 
     Raises:
-        Refusal: `bad_prompt`, when the prompt file cannot be read or does not render.
+        Refusal: `bad_prompt`, when the prompt file cannot be read or does not render, or a list of one of `repos` the
+            run would hear cannot be used (§42).
     """
+    if checklists.reminded(kind):
+        # Read now only to refuse a list canopy cannot use: the run reads its lists again as it starts, into its answers
+        # directory, and never runs without them.
+        try:
+            checklists.for_repos(ctx.config, repos)
+        except checklists.ChecklistError as e:
+            raise Refusal("bad_prompt", str(e)) from e
     remembered = memory.render(ctx.conn, ctx.config, key=key, kind=kind, repos=repos)
     if remembered is not None:
         values = {**values, **remembered.values}
