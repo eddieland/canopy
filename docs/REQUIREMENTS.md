@@ -342,7 +342,8 @@ reviewers do, canopy's adversarial one included, which is asked for defects and 
 Asked one plain question of one diff, an agent answers it reliably. The operator wants that question asked at the
 moment it matters, once the worker has pushed and before it finishes, with its answer to each rule recorded, so the
 nits are fixed before a person reads the PR and the list earns its items; and, if that is not enough or for PRs
-workers did not write, a second review that asks the same list of a PR.
+workers did not write, a second review that asks the same list of a PR. The rules are a repository's: a workspace's
+repositories differ in language and team, so each has its own list (2026-10-30).
 
 ## Nice to have
 
