@@ -124,28 +124,29 @@ test('the version stays at the window foot on a page longer than the window', as
     expect(box === null ? 0 : Math.round(box.y + box.height)).toBe(600)
 })
 
-test("the foot's buttons stay inside the rail in a palette that sets every line in its mono", async ({ page }) => {
-    await storeTheme(page, 'dark')
-    await storePalette(page, 'dark', 'monokai')
-    await page.goto('attention')
-    await settled(page)
-    const footer = await page
-        .getByTestId('rail-footer')
-        .evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect)
-    for (const testId of ['rail-guide', 'rail-settings']) {
-        const button = page.getByTestId(testId)
-        const box = await button.evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect)
-        expect(box.left).toBeGreaterThanOrEqual(footer.left)
-        expect(box.right).toBeLessThanOrEqual(footer.right)
-        // Its label whole, not cut short.
-        expect(await button.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
-    }
-})
-
-test("the foot's buttons sit side by side in the default palette", async ({ page }) => {
-    await page.goto('attention')
-    await settled(page)
-    const top = (testId: string): Promise<number> =>
-        page.getByTestId(testId).evaluate((el) => el.getBoundingClientRect().top)
-    expect(await top('rail-settings')).toBe(await top('rail-guide'))
-})
+// The default palette, and the two whose mono face runs wider than the sans.
+for (const [theme, palette] of [
+    ['dark', 'indigo'],
+    ['dark', 'monokai'],
+    ['light', 'gruvbox'],
+] as const) {
+    test(`the foot's buttons sit side by side inside the rail in ${theme} ${palette}`, async ({ page }) => {
+        await storeTheme(page, theme)
+        await storePalette(page, theme, palette)
+        await page.goto('attention')
+        await settled(page)
+        const rect = (testId: string): Promise<DOMRect> =>
+            page.getByTestId(testId).evaluate((el) => el.getBoundingClientRect().toJSON() as DOMRect)
+        const footer = await rect('rail-footer')
+        const guide = await rect('rail-guide')
+        const settings = await rect('rail-settings')
+        expect(settings.top).toBe(guide.top)
+        expect(guide.left).toBeGreaterThanOrEqual(footer.left)
+        expect(settings.right).toBeLessThanOrEqual(footer.right)
+        // Each label whole, not cut short.
+        for (const testId of ['rail-guide', 'rail-settings']) {
+            const button = page.getByTestId(testId)
+            expect(await button.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+        }
+    })
+}
