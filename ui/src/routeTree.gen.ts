@@ -25,6 +25,7 @@ import { Route as GuidePageRouteImport } from './routes/guide.$page'
 import { Route as PullRequestsIndexRouteImport } from './routes/pull-requests.index'
 import { Route as PullRequestsPrRouteImport } from './routes/pull-requests.pr'
 import { Route as ReportsIndexRouteImport } from './routes/reports.index'
+import { Route as ReportsChecklistRouteImport } from './routes/reports.checklist'
 import { Route as ReportsSpendRouteImport } from './routes/reports.spend'
 import { Route as ReviewsIndexRouteImport } from './routes/reviews.index'
 import { Route as ReviewsIdRouteImport } from './routes/reviews.$id'
@@ -127,6 +128,11 @@ const PullRequestsPrRoute = PullRequestsPrRouteImport.update({
 const ReportsIndexRoute = ReportsIndexRouteImport.update({
   id: '/reports/',
   path: '/reports/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsChecklistRoute = ReportsChecklistRouteImport.update({
+  id: '/reports/checklist',
+  path: '/reports/checklist',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsSpendRoute = ReportsSpendRouteImport.update({
@@ -260,6 +266,7 @@ export interface FileRoutesByFullPath {
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
+  '/reports/checklist': typeof ReportsChecklistRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
@@ -301,6 +308,7 @@ export interface FileRoutesByTo {
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
+  '/reports/checklist': typeof ReportsChecklistRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
@@ -343,6 +351,7 @@ export interface FileRoutesById {
   '/chores/$name': typeof ChoresNameRoute
   '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
+  '/reports/checklist': typeof ReportsChecklistRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
@@ -386,6 +395,7 @@ export interface FileRouteTypes {
     | '/chores/$name'
     | '/guide/$page'
     | '/pull-requests/pr'
+    | '/reports/checklist'
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
@@ -427,6 +437,7 @@ export interface FileRouteTypes {
     | '/chores/$name'
     | '/guide/$page'
     | '/pull-requests/pr'
+    | '/reports/checklist'
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
@@ -468,6 +479,7 @@ export interface FileRouteTypes {
     | '/chores/$name'
     | '/guide/$page'
     | '/pull-requests/pr'
+    | '/reports/checklist'
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
@@ -510,6 +522,7 @@ export interface RootRouteChildren {
   ChoresNameRoute: typeof ChoresNameRoute
   GuidePageRoute: typeof GuidePageRoute
   PullRequestsPrRoute: typeof PullRequestsPrRoute
+  ReportsChecklistRoute: typeof ReportsChecklistRoute
   ReportsSpendRoute: typeof ReportsSpendRoute
   ReviewsIdRoute: typeof ReviewsIdRoute
   RunsIdRoute: typeof RunsIdRoute
@@ -651,6 +664,13 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/reports/'
       preLoaderRoute: typeof ReportsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports/checklist': {
+      id: '/reports/checklist'
+      path: '/reports/checklist'
+      fullPath: '/reports/checklist'
+      preLoaderRoute: typeof ReportsChecklistRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports/spend': {
@@ -830,6 +850,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChoresNameRoute: ChoresNameRoute,
   GuidePageRoute: GuidePageRoute,
   PullRequestsPrRoute: PullRequestsPrRoute,
+  ReportsChecklistRoute: ReportsChecklistRoute,
   ReportsSpendRoute: ReportsSpendRoute,
   ReviewsIdRoute: ReviewsIdRoute,
   RunsIdRoute: RunsIdRoute,

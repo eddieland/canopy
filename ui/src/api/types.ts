@@ -167,6 +167,10 @@ export type ReportModel = Schemas['ReportModel']
 export type ReportTicket = Schemas['ReportTicket']
 /** The tokens a month's runs reported, by kind, and the share of what was sent read from the cache. */
 export type ReportTokens = Schemas['ReportTokens']
+/** How the worker runs of a window of local days answered each repository's checklist, as `canopy checklist` counts. */
+export type ChecklistCounts = Schemas['ChecklistCounts']
+/** One item of one repository's checklist: the runs reminded of it, and how many gave each answer. */
+export type ChecklistItemCounts = Schemas['ChecklistItemCounts']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */

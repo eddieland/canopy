@@ -62,6 +62,8 @@ export const keys = {
     // Under the breakdowns' key too, so whatever marks them stale (a cost, a run's start or end, a tick's decisions)
     // marks the months stale with them.
     monthlyReport: (months: number) => ['spend', 'breakdown', 'months', months] as const,
+    // Under the breakdowns' key too, so a run's end, which records its answers, marks the counts stale.
+    checklistCounts: (days: number) => ['spend', 'breakdown', 'checklist', days] as const,
     tick: ['tick'] as const,
     // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
     tickNow: ['tick-now'] as const,
@@ -229,6 +231,18 @@ export function monthlyReportQuery(months: number) {
         queryKey: keys.monthlyReport(months),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/reports/monthly', { params: { query: { months } }, signal })),
+    })
+}
+
+/**
+ * How the worker runs that started in the last `days` local days answered each repository's checklist, per item, as
+ * `canopy checklist --days` counts them. Marked stale with the spend breakdowns, whenever a run ends.
+ */
+export function checklistCountsQuery(days: number) {
+    return queryOptions({
+        queryKey: keys.checklistCounts(days),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reports/checklist', { params: { query: { days } }, signal })),
     })
 }
 
