@@ -12,6 +12,8 @@ async function covers(highlight: Locator, link: Locator): Promise<void> {
     await expect(async () => {
         const [h, l] = await Promise.all([highlight.boundingBox(), link.boundingBox()])
         expect(h?.y).toBeCloseTo(l?.y ?? Number.NaN, 0)
+        expect(h?.x).toBeCloseTo(l?.x ?? Number.NaN, 0)
+        expect(h?.height).toBeCloseTo(l?.height ?? Number.NaN, 0)
     }).toPass()
 }
 
@@ -27,6 +29,11 @@ test('the nav highlight slides to the item a navigation lands on', async ({ page
     await nav.getByRole('link', { name: 'Reports' }).click()
     await covers(highlight, nav.getByRole('link', { name: 'Reports' }))
     // It takes on the color of the section it lands on.
+    await expect(highlight).toHaveClass(/\bbg-section-reports\/24\b/u)
+
+    // On a page under Reports, it sits on that page's item, in Reports' color.
+    await nav.getByRole('link', { name: 'Spend' }).click()
+    await covers(highlight, nav.getByRole('link', { name: 'Spend' }))
     await expect(highlight).toHaveClass(/\bbg-section-reports\/24\b/u)
 
     await page.getByRole('link', { name: 'Tickets' }).click()

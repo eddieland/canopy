@@ -88,9 +88,10 @@ Rules:
 
   A new section takes a color the same way, from what its page holds, and stays apart from its neighbours in the nav
   and from the status colors on its own page. Eight nav hues, five statuses, and the accent leave the wheel full, so a
-  new one may mean moving another. They go on the nav's icons, highlight, and active label, the first step of the page
-  header's trail, and the header's aurora and name (`wordmark`), and nowhere in a page's data: there a color is a
-  state's. A page in no section (the 404) takes the accent.
+  new one may mean moving another. They go on the nav's icons, highlight, and active label, the hairline beside the
+  pages open under a section, the first step of the page header's trail, and the header's aurora and name
+  (`wordmark`), and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the
+  accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run, or the sessions outside canopy, in the spend page's
   charts and the legend, and nowhere else: they are fills, never text, so the legend's words are `muted-foreground`
   beside a swatch. Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on
@@ -194,10 +195,14 @@ Rules:
   (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
   `src/lib/sections.ts`): what they work in first (Attention, Tickets, Tasks, Pull requests), then what they
   check now and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav item
-  is height the sticky part has none to spare of in an 800px window. Each nav item says on hover what its page holds,
-  and each spend window what it covers, as a native `title`; a spend window opens the spend page over its week or
-  month. Each block under the nav is a hairline and a `panel-label` over its content, but the spend's, where each
-  window's name is the label. What is working is every agent run running,
+  is height the sticky part has none to spare of in an 800px window. The pages under a section (Runs' Ticks and
+  Worktrees, Pull requests' Reviews, Reports' Spend) open under its item while it is the section shown, so the rail
+  says where a page is: `text-sm` rows of `h-7`, `muted-foreground`, their labels in line with the section's, on a 1px
+  hairline in its color down its icon's middle. Elsewhere they stay folded, so the nav keeps its eight rows. The strip
+  below `lg` keeps its icons alone; the sheet shows them as the whole rail does. Each nav item says on hover what its
+  page holds, and each spend window what it covers, as a native `title`; a spend window opens the spend page over its
+  week or month. Each block under the nav is a hairline and a `panel-label` over its content, but the spend's, where
+  each window's name is the label. What is working is every agent run running,
   worker runs, reviews of PRs, chore runs, and task runs alike, then the worker runs waiting on the operator's answer,
   each oldest first, a ticket's latest run alone: a dot in its state's color, what it works on (the ticket's key, the
   PR, the chore, the task run's `task:N#M`, in medium weight), how long it has run (or `waiting on you` in
@@ -523,8 +528,10 @@ Rules:
   (`Favicon`); `public/favicon.svg`, the plain mark in each theme's accent, is the icon before sign-in and the API
   docs'. It is static: a tab that moves pulls the eye from whatever the operator is reading.
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 24% tint
-  with a 3px bar down its full height, its label at medium weight in the section's color. Light's section colors sit
-  near 4.5:1 on the bare canvas, so on their tint the label is shaded toward black (`nav-label-shade`); dark's is not.
+  with a 3px bar down its full height, its label at medium weight in the section's color. On a page under a section
+  (Ticks, or a tick's page), the highlight is on that page's item, in its section's color, and the section's label
+  stays in `foreground`, untinted. Light's section colors sit near 4.5:1 on the bare canvas, so on their tint the
+  label is shaded toward black (`nav-label-shade`); dark's is not.
   In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and the runs page's chosen
   filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
 - **The aurora**: a 2px hairline along the header's foot, over its border, fading through the nav's colors in the
