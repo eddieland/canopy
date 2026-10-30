@@ -177,6 +177,29 @@ def test_stale_and_unobserved_subjects_name_what(
     assert observed(canopy_env, tracked) == snapshot
 
 
+def test_a_candidate_leaves_out_a_title_its_listed_ticket_says_already(
+    canopy_env: CanopyEnv,
+    tracked: sqlite3.Connection,
+) -> None:
+    """The tracker's title is said once: left out where it is the listed ticket's, kept where the two differ."""
+    held(canopy_env, tracked, "PROJ-2")
+    held(canopy_env, tracked, "PROJ-3")
+    for key in (KEY, "PROJ-2", "PROJ-3"):
+        observe_ticket(tracked, key)
+    branches_read(tracked)
+    query_read(tracked, [KEY, "PROJ-2", "PROJ-3"])
+    with clock(FIRST_SEEN):
+        db.set_ticket(tracked, KEY, str(canopy_env.root), title="Retry flaky uploads")
+        db.set_ticket(tracked, "PROJ-2", str(canopy_env.root), title="Retry uploads")
+    found = observed(canopy_env, tracked)
+    # PROJ-3 has no title of its own yet, so it keeps the tracker's.
+    assert {t["key"]: t.get("title") for t in found["tickets"]} == {
+        KEY: None,
+        "PROJ-2": "Retry flaky uploads",
+        "PROJ-3": "Retry flaky uploads",
+    }
+
+
 def test_the_prs_reviews_ask_about_are_shown_as_read(canopy_env: CanopyEnv, tracked: sqlite3.Connection) -> None:
     """The overseer reads no GitHub there (DESIGN §39): a request's PR, and each the query found, is shown as read."""
     canopy_env.configure(canopy_env.user_file, {"review": {"query": "is:pr review-requested:@me"}})
@@ -241,12 +264,14 @@ def test_comments_past_the_cursor_are_those_first_observed_after_it(tracked: sql
 def observed(env: CanopyEnv, conn: sqlite3.Connection) -> dict[str, Any]:
     """The block's observations of `env`'s journal at NOW, as the overseer reads them.
 
-    The tick is derived first, as a tick derives it, and the section is returned as JSON.
+    The tick is derived first, as a tick derives it, and the section is returned as JSON, rendered with the open
+    tickets' titles as the block lists them.
     """
     conn.commit()
     ctx = context(env)
     with clock(FRESH):
         tick_id = db.start_tick(ctx.conn, dry_run=False)
     phases.record(ctx.conn, tick_id, phases.derive(ctx, NOW))
-    section = observations.section(ctx, tick_id, NOW, db.open_tickets(ctx.conn))
-    return json.loads(json.dumps(observations.rendered(section)))
+    listed = db.open_tickets(ctx.conn)
+    section = observations.section(ctx, tick_id, NOW, listed)
+    return json.loads(json.dumps(observations.rendered(section, {t.key: t.title for t in listed})))
