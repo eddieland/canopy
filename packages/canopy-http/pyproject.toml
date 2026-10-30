@@ -23,7 +23,7 @@ classifiers = [
 requires-python = ">=3.12"
 # httpx2 for its transport: it tells a request that never left from one that may have been carried out, and trusts
 # the system's certificates (truststore), so an Enterprise host's own CA works. Nothing from canopy.
-dependencies = ["httpx2>=2.13.1"]
+dependencies = ["httpx2>=2.16.0"]
 
 [project.urls]
 Homepage = "https://github.com/eddieland/canopy"

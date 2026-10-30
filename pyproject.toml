@@ -38,11 +38,11 @@ dependencies = [
     "canopy-notify-slack",
     "canopy-sandbox",
     "click>=8.5.0",
-    "fastapi>=0.143.2",
+    "fastapi>=0.161.1",
     "pydantic>=2.14.1",
     "rich>=15.0.0",
     # FastAPI's own foundation; canopy.serve's middleware and responses import it directly, so it is declared too.
-    "starlette>=1.8.0",
+    "starlette>=1.9.0",
     "tomlkit>=0.15.1",
     "uvicorn>=0.54.0",
 ]
@@ -140,8 +140,8 @@ dev = [
     # never runs it, so it is here for its tests and type checks, not among canopy's dependencies.
     "canopy-review-bench",
     "editorconfig-checker>=3.11.1",
-    "httpx2>=2.13.1",
-    "hypothesis>=6.170.0",
+    "httpx2>=2.16.0",
+    "hypothesis>=6.170.8",
     # Holds what an MCP tool returns to the schema it lists, as a client would check it (tests/canopy/loop/test_mcp.py).
     "jsonschema>=4.26.0",
     # Git hooks (prek.toml) that run the formatters and linters on a commit: `make hooks` installs them.
@@ -151,8 +151,8 @@ dev = [
     # Line and branch coverage: `make coverage`, and `make check COVERAGE=1`, whose coverage.xml CI sends to Codecov.
     "pytest-cov>=7.1.0",
     "pytest-xdist>=3.8.0",
-    "ruff>=0.17.1",
-    "rumdl>=0.2.79",
+    "ruff>=0.17.2",
+    "rumdl>=0.3.0",
     "shellcheck-py>=0.11.0.1",
     # Snapshot tests: what canopy renders whole, held to a file under a test's `__snapshots__/` (AGENTS.md, Testing).
     "syrupy>=6.1.1",
