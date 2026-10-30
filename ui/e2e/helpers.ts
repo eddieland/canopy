@@ -271,17 +271,55 @@ export async function padMessages(page: Page, ticketKey: string, count: number):
 
 /**
  * Makes canopy's lifetime spend `usd`, as `GET /api/spend` and the event stream report it, for the hat shop: the mock
- * has spent too little to buy a hat. The stream's messages are rewritten in the page, as each is read, since a stream
- * never ends for a route to read whole.
+ * has spent too little to buy a hat.
  */
 export async function spentInAll(page: Page, usd: number): Promise<void> {
+    await respend(page, { total: usd })
+}
+
+/**
+ * Makes the last 24 hours cost `day` dollars and the last 30 days `month`, as `GET /api/spend` and the event stream
+ * report them, for the rail at an operator's figures: the mock's have two digits.
+ */
+export async function spentInWindows(page: Page, day: number, month: number): Promise<void> {
+    await respend(page, { day, month })
+}
+
+/** The figures `respend` puts in the spend; one absent stays as the server sent it. */
+interface Respent {
+    /** The lifetime total, in dollars. */
+    total?: number
+    /** What the last 24 hours cost, in dollars. */
+    day?: number
+    /** What the last 30 days cost, in dollars. */
+    month?: number
+}
+
+/** The spend's figures `respend` rewrites, as the API and the stream send them. */
+interface SpendFigures {
+    /** The lifetime total. */
+    total_usd: number | null
+    /** The last 24 hours. */
+    day: { cost_usd: number | null }
+    /** The last 30 days. */
+    month: { cost_usd: number | null }
+}
+
+/**
+ * Puts `figures` in the spend `GET /api/spend` and the event stream report. The stream's messages are rewritten in the
+ * page, as each is read, since a stream never ends for a route to read whole.
+ */
+async function respend(page: Page, figures: Respent): Promise<void> {
     await page.route('**/api/spend', async (route) => {
         const response = await route.fetch()
-        const body = (await response.json()) as { total_usd: number | null }
-        body.total_usd = usd
+        const body = (await response.json()) as SpendFigures
+        body.total_usd = figures.total ?? body.total_usd
+        body.day.cost_usd = figures.day ?? body.day.cost_usd
+        body.month.cost_usd = figures.month ?? body.month.cost_usd
         await route.fulfill({ response, json: body })
     })
-    await page.addInitScript((total) => {
+    // The init script runs in the page, apart from this module, so it repeats the three lines above.
+    await page.addInitScript((given: Respent) => {
         // The getter is only ever called with `.call` on an event, so it never loses its `this`.
         // oxlint-disable-next-line typescript/unbound-method
         const read = Object.getOwnPropertyDescriptor(MessageEvent.prototype, 'data')?.get
@@ -291,15 +329,17 @@ export async function spentInAll(page: Page, usd: number): Promise<void> {
                 if (!(this.target instanceof EventSource) || typeof data !== 'string') {
                     return data
                 }
-                const parsed = JSON.parse(data) as { type?: string; spend?: { total_usd: number | null } }
+                const parsed = JSON.parse(data) as { type?: string; spend?: SpendFigures }
                 if (parsed.type !== 'spend.updated' || parsed.spend === undefined) {
                     return data
                 }
-                parsed.spend.total_usd = total
+                parsed.spend.total_usd = given.total ?? parsed.spend.total_usd
+                parsed.spend.day.cost_usd = given.day ?? parsed.spend.day.cost_usd
+                parsed.spend.month.cost_usd = given.month ?? parsed.spend.month.cost_usd
                 return JSON.stringify(parsed)
             },
         })
-    }, usd)
+    }, figures)
 }
 
 /** A line of a review's diff, as the API sends it. */
