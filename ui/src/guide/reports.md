@@ -25,11 +25,18 @@ every run cold.
   shipped; five means somebody had opinions.
 - **PR comments**: comments on its PRs from people other than the PR's author. canopy posts as you, the author, so its
   own replies and reviews never count as feedback it received. Bots are left out too.
-- **to land**: from its first worker run to the tick that marked it done. canopy doesn't keep GitHub's merge time, so
-  the tick that saw the merge stands in, which can add up to one tick's wait.
-- **review wait**: from the end of its first worker run that ended done, when the PR was ready, to the first review
-  after it. canopy keeps no history of a ticket's phases, so this is the closest honest proxy for time spent waiting on
-  a reviewer. A ticket nobody reviewed has none, and isn't counted.
+- **to land**: from its first worker run to its PR's merge, on GitHub's clock. A PR canopy read before it kept
+  GitHub's times has no merge time, so the tick that marked the ticket done stands in, which can add up to one tick's
+  wait.
+- **review wait**: from when its PR started waiting on a reviewer to the first review after that, on GitHub's clock:
+  the first review asked for once the PR was ready, or the moment it was ready if nobody was asked. A PR opened ready
+  was ready when it was opened; a draft, when it was last marked ready. Without GitHub's times, the end of the
+  ticket's first worker run that ended done stands in for ready. A ticket nobody reviewed has none, and isn't counted.
+
+Both are GitHub's own times wherever canopy has them, and a proxy only where it doesn't: an older PR, read before
+canopy kept them, is never filled in after the fact. Hover a median for how many of its tickets ran on GitHub's clock,
+and a ticket's figure under **Landed** for which clock it ran on. A month of mostly proxies reads a little slow, by a
+tick here and a worker's wrap-up there.
 
 Click a month to see it in detail below; the page opens on the latest.
 
@@ -42,7 +49,9 @@ for those whose sessions canopy hasn't read yet, then **none** for those it read
 
 **Landed** lists the month's tickets the loop marked done as merged, the latest first, with each one's iterations, PR
 comments, reviews (the ones that asked for changes in brackets), time to land, review wait, and what its own runs cost.
-A ticket closed without a merge is counted in **closed** above, not here.
+Hover a time to land or a review wait to see whether it's GitHub's or a proxy's. A ticket still counts in the month the
+loop marked it done, whenever GitHub says it merged. A ticket closed without a merge is counted in **closed** above, not
+here.
 
 ## The spend page
 

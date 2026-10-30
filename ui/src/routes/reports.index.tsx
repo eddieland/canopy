@@ -13,6 +13,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { UnnamedModel } from '@/components/unnamed-model'
 import { useClock } from '@/lib/clock'
 import {
+    clockShare,
     costPercent,
     DEFAULT_MONTHS,
     hoursText,
@@ -24,7 +25,9 @@ import {
     reportLine,
     reportMonth,
     reportSpan,
+    reviewWaitHint,
     sentTokens,
+    toLandHint,
     wroteTokens,
 } from '@/lib/reports'
 import { unnamedHint } from '@/lib/models'
@@ -53,10 +56,11 @@ const ITERATIONS_HINT = 'Worker runs, implement and resume, that started before 
 const COMMENTS_HINT = "Comments on its PRs from people other than the PR's author; canopy posts as the author"
 const REVIEWS_HINT = "Reviews of its PRs from people other than the PR's author, then how many asked for changes"
 const TO_LAND_HINT =
-    'From its first worker run to the loop marking it done: the journal keeps no merge time, so the tick that saw ' +
-    'the merge stands in'
+    "From its first worker run to its PR's merge, as GitHub timed it; where canopy kept no merge time, to the tick " +
+    'that marked it done. Hover a figure for which'
 const WAIT_HINT =
-    'From the end of its first worker run that ended done, when its PR was ready, to the first review after it'
+    'From when its PR began waiting on a review, as GitHub timed it, to the first review after it; where canopy kept ' +
+    'no ready time, from the end of its first worker run that ended done. Hover a figure for which'
 
 // The column names of a table in a padded scrolling region, as the spend page's: the region's top padding is the
 // head's cells', so the rows scrolling under the sticky head never show above it.
@@ -283,9 +287,13 @@ function Months({ months, picked }: { months: readonly ReportMonth[]; picked: st
     )
 }
 
-/** A number in a table's row, right aligned. */
-function Readout({ children }: { children: ReactNode }) {
-    return <td className="readout pl-3">{children}</td>
+/** A number in a table's row, right aligned, with what it ran on, if said, on its hover. */
+function Readout({ children, title }: { children: ReactNode; title?: string | undefined }) {
+    return (
+        <td className="readout pl-3" title={title}>
+            {children}
+        </td>
+    )
 }
 
 /** Every month, the newest first: the tickets it landed and the medians of what each took. */
@@ -318,8 +326,12 @@ function Delivery({ months, picked }: { months: readonly ReportMonth[]; picked: 
                             <Readout>{m.landed.length}</Readout>
                             <Readout>{medianText(m.median_iterations ?? null)}</Readout>
                             <Readout>{medianText(m.median_pr_comments ?? null)}</Readout>
-                            <Readout>{hoursText(m.median_hours_to_land ?? null)}</Readout>
-                            <Readout>{hoursText(m.median_review_wait_hours ?? null)}</Readout>
+                            <Readout title={clockShare(m, 'to land')}>
+                                {hoursText(m.median_hours_to_land ?? null)}
+                            </Readout>
+                            <Readout title={clockShare(m, 'review wait')}>
+                                {hoursText(m.median_review_wait_hours ?? null)}
+                            </Readout>
                         </tr>
                     ))}
                 </tbody>
@@ -484,8 +496,8 @@ function Landed({ month }: { month: ReportMonth }) {
                                     <span className="text-status-blocked"> ({t.changes_requested})</span>
                                 )}
                             </Readout>
-                            <Readout>{hoursText(t.hours_to_land ?? null)}</Readout>
-                            <Readout>{hoursText(t.review_wait_hours ?? null)}</Readout>
+                            <Readout title={toLandHint(t)}>{hoursText(t.hours_to_land ?? null)}</Readout>
+                            <Readout title={reviewWaitHint(t)}>{hoursText(t.review_wait_hours ?? null)}</Readout>
                             <td className="readout pl-3">
                                 <Cost usd={t.cost_usd ?? null} />
                             </td>

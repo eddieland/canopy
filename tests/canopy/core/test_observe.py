@@ -153,6 +153,43 @@ def test_a_prs_title_is_kept_to_one_line_cut_and_marked_and_none_when_not_printe
     assert seen.title is None, "a reader that prints no title leaves none, rather than the last one read"
 
 
+def test_a_prs_times_are_kept_in_the_journals_shape_and_none_when_not_printed(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    pr = {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7}
+    times = {
+        "created_at": "2026-10-17T09:00:00Z",
+        "ready_at": "2026-10-18T08:00:00+02:00",
+        "review_requested_at": "2026-10-18T09:00:00",
+        "merged_at": "2026-10-19T15:00:00Z",
+        "closed_at": "2026-10-19T15:00:00Z",
+    }
+    prints(connector_state, {**pr, **times})
+    assert run(ctx).refused == {}
+    [seen] = records.fetch_all(ctx.conn, records.ObservedPr, sql.frag("SELECT * FROM observed_prs"))
+    assert (seen.created_at, seen.ready_at, seen.review_requested_at, seen.merged_at, seen.closed_at) == (
+        "2026-10-17T09:00:00.000Z",
+        "2026-10-18T06:00:00.000Z",
+        "2026-10-18T09:00:00.000Z",
+        "2026-10-19T15:00:00.000Z",
+        "2026-10-19T15:00:00.000Z",
+    )
+
+    prints(connector_state, {**pr, "merged_at": "last Tuesday"})
+    assert run(ctx).refused == {"pr": 1}, "a time canopy cannot read refuses the line"
+    prints(connector_state, pr)
+    run(ctx)
+    [seen] = records.fetch_all(ctx.conn, records.ObservedPr, sql.frag("SELECT * FROM observed_prs"))
+    assert (seen.created_at, seen.ready_at, seen.review_requested_at, seen.merged_at, seen.closed_at) == (
+        None,
+        None,
+        None,
+        None,
+        None,
+    ), "a reader that prints no times, as an older one, leaves none"
+
+
 def test_the_request_holds_only_what_is_asked() -> None:
     assert observe.Request(prs=[]).to_json() == {"prs": []}
     tickets = [observe.AskedTicket("PROJ-1", "2026-10-18T09:00:00.000Z"), observe.AskedTicket("PROJ-2")]

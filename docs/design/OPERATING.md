@@ -52,9 +52,11 @@ what an idle tick costs is the overseer's runs that bought nothing.
 The web UI's reports page reads the same figures by local calendar month, dollars and tokens by kind and by model,
 and the sessions outside canopy beside the kinds, so a month's total is all agent spend, as the budget's is,
 beside what each month landed: a ticket the loop marked done as merged, with its worker runs, the comments and reviews
-people other than its PR's author left, and how long it took. The journal keeps no merge time and no phase history, so
-a ticket lands when the loop marks it done, and its review wait runs from its first worker run that ended `done`; the
-page says so, rather than pass a proxy off as GitHub's own clock. The spend page, by day, sits under it.
+people other than its PR's author left, and how long it took: to its PR's merge, and its wait from when the PR was
+ready, or asked for review after, to the first review, each on GitHub's clock as the `vcs` source read it (§30). Where
+a PR has no such time, read before canopy kept them, a proxy stands in, the tick that marked the ticket done and its
+first worker run that ended `done`; the page says which a figure used, rather than pass a proxy off as GitHub's own
+clock. The spend page, by day, sits under it.
 
 `spend.monthly_budget_usd` is what the operator means a local calendar month of agent spend to cost: canopy's runs and
 the runtime's sessions outside canopy (§13, Every session's spend), canopy's share shown beside the whole. `canopy

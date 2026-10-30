@@ -6431,6 +6431,13 @@ export type components = {
          */
         ReportTicket: {
             /**
+             * Awaiting Review At
+             * @description When its PR began waiting on a review, as GitHub says: the first review asked for once it was ready, or when it
+             *     was ready; None where the reader kept neither, and its review wait starts at its first worker run that ended
+             *     `done` instead.
+             */
+            awaiting_review_at: string | null;
+            /**
              * Changes Requested
              * @description How many of those asked for changes.
              */
@@ -6442,7 +6449,8 @@ export type components = {
             cost_usd: number | null;
             /**
              * Hours To Land
-             * @description From its first worker run's start to its landing, in hours; None with no worker run.
+             * @description From its first worker run's start to its PRs' merge, `merged_at`, or to `landed_at` without it, in hours; None
+             *     with no worker run.
              */
             hours_to_land: number | null;
             /**
@@ -6458,9 +6466,15 @@ export type components = {
             /**
              * Landed At
              * Format: date-time
-             * @description When the loop marked it done: the journal keeps no merge time of its own.
+             * @description When the loop marked it done, which the month it counts in goes by.
              */
             landed_at: string;
+            /**
+             * Merged At
+             * @description When its PRs merged, as GitHub says, the latest of them; None where the reader kept no merge time, and its hours
+             *     to land end at `landed_at` instead.
+             */
+            merged_at: string | null;
             /**
              * Pr Comments
              * @description The comments on its PRs from people other than each PR's author, bots' apart: canopy posts as the author.
@@ -6468,8 +6482,8 @@ export type components = {
             pr_comments: number;
             /**
              * Review Wait Hours
-             * @description From the end of its first worker run that ended `done`, when its PR was ready, to the first review after it, in
-             *     hours; None with no such run or no such review.
+             * @description From when its PR began waiting on a review, `awaiting_review_at`, or without it the end of its first worker run
+             *     that ended `done`, to the first review after it, in hours; None with no start or no such review.
              */
             review_wait_hours: number | null;
             /**

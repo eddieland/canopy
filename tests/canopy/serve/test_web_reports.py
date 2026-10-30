@@ -36,6 +36,8 @@ def test_the_monthly_report_reads_local_months_oldest_first(backend: Backend) ->
     assert [k["kind"] for k in august["kinds"] if k["runs"]] == ["workers"]
     landed = [t for t in history.TICKETS if t.done_at.month == 8 and not t.closed]
     assert [t["key"] for t in august["landed"]] == [t.key for t in reversed(landed)]
+    # The mock's reader kept none of GitHub's times, so each figure is its proxy's.
+    assert {(t["merged_at"], t["awaiting_review_at"]) for t in august["landed"]} == {(None, None)}
     year = c.get("/api/reports/monthly").json()["months"]
     assert len(year) == monthly.DEFAULT_MONTHS
     # The workspace took canopy up in April: nothing before.

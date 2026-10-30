@@ -213,6 +213,7 @@ def test_a_landed_ticket_counts_its_iterations_reviews_and_waits(tmp_path: Path,
     assert landed.pr_comments == 1
     assert (landed.reviews, landed.changes_requested) == (3, 1)
     assert landed.review_wait == timedelta(hours=4)
+    assert (landed.merged_at, landed.awaiting_review_at) == (None, None), "no time of GitHub's read: the proxies"
     assert landed.cost_usd == 4.0  # the plan and three worker runs
     assert october.closed == 1
     assert october.pull_requests == 0  # first named in September
@@ -223,3 +224,38 @@ def test_a_landed_ticket_counts_its_iterations_reviews_and_waits(tmp_path: Path,
     assert october.per_landed == pytest.approx(october.cost_usd)
     assert monthly.median([None, 3, 1, None]) == 2
     assert monthly.median([None]) is None
+
+
+def test_a_landed_tickets_waits_run_on_githubs_times_where_the_reader_kept_them(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """To land ends at the merge, and review wait runs from the first review asked for once ready, or from ready."""
+    conn = journals.open(tmp_path / "canopy.db")
+    t = tick(conn, at(9, 28), 1.0)
+    ticket(conn, "PROJ-1")
+    run(conn, t, "PROJ-1", at(9, 28, 10), ended=at(9, 28, 11), pr=PR)
+    conn.execute(
+        "INSERT INTO observed_prs (url, repository, number, state, draft, author, observed_at, created_at, ready_at, "
+        "review_requested_at, merged_at, closed_at) "
+        "VALUES (?, 'acme/api', 7, 'merged', 0, 'operator', ?, ?, ?, ?, ?, ?)",
+        (PR, at(10, 8), at(9, 28, 11), at(9, 29, 12), at(9, 29, 16), at(10, 3, 15), at(10, 3, 15)),
+    )
+    said(conn, 1, "dana", at(9, 29, 15), state="changes_requested")  # before a review was asked for
+    said(conn, 2, "gina", at(10, 3, 12), state="approved")
+    decide(conn, t, "PROJ-1", at(10, 4, 11))
+
+    [landed] = monthly.months(conn, NOW, 1, state_dir=STATE_DIR)[0].landed
+    assert (landed.merged_at, landed.to_land) == (at(10, 3, 15), timedelta(days=5, hours=5))
+    assert (landed.awaiting_review_at, landed.review_wait) == (at(9, 29, 16), timedelta(days=3, hours=20))
+
+    # With no review asked for, it waits from when the PR was ready.
+    conn.execute("UPDATE observed_prs SET review_requested_at = NULL")
+    [landed] = monthly.months(conn, NOW, 1, state_dir=STATE_DIR)[0].landed
+    assert (landed.awaiting_review_at, landed.review_wait) == (at(9, 29, 12), timedelta(hours=3))
+
+    # A PR read before canopy read its times falls back to the proxies: the tick, and the first run that ended done.
+    conn.execute("UPDATE observed_prs SET ready_at = NULL, merged_at = NULL")
+    [landed] = monthly.months(conn, NOW, 1, state_dir=STATE_DIR)[0].landed
+    assert (landed.merged_at, landed.to_land) == (None, timedelta(days=6, hours=1))
+    assert (landed.awaiting_review_at, landed.review_wait) == (None, timedelta(days=1, hours=4))
