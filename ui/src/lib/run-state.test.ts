@@ -134,7 +134,7 @@ describe('railWork', () => {
         expect(railWork({ runs }, 4)).toEqual({
             shown: runs.slice(0, 4).map((run) => ({ kind: 'run', run })),
             more: 2,
-            moreAt: '/runs',
+            moreAt: '/workspace/runs',
         })
         expect(railWork({ runs: runs.slice(0, 2) }, 4).more).toBe(0)
 
@@ -142,7 +142,7 @@ describe('railWork', () => {
         expect(railWork({ runs: runs.slice(0, 4), reviews }, 4).moreAt).toBe('/pull-requests/reviews')
         const chores = [chore('deps', 3, '2026-10-08T13:00:00Z')]
         expect(railWork({ runs: runs.slice(0, 4), chores }, 4).moreAt).toBe('/chores')
-        expect(railWork({ runs: runs.slice(0, 4), reviews, chores }, 4).moreAt).toBe('/runs')
+        expect(railWork({ runs: runs.slice(0, 4), reviews, chores }, 4).moreAt).toBe('/workspace/runs')
         const tasks = [task(6, '2026-10-08T13:00:00Z')]
         expect(railWork({ runs: runs.slice(0, 4), tasks }, 4).moreAt).toBe('/tasks')
     })

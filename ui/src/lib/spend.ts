@@ -14,11 +14,14 @@ import type {
     SpendSessions,
     SpendTicket,
     SpendTool,
+    SpendUnpriced,
 } from '@/api/types'
+import type { DayBar } from '@/lib/chart'
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
 import { UNREAD } from '@/lib/models'
+import { pickWindow, windowName } from '@/lib/report-window'
 import type { RunsOf } from '@/lib/run-state'
 import { clockTime, stamp } from '@/lib/time'
 
@@ -134,29 +137,9 @@ export function spendLine(found: Pick<SpendBreakdown, 'days' | 'hours' | 'done' 
     return `${costText(found.totals.total)} over ${windowName(found)} · ${counted(found.done, 'ticket')} done`
 }
 
-/** A window's length in words, from its search params or the breakdown read over it: `24 hours`, `7 days`. */
-export function windowName(range: { days?: number | null; hours?: number | null }): string {
-    const [n, unit] =
-        range.hours === undefined || range.hours === null ? [range.days ?? 0, 'day'] : [range.hours, 'hour']
-    return n === 1 ? `1 ${unit}` : `${n} ${unit}s`
-}
-
-/** A window's id, its toggle's value and test id: the hours with an `h`, `24h`, or the days, `7`. */
-export function windowId(range: SpendBreakdownRange): string {
-    return range.hours === undefined ? String(range.days) : `${range.hours}h`
-}
-
 /** The window the search params name, if the page offers it: hours before days; undefined for the default. */
 export function spendWindow(search: { days?: unknown; hours?: unknown }): SpendBreakdownRange | undefined {
-    return (
-        SPEND_WINDOWS.find((w) => w.hours !== undefined && names(search.hours, w.hours)) ??
-        SPEND_WINDOWS.find((w) => w.days !== undefined && names(search.days, w.days))
-    )
-}
-
-// Whether a search param names `n`, as a number or as its digits.
-function names(value: unknown, n: number): boolean {
-    return n === value || String(n) === value
+    return pickWindow(SPEND_WINDOWS, search)
 }
 
 /**
@@ -176,10 +159,20 @@ export function chartTop(days: SpendDay[]): number {
     return Math.max(0, ...days.map((day) => day.costs.total ?? 0))
 }
 
-/** Where the dearest day is in the window, the latest of any equal, so its total is said over its bar; -1 for none. */
-export function dearestDay(days: SpendDay[]): number {
-    const top = chartTop(days)
-    return top === 0 ? -1 : days.findLastIndex((day) => day.costs.total === top)
+/** Each day, or hour, as the by-day chart draws it: its series bottom up, as `seriesCost` counts them. */
+export function spendBars(days: readonly SpendDay[], clock: Clock): DayBar[] {
+    return days.map((day) => ({
+        key: day.day,
+        label: dayLabel(day, clock),
+        hint: dayHint(day, clock),
+        total: day.costs.total ?? 0,
+        totalText: costText(day.costs.total),
+        segments: SERIES.map((series) => ({
+            key: series.key,
+            fill: series.fill,
+            value: seriesCost(day.costs, series.key),
+        })),
+    }))
 }
 
 /**
@@ -227,6 +220,28 @@ function dateLabel(day: string): string {
         day: 'numeric',
         timeZone: 'UTC',
     })
+}
+
+/** Each kind of run in words, as `canopy spend` counts the runs that reported no cost. */
+export const KIND_LABEL: Record<SpendKind, string> = {
+    overseer: 'overseer runs',
+    workers: 'worker runs',
+    plans: 'plan runs',
+    chores: 'chore runs',
+    reviews: 'review runs',
+    tasks: 'task runs',
+}
+
+/**
+ * What of a window's ended runs reported no cost, by kind, as a sentence: `No cost reported: 1 of 4 worker runs.`, or
+ * `Every run that ended reported a cost.` A gap in the figures then never passes for a quiet window.
+ */
+export function unpricedText(unpriced: readonly SpendUnpriced[]): string {
+    const parts = unpriced
+        .filter((u) => u.unpriced > 0)
+        .map((u) => `${u.unpriced} of ${u.runs} ${KIND_LABEL[u.kind]}`)
+        .join(', ')
+    return parts === '' ? 'Every run that ended reported a cost.' : `No cost reported: ${parts}.`
 }
 
 /** A share, 0 to 1, as a whole percent: `41%`, or a dash when there is none. */
@@ -293,7 +308,7 @@ export function modelKey(row: Pick<ModelRow, 'model' | 'unread'>): string {
 
 /**
  * The runs page's kind (`?kind=`) each kind of run is listed under, which By model's links carry: a plan run is a
- * worker run there. Null for the overseer's, whose ticks it lists apart, at `/runs/ticks`, and not by model.
+ * worker run there. Null for the overseer's, whose ticks it lists apart, at `/workspace/ticks`, and not by model.
  */
 export const RUNS_KIND: Record<SpendKind, RunsOf | null> = {
     overseer: null,

@@ -12,7 +12,7 @@ export const SECTIONS = [
     '/tickets',
     '/tasks',
     '/pull-requests',
-    '/runs',
+    '/workspace',
     '/chores',
     '/reports',
     '/memory',
@@ -25,7 +25,7 @@ export type Section = (typeof SECTIONS)[number]
 /** Each section's name: its nav item's label and the first step of the trail over its pages. */
 export const SECTION_LABEL: Record<Section, string> = {
     '/attention': 'Attention',
-    '/runs': 'Runs',
+    '/workspace': 'Workspace',
     '/tickets': 'Tickets',
     '/tasks': 'Tasks',
     '/pull-requests': 'Pull requests',
@@ -40,7 +40,7 @@ export const SECTION_LABEL: Record<Section, string> = {
 /** Each section's color as text: its icon, its nav label while it is shown, and the label over its pages. */
 export const SECTION_TEXT: Record<Section, string> = {
     '/attention': 'text-section-attention',
-    '/runs': 'text-section-runs',
+    '/workspace': 'text-section-workspace',
     '/tickets': 'text-section-tickets',
     '/tasks': 'text-section-tasks',
     '/pull-requests': 'text-section-pull-requests',
@@ -53,7 +53,7 @@ export const SECTION_TEXT: Record<Section, string> = {
 /** Each section's color as a tint: the nav's highlight on the section shown, under its label in that color. */
 export const SECTION_TINT: Record<Section, string> = {
     '/attention': 'bg-section-attention/24',
-    '/runs': 'bg-section-runs/24',
+    '/workspace': 'bg-section-workspace/24',
     '/tickets': 'bg-section-tickets/24',
     '/tasks': 'bg-section-tasks/24',
     '/pull-requests': 'bg-section-pull-requests/24',
@@ -66,7 +66,7 @@ export const SECTION_TINT: Record<Section, string> = {
 /** Each section's color as a solid fill: the bar down the nav highlight's left edge. */
 export const SECTION_FILL: Record<Section, string> = {
     '/attention': 'bg-section-attention',
-    '/runs': 'bg-section-runs',
+    '/workspace': 'bg-section-workspace',
     '/tickets': 'bg-section-tickets',
     '/tasks': 'bg-section-tasks',
     '/pull-requests': 'bg-section-pull-requests',

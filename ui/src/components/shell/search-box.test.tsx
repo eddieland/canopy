@@ -63,7 +63,7 @@ describe('SearchBox', () => {
     })
 
     it('opens the search at once on Enter', async () => {
-        const { router } = await renderRouted(<SearchBox onJump={vi.fn<() => void>()} />, { at: '/runs' })
+        const { router } = await renderRouted(<SearchBox onJump={vi.fn<() => void>()} />, { at: '/workspace/runs' })
 
         type('csv')
         await act(async () => {
@@ -74,7 +74,7 @@ describe('SearchBox', () => {
     })
 
     it("opens a task's page on Enter when the box holds its reference alone", async () => {
-        const { router } = await renderRouted(<SearchBox onJump={vi.fn<() => void>()} />, { at: '/runs' })
+        const { router } = await renderRouted(<SearchBox onJump={vi.fn<() => void>()} />, { at: '/workspace/runs' })
 
         type(' task:4 ')
         await act(async () => {

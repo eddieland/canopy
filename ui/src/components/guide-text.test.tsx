@@ -35,7 +35,7 @@ describe('GuideText', () => {
         const line: GuidePiece[] = [
             { kind: 'link', text: 'signing in', target: { kind: 'page', page: 'signing-in', hash: 'the-secret' } },
             text(', '),
-            { kind: 'link', text: 'the runs', target: { kind: 'section', to: '/runs' } },
+            { kind: 'link', text: 'the workspace', target: { kind: 'section', to: '/workspace' } },
             text(', '),
             { kind: 'link', text: 'the docs', target: { kind: 'web', href: 'https://docs.example.test/' } },
         ]
@@ -44,8 +44,8 @@ describe('GuideText', () => {
         const page = screen.getByRole('link', { name: 'signing in' })
         expect(page.getAttribute('href')).toBe('/guide/signing-in#the-secret')
         expect(page.getAttribute('target')).toBeNull()
-        const section = screen.getByRole('link', { name: 'the runs' })
-        expect(section.getAttribute('href')).toBe('/runs')
+        const section = screen.getByRole('link', { name: 'the workspace' })
+        expect(section.getAttribute('href')).toBe('/workspace')
         expect(section.getAttribute('target')).toBeNull()
         const web = screen.getByRole('link', { name: 'the docs' })
         expect(web.getAttribute('href')).toBe('https://docs.example.test/')

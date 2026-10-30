@@ -1,11 +1,22 @@
-"""What each local calendar month cost and got done, as the API sends it (DESIGN §11), by the backend's clock."""
+"""The reports, as the API sends them (DESIGN §11), by the backend's clock.
+
+What each local calendar month cost and got done, and how the last days' runs ended, as `canopy health` reads them.
+"""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, runtime_sessions
+from canopy.core import db, health, runtime_sessions, spend
 from canopy.serve import monthly
+from canopy.serve.schema.health import (
+    HealthCounts,
+    HealthDay,
+    HealthFailure,
+    HealthOutcome,
+    HealthRefusal,
+    HealthReport,
+)
 from canopy.serve.schema.reports import (
     MonthlyReport,
     ReportKind,
@@ -15,12 +26,18 @@ from canopy.serve.schema.reports import (
     ReportTicket,
     ReportTokens,
 )
+from canopy.serve.schema.spend import SpendUnpriced
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from datetime import timedelta
 
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
+
+
+# How `canopy health` names a task's run's subject: its task's id after it.
+_TASK = "task:"
 
 
 def monthly_report(backend: Backend, ctx: Context, months: int) -> MonthlyReport:
@@ -35,6 +52,39 @@ def monthly_report(backend: Backend, ctx: Context, months: int) -> MonthlyReport
     return MonthlyReport(
         months=[_month(m) for m in found],
         sessions_read_at=db.parse_time(read.read_at) if read is not None else None,
+    )
+
+
+def health_report(backend: Backend, ctx: Context, days: int) -> HealthReport:
+    """How the runs of the last `days` local days ended, by the backend's clock, as `canopy health` reads them.
+
+    Returns:
+        The report, with each day's ended and failed runs and how many runs reported no cost.
+    """
+    now = backend.clock()
+    # One snapshot, so a run ending between two of the reads is in all of them or none.
+    with db.read_snapshot(ctx.conn):
+        found = health.report(ctx.conn, now, days)
+        per_day = health.by_day(ctx.conn, now, days)
+        unpriced = spend.unpriced(ctx.conn, found.since, found.until)
+    return HealthReport(
+        days=found.days,
+        since=db.parse_time(found.since),
+        until=db.parse_time(found.until),
+        outcomes=[
+            HealthOutcome(kind=o.kind, what=o.what, status=o.status, failed=o.failed, runs=o.runs, cost_usd=o.cost_usd)
+            for o in found.outcomes
+        ],
+        failures=[_failure(f) for f in found.failures],
+        refusals=[
+            HealthRefusal(guard=r.guard, decisions=r.decisions, ticks=r.ticks, last_tick=r.last_tick)
+            for r in found.refusals
+        ],
+        per_day=[
+            HealthDay(day=d.day, start=db.parse_time(d.start), ended=_counts(d.ended), failed=_counts(d.failed))
+            for d in per_day
+        ],
+        unpriced=[SpendUnpriced(kind=u.kind, runs=u.runs, unpriced=u.unpriced) for u in unpriced],
     )
 
 
@@ -100,3 +150,34 @@ def _ticket(found: monthly.Landed) -> ReportTicket:
 
 def _hours(span: timedelta | None) -> float | None:
     return None if span is None else span.total_seconds() / 3600
+
+
+# What a failure was about, by its kind, from the one subject `canopy health` gives it: a worker's or a plan's ticket,
+# a review's PR, a task's `task:ID`, and a chore's name, which is its sort.
+def _failure(found: health.Failure) -> HealthFailure:
+    subject = found.subject
+    task = subject.removeprefix(_TASK) if found.kind == "tasks" and subject is not None else None
+    return HealthFailure(
+        kind=found.kind,
+        id=found.id,
+        what=found.what,
+        status=found.status,
+        started_at=db.parse_time(found.started_at),
+        ticket=subject if found.kind in {"workers", "plans"} else None,
+        pr_url=subject if found.kind == "reviews" else None,
+        chore=found.what if found.kind == "chores" else None,
+        task_id=int(task) if task is not None and task.isdigit() else None,
+        note=found.note,
+        cost_usd=found.cost_usd,
+    )
+
+
+def _counts(found: Mapping[spend.Kind, int]) -> HealthCounts:
+    return HealthCounts(
+        overseer=found.get("overseer", 0),
+        workers=found.get("workers", 0),
+        plans=found.get("plans", 0),
+        chores=found.get("chores", 0),
+        reviews=found.get("reviews", 0),
+        tasks=found.get("tasks", 0),
+    )

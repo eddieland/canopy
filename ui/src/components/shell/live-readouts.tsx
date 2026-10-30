@@ -136,7 +136,7 @@ function LastTick({ tick }: { tick: Tick }) {
             {/* One link, as the other readouts are, so the word's and the age's facts are its titles rather than tips
             of their own over the card. */}
             <Link
-                to="/runs/ticks/$id"
+                to="/workspace/ticks/$id"
                 params={{ id: String(tick.id) }}
                 className={cn(
                     'readout text-xs whitespace-nowrap underline-offset-4 hover:underline',

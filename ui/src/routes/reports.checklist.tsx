@@ -17,7 +17,7 @@ import {
 } from '@/lib/checklist'
 import type { RepoItems } from '@/lib/checklist'
 import { repoListFrom, repoListOf, reposIn, reposWords } from '@/lib/repo-filter'
-import { windowName } from '@/lib/spend'
+import { windowName } from '@/lib/report-window'
 import { cn } from '@/lib/utils'
 
 interface ChecklistSearch {

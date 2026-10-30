@@ -135,17 +135,19 @@ export const PAGE_GUIDES = {
     '/pull-requests/reviews/': 'pull-requests#the-reviews-page',
     '/pull-requests/reviews/$id': 'pull-requests#a-reviews-page',
     '/pull-requests/reviews/$id_/run': 'pull-requests#a-reviews-run',
-    '/runs/': 'runs',
-    '/runs/$id': 'runs#a-runs-page',
-    '/runs/worktrees': 'runs#worktrees',
+    '/workspace/': 'runs#the-workspace-page',
+    '/workspace/runs/': 'runs',
+    '/workspace/runs/$id': 'runs#a-runs-page',
+    '/workspace/worktrees': 'runs#worktrees',
     '/chores/': 'chores',
     '/chores/$name': 'chores#a-chores-page',
     '/chores/$name_/runs/$id': 'chores#a-chores-page',
-    '/runs/ticks/': 'ticks',
-    '/runs/ticks/$id': 'ticks#a-ticks-page',
+    '/workspace/ticks/': 'ticks',
+    '/workspace/ticks/$id': 'ticks#a-ticks-page',
     '/reports/': 'reports',
     '/reports/spend': 'reports#the-spend-page',
     '/reports/checklist': 'reports#the-checklist-page',
+    '/reports/health': 'reports#the-health-page',
     '/memory': 'memory',
     '/search': 'overview#search',
     '/system': 'overview#system-resources',
@@ -164,6 +166,11 @@ export const PAGE_GUIDES = {
         | '/ticks/'
         | '/ticks/$id'
         | '/worktrees'
+        | '/runs/'
+        | '/runs/$id'
+        | '/runs/ticks/'
+        | '/runs/ticks/$id'
+        | '/runs/worktrees'
         | '/guide/'
         | '/guide/$page'
     >,
@@ -225,8 +232,8 @@ export function guideFor(routeId: keyof FileRoutesById | undefined): GuideFor | 
 
 /**
  * Where a link written as `href` on page `from` goes, or undefined when it goes nowhere the guide links: `overview`
- * or `overview#the-rail` is a page of the guide, `#the-rail` a heading on `from`, `/runs` a section of the app, and
- * an http or https URL the web. A link to anything else is left as its characters.
+ * or `overview#the-rail` is a page of the guide, `#the-rail` a heading on `from`, `/workspace` a section of the app,
+ * and an http or https URL the web. A link to anything else is left as its characters.
  */
 export function guideTarget(href: string, from: string): GuideTarget | undefined {
     if (WEB.test(href)) {

@@ -56,7 +56,8 @@ people other than its PR's author left, and how long it took: to its PR's merge,
 ready, or asked for review after, to the first review, each on GitHub's clock as the `vcs` source read it (§30). Where
 a PR has no such time, read before canopy kept them, a proxy stands in, the tick that marked the ticket done and its
 first worker run that ended `done`; the page says which a figure used, rather than pass a proxy off as GitHub's own
-clock. The spend page, by day, sits under it.
+clock. The spend page, by day, sits under it, and the health page, `canopy health`'s report over the same local days
+with each day's failed runs by kind.
 
 `spend.monthly_budget_usd` is what the operator means a local calendar month of agent spend to cost: canopy's runs and
 the runtime's sessions outside canopy (§13, Every session's spend), canopy's share shown beside the whole. `canopy
