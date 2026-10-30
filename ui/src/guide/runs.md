@@ -233,9 +233,10 @@ treehouse takes each pool's lock for a moment, which is why it doesn't do so con
 A worker, a planner, or a reviewer posts updates on its progress while it runs: a summary for someone who skipped the
 transcript, what it's doing now, what it finished with the proof of each (`tests pass: 42/42`, `pushed abc123`, or the
 honest `not pushed`), what's left, and anything in its way it's working around. A long job adds its steps, each `to
-do`, `working`, `blocked`, `done`, or `skipped`, and a meter fills in a segment per step, with how many are done and the
-stage under way; a worker with an approved plan takes them from the plan, so you watch the plan you approved being
-done, or not. A step working longer than a fifth of the run's time limit reads `stuck`. Each update replaces the last.
+do`, `working`, `blocked`, `done`, or `skipped`, and a meter fills in a segment per step done, the one under way only
+halfway, with how many are done and the stage under way; a worker with an approved plan takes them from the plan, so
+you watch the plan you approved being done, or not. A step working longer than a fifth of the run's time limit reads
+`stuck`. Each update replaces the last.
 It's the agent's own account, so read it as you'd read a colleague's standup: useful, and checked against the diff.
 
 It reads as one checklist: the steps, the working one pulsing with what the agent says it's doing now under it, or,
