@@ -126,7 +126,7 @@ function WorkingRow({ item }: { item: RailItem }) {
                     <TicketTitle title={run.ticket_title} className="pl-4 text-xs font-normal text-muted-foreground" />
                     <PhaseLine run={run} />
                     {run.state === 'running' && run.card !== null && run.card.steps.length > 0 && (
-                        <ProgressMeter card={run.card} className="mt-0.5 ml-4" />
+                        <ProgressMeter card={run.card} running className="mt-0.5 ml-4" />
                     )}
                 </Link>
             )
