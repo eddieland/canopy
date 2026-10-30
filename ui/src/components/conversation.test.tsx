@@ -172,6 +172,20 @@ describe('Conversation', () => {
         expect(screen.queryByText('seen')).toBeNull()
     })
 
+    it("lays out a body's Markdown, a labelled link showing its URL", async () => {
+        const body =
+            'Two things to settle:\n\n- the **color**\n- the `csv` header\n\nSee [the doc](https://example.test/d)'
+        await renderRouted(<Conversation messages={[message({ id: 7, body })]} />, { client: knowing(5) })
+        expect(screen.getByText('Two things to settle:')).toBeDefined()
+        expect(
+            within(item(7))
+                .getAllByRole('listitem')
+                .map((li) => li.textContent),
+        ).toEqual(['the color', 'the csv header'])
+        expect(within(item(7)).getByRole('code').textContent).toBe('csv')
+        expect(within(item(7)).getByRole('link').textContent).toBe('https://example.test/d')
+    })
+
     it('shows every body as text, markup kept as its characters and only its web addresses linked', async () => {
         const body = '<script>alert(1)</script> see https://example.test/a and javascript:alert(1)'
         await renderRouted(<Conversation messages={[message({ id: 7, body })]} />, { client: knowing(5) })

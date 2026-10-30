@@ -1100,7 +1100,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   a muted line saying when and how, with the branch and PRs it dropped under it, and that attempt's messages folded
   under `Show N earlier messages`, a `Disclosure`, and dimmed, since the loop no longer reads them. Only the latest
   says the loop reads what came after. The panel's count is of the messages after the latest forget.
-  Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
+  Bodies are rich text (below), on a 24px line (`leading-6`): always text, but for their URLs. An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
   (`src/lib/acknowledged.ts`), and a plain `seen` chip once one has, so a reply never goes unacknowledged; an
   `awaiting_reply` item it answered carries an `answered` chip, with a line saying it leaves at the next tick, and so
@@ -1241,13 +1241,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   until turned on, across reloads (`src/lib/pretty-output.ts`), as a list keeps its order; a run's keeps it for the
   page alone.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
-  summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
-  `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` (at `text-xs`) and
-  **strong** inline.
+  summary, a decision's rationale, and a conversation's message: line breaks kept, `-` and `1.` lists (nested by
+  indent), `#` headings as a `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and
+  `code` (at `text-xs`) and **strong** inline.
   It reads nothing else: other markup, a labelled link's included, stays characters. Every piece is React text, and
   its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
-  A conversation's bubbles keep their own `whitespace-pre-wrap`.
+  A conversation's bubbles lay out their bodies with it too, their line breaks kept, since the operator and the
+  workers break lines on purpose; on a raised bubble its code sits on `background`.
 - **The guide** (`/guide/PAGE`, `src/lib/guide.ts`, `GuideText`) is the operator's documentation, a page each, as
   Markdown in `src/guide/` (docs/design/CONVERSATIONS.md §22), laid out as a documentation site rather than in panels.
   On the left, the pages by group (`SOURCES`), each group a heading over its pages on a hairline, the page shown in
