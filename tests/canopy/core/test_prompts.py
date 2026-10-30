@@ -94,6 +94,16 @@ def test_a_plan_prompt_needs_its_authorization_and_the_operators_messages(canopy
         prompts.render_worker(cfg, "plan", values)
 
 
+def test_a_prompt_splits_at_its_first_run_marker_line_into_body_and_message() -> None:
+    marker = prompts.RUN_MARKER
+    parts = prompts.split(f"# fixed\n\nWork.\n\n{marker}\n\n## Run\n\nPROJ-1\n{marker}\n")
+    assert parts == prompts.Split("# fixed\n\nWork.\n", f"## Run\n\nPROJ-1\n{marker}\n")
+    assert parts.whole == f"# fixed\n\nWork.\n\n## Run\n\nPROJ-1\n{marker}\n"
+    # A marker inside a line is no marker, and a prompt without one is all message.
+    assert prompts.split(f"Work. {marker}\n") == prompts.Split(None, f"Work. {marker}\n")
+    assert prompts.split("Work.\n").whole == "Work.\n"
+
+
 def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
@@ -314,7 +324,7 @@ def test_open_pr_names_the_mcp_or_only_the_skill() -> None:
 
 @pytest.mark.parametrize(
     ("kind", "before"),
-    [("implement", "Never target another branch."), ("resume", "with the ticket key in the\ntitle.")],
+    [("implement", "Never target another branch."), ("resume", "with the ticket key\nin the title.")],
 )
 def test_shipped_prompts_that_open_prs_say_how(canopy_env: CanopyEnv, kind: str, before: str) -> None:
     text = prompts.render_worker(
@@ -512,7 +522,7 @@ def test_shipped_prompts_that_commit_say_how_to_bring_a_base_in(
     with_rebase(canopy_env)
     text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
     assert "rebase onto `origin/<base>`, and never merge it in" in text
-    assert "`git push --force-with-lease origin HEAD:refs/heads/agent/PROJ-1-work`" in text
+    assert "`git push --force-with-lease origin HEAD:refs/heads/<branch>`" in text
     assert "Never rebase" not in text
 
 
@@ -590,10 +600,10 @@ def test_every_run_kind_has_a_worker_prompt_and_every_kind_but_plan_a_private_on
 def test_a_resume_names_each_of_its_reasons_in_the_vocabularys_order() -> None:
     note = prompts.reasons_note(["review", "ci"], private=False)
     assert note.splitlines() == [
-        '- `ci`: checks failed on the PR: fix them, as "Failed checks" below says.',
+        '- `ci`: checks failed on the PR: fix them, as "Failed checks" says.',
         (
             "- `review`: review comments, or canopy's review findings, to address, as \"canopy's review\" and "
-            '"Reviewers" below say.'
+            '"Reviewers" say.'
         ),
     ]
     # A private ticket's reply is the operator's, in its conversation; every reason has its line.

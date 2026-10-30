@@ -16,7 +16,7 @@ from canopy.core.config import load
 from canopy.core.vocab import ResumeReason, RunKind
 from tests.canopy.helpers import KEY, agent_runs, listed, planner_does, pool_statuses, trailers_on
 from tests.canopy.review_helpers import CLEAN, feature_commit, head, reviewer_reports
-from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
+from tests.canopy.scenario_helpers import Ran, Scenario, dispatches, pushes, reviews
 from tests.conftest import CanopyEnv, GitPool
 
 MODEL = "acme/fake-model-1"
@@ -24,6 +24,13 @@ OTHER = "acme/fake-model-2"
 PLAN = dispatches(kind=RunKind.PLAN)
 #: A resume that needs no cursor and no review: its PR conflicts with its base.
 RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CONFLICT])
+
+
+def snapshot_of(scenario: Scenario, run: Ran) -> str:
+    """The digest of the snapshot made for `run`: the config it ran under, and its prompt's body (DESIGN §13)."""
+    cfg = load(scenario.env.root, scenario.env.user_file)
+    bodies, _ = definitions.run_prompt(run.prompt, cfg.runtime.worker_cmd)
+    return definitions.digest(cfg, bodies=bodies)
 
 
 def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(
@@ -37,7 +44,7 @@ def test_a_run_on_a_chosen_model_records_it_and_its_definition_names_it(
     run = scenario.run(worker=pushes())
     assert run.row["model"] == MODEL
     # What the run records is what it ran on: the snapshot made for the config it ran under names the model.
-    digest = definitions.digest(load(scenario.env.root, scenario.env.user_file))
+    digest = snapshot_of(scenario, run)
     snapshot = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest
     assert f'\nmodel: "{MODEL}"\n' in (snapshot / "agents" / "canopy-worker.md").read_text()
     # The list is read in the workspace root, not in the run's slot, whose own runtime config could change it: at the
@@ -141,7 +148,7 @@ def test_a_run_at_a_variant_records_it_and_its_definition_names_it(
     scenario.configures(runtime={"models": {"worker": f"{MODEL}@high"}})
     run = scenario.run(worker=pushes())
     assert run.row["model"] == f"{MODEL}@high"
-    digest = definitions.digest(load(scenario.env.root, scenario.env.user_file))
+    digest = snapshot_of(scenario, run)
     worker = scenario.env.root / ".canopy" / definitions.RUNTIME_DIR / digest / "agents" / "canopy-worker.md"
     assert f'\nmodel: "{MODEL}"\nvariant: "high"\n' in worker.read_text()
     # The variants are read only when one is chosen: the runtime drops one its model lacks without a word.

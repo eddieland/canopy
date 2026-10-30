@@ -297,8 +297,10 @@ def reviewer(
     Returns:
         Its argv behind the sandbox, if `repo` is sandboxed, its stdin, its environment, and its definitions.
     """
-    snapshot = definitions.ensure(ctx.state_dir, ctx.config, models)
-    command = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, title)
+    # The prompt's fixed instructions are the reviewer's body, in a snapshot every review shares (DESIGN §13).
+    bodies, message = definitions.run_prompt(prompt, ctx.config.runtime.review_cmd)
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config, models, bodies)
+    command = render_command(ctx.config.runtime.review_cmd, message, snapshot, title)
     argv = sandboxing.wrap(ctx.config.runtime, [repo], "review", command.argv, snapshot)
     # The operator's commands refuse inside canopy's own runs (DESIGN §22). The reviewer reads its checkout's history
     # through canopy's read-only git tools, over that checkout alone, named as its link is (DESIGN §27), and says

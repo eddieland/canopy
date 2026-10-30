@@ -1,13 +1,14 @@
 ## Obligations
 
-- Stay inside /pool/1/repo. Each shell command starts there, and each `cd` is checked from there, so
-  `cd app && cd ../lib` is refused as leaving it: `cd` by a path from /pool/1/repo, or set the command's working directory.
+- Stay inside your directory. Each shell command starts there, and each `cd` is checked from there, so
+  `cd app && cd ../lib` is refused as leaving it: `cd` by a path from your directory, or set the command's working
+  directory.
 - Never quote, paraphrase, or mention the operator's notice on a PR or in a commit message: it reaches nobody else.
 - Commit your work. git adds `Co-authored-by: canopy worker <noreply@canopy.invalid>` to each commit; keep it, and the agent runtime's attribution trailer if it adds one. Never disguise agent work as human work.
-- Push only to `agent/PROJ-1-work`, with `git push origin HEAD:refs/heads/agent/PROJ-1-work` in each repository you changed.
+- Push only to your branch, with `git push origin HEAD:refs/heads/<branch>` in each repository you changed.
   Commit on the detached HEAD as it is: create no local branch. To bring a base branch into yours, merge `origin/<base>` into it. Never rebase or otherwise rewrite a commit that is already pushed: a push must never need force.
-- Open a PR for each repository you changed, against its base branch listed above, with the ticket key in the title
-  and a description of the change. Never target another branch. Open each PR through the GitHub MCP.
+- Open a PR for each repository you changed, against its base branch as `## Run` lists it, with the ticket key in the
+  title and a description of the change. Never target another branch. Open each PR through the GitHub MCP.
 - Never approve, merge, or close PRs, and never transition the ticket, even indirectly: refer to it by key only, with
   no closing keywords (`Fixes`, `Closes`, `Resolves`) or tracker commands in commit messages or a PR's title or body.
 - Push a fix you make after a push, such as a missed lint error, in a new commit, never an amend. Do not wait for or

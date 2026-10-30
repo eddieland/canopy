@@ -119,7 +119,7 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(scenario: S
     assert "This ticket is not stacked on another ticket's branch." in text
     assert ": branch `agent/PROJ-2-second` from `main`; PR: " in text
     assert "- `retarget`: the PR this ticket was stacked on has merged" in text
-    assert "change this ticket's PR to target its repository's base branch listed above" in text
+    assert "change this ticket's PR to target its repository's base branch as `## Run` lists it" in text
     assert subjects(git_pool, "agent/PROJ-2-second")[:2] == ["PROJ-2: conflict fix", "PROJ-2: stacked"]
 
     # Retargeted, it is stacked no more, and its latest run shows no base.

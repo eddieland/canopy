@@ -1250,7 +1250,6 @@ def _follow_ups_note(ctx: Context, key: str, *, private: bool) -> str:
     if limit == 0:
         return prompts.no_follow_ups("the operator set policy.max_follow_ups to 0")
     return prompts.follow_ups(
-        key,
         limit,
         [r.name for r in ctx.workspace.repos],
         needs_human=ctx.config.tracker.needs_human_label,

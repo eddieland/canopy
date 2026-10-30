@@ -69,7 +69,9 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(scenario: S
     argv = worker["argv"]
     assert isinstance(argv, list)
     assert "canopy-worker-private" in argv
-    assert "# canopy private worker: implement" in str(argv[-1])
+    # Its fixed instructions are its agent's body; it is sent the run's own (DESIGN §13).
+    assert run.prompt.startswith("# canopy private worker: implement")
+    assert str(argv[-1]).startswith(f"## Run\n\nYou are working ticket {KEY} in ")
     assert run.status == "blocked"
     [report, question] = db.messages_of(conn, conversation.TICKET, KEY, 10)
     assert (report.kind, report.body, report.run_id) == ("report", "half done", run.id)
