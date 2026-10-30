@@ -383,6 +383,9 @@ opencode api --server http://127.0.0.1:4096 agent.list
 To run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config, run
 `canopy sandbox setup` and follow [SANDBOX.md](SANDBOX.md). It is opt-in, and not yet proven.
 
+If your CI is not GitHub Actions, such as Jenkins, your workers can see its checks go red but not read their logs
+until you give them a way: [OTHER_CI.md](OTHER_CI.md).
+
 To have your own agent judge how canopy is working for you, from where the spend goes to whether the planner is on the
 right model, paste one of the prompts in [INSIGHTS.md](INSIGHTS.md) into a session with canopy's skill.
 
