@@ -244,6 +244,10 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   overseer's `decisions` per row of §7's phase table, counted by distinct situation as well as by decision
   (2026-10-15 F26), each disagreement read and attributed (the rationale says which side was right), and what the
   connectors cost, in calls and seconds per tick, from `connector_runs`. M37 closes against it.
+- **S69. The overseer reads the journal, measured** (M37). After a day of `canopy loop` against the real queue,
+  re-measure with MEASUREMENTS' prompt (Re-measuring). Expect tool-result tokens per tick at a tenth of the first day's
+  median (about 14k), and no action missed over the day, checked against the derivation as M36's agreement counts are.
+  Record the numbers in `MEASUREMENTS.md`.
 
 ## Retired
 

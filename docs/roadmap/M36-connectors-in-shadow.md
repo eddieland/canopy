@@ -13,6 +13,6 @@ Learned: closed by the operator on a few days of real use of both connectors, be
 with the agreement and cost measured, which is SCENARIOS S68; reading Jira and GitHub live are S56 and S57. M37 was
 started ahead of that measurement (2026-10-22) and settled the proposed tracker query run in code: the harness records
 a fresh read's result as `canopy queried` would.
-Next: M37's Accept still checks against the derivation as here, so S68 is run before it closes. Whether one failed
+Next: M37 closed on real use (2026-10-30) before S68 ran, so S68 and M37's S69 are run together. Whether one failed
 run raises `connector_failed` stays open (§30), M39 having settled that a poll's failure the tick's read clears raises
 nothing.
