@@ -10,11 +10,12 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import db, review_runs
+from canopy.core import cards, db, review_runs
 from canopy.core.config import ConfigError, load
 from canopy.core.vocab import Decider, ReviewRunStatus
+from canopy.infra import logs
 from canopy.loop import attention
-from tests.canopy.helpers import KEY, Called, context, in_tick, messages, operator, raises, seen, waits
+from tests.canopy.helpers import KEY, Called, context, in_tick, messages, operator, plan_run, raises, seen, waits
 from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import CanopyEnv
 
@@ -130,6 +131,30 @@ def test_an_item_whose_pr_has_a_high_impact_review_reaches_the_operator_first(
         "+ PROJ-5 needs_author: PROJ-5 detail",
     ]
     assert [i.ticket_key for i in attention.listed(context(canopy_env))] == ["PROJ-4", "PROJ-3", "PROJ-5"]
+
+
+def test_a_running_runs_question_is_the_web_uis_alone(
+    scenario: Scenario,
+    canopy_env: CanopyEnv,
+    notified: Path,
+    tmp_path: Path,
+) -> None:
+    """The operator answers it by letter: neither the overseer, `attention.md`, nor a sink hears of it (DESIGN §41)."""
+    scenario.tick(*recorded(("PROJ-3", "needs_author")))
+    run_id = plan_run(scenario.conn, tmp_path)
+    question = {"ask": "Keep the old endpoint?", "options": ["keep it", "remove it"], "recommend": "A"}
+    card = cards.Card.model_validate({"summary": "Fixing it.", "now": "testing", "question": question})
+    cards.record_call(scenario.conn, "runs", run_id, card)
+    ctx = context(canopy_env)
+    assert [(i.ticket_key, i.reason) for i in attention.shown(ctx)] == [
+        ("PROJ-3", "needs_author"),
+        (f"run:{run_id}", "run_question"),
+    ]
+    assert [i.reason for i in attention.listed(ctx)] == ["needs_author"]
+    assert [i["reason"] for i in attention.for_overseer(ctx.conn)] == ["needs_author"]
+    attention.publish(ctx, logs.for_tick(None))
+    assert len(messages(notified)) == 1
+    assert f"run:{run_id}" not in (canopy_env.state_dir / "attention.md").read_text()
 
 
 def test_failed_notify_is_retried_next_tick(scenario: Scenario, canopy_env: CanopyEnv, notified: Path) -> None:

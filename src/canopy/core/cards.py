@@ -97,6 +97,12 @@ STALE_MINUTES = 10
 #: The letters a question's options go by, in order, and so how many it may have.
 type Letter = Literal["A", "B", "C", "D", "E"]
 LETTERS: tuple[Letter, ...] = ("A", "B", "C", "D", "E")
+#: The attention reason of a running run's question that waits on the operator's answer (DESIGN §41), and where a
+#: ticket key would be, how its item names the run: `run:41` for a worker's or a planner's, `review:7` for a review's.
+#: A ticket key has no colon (DESIGN §17), so neither can equal one.
+REASON = "run_question"
+RUN_PREFIX = "run:"
+REVIEW_PREFIX = "review:"
 
 
 def _line(value: str) -> str:
@@ -406,6 +412,53 @@ def of(row: sqlite3.Row | records.Row) -> Standing:
     return Standing(card, at, calls_since, since, asked, answer if answered is not None else None, answered)
 
 
+def waiting(standing: Standing) -> Question | None:
+    """The question a run's card asks while it waits on the operator: asked, and not yet answered.
+
+    Returns:
+        The question; None with none, or one answered.
+    """
+    question = standing.card.question if standing.card is not None else None
+    if question is None or standing.asked_at is None or standing.answer is not None:
+        return None
+    return question
+
+
+def questions(conn: sqlite3.Connection) -> list[items.Item]:
+    """An attention item for each running run, worker's, planner's, or review's, whose card asks a question unanswered.
+
+    Read from the journal as it is listed, so one opens with the update that asks it and is gone once the operator
+    answers, the agent asks none, or the run ends (DESIGN §41). Each names its run where a ticket key would be, and
+    says the question in the agent's words, which are text to show, never to act on (TRUST_MODEL T1).
+
+    Returns:
+        The runs' items, then the reviews', each oldest first, open since the question was asked.
+    """
+    # Written out, not bound, so the running runs' partial indexes serve it, however long the history behind them.
+    asking = "status = 'running' AND card_asked_at IS NOT NULL AND card_answer IS NULL"
+    runs = records.select(records.Run).where(asking).order_by("id").all(conn)
+    reviews = records.select(records.ReviewRun).where(asking).order_by("id").all(conn)
+    found = [_item(f"{RUN_PREFIX}{run.id}", f"{run.kind}, {run.ticket_key}", of(run)) for run in runs]
+    found += [_item(f"{REVIEW_PREFIX}{review.id}", f"of {review.pr_url}", of(review)) for review in reviews]
+    return [item for item in found if item is not None]
+
+
+def _item(ref: str, what: str, standing: Standing) -> items.Item | None:
+    """The attention item of the question `standing` waits on, about the run `ref`, which is `what` it is.
+
+    Returns:
+        The item, or None when its card no longer reads as asking one.
+    """
+    question = waiting(standing)
+    if question is None or standing.asked_at is None:
+        return None
+    detail = (
+        f"{ref} ({what}) asks you, recommends {question.recommend}: {question.ask}; "
+        f"answer with `canopy reply {ref} LETTER`"
+    )
+    return items.Item(ref, REASON, detail, db.format_time(standing.asked_at))
+
+
 def percent(card: Card) -> int | None:
     """How much of a card's steps is done: its `done` steps' share of those not skipped, rounded down.
 
@@ -471,8 +524,8 @@ def asking(standing: Standing, ref: str, now: datetime | None = None) -> str | N
     Returns:
         `asks you, 3m: <question>  canopy reply run:41 A-C (recommends B)`; None with no question, or one answered.
     """
-    question = standing.card.question if standing.card is not None else None
-    if question is None or standing.asked_at is None or standing.answer is not None:
+    question = waiting(standing)
+    if question is None or standing.asked_at is None:
         return None
     age = items.age(db.format_time(standing.asked_at), now)
     letters = f"{LETTERS[0]}-{LETTERS[len(question.options) - 1]}"

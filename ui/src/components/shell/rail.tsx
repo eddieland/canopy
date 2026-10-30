@@ -17,7 +17,7 @@ import type { Clock } from '@/lib/clock'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import { choreRunRef, reviewRef, runRef, taskRunRef } from '@/lib/refs'
 import { runPhase, useQuips } from '@/lib/run-phase'
-import { railWork } from '@/lib/run-state'
+import { asksYou, railWork } from '@/lib/run-state'
 import type { RailItem } from '@/lib/run-state'
 import { taskTitle } from '@/lib/tasks'
 import { stamp } from '@/lib/time'
@@ -106,23 +106,26 @@ function itemKey(item: RailItem): string {
 /**
  * One row of what is working, opening its page: a dot in its state's color, what it works on (a ticket's key, a PR, a
  * chore, a task's run), how long it has run or `waiting on you`, and under it what it is: the ticket's title, the
- * review, the run, the task's first line. A worker run adds what it is doing, `planning`, on a line of its own, and
- * while it runs, its steps' meter when its progress names any; a
- * task's run has no kind or reasons to name a phase by, and its first line is the operator's own words.
+ * review, the run, the task's first line. A worker run or a review whose progress asks you a question you have not
+ * answered reads `asks you` in place of its age, its dot and tint those of what waits on you, though it runs on. A
+ * worker run adds what it is doing, `planning`, on a line of its own, and while it runs, its steps' meter when its
+ * progress names any; a task's run has no kind or reasons to name a phase by, and its first line is the operator's own
+ * words.
  */
 function WorkingRow({ item }: { item: RailItem }) {
     switch (item.kind) {
         case 'run': {
             const { run } = item
+            const asks = asksYou(run)
             return (
                 <Link
                     to="/runs/$id"
                     params={{ id: String(run.id) }}
                     title={`${runRef(run.id)} ${run.kind}`}
-                    className={row(run.state)}
+                    className={row(asks ? 'blocked' : run.state)}
                     data-testid={`rail-run-${run.id}`}
                 >
-                    <RowHead state={run.state} subject={run.ticket_key} started={run.started_at} />
+                    <RowHead state={run.state} subject={run.ticket_key} started={run.started_at} asks={asks} />
                     <TicketTitle title={run.ticket_title} className="pl-4 text-xs font-normal text-muted-foreground" />
                     <PhaseLine run={run} />
                     {run.state === 'running' && run.card !== null && run.card.steps.length > 0 && (
@@ -134,15 +137,16 @@ function WorkingRow({ item }: { item: RailItem }) {
         case 'review': {
             const { review } = item
             const pr = pullRequestLabel(review.pr_url)
+            const asks = review.state === 'running' && review.asks_you
             return (
                 <Link
                     to="/pull-requests/reviews/$id"
                     params={{ id: String(review.id) }}
                     title={`${reviewRef(review.id)} of ${pr}`}
-                    className={row(review.state)}
+                    className={row(asks ? 'blocked' : review.state)}
                     data-testid={`rail-review-${review.id}`}
                 >
-                    <RowHead state={review.state} subject={pr} started={review.started_at} />
+                    <RowHead state={review.state} subject={pr} started={review.started_at} asks={asks} />
                     <Under>
                         {review.ticket_key === null
                             ? reviewRef(review.id)
@@ -198,17 +202,31 @@ function row(state: RunState): string {
     )
 }
 
-/** A working row's head line: its dot, what it works on, and how long it has run, or `waiting on you`. */
-function RowHead({ state, subject, started }: { state: RunState; subject: string; started: string }) {
+/**
+ * A working row's head line: its dot, what it works on, and how long it has run, or `waiting on you`. One that `asks`
+ * you a question as it runs reads `asks you` instead, on the dot of what waits on you.
+ */
+function RowHead({
+    state,
+    subject,
+    started,
+    asks = false,
+}: {
+    state: RunState
+    subject: string
+    started: string
+    asks?: boolean
+}) {
+    const waits = asks ? 'asks you' : state === 'blocked' && 'waiting on you'
     return (
         <span className="flex items-center gap-2 font-mono text-xs">
-            <RunDot state={state} />
+            <RunDot state={asks ? 'blocked' : state} />
             <span className="min-w-0 truncate font-medium text-foreground">{subject}</span>
             <span className="ml-auto shrink-0">
-                {state === 'blocked' ? (
-                    <span className="font-sans whitespace-nowrap text-status-blocked">waiting on you</span>
-                ) : (
+                {waits === false ? (
                     <Age at={started} />
+                ) : (
+                    <span className="font-sans whitespace-nowrap text-status-blocked">{waits}</span>
                 )}
             </span>
         </span>

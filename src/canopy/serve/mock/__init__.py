@@ -439,14 +439,16 @@ def _attention(ctx: Context) -> list[Item]:
     """The fixtures' list, less a finding the operator dismissed, as `loop.attention.listed` leaves one out.
 
     Returns:
-        `ATTENTION` without the findings dismissed in the mock journal, and the tasks' items as the journal has them.
+        `ATTENTION` without the findings dismissed in the mock journal, the tasks' items as the journal has them, and
+        the running runs' questions unanswered, as `loop.attention.shown` adds them.
     """
     dismissed = {
         (f"chore:{f.chore}", f.finding.id)
         for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace, starts=ctx.finding_starts)
         if f.dismissed
     }
-    return [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed] + tasks.attention(ctx.conn)
+    listed = [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed] + tasks.attention(ctx.conn)
+    return listed + cards.questions(ctx.conn)
 
 
 def _end_run(ctx: Context, run: records.Run) -> bool:

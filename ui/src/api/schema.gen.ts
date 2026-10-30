@@ -2584,6 +2584,16 @@ export type components = {
              */
             repo: string | null;
             /**
+             * Review
+             * @description The running review whose question it is, by its id (DESIGN §41): `run_question`.
+             */
+            review: number | null;
+            /**
+             * Run
+             * @description The running worker's or planner's run whose question it is, by its id (DESIGN §41): `run_question`.
+             */
+            run: number | null;
+            /**
              * Since
              * Format: date-time
              * @description When the unbroken run of ticks that recorded it began, or its cause did if that came first or no tick records
@@ -2592,7 +2602,7 @@ export type components = {
             since: string;
             /**
              * Subject
-             * @description How the CLI names it: `PROJ-1`, `api`, `PROJ-1 (api)`, `chore:deps`.
+             * @description How the CLI names it: `PROJ-1`, `api`, `PROJ-1 (api)`, `chore:deps`, `run:41`.
              */
             subject: string;
             /**
@@ -2603,7 +2613,8 @@ export type components = {
             task: number | null;
             /**
              * Ticket Key
-             * @description The ticket it is about, when it is about one; a chore's, a task's, and a repository's items have none.
+             * @description The ticket it is about, when it is about one; a chore's, a task's, and a repository's items have none. A run's
+             *     question is about its run's ticket, and a review's about the review's, when it has one.
              */
             ticket_key: string | null;
             /**
@@ -7269,6 +7280,12 @@ export type components = {
          * @description One review run of a PR at a commit (DESIGN §21): canopy's own review, which is never on the PR (D114).
          */
         ReviewSummary: {
+            /**
+             * Asks You
+             * @description Whether it runs with a question in its progress that waits on the operator's answer (DESIGN §41).
+             * @default false
+             */
+            asks_you: boolean;
             /**
              * Cost Usd
              * @description What the agent runtime reported it cost, in US dollars; None when it reported nothing.

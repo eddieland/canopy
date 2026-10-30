@@ -171,9 +171,12 @@ function reviewStatuses(reviews: ReviewSummary[]): string {
     return reviews.map((review) => `${review.id}:${review.state}`).join(',')
 }
 
-/** What of a review run's row moves as it works and ends: its status, and its cost at each model call's end. */
+/**
+ * What of a review run's row moves as it works and ends: its status, its cost at each model call's end, and whether its
+ * progress asks the operator a question, which its page shows.
+ */
 function reviewLogged(review: ReviewSummary): string {
-    return `${review.status}:${review.cost_usd ?? ''}`
+    return `${review.status}:${review.cost_usd ?? ''}:${review.asks_you}`
 }
 
 /** What moves as a running chore run's log grows: its status, and its cost at each model call's end. */
