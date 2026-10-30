@@ -10,6 +10,20 @@ export const FAILED_READ = 'its session could not be read, tried again later'
 export const UNREAD = 'unread'
 
 /**
+ * What names no model, as the runtime picks its own: shown in muted sans wherever an id would be, never monospace,
+ * since it is no id.
+ */
+export const RUNTIME_DEFAULT = 'runtime default'
+
+/**
+ * A model at a variant as every page names it, `provider/model@variant`, from config's model and variant apart: the
+ * model alone at its default variant, never `at high`.
+ */
+export function withVariant(model: string, variant: string | null): string {
+    return variant === null ? model : `${model}@${variant}`
+}
+
+/**
  * Whether a session naming `served` ran on the model canopy `asked` for, as `provider/model[@variant]`: the same id, or
  * `asked` at a variant and `served` the model alone, since a session names a variant only when it is not the model's
  * default, and a run whose variant the runtime no longer lists is refused before it starts.

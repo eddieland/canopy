@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { mockRuns } from '@/api/mocks'
 import type { Run } from '@/api/types'
 
-import { modelNames, ranOn, runModelIds, sameModel, unservedReason } from './models'
+import { modelNames, ranOn, runModelIds, sameModel, unservedReason, withVariant } from './models'
 
 const [RUNNING, BLOCKED] = mockRuns as [Run, Run]
 
@@ -22,6 +22,23 @@ describe('modelNames', () => {
         expect(names.get('openai/gpt-5')).toBe('openai/gpt-5')
         expect(names.get('azure/gpt-5')).toBe('azure/gpt-5')
         expect(names.get('anthropic/claude-sonnet-4-5')).toBe('claude-sonnet-4-5')
+    })
+
+    it('keeps whole a model a gateway and its maker both serve, short when one alone does', () => {
+        const both = modelNames(['github-copilot/claude-sonnet-4.5@high', 'anthropic/claude-sonnet-4.5@high'])
+        expect([...both.values()]).toEqual([
+            'github-copilot/claude-sonnet-4.5@high',
+            'anthropic/claude-sonnet-4.5@high',
+        ])
+        const alone = modelNames(['github-copilot/claude-sonnet-4.5', 'github-copilot/gpt-5'])
+        expect([...alone.values()]).toEqual(['claude-sonnet-4.5', 'gpt-5'])
+    })
+})
+
+describe('withVariant', () => {
+    it('joins a model and its variant as one id, the model alone at its default', () => {
+        expect(withVariant('github-copilot/gpt-5', 'high')).toBe('github-copilot/gpt-5@high')
+        expect(withVariant('github-copilot/claude-sonnet-4.5', null)).toBe('github-copilot/claude-sonnet-4.5')
     })
 })
 
