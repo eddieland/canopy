@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
+import { Check } from 'lucide-react'
+import { useState } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
 
 import { tickQuery } from '@/api/queries'
@@ -303,16 +305,37 @@ function Head({
             )}
             {comment && <Chip>data, authorizes nothing</Chip>}
             {waiting && <Chip tone="blocked">waiting on you</Chip>}
-            {unread && (
-                <span title={unread.title}>
-                    <Chip tone="running">{unread.label}</Chip>
-                </span>
-            )}
-            {seen && (
-                <span title={SEEN}>
-                    <Chip>seen</Chip>
-                </span>
-            )}
+            <Receipt unread={unread} seen={seen} />
         </HeadLine>
+    )
+}
+
+/**
+ * Whether a tick has read one of the operator's messages: `waiting for the next tick` until one has, then `seen` with a
+ * check, in the accent, the operator's side. A message that was unread while the page showed it pops its `seen` in
+ * once, as the tick reads it: a small reward for a real change, never for a page that opens on it already read.
+ */
+function Receipt({ unread, seen }: { unread: Pending | null; seen: boolean }) {
+    const [waited, setWaited] = useState(unread !== null)
+    if (unread !== null && !waited) {
+        setWaited(true)
+    }
+    if (unread) {
+        return (
+            <span title={unread.title}>
+                <Chip tone="running">{unread.label}</Chip>
+            </span>
+        )
+    }
+    if (!seen) {
+        return null
+    }
+    return (
+        <span title={SEEN} className={cn(waited && 'animate-receipt')}>
+            <Chip className="border-accent/40 text-accent">
+                <Check aria-hidden className="size-3" />
+                seen
+            </Chip>
+        </span>
     )
 }
