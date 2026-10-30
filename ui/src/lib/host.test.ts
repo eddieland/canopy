@@ -65,12 +65,12 @@ describe('the load', () => {
     })
 
     it('heads somewhere once the last minute moves a tenth of the cores off the quarter hour', () => {
-        expect(loadTrend({ cores: 12, load: [6, 4, 4.5] })).toBe('rising')
-        expect(loadTrend({ cores: 12, load: [2, 3, 3.5] })).toBe('falling')
-        expect(loadTrend({ cores: 12, load: [2.41, 1.87, 1.52] })).toBe('steady')
-        expect(loadTrend({ cores: null, load: [1, 1, 0.4] })).toBe('rising')
-        expect(loadTrend({ cores: 2, load: [0.9, 0.7, 0.6] })).toBe('steady')
-        expect(loadTrend({ cores: 12, load: null })).toBeNull()
+        expect(loadTrend({ cores: 12, load: [6, 4, 4.5], time: null })).toBe('rising')
+        expect(loadTrend({ cores: 12, load: [2, 3, 3.5], time: null })).toBe('falling')
+        expect(loadTrend({ cores: 12, load: [2.41, 1.87, 1.52], time: null })).toBe('steady')
+        expect(loadTrend({ cores: null, load: [1, 1, 0.4], time: null })).toBe('rising')
+        expect(loadTrend({ cores: 2, load: [0.9, 0.7, 0.6], time: null })).toBe('steady')
+        expect(loadTrend({ cores: 12, load: null, time: null })).toBeNull()
     })
 })
 
@@ -83,7 +83,7 @@ describe('the header readout', () => {
 
     it('names the worst concern: a disk under the floor before a busy machine', () => {
         const host = mockHost({
-            cpu: { cores: 4, load: [6, 5, 4] },
+            cpu: { cores: 4, load: [6, 5, 4], time: null },
             disks: [disk({ holds: ['workspace', 'journal'], free: GIB })],
         })
 
@@ -97,7 +97,7 @@ describe('the header readout', () => {
     })
 
     it('calls a saturated machine busy, never broken', () => {
-        const host = mockHost({ cpu: { cores: 2, load: [3, 2, 1] } })
+        const host = mockHost({ cpu: { cores: 2, load: [3, 2, 1], time: null } })
 
         expect(hostReadout(host)).toBe('host busy')
         expect(hostPressure(host)).toBe('high')

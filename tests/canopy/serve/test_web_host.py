@@ -10,7 +10,7 @@ from pathlib import Path
 
 from canopy.core.context import Context
 from canopy.serve import host, mock
-from canopy.serve.schema.host import HostResources
+from canopy.serve.schema.host import CpuTime, HostResources
 from tests.canopy.web_helpers import client, signed_in_client
 
 NOW = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
@@ -19,8 +19,12 @@ GIB = 1024**3
 
 
 def fake_proc(root: Path) -> Path:
-    """A `/proc` with what the reader reads of it: memory, boot time, and this process's status, start, and files."""
+    """A `/proc` with what the reader reads of it.
+
+    Its memory, the processors' time, boot time, the pressure stalls, and this process's status, start, and files.
+    """
     (root / "self" / "fd").mkdir(parents=True)
+    (root / "pressure").mkdir()
     # Three the process holds, and the one listing the directory opens, which the kernel lists too.
     for fd in ("0", "1", "2", "3"):
         (root / "self" / "fd" / fd).touch()
@@ -28,7 +32,12 @@ def fake_proc(root: Path) -> Path:
         "MemTotal:       16384000 kB\nMemFree:  100 kB\nMemAvailable:    4096000 kB\n"
         "SwapTotal:       2048000 kB\nSwapFree:        1024000 kB\n",
     )
-    (root / "stat").write_text(f"cpu  1 2 3 4\nbtime {BOOT}\nprocesses 99\n")
+    # User, nice, system, idle, iowait, irq, softirq, steal, and the guests', which user counts: 300 busy of 1000.
+    (root / "stat").write_text(f"cpu  200 10 60 600 100 10 15 5 40 0\ncpu0 1 2 3 4\nbtime {BOOT}\nprocesses 99\n")
+    for kind, some in (("memory", "0.50"), ("io", "12.25")):
+        (root / "pressure" / kind).write_text(
+            f"some avg10={some} avg60=0.00 avg300=0.00 total=1\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0\n",
+        )
     (root / "self" / "status").write_text("Name:\tcanopy\nVmRSS:\t  204800 kB\nThreads:\t7\n")
     # Its name holds a space and a parenthesis, which the fields after it are counted past. Its 22nd field says it
     # started 100 clock ticks after the machine did.
@@ -45,6 +54,10 @@ def test_it_reads_the_machine_from_proc(tmp_path: Path) -> None:
     assert found.booted_at == datetime.fromtimestamp(BOOT, UTC)
     assert (found.memory.total, found.memory.available) == (16384000 * 1024, 4096000 * 1024)
     assert (found.memory.swap_total, found.memory.swap_free) == (2048000 * 1024, 1024000 * 1024)
+    tick = os.sysconf("SC_CLK_TCK")
+    assert found.cpu.time is not None
+    assert (found.cpu.time.busy, found.cpu.time.total) == (300 / tick, 1000 / tick)
+    assert (found.stalled.memory, found.stalled.io) == (0.005, 0.1225)
     assert (found.process.rss, found.process.threads, found.process.open_files) == (204800 * 1024, 7, 3)
     assert found.process.started_at is not None
     assert found.process.started_at.timestamp() - BOOT == 100 / os.sysconf("SC_CLK_TCK")
@@ -54,6 +67,7 @@ def test_off_linux_what_only_proc_says_is_none(tmp_path: Path) -> None:
     found = host.read_at([("workspace", tmp_path)], proc=tmp_path / "no-proc", now=NOW)
 
     assert (found.booted_at, found.memory.available, found.memory.swap_total) == (None, None, None)
+    assert (found.cpu.time, found.stalled.memory, found.stalled.io) == (None, None, None)
     assert (found.process.started_at, found.process.rss, found.process.open_files) == (None, None, None)
     # What the standard library gives everywhere is still there.
     assert found.memory.total is not None
@@ -121,9 +135,46 @@ def test_a_sample_is_what_the_graphs_draw_of_a_reading(tmp_path: Path) -> None:
     taken = host.sample(found)
 
     assert taken.load == 1.5
+    # One reading cannot say how busy the processors were: that takes two.
+    assert taken.cpu_busy is None
     assert taken.memory_used == (16384000 - 4096000) * 1024
+    assert taken.swap_used == (2048000 - 1024000) * 1024
+    assert (taken.memory_stalled, taken.io_stalled) == (0.005, 0.1225)
     assert taken.rss == 204800 * 1024
     assert [(d.path, d.free) for d in taken.disks] == [(d.path, d.free) for d in found.disks]
+
+
+def test_each_sample_measures_the_processors_against_the_reading_before(tmp_path: Path) -> None:
+    samples = host.Samples()
+    first = _reading(tmp_path, NOW)
+    later = _busy(_reading(tmp_path, NOW + timedelta(seconds=10)), busy=60, total=100)
+
+    samples.add(first)
+    samples.add(later)
+
+    assert [s.cpu_busy for s in samples.history().samples] == [None, 0.6]
+
+
+def test_counts_that_did_not_grow_measure_nothing() -> None:
+    before = CpuTime(busy=50, total=100)
+
+    assert host.busy_between(before, CpuTime(busy=50, total=100)) is None
+    # As across a reboot, which starts the counts over.
+    assert host.busy_between(before, CpuTime(busy=1, total=2)) is None
+    assert host.busy_between(None, before) is None
+    assert host.busy_between(before, CpuTime(busy=75, total=200)) == 0.25
+
+
+def test_a_proc_written_otherwise_reads_as_unread(tmp_path: Path) -> None:
+    proc = fake_proc(tmp_path / "proc")
+    (proc / "stat").write_text(f"\ncpu  1 2 x 4 5\nbtime {BOOT}\n")
+    (proc / "pressure" / "memory").write_text("some avg60=0.00\n")
+    (proc / "pressure" / "io").write_text("\nsome avg10=lots\n")
+
+    found = host.read_at([("workspace", tmp_path)], proc=proc, now=NOW)
+
+    assert (found.cpu.time, found.stalled.memory, found.stalled.io) == (None, None, None)
+    assert found.booted_at == datetime.fromtimestamp(BOOT, UTC)
 
 
 def test_the_sampler_reads_until_cancelled_and_skips_any_read_that_fails(tmp_path: Path) -> None:
@@ -182,6 +233,8 @@ def test_the_mock_serves_a_fixed_hour_ending_with_its_machine(tmp_path: Path) ->
     assert len(samples) == host.KEPT
     assert samples[-1]["at"] == "2026-10-08T12:30:00Z"
     assert samples[-1]["load"] == 2.41
+    # The mock's last reading measures its processors against the one before, as the server's do.
+    assert samples[-1]["cpu_busy"] == 0.15
     assert [d["path"] for d in samples[0]["disks"]] == ["/home/operator/acme", "/tmp"]  # noqa: S108
 
 
@@ -191,3 +244,11 @@ def _reading(tmp_path: Path, now: datetime) -> HostResources:
         fake_proc(proc)
     found = host.read_at([("workspace", tmp_path)], proc=proc, now=now)
     return found.model_copy(update={"cpu": found.cpu.model_copy(update={"load": [1.5, 1.0, 0.5]})})
+
+
+def _busy(found: HostResources, *, busy: float, total: float) -> HostResources:
+    # `found` with its processors' time grown by `busy` of `total` seconds.
+    time = found.cpu.time
+    assert time is not None
+    grown = CpuTime(busy=time.busy + busy, total=time.total + total)
+    return found.model_copy(update={"cpu": found.cpu.model_copy(update={"time": grown})})

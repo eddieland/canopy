@@ -46,11 +46,15 @@ test("the graphs draw the server's last hour of readings, and say the one under 
     await page.goto('system')
     await settled(page)
     const graphs = page.getByTestId('host-graphs').getByTestId('trend-chart')
-    // The load, the memory, the loop's own, and each of the mock's two disks.
-    await expect(graphs).toHaveCount(5)
+    // The load, the processors busy, the memory, the swap, the two stalls, the loop's own, and the mock's two disks.
+    await expect(graphs).toHaveCount(9)
     const load = graphs.first()
     await expect(load.getByTestId('trend-value')).toHaveText(/^20% now · peak \d+%$/u)
     await expect(load).toContainText('60 min ago')
+    await expect(graphs.nth(1)).toContainText('CPU busy')
+    await expect(graphs.nth(1).getByTestId('trend-value')).toHaveText(/^15% now · peak \d+%$/u)
+    await expect(graphs.nth(3)).toContainText('Swap used')
+    await expect(graphs.nth(5)).toContainText('Disk stalls')
 
     const plot = load.getByTestId('trend-plot')
     const box = await plot.boundingBox()

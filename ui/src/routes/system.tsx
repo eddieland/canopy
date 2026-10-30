@@ -53,6 +53,10 @@ const BAR: Record<Pressure, string> = {
 // How pressed, as a number to sort by.
 const RANK: Record<Pressure, number> = { ok: 0, high: 1, critical: 2 }
 
+// The least top a stall's graph has: a process waits a little now and then on any machine, which a graph scaled to its
+// peak would draw as a cliff, so a tenth of the time is drawn as tall as anything short of real pressure.
+const STALL_TOP = 0.1
+
 // Between a counter's number and its unit: a rolling number's glyphs are drawn by CSS, which collapses a plain space.
 const NBSP = '\u00A0'
 
@@ -203,9 +207,9 @@ interface Graph {
 }
 
 /**
- * The server's readings of the machine over the last hour, kept in memory since it started: the load, the memory in
- * use, the loop's own, and each disk's free space, each a graph of its own. A measure the system gives no reading of
- * draws none.
+ * The server's readings of the machine over the last hour, kept in memory since it started: the load, the processors
+ * busy, the memory and swap in use, how long processes waited for memory and on disks, the loop's own memory, and
+ * each disk's free space, each a graph of its own. A measure the system gives no reading of draws none.
  */
 function LastHour({ host }: { host: HostResources }) {
     const { data } = useQuery(hostSamplesQuery)
@@ -240,9 +244,10 @@ function Graphs({ host, history }: { host: HostResources; history: HostHistory }
     )
 }
 
-// The graphs of `history`: the load as a share of the cores (the bare average where they are not known), the memory
-// against all there is, the loop's own memory, and each disk's free space against its size, with the tick's floor
-// where it has one.
+// The graphs of `history`: the load as a share of the cores (the bare average where they are not known), the share of
+// the processors busy, the memory and the swap against all there is (none for a machine with no swap), the share of
+// the time a process waited for memory and on a disk, the loop's own memory, and each disk's free space against its
+// size, with the tick's floor where it has one.
 function graphsOf(host: HostResources, history: HostHistory): Graph[] {
     const graphs: Graph[] = []
     const cores = host.cpu.cores
@@ -257,6 +262,16 @@ function graphsOf(host: HostResources, history: HostHistory): Graph[] {
             reference: cores === null ? undefined : { value: 1, label: 'all busy' },
         })
     }
+    const busy = trend(history, (s) => s.cpu_busy)
+    if (busy !== null) {
+        graphs.push({
+            label: 'CPU busy',
+            detail: cores === null ? 'of all cores' : `of ${cores} cores`,
+            trend: busy,
+            top: 1,
+            format: percentText,
+        })
+    }
     const memory = trend(history, (s) => s.memory_used)
     if (memory !== null) {
         graphs.push({
@@ -266,6 +281,32 @@ function graphsOf(host: HostResources, history: HostHistory): Graph[] {
             top: host.memory.total ?? headroom(memory.peak),
             format: bytesText,
         })
+    }
+    const swapTotal = host.memory.swap_total ?? 0
+    const swap = swapTotal > 0 ? trend(history, (s) => s.swap_used) : null
+    if (swap !== null) {
+        graphs.push({
+            label: 'Swap used',
+            detail: `of ${bytesText(swapTotal)}`,
+            trend: swap,
+            top: swapTotal,
+            format: bytesText,
+        })
+    }
+    const stalls: [string, Trend | null][] = [
+        ['Memory stalls', trend(history, (s) => s.memory_stalled)],
+        ['Disk stalls', trend(history, (s) => s.io_stalled)],
+    ]
+    for (const [label, stalled] of stalls) {
+        if (stalled !== null) {
+            graphs.push({
+                label,
+                detail: 'time a process waited',
+                trend: stalled,
+                top: Math.max(headroom(stalled.peak), STALL_TOP),
+                format: percentText,
+            })
+        }
     }
     const rss = trend(history, (s) => s.rss)
     if (rss !== null) {
