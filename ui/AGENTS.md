@@ -59,6 +59,13 @@ dozen. When every screenshot differs, check the browser before the change.
   `--type-aware`, so the rules that need types run too: a floating promise, a deprecated API, a condition that is
   always true, a switch that misses a case, a number tested for truth. Fix what it finds. A line that must break a
   rule carries `oxlint-disable-next-line` with the rule's name and a comment saying why.
+- **Imports go down.** Each directory of `src/` is a layer, and imports only from those below it: `api/` (the
+  client, queries, mutations, and the server's types), then `lib/` (logic over them, and the hooks that keep a
+  setting), `theme/`, `hooks/`, `components/ui/` (the shadcn wrappers, which know nothing of canopy's data), then
+  `components/`, `components/shell/` (the frame every page sits in), and `routes/`. A component a page and the shell
+  both use lives in `components/`. The route tree's types may be named anywhere, and a test may import what sits above
+  the code it tests. `npm run lint` refuses the rest, and a held library outside its files (Stack), with
+  `scripts/check-imports.mjs`, whose `LAYERS` says what each layer may import.
 - **Tokens only.** No raw colors and no `dark:` in components; a theme difference is a token change. The lint enforces
   it. See `DESIGN.md`.
 - **Every export has a JSDoc comment**, and so does each field of an exported interface: what it is or does, in
