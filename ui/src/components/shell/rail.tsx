@@ -247,8 +247,9 @@ function Under({ children }: { children: string }) {
 /**
  * The top of the rail's foot, a readout at its base standing on the footer's hairline, in two rows: what the last 24
  * hours and then the last 30 days cost, each window's name on the left, standing for the block's label, and its cost on
- * the right, so the figures line up however many digits they have. The 30 days, the figure the operator watches, is the
- * larger. Either opens the spend page over its own window: the 24 hours by the hour, or the 30 days by the day.
+ * the right, so the figures line up however many digits they have. The two rows are set alike, so neither reads as a
+ * different kind of figure. Either opens the spend page over its own window: the 24 hours by the hour, or the 30 days
+ * by the day.
  */
 export function RailSpend() {
     const spend = useQuery(spendQuery).data
@@ -269,7 +270,6 @@ export function RailSpend() {
                     label="30d"
                     hint={`Spent in the last 30 days${outside}: the month by day`}
                     days={30}
-                    headline
                 />
             </div>
         </section>
@@ -402,8 +402,7 @@ function outsideHint(spend: Spend | undefined, clock: Clock): string {
 
 /**
  * One window's row: its name on the left and its cost on the right, a dash when nothing in it reported one, opening the
- * spend page over `hours` or `days`. A `headline` cost is a step larger. The row keeps its height before the cost
- * arrives.
+ * spend page over `hours` or `days`. The row keeps its height before the cost arrives.
  */
 function Spent({
     window,
@@ -411,24 +410,19 @@ function Spent({
     hint,
     hours,
     days,
-    headline = false,
 }: {
     window: SpendWindow | undefined
     label: string
     hint: string
     hours?: 24
     days?: 30
-    headline?: boolean
 }) {
     const cost = window?.cost_usd ?? null
     return (
         <Link
             to="/reports/spend"
             search={{ days, hours }}
-            className={cn(
-                '-mx-1 flex items-baseline justify-between gap-3 rounded-sm px-1 hover:bg-surface-raised',
-                headline ? 'min-h-5' : 'min-h-4',
-            )}
+            className="-mx-1 flex min-h-4 items-baseline justify-between gap-3 rounded-sm px-1 hover:bg-surface-raised"
             title={hint}
             data-testid={`rail-spend-link-${label}`}
         >
@@ -436,10 +430,7 @@ function Spent({
             {window === undefined ? (
                 <Skeleton className="h-4 w-14 self-center" />
             ) : (
-                <span
-                    className={cn('readout text-right text-foreground', headline ? 'text-sm font-medium' : 'text-xs')}
-                    data-testid={`rail-spend-${label}`}
-                >
+                <span className="readout text-right text-xs text-foreground" data-testid={`rail-spend-${label}`}>
                     <Cost usd={cost} />
                 </span>
             )}
