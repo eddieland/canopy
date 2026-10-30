@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from canopy.core import cards, checklists, commit_hooks
+from canopy.core import cards, checklists, commit_hooks, records
 from tests.canopy.helpers import WORKER_DONE, agent_runs, checklists_dir, trailers_on, worker_does
 from tests.canopy.scenario_helpers import dispatches
 from tests.conftest import executable, git
@@ -81,6 +81,18 @@ def test_the_first_push_is_held_with_the_list_and_the_next_goes_through(
     [marker] = marked
     assert marker.parent.parent == primary / ".git" / "worktrees"
     assert marker.read_text().split()[0] == str(run.id)
+
+
+def test_a_held_worker_pushes_again_and_its_answers_are_recorded(scenario: Scenario, git_pool: GitPool) -> None:
+    (checklists_dir(scenario.env) / "repo.md").write_text(LIST)
+    result = json.loads(WORKER_DONE) | {"checklist": {"repo": {"general-types": "fixed"}}}
+    run = scenario.run(worker=worker_does(COMMIT, PUSH, COMMIT, PUSH, result=json.dumps(result)))
+    _, held, _, sent = ran(scenario.agent_log)
+    assert str(held["stderr"]).startswith(HELD)
+    assert sent["returncode"] == 0
+    assert run.status == "done"
+    [answer] = records.select(records.ChecklistAnswer).where("run_id = ?", run.id).all(scenario.conn)
+    assert (answer.repo, answer.item, answer.answer, answer.reason) == ("repo", "general-types", "fixed", None)
 
 
 @pytest.mark.parametrize("who", ["another run", "this run, long ago"])

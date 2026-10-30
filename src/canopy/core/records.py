@@ -57,6 +57,7 @@ from canopy.core.vocab import (
     FindingAnswer,
     GcPassStatus,
     HoldKind,
+    ItemAnswer,
     MemoryAuthor,
     MemoryCited,
     MemoryMode,
@@ -1788,6 +1789,21 @@ class ReviewAnswer(Row):
     finding: int
     answer: FindingAnswer
     #: Why it declined, or what it says of a fix; None for a fix it said nothing of.
+    reason: str | None
+
+
+@dataclass(frozen=True)
+class ChecklistAnswer(Row):
+    """What a reminded worker answered of one item of a repository's checklist (DESIGN §42): its words, untrusted."""
+
+    TABLE: ClassVar[LiteralString] = "checklist_answers"
+
+    run_id: int
+    repo: str
+    #: The item's id, as the run's list named it.
+    item: str
+    answer: ItemAnswer
+    #: Why it held the item, or what it says of another answer; None when it said nothing.
     reason: str | None
 
 

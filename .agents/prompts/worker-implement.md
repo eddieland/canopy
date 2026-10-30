@@ -191,4 +191,4 @@ they conflict.
 
 ## Result line
 
-{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<your report, line breaks sparingly>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}{{DRAFTS}}
+{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<your report, line breaks sparingly>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}{{DRAFTS}}{{CHECKLIST}}

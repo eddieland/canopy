@@ -228,4 +228,4 @@ they conflict.
 
 ## Result line
 
-{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<what you addressed, line breaks sparingly>","question":"<only when blocked>","flaky":false}{{MEMORY_CONTRACT}}{{DRAFTS}}{{REVIEW_ANSWERS}}
+{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<what you addressed, line breaks sparingly>","question":"<only when blocked>","flaky":false}{{MEMORY_CONTRACT}}{{DRAFTS}}{{REVIEW_ANSWERS}}{{CHECKLIST}}
