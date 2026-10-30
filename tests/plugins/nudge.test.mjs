@@ -13,9 +13,9 @@ const plugin = path.join(here, "..", "..", ".agents", "plugins", "canopy.js");
 const { default: canopy } = await import(pathToFileURL(plugin).href);
 
 const STATUS = "canopy_run_status";
-const ASKED =
-    "[canopy] 20 tool calls since your last update: call canopy_run_status with where your work stands now," +
-    " then go on.";
+const TAIL = ": call canopy_run_status with where your work stands now, then go on.";
+const FIRST = `[canopy] 8 tool calls and no update yet${TAIL}`;
+const ASKED = `[canopy] 20 tool calls since your last update${TAIL}`;
 
 beforeEach(() => {
     delete process.env.CANOPY_DEADLINE;
@@ -48,45 +48,64 @@ async function calls(hooks, count, session = "ses_1") {
     }
 }
 
-test("the 20th call with no update asks for one, after a built-in's output and first in an MCP tool's", async () => {
+/** A session's first update, which the nudge asks for at its 8th call; any later one is asked for at the 20th. */
+async function updates(hooks, session = "ses_1") {
+    await after(hooks, mcp(), { tool: STATUS, session });
+}
+
+test("the 8th call with no update yet asks for one, after a built-in's output and first in an MCP tool's", async () => {
     const hooks = await canopy.server({});
-    await calls(hooks, 19);
-    assert.equal((await after(hooks, builtin("line\n"))).output, `line\n${ASKED}`);
+    await calls(hooks, 7);
+    assert.equal((await after(hooks, builtin("line\n"))).output, `line\n${FIRST}`);
 
     const other = await canopy.server({});
-    await calls(other, 19);
+    await calls(other, 7);
     const result = await after(other, mcp("from the server"));
     assert.deepEqual(result.content, [
-        { type: "text", text: ASKED },
+        { type: "text", text: FIRST },
         { type: "text", text: "from the server" },
     ]);
 });
 
-test("it asks once per lapse, and a status call starts the count again", async () => {
+test("after an update, the 20th call with no other asks for one", async () => {
     const hooks = await canopy.server({});
+    await updates(hooks);
     await calls(hooks, 19);
     assert.equal((await after(hooks, builtin())).output, `ok\n${ASKED}`);
-    await calls(hooks, 30);
-    await after(hooks, mcp(), { tool: STATUS });
+});
+
+test("it asks again each 20 calls it goes unanswered, and a status call starts the count again", async () => {
+    const hooks = await canopy.server({});
+    await calls(hooks, 7);
+    assert.equal((await after(hooks, builtin())).output, `ok\n${FIRST}`);
+    await calls(hooks, 19);
+    assert.equal((await after(hooks, builtin())).output, `ok\n${FIRST.replace("8 tool calls", "28 tool calls")}`);
+    await updates(hooks);
+    await calls(hooks, 19);
+    assert.equal((await after(hooks, builtin())).output, `ok\n${ASKED}`);
+    await calls(hooks, 19);
+    assert.equal((await after(hooks, builtin())).output, `ok\n${ASKED.replace("20 tool calls", "40 tool calls")}`);
+    await updates(hooks);
     await calls(hooks, 19);
     assert.equal((await after(hooks, builtin())).output, `ok\n${ASKED}`);
 });
 
 test("each session counts its own calls", async () => {
     const hooks = await canopy.server({});
+    await updates(hooks, "ses_1");
     await calls(hooks, 19, "ses_1");
-    await calls(hooks, 19, "ses_2");
-    await after(hooks, mcp(), { tool: STATUS, session: "ses_2" });
+    await calls(hooks, 7, "ses_2");
+    await updates(hooks, "ses_2");
     assert.equal((await after(hooks, builtin(), { session: "ses_1" })).output, `ok\n${ASKED}`);
     assert.equal((await after(hooks, builtin(), { session: "ses_2" })).output, "ok");
 });
 
 test("a result that cannot take the line is asked again on the next call", async () => {
     const hooks = await canopy.server({});
-    await calls(hooks, 19);
+    await calls(hooks, 7);
     await assert.doesNotReject(after(hooks, { output: 3 }));
     const said = (await after(hooks, builtin())).output;
-    assert.equal(said, `ok\n${ASKED.replace("20 tool calls", "21 tool calls")}`);
+    assert.equal(said, `ok\n${FIRST.replace("8 tool calls", "9 tool calls")}`);
 });
 
 test("a run that keeps no progress, or names none, gets no nudge; a review's and a task's do", async () => {
@@ -102,8 +121,8 @@ test("a run that keeps no progress, or names none, gets no nudge; a review's and
     for (const run of ["review-3", "task-1"]) {
         process.env.CANOPY_RUN_ID = run;
         const hooks = await canopy.server({});
-        await calls(hooks, 19);
-        assert.equal((await after(hooks, builtin())).output, `ok\n${ASKED}`, run);
+        await calls(hooks, 7);
+        assert.equal((await after(hooks, builtin())).output, `ok\n${FIRST}`, run);
     }
 });
 
@@ -132,7 +151,7 @@ test("under OpenCode 2, the line goes first in the result's content", async () =
         status: "completed",
         result,
     });
-    for (let n = 0; n < 19; n++) {
+    for (let n = 0; n < 7; n++) {
         const quiet = event("read", { output: "ok" });
         await tool["execute.after"](quiet);
         assert.deepEqual(quiet.result, { output: "ok" });
@@ -140,7 +159,7 @@ test("under OpenCode 2, the line goes first in the result's content", async () =
     const asked = event("read", { output: "ok" });
     await tool["execute.after"](asked);
     assert.deepEqual(asked.result.content, [
-        { type: "text", text: ASKED },
+        { type: "text", text: FIRST },
         { type: "text", text: "ok" },
     ]);
 });
@@ -161,14 +180,14 @@ test("under OpenCode 2, a failed call counts toward the nudge, and a refused sta
         mcp: { list: async () => ({ data: [] }) },
     });
     const call = { sessionID: "ses_1", agent: "a", messageID: "m", id: "call_1", input: {} };
-    for (let n = 0; n < 18; n++) {
+    for (let n = 0; n < 6; n++) {
         await tool["execute.after"]({ ...call, tool: "read", status: "error", error: { message: "no" } });
     }
     await tool["execute.after"]({ ...call, tool: STATUS, status: "error", error: { message: "refused" } });
     const asked = { ...call, tool: "read", status: "completed", result: { output: "ok" } };
     await tool["execute.after"](asked);
     assert.deepEqual(asked.result.content, [
-        { type: "text", text: ASKED },
+        { type: "text", text: FIRST },
         { type: "text", text: "ok" },
     ]);
 });
