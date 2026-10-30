@@ -23,7 +23,7 @@ import functools
 import json
 import os
 import sqlite3
-from collections.abc import Callable, Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never
@@ -33,6 +33,7 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, S
 from canopy.core import (
     agent_models,
     cards,
+    checklists,
     commit_hooks,
     contract,
     conversation,
@@ -265,6 +266,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
                 raise SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
             tidy.make_objects(_objects(ctx, run))
             cards.make_answers(_answers(ctx, run))
+            _write_checklists(ctx, run, kind, slots)
             outcome = _doer(kind)(ctx, run, slots, out, log)
         except stopping.Stopped as e:
             outcome = Outcome(RunStatus.CRASHED, None, str(e))
@@ -288,6 +290,23 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             _check_drafts(ctx, run_id, stop, log)
             run_models.read_ended(ctx, "runs", run_id, log)
     return outcome
+
+
+def _write_checklists(ctx: Context, run: sqlite3.Row, kind: RunKind, slots: Iterable[_Slot]) -> None:
+    """Write the lists of the run's repositories to its answers directory, for canopy's plugin to hand on (§42).
+
+    A run that pushes nothing, or none of whose repositories has a list, gets no file and is never reminded.
+
+    Raises:
+        SetupError: a list cannot be used or written: dispatch read it, so it changed since, and the run never runs
+            without it.
+    """
+    if not checklists.reminded(kind):
+        return
+    try:
+        checklists.write(_answers(ctx, run), checklists.for_repos(ctx.config, [s.repo for s in slots]))
+    except (checklists.ChecklistError, OSError) as e:
+        raise SetupError(str(e)) from e
 
 
 def _check_drafts(ctx: Context, run_id: int, stop: stopping.StopOnSignal, log: logs.TickAdapter) -> None:
