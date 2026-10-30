@@ -7,7 +7,7 @@ the state directory as the CLI reads it.
 import json
 from pathlib import Path
 
-from canopy.core import conversation, db, pools, records
+from canopy.core import cards, conversation, db, pools, records
 from canopy.core.context import Context
 from canopy.core.vocab import PoolKind, RunStatus
 from canopy.runs import tasks
@@ -181,6 +181,34 @@ def test_a_task_runs_report_is_its_file_as_text_and_says_when_it_was_edited_or_i
 
     # A run that left no report has none to read.
     assert c.get(f"/api/tasks/{task.id}/runs/{unreported}/report").status_code == 404
+
+
+def test_a_running_task_runs_progress_is_on_its_run_its_page_and_the_list(backend: Backend) -> None:
+    """As a worker run's is (DESIGN §41): what it does now, with its steps, and no question."""
+    card = cards.Card.model_validate(
+        {
+            "summary": "Timed the export; it re-reads every row.",
+            "now": "reading export.py",
+            "steps": [{"title": "time it", "status": "done"}, {"title": "find why", "status": "working"}],
+        },
+    )
+    with backend.open() as ctx:
+        task = submit(ctx)
+        run_id = start(ctx, task)
+        cards.record_call(ctx.conn, "task_runs", run_id, card)
+    c = client(None, backend)
+    shown = c.get(f"/api/tasks/{task.id}/runs/{run_id}").json()["run"]["card"]
+    assert (shown["now"], shown["percent"], shown["stage"], shown["question"], shown["calls_since"]) == (
+        "reading export.py",
+        50,
+        None,
+        None,
+        0,
+    )
+    assert shown["steps"][1]["stuck_at"] is not None
+    assert c.get(f"/api/tasks/{task.id}").json()["runs"][0]["card"] == shown
+    [listed, *_] = c.get("/api/tasks").json()
+    assert listed["latest"]["card"] == shown
 
 
 def submit(ctx: Context) -> records.Task:

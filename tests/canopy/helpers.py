@@ -913,10 +913,11 @@ def worker_does(
 def private_worker_does(
     *commands: list[str],
     result: dict[str, object],
+    tools: Sequence[Called] = (),
     **behavior: Unpack[Behavior],
 ) -> Iterator[None]:
-    """Until the block ends, the fake private worker runs `commands` and then prints `result`."""
-    with scripted("WORKER_PRIVATE", {"COMMANDS": json.dumps(commands), "RESULT": json.dumps(result)}, behavior):
+    """Until the block ends, the fake private worker makes the calls `tools` names, runs `commands`, prints `result`."""
+    with scripted("WORKER_PRIVATE", {**reported(result, commands, tools), "COMMANDS": json.dumps(commands)}, behavior):
         yield
 
 

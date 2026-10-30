@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from canopy.serve.schema import Attachments, Message, Model, ModelsServed, RunState
+from canopy.serve.schema import Attachments, Message, Model, ModelsServed, RunCard, RunState
 
 type TaskStanding = Annotated[
     Literal[
@@ -77,6 +77,9 @@ class TaskRun(Model):
     served: list[str] = []
     """The models its session names as having served it, as `provider/model`, the most costly first; empty until
     canopy reads the session, and when none did. The runs page's `?model=` keeps the runs one served."""
+    card: RunCard | None = None
+    """Its worker's progress (DESIGN §41), while it runs and its last once it ends; None when it wrote none. A task's
+    asks no question."""
 
 
 class TaskSummary(Model):

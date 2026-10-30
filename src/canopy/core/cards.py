@@ -1,10 +1,10 @@
 """A running agent's card: where its work stands, in its own words, while it runs (DESIGN §41).
 
-A worker, a planner, or a reviewer says where its work stands by calling canopy's `status` tool, each call its whole
-card: a summary, what it does now, what is done with the proof of each, what is next, what is in its way, for a long
-job its steps, each with a status and a stage, from which canopy says how much is done, and a question it works around
-while the operator decides, with lettered options and the one it recommends. The
-harness reads the call from the events the agent prints, as it reads the agent's spend, holds it to the tool's own
+A worker, a planner, a reviewer, or a one-off task's worker says where its work stands by calling canopy's `status`
+tool, each call its whole card: a summary, what it does now, what is done with the proof of each, what is next, what is
+in its way, for a long job its steps, each with a status and a stage, from which canopy says how much is done, and, but
+for a task's, a question it works around while the operator decides, with lettered options and the one it recommends.
+The harness reads the call from the events the agent prints, as it reads the agent's spend, holds it to the tool's own
 input, and records it on the run, with how many tool calls the agent had made by then; a call that does not validate,
 or that ended in an error, records nothing. So nothing the agent writes reaches the journal but what canopy observes it
 print (TRUST_MODEL T1). The card is shown to the operator, and given to no agent.
@@ -62,17 +62,22 @@ TOOL = "status"
 #: How the runtime starts the server: this interpreter's canopy, which `-P` keeps off the working directory's modules
 #: (TRUST_MODEL T7).
 SERVER_COMMAND = (sys.executable, "-P", "-m", "canopy", "_mcp", "--status")
-#: A run's CANOPY_RUN_ID that names a run keeping a card: a worker's or a planner's id, or a review's, `review-7`.
-RUN_ID_RE = re.compile(r"(?:review-)?[0-9]{1,18}")
+#: A run's CANOPY_RUN_ID that names a run keeping a card: a worker's or a planner's id, a review's, `review-7`, or a
+#: one-off task's, `task-3`.
+RUN_ID_RE = re.compile(r"(?:review-|task-)?[0-9]{1,18}")
+#: One that names a run whose card may ask the operator a question, and so has an answers directory: any of those but a
+#: task's, whose question is its final line's, answered by a reply to the task (DESIGN §36).
+ASKING_RUN_ID_RE = re.compile(r"(?:review-)?[0-9]{1,18}")
 #: The variable that names a run's answers directory, and the file in it that holds the operator's latest answer.
 ANSWERS_ENV = "CANOPY_ANSWERS"
 ANSWER_FILE = "answer.json"
-#: The run tables whose runs keep a card: a worker's and a planner's, and a review's.
-type CardTable = Literal["runs", "review_runs"]
+#: The run tables whose runs keep a card: a worker's and a planner's, a review's, and a one-off task's.
+type CardTable = Literal["runs", "review_runs", "task_runs"]
 #: Each card table's status of a run still running.
 _RUNNING: Mapping[CardTable, RunStatus | ReviewRunStatus] = {
     "runs": RunStatus.RUNNING,
     "review_runs": ReviewRunStatus.RUNNING,
+    "task_runs": RunStatus.RUNNING,
 }
 
 #: How long the summary and what is in the way may be, and every other line, in characters.
@@ -254,18 +259,31 @@ def tool_name() -> str:
     return servers.tool_name(SERVER, TOOL)
 
 
-def read_call(called: Called) -> Card | None:
+def read_call(called: Called, *, may_ask: bool = True) -> Card | None:
     """The card a tool call the agent made says, if it is a `status` call that completed and validates.
 
+    A card that asks a question is held to `may_ask`, as the server holds it (`may_ask`'s function).
+
     Returns:
-        The card, or None for any other call, a refused one, or one whose input is not a card.
+        The card, or None for any other call, a refused one, one whose input is not a card, or one that asks a question
+        where none may be asked.
     """
     if called.tool != tool_name() or not called.completed:
         return None
     try:
-        return Card.model_validate(called.input)
+        card = Card.model_validate(called.input)
     except ValidationError:
         return None
+    return card if may_ask or card.question is None else None
+
+
+def may_ask(run: str) -> bool:
+    """Whether the run CANOPY_RUN_ID names `run` may ask the operator a question on its card.
+
+    Returns:
+        True for a worker's, a planner's, or a review's run; False for a task's, or anything else.
+    """
+    return ASKING_RUN_ID_RE.fullmatch(run) is not None
 
 
 def record_call(conn: sqlite3.Connection, table: CardTable, run_id: int, card: Card | None) -> None:
@@ -316,10 +334,10 @@ def answers_dir(state_dir: Path, run: str) -> Path:
         own files, inside the state directory a sandbox denies, so a run reads its own and no other's (DESIGN §24).
 
     Raises:
-        ValueError: `run` names no run that keeps a card.
+        ValueError: `run` names no run whose card may ask.
     """
-    if not RUN_ID_RE.fullmatch(run):
-        raise ValueError(f"{run!r} names no run that keeps a card")
+    if not may_ask(run):
+        raise ValueError(f"{run!r} names no run whose card may ask a question")
     review, _, run_id = run.rpartition("-")
     return state_dir / ("reviews" if review else "runs") / f"{int(run_id)}.answers"
 

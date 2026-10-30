@@ -244,6 +244,7 @@ export function mockTaskRun(fields: Partial<TaskRun> = {}): TaskRun {
         peak_context: 61200,
         log_path: '.canopy/task-runs/1.log',
         served: [],
+        card: null,
         ...fields,
     }
 }

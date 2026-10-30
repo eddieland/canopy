@@ -396,7 +396,7 @@ def run(
 
 
 def card(row: sqlite3.Row | records.Row, *, running: bool, timeout_minutes: int | None) -> RunCard | None:
-    """A run's or a review run's progress as the API sends it (DESIGN §41), or None when it wrote none.
+    """A run's, a review run's, or a task run's progress as the API sends it (DESIGN §41), or None when it wrote none.
 
     `timeout_minutes`, the run's time limit, says when a working step is stuck; with None, none is.
 

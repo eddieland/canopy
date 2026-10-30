@@ -230,13 +230,14 @@ treehouse takes each pool's lock for a moment, which is why it doesn't do so con
 
 ## A running agent's progress
 
-A worker, a planner, or a reviewer posts updates on its progress while it runs: a summary for someone who skipped the
-transcript, what it's doing now, what it finished with the proof of each (`tests pass: 42/42`, `pushed abc123`, or the
-honest `not pushed`), what's left, and anything in its way it's working around. A long job adds its steps, each `to
-do`, `working`, `blocked`, `done`, or `skipped`, and a meter fills in a segment per step, with how many are done and the
-stage under way; a worker with an approved plan takes them from the plan, so you watch the plan you approved being
-done, or not. A step working longer than a fifth of the run's time limit reads `stuck`. Each update replaces the last.
-It's the agent's own account, so read it as you'd read a colleague's standup: useful, and checked against the diff.
+A worker, a planner, a reviewer, or a [task](tasks)'s worker posts updates on its progress while it runs: a summary for
+someone who skipped the transcript, what it's doing now, what it finished with the proof of each (`tests pass: 42/42`,
+`pushed abc123`, or the honest `not pushed`), what's left, and anything in its way it's working around. A long job adds
+its steps, each `to do`, `working`, `blocked`, `done`, or `skipped`, and a meter fills in a segment per step, with how
+many are done and the stage under way; a worker with an approved plan takes them from the plan, so you watch the plan
+you approved being done, or not. A step working longer than a fifth of the run's time limit reads `stuck`. Each update
+replaces the last. It's the agent's own account, so read it as you'd read a colleague's standup: useful, and checked
+against the diff.
 
 It reads as one checklist: the steps, the working one pulsing with what the agent says it's doing now under it, or,
 for a job without steps, what's done, what it's doing, and what's next, in that order. With steps, what it wrote is
@@ -252,9 +253,10 @@ A, and the one it recommends and works toward meanwhile. It sits in an amber box
 Click an option, or run `canopy reply run:ID LETTER` (`review:ID` for a review), and the agent hears your letter on its
 next tool call; click another to change your mind, as long as it runs. An answer is a letter, never words: you choose
 among its options, which is also all a line forged to look like canopy's could do. A question it can't work around
-still ends the run as `blocked`, as before.
+still ends the run as `blocked`, as before. A task's run asks none here: its questions end the run, and your reply
+starts the next.
 
-A run's page and a review's page lead with the whole of it; the runs list shows what it's doing now, `asks you` while
-a question waits, and when it was last updated, after a small meter when it has steps; a ticket's page shows it as a
-bubble under `working now`; and the rail puts the meter under a working ticket whose progress has steps. Nothing in it
-reaches another agent, and nothing in it changes what canopy does: it's for you.
+A run's page, a review's, and a task run's lead with the whole of it; the runs list shows what it's doing now, `asks
+you` while a question waits, and when it was last updated, after a small meter when it has steps; a ticket's page shows
+it as a bubble under `working now`; and the rail puts the meter under a working ticket whose progress has steps. Nothing
+in it reaches another agent, and nothing in it changes what canopy does: it's for you.
