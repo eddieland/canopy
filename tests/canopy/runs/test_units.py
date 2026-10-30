@@ -106,7 +106,7 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
     assert rationale == f"run 1: {BRANCH} in api at {slots['api']}, web at {slots['web']}; desk {desk}; label {LABEL}"
 
     prompt = run.prompt
-    assert f"ticket PROJ-1 in {desk}." in prompt
+    assert f"ticket PROJ-1 in {desk}, and your branch is " in prompt
     assert "This is a joint run over 2 repositories" in prompt
     assert f"- `api` at `{desk / 'api'}`: branch `{BRANCH}` from `main`; PR: not recorded;" in prompt
     assert f"- `web` at `{desk / 'web'}`: branch `{BRANCH}` from `main`; PR: not recorded;" in prompt

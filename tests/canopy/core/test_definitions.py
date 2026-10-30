@@ -844,6 +844,32 @@ def test_an_overseer_override_canopy_cannot_read_refuses_the_snapshot(canopy_env
         definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
 
 
+#: A run's prompt as canopy renders one: fixed instructions, the marker, then the run's own.
+RUN_PROMPT = f"# canopy worker\n\nWork.\n\n{prompts.RUN_MARKER}\n\n## Run\n\nPROJ-1\n"
+
+
+def test_a_runs_fixed_instructions_are_its_agents_body_and_the_rest_its_message() -> None:
+    assert definitions.run_prompt(RUN_PROMPT, "opencode run --agent canopy-worker") == (
+        {agents.WORKER: "# canopy worker\n\nWork.\n"},
+        "## Run\n\nPROJ-1\n",
+    )
+
+
+@pytest.mark.parametrize("command", ["opencode run --agent my-worker", "my-agent --prompt"])
+def test_an_agent_canopy_does_not_ship_is_sent_the_whole_prompt(command: str) -> None:
+    # Its definition is the operator's, which canopy renders nothing into: the instructions travel in the message.
+    assert definitions.run_prompt(RUN_PROMPT, command) == ({}, "# canopy worker\n\nWork.\n\n## Run\n\nPROJ-1\n")
+
+
+def test_runs_with_one_body_share_a_snapshot_and_another_body_makes_its_own(canopy_env: CanopyEnv) -> None:
+    cfg = config.load(canopy_env.root)
+    shared = definitions.ensure(canopy_env.state_dir, cfg, bodies={agents.WORKER: "Work.\n"})
+    assert definitions.ensure(canopy_env.state_dir, cfg, bodies={agents.WORKER: "Work.\n"}) == shared
+    assert (shared / "agents" / f"{agents.WORKER}.md").read_text().endswith("\n---\n\nWork.\n")
+    other = definitions.ensure(canopy_env.state_dir, cfg, bodies={agents.WORKER: "Work harder.\n"})
+    assert len({shared, other, definitions.ensure(canopy_env.state_dir, cfg)}) == 3
+
+
 JIRA_CLI_READS = ("jira issue list *", "jira issue view *")
 
 

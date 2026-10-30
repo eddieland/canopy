@@ -152,5 +152,6 @@ permission:
   "canopy_run_status": allow
 ---
 
+<!-- canopy: prompt -->
 Your task is the prompt canopy starts this run with. If it is not a "# canopy private worker" prompt,
 print `no prompt supplied` and exit.

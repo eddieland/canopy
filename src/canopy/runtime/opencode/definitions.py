@@ -24,6 +24,8 @@ files mark for it:
 - the overseer's prompt as its body: the body is the agent's system prompt, which the provider caches across ticks,
   where the state block, the tick's message, changes every tick (DESIGN §6). Its skill tool is denied, so that OpenCode
   sends neither it nor the list of skills.
+- a run's fixed instructions as the body of the worker's, private worker's, planner's, or reviewer's definition, in
+  place of the stub it ships with, so that the run's message holds only what is the run's own (DESIGN §13).
 
 Every shipped agent denies the operator's own skill, `canopy` (DESIGN §13), by name, whatever directory it is installed
 in: it is for the operator's sessions, and an agent canopy runs has its own prompt to follow.
@@ -40,7 +42,16 @@ import re
 from typing import TYPE_CHECKING
 
 from canopy.infra import resources
-from canopy.runtime.agents import CHORE, OVERSEER, PLANNER, PRIVATE_WORKER, REVIEWER, WORKER, DefinitionsError
+from canopy.runtime.agents import (
+    BODIED,
+    CHORE,
+    OVERSEER,
+    PLANNER,
+    PRIVATE_WORKER,
+    REVIEWER,
+    WORKER,
+    DefinitionsError,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -144,6 +155,9 @@ _TEMPERATURE_MARKER = "# canopy: temperature\n"
 _MODEL_MARKER = "# canopy: model\n"
 # The line of the shipped overseer definition its prompt replaces, with everything after it.
 _PROMPT_MARKER = "<!-- canopy: overseer prompt -->\n"
+# The line of the other shipped definitions that take a body (`BODIED`) a run's fixed instructions replace, with the
+# stub after it; a definition rendered with none keeps the stub, and loses only the line.
+_BODY_MARKER = "<!-- canopy: prompt -->\n"
 # The line of the shipped overseer definition the denial of its skill tool is rendered at: it reads no tracker, so it
 # has no skill to load, and a tool whose last rule denies `*` is not sent. The line ends its `skill` rules, after the
 # denial of the operator's skill.
@@ -237,7 +251,7 @@ def _render_models(found: dict[str, bytes], rules: Rules) -> None:
 
 
 def _render_by_agent(found: dict[str, bytes], rules: Rules) -> None:
-    """Render into `found`, in place, what `rules` gives agents by name: the store, bash allows, temperature."""
+    """Render into `found`, in place, what `rules` gives agents by name: the store, bash allows, temperature, body."""
     for agent in _AGENTS:
         rel = _file(agent)
         if rel in found:
@@ -250,6 +264,10 @@ def _render_by_agent(found: dict[str, bytes], rules: Rules) -> None:
         rel = _file(agent)
         if rel in found:
             found[rel] = render_temperature(found[rel].decode(), rel, temperature).encode()
+    for agent in BODIED:
+        rel = _file(agent)
+        if rel in found:
+            found[rel] = render_body(found[rel].decode(), rel, rules.bodies.get(agent)).encode()
 
 
 def render_private(text: str, tools: McpTools | None, name: str = _PRIVATE_FILE) -> str:
@@ -461,6 +479,23 @@ def render_overseer(text: str, prompt: str) -> str:
         raise DefinitionsError(f"{_OVERSEER_FILE} has no line {_SKILL_MARKER.strip()!r} to render the skill rule at")
     head = head.replace(_SKILL_MARKER, _SKILL_MARKER + _SKILL_RULE, 1)
     return head + prompt.strip("\n") + "\n"
+
+
+def render_body(text: str, name: str, body: str | None) -> str:
+    """Return definition `name` with `body` in place of its marked line and the stub after it, or the stub alone.
+
+    The body is the agent's system prompt, cached with the tools, so every run started with the same fixed instructions
+    shares it (DESIGN §13). Without one, the stub stays: it takes the prompt the run is started with as the task.
+
+    Raises:
+        DefinitionsError: `text` has no marked line to render the body at.
+    """
+    head, marker, stub = text.partition(_BODY_MARKER)
+    if not marker:
+        raise DefinitionsError(f"{name} has no line {_BODY_MARKER.strip()!r} to render a run's prompt at")
+    if body is None:
+        return head + stub
+    return head + body.strip("\n") + "\n"
 
 
 def _require_reads_marker(text: str, name: str) -> None:

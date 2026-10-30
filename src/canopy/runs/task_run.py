@@ -421,9 +421,11 @@ def _run_agent(
     if refused is not None:
         raise SetupError(refused)
     prompt = starts.prompt_file(Path(run.log_path)).read_text(encoding="utf-8")
-    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     runtime = ctx.config.runtime
-    command = render_command(runtime.worker_template(runtime.private_worker_cmd), prompt, snapshot, f"task:{task.id}")
+    # The prompt's fixed instructions are its agent's body, in a snapshot every task's run shares (DESIGN §13).
+    bodies, message = definitions.run_prompt(prompt, runtime.private_worker_cmd)
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config, bodies=bodies)
+    command = render_command(runtime.worker_template(runtime.private_worker_cmd), message, snapshot, f"task:{task.id}")
     argv = sandboxing.wrap(runtime, [run.repo], "worker", command.argv, snapshot)
     timeout_minutes = runtime.worker_timeout_minutes
     log.info(

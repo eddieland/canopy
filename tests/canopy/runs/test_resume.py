@@ -88,10 +88,10 @@ def test_a_red_check_resumes_the_recorded_branch_with_the_checks_named(scenario:
     assert log.splitlines() == ["PROJ-1: fix the build", "PROJ-1: first", "initial"]
     prompt = resumed.prompt
     assert prompt.startswith("# canopy worker: resume")
-    assert '## Why you were resumed\n\n- `ci`: checks failed on the PR: fix them, as "Failed checks" below says.\n' in (
+    assert '## Why you were resumed\n\n- `ci`: checks failed on the PR: fix them, as "Failed checks" says.\n' in (
         prompt
     )
-    assert "## Failed checks\n\nWhen `ci` is among the reasons above" in prompt
+    assert "## Failed checks\n\nWhen `ci` is among the reasons, read the failing checks" in prompt
     assert "PR: https://example.test/pr/1." in prompt  # the implement worker reported it
     assert "This is attempt 1 of 6." in prompt
     assert CHECK in prompt
