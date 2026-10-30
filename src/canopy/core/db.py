@@ -1066,16 +1066,21 @@ def set_progress(
     session_id: str,
     *,
     usage: Usage | None = None,
+    did: tuple[str, str] | None = None,
 ) -> None:
     """Record what a running tick's overseer, or a chore, task, or review run's agent, has reported so far (§6, §19).
 
-    Its session always, and what it has spent so far when `usage` is given. Nothing changes for one not running.
+    Its session always, what it has spent so far when `usage` is given, and a tick's overseer's latest tool call when
+    `did` is, as `(tool, what it did)`, stamped now; only a tick keeps one. Nothing changes for one not running.
     """
     running = records.update(records.of_table(table)).where("id = ? AND status = 'running'", row_id)
     with transaction(conn):
         running.set(session_id=session_id).run(conn)
         if usage is not None:
             running.set_to(_SPENT, *_spent(usage)).run(conn)
+        if did is not None:
+            tool, what = did
+            running.set(activity_tool=tool, activity=what, activity_at=now()).run(conn)
 
 
 def usage_of(row: sqlite3.Row | records.Row) -> Usage | None:

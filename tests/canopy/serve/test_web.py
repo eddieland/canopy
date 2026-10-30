@@ -968,6 +968,20 @@ def test_a_message_is_acknowledged_by_the_latest_ok_tick_that_read_it(ctx: Conte
     assert c.get("/api/tick").json()["acknowledged"] == replied
 
 
+def test_a_running_ticks_overseers_latest_tool_call_is_sent_until_it_ends(ctx: Context) -> None:
+    """As a running run's is (DESIGN §8): on the tick, the ticks list, and the tick's page, and none once it ends."""
+    c, _ = signed_in_client(ctx)
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    assert c.get("/api/tick").json()["tick"]["activity"] is None
+    db.set_progress(ctx.conn, "ticks", tick_id, "ses_o1", did=("canopy_decide", "decide 2 tickets"))
+    sent = c.get("/api/tick").json()["tick"]["activity"]
+    assert (sent["tool"], sent["did"]) == ("canopy_decide", "decide 2 tickets")
+    assert c.get(f"/api/ticks/{tick_id}").json()["tick"]["activity"] == sent
+    assert c.get("/api/ticks").json()[0]["activity"] == sent
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "2 decisions")
+    assert c.get("/api/tick").json()["tick"]["activity"] is None
+
+
 def serve_on(env: CanopyEnv, port: int, extra: str = "") -> None:
     env.write_user(user_toml() + f"\n[serve]\nport = {port}\n{extra}")
 

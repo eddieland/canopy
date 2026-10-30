@@ -13,7 +13,7 @@ from canopy.core import db, run_models
 from canopy.core.vocab import TickStatus
 from canopy.serve.schema import LastTick, Tick, TickDetail
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
-from canopy.serve.views import decision, lines, models_served, new_tokens, shown_path
+from canopy.serve.views import activity, decision, lines, models_served, new_tokens, shown_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -68,6 +68,7 @@ def tick_of(row: records.Tick, decisions: int) -> Tick:
         idle=row.idle,
         woken_by=row.woken_by,
         canopy_version=row.canopy_version,
+        activity=activity(row) if row.status is TickStatus.RUNNING else None,
     )
 
 
