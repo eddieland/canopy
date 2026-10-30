@@ -105,6 +105,8 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("paths", "plan_archive_conversations = true"),
         # Comments are the operator's words, sent to a remote only they choose.
         ("paths", "plan_archive_comments = true"),
+        # It sets how often the operator's remote is pushed to.
+        ("paths", "plan_archive_every_minutes = 0"),
         ("personas", "worker = 'canopy'"),
         ("personas", "planner = 'skeptic'"),
         ("personas", "reviewer = 'lenient'"),

@@ -102,7 +102,7 @@ resumes that followed them, each with the plan it followed, and the ticket's PRs
 archive alone says what came of a plan; one in the directory lists every ticket. An index is canopy's only while its
 first line says so, so the operator's own is never touched, and a title in one is escaped text, never inside a link,
 as is a PR's URL that is not a plain one (T1).
-With `paths.plan_archive`, a clone's top level, each live tick does the same into its `<workspace>/`, or into the top
+With `paths.plan_archive`, a clone's top level, a live tick does the same into its `<workspace>/`, or into the top
 level itself with `paths.plan_archive_workspace_dir` off, prompts too unless `paths.plan_archive_prompts` is off,
 comments unless `paths.plan_archive_comments` is off, conversations only with `paths.plan_archive_conversations`,
 commits what it wrote there alone (at the top level, each
@@ -111,8 +111,10 @@ upstream, never forcing: an upstream that refuses it for commits another clone p
 commits rebased onto them, so the push is a fast-forward, and a rebase that cannot finish is aborted. `archive_unpushed`
 stays open while the archive is not all there, so a failed push is retried each tick. A tick writes at most a thousand
 files, so a long history goes in over several, each push bounded, and reads again only the plans whose row or files
-changed, and the conversations with a new message, since it last found them as they stand. A dry run only reads the
-clone (TRUST_MODEL T6).
+changed, and the conversations with a new message, since it last found them as they stand. It archives at most once
+each `paths.plan_archive_every_minutes`, timed from the archive's last commit in the clone, so the remote is pushed to
+a few times a day, except while `archive_unpushed` is open; a tick that waits, and a dry run, only read the clone
+(TRUST_MODEL T6).
 
 ### Commenting on a plan
 

@@ -184,10 +184,13 @@ prompt_overrides = "~/.config/canopy/prompts"
 # Optional: your own personas, each `<name>.md`, at most 4 KiB. One named as canopy's shadows it; `canopy personas`
 # lists them all (DESIGN §31).
 # personas = "~/.config/canopy/personas"
-# Optional: a clone of a private repository of yours. Each live tick copies every plan of the workspace into
+# Optional: a clone of a private repository of yours. A live tick copies every plan of the workspace into
 # <clone>/<workspace>/, with its status and approval, commits, and pushes to the clone's upstream (DESIGN §25). Plans
 # hold what planners read of your tickets: keep the repository private. `canopy archive DIR` does the copy by hand.
 # plan_archive = "~/src/plans"
+# The least time between archives, from the archive's last commit in the clone, so its remote is pushed to a few times
+# a day. A push that failed is retried each tick all the same. 0 archives every tick.
+# plan_archive_every_minutes = 360
 # Set false to archive into the clone's top level rather than <clone>/<workspace>/, for a repository that holds this
 # workspace's plans alone. Only what canopy wrote there is committed: each ticket's directory and its own README.md.
 # plan_archive_workspace_dir = true

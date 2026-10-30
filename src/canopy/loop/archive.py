@@ -1,19 +1,23 @@
-"""Plans archived to a clone of the operator's own each tick (DESIGN §25): exported, committed, and pushed.
+"""Plans archived to a clone of the operator's own (DESIGN §25): exported, committed, and pushed.
 
-With `paths.plan_archive` set, a live tick exports every plan of the workspace into `<clone>/<workspace>/`, or the
-clone's top level with `paths.plan_archive_workspace_dir` off (`plan_export`), each with its planner's prompt unless
-`paths.plan_archive_prompts` is off and its original when the operator edited it, the operator's comments on each
-ticket's plans unless `paths.plan_archive_comments` is off, each planned ticket's conversation with
-`paths.plan_archive_conversations`, and a README.md indexing each ticket's plans and work and every ticket, commits what
-changed there and nothing else, under a message naming each file it adds or changes, and pushes the clone's branch to
-its upstream. At the top level, "there" is what
-the export wrote (`plan_export.owned`): each planned ticket's directory, and the index of every ticket while it is
-canopy's, so the operator's own files beside them are never committed. When the upstream refuses the push for commits
-the clone lacks, as another clone pushed, they are fetched, this clone's commits rebased onto them, and the push made
+With `paths.plan_archive` set, a live tick on which the archive is due (below) exports every plan of the workspace into
+`<clone>/<workspace>/`, or the clone's top level with `paths.plan_archive_workspace_dir` off (`plan_export`), each with
+its planner's prompt unless `paths.plan_archive_prompts` is off and its original when the operator edited it, the
+operator's comments on each ticket's plans unless `paths.plan_archive_comments` is off, each planned ticket's
+conversation with `paths.plan_archive_conversations`, and a README.md indexing each ticket's plans and work and every
+ticket, commits what changed there and nothing else, under a message naming each file it adds or changes, and pushes the
+clone's branch to its upstream. At the top level, "there" is what the export wrote (`plan_export.owned`): each planned
+ticket's directory, and the index of every ticket while it is canopy's, so the operator's own files beside them are
+never committed. When the upstream refuses the push for commits the clone lacks, as another clone pushed, they are
+fetched, this clone's commits rebased onto them, and the push made
 again, so a push is always a fast-forward. A dry run only reads the clone.
 Either way the tick raises `archive_unpushed` while the archive is not all on its upstream, so a push that failed is
 retried each live tick and the operator sees why until one succeeds. A tick writes at most `PER_TICK` files, so a long
 history goes in over several ticks, each commit and push bounded, and the item stays open until it all has.
+
+The archive is due once `paths.plan_archive_every_minutes` has passed since its last commit in the clone, so its remote
+is pushed to a few times a day rather than every tick, and every tick while `archive_unpushed` is open, so neither a
+retry nor a long history waits on it. A tick it is not due only reads the clone, as a dry run does.
 
 The path must be a clone's own top level, never a directory inside a repository, which could be one the operator works
 in. git runs as the harness always runs it (D107), and the push never forces. Nothing here raises: an archive that fails
@@ -25,9 +29,11 @@ from __future__ import annotations
 import itertools
 import operator
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import hostgit, plan_export
+from canopy.core import hostgit, plan_export, sql
+from canopy.core.items import ACTION_PREFIX
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -68,8 +74,33 @@ def run(ctx: Context, log: logs.TickAdapter, *, dry_run: bool) -> str | None:
     git = _Git(ctx.runner, clone)
     name = ctx.workspace.name
     place = _Place(name, name if ctx.config.paths.plan_archive_workspace_dir else "")
-    failure = None if dry_run else _archive(ctx, git, place, log)
+    failure = None if dry_run or not _due(ctx, git, place) else _archive(ctx, git, place, log)
     return failure or _unpushed(git, place, place.paths(ctx.conn, clone))
+
+
+def _due(ctx: Context, git: _Git, place: _Place) -> bool:
+    """Whether this tick archives: `paths.plan_archive_every_minutes` after the last, or while its item is open.
+
+    Returns:
+        True with the setting at 0, while the latest `ok` tick raised `archive_unpushed`, when the archive has no commit
+        in the clone, or once that long has passed since its newest.
+    """
+    every = ctx.config.paths.plan_archive_every_minutes
+    if every == 0 or _raised(ctx.conn):
+        return True
+    last = git.committed_at(place.paths(ctx.conn, git.clone))
+    return last is None or datetime.now(UTC) - last >= timedelta(minutes=every)
+
+
+def _raised(conn: Connection) -> bool:
+    """Whether the latest `ok` tick raised `archive_unpushed`, as the attention list reads it.
+
+    Returns:
+        True when it did, so a failed push or a history left for the next tick is not held back.
+    """
+    newest = sql.select("max(id)").from_("ticks").where("status = 'ok'")
+    query = sql.select("1").from_("decisions").where("tick_id = ({}) AND action = ?", newest, ACTION_PREFIX + REASON)
+    return sql.execute(conn, query).fetchone() is not None
 
 
 def _archive(ctx: Context, git: _Git, place: _Place, log: logs.TickAdapter) -> str | None:
@@ -358,6 +389,19 @@ class _Git:
             The count, or None when git cannot tell, as for a branch with no upstream.
         """
         return self._count("HEAD..@{upstream}")
+
+    def committed_at(self, paths: Sequence[str]) -> datetime | None:
+        """When the newest commit on HEAD that touched `paths` was made, by its committer's clock.
+
+        Returns:
+            The time, or None when no commit touched them, as for no path, or git cannot tell.
+        """
+        # No path would be every path in the clone: nothing of the archive is there yet.
+        if not paths:
+            return None
+        found = self.run("log", "-1", "--format=%ct", "--", *paths)
+        stamp = found.stdout.strip()
+        return datetime.fromtimestamp(int(stamp), UTC) if found.ok and stamp.isdigit() else None
 
     def rebasing(self) -> bool:
         """Whether a rebase stopped in the clone, by either of git's backends.
