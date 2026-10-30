@@ -19,6 +19,7 @@ export function ReviewModelMenu({
     disabled = false,
     onChange,
     testId,
+    labelClassName = 'panel-label',
 }: {
     /** The model picked for the request, `provider/model[@variant]`, or null for config's. */
     model: string | null
@@ -30,6 +31,8 @@ export function ReviewModelMenu({
     onChange: (model: string | null) => void
     /** The menu's trigger's test id. */
     testId?: string
+    /** The classes of `Model` before the menu: a `panel-label` by default, the form's field label in the form. */
+    labelClassName?: string
 }) {
     const { data } = useQuery(configModelsQuery)
     const reviewer = data?.agents.find((row) => row.agent === 'reviewer')
@@ -38,7 +41,7 @@ export function ReviewModelMenu({
     const current = model === null ? pickerModel(configured) : pickerModel(model)
     return (
         <span className="flex flex-wrap items-center gap-2">
-            <span className="panel-label" aria-hidden>
+            <span className={labelClassName} aria-hidden>
                 Model
             </span>
             <ModelPicker
