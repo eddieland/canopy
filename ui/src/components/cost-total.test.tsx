@@ -13,7 +13,7 @@ const OPUS = { model: 'anthropic/claude-opus-4-1', runs: 3, cost_usd: 4.5 }
 const SONNET = { model: 'anthropic/claude-sonnet-4-5', runs: 1, cost_usd: 0.6 }
 
 function renderCost(cost: Partial<CostTotal>) {
-    const total = { runs: 4, reviews: 0, priced: 4, cost_usd: 5.6, models: [], ...cost }
+    const total = { runs: 4, reviews: 0, priced: 4, cost_usd: 5.6, models: [], unread_cost_usd: null, ...cost }
     return render(
         <Fields>
             <CostTotalRow cost={total} />
@@ -34,5 +34,21 @@ describe('CostTotalRow', () => {
         const split = screen.getByTestId('cost-total-models')
         expect(split.textContent).toBe('claude-opus-4-1 $4.50claude-sonnet-4-5 $0.60none $0.50')
         expect(tipOf(screen.getByText(/^claude-opus-4-1/u))).toBe('anthropic/claude-opus-4-1, over 3 runs')
+        expect(screen.queryByText('unread')).toBeNull()
+    })
+
+    it('says unread for the part of the rest whose sessions canopy has yet to read, apart from none', () => {
+        renderCost({ cost_usd: 5.8, models: [OPUS, SONNET], unread_cost_usd: 0.5 })
+        const split = screen.getByTestId('cost-total-models')
+        expect(split.textContent).toBe('claude-opus-4-1 $4.50claude-sonnet-4-5 $0.60unread $0.50none $0.20')
+        expect(tipOf(screen.getByText('unread'))).toMatch(/^Runs whose sessions canopy has yet to read/u)
+        expect(tipOf(screen.getByText('none'))).toMatch(/^Runs whose sessions named no model/u)
+    })
+
+    it('says only unread when the rest is all runs canopy has yet to read', () => {
+        renderCost({ models: [OPUS, SONNET], unread_cost_usd: 0.5 })
+        expect(screen.getByTestId('cost-total-models').textContent).toBe(
+            'claude-opus-4-1 $4.50claude-sonnet-4-5 $0.60unread $0.50',
+        )
     })
 })

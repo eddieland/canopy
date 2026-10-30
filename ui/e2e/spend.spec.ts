@@ -278,23 +278,28 @@ test("what the runs spent on each model, every kind's summed, or one kind's from
     // Four models, each counted once whatever kinds it served.
     await expect(page.getByTestId('spend-model-count')).toHaveText('4')
     const models = page.getByTestId('spend-model-table').getByTestId('spend-model')
-    await expect(models).toHaveCount(5)
+    await expect(models).toHaveCount(6)
     // Sonnet served the overseer and the workers both: one row, the dearest.
     await expect(models.first().getByRole('rowheader')).toHaveText('anthropic/claude-sonnet-4-5')
-    // The runs no session named a model for sit last, every kind's together.
+    // The runs no session named a model for sit last, every kind's together: those canopy has yet to read, then those
+    // it read that named none.
+    await expect(models.nth(4).getByRole('rowheader')).toHaveText('unread')
     await expect(models.last().getByRole('rowheader')).toHaveText('none: no session named one')
 
     await page.getByTestId('spend-model_kind').getByRole('link', { name: 'workers' }).click()
     await expect(page).toHaveURL(/\/reports\/spend\?model_kind=workers$/u)
-    await expect(models).toHaveCount(3)
+    await expect(models).toHaveCount(4)
     await expect(models.nth(1).getByRole('rowheader')).toHaveText('anthropic/claude-opus-4-1')
     // Spent, then per run: one run, so the same.
     await expect(models.nth(1).getByRole('cell')).toHaveText(['1', '23', '$1.65', '$1.65'])
+    // Run 40's failed read among them, and run 42, which no tick has read yet.
+    await expect(models.nth(2).getByRole('rowheader')).toHaveText('unread')
+    await expect(models.nth(2).getByRole('cell')).toHaveText(['5', '–', '$2.53', '$0.51'])
+    // ABC-099's feedback plan run, which reported no session, and no cost.
     await expect(models.last().getByRole('rowheader')).toHaveText('none: no session named one')
-    // ABC-099's feedback plan run among them, which recorded no cost.
-    await expect(models.last().getByRole('cell')).toHaveText(['6', '–', '$2.53', '$0.42'])
-    // What the none row holds is said in the header, since it sits last.
-    await expect(page.getByTestId('spend-model-unattributed')).toHaveText(/^\d+% not yet attributed$/u)
+    await expect(models.last().getByRole('cell')).toHaveText(['1', '–', '–', '–'])
+    // What the unread row holds is said in the header, since it sits near the end and shrinks as ticks read it.
+    await expect(page.getByTestId('spend-model-unread')).toHaveText(/^\d+% unread$/u)
 })
 
 test("a model's row opens the runs page on the runs of its kind it served", async ({ page }) => {
@@ -338,9 +343,12 @@ test("a ticket's worker models, beside the workspace's, open By model for the ti
     const kinds = page.getByTestId('spend-model_kind')
     await expect(kinds.getByRole('link', { name: 'workers' })).toHaveAttribute('data-selected', 'true')
     const models = page.getByTestId('spend-model-table').getByTestId('spend-model')
-    await expect(models).toHaveCount(3)
+    // Its two models, then its resume no tick has read yet and its feedback plan, which reported no session.
+    await expect(models).toHaveCount(4)
     await expect(models.nth(1).getByRole('rowheader')).toHaveText('anthropic/claude-sonnet-4-5')
     await expect(models.nth(1).getByRole('cell')).toHaveText(['1', '41', '$0.66', '$0.66', '$1.54'])
+    await expect(models.nth(2).getByRole('rowheader')).toHaveText('unread')
+    await expect(models.last().getByRole('rowheader')).toHaveText('none: no session named one')
     // Every kind of its runs, the reviewer's among them, then every ticket's again, at the kind chosen.
     await kinds.getByRole('link', { name: 'all' }).click()
     await expect(page).toHaveURL(/model_kind=all/u)

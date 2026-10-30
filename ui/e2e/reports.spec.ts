@@ -24,7 +24,11 @@ test('the nav opens Reports, a year of months newest first with the latest in de
     await expect(page.getByTestId('reports-kind')).toHaveCount(6)
     // The mock's loop never read the runtime's sessions: none outside canopy.
     await expect(page.getByTestId('reports-outside')).toContainText('outside canopy')
-    await expect(page.getByTestId('reports-model').first()).toBeVisible()
+    // Its four models, then the runs no session named one for: those canopy has yet to read, then those read to none.
+    const models = page.getByTestId('reports-model').getByRole('rowheader')
+    await expect(models).toHaveCount(6)
+    await expect(models.nth(4)).toHaveText('unread')
+    await expect(models.last()).toHaveText('none: no session named one')
     const landed = page.getByTestId('reports-landed-ticket')
     await expect(landed).toHaveCount(2)
     await expect(landed.first()).toContainText('ABC-091')

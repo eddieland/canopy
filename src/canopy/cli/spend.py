@@ -52,8 +52,10 @@ _TICKETS = 10
 # The tools that returned the most the text lists, and the width of their names' column; `--json` lists every one.
 _TOOLS = 10
 _TOOL_WIDTH = 32
-# What `canopy spend` says for a kind's runs whose sessions named no model.
-NO_MODEL = "(no model read)"
+# What `canopy spend` says for a kind's runs whose sessions named no model: those canopy has yet to read (running, not
+# read yet, or failed to read), and those read that named none (no longer kept, no session, or no model call).
+UNREAD = "(unread)"
+NO_MODEL = "(none)"
 
 
 @click.command("spend")
@@ -218,7 +220,7 @@ def _tools(found: Breakdown) -> list[str]:
 def _models(found: Breakdown) -> list[str]:
     if not any(m.model is not None for m in found.models):
         return ["No run's models read yet: canopy reads them from each run's session, a few runs each tick."]
-    width = max(len(m.model or NO_MODEL) for m in found.models)
+    width = max(len(_model_name(m)) for m in found.models)
 
     def line(model: str, kind: str, *counts: str) -> str:
         return f"{model:<{width}} {kind:<{_DAY_WIDTH}}" + "".join(f"{c:>{_COST_WIDTH}}" for c in counts)
@@ -226,7 +228,7 @@ def _models(found: Breakdown) -> list[str]:
     lines = [line("model", "kind", "runs", "replies", "spent")]
     lines.extend(
         line(
-            m.model or NO_MODEL,
+            _model_name(m),
             m.kind,
             str(m.runs),
             str(m.replies) if m.model is not None else "-",
@@ -236,6 +238,12 @@ def _models(found: Breakdown) -> list[str]:
     )
     lines.append("A run on two models counts under each.")
     return lines
+
+
+def _model_name(row: spend.ModelSpend) -> str:
+    if row.model is not None:
+        return row.model
+    return UNREAD if row.unread else NO_MODEL
 
 
 # Each kind's first model calls by local ISO week: the median one's size, and what they all read from the cache of what

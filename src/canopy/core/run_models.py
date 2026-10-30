@@ -277,6 +277,37 @@ def of_ticket(conn: sqlite3.Connection, key: str) -> list[ModelTotal]:
     ]
 
 
+def unread_of_ticket(conn: sqlite3.Connection, key: str) -> float | None:
+    """What a ticket's runs and the review runs naming it reported costing, of those whose sessions are `unread`.
+
+    Part of what `of_ticket` leaves of the ticket's cost: the rest is the runs read that named no model.
+
+    Returns:
+        Their cost, in US dollars; None when none reported one.
+    """
+    parts = sql.union(*(_ticket_unread(table, key) for table in _TICKET_TABLES), every=True)
+    [(cost,)] = sql.execute(conn, sql.select("SUM(cost_usd)").from_("({}) AS u", parts)).fetchall()
+    return None if cost is None else float(cost)
+
+
+def unread(table: RunTable) -> sql.Fragment:
+    """Whether canopy has yet to read the session of `table`'s run `r`, 1 or 0, as the web UI says `unread` (§13).
+
+    1 while the run runs, until a read of its ended session, and after a read that failed; 0 once a read found its
+    session, or found it gone, and for a run that ended with no session to read. Only a run `run_models` names no
+    model of is told apart so: one it names was read.
+
+    Returns:
+        The condition, for a `{}` in a query whose run table is `r`.
+    """
+    return sql.frag(
+        "coalesce((SELECT m.status = ? FROM run_model_reads m WHERE m.run_table = ? AND m.run_id = r.id), "
+        "r.ended_at IS NULL OR coalesce(r.session_id, '') <> '')",
+        ModelsRead.FAILED,
+        table,
+    )
+
+
 def _retry_before(now: datetime | None = None) -> str:
     return db.format_time((now or datetime.now(UTC)) - RETRY_AFTER)
 
@@ -320,6 +351,17 @@ def _ticket_models(table: Literal["runs", "review_runs"], key: str) -> sql.Selec
         sql.select("m.model, m.cost_usd")
         .from_("{} r CROSS JOIN run_models m ON m.run_table = ? AND m.run_id = r.id", sql.name(table), table)
         .where("r.ticket_key = ?", key)
+    )
+
+
+# One table's runs of a ticket that no session named a model for and whose sessions are unread, with their cost.
+def _ticket_unread(table: Literal["runs", "review_runs"], key: str) -> sql.Select:
+    return (
+        sql.select("r.cost_usd")
+        .from_("{} r", sql.name(table))
+        .where("r.ticket_key = ?", key)
+        .where("NOT EXISTS (SELECT 1 FROM run_models m WHERE m.run_table = ? AND m.run_id = r.id)", table)
+        .where("{}", unread(table))
     )
 
 

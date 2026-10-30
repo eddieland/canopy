@@ -568,6 +568,10 @@ class CostTotal(Model):
     models: list[ModelCost] = []
     """A ticket's: what each model their sessions named cost, the most costly first; the rest of `cost_usd` is the
     runs no session named a model for. Empty for a PR's."""
+    unread_cost_usd: float | None = None
+    """A ticket's: what its runs whose sessions canopy has yet to read reported, of that rest (running, not read yet,
+    or a read that failed); the remainder is the runs read that named none. None when none reported a cost, and for a
+    PR's."""
 
 
 class Granted(Model):
