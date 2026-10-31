@@ -80,6 +80,7 @@ export function MarkdownField({
     toolbar = true,
     pullRequests = false,
     id,
+    ref,
     onKeyDown,
     className,
     ...props
@@ -188,7 +189,15 @@ export function MarkdownField({
         >
             <div className={cn('grid min-w-0', preview === 'live' && '@2xl:grid-cols-2')}>
                 <textarea
-                    ref={area}
+                    ref={(node) => {
+                        area.current = node
+                        // The caller's ref sees the same textarea, as a plain field's would.
+                        if (typeof ref === 'function') {
+                            ref(node)
+                        } else if (ref !== null && ref !== undefined) {
+                            ref.current = node
+                        }
+                    }}
                     id={fieldId}
                     value={value}
                     hidden={!showsText}

@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { useState } from 'react'
+import { createRef, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
@@ -78,6 +78,19 @@ describe('MarkdownField', () => {
         select(7)
         fireEvent.keyDown(field(), { key: 'Enter' })
         expect(field().value).toBe('- first')
+    })
+
+    it('gives a ref the caller passes the textarea, and still formats through its own', () => {
+        const caller = createRef<HTMLTextAreaElement>()
+        function WithRef() {
+            const [value, setValue] = useState('word')
+            return <MarkdownField aria-label="Reply" ref={caller} value={value} onValueChange={setValue} />
+        }
+        render(<WithRef />)
+        expect(caller.current).toBe(field())
+        select(0, 4)
+        fireEvent.click(screen.getByRole('button', { name: 'Code' }))
+        expect(field().value).toBe('`word`')
     })
 
     it('previews the text as it will read, and goes back to it', () => {
