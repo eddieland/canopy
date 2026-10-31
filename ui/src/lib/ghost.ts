@@ -191,6 +191,13 @@ export const GHOST_TIPS = {
         "Field report: tried to lease a worktree. Told I'm not a ticket. I'm a sphere. Rude.",
         'Dear Traveler, a clean worktree is one nobody has fought in yet.',
     ],
+    '/components': [
+        'Eyes up, Guardian. Every button in the armory, and not one of them is Tick now.',
+        'Scanning... six kinds of button. The destructive one is red. Some lore writes itself.',
+        "Grimoire: this page is mock data alone. Press anything. It's a firing range.",
+        'Field report: the Markdown field previews what you write. I wish my reports did.',
+        'Dear Traveler, a primitive is just a page that has not met its data yet.',
+    ],
     '/plan-editor': [
         'Eyes up, Guardian. A plan. Add a step called "jump in and figure it out". Classic.',
         "Grimoire: nothing here is saved. Write your boldest plans. The Darkness can't read them.",

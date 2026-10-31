@@ -55,6 +55,7 @@ export const ROUTES = [
     'settings/skills',
     'search?q=web',
     'plan-editor',
+    'components',
     'memory',
     'system',
     'guide/overview',
