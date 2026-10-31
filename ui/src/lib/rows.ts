@@ -301,6 +301,14 @@ export const ROW_COLUMNS = {
         ['use', '9rem', 1],
         ['age', AGE, 2],
     ],
+    /**
+     * An item of a run's checklist, on the run's page: what the run answered, as a chip with room for `unanswered`,
+     * then the item's id. A held item's reason goes under its id.
+     */
+    'checklist-answer': [
+        ['state', '5.5rem'],
+        ['item', FREE],
+    ],
     /** A transcript's row: its time, its mark, and its text, under which a tool call's body opens. */
     transcript: [
         ['time', '3.5rem'],
@@ -443,6 +451,7 @@ const FROM: Record<RowColumn, string> = {
     holder: 'col-[holder/end]',
     id: 'col-[id/end]',
     impact: 'col-[impact/end]',
+    item: 'col-[item/end]',
     key: 'col-[key/end]',
     kind: 'col-[kind/end]',
     label: 'col-[label/end]',

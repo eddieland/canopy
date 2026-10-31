@@ -171,6 +171,10 @@ export type ReportTokens = Schemas['ReportTokens']
 export type ChecklistCounts = Schemas['ChecklistCounts']
 /** One item of one repository's checklist: the runs reminded of it, and how many gave each answer. */
 export type ChecklistItemCounts = Schemas['ChecklistItemCounts']
+/** What a run answered of one item of its repository's checklist, with a held item's reason, on the run's page. */
+export type ChecklistAnswer = Schemas['ChecklistAnswer']
+/** A worker's answer to a checklist item: pass, fixed, held, n/a, or unanswered. */
+export type ItemAnswer = Schemas['ItemAnswer']
 /** How the last days' runs ended, the newest failures, what the guards refused, and each day's counts. */
 export type HealthReport = Schemas['HealthReport']
 /** How many of one kind's runs, of one sort, ended in one status, and what they cost. */

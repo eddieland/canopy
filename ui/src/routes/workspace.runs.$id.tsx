@@ -17,6 +17,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } fr
 import { PromptPanel } from '@/components/prompt-panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
+import { ChecklistPanel } from '@/components/run-checklist'
 import { ProgressPanel } from '@/components/run-progress'
 import { RunDoing } from '@/components/run-doing'
 import { Chip } from '@/components/status'
@@ -93,6 +94,7 @@ function Loaded({ id }: { id: number }) {
                     />
                 )}
                 <RunPanel run={data} transcript={transcript} onShow={view.show} />
+                <ChecklistPanel answers={data.checklist} />
                 <TranscriptPanel transcript={transcript} running={data.state === 'running'} page="run" view={view} />
                 <PromptPanel transcript={transcript} />
                 <RunOutputPanel id={data.id} />

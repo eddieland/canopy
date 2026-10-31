@@ -171,11 +171,11 @@ rule that never fails is a rule the workers are paying tokens to agree with. One
 about with whoever wrote it. A lot of **unanswered** usually means runs that never pushed, so were never asked: canopy
 counts every item of a run it gave a list to, pushed or not, and errs toward too many.
 
-Why a worker held an item is its own words, so it stays on the run rather than here: `canopy show run:ID` prints it.
-Pick **7 days**, **14 days**, or **30 days** in the header; a day runs midnight to midnight on canopy's clock, as the
-spend page's do. Two weeks is the measurement the checklist was built to take. With lists in more than one repository,
-the picker beside it narrows the table to the ones you choose. With no list answered in the window, the page says so,
-and names `paths.checklists`, where the lists live.
+Why a worker held an item is its own words, so it stays on the run rather than here: the [run's page](runs#a-runs-page)
+shows it, and `canopy show run:ID` prints it. Pick **7 days**, **14 days**, or **30 days** in the header; a day runs
+midnight to midnight on canopy's clock, as the spend page's do. Two weeks is the measurement the checklist was built to
+take. With lists in more than one repository, the picker beside it narrows the table to the ones you choose. With no
+list answered in the window, the page says so, and names `paths.checklists`, where the lists live.
 
 ## The health page
 

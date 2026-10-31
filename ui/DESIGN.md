@@ -485,7 +485,9 @@ Rules:
   in its description and listed under the panel); `when` (`WhenField`), started, ended, and how long it took in one
   field, `Oct 8 06:30 → 06:59 · 29m`, and its `span` age (`for 3m` while it runs); `spent`; then a tick's canopy
   version; then the paths, a run's branch, worktrees, and log, a chore run's log, a task run's branch, pushed commit,
-  and log.
+  and log. A run given a checklist has its answers in a panel of their own under that one (`ChecklistPanel`), before
+  its transcript: what came of it, a row an item, too many for a field. An answer is a chip, `held` in
+  `status-blocked`, since a reviewer reads its reason under it, and the rest plain.
   Then the thread the operator came to answer, with its form: a ticket's conversation and the reply, then the
   ticket's actions. A page with no
   thread has its main content there instead: a run's and a task run's transcript, a chore's open findings and runs, a
