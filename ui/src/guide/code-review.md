@@ -130,7 +130,8 @@ know about. Keep a few as `[[review.eval_cases]]` in the workspace's private con
 forward, each with the line its bug was on, and a few you know are clean. `canopy review eval` reviews every case at
 its commit and reports how many of the bugs it found and how many alarms it raised on the clean ones; `--persona` and
 `--model` try something else on the same cases. Run it when you change the reviewer's prompt, persona, or model, before
-you decide the change helped. It's a measurement, not a gate: nothing it finds reaches the loop, and each result lands
+you decide the change helped; `canopy status` reminds you when none of your saved scores is of the reviewer as it's set
+now. It's a measurement, not a gate: nothing it finds reaches the loop, and each result lands
 in `.canopy/review-evals/` with what it ran on, so the next run has a number to beat. [Adding eval
 cases](#adding-eval-cases) says how to pick them.
 

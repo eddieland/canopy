@@ -45,7 +45,7 @@ from canopy.loop.render import (
     spent,
 )
 from canopy.notify import deliver
-from canopy.reviews import review_requests
+from canopy.reviews import evals, review_requests
 from canopy.runs import drafted, tasks
 
 if TYPE_CHECKING:
@@ -160,6 +160,9 @@ def cmd_status(click_ctx: click.Context) -> int:
     readout = memory.readout(ctx.config.memory)
     if readout is not None:
         click.echo(f"{readout} ({memory.tiers(ctx.config.memory)})")
+    unscored = evals.unscored(ctx)
+    if unscored is not None:
+        click.echo(unscored)
     _print_replies(ctx)
 
     _print_attention(attention.listed(ctx))
