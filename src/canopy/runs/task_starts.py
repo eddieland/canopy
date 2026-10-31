@@ -7,7 +7,9 @@ a later tick rather than being refused, and a dry tick starts none (D036). So do
 list the private worker's chosen model, or its list cannot be read (DESIGN §13): the tick raises the attention item of
 that name, about the workspace, since the model is config's, and no task spends a run on it. Each start leases a slot in
 the task's repository's pool as `canopy:task:<id>`, records the run, renders its prompt, and spawns the detached
-`canopy _task` (`task_run.py`).
+`canopy _task` (`task_run.py`). The prompt tells a run in a repository with a checklist that its push may be held for
+the list, and the field it answers it in (DESIGN §42); a list canopy cannot use closes the run `crashed`, never runs it
+without the list.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import agent_models, conversation, db, notice, pools, prompts
+from canopy.core import agent_models, checklist_answers, checklists, conversation, db, notice, pools, prompts
 from canopy.core.vocab import Decider, RunStatus
 from canopy.infra import lock, logs, procs
 from canopy.runs import attachments, tasks
@@ -30,7 +32,7 @@ if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.context import Context
 
-#: Where task runs' logs, prompts, and object directories live: `<state_dir>/task-runs/`, the operator's only.
+#: Where task runs' logs, prompts, object and answers directories live: `<state_dir>/task-runs/`, the operator's only.
 RUNS_DIR = "task-runs"
 
 
@@ -92,6 +94,15 @@ def prompt_file(log_path: Path) -> Path:
 def objects_dir(log_path: Path) -> Path:
     """Return a task run's object directory, beside its log at `log_path`, as a worker run's is (DESIGN §8)."""
     return log_path.with_suffix(".objects")
+
+
+def answers_dir(log_path: Path) -> Path:
+    """Return a task run's answers directory, beside its log at `log_path`: where its repository's checklist is (§42).
+
+    A task's run asks the operator no question (§41), so the directory holds only its list, and is made only for a run
+    given one.
+    """
+    return log_path.with_suffix(".answers")
 
 
 def _held(ctx: Context) -> str | None:
@@ -189,8 +200,9 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
         The pid of `canopy _task`, which claims the run.
 
     Raises:
-        _NotStarted: the prompt could not be rendered or written, or the process started. The run is closed `crashed`
-            with why, so the task does not start again: a task never retries on its own (DESIGN §36).
+        _NotStarted: the prompt could not be rendered or written, its repository's checklist cannot be used (§42), or
+            the process started. The run is closed `crashed` with why, so the task does not start again: a task never
+            retries on its own (DESIGN §36).
         RuntimeError: the run's row is gone, which nothing but a broken journal does.
     """
     run = tasks.get_run(ctx.conn, run_id)
@@ -217,13 +229,17 @@ def _spawn(ctx: Context, task: records.Task, run_id: int, lease: pools.Lease) ->
     }
     log_path = Path(run.log_path)
     try:
+        # Read now to tell the worker its push may be held, and to refuse a list canopy cannot use: `_task` reads it
+        # again as it starts, into the run's answers directory, and never runs without it (DESIGN §42).
+        lists = checklists.for_repos(ctx.config, [task.repo])
+        values[checklist_answers.CHECKLIST] = checklist_answers.contract_text(lists)
         # The model the run recorded, which canopy writes into its definition, for the commit trailer to name.
         prompt = prompts.render_task(ctx.config, values, notice=notice.for_prompt(ctx.conn), model=run.model)
         logs.write_private(prompt_file(log_path), prompt)
         # `python -m canopy`, not `canopy` from PATH: the child is this same installation.
         argv = [sys.executable, "-m", "canopy", "_task", str(run_id)]
         pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=log_path)
-    except (OSError, prompts.PromptError, procs.ProcError) as e:
+    except (OSError, prompts.PromptError, procs.ProcError, checklists.ChecklistError) as e:
         note = json.dumps({"harness": f"could not start the task's worker: {e}"})
         tasks.close_run(ctx.conn, ctx.config, run_id, RunStatus.CRASHED, note, head=None)
         raise _NotStarted(str(e)) from e

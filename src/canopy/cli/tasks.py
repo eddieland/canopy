@@ -15,11 +15,12 @@ import click
 from canopy.cli import attachments as attachments_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
-from canopy.core import cards, conversation, plans
+from canopy.core import cards, checklist_answers, conversation, plans
 from canopy.core.items import age
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
 from canopy.infra.text import one_line, printable
+from canopy.loop.readback import checklist_lines
 from canopy.loop.render import result_of, spent
 from canopy.runs import task_run, task_tickets, tasks
 
@@ -97,7 +98,8 @@ def cmd_task_list(click_ctx: click.Context) -> int:
 def show(ctx: Context, task_id: int) -> None:
     """Print task `task_id`: where it stands, its text, each run, its tickets, its conversation, and its report.
 
-    Each run is shown with its branch and the head it left on origin; the newest report as its file stands (§36).
+    Each run is shown with its branch, the head it left on origin, and its answers to its repository's checklist (§42);
+    the newest report as its file stands (§36).
 
     Raises:
         CliError: canopy has no such task.
@@ -197,6 +199,11 @@ def _show_run(ctx: Context, run: records.TaskRun) -> None:
         click.echo(f"    report {path}{_report_state(run, plans.read(path))}")
     session = f"session {run.session_id}" if run.session_id else "no session reported"
     click.echo(f"    {session}, log {run.log_path}")
+    answered = checklist_lines(checklist_answers.of_run(ctx.conn, run.id, table="task_runs"))
+    if answered:
+        click.echo("    checklist:")
+    for line in answered:
+        click.echo(f"      {line}")
     # Its worker's progress, while it runs and its last once it ends: the operator's alone, never shown inside one of
     # canopy's ticks or runs (DESIGN §41). A task's asks no question, so `ref` names no run to answer.
     running = run.status is RunStatus.RUNNING

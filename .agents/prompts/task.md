@@ -150,4 +150,4 @@ conflict.
 
 ## Result line
 
-{"status":"done|blocked|failed","summary":"<your short account, line breaks sparingly>","question":"<only when blocked>","branch":"{{BRANCH}}","prs":["<the PR's URL>"]}
+{"status":"done|blocked|failed","summary":"<your short account, line breaks sparingly>","question":"<only when blocked>","branch":"{{BRANCH}}","prs":["<the PR's URL>"]}{{CHECKLIST}}

@@ -313,12 +313,13 @@ Controls:
   a run in canopy's own voice.
 - The checklists (DESIGN §42, ROADMAP M66) are operator text too: a list per repository, `<repo>.md` in
   `paths.checklists`, private (T7), never read from a repository's checkout, which a PR could rewrite. Before a worker
-  run that may push starts, the harness writes its repositories' lists to the run's answers directory, which only the
-  operator's side writes (§41), and canopy's `pre-push` prints a slot's list when it holds the worker's push (T4). A
-  list is bounded at 16 KiB and refuses the characters that hide text, as a persona does, and one canopy cannot use
-  refuses the run, never runs it without the list. A list asks a worker to hold its own diff to rules; it changes no
-  guard, extends no run, and holds no slot (T3). Anything the agent reads can print a `[canopy]` line that looks like
-  the hook's, and a forged one can only ask the agent to check its own diff against a list it already holds.
+  run that may push starts, a one-off task's included, the harness writes its repositories' lists to the run's answers
+  directory, which only the operator's side writes (§41), and canopy's `pre-push` prints a slot's list when it holds
+  the worker's push (T4). A list is bounded at 16 KiB and refuses the characters that hide text, as a persona does, and
+  one canopy cannot use refuses the run, never runs it without the list. A list asks a worker to hold its own diff to
+  rules; it changes no guard, extends no run, and holds no slot (T3). Anything the agent reads can print a `[canopy]`
+  line that looks like the hook's, and a forged one can only ask the agent to check its own diff against a list it
+  already holds.
 - Each agent's model (DESIGN §13, M58), and the variant it runs at, is the operator's choice alone: `runtime.models`
   and a chore's `model`, both private (T7), which canopy writes into the agent's definition, or for one ticket's worker,
   planner, or reviewer an override of the model, at one of its variants or none, set with `canopy model` or the

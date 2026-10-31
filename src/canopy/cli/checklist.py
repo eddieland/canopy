@@ -36,9 +36,9 @@ _COUNTS = ("reminded", *(str(a) for a in ItemAnswer))
 def cmd_checklist(click_ctx: click.Context, *, days: int, repo: str | None, as_json: bool) -> int:
     """Count, per repository and item of its checklist, how the worker runs of the last days answered it.
 
-    Reminded is the runs given the item, by when they started. Each answered it pass, fixed, held, or n/a, or said
-    nothing of it, counted unanswered. An item mostly n/a or never failing is one to reword or drop; one often held is
-    one to argue. Why a run held an item is on its run: canopy show run:ID.
+    Reminded is the runs given the item, a task's included, by when they started. Each answered it pass, fixed, held,
+    or n/a, or said nothing of it, counted unanswered. An item mostly n/a or never failing is one to reword or drop; one
+    often held is one to argue. Why a run held an item is on its run: canopy show run:ID, or task:N for a task's.
     """
     ctx = open_context(click_ctx)
     found = checklist_answers.counts(ctx.conn, datetime.now(UTC), days, repo=repo)
@@ -67,5 +67,5 @@ def render(found: Counts) -> list[str]:
         + "".join(f"  {c.of(a):>{len(a)}}" for a in ItemAnswer)
         for c in found.items
     )
-    lines.extend(["", "Why a run held an item is on its run: canopy show run:ID."])
+    lines.extend(["", "Why a run held an item is on its run: canopy show run:ID, or task:N for a task's."])
     return lines

@@ -10,6 +10,10 @@ What the run leaves besides its branch: its report, `.canopy-task-report.md` at 
 ignores, is kept in the state directory before the slot is returned, and the next run starts with a copy of the
 latest; and the tickets its result's `created` names are checked on their text and recorded against the task
 (`task_tickets`). The run writes nothing about any ticket: its row, its log, and its result name the task alone.
+
+A run in a repository with a checklist is given it as a worker's run is (DESIGN §42): written to the run's answers
+directory, beside its log, where canopy's `pre-push` reads it to hold the worker's push, and its result's `checklist`
+held to it, a row recorded for every item however the run ended, `unanswered` for one its result left out.
 """
 
 from __future__ import annotations
@@ -25,6 +29,8 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr
 from canopy.core import (
     agent_models,
     cards,
+    checklist_answers,
+    checklists,
     commit_hooks,
     contract,
     conversation,
@@ -90,6 +96,8 @@ class Outcome:
     head: str | None = None
     #: Its result's `created`, checked: the keys its close records against the task, and the entries refused.
     tickets: task_tickets.Checked = field(default_factory=task_tickets.Checked)
+    #: What the worker answered of each item of its repository's list, checked (DESIGN §42); None when it got none.
+    checklist: checklist_answers.Checked | None = None
 
     def result_json(self) -> str:
         """Return what `task_runs.result_json` stores: the validated result, the harness's note, and the refusals.
@@ -156,6 +164,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
                 stored,
                 head=outcome.head,
                 tickets=outcome.tickets.recorded,
+                checklist=outcome.checklist,
             )
             if not closed:
                 log.warning("task run was already closed; its outcome is not recorded", extra=fields)
@@ -234,8 +243,8 @@ def keep_report(ctx: Context, run: records.TaskRun, log: logs.TickAdapter) -> st
 def release(ctx: Context, run: records.TaskRun, link: bytes | None, log: logs.TickAdapter) -> None:
     """Remove the report from the run's slot, tidy it as a worker run's is (DESIGN §8), and return it.
 
-    The run's object directory is removed too. A slot that could not be tidied is not returned, and the object
-    directory is kept, so its objects can be read.
+    The run's answers directory, which holds its checklist (§42), is removed first, and its object directory last. A
+    slot that could not be tidied is not returned, and the object directory is kept, so its objects can be read.
     """
     fields = {"task_run_id": run.id, "slot": run.slot_path, "lease_id": run.lease_id, "repo": run.repo}
     slot = Path(run.slot_path)
@@ -245,6 +254,7 @@ def release(ctx: Context, run: records.TaskRun, link: bytes | None, log: logs.Ti
     except OSError as e:
         # A directory a worker made in its place: it is no report canopy wrote, and the next copy refuses it.
         log.warning("task's report not removed from its slot", extra={**fields, "error": str(e)})
+    cards.remove_answers(starts.answers_dir(Path(run.log_path)))
     objects = starts.objects_dir(Path(run.log_path))
     if not tidy.tidy(ctx.runner, slot, link=link, base=run.base_branch, objects=objects, log=log, fields=fields):
         return
@@ -273,13 +283,15 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
         origin, `crashed` for a worker that rewrote its slot's git, or `stopped` for a task stopped before it started.
 
     Raises:
-        SetupError: a git step failed, or the runtime's config where it runs shadows canopy's definitions.
+        SetupError: a git step failed, the runtime's config where it runs shadows canopy's definitions, or the
+            repository's checklist can no longer be used or written.
     """
     task = tasks.get(ctx.conn, run.task_id)
     if task is None or task.stopped_at is not None:
         note = "the operator stopped the task before its worker started"
         log.info("task run not started", extra={"task_run_id": run.id, "reason": note})
         return Outcome(RunStatus.STOPPED, None, note)
+    _write_checklist(ctx, run)
     slot = Path(run.slot_path)
     git = checkpoint.Git(ctx.runner, slot, run.repo)
     start = checkpoint.check_out(git, run.base_branch, run.branch)
@@ -289,6 +301,9 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     done, text = _run_agent(ctx, run, task, out, log, marks=marks)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     parsed = contract.last_line(TaskResult, text)
+    # Read only from a valid result line, and recorded however the run ends: an item it was given and did not answer is
+    # counted unanswered (DESIGN §42).
+    listed = _check_checklist(run, text if parsed is not None else "")
     if done.timed_out:
         status, note = RunStatus.TIMEOUT, f"the worker timed out after {timeout_minutes} minutes"
     elif parsed is None:
@@ -306,7 +321,8 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     if rewritten is not None:
         # The slot's git directory may be one the worker made: canopy runs no git in it.
         crashed = f"the worker rewrote {rewritten}; nothing was checked or pushed"
-        return Outcome(RunStatus.CRASHED, parsed, "; ".join(n for n in (crashed, tickets.note()) if n), tickets=tickets)
+        noted = "; ".join(n for n in (crashed, tickets.note()) if n)
+        return Outcome(RunStatus.CRASHED, parsed, noted, tickets=tickets, checklist=listed)
     objects = starts.objects_dir(Path(run.log_path))
     if tidy.used(objects):
         # A sandboxed worker's commits are only in the run's object directory (DESIGN §8).
@@ -325,7 +341,42 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
         log.warning("task's branch rewritten on origin", extra={"task_run_id": run.id, "before": start.pushed})
         note = "; ".join(n for n in (note, forced) if n)
     note = "; ".join(n for n in (note, *checkpoint.unmarked(git, run.branch, start, run.base_branch, marks)) if n)
-    return Outcome(status, parsed, note, head=head, tickets=tickets)
+    if listed is not None:
+        note = "; ".join(n for n in (note, listed.note()) if n)
+    return Outcome(status, parsed, note, head=head, tickets=tickets, checklist=listed)
+
+
+def _write_checklist(ctx: Context, run: records.TaskRun) -> None:
+    """Write the list of the run's repository, if it has one, to the run's answers directory, for canopy's hook (§42).
+
+    A run in a repository without a list gets no directory, and is never held.
+
+    Raises:
+        SetupError: the list cannot be used or written: the tick read it to render the prompt, so it changed since, and
+            the run never runs without it.
+    """
+    try:
+        lists = checklists.for_repos(ctx.config, [run.repo])
+        if lists:
+            answers = starts.answers_dir(Path(run.log_path))
+            cards.make_answers(answers)
+            checklists.write(answers, lists)
+    except (checklists.ChecklistError, OSError) as e:
+        raise SetupError(str(e)) from e
+
+
+def _check_checklist(run: records.TaskRun, text: str) -> checklist_answers.Checked | None:
+    """Check what the worker answered of the list it was given, read back from the run's answers directory (§42).
+
+    `text` is its output, or "" when its last line was no valid result, whose fields are not read.
+
+    Returns:
+        An answer for every item of the list; None for a run given none.
+    """
+    lists = checklists.given(starts.answers_dir(Path(run.log_path)), [run.repo])
+    if not lists:
+        return None
+    return checklist_answers.check(lists, checklist_answers.parse(text) if text else None)
 
 
 def _marks(ctx: Context) -> commit_hooks.Marks:
@@ -404,7 +455,8 @@ def _run_agent(
 
     The private worker's definition is the one that writes nothing to a ticket (DESIGN §22), so the slot's config must
     name none of the tracker server's tools either. The session, cost, and tool calls the runtime reported are recorded
-    at once. canopy's git hooks put `marks` on every commit the worker makes (`commit_hooks`).
+    at once. canopy's git hooks put `marks` on every commit the worker makes (`commit_hooks`), and hold its push for
+    its repository's checklist, when the run has one (DESIGN §42).
 
     Returns:
         The agent's process and the text its result line is read from.
@@ -441,7 +493,13 @@ def _run_agent(
     # its question is its final line's, which a reply to the task answers (DESIGN §36, §41).
     served = {cards.SERVER: cards.SERVER_COMMAND}
     env |= servers.env(served, version=ctx.config.runtime.version, cwd=ctx.workspace.root.absolute())
-    env |= commit_hooks.env(snapshot, marks, os.environ)
+    answers = starts.answers_dir(Path(run.log_path))
+    listed = checklists.file_of(answers, run.repo)
+    held = {slot: listed} if listed.is_file() else {}
+    if held:
+        # Where canopy's `pre-push` reads the list, which a sandboxed run may read and not write (DESIGN §24, §42).
+        env[cards.ANSWERS_ENV] = str(answers)
+    env |= commit_hooks.env(snapshot, marks, os.environ, held)
     done = ctx.runner.run(
         argv,
         cwd=slot,

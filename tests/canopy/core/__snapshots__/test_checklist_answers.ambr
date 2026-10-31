@@ -9,6 +9,6 @@
   api   doc-comments          3     1      0     0    0           2
   web   no-any                1     0      0     1    0           0
   
-  Why a run held an item is on its run: canopy show run:ID.
+  Why a run held an item is on its run: canopy show run:ID, or task:N for a task's.
   '''
 # ---

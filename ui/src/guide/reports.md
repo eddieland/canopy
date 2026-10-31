@@ -160,11 +160,11 @@ item and answer it. The checklist page, which **Checklist** on [Reports](/report
 can tell which items earn their place. It's what `canopy checklist` prints.
 
 **By item** is one table, a group of rows per repository under its name, each item in its list's order. **reminded**
-is how many worker runs were given the item, by when they started; then how many answered **pass** (the diff already
-held to it), **fixed** (it didn't, and the worker committed the fix), **held** (it doesn't, and the worker left it so
-for a reason it gave), or **n/a** (the diff touches nothing the item is about), and how many said nothing of it,
-**unanswered**. A run still running hasn't answered yet, so it isn't counted. A zero is dimmed, so the answers that
-happened stand out. Hover a column's name for what it counts.
+is how many worker runs were given the item, a task's among them, by when they started; then how many answered
+**pass** (the diff already held to it), **fixed** (it didn't, and the worker committed the fix), **held** (it doesn't,
+and the worker left it so for a reason it gave), or **n/a** (the diff touches nothing the item is about), and how many
+said nothing of it, **unanswered**. A run still running hasn't answered yet, so it isn't counted. A zero is dimmed, so
+the answers that happened stand out. Hover a column's name for what it counts.
 
 How to read it: an item that's mostly **n/a**, or never anything but **pass**, is one to reword or drop, because a
 rule that never fails is a rule the workers are paying tokens to agree with. One that's often **held** is one to argue
@@ -172,10 +172,10 @@ about with whoever wrote it. A lot of **unanswered** usually means runs that nev
 counts every item of a run it gave a list to, pushed or not, and errs toward too many.
 
 Why a worker held an item is its own words, so it stays on the run rather than here: the [run's page](runs#a-runs-page)
-shows it, and `canopy show run:ID` prints it. Pick **7 days**, **14 days**, or **30 days** in the header; a day runs
-midnight to midnight on canopy's clock, as the spend page's do. Two weeks is the measurement the checklist was built to
-take. With lists in more than one repository, the picker beside it narrows the table to the ones you choose. With no
-list answered in the window, the page says so, and names `paths.checklists`, where the lists live.
+shows it, and `canopy show run:ID` prints it, or `task:N` for a task's. Pick **7 days**, **14 days**, or **30 days** in
+the header; a day runs midnight to midnight on canopy's clock, as the spend page's do. Two weeks is the measurement the
+checklist was built to take. With lists in more than one repository, the picker beside it narrows the table to the ones
+you choose. With no list answered in the window, the page says so, and names `paths.checklists`, where the lists live.
 
 ## The health page
 

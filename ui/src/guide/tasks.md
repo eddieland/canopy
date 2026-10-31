@@ -102,6 +102,10 @@ on; the harness's note when canopy decided how it ended; the PRs it named and th
 spent and on which models, the one canopy asked for first, as a worker run's page names them; its branch, the commit it
 pushed, and its log.
 
+A task's worker pushes like any other, so in a repository you keep a [checklist](reports#the-checklist-page) for, its
+first push is held for the list too, and its answers sit in a **Checklist** panel under Run, as on [a worker run's
+page](runs#a-runs-page). A one-off task doesn't get a pass on the house rules just for being one-off.
+
 Under it is the **transcript**, the session's events read from the run's log: what the worker wrote, each tool call
 with its input and output, and what each model call cost, with the context chart one click away, as on a run's page.
 It is the place to check how a run got its answer before you build on it. A run still working shows what its worker

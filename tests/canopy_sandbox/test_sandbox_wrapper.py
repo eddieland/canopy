@@ -998,6 +998,38 @@ def test_a_sandboxed_repositorys_task_runs_in_the_wrapper_canopy_adds(canopy_env
     assert call["cwd"] == present(tasks.get_run(ctx.conn, started.run_id)).slot_path
     assert call["env"]["XDG_CACHE_HOME"] == str(sandbox.caches() / "worker")
     assert call["env"]["CANOPY_GIT_OBJECTS"]
+    # A task in a repository without a checklist has no answers directory to read.
+    assert not any(p.endswith(".answers") for p in call["settings"]["filesystem"]["allowRead"])
+
+
+@pytest.mark.usefixtures("worktree_pool")
+def test_a_sandboxed_tasks_run_reads_its_checklist_and_writes_none_of_it(
+    canopy_env: CanopyEnv,
+    sandbox: Sandbox,
+) -> None:
+    """Its list is in an answers directory of its own, beside its log, as canopy's `pre-push` reads it (DESIGN §42)."""
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"sandbox_repos": ["repo"]}})
+    lists = canopy_env.user_file.parent / "checklists"
+    lists.mkdir()
+    (lists / "repo.md").write_text("## general-types\n\nA parameter takes the most general type its body needs.\n")
+    canopy_env.configure(canopy_env.user_file, {"paths": {"checklists": str(lists)}})
+    ctx = inline_context(canopy_env)
+    assert operator("task", "submit", "Find out why the build is slow.") == 0
+    with in_tick(ctx.conn) as tick_id:
+        [started] = task_starts.start_queued(ctx, tick_id, logs.for_tick(tick_id))
+
+    with private_worker_does(result={"status": "done", "summary": "nothing to change"}):
+        assert main(["_task", str(started.run_id)], runner=InlineRunner()) == 0
+
+    run = present(tasks.get_run(ctx.conn, started.run_id))
+    assert run.status == "done"
+    call = sandbox.only_call()
+    answers = task_starts.answers_dir(Path(run.log_path))
+    filesystem = call["settings"]["filesystem"]
+    assert str(answers) in filesystem["allowRead"]
+    listed = checklists.file_of(answers, "repo")
+    assert covered(filesystem["allowRead"], listed)
+    assert not covered(filesystem["allowWrite"], listed)
 
 
 def answers_dir(tmp_path: Path, parent: str = "runs") -> Path:
@@ -1007,11 +1039,23 @@ def answers_dir(tmp_path: Path, parent: str = "runs") -> Path:
     return answers
 
 
-@pytest.mark.parametrize("role", ["worker", "review"])
-def test_a_run_reads_its_answers_directory_and_writes_none_of_it(sandbox: Sandbox, tmp_path: Path, role: str) -> None:
-    """The operator's answer to its card's question reaches the run there (DESIGN §41)."""
+@pytest.mark.parametrize(
+    ("role", "parent"),
+    [("worker", "runs"), ("review", "reviews"), ("worker", canopy_sandbox.TASK_RUNS)],
+)
+def test_a_run_reads_its_answers_directory_and_writes_none_of_it(
+    sandbox: Sandbox,
+    tmp_path: Path,
+    role: str,
+    parent: str,
+) -> None:
+    """The operator's answer to its card's question reaches the run there (DESIGN §41), and its checklist (§42).
+
+    A one-off task's run, a worker's role, has one beside its other files, where canopy keeps them.
+    """
+    assert canopy_sandbox.TASK_RUNS == task_starts.RUNS_DIR
     _, slot = linked_worktree(tmp_path, "repo")
-    answers = answers_dir(tmp_path, "runs" if role == "worker" else "reviews")
+    answers = answers_dir(tmp_path, parent)
     env = {"CANOPY_ANSWERS": str(answers)}
     if role == "worker":
         env["CANOPY_GIT_OBJECTS"] = str(objects_dir(tmp_path))

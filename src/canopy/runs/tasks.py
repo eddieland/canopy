@@ -15,7 +15,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, cast
 
-from canopy.core import contract, conversation, db, outbox, plans, pools, records, sql
+from canopy.core import checklist_answers, contract, conversation, db, outbox, plans, pools, records, sql
 from canopy.core.conversation import Refused
 from canopy.core.vocab import RunStatus
 from canopy.runs import task_tickets
@@ -439,12 +439,13 @@ def close_run(
     *,
     head: str | None,
     tickets: Iterable[str] = (),
+    checklist: checklist_answers.Checked | None = None,
 ) -> bool:
     """Close task run `run_id` as `status`, with its result and the head its branch was at on origin (DESIGN §36).
 
     In the same transaction it records the run's messages about its task, its report and a `blocked` run's question,
-    each naming the run; `tickets`, the keys `task_tickets.check` passed, against the task; and its `task.ended` event,
-    naming the keys it recorded, when a sink takes `tasks`.
+    each naming the run; `tickets`, the keys `task_tickets.check` passed, against the task; `checklist`, its answers to
+    its repository's list (§42); and its `task.ended` event, naming the keys it recorded, when a sink takes `tasks`.
 
     Returns:
         True if this call closed it; False when it was already closed, by reconcile or a stop: nothing is recorded.
@@ -476,6 +477,7 @@ def close_run(
                 task_run_id=run_id,
             )
         recorded = task_tickets.record(conn, run.task_id, run_id, tickets)
+        checklist_answers.record(conn, run_id, checklist, table="task_runs")
         event = outbox.task_ended(config, run, status, result_json, head=head, message=last, tickets=recorded)
         if event is not None:
             db.record_event(conn, event)
