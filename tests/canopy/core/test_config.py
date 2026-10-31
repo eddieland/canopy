@@ -10,8 +10,9 @@ from canopy_artifacts import tools as store_tools
 
 from canopy.cli.main import main
 from canopy.core import config, workspace
-from canopy.core.config import ConfigError, PlannerApproval, load, render_command
+from canopy.core.config import ConfigError, load, render_command
 from canopy.core.context import Context
+from canopy.core.vocab import PlannerApproval
 from canopy.loop import reread
 from canopy.runtime.implementation import Version
 from tests.conftest import HERMETIC_GIT, SHARED_TOML, TRACKER_SOURCE, TRACKER_TOML, CanopyEnv, git, user_toml

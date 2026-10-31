@@ -231,6 +231,13 @@ export const TIPS = {
         'Hot take: LGTM is a complete sentence. I also say it about naps.',
         'Haiku: ready for review / the reviewer is at lunch / a long lunch, it seems',
     ],
+    '/reports/plans': [
+        "It looks like you're judging plans. I approve every plan I see. That's why I'm not allowed to.",
+        'Unhelpful tip: a plan approved in four seconds was either perfect or not read. I can tell you which.',
+        'Dear diary, the planner approved its own plan. The PR needed three resumes. We do not speak of it.',
+        'Hot take: the fastest code review is a plan review. The second fastest is LGTM.',
+        'Haiku: plan says two files / the diff touches eleven / resume, resume, done',
+    ],
     '/workspace/ticks/': [
         "It looks like you're counting ticks. I counted one, then lost my place.",
         'Unhelpful tip: every tick has an id. I have an id too. It is Sprig.',

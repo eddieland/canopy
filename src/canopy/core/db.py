@@ -22,6 +22,7 @@ from canopy.core.vocab import (
     Decider,
     NumberedItem,
     Phase,
+    PlannerApproval,
     PlanStatus,
     PoolKind,
     ResumeReason,
@@ -842,6 +843,7 @@ def insert_run(
     persona_digest: str | None = None,
     persona_text: str | None = None,
     model: str | None = None,
+    plan_review: PlannerApproval | None = None,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
@@ -857,6 +859,7 @@ def insert_run(
     `persona` and `persona_digest` are the name and text digest of the persona its prompt carries, or None for a kind
     no persona reaches (DESIGN §31); `persona_text` is that text, kept once per digest (`record_persona_text`).
     `model` is the model canopy chose for the run's agent, or None for the runtime's default (DESIGN §13).
+    `plan_review` is the level of `policy.planner_may_approve` a plan run's prompt offered, None for another kind (§25).
 
     Returns:
         The new run's id.
@@ -878,6 +881,7 @@ def insert_run(
             persona=persona,
             persona_digest=persona_digest,
             model=model,
+            plan_review=plan_review,
         )
         run_id = rowid(run.run(conn))
         record_persona_text(conn, persona_digest, persona_text)
