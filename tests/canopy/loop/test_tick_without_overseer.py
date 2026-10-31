@@ -80,7 +80,7 @@ def test_a_tick_with_a_ticket_left_runs_the_overseer(quiet: Scenario) -> None:
 def test_a_tick_with_a_due_chore_with_a_when_runs_the_overseer(quiet: Scenario) -> None:
     due_chore(quiet, THEIRS, when="Weekdays only.")
     ticked = quiet.tick(chore_waits(THEIRS, "not a weekday"))
-    assert ticked.tick.overseer_ran is True
+    assert ticked.tick.overseer_ran == 1
 
 
 def test_a_dry_run_with_nothing_left_runs_no_overseer_and_starts_nothing(quiet: Scenario) -> None:
@@ -107,9 +107,9 @@ def test_a_tick_that_ran_no_overseer_leaves_the_idle_count_as_it_was(
 ) -> None:
     # Idle pacing paces the overseer's runs alone (DESIGN §39); any other tick counts as it did.
     with in_tick(conn, ends_ok=True) as without:
-        db.set_tick_overseer(conn, without, ran=False)
+        db.set_tick_overseer(conn, without, runs=0)
     with in_tick(conn, ends_ok=True) as ran:
-        db.set_tick_overseer(conn, ran, ran=True)
+        db.set_tick_overseer(conn, ran, runs=1)
     ctx = context(canopy_env)
     assert pacing.count(ctx, tick.Outcome(without, TickStatus.OK, ""), 3, idle=True, on=True) == 3
     assert pacing.count(ctx, tick.Outcome(without, TickStatus.OK, ""), 3, idle=False, on=True) == 3
