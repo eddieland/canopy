@@ -6,7 +6,8 @@
 // (ui/AGENTS.md). A link keeps its Markdown and shows its address on hover, but is not a link: the web UI links a URL
 // only to itself (D113). A line the source wraps inside a paragraph is a soft break of its own, drawn as a space and
 // written back as the wrap it was. Text pasted as Markdown is read as Markdown, through the same parser, and what is
-// copied out of more than one block is written as Markdown.
+// copied out of more than one block is written as Markdown. A Mermaid code block is drawn as its diagram too, as an
+// image (src/lib/plan-diagram.ts), which keeps it text all the same: the code is the document.
 import { Extension, getTextBetween, getTextSerializersFromSchema, mergeAttributes, Node } from '@tiptap/core'
 import type { AnyExtension, JSONContent, MarkdownToken } from '@tiptap/core'
 import { Heading } from '@tiptap/extension-heading'
@@ -19,6 +20,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { StarterKit } from '@tiptap/starter-kit'
 
 import { ATOM } from '@/lib/plan-anchors'
+import { PlanDiagrams } from '@/lib/plan-diagram'
 
 // A mark as a document's JSON holds it.
 type JSONMark = NonNullable<JSONContent['marks']>[number]
@@ -46,6 +48,7 @@ export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
         VerbatimInline,
         ImageAsText,
         SoftBreak,
+        PlanDiagrams,
         PasteMarkdown,
         CopyMarkdown,
         PlanMarkdown.configure({ indentation: { style: 'space', size: 2 } }),
