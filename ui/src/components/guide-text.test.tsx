@@ -53,6 +53,26 @@ describe('GuideText', () => {
         expect(web.getAttribute('rel')).toBe('noreferrer noopener')
     })
 
+    it('lays out a quote, a rule, a table, and emphasis', async () => {
+        const blocks: Block<GuidePiece>[] = [
+            { kind: 'quote', blocks: [{ kind: 'paragraph', lines: [[{ kind: 'em', text: 'Measure twice.' }]] }] },
+            { kind: 'rule' },
+            {
+                kind: 'table',
+                align: [undefined, 'right'],
+                head: [[text('Key')], [text('Default')]],
+                rows: [[[text('a')], [text('2')]]],
+            },
+        ]
+        await renderRouted(<GuideText blocks={blocks} page="overview" />)
+
+        expect(screen.getByRole('blockquote').textContent).toBe('Measure twice.')
+        expect(screen.getByRole('emphasis').textContent).toBe('Measure twice.')
+        expect(screen.getByRole('separator')).toBeDefined()
+        expect(screen.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['Key', 'Default'])
+        expect(screen.getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['a', '2'])
+    })
+
     it('colors a code block by the language its fence names, its characters as written', async () => {
         const lines = ['# The policy', '[policy]', 'max_resume_attempts = 2']
         const { container } = await renderRouted(

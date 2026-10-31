@@ -9,8 +9,8 @@ import { splitLinks } from '@/lib/links'
 import type { Piece } from '@/lib/links'
 import { isPullRequest, pullRequestLabel } from '@/lib/pull-request-label'
 import { splitRunRefs } from '@/lib/refs'
-import { clamp, codeSpans, parse } from '@/lib/rich-text'
-import type { Block, Inline, Line } from '@/lib/rich-text'
+import { ALIGN, clamp, codeSpans, parse } from '@/lib/rich-text'
+import type { Align, Block, Inline, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
 
 /** How many lines a summary or a rationale shows in a list's row before its toggle. */
@@ -20,8 +20,9 @@ export const SUMMARY_LINES = 4
 const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' }
 
 /**
- * Agent-written text laid out as it was written: line breaks, lists, headings, and code (`src/lib/rich-text.ts`). It is
- * untrusted, so every piece is React text, never HTML; a URL outside code is a link to itself (`LinkedText`, D113).
+ * Agent-written text laid out as it was written: line breaks, lists, headings, quotes, rules, tables, and code
+ * (`src/lib/rich-text.ts`). It is untrusted, so every piece is React text, never HTML; a URL outside code is a link to
+ * itself (`LinkedText`, D113).
  * With `lines`, text longer than that shows its first lines and a toggle for the rest; a long line counts as the lines
  * it wraps to, so one long paragraph folds too. With `prose`, a paragraph's or an item's lines join with a space, as
  * Markdown's soft breaks do, for a file wrapped at a column (a persona) rather than written a line a thought. With
@@ -140,6 +141,46 @@ function BlockView({ block, prose, look }: { block: Block; prose: boolean; look:
                 <ul className={cn(list, 'list-disc')}>{items}</ul>
             )
         }
+        case 'quote': {
+            return (
+                <blockquote className="flex flex-col gap-1.5 border-l-2 pl-3 text-muted-foreground">
+                    {block.blocks.map((inner, i) => (
+                        <BlockView key={i} block={inner} prose={prose} look={look} />
+                    ))}
+                </blockquote>
+            )
+        }
+        case 'rule': {
+            return <hr className="my-1" />
+        }
+        case 'table': {
+            return (
+                <div className="overflow-x-auto">
+                    <table className="border-collapse text-left">
+                        <thead>
+                            <tr className="border-b">
+                                {block.head.map((line, i) => (
+                                    <th key={i} scope="col" className={cn(cellClass(block.align[i]), 'font-medium')}>
+                                        <LineView line={line} look={look} />
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {block.rows.map((row, i) => (
+                                <tr key={i} className="border-b last:border-b-0">
+                                    {row.map((line, j) => (
+                                        <td key={j} className={cellClass(block.align[j])}>
+                                            <LineView line={line} look={look} />
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )
+        }
         case 'code': {
             return (
                 <pre
@@ -153,6 +194,11 @@ function BlockView({ block, prose, look }: { block: Block; prose: boolean; look:
             )
         }
     }
+}
+
+// A table cell's class, set as its column's delimiter row asks.
+function cellClass(align: Align): string {
+    return cn('px-2 py-1 align-top first:pl-0 last:pr-0', align && ALIGN[align])
 }
 
 function LineView({ line, look }: { line: Line; look: Look }) {
@@ -169,6 +215,20 @@ function InlineView({ piece, look }: { piece: Inline; look: Look }) {
                 <strong className="font-semibold">
                     <LinkedText text={piece.text} pullRequests={look.pullRequests} />
                 </strong>
+            )
+        }
+        case 'em': {
+            return (
+                <em className="italic">
+                    <LinkedText text={piece.text} pullRequests={look.pullRequests} />
+                </em>
+            )
+        }
+        case 'del': {
+            return (
+                <del className="line-through">
+                    <LinkedText text={piece.text} pullRequests={look.pullRequests} />
+                </del>
             )
         }
         case 'code': {

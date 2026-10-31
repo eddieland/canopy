@@ -151,15 +151,31 @@ function linkProblems(page: GuidePage): string[] {
 }
 
 function lines(blocks: Block<GuidePiece>[]): Line<GuidePiece>[] {
-    return blocks.flatMap((block) => {
-        if (block.kind === 'paragraph') {
+    return blocks.flatMap((block) => linesOf(block))
+}
+
+function linesOf(block: Block<GuidePiece>): Line<GuidePiece>[] {
+    switch (block.kind) {
+        case 'paragraph': {
             return block.lines
         }
-        if (block.kind === 'heading') {
+        case 'heading': {
             return [block.line]
         }
-        return block.kind === 'list' ? block.items.flatMap((item) => item.lines) : []
-    })
+        case 'list': {
+            return block.items.flatMap((item) => item.lines)
+        }
+        case 'quote': {
+            return lines(block.blocks)
+        }
+        case 'table': {
+            return [...block.head, ...block.rows.flat()]
+        }
+        case 'rule':
+        case 'code': {
+            return []
+        }
+    }
 }
 
 function anchors(blocks: Block<GuidePiece>[]): string[] {
