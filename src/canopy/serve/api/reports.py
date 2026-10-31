@@ -66,8 +66,9 @@ def checklist_counts(
 ) -> ChecklistCounts:
     """How the worker runs that started in the window answered each item of their repositories' lists.
 
-    As `canopy checklist` counts them: per repository and item, the runs reminded, then each answer. A held item's
-    reason is the worker's text, and stays on its run.
+    As `canopy checklist` counts them: per repository and item, the runs reminded, then each answer, with the newest
+    runs behind its `held` and `fixed` answers, each held one's reason the worker's text on a line. Then the same
+    counts per item and local ISO week of the window.
     """
     with backend.open() as ctx:
         return checklist_views.checklist_counts(backend, ctx, days, repo=repo)
