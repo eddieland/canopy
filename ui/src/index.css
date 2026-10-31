@@ -711,6 +711,63 @@
     }
 }
 
+/*
+ * Halloween's air beside Sprig (src/components/season.tsx): a bat beats its wings as it drifts up and down, and a
+ * spider lets itself down its thread and climbs back. The thread stretches as the spider drops, on the same clock, so
+ * the two never part: the thread is 14 units long and the spider drops 5.6, two fifths of it.
+ */
+@keyframes buddy-flap {
+    50% {
+        transform: scaleY(0.35);
+    }
+}
+
+@keyframes buddy-drift {
+    50% {
+        transform: translateY(3px);
+    }
+}
+
+@keyframes buddy-dangle {
+    50% {
+        transform: translateY(5.6px);
+    }
+}
+
+@keyframes buddy-thread {
+    50% {
+        transform: scaleY(1.4);
+    }
+}
+
+@utility animate-buddy-flap {
+    transform-box: fill-box;
+    transform-origin: center;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-flap 380ms ease-in-out infinite;
+    }
+}
+
+@utility animate-buddy-drift {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-drift 2.4s ease-in-out infinite;
+    }
+}
+
+@utility animate-buddy-dangle {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-dangle 5s ease-in-out infinite;
+    }
+}
+
+@utility animate-buddy-thread {
+    transform-box: fill-box;
+    transform-origin: top;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-thread 5s ease-in-out infinite;
+    }
+}
+
 @utility animate-buddy-blink {
     transform-box: fill-box;
     transform-origin: center;

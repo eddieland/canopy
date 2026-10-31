@@ -72,7 +72,8 @@ interface Offer {
  * (src/lib/ghost.ts), and keeps every rule above. A tip one of them offered is never shown under the other's name.
  *
  * In a season (src/lib/seasons.ts), a jack-o'-lantern or the like stands beside whichever of them is there, in the
- * same slot, so it steps out with them.
+ * same slot, so it steps out with them; what hangs or flies over it shows only where the bubble has its room, so it
+ * never covers the blocks above.
  */
 export function Buddy() {
     const view = viewOf(useRouterState({ select: (state) => state.matches.at(-1)?.routeId }))
@@ -179,7 +180,7 @@ export function Buddy() {
                             <Figure cue={offer.n} hat={worn} rave={rave} />
                         )}
                     </button>
-                    {season === null ? null : <SeasonDecoration id={season} className="mb-1 h-9 w-10" />}
+                    {season === null ? null : <SeasonDecoration id={season} aloft={room === 'roomy'} />}
                 </div>
             </aside>
         </div>
