@@ -168,7 +168,8 @@ Rules:
 - Sizes: `text-xl` page titles and the spend's totals, `text-sm` body, `text-xs` secondary and data-dense rows, and
   `text-2xs` (11px, defined in `tokens.css`) for the smallest print: a chip, the stream's state, the rail's labels and
   spend windows, and a `panel-label`. A document, long-form prose (a guide page, a plan), has one step of its own,
-  `text-base`, through its utilities alone (A document, under Primitives), so that is the only place it appears.
+  `text-base`, through its utilities alone (A document, under Primitives); rich text's `#` and `##` headings are the
+  one other place it appears (Rich text).
   Nothing larger, but a counter's value (`text-3xl`), and nothing smaller or between the steps: no arbitrary sizes
   (`text-[0.625rem]`). Code is the one size set against its line, not a step (`text-code`, Rich text).
 - **An icon is the size of the text it sits with**: 16px (`size-4`) beside `text-sm` and in a button of the default or
@@ -1321,7 +1322,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   page alone.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary, a decision's rationale, and a conversation's message: line breaks kept, `-` and `1.` lists (nested by
-  indent), `#` headings as a `font-medium` line, `>` quotes as their own blocks, muted on a stroke at their left, a
+  indent), headings as a `font-semibold` line with space above it, `#` and `##` a step over `###` (`text-base`, a
+  small step, as the page's heading ladder does not apply inside a bubble), `>` quotes as their own blocks, muted on
+  a stroke at their left, a
   `---` rule as a hairline, a pipe table with its head as column headers and its columns aligned by their colons,
   scrolling sideways when wide, fenced code as a `surface-raised` block that scrolls sideways, and `code`, **strong**,
   *emphasis*, and ~~struck~~ inline. Code, inline or fenced, is `text-code`: a step under its line on a sans palette,
