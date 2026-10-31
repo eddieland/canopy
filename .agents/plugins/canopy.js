@@ -64,7 +64,10 @@ const CARD_RUN = /^(?:review-|task-)?[0-9]{1,18}$/;
 const ASKING_RUN = /^(?:review-)?[0-9]{1,18}$/;
 /** canopy's tool that posts an update of the run's progress, as the runtime names it. */
 const STATUS_TOOL = "canopy_run_status";
-/** How many tool calls a session makes with no `status` call before the nudge asks for one. */
+/** How many tool calls a session makes before its first `status` call, before the nudge asks for one. */
+const FIRST_CALLS = 8;
+/** How many tool calls a session makes with no `status` call after its first, and after each time the nudge asked,
+ * before the nudge asks again. */
 const STALE_CALLS = 20;
 /** The file in a run's answers directory that holds the operator's latest answer, and the most of it read. */
 const ANSWER_FILE = "answer.json";
@@ -398,15 +401,16 @@ function split() {
 }
 
 /**
- * The nudge's hooks: the one that asks for an update once a session has gone `STALE_CALLS` tool calls without one.
+ * The nudge's hooks: the one that asks for an update once a session has gone a while without one.
  *
  * A worker, a planner, a reviewer, or a task's worker keeps its progress, where its work stands, for the operator
- * (DESIGN §41), through canopy's `status` tool; one that forgets leaves the operator progress that says less each call.
- * The nudge counts each session's tool calls since its last successful `status` call, or since it started, and at
- * `STALE_CALLS` adds one line to that call's result asking for an update, the way the clock adds its line, so the agent
- * hears it between calls and never mid-thought. It asks once per lapse: not again until the agent has called `status`.
- * It keeps the count and whether it asked, per session, and nothing else; in any other run, as CANOPY_RUN_ID names it,
- * it has no hook.
+ * (DESIGN §41), through canopy's `status` tool; one that forgets leaves the operator progress that says less each call,
+ * or none at all. The nudge counts each session's tool calls since its last successful `status` call, or since it
+ * started, and adds one line to a call's result asking for an update, the way the clock adds its line, so the agent
+ * hears it between calls and never mid-thought: at `FIRST_CALLS` for a session that has posted none yet, so the
+ * operator hears early what the work is, and at `STALE_CALLS` after its last. An agent that goes on without one is
+ * asked again each `STALE_CALLS` calls after. It keeps, per session, the count, whether it has updated, and when it
+ * last asked, and nothing else; in any other run, as CANOPY_RUN_ID names it, it has no hook.
  *
  * @returns {Hooks} The nudge's hooks.
  */
@@ -418,7 +422,9 @@ function nudge() {
     /** @type {Map<string | undefined, number>} */
     const since = new Map();
     /** @type {Set<string | undefined>} */
-    const asked = new Set();
+    const updated = new Set();
+    /** @type {Map<string | undefined, number>} */
+    const askedAt = new Map();
     return {
         /**
          * @param {AfterInput | undefined} input
@@ -429,29 +435,32 @@ function nudge() {
             // A `status` call the server refused, which has no result, leaves the last update as old as it was.
             if (input?.tool === STATUS_TOOL && output !== null && output !== undefined) {
                 since.delete(session);
-                asked.delete(session);
+                askedAt.delete(session);
+                updated.add(session);
                 return;
             }
             const calls = (since.get(session) ?? 0) + 1;
             since.set(session, calls);
-            if (calls >= STALE_CALLS && !asked.has(session) && tell(output, stale(calls))) {
-                asked.add(session);
+            const first = !updated.has(session);
+            const last = askedAt.get(session);
+            const due = last === undefined ? calls >= (first ? FIRST_CALLS : STALE_CALLS) : calls - last >= STALE_CALLS;
+            if (due && tell(output, stale(calls, first))) {
+                askedAt.set(session, calls);
             }
         },
     };
 }
 
 /**
- * The nudge's line, after `calls` tool calls with no `status` call.
+ * The nudge's line, after `calls` tool calls with no `status` call, `first` when the session has made none yet.
  *
  * @param {number} calls
+ * @param {boolean} first
  * @returns {string}
  */
-function stale(calls) {
-    return (
-        `${MARK} ${calls} tool calls since your last update: call ${STATUS_TOOL} with where your work stands now,` +
-        " then go on."
-    );
+function stale(calls, first) {
+    const lapse = first ? `${calls} tool calls and no update yet` : `${calls} tool calls since your last update`;
+    return `${MARK} ${lapse}: call ${STATUS_TOOL} with where your work stands now, then go on.`;
 }
 
 /**

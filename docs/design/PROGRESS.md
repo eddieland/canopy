@@ -55,9 +55,11 @@ own options (TRUST_MODEL T1).
 
 canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a worker's, planner's, review's, or task's
 run, it counts each session's tool calls since its last `status` call, and after a number of them adds one `[canopy]`
-line to that call's result asking for an update, once per lapse, so the agent is asked between calls and never
-mid-thought. It keeps the count and whether it asked, and nothing else, as the clock keeps whether it has warned. A
-forged line can only ask for an update, so it fails safe, as the clock's do (§33).
+line to that call's result asking for an update, so the agent is asked between calls and never mid-thought. It asks
+sooner before a session's first update than after, so the operator learns early what the work is, and asks again each
+time as many calls go by unanswered, so one ask ignored does not leave the run silent. It keeps the count, whether the
+session has updated, and when it last asked, and nothing else, as the clock keeps whether it has warned. A forged line
+can only ask for an update, so it fails safe, as the clock's do (§33).
 
 A run's progress is shown to the operator and never put in another agent's prompt, so neither the overseer's cache
 (§6) nor its trust in worker text changes (TRUST_MODEL T1). Nothing in its progress extends a run or holds a slot (T3).
