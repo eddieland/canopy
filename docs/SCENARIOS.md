@@ -284,6 +284,13 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   re-measure with MEASUREMENTS' prompt (Re-measuring). Expect tool-result tokens per tick at a tenth of the first day's
   median (about 14k), and no action missed over the day, checked against the derivation as M36's agreement counts are.
   Record the numbers in `MEASUREMENTS.md`.
+- **S70. The tools over a week** (M48, closed on real use 2026-10-31). Run `canopy loop` a week against the real
+  queue, with the operator's chores on. Expect no `bash` call in any overseer transcript, no tick that closed
+  `canopy_unavailable` or failed for a tool call the overseer could not make (a call refused for its shape, not by a
+  guard), no chore run failing for its server, and the chores' transcripts reading their history through
+  `canopy_chore_history`. With MEASUREMENTS' prompt (Re-measuring), record tool-result tokens per tick against
+  2026-10-13's median, the only one on record from the overseer's shell: about 8k a tick from tick 100 on. Record the
+  numbers in `MEASUREMENTS.md`.
 
 ## Retired
 
