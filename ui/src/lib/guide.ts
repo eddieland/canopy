@@ -13,11 +13,14 @@ import configFiles from '@/guide/config-files.md?raw'
 import glossary from '@/guide/glossary.md?raw'
 import howTheLoopWorks from '@/guide/how-the-loop-works.md?raw'
 import memory from '@/guide/memory.md?raw'
+import notifications from '@/guide/notifications.md?raw'
 import overview from '@/guide/overview.md?raw'
+import personas from '@/guide/personas.md?raw'
 import philosophy from '@/guide/philosophy.md?raw'
 import plans from '@/guide/plans.md?raw'
 import pullRequests from '@/guide/pull-requests.md?raw'
 import reports from '@/guide/reports.md?raw'
+import runningTheLoop from '@/guide/running-the-loop.md?raw'
 import runs from '@/guide/runs.md?raw'
 import settings from '@/guide/settings.md?raw'
 import signingIn from '@/guide/signing-in.md?raw'
@@ -81,6 +84,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['overview', overview],
             ['signing-in', signingIn],
             ['how-the-loop-works', howTheLoopWorks],
+            ['running-the-loop', runningTheLoop],
             ['philosophy', philosophy],
         ],
     },
@@ -94,6 +98,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['pull-requests', pullRequests],
             ['code-review', codeReview],
             ['checklists', checklists],
+            ['personas', personas],
         ],
     },
     {
@@ -104,6 +109,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['reports', reports],
             ['chores', chores],
             ['memory', memory],
+            ['notifications', notifications],
             ['slack', slack],
             ['settings', settings],
         ],

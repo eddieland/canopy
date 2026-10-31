@@ -16,15 +16,17 @@ paragraph in the guide to read even if you read nothing else.
 The guide comes in four parts, in the order you'll need them.
 
 - **Getting started**: this page, signing in, [How the loop works](how-the-loop-works), the handful of ideas every
-  other page leans on, and [Philosophy](philosophy), why canopy is built the way it is. Read those two before anything
-  surprises you, not after.
+  other page leans on, [Running the loop](running-the-loop), starting and stopping it, and [Philosophy](philosophy),
+  why canopy is built the way it is. Read the ideas and the why before anything surprises you, not after.
 - **Your work**: the pages where the loop waits on you. [Attention](attention) first, then [Tickets](tickets),
-  [Plans](plans), and [Pull requests and reviews](pull-requests), with [Code review](code-review) on how to spend
-  your reviewing time when agents write most of the code, and [Checklists](checklists) for the rules you'd otherwise
-  keep writing in review comments.
+  [Plans](plans), [Tasks](tasks), and [Pull requests and reviews](pull-requests), with [Code review](code-review) on
+  how to spend your reviewing time when agents write most of the code, [Checklists](checklists) for the rules you'd
+  otherwise keep writing in review comments, and [Personas](personas) for the voice your agents write in.
 - **The loop**: the pages where you watch it work. [Runs and worktrees](runs), [Ticks](ticks), [Reports](reports),
-  [Chores](chores), [Memory](memory), and [Settings](settings).
-- **Reference**: the [Glossary](glossary), every word the other pages assume you know, for when one of them does.
+  [Chores](chores), [Memory](memory), [Notifications](notifications) and [Slack](slack) for hearing about it away
+  from this page, and [Settings](settings).
+- **Reference**: [Config files](config-files), the examples canopy ships, and the [Glossary](glossary), every word the
+  other pages assume you know, for when one of them does.
 
 You don't have to come in through the front door. Every page of the app has a book at its top right that opens the
 part of this guide about that page, so the answer to "what is this?" is one click from the thing you're asking about.

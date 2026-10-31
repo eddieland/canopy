@@ -51,8 +51,8 @@ migration's sha256. Passes: both files in the diff. Fails: a migration alone.
 Ten to fifteen items is plenty. A longer list is usually two lists, or a list with a linter hiding in it: anything a
 machine can check belongs in the linter, which never gets tired of saying so.
 
-A file holds at most 16 KiB of UTF-8, and nothing before its first heading. Like a [persona](tickets#choosing-a-persona),
-it may not hold a character that hides text, such as a zero-width space, since it reaches every run in its repository.
+A file holds at most 16 KiB of UTF-8, and nothing before its first heading. Like a [persona](personas), it may not
+hold a character that hides text, such as a zero-width space, since it reaches every run in its repository.
 
 ## When a list can't be read
 
