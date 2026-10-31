@@ -3,7 +3,7 @@
 -- task run in `task_run_id`, never both. SQLite cannot drop a NOT NULL or a primary key in place, so
 -- `checklist_answers` is rebuilt with every row it had, each keeping its rowid, by which an item's list order is read;
 -- nothing references it, and it has no index.
-CREATE TABLE checklist_answers_0114 (
+CREATE TABLE checklist_answers_0115 (
     run_id       INTEGER REFERENCES runs(id),
     repo         TEXT NOT NULL,
     item         TEXT NOT NULL,
@@ -15,7 +15,7 @@ CREATE TABLE checklist_answers_0114 (
     UNIQUE (run_id, repo, item),
     UNIQUE (task_run_id, repo, item)
 );
-INSERT INTO checklist_answers_0114 (rowid, run_id, repo, item, answer, reason)
+INSERT INTO checklist_answers_0115 (rowid, run_id, repo, item, answer, reason)
     SELECT rowid, run_id, repo, item, answer, reason FROM checklist_answers;
 DROP TABLE checklist_answers;
-ALTER TABLE checklist_answers_0114 RENAME TO checklist_answers;
+ALTER TABLE checklist_answers_0115 RENAME TO checklist_answers;

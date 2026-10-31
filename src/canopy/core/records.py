@@ -1165,6 +1165,13 @@ class ObservedPr(Row):
     mergeable_state: MergeState | None
     #: Its title, the PR author's text, cut and marked, for display only: None from a reader that printed none.
     title: str | None
+    #: Its times, each None from a reader that printed none: when it was opened; when it last became ready for review,
+    #: None while a draft; when a review was first asked for at or after that; and when it merged and when it closed.
+    created_at: str | None
+    ready_at: str | None
+    review_requested_at: str | None
+    merged_at: str | None
+    closed_at: str | None
 
 
 @dataclass(frozen=True)

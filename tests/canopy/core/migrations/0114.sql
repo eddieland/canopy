@@ -1,5 +1,6 @@
--- sha256 of 0114_task_checklist_answers.sql: 1f9a231292cd38b4e8b6c7b11f57aa3596d2f8a08a7d8cc69dfb7629855abaf8
+-- sha256 of 0114_observed_pr_times.sql: 44080223e6474aafbb007683d5eeb2a7d9a4df7dcbce7eb0e1fe6d9e5b5b1448
 
--- Rebuilds checklist_answers, which keeps the row 0112 seeded, a worker run's; this one is a task run's.
-INSERT INTO checklist_answers (repo, item, answer, reason, task_run_id)
-VALUES ('repo', 'newspaper', 'fixed', NULL, (SELECT min(id) FROM task_runs));
+UPDATE observed_prs SET created_at = '2026-10-17T09:00:00.000Z', ready_at = '2026-10-17T09:00:00.000Z',
+    review_requested_at = '2026-10-17T10:00:00.000Z', merged_at = '2026-10-19T15:00:00.000Z',
+    closed_at = '2026-10-19T15:00:00.000Z'
+WHERE url = (SELECT min(url) FROM observed_prs);

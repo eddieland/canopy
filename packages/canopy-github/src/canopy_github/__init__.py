@@ -15,6 +15,7 @@ import re
 import subprocess
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TextIO
 
 import canopy_http
@@ -319,6 +320,32 @@ def more(first: Mapping[str, object], fetch: Callable[[str], Mapping[str, object
     return pages(lambda after: first if after is None else fetch(after))
 
 
+def backward(
+    last: Mapping[str, object],
+    fetch: Callable[[str], Mapping[str, object]],
+) -> Iterator[list[Mapping[str, object]]]:
+    """Each page of a connection read from its end, its last page in hand and each earlier one fetched by its cursor.
+
+    Yields:
+        Each page's nodes, the newest page first, each page in GitHub's order.
+
+    Raises:
+        GitHubError: The pages never end: GitHub sent a page's cursor twice.
+    """
+    seen: set[str] = set()
+    page = last
+    while True:
+        yield items(page.get("nodes"))
+        info = obj(page.get("pageInfo"), "pageInfo")
+        cursor = info.get("startCursor")
+        if info.get("hasPreviousPage") is not True or not isinstance(cursor, str):
+            return
+        if cursor in seen:
+            raise GitHubError("its pages never end: GitHub sent a page's cursor twice", certain=True)
+        seen.add(cursor)
+        page = fetch(cursor)
+
+
 def obj(value: object, what: str) -> Mapping[str, object]:
     """`value` as a JSON object.
 
@@ -351,6 +378,21 @@ def text(value: object) -> str | None:
         The string, or None.
     """
     return value if isinstance(value, str) else None
+
+
+def parse_time(value: object) -> datetime | None:
+    """A time as GitHub writes it, `2026-10-18T10:00:00Z`, or as canopy does, in ISO 8601.
+
+    Returns:
+        The time, in UTC when it names no offset; None for anything else.
+    """
+    if not isinstance(value, str):
+        return None
+    try:
+        moment = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
 
 
 def number(value: object) -> int | None:
