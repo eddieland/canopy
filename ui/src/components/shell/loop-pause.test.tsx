@@ -1,10 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { mockCapacity } from '@/api/mocks'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
+import { mockCapacity } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { LoopState } from '@/api/types'
 import { StreamContext } from '@/hooks/use-loop-down'

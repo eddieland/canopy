@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:api": "cd .. && uv run python -m canopy.serve --mock --port 8765",
     "build": "vite build",
-    "fmt": "oxfmt --write .",
+    "fmt": "oxlint -c .oxlintrc.unused-imports.json --fix --quiet && oxfmt --write .",
     "fmt:check": "oxfmt --check .",
     "typecheck": "tsc -b",
     "lint": "oxlint --type-aware --deny-warnings && node scripts/check-source.mjs && node scripts/check-imports.mjs",

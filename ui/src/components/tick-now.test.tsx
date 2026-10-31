@@ -6,9 +6,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { api } from '@/api/client'
 import { keys } from '@/api/queries'
 import type { Tick } from '@/api/types'
-import { StreamContext } from '@/hooks/use-loop-down'
-
 import { TickNow } from '@/components/tick-now'
+import { StreamContext } from '@/hooks/use-loop-down'
 
 // Every path the button asked, and what the server stand-in answers next: by default, the tick asked for.
 let asked: string[] = []

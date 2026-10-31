@@ -47,7 +47,7 @@ From `ui/` (or `make ui-check`, `make ui-e2e`, `make ui-fmt` from the root):
 | `npm run check` | format check, lint, typecheck, generated types current, unit tests, build: what CI runs |
 | `npm run fmt:check`, `lint`, `typecheck`, `check:api` | its pieces, one at a time |
 | `npm test -- <files>` | the Vitest files named |
-| `npm run fmt` | format with oxfmt |
+| `npm run fmt` | remove unused imports (oxlint), then format and sort imports with oxfmt |
 | `npm run gen:api` | regenerate `src/api/schema.gen.ts` from `canopy.serve`'s OpenAPI schema |
 | `npm run test:e2e -- <specs>` | build, then Playwright against it, served by FastAPI; every spec when none is named |
 
@@ -121,6 +121,9 @@ dozen. When every screenshot differs, check the browser before the change.
   code as an image (D131), which runs no script and fetches nothing.
 - **Formatting:** oxfmt, 120 columns, 4-space indent (the repository's `.editorconfig`). A formatter does not split a
   long string: split class lists across `cn()` or `cva()` arguments. The lint fails on a line over 120.
+- **Imports are sorted, not arranged.** oxfmt sorts them by path in groups (`sortImports` in `.oxfmtrc.json`):
+  node's, packages, the app's own (`@/`), relative, then stylesheets. `npm run fmt` first removes unused imports
+  (`.oxlintrc.unused-imports.json`), so run it rather than tidying them by hand.
 - **Mocks are flagged.** `python -m canopy.serve --mock` serves the real API over a journal seeded from
   `canopy/serve/mock/`, a workspace of three repositories; the header shows `mock`. Its times are fixed around
   2026-10-08 12:00 UTC: a screenshot test freezes the browser's clock (`NOW` in `e2e/helpers.ts`). `src/api/mocks.ts`

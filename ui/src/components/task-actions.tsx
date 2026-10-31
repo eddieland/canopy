@@ -6,8 +6,8 @@ import { refreshTask, stopTask } from '@/api/mutations'
 import type { TaskSummary } from '@/api/types'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
-import { taskRef } from '@/lib/refs'
 import { taskStoppedText } from '@/lib/outcomes'
+import { taskRef } from '@/lib/refs'
 
 /**
  * The CLI's stop on one task (DESIGN §36), under its reply as a ticket's verbs are: Stop, and Stop now while a run of

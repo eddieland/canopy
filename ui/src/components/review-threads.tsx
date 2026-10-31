@@ -39,7 +39,6 @@ import {
     threadWhere,
     waiting,
 } from '@/lib/drafts'
-import type { Placed } from '@/lib/reviews'
 import {
     draftDroppedText,
     draftEditedText,
@@ -48,6 +47,7 @@ import {
     draftsStagedText,
     draftsStagedToast,
 } from '@/lib/outcomes'
+import type { Placed } from '@/lib/reviews'
 import { shortSha, threadAnchor } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 

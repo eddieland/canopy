@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  // `npm run fmt` runs oxlint with this config alone, before oxfmt, to remove unused imports as ruff's fix does for
+  // Python. It is a warning here so that `fmt` never fails: an unused variable it leaves is .oxlintrc.json's to refuse.
+  "plugins": [],
+  "categories": {},
+  "ignorePatterns": ["dist", "src/routeTree.gen.ts", "src/api/schema.gen.ts", "playwright-report", "test-results"],
+  "rules": {
+    "eslint/no-unused-vars": ["warn", { "fix": { "imports": "safe-fix", "variables": "off" } }]
+  }
+}

@@ -13,9 +13,9 @@
 // words are the old plan's, set as text.
 import { Extension } from '@tiptap/core'
 import type { Editor } from '@tiptap/core'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorState, Transaction } from '@tiptap/pm/state'
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import { diffArrays } from 'diff'
 import type { ArrayChange } from 'diff'

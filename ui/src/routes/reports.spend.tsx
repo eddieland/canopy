@@ -21,16 +21,16 @@ import { FirstCallChart } from '@/components/first-call-chart'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { PullRequestTable } from '@/components/pull-request-table'
 import type { PullRequestColumn } from '@/components/pull-request-table'
+import { TickRow } from '@/components/tick-row'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
-import { TickRow } from '@/components/tick-row'
 import { UnnamedModel } from '@/components/unnamed-model'
 import { WindowToggle } from '@/components/window-toggle'
 import { useClock } from '@/lib/clock'
 import { firstKind, KIND_SERIES, seriesOf, seriesWeeks } from '@/lib/first-calls'
-import { windowName } from '@/lib/report-window'
 import { unnamedHint, UNREAD, UNREAD_RUNS_HINT } from '@/lib/models'
+import { windowName } from '@/lib/report-window'
 import {
     alertMarks,
     alertsText,

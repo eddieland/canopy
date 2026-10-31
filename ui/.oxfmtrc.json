@@ -4,5 +4,10 @@
   "semi": false,
   "singleQuote": true,
   "trailingComma": "all",
+  // Imports sorted by path in groups, a blank line between: node's builtins, packages, the app's own (`@/`), then
+  // relative paths, then stylesheets. Unused imports are removed by `npm run fmt` too (.oxlintrc.unused-imports.json).
+  "sortImports": {
+    "groups": ["builtin", "external", ["internal", "subpath"], ["parent", "sibling", "index"], "style", "unknown"]
+  },
   "ignorePatterns": ["src/routeTree.gen.ts", "src/api/schema.gen.ts", "package-lock.json", "**/*.md"]
 }

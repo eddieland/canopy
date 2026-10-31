@@ -1,8 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, Link } from '@tanstack/react-router'
 
-import { AppShell } from '@/components/shell/app-shell'
 import { Empty, PageHeader, Panel } from '@/components/panel'
+import { AppShell } from '@/components/shell/app-shell'
 
 /** What every route's loaders and hooks get from the router. */
 export interface RouterContext {

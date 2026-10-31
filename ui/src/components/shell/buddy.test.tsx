@@ -1,4 +1,3 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import {
     createMemoryHistory,
     createRootRoute,
@@ -7,6 +6,7 @@ import {
     Outlet,
     RouterProvider,
 } from '@tanstack/react-router'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ANYWHERE, nextTip, RAVE, setCompanion, STORAGE_KEY, TIPS, tipsFor, VOICES } from '@/lib/buddy'

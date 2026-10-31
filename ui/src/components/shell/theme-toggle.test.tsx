@@ -1,8 +1,8 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { STORAGE_KEY } from '@/theme/store'
 import { stubSystemTheme } from '@/test-utils'
+import { STORAGE_KEY } from '@/theme/store'
 
 import { ThemeToggle } from './theme-toggle'
 

@@ -1,7 +1,7 @@
 import { QueryClient } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
-import { useState } from 'react'
 import type { Middleware } from 'openapi-fetch'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'

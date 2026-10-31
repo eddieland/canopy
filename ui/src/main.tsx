@@ -1,5 +1,4 @@
 import './index.css'
-
 import { QueryClientProvider } from '@tanstack/react-query'
 import { createRouter, RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
@@ -7,9 +6,9 @@ import { createRoot } from 'react-dom/client'
 
 import { api, writeToken } from '@/api/client'
 import { keys } from '@/api/queries'
+import type { Session } from '@/api/types'
 import { PAGE_SCROLLER } from '@/components/shell/app-shell'
 import { Toaster } from '@/components/toaster'
-import type { Session } from '@/api/types'
 import { basePath } from '@/lib/base'
 import { createQueryClient } from '@/lib/query-client'
 

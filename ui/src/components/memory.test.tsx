@@ -4,7 +4,6 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
-
 import type { MemoryEntry, MemoryProposal } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 

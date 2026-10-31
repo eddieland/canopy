@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { mockAttention } from '@/api/mocks'
 import type { AttentionItem } from '@/api/types'
 
+import staticIcon from '../../public/favicon.svg?raw'
 import { faviconDot, faviconSvg, faviconUrl } from './favicon'
 import type { FaviconColors } from './favicon'
-import staticIcon from '../../public/favicon.svg?raw'
 
 const WAITING = mockAttention[0] as AttentionItem
 const FAILED: AttentionItem = { ...WAITING, id: 'a2', reason: 'worker_failed' }

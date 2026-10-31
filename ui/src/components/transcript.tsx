@@ -26,14 +26,14 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Toggle } from '@/components/ui/toggle'
 import { useTranscriptView } from '@/hooks/use-transcript-view'
 import type { TranscriptView } from '@/hooks/use-transcript-view'
+import { useClock } from '@/lib/clock'
 import { setContextChartOpen, useContextChartOpen } from '@/lib/context-chart-open'
 import type { TranscriptPage } from '@/lib/context-chart-open'
-import { ordered, useListOrder } from '@/lib/list-order'
 import { tokenize } from '@/lib/json-lines'
+import { ordered, useListOrder } from '@/lib/list-order'
 import { removedAfter } from '@/lib/retention'
 import { rowLineFrom } from '@/lib/rows'
 import { marked, markedTokens } from '@/lib/search'
-import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import {
     byCall,

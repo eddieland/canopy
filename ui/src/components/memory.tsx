@@ -25,6 +25,7 @@ import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Clipped } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { useClock } from '@/lib/clock'
 import {
     byKind,
     lapsesText,
@@ -40,7 +41,6 @@ import {
 import type { MemoryStand, TierModes } from '@/lib/memory'
 import { memoryRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
-import { useClock } from '@/lib/clock'
 import { localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 

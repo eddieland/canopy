@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
+import type { AnswerTarget } from '@/api/mutations'
 import {
     attentionQuery,
     choreQuery,
@@ -17,10 +18,9 @@ import {
     ticketQuery,
     ticketsQuery,
 } from '@/api/queries'
-import type { AnswerTarget } from '@/api/mutations'
 import type { AttentionItem, Draft, Run, RunCard, TicketSummary, Unit, WaitingFeedbackPlan } from '@/api/types'
-import { EmptyAttention } from '@/components/all-clear'
 import { Age } from '@/components/age'
+import { EmptyAttention } from '@/components/all-clear'
 import { ChoreFindingText } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
@@ -31,13 +31,13 @@ import { useDismissFinding } from '@/components/dismiss-finding'
 import { FeedbackPlanWaits } from '@/components/feedback-plan-card'
 import { GrantLimits } from '@/components/grant-limits'
 import { Leaf } from '@/components/leaf'
-import { Notice } from '@/components/notice'
-import { PlanCard } from '@/components/plan-card'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
-import { PullRequestLink } from '@/components/pull-request-link'
-import { ReviewLink } from '@/components/review-link'
 import { LessonsDue, LessonsWrong, ProposalsWaiting } from '@/components/memory-attention'
 import { ModelAttention } from '@/components/model-attention'
+import { Notice } from '@/components/notice'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { PlanCard } from '@/components/plan-card'
+import { PullRequestLink } from '@/components/pull-request-link'
+import { ReviewLink } from '@/components/review-link'
 import { InlineCode } from '@/components/rich-text'
 import { RunLink } from '@/components/run-link'
 import { ProgressQuestion } from '@/components/run-progress'
@@ -73,11 +73,11 @@ import { settled, withLeaving } from '@/lib/leaving'
 import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
 import { reasonMeaning } from '@/lib/meanings'
+import { pullRequestLabel } from '@/lib/pull-request-label'
 import { reviewRef, taskRef } from '@/lib/refs'
 import { taskTitle } from '@/lib/tasks'
-import { cn } from '@/lib/utils'
-import { pullRequestLabel } from '@/lib/pull-request-label'
 import type { Tone } from '@/lib/tone'
+import { cn } from '@/lib/utils'
 
 interface AttentionSearch {
     item?: string | undefined
