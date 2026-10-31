@@ -83,8 +83,8 @@
 
 /*
  * A document's type (ui/DESIGN.md, "A document"): long-form prose, a guide page or a plan, a step up from the 14px
- * around it, with two steps of heading over it, a section and a subsection. The only `text-base` in the app, so the
- * guide and a plan read alike.
+ * around it, with two steps of heading over it, a section and a subsection. The only `text-base` in the app but rich
+ * text's top headings, so the guide and a plan read alike.
  */
 @utility document-text {
     @apply text-base/7;
