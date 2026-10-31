@@ -7,6 +7,7 @@ import type { ReactNode } from 'react'
 
 import { reloadConfig, signOut } from '@/api/mutations'
 import { keys, personasQuery, sessionQuery, spendQuery } from '@/api/queries'
+import { Code } from '@/components/code'
 import { ConfigModels } from '@/components/config-models'
 import { Cost } from '@/components/cost'
 import { Disclosure } from '@/components/disclosure'
@@ -50,7 +51,6 @@ import type { Palette } from '@/theme/palette'
 import type { ResolvedTheme, ThemePreference } from '@/theme/store'
 import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
-import { Code } from '@/components/code'
 
 /**
  * What this browser keeps (the theme, the clock, the send key, the review personas, the fun, the session), the limits

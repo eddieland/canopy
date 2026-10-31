@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 
 import { choresQuery, loopQuery, reviewsQuery, runsQuery, tasksQuery, ticksQuery, worktreesQuery } from '@/api/queries'
 import { CapacityLine } from '@/components/capacity-line'
+import { Code } from '@/components/code'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PoolCounters } from '@/components/pool-counters'
@@ -11,7 +12,6 @@ import { SubjectRunsTable } from '@/components/runs-table'
 import { TickNow } from '@/components/tick-now'
 import { TickRow } from '@/components/tick-row'
 import { busy, runningTasks, subjectRuns } from '@/lib/run-state'
-import { Code } from '@/components/code'
 
 // How many of the latest ticks the overview shows; the rest are on the ticks page.
 const TICKS_SHOWN = 5

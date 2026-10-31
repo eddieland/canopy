@@ -14,6 +14,7 @@ import type {
     RunState,
 } from '@/api/types'
 import { Age } from '@/components/age'
+import { Code } from '@/components/code'
 import { Copyable, CopyButton } from '@/components/copy-button'
 import { Disclosure } from '@/components/disclosure'
 import { VersionForget } from '@/components/memory-actions'
@@ -42,7 +43,6 @@ import { RUN_TEXT } from '@/lib/run-state'
 import { useClock } from '@/lib/clock'
 import { localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { Code } from '@/components/code'
 
 // What `MemoryPurge` copies: the verb alone, since what it purges is the operator's to name in the shell.
 const PURGE_COMMAND = 'canopy memory purge'

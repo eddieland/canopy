@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { HOST_REFRESH_MS, hostQuery, hostSamplesQuery, metaQuery } from '@/api/queries'
 import type { Disk, HostHistory, HostResources } from '@/api/types'
 import { Age } from '@/components/age'
+import { Code } from '@/components/code'
 import { CopyButton } from '@/components/copy-button'
 import { Counter } from '@/components/counter'
 import { Field, Fields } from '@/components/fields'
@@ -33,7 +34,6 @@ import { age, useNow } from '@/lib/time'
 import { trend } from '@/lib/trend'
 import type { Trend } from '@/lib/trend'
 import { cn } from '@/lib/utils'
-import { Code } from '@/components/code'
 
 // What the page shows, the same on every visit: the title's help, so the description is left for the machine.
 const HELP =

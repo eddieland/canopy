@@ -2,12 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ticksQuery } from '@/api/queries'
+import { Code } from '@/components/code'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { TickNow } from '@/components/tick-now'
 import { TickRow } from '@/components/tick-row'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { Code } from '@/components/code'
 
 /** The latest ticks, newest first, as `canopy decisions` prints them. */
 export const Route = createFileRoute('/workspace/ticks/')({

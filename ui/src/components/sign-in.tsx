@@ -5,12 +5,12 @@ import type { SubmitEvent } from 'react'
 import { ApiError } from '@/api/client'
 import { signIn } from '@/api/mutations'
 import { keys, unsentQuery } from '@/api/queries'
+import { Code } from '@/components/code'
 import { Notice } from '@/components/notice'
 import { Input } from '@/components/input'
 import { Mark } from '@/components/mark'
 import { Button } from '@/components/ui/button'
 import { pageTitle } from '@/lib/page-title'
-import { Code } from '@/components/code'
 
 /**
  * Asks for the listener secret once (DESIGN §22). A right one sets a session cookie for 30 days; the secret itself is

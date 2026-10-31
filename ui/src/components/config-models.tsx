@@ -3,6 +3,7 @@ import { useState } from 'react'
 
 import { configModelsQuery, modelsQuery } from '@/api/queries'
 import type { ChoreModel, ConfigModels as Models, ConfiguredModel } from '@/api/types'
+import { Code } from '@/components/code'
 import { Disclosure } from '@/components/disclosure'
 import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
@@ -11,7 +12,6 @@ import { Chip } from '@/components/status'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { RUNTIME_DEFAULT, withVariant } from '@/lib/models'
 import { readFailure } from '@/lib/read-failure'
-import { Code } from '@/components/code'
 
 /**
  * The model config chooses for each of canopy's agents and each chore (DESIGN §13, §19), read only: a row each, its

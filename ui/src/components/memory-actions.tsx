@@ -17,6 +17,7 @@ import {
 } from '@/api/mutations'
 import { memoryQuery } from '@/api/queries'
 import type { MemoryEntry } from '@/api/types'
+import { Code } from '@/components/code'
 import { ForgetForm } from '@/components/forget-form'
 import { Textarea } from '@/components/input'
 import { MemoryText } from '@/components/memory-text'
@@ -42,7 +43,6 @@ import { useSendKeys } from '@/lib/send-key'
 import type { SendKeys } from '@/lib/send-key'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { Code } from '@/components/code'
 
 // The operator's verbs on agent memory from the page that shows it (DESIGN §28, ROADMAP M52): each the function its
 // `canopy memory` verb calls, with its guards. A verb's row can leave once it is done (a promoted or rejected

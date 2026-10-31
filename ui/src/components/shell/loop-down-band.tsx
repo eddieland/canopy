@@ -1,9 +1,9 @@
 import { Unplug } from 'lucide-react'
 
 import { Age } from '@/components/age'
+import { Code } from '@/components/code'
 import { useLoopDown } from '@/hooks/use-loop-down'
 import { cn } from '@/lib/utils'
-import { Code } from '@/components/code'
 
 /**
  * The band over every page while the loop isn't answering (ui/DESIGN.md, the header): once the stream has been down

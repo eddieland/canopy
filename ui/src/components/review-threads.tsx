@@ -7,6 +7,7 @@ import { dropDraft, editDraft, refreshThreads, sendDrafts, stageDrafts } from '@
 import { pullRequestThreadsQuery } from '@/api/queries'
 import type { Draft, DraftFromPlan, FeedbackPlanItem, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
 import { Age } from '@/components/age'
+import { Code } from '@/components/code'
 import { CommentText } from '@/components/comment-text'
 import { Disclosure } from '@/components/disclosure'
 import { DraftCardFrame, DraftForm, DraftVerbs, DropVerb, EditVerb } from '@/components/draft-card'
@@ -49,7 +50,6 @@ import {
 } from '@/lib/outcomes'
 import { shortSha, threadAnchor } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
-import { Code } from '@/components/code'
 
 /**
  * A PR's review threads on the diff its latest run kept, each draft under the thread it answers (DESIGN §29, On the
