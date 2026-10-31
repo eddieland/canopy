@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, run_models, runtime_sessions, sql
+from canopy.core import contract, db, run_models, runtime_sessions, sql, tracked_prs
 from canopy.core.spend import KIND_TABLES, KINDS, done_in
 from canopy.core.vocab import RunKind, RunStatus
 
@@ -212,7 +212,7 @@ def months(conn: sqlite3.Connection, now: datetime, count: int = DEFAULT_MONTHS,
     with db.read_snapshot(conn):
         kinds = _kinds(conn, since, until)
         models = _models(conn, since, until)
-        prs = _pull_requests(conn, until)
+        prs = tracked_prs.tracked(conn, since, until)
         done = done_in(conn, since, until)
         landed = _landed(conn, {k: at for k, (how, at) in done.items() if how == "merged"})
         outside = _outside(conn, since, until, state_dir)
@@ -232,7 +232,7 @@ def months(conn: sqlite3.Connection, now: datetime, count: int = DEFAULT_MONTHS,
                 reverse=True,
             ),
             closed=closed.count(name),
-            pull_requests=sum(1 for first in prs.values() if _month_of(first) == name),
+            pull_requests=sum(1 for pr in prs.values() if _month_of(pr.first_named) == name),
             outside=outside.get(name, Outside()),
         )
         for name, start, end in bounds
@@ -375,22 +375,6 @@ def _costliest(models: Mapping[_ModelKey, ModelMonth]) -> list[ModelMonth]:
         models.values(),
         key=lambda m: (m.model is None, not m.unread, -(m.cost_usd or 0.0), m.model or ""),
     )
-
-
-# Each PR a run that started before `until` names, and when the first run that names it started: when the PR first
-# shows in the journal, which a PR's creation time would be, were it kept.
-def _pull_requests(conn: sqlite3.Connection, until: str) -> dict[str, str]:
-    first: dict[str, str] = {}
-    pushed = (
-        sql.select("started_at, result_json")
-        .from_("runs")
-        .where("started_at < ? AND result_json IS NOT NULL", until)
-        .order_by("started_at, id")
-    )
-    for started, result in sql.execute(conn, pushed):
-        for url in contract.stored_prs(contract.stored_object(result)):
-            first.setdefault(url, str(started))
-    return first
 
 
 @dataclass(frozen=True)

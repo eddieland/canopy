@@ -97,6 +97,10 @@ Rules:
   one color across Reports. They are fills, never text, so the legend's words are `muted-foreground` beside a swatch.
   Idle overseer spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both
   themes, WCAG's bar for a graphic, which `tokens.test.ts` measures.
+- **Check fills** (`check-1` to `check-4`, `check-other`; `src/lib/ci.ts`) color the CI page's red checks by day: a
+  check by its rank that window, the most often red first, never by its name, and the rest in `check-other`, the dry
+  run's neutral. Hues apart from the spend series and the status reds and greens, so a check never reads as a kind of
+  run or as a verdict. Fills, never text; each reaches 3:1 on `surface`, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
   with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
   legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
@@ -1006,6 +1010,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   the day's failed and ended runs, since a failure's weight is its share. A window where nothing failed is one `Empty`
   line. Its window, a week or 30 days, is the same segmented control as the spend page's (`WindowToggle`), in the
   outcomes panel's header, kept in `?days=`.
+- **The red checks chart** (the CI page) is the same `DayChart`: a bar per local day of the red check runs, a series
+  per check the server names apart, by rank in the check fills, and the rest summed as `other` in `check-other`, the
+  legend and a table of the same numbers under it. Its window is the health page's, in the checks panel's header.
+- **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
+  with its unit's phase, its ticket, then the page's own figures. The spend page's By pull request and the CI page's
+  flaky kicks use it.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every

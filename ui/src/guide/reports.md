@@ -2,7 +2,8 @@
 
 What canopy cost and what it got done, month by month, what agent runs cost each day, and how they ended. Every
 dollar and token here is what the agent runtime reported, so if a runtime under-reports, so does this page. It is a
-mirror, not an audit. Beside them, the checklist page counts how workers answered your checklists, item by item.
+mirror, not an audit. Beside them, the checklist page counts how workers answered your checklists, item by item, and
+the CI page says which checks fail.
 
 ## The reports page
 
@@ -192,3 +193,32 @@ so did one you stopped yourself. Neither counts, however much the question annoy
   refused, in how many ticks, and the latest tick to open. A guard refusing the same thing tick after tick is the
   overseer asking for something your limits don't allow; [Limits and trust](settings#limits-and-trust) is where that
   argument is settled.
+
+## The CI page
+
+The CI page, **CI** under [Reports](/reports) in the nav, says which checks fail on canopy's PRs, what fixing them
+cost, and whether rerunning the flaky ones worked, over the last **7 days** or **30 days**. A check run counts on the
+day a source first saw it finish, on the clock of the machine canopy runs on. The line under the title is the window
+at a glance, `71% of PR heads green first time · 4 flaky kicks over 7 days`: a head is green first time when the
+first run of every check on it passed, before anyone reran anything.
+
+Red means `failure`, `error`, `timed_out`, or `startup_failure`; green means `success`. `cancelled`, `skipped`,
+`neutral`, `stale`, and `action_required` count as neither, so a check you cancelled never passes for one that broke.
+
+- **Checks by name**: each check, the worst first, with its runs, its red runs, its failure rate (red out of red and
+  green), and how often the next run on a new head of the same PR passed after a red one. A rerun on the same head is
+  not a new head, which is the point: it tells a fix from a retry.
+- **Red checks by day**: a bar per day of the red runs, a color per check for the few most often red and the rest
+  summed as `other`. Hover a bar for that day's checks; the table under it holds the same numbers.
+- **Fix-CI resumes**: each resume for `ci` (and each old `fix-ci`), with how it ended, what it cost, and the checks
+  red on its PR when it started, each with how its first run on the next head went: `green`, `red`, or `not yet`. That
+  is the only red-to-green rate the journal can give, and the panel's header sums it.
+- **Flaky kicks**: each PR canopy rebased and pushed to rerun a check a worker called flaky, with its kicks, the most
+  one head of work had against `trust.max_flaky_kicks`, and how many came back red anyway; under it, each kick that
+  did. With the limit at 0, kicks are off and the panel says so: a flaky check waits for you, as it always has.
+- **Cooldown refusals**: how often the `cooldown` guard held a resume for `ci` while the checks had time to run again,
+  with the latest tick. The [health page](#the-health-page) has every guard's refusals; this one just points there.
+
+The page sees only the PRs canopy observed, and only their check runs from M36 on, when canopy started keeping every
+one. A commit status has no check run, so it has no history here and isn't counted. If your CI reports by status
+alone, this page will look suspiciously calm.

@@ -161,7 +161,7 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:
     with db.read_snapshot(conn):
         outcomes = [o for kind in spend.KINDS for o in _outcomes(conn, kind, since, until)]
         failures = [f for kind in spend.KINDS for f in _failures(conn, kind, since, until)]
-        refusals = _refusals(conn, since, until)
+        refused = refusals(conn, since, until)
     failures.sort(key=lambda f: (f.started_at, spend.KINDS.index(f.kind), f.id), reverse=True)
     return Health(
         since=since,
@@ -169,7 +169,7 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:
         days=days,
         outcomes=outcomes,
         failures=failures[:FAILURES],
-        refusals=refusals,
+        refusals=refused,
     )
 
 
@@ -201,6 +201,26 @@ def by_day(conn: sqlite3.Connection, now: datetime, days: int) -> list[Day]:
                 if str(status) in _FAILED[kind]:
                     failed[str(day)][kind] += int(runs)
     return [Day(day=day, start=at, ended=ended[day], failed=failed[day]) for day, at in starts.items()]
+
+
+def refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
+    """What each guard refused the overseer in `[since, until)`, each a journal time, by when the decision was made.
+
+    Returns:
+        A row per guard, the most frequent first.
+    """
+    refused = (
+        sql.select("substr(action, ?), count(*), count(DISTINCT tick_id), max(tick_id)", len(REFUSED) + 1)
+        .from_("decisions")
+        .where("action LIKE ? AND created_at >= ? AND created_at < ?", f"{REFUSED}%", since, until)
+        .group_by("action")
+        .order_by("count(*) DESC, action")
+    )
+    rows = sql.execute(conn, refused)
+    return [
+        Refusal(guard=str(guard), decisions=int(n), ticks=int(ticks), last_tick=int(last))
+        for guard, n, ticks, last in rows
+    ]
 
 
 # One kind's ended runs in the window, by sort and status. A run still running has not ended any way yet.
@@ -258,21 +278,6 @@ def _note(kind: Kind, stored: object) -> str:
 
 def _text(value: object) -> str | None:
     return value if isinstance(value, str) else None
-
-
-def _refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
-    refused = (
-        sql.select("substr(action, ?), count(*), count(DISTINCT tick_id), max(tick_id)", len(REFUSED) + 1)
-        .from_("decisions")
-        .where("action LIKE ? AND created_at >= ? AND created_at < ?", f"{REFUSED}%", since, until)
-        .group_by("action")
-        .order_by("count(*) DESC, action")
-    )
-    rows = sql.execute(conn, refused)
-    return [
-        Refusal(guard=str(guard), decisions=int(n), ticks=int(ticks), last_tick=int(last))
-        for guard, n, ticks, last in rows
-    ]
 
 
 def _one_line(text: str) -> str:

@@ -185,6 +185,22 @@ export type HealthDay = Schemas['HealthDay']
 export type HealthCounts = Schemas['HealthCounts']
 /** How many of a kind's ended runs reported no cost, of how many. */
 export type SpendUnpriced = Schemas['SpendUnpriced']
+/** Which checks failed in a window, what fixing them cost, and whether the flaky kicks worked. */
+export type CiReport = Schemas['CiReport']
+/** One check's runs in a window, by its name across every PR, and how often a new head fixed it. */
+export type CiCheck = Schemas['CiCheck']
+/** One local day's red check runs, by the chart's series. */
+export type CiDay = Schemas['CiDay']
+/** A `resume` for `ci`, or a retired `fix-ci`, with the checks it found red. */
+export type CiFix = Schemas['CiFix']
+/** A check a fix found red, and how its first run on the next head ended. */
+export type CiFixedCheck = Schemas['CiFixedCheck']
+/** A flaky kick, and whether the checks red before it came back red. */
+export type CiKick = Schemas['CiKick']
+/** A PR the window's kicks reran the checks of, against `trust.max_flaky_kicks`. */
+export type CiKickedPullRequest = Schemas['CiKickedPullRequest']
+/** How a check run counts: red, green, or neither. */
+export type CiVerdict = Schemas['CiVerdict']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */

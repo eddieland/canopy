@@ -43,6 +43,7 @@ interface SubPage {
         | '/reports/spend'
         | '/reports/checklist'
         | '/reports/health'
+        | '/reports/ci'
     label: string
     hint: string
 }
@@ -104,7 +105,7 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
         icon: ChartColumn,
         hint:
             'What canopy cost and got done month by month, what agent runs cost each day and how they ended, ' +
-            'and how workers answered your checklists',
+            'how workers answered your checklists, and which checks fail',
         pages: [
             {
                 to: '/reports/spend',
@@ -120,6 +121,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
                 to: '/reports/health',
                 label: 'Health',
                 hint: "How the last days' runs ended, the newest failures, and what the guards refused",
+            },
+            {
+                to: '/reports/ci',
+                label: 'CI',
+                hint: 'Which checks fail, what fixing them cost, and whether flaky kicks worked',
             },
         ],
     },

@@ -95,6 +95,12 @@ const SERIES = [
     'spend-tasks',
     'spend-dry-run',
     'spend-outside',
+    // The CI page's red checks, the same kind of fill.
+    'check-1',
+    'check-2',
+    'check-3',
+    'check-4',
+    'check-other',
 ]
 // A transcript's context chart: fills on a panel's surface, and on the raised one behind the call picked.
 const CONTEXT = ['context-carried', 'context-added']
