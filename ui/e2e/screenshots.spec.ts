@@ -154,6 +154,22 @@ for (const palette of ['gruvbox', 'black'] as const) {
     })
 }
 
+// A worker's report in Markdown, its inline code, heading, list, and fence, on Gruvbox dark: the palette that sets
+// every line in mono, where code drawn smaller than its line or on a tile darker than its bubble read worst (#1838).
+// The conversation alone, so a change elsewhere on the ticket's page rewrites none of it.
+test('rich text in a conversation in gruvbox dark', async ({ page }) => {
+    await page.clock.setFixedTime(NOW)
+    await storeTheme(page, 'dark')
+    await storePalette(page, 'dark', 'gruvbox')
+    await signIn(page)
+    await page.goto('tickets/ABC-103')
+    await settled(page)
+    await expect(page.locator('html')).toHaveAttribute('data-dark-palette', 'gruvbox')
+    const conversation = page.getByTestId('conversation')
+    await expect(conversation.getByText('What changed', { exact: true })).toBeVisible()
+    await expect(conversation).toHaveScreenshot('conversation-rich-text-gruvbox-dark.png')
+})
+
 // A PR's feedback plan in each state it has, each on a PR of its own (canopy/serve/mock/feedback_plans.py): the panel
 // alone, so a change to it rewrites these small images rather than a PR's whole page.
 const FEEDBACK_PLANS = [
