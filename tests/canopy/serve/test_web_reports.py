@@ -1,4 +1,4 @@
-"""The web UI's reports (DESIGN §11, §42): what each local month cost and got done, the checklist, and health.
+"""The web UI's reports (DESIGN §11, §42): what each local month cost and got done, the checklist, health, and CI.
 
 Reads only.
 """
@@ -7,14 +7,17 @@ from datetime import UTC, datetime
 
 import pytest
 
-from canopy.core import db, health, runtime_sessions, spend
+from canopy.core import db, health, records, runtime_sessions, spend
 from canopy.core.context import Context
+from canopy.core.vocab import CheckConclusion, ResumeReason, RunKind
+from canopy.infra import resources
 from canopy.runtime.report import SessionPage, SessionSpend
 from canopy.serve import monthly
 from canopy.serve.backend import Backend
 from canopy.serve.mock import T0, history
-from tests.canopy.helpers import journal_of_answers
+from tests.canopy.helpers import check_ran, context, earlier, journal_of_answers, kicked, worker_ran
 from tests.canopy.web_helpers import client, signed_in_client
+from tests.conftest import CanopyEnv
 
 
 def test_the_monthly_report_reads_local_months_oldest_first(backend: Backend) -> None:
@@ -159,3 +162,75 @@ def test_a_health_failure_names_what_it_was_about_by_its_kind(backend: Backend) 
                 "tasks": {"task_id"},
             }[f["kind"]]
         )
+
+
+def test_the_ci_report_counts_the_mocks_week_of_check_runs(backend: Backend) -> None:
+    """The mock's week: its heads, its checks the worst first, the red ones by day, and its fixes; kicks are off."""
+    c = client(None, backend)
+    found = c.get("/api/reports/ci").json()
+    assert (found["days"], found["since"], found["until"]) == (7, "2026-10-02T00:00:00Z", "2026-10-09T00:00:00Z")
+    assert (found["heads"], found["green_first"]) == (10, 4)
+    assert [(k["name"], k["red"], k["followed"], k["passed"]) for k in found["checks"]][:3] == [
+        ("e2e", 3, 1, 1),
+        ("unit", 2, 2, 2),
+        ("integration", 1, 0, 0),
+    ]
+    assert found["series"] == ["e2e", "unit", "build", "integration", None]
+    assert [d["day"] for d in found["per_day"]] == [f"2026-10-0{n}" for n in range(2, 9)]
+    assert found["per_day"][-1]["red"] == [3, 0, 0, 1, 1]
+    # Run 40, a retired `fix-ci`, failed before PR 86's next head; run 43 is a `resume` for `ci` still running.
+    assert [(f["run_id"], f["kind"], f["status"]) for f in found["fixes"]] == [
+        (43, "resume", "running"),
+        (40, "fix-ci", "failed"),
+    ]
+    assert found["fixes"][1]["checks"] == [
+        {"pr_url": "https://github.com/acme/web/pull/86", "name": "e2e", "next": None},
+    ]
+    assert (found["kicks"], found["kicked_pull_requests"], found["max_flaky_kicks"]) == ([], [], 0)
+    assert found["cooldown"] is None
+    assert c.get("/api/reports/ci", params={"days": 30}).json()["days"] == 30
+    assert c.get("/api/reports/ci", params={"days": 0}).status_code == 422
+    assert c.get("/api/reports/ci", params={"days": spend.MAX_DAYS + 1}).status_code == 422
+
+
+def test_the_ci_report_reads_kicks_fixes_and_the_cooldown_from_the_journal(canopy_env: CanopyEnv) -> None:
+    """A journal by hand: a fix, a kick that came back red, its PR against the private limit, and the cooldown."""
+    canopy_env.write_private("[trust]\nmax_flaky_kicks = 2\n")
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    conn, now = ctx.conn, datetime.now(UTC)
+    pr = "https://github.com/acme/web/pull/7"
+    worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 2, 2), prs={"web": pr})
+    check_ran(conn, pr, "h1", "e2e", CheckConclusion.FAILURE, earlier(now, 2, 1))
+    check_ran(conn, pr, "h1", "unit", CheckConclusion.SUCCESS, earlier(now, 2, 1))
+    fix = worker_ran(conn, RunKind.RESUME, earlier(now, 2), prs={"web": pr}, reasons=(ResumeReason.CI,), cost=0.4)
+    kicked(conn, fix, "h1", "h2", earlier(now, 1, 23))
+    check_ran(conn, pr, "h2", "e2e", CheckConclusion.FAILURE, earlier(now, 1, 22))
+    tick = records.insert(records.Tick, started_at=earlier(now, 1), dry_run=0).run(conn).lastrowid
+    for action in ("refused:cooldown", "refused:cooldown", "refused:capacity"):
+        records.insert(
+            records.Decision,
+            tick_id=tick,
+            created_at=earlier(now, 1),
+            ticket_key="PROJ-1",
+            action=action,
+            rationale="r",
+        ).run(conn)
+    c, _ = signed_in_client(ctx)
+    found = c.get("/api/reports/ci").json()
+    [fixed] = found["fixes"]
+    assert (fixed["run_id"], fixed["ticket_key"], fixed["cost_usd"]) == (fix, "PROJ-1", 0.4)
+    assert fixed["checks"] == [{"pr_url": pr, "name": "e2e", "next": "red"}]
+    [kick] = found["kicks"]
+    assert (kick["pr_url"], kick["kick"], kick["red_before"], kick["still_red"], kick["checked"]) == (
+        pr,
+        1,
+        ["e2e"],
+        ["e2e"],
+        True,
+    )
+    assert found["kicked_pull_requests"] == [
+        {"url": pr, "ticket_key": "PROJ-1", "phase": None, "kicks": 1, "most": 1, "still_red": 1},
+    ]
+    assert found["max_flaky_kicks"] == 2
+    assert found["cooldown"] == {"guard": "cooldown", "decisions": 2, "ticks": 1, "last_tick": tick}

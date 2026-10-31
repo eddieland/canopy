@@ -52,9 +52,10 @@ context.
 - Of `gh`, only `gh pr view`, `gh pr checks`, `gh pr diff`, `gh pr edit`, and `gh run view` are allowed: try no
   other, `gh api` among them, and read GitHub through the GitHub MCP server instead. Use `gh pr edit` only on your own
   PRs' title and body.
-- Keep your progress current for the operator, who reads it instead of your transcript: call `canopy_run_status` once
-  you know what the work is, after each step you finish, and when what you are doing changes. Each call is an update,
-  your whole progress, and replaces the last: `summary`, `now`, `done` (each step with its proof, such as `tests pass:
+- Keep your progress current for the operator, who reads it instead of your transcript: call `canopy_run_status` first
+  right after you read your ticket, and the plan if there is one, before you explore the code: a rough first update
+  beats none. Then call it after each step you finish, and when what you are doing changes. Each call is an update, your
+  whole progress, and replaces the last: `summary`, `now`, `done` (each step with its proof, such as `tests pass:
   42/42`, `pushed abc123`, or `not pushed`), `next`, and `stuck` only for something in your way that you work around,
   such as CI down. It changes nothing by itself. A decision you need from the operator but can work around meanwhile
   goes in it as `question`: `ask`, two to five `options`, lettered A, B, and on, and the one you `recommend`; work

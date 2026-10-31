@@ -966,6 +966,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/ci": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get what CI did over the last days
+         * @description Each check's red runs and how often a new head fixed it, each day's, the fixes and kicks, and the cooldown.
+         */
+        get: operations["getCiReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/health": {
         parameters: {
             query?: never;
@@ -3181,6 +3201,288 @@ export type components = {
              */
             run_id: number;
         };
+        /**
+         * CiCheck
+         * @description One check's runs observed in the window, by its name across every PR.
+         */
+        CiCheck: {
+            /**
+             * Followed
+             * @description Its red runs that a later run of it on a new head of the same PR followed.
+             */
+            followed: number;
+            /**
+             * Green
+             * @description Of those, the green ones; the rest counted as neither.
+             */
+            green: number;
+            /**
+             * Name
+             * @description The check's name, as its host names it.
+             */
+            name: string;
+            /**
+             * Passed
+             * @description Of those, the ones whose next run on the new head was green.
+             */
+            passed: number;
+            /**
+             * Red
+             * @description Of those, the red ones.
+             */
+            red: number;
+            /**
+             * Runs
+             * @description Its runs a source observed completed in the window.
+             */
+            runs: number;
+        };
+        /**
+         * CiDay
+         * @description One local day of the window: its red check runs, by the chart's series.
+         */
+        CiDay: {
+            /**
+             * Day
+             * @description The day, `YYYY-MM-DD`, in the local time of the machine canopy runs on.
+             */
+            day: string;
+            /**
+             * Red
+             * @description Each series' red runs, in `CiReport.series` order.
+             */
+            red: number[];
+            /**
+             * Start
+             * Format: date-time
+             * @description When it starts: its local midnight, so a page can write it in its own zone.
+             */
+            start: string;
+        };
+        /**
+         * CiFix
+         * @description A `resume` for `ci`, or a retired `fix-ci`, that started in the window.
+         */
+        CiFix: {
+            /**
+             * Checks
+             * @description The checks red on its PRs' heads when it started; empty when no source had observed one.
+             */
+            checks: components["schemas"]["CiFixedCheck"][];
+            /**
+             * Cost Usd
+             * @description What it cost, in US dollars; None when it reported none.
+             */
+            cost_usd: number | null;
+            /**
+             * Kind
+             * @description Its kind: `resume`, or `fix-ci` for a run from before a `resume` fixed CI.
+             */
+            kind: string;
+            /**
+             * Run Id
+             * @description The run.
+             */
+            run_id: number;
+            /**
+             * Started At
+             * Format: date-time
+             * @description When it started.
+             */
+            started_at: string;
+            /**
+             * Status
+             * @description How it ended, or `running`.
+             */
+            status: string;
+            /**
+             * Ticket Key
+             * @description Its ticket.
+             */
+            ticket_key: string;
+        };
+        /**
+         * CiFixedCheck
+         * @description A check a fix found red on its PR's head, and how its first run on the head after it ended.
+         */
+        CiFixedCheck: {
+            /**
+             * Name
+             * @description The check's name.
+             */
+            name: string;
+            /** @description How its first run on the next head ended; None while no source has observed one. */
+            next: components["schemas"]["CiVerdict"] | null;
+            /**
+             * Pr Url
+             * @description The PR it ran on.
+             */
+            pr_url: string;
+        };
+        /**
+         * CiKick
+         * @description A flaky kick made in the window: a branch rebased and pushed so its checks ran again.
+         */
+        CiKick: {
+            /**
+             * Branch
+             * @description The branch it kicked.
+             */
+            branch: string;
+            /**
+             * Checked
+             * @description Whether a source has observed a run of any of them on the head it pushed.
+             */
+            checked: boolean;
+            /**
+             * Kick
+             * @description Which of its head's kicks it was, from 1, as `trust.max_flaky_kicks` counts them.
+             */
+            kick: number;
+            /**
+             * Kicked At
+             * Format: date-time
+             * @description When it was made.
+             */
+            kicked_at: string;
+            /**
+             * Pr Url
+             * @description The PR its run named, else the one a source observed at its heads; None with neither.
+             */
+            pr_url: string | null;
+            /**
+             * Red Before
+             * @description The checks red on the head it replaced.
+             */
+            red_before: string[];
+            /**
+             * Repo
+             * @description The workspace repository it kicked.
+             */
+            repo: string;
+            /**
+             * Run Id
+             * @description The `resume` whose worker judged the check flaky.
+             */
+            run_id: number;
+            /**
+             * Still Red
+             * @description Of those, the ones whose first run on the head it pushed was red again.
+             */
+            still_red: string[];
+        };
+        /**
+         * CiKickedPullRequest
+         * @description A PR the window's kicks reran the checks of.
+         */
+        CiKickedPullRequest: {
+            /**
+             * Kicks
+             * @description Its kicks in the window.
+             */
+            kicks: number;
+            /**
+             * Most
+             * @description The most of them one head of work had, against `trust.max_flaky_kicks`.
+             */
+            most: number;
+            /**
+             * Phase
+             * @description Its unit's phase (DESIGN §7); None for a PR no unit of the loop's has.
+             */
+            phase: string | null;
+            /**
+             * Still Red
+             * @description Its kicks whose check came back red.
+             */
+            still_red: number;
+            /**
+             * Ticket Key
+             * @description The ticket that owns it: its unit's, else the one its runs or a kick's run named.
+             */
+            ticket_key: string | null;
+            /**
+             * Url
+             * @description The PR.
+             */
+            url: string;
+        };
+        /**
+         * CiReport
+         * @description Which checks failed in the window, what fixing them cost, and whether the flaky kicks worked.
+         */
+        CiReport: {
+            /**
+             * Checks
+             * @description The worst first: the most red runs, then the highest share of red among red and green.
+             */
+            checks: components["schemas"]["CiCheck"][];
+            /** @description What the `cooldown` guard refused in the window, as the health report counts it; None when it refused nothing. */
+            cooldown: components["schemas"]["HealthRefusal"] | null;
+            /**
+             * Days
+             * @description How many local days the window holds, today's so far included.
+             */
+            days: number;
+            /**
+             * Fixes
+             * @description The newest first.
+             */
+            fixes: components["schemas"]["CiFix"][];
+            /**
+             * Green First
+             * @description Of those, the heads whose first run of every check was not red.
+             */
+            green_first: number;
+            /**
+             * Heads
+             * @description The PR heads first checked in the window that had a red or a green first run of a check.
+             */
+            heads: number;
+            /**
+             * Kicked Pull Requests
+             * @description The most kicked first.
+             */
+            kicked_pull_requests: components["schemas"]["CiKickedPullRequest"][];
+            /**
+             * Kicks
+             * @description The newest first.
+             */
+            kicks: components["schemas"]["CiKick"][];
+            /**
+             * Max Flaky Kicks
+             * @description `trust.max_flaky_kicks`: how many kicks a head of work gets; 0 when canopy kicks none.
+             */
+            max_flaky_kicks: number;
+            /**
+             * Per Day
+             * @description Every day of the window, oldest first.
+             */
+            per_day: components["schemas"]["CiDay"][];
+            /**
+             * Series
+             * @description The check names the red-by-day chart names apart, the most often red first, then None for every other check
+             *     when any other was red.
+             */
+            series: (string | null)[];
+            /**
+             * Since
+             * Format: date-time
+             * @description When the window starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: local midnight after today.
+             */
+            until: string;
+        };
+        /**
+         * @description How a check run counts: `red` for `failure`, `error`, `timed_out`, or `startup_failure`, `green` for `success`, and `neither` for the rest (`cancelled`, `skipped`, `neutral`, `stale`, `action_required`).
+         * @enum {string}
+         */
+        CiVerdict: "green" | "red" | "neither";
         /**
          * Comment
          * @description Where a mirrored tracker comment came from (DESIGN §22, M19).
@@ -13995,6 +14297,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChecklistCounts"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getCiReport: {
+        parameters: {
+            query?: {
+                /** @description How many local days to read, today's so far included: 1 to 366. */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CiReport"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */
