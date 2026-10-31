@@ -37,7 +37,7 @@ from pydantic import (
 )
 from pydantic_core import PydanticUndefined
 
-from canopy.core import config, contract, conversation, db, kept_items, memory, recorded_runs, vocab
+from canopy.core import config, contract, conversation, db, kept_items, memory, overseer_runs, recorded_runs, vocab
 from canopy.core.vocab import RecordedStatus, ResumeReason, RunKind, TickStatus
 from canopy.infra import logs
 from canopy.loop import attention, claims, harness, harness_dispatches
@@ -66,7 +66,8 @@ MAX_TITLE = 80
 MAX_PR_URL = 300
 #: What `decide` records.
 DECIDE_ACTIONS = ("wait", "skip", "done")
-#: The guard that refuses what the overseer records about a ticket the harness decided (DESIGN §37).
+#: The guard that refuses what the overseer records about a ticket the harness decided (DESIGN §37), or, in a run given
+#: one subject, about anything else (§40).
 DECIDED = "decided"
 #: The guard that refuses an attention item of a reason the harness raises from its causes (DESIGN §37).
 RAISED = "raised"
@@ -721,7 +722,7 @@ def decide(ctx: Context, request: Decisions) -> Outcome[Decided]:
     """
     current = running_tick(ctx)
     keys = [d.key for d in request.decisions]
-    if refused := [r for key in keys if (r := _decided_by_harness(ctx, current.id, key, "decide")) is not None]:
+    if refused := [r for key in keys if (r := _decided_elsewhere(ctx, current.id, key, "decide")) is not None]:
         recorded = "the refusal was recorded" if len(refused) == 1 else "the refusals were recorded"
         unrecorded = "" if len(request.decisions) == 1 else ", and nothing else in the call: decide the rest again"
         raise Refused(f"decide refused ({DECIDED}): {'; '.join(refused)}; {recorded}{unrecorded}")
@@ -803,6 +804,8 @@ def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
     if key is not None:
         _refuse_decided(ctx, current.id, key, "attention")
         db.touch_ticket(ctx.conn, key, ctx.repo)
+    else:
+        refuse_other_subject(ctx, current.id, "attention", pr=pr)
     _refuse_raised(ctx, current.id, request.reason, key=key, repo=unit, pr=pr)
     kept = request.reason in kept_items.KEPT
     if kept:
@@ -1070,25 +1073,48 @@ def running_tick(ctx: Context) -> records.Tick:
     return row
 
 
-def _refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
-    """Refuse the overseer's `verb` about ticket `key` when the harness decided it in tick `tick_id` (DESIGN §37).
+def refuse_other_subject(
+    ctx: Context,
+    tick_id: int,
+    verb: str,
+    *,
+    key: str | None = None,
+    pr: str | None = None,
+    chore: str | None = None,
+) -> None:
+    """Refuse the overseer's `verb` about anything but the subject its run in tick `tick_id` was given (DESIGN §40).
 
-    The harness decided it before the overseer ran, or dispatches it after. The overseer was not shown the ticket, and
-    the harness's decision stands: a steered overseer cannot overrule it (TRUST_MODEL T1). The refusal is recorded, as
-    a guard's is.
+    The verb is about ticket `key`, PR `pr`, or chore `chore`. A run given one subject records nothing about another:
+    its message held no other, so text on one ticket cannot steer a decision about another (TRUST_MODEL T1). A run
+    given the whole state block, as every run is unless `loop.overseer_per_subject` is on, is refused nothing here.
+    The refusal is recorded, as a guard's is.
 
     Raises:
-        Refused: The harness decided the ticket this tick.
+        Refused: The verb is about another subject than the run's.
     """
-    if (reason := _decided_by_harness(ctx, tick_id, key, verb)) is not None:
+    if (reason := _other_subject(ctx, tick_id, verb, key=key, pr=pr, chore=chore)) is not None:
         raise Refused(f"{verb} refused ({DECIDED}): {reason}; the refusal was recorded")
 
 
-def _decided_by_harness(ctx: Context, tick_id: int, key: str, verb: str) -> str | None:
-    """Record the refusal of `verb` about `key` if the harness decided the ticket in tick `tick_id`.
+def _refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
+    """Refuse the overseer's `verb` about ticket `key` when it is not the overseer's to decide in tick `tick_id`.
+
+    The harness decided it before the overseer ran, or dispatches it after (DESIGN §37): the overseer was not shown the
+    ticket, and the harness's decision stands, so a steered overseer cannot overrule it (TRUST_MODEL T1). Or the run is
+    given another subject (§40). The refusal is recorded, as a guard's is.
+
+    Raises:
+        Refused: The harness decided the ticket this tick, or the run is given another subject.
+    """
+    if (reason := _decided_elsewhere(ctx, tick_id, key, verb)) is not None:
+        raise Refused(f"{verb} refused ({DECIDED}): {reason}; the refusal was recorded")
+
+
+def _decided_elsewhere(ctx: Context, tick_id: int, key: str, verb: str) -> str | None:
+    """Record the refusal of `verb` about `key` if the harness decided it in tick `tick_id`, or the run's is another.
 
     Returns:
-        The refusal's reason, or None when the ticket is the overseer's to decide.
+        The refusal's reason, or None when the ticket is this run's to decide.
     """
     if harness.decided(ctx.conn, tick_id, key):
         where = "decided"
@@ -1097,11 +1123,56 @@ def _decided_by_harness(ctx: Context, tick_id: int, key: str, verb: str) -> str 
         where = "dispatches"
         shown = "dispatches_to_come"
     else:
-        return None
+        return _other_subject(ctx, tick_id, verb, key=key)
     reason = f"the harness {where} {key} this tick (the state block's `{shown}`); record nothing about it"
     db.record_decision(ctx.conn, tick_id, key, attention.REFUSED_DECIDED, reason)
     logs.for_tick(tick_id).info("refused: decided by the harness", extra={"ticket": key, "verb": verb})
     return reason
+
+
+def _other_subject(
+    ctx: Context,
+    tick_id: int,
+    verb: str,
+    *,
+    key: str | None = None,
+    pr: str | None = None,
+    chore: str | None = None,
+) -> str | None:
+    """Record the refusal of `verb` about `key`, `pr`, or `chore` if the running overseer run's subject is another.
+
+    Returns:
+        The refusal's reason, or None when the run is given the whole block or that subject.
+    """
+    run = overseer_runs.running(ctx.conn, tick_id)
+    if run is None or run.subject is None or _covers(ctx, run.subject, key=key, pr=pr, chore=chore):
+        return None
+    about = key or (f"{attention.CHORE_PREFIX}{chore}" if chore is not None else f"{attention.PR_PREFIX}{pr}")
+    reason = f"this run is given {run.subject} alone; record nothing about {about}"
+    db.record_decision(ctx.conn, tick_id, key, attention.REFUSED_DECIDED, reason, pr=pr, chore=chore)
+    logs.for_tick(tick_id).info(
+        "refused: another subject",
+        extra={"subject": run.subject, "ticket": key, "pr": pr, "chore": chore, "verb": verb},
+    )
+    return reason
+
+
+def _covers(ctx: Context, subject: str, *, key: str | None, pr: str | None, chore: str | None) -> bool:
+    """Whether a run given `subject` may record about ticket `key`, PR `pr`, and chore `chore`, those given.
+
+    The chores' run, about chores alone; a PR's, about that PR alone, with no ticket; and a ticket's, about that ticket
+    and its units' PRs.
+
+    Returns:
+        True when each given is the subject's.
+    """
+    if subject == overseer_runs.CHORES:
+        return key is None and pr is None
+    if subject.startswith(overseer_runs.PR_PREFIX):
+        return key is None and chore is None and pr == subject.removeprefix(overseer_runs.PR_PREFIX)
+    if chore is not None or (key is not None and key != subject):
+        return False
+    return pr is None or pr in {u.pr_url for u in db.units(ctx.conn, subject)}
 
 
 def _refuse_raised(

@@ -419,7 +419,7 @@ def test_a_ticket_whose_pr_no_source_reads_waits_unlisted_raising_its_item_until
     # Its work forgotten, its unit goes with the PR, and the ticket is the overseer's again, its item gone.
     scenario.operator("forget", KEY)
     again = scenario.tick(*waits(KEY))
-    assert again.tick.overseer_ran is True
+    assert again.tick.overseer_ran == 1
     assert harness.recorded(scenario.conn, again.tick.id) == []
     assert scenario.attention() == []
     assert [t["key"] for t in scenario.state()["observations"]["tickets"]] == [KEY]

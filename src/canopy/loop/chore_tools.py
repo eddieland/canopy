@@ -2,7 +2,8 @@
 
 Each is a request (`loop.tools.Request`) and a function, which the MCP server (`loop.mcp`) calls, as it does the
 overseer's other verbs. A chore with no `when` is the harness's, which runs it
-when it is due (DESIGN §37): either verb about one is refused `decided`. A chore run the overseer asks for is recorded,
+when it is due (DESIGN §37): either verb about one is refused `decided`, as either is in a run given a subject other
+than the due chores (§40). A chore run the overseer asks for is recorded,
 and the tick starts it once the overseer's run has ended (`spawn_chore`, DESIGN §40).
 """
 
@@ -27,6 +28,7 @@ from canopy.loop.tools import (
     Result,
     Text,
     matching,
+    refuse_other_subject,
     running_tick,
     truncate,
 )
@@ -172,11 +174,14 @@ def chore_wait(ctx: Context, request: ChoreWait) -> Outcome[ChoreWaitRecorded]:
 def _refuse_decided(ctx: Context, tick_id: int, name: str, verb: str) -> None:
     """Refuse the overseer's `verb` about chore `name` when it has no `when`: the harness runs it (DESIGN §37).
 
+    Or when the overseer's run is given another subject than the due chores (§40).
+
     Raises:
-        Refused: The chore is the harness's. The refusal is recorded, as a guard's is.
+        Refused: The chore is the harness's, or the run's subject is another. The refusal is recorded, as a guard's is.
     """
     chore = chore_view.configured(ctx.config, ctx.workspace).get(name)
     if chore is None or not harness_dispatches.takes_chore(chore):
+        refuse_other_subject(ctx, tick_id, verb, chore=name)
         return
     reason = f"{name} has no `when`, so the harness runs it when it is due, after you; record nothing about it"
     db.record_decision(ctx.conn, tick_id, None, f"refused:{DECIDED}", reason, chore=name)

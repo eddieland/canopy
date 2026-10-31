@@ -3,7 +3,10 @@
 A live tick starts the operator's queued one-off tasks after reconcile, in code, before the overseer (DESIGN §36). The
 runs the overseer asks for are recorded, and the tick starts them once its run has ended, with the harness's own
 (`spawns.py`, DESIGN §40); one it did not start is closed unstarted as it closes, or by the next tick if it died. Its
-overseer's run is recorded as it starts and as it ends (`core/overseer_runs.py`). A tick that closes `ok` notes, on
+overseer's run is recorded as it starts and as it ends (`core/overseer_runs.py`). With `loop.overseer_per_subject` on,
+it runs the overseer once for each subject left to it instead, one at a time in §7's order, each run given the state
+block's shared part and that subject alone (`subjects.py`, §40): a run that fails, or leaves its subject's duty undone,
+holds up no other, and the tick closes `overseer_failed` naming each such subject. A tick that closes `ok` notes, on
 each ticket, what it did about the operator's messages it read (`acknowledge.py`).
 """
 
@@ -58,6 +61,7 @@ from canopy.loop import (
     phases,
     spawns,
     state,
+    subjects,
 )
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
@@ -65,7 +69,7 @@ from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
 from canopy.reviews import waiting as review_waiting
 from canopy.runs import artifact_authority, drafted, drafts, feedback_plans, follow_ups, policy, reconcile, task_starts
-from canopy.runtime import project_config, servers, stdout
+from canopy.runtime import project_config, report, servers, stdout
 
 if TYPE_CHECKING:
     import sqlite3
@@ -73,7 +77,8 @@ if TYPE_CHECKING:
 
     from canopy.core import records
     from canopy.core.context import Context
-    from canopy.runtime.report import Usage
+    from canopy.runs.reconcile import Capacity
+    from canopy.runtime.report import AgentOutput, Usage
 
 TICK_ID_ENV = conversation.TICK_ID_ENV
 # A word no model writes by chance, alone on a line of the overseer's final message (DESIGN §6).
@@ -157,6 +162,29 @@ def state_block(
     return rendered.block
 
 
+def subject_messages(
+    ctx: Context,
+    *,
+    tick_id: int,
+    dry_run: bool,
+    now: datetime,
+    reconciled: reconcile.Reconciled,
+) -> list[tuple[subjects.Subject, str]]:
+    """Read the journal for tick `tick_id` and render the message each run of the overseer gets, once per subject (§40).
+
+    `reconciled` is what reconcile left. Each subject is told the capacity left to it before any run records one.
+
+    Returns:
+        Each subject and its run's message, the state block's shared part then its own, in the order they run.
+    """
+    rendered = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled)
+    shared = state.shared_block(rendered.state)
+    return [
+        (s, shared + _subject_part(rendered, s, subjects.capacity(ctx, tick_id, reconciled.capacity, s)))
+        for s in subjects.listed(ctx, tick_id, rendered.state, rendered.owed)
+    ]
+
+
 def session_title(tick_id: int, woken_by: WokenBy | None, *, tickets: int, running: int, open_items: int) -> str:
     """The overseer's session title: what started tick `tick_id`, then what it faces (DESIGN §13).
 
@@ -172,6 +200,16 @@ def session_title(tick_id: int, woken_by: WokenBy | None, *, tickets: int, runni
         f"{open_items} need{'s' if open_items == 1 else ''} you" if open_items else "",
     ]
     return f"tick {tick_id} · {_woken_title(woken_by)} · {', '.join(f for f in faces if f) or 'nothing open'}"
+
+
+def subject_title(subject: subjects.Subject, tick_id: int, woken_by: WokenBy | None) -> str:
+    """The session title of tick `tick_id`'s overseer run given `subject` alone (DESIGN §13, §40).
+
+    Returns:
+        `<subject> · tick <id> · <what started it>`, such as `PROJ-1 · tick 412 · run ended`: a run's title names its
+        ticket first, as a worker's does.
+    """
+    return f"{subject.label} · tick {tick_id} · {_woken_title(woken_by)}"
 
 
 def _woken_title(woken_by: WokenBy | None) -> str:
@@ -242,7 +280,7 @@ def _render(
         *(t.comment_cursor for t in tickets),
         *(c for us in units.values() for u in us for c in (u.review_cursor, u.ci_cursor)),
     ]
-    block = state.state_block(
+    built = state.build(
         ctx.config,
         ctx.repo_root,
         tick_id=tick_id,
@@ -292,7 +330,7 @@ def _render(
         running=len(running),
         open_items=len(attention.current(ctx.conn)),
     )
-    return _Rendered(block, owed, _left(ctx.conn, tick_id, owed, reviews), title)
+    return _Rendered(state.render(built), built, owed, _left(ctx.conn, tick_id, owed, reviews), title)
 
 
 @dataclass(frozen=True)
@@ -301,6 +339,8 @@ class _Rendered:
 
     #: The `## State` section, the overseer's whole message.
     block: str
+    #: The block's JSON before it was rendered, which a tick that runs the overseer once per subject cuts (§40).
+    state: state.OverseerState
     #: What the overseer owes this tick (DESIGN §6 step 5).
     owed: duties.Duties
     #: What the block leaves the overseer to judge, a phrase each; with none, the tick runs no overseer (DESIGN §39).
@@ -467,26 +507,42 @@ def _steps(
     now = datetime.now(UTC)
     _query(ctx, tick_id, now, log)
     rendered = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, woken_by=woken_by)
+    # Run once per subject, the overseer is given each subject left to it alone (DESIGN §40).
+    listed = (
+        subjects.listed(ctx, tick_id, rendered.state, rendered.owed) if ctx.config.loop.overseer_per_subject else None
+    )
     # With nothing left to judge, the overseer would be handed an empty block: the tick runs none, and owes nothing.
     # The disk check still holds the harness's dispatches, which fill a disk as the overseer's do (DESIGN §39).
-    overseer = bool(rendered.left)
+    overseer = bool(rendered.left if listed is None else listed)
     halted = _halt(ctx, tick_id, log, overseer=overseer)
-    db.set_tick_overseer(ctx.conn, tick_id, ran=overseer and halted is None)
+    # Run once per subject, the tick counts its runs as each starts.
+    db.set_tick_overseer(ctx.conn, tick_id, runs=int(overseer and halted is None and listed is None))
     if halted is not None:
         return finish(*halted)
-    failure, usage = _overseer(ctx, tick_id, rendered, dry_run=dry_run, log=log)
+    if listed is None:
+        failure, usage = _overseer(ctx, tick_id, rendered, dry_run=dry_run, log=log)
+    else:
+        failure, usage = _per_subject(
+            ctx,
+            tick_id,
+            rendered,
+            listed,
+            reconciled.capacity,
+            dry_run=dry_run,
+            log=log,
+            woken_by=woken_by,
+        )
     # After the overseer, whatever its run ended as, every run it recorded and the harness's own; a tick halted before
     # it starts none (DESIGN §37, §40).
     _spawn(ctx, tick_id, log)
     if failure is not None:
         return finish(TickStatus.OVERSEER_FAILED, failure, usage)
-    owed = rendered.owed
 
     decisions = db.decisions_for_tick(ctx.conn, tick_id)
     prefix = ("dry run; " if dry_run else "") + ("" if overseer else f"{NO_OVERSEER}; ")
     # A duty left undone fails the tick as a missing done line does: closing it `ok` would resolve the items of every
-    # ticket it left out (DESIGN §6 step 5).
-    undone = duties.undone(ctx.conn, tick_id, owed)
+    # ticket it left out (DESIGN §6 step 5). Run once per subject, each run's was checked as it ended (DESIGN §40).
+    undone: list[str] = [] if listed is not None else duties.undone(ctx.conn, tick_id, rendered.owed)
     if undone:
         log.error("overseer left duties undone", extra={"undone": undone, "dry_run": dry_run})
         failure = f"overseer left duties undone: {'; '.join(undone)}"
@@ -522,9 +578,87 @@ def _overseer(
         return None, None
     run_id = overseer_runs.start(ctx.conn, tick_id)
     # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
-    failure, usage = _run_overseer(ctx, tick_id, run_id, rendered.block, rendered.title, dry_run=dry_run, log=log)
-    overseer_runs.end(ctx.conn, run_id, failure)
-    return failure, usage
+    ran = _run_overseer(ctx, tick_id, run_id, rendered.block, rendered.title, dry_run=dry_run, log=log)
+    if ran.output is not None:
+        output = ran.output
+        db.set_tick_report(ctx.conn, tick_id, output.session_id, output.usage, digest=ran.digest, tools=output.tools)
+    overseer_runs.end(ctx.conn, run_id, ran.failure)
+    return ran.failure, ran.usage
+
+
+def _per_subject(
+    ctx: Context,
+    tick_id: int,
+    rendered: _Rendered,
+    listed: Sequence[subjects.Subject],
+    base: Capacity,
+    *,
+    dry_run: bool,
+    log: logs.TickAdapter,
+    woken_by: WokenBy | None,
+) -> tuple[str | None, Usage | None]:
+    """Run the overseer once for each of `listed`, one at a time, in their order (DESIGN §40).
+
+    Each run's message is the state block's shared part, rendered once, then its subject's part, with the capacity
+    left to it of `base`. A subject of new work alone gets the harness's `wait` and no run once none is left. A run is
+    recorded with its subject as it starts and as it ends, and owes its done line and its subject's duty: one that
+    fails, or leaves its duty undone, leaves its subject undecided, what it recorded standing, and the next goes on. The
+    tick keeps what its runs cost together, and the last one's session.
+
+    Returns:
+        Each failed subject and why, as the tick's summary, or None when every run ended well; and what the runs cost
+        together, if the runtime reported it.
+    """
+    shared = state.shared_block(rendered.state)
+    kept = shared
+    failed: list[str] = []
+    outputs: list[AgentOutput] = []
+    digest: str | None = None
+    ran = 0
+    for subject in listed:
+        left = subjects.capacity(ctx, tick_id, base, subject)
+        if subjects.waits(subject, left):
+            subjects.wait(ctx, tick_id, subject, left)
+            log.info("overseer not run: no capacity for new work", extra={"subject": subject.name})
+            continue
+        part = _subject_part(rendered, subject, left)
+        ran += 1
+        # The tick's prompt file holds the shared part once, then each subject's, as its runs were given them.
+        kept += part
+        db.set_tick_overseer(ctx.conn, tick_id, runs=ran)
+        run_id = overseer_runs.start(ctx.conn, tick_id, subject=subject.name)
+        title = subject_title(subject, tick_id, woken_by)
+        done = _run_overseer(
+            ctx,
+            tick_id,
+            run_id,
+            shared + part,
+            title,
+            prompt=kept,
+            append=ran > 1,
+            dry_run=dry_run,
+            log=log,
+        )
+        failure, undone = done.failure, False
+        if done.output is not None:
+            outputs.append(done.output)
+            digest = done.digest
+        if failure is None:
+            owed = duties.of_subject(rendered.owed, ticket=subject.ticket, chores=subject.chores)
+            if left_undone := duties.undone(ctx.conn, tick_id, owed):
+                failure, undone = f"overseer left duties undone: {'; '.join(left_undone)}", True
+                log.error("overseer left duties undone", extra={"subject": subject.name, "undone": left_undone})
+        overseer_runs.end(ctx.conn, run_id, failure, undone=undone)
+        if failure is not None:
+            failed.append(f"{subject.name}: {failure}")
+    usage = report.together([o.usage for o in outputs if o.usage is not None])
+    if outputs:
+        session = next((o.session_id for o in reversed(outputs) if o.session_id is not None), None)
+        tools = report.tools_together(o.tools for o in outputs)
+        db.set_tick_report(ctx.conn, tick_id, session, usage, digest=digest, tools=tools)
+    if not failed:
+        return None, usage
+    return f"overseer failed on {len(failed)} of {ran} subjects: {'; '.join(failed)}", usage
 
 
 def _harness_cursors(ctx: Context, tick_id: int, log: logs.TickAdapter, *, dry_run: bool) -> None:
@@ -875,38 +1009,75 @@ def _initialized(out: str) -> bool:
     return isinstance(info, dict) and info.get("name") == mcp.SERVER
 
 
+@dataclass(frozen=True)
+class _Ran:
+    """How one run of the overseer ended, and what the runtime reported of it."""
+
+    #: Why it failed, with the errors the runtime reported unless it timed out; None when it ended well.
+    failure: str | None
+    #: What it printed, read; None when it did not start.
+    output: AgentOutput | None = None
+    #: The definitions snapshot it loaded, by its directory's name; None when it did not start.
+    digest: str | None = None
+
+    @property
+    def usage(self) -> Usage | None:
+        """What it cost, if the runtime reported it."""
+        return self.output.usage if self.output is not None else None
+
+
+def _subject_part(rendered: _Rendered, subject: subjects.Subject, left: state.CapacityState) -> str:
+    """The part of the state block `rendered` about `subject`, with the capacity `left` to it (DESIGN §40).
+
+    Returns:
+        Its `## Subject` section.
+    """
+    return state.subject_block(
+        rendered.state,
+        name=subject.name,
+        ticket=subject.ticket,
+        prs=subject.prs,
+        chores=subject.chores,
+        capacity=left,
+    )
+
+
 def _run_overseer(
     ctx: Context,
     tick_id: int,
     run_id: int,
-    block: str,
+    message: str,
     title: str,
     *,
+    prompt: str | None = None,
+    append: bool = False,
     dry_run: bool,
     log: logs.TickAdapter,
-) -> tuple[str | None, Usage | None]:
-    """Run `overseer_cmd` as run `run_id`, with the state block `block` as its prompt, and `title` as its `{title}`.
+) -> _Ran:
+    """Run `overseer_cmd` as run `run_id`, with `message` as its prompt, and `title` as its `{title}`.
 
-    Output goes to `<state_dir>/ticks/<id>.log` as the overseer prints it, its stderr after it once it ends, and the
-    block to `<id>.prompt` beside it first, for the transcript's first model call (DESIGN §22). What its events report
-    so far is recorded on the tick as they come, so a running tick shows its session and spend; the session and cost
-    again when the overseer ends, failed or not.
+    Output goes to `<state_dir>/ticks/<id>.log` as the overseer prints it, its stderr after it once it ends, and
+    `prompt`, `message` if None, to `<id>.prompt` beside it first, for the transcript's first model call (DESIGN §22).
+    With `append`, the output goes after what an earlier run of the tick wrote there, as each run of a tick that runs
+    the overseer once per subject does after its first (§40), whose `prompt` holds every message the tick gave so far.
+    What its events report so far is recorded on the tick as they come, so a running tick shows its session and spend;
+    its session and cost are recorded on the run when it ends, failed or not, and the caller records them on the tick.
 
     Returns:
-        Why it failed, with the errors the runtime reported unless it timed out, None on success, and what it cost if
-        the runtime reported it.
+        How it ended: why it failed, with the errors the runtime reported unless it timed out, or None on success, and
+        what it printed.
     """
     # The runtime reads the repository's config too: it must not define an agent of canopy's (D044).
     failure = project_config.refusal([ctx.repo_root], version=ctx.config.runtime.version)
     if failure is not None:
         log.error("overseer not started", extra={"reason": failure, "dry_run": dry_run})
-        return failure, None
+        return _Ran(failure)
     try:
         definitions_dir = definitions.ensure(ctx.state_dir, ctx.config)
     except definitions.DefinitionsError as e:
         log.error("overseer not started", extra={"reason": str(e), "dry_run": dry_run})  # noqa: TRY400
-        return str(e), None
-    command = render_command(ctx.config.runtime.overseer_cmd, block, definitions_dir, title)
+        return _Ran(str(e))
+    command = render_command(ctx.config.runtime.overseer_cmd, message, definitions_dir, title)
     # What the definitions just rendered hold for it, as `_check_model` found it listed.
     model = agent_models.of_template(ctx.config.runtime.models, ctx.config.runtime.overseer_cmd)
     db.set_tick_model(ctx.conn, tick_id, model.name if model is not None else None)
@@ -924,9 +1095,9 @@ def _run_overseer(
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
     out_dir = ctx.state_dir / "ticks"
     out_dir.mkdir(parents=True, exist_ok=True)
-    logs.write_private(out_dir / f"{tick_id}.prompt", block)
+    logs.write_private(out_dir / f"{tick_id}.prompt", message if prompt is None else prompt)
     out_path = out_dir / f"{tick_id}.log"
-    with logs.open_private(out_path) as out:
+    with logs.open_private(out_path, append=append) as out:
         watch = progress.Progress(
             ctx.conn,
             "ticks",
@@ -959,21 +1130,15 @@ def _run_overseer(
                     on_line=watch,
                 )
         except procs.ProcError as e:
-            # It printed nothing, so it keeps no output, as a tick whose overseer never ran keeps none.
-            out_path.unlink(missing_ok=True)
+            # It printed nothing, so it keeps no output, as a tick whose overseer never ran keeps none; an earlier run's
+            # stays.
+            if not append:
+                out_path.unlink(missing_ok=True)
             log.exception("overseer could not start", extra={"error": str(e)})
-            return str(e), None
+            return _Ran(str(e))
         out.write(f"\n--- stderr ---\n{result.stderr}")
 
     output = stdout.read(result.stdout, version=ctx.config.runtime.version)
-    db.set_tick_report(
-        ctx.conn,
-        tick_id,
-        output.session_id,
-        output.usage,
-        digest=definitions_dir.name,
-        tools=output.tools,
-    )
     overseer_runs.report(ctx.conn, run_id, output.session_id, output.usage)
     if result.timed_out:
         failure = f"overseer timed out after {timeout_minutes} minutes"
@@ -982,12 +1147,12 @@ def _run_overseer(
     elif not _done(output.last):
         failure = f"overseer's final message has no {DONE_LINE} line"
     else:
-        return None, output.usage
+        return _Ran(None, output, definitions_dir.name)
     # What the runtime said is why it ended; after a timeout, canopy ended it.
     if output.errors and not result.timed_out:
         failure = f"{failure}; the runtime reported {_reported(output.errors)}"
     log.error("overseer failed", extra={"reason": failure, "output": str(out_path), "dry_run": dry_run})
-    return failure, output.usage
+    return _Ran(failure, output, definitions_dir.name)
 
 
 def _reported(errors: Sequence[str]) -> str:

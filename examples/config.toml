@@ -119,6 +119,9 @@ interval_minutes = 15
 # No tick runs the overseer, so none starts work, while the disk holding .canopy/ or the workspace has less free than
 # this, in MiB; you are told through the attention list. 0 turns the check off.
 # min_free_disk_mib = 2048
+# Run the overseer once for each ticket, PR to review, and the due chores, each run shown that subject alone, rather
+# than once a tick shown everything. Off by default while it is measured (ROADMAP M40).
+# overseer_per_subject = false
 
 [spend]
 # What a calendar month of agent spend should cost, in whole US dollars: canopy's runs and every session of the runtime

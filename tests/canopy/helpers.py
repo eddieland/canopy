@@ -870,11 +870,27 @@ def overseer_does(
     journal does not know yet, the tests' tracker holds and reads first (`holds_listed`), so the overseer is listed it.
     """
     holds_listed(moves)
+    with overseer_script(*moves, result=result, **behavior):
+        yield
+
+
+def overseer_script(
+    *moves: Called | list[str],
+    result: str = TICK_DONE,
+    **behavior: Unpack[Behavior],
+) -> Script:
+    """The fake overseer's script that makes each move and prints `result`, as `overseer_does` plays it.
+
+    As data, a scenario hands it to the run of one subject alone, when the tick runs the overseer once per subject
+    (FAKE_OVERSEER_FOR in the fake, DESIGN §40).
+
+    Returns:
+        The script, a block.
+    """
     commands = [move for move in moves if not isinstance(move, Called)]
     tools = [[move.name, move.arguments] for move in moves if isinstance(move, Called)]
     settings = {"COMMANDS": json.dumps(commands), "RESULT": result, "TOOLS": json.dumps(tools, default=str)}
-    with scripted("OVERSEER", settings, behavior):
-        yield
+    return scripted("OVERSEER", settings, behavior)
 
 
 @contextmanager

@@ -77,7 +77,23 @@ its one, given the whole block, its subject none, with how it ended (`ok`, `fail
 or `abandoned`), its session, the model asked for, and its cost; `ticks` keeps writing its own columns, so no reader
 moved, and the migration back-fills a run for each past tick that ran its overseer, ending as its tick did. Chosen
 conservatively, for the operator to change: the models that served a run are still read under its tick, which holds
-while a tick makes one run. Left: stage 1's live check, and the rest of stage 2. Chosen conservatively for stage
+while a tick makes one run. Built (2026-10-31), behind the private `loop.overseer_per_subject`, off by default, chosen
+conservatively for the operator to turn on ahead of the live check: the runs per subject. Each ticket owed a decision,
+each PR whose review is its to start (an open request, a revision a note asks for, or a fresh query match whose head
+has no `done` review and none running), and the due chores with a `when` together, last, get a run each, one at a
+time in §7's order: a subject by the highest row it holds that dispatches, one holding none after `ready`. Each run's
+message is the block's shared part, rendered once and the same byte for byte, then its subject's part, told the
+capacity left after the harness's dispatches ranked above it and the runs recorded before it; once none is left, a
+ticket of new work alone gets the harness's `wait`, naming capacity, and no run. A run's tools refuse anything about
+another subject `decided`. The checks are made once; each run owes its done line and its subject's duty, a PR's run
+none the harness checks, as today; one that fails or leaves it undone holds up no other, and the tick closes
+`overseer_failed` naming each. Each run is recorded with its subject, and `ticks.overseer_ran` counts the runs. Chosen
+conservatively, for the operator to change: the tick keeps its runs' cost together and the last run's session, so the
+models that served are read from that session alone; the runs' output goes to the tick's one log, and its prompt file
+holds the shared part then each subject's. Left: stage 1's live check; of stage 2, a run's cost counted toward its
+ticket in `canopy spend`, its `--json`, and the spend page, `canopy decisions` by run, the harness's `skip` for a
+ticket the query found that is no candidate (each gets a run today), the design folded into the sections it names, and
+the live check. Chosen conservatively for stage
 2: runs one at a time, every run on the overseer's one model, a subject of new work waited by the harness with no run
 once capacity is out, and a tick with a failed run closing `overseer_failed`. Open for the operator: spawning a run's
 asks as soon as it ends (recommended: not until a tick's length is measured to delay work); runs in parallel

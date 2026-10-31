@@ -9,15 +9,18 @@ The tracker query is the harness's, never the overseer's: the tick records the `
 was within `connect.max_age_minutes`, before the overseer runs (`record_queried`), and each ticket it found is owed a
 decision. A tick of an older release recorded the overseer's `canopy queried` as the same decision, which
 `last_queried` still reads.
+
+A tick that runs the overseer once per subject (DESIGN §40) checks each run when it ends, against its subject's duty
+alone (`of_subject`): a decision for its ticket, or a run or wait for each due chore from the chores' run.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db
+from canopy.core import conversation, db, recorded_runs
 from canopy.core.vocab import Decider
 
 if TYPE_CHECKING:
@@ -33,6 +36,8 @@ _QUERIED_NONE = "the query returned no open ticket"
 _QUERIED_SOME = "the query returned these open tickets: "
 #: How many omitted tickets the failure names before it counts the rest.
 _NAMED = 10
+#: What a verb refused `decided` records, about the ticket it named: never a decision of that ticket's (§37, §40).
+_REFUSED_DECIDED = "refused:decided"
 
 
 @dataclass(frozen=True)
@@ -50,6 +55,8 @@ class Duties:
     exempt: frozenset[str]
     chores: frozenset[str]
     harness: int
+    #: Whether the tickets the query found are owed too: not by a run given one subject (DESIGN §40).
+    queried: bool = True
 
 
 def owed(
@@ -76,6 +83,37 @@ def owed(
         exempt=frozenset([*stopped, *(str(t["key"]) for t in recently_done), *decided]),
         chores=frozenset(c["name"] for c in chores if c["due"] and not c["running"]),
         harness=max((d.id for d in recorded), default=0),
+    )
+
+
+def owed_tickets(conn: sqlite3.Connection, tick_id: int, duties: Duties) -> list[str]:
+    """The tickets owed a decision in tick `tick_id`: the block's and the query's, but those exempt or stopped.
+
+    Returns:
+        Their keys, sorted.
+    """
+    found = {
+        key
+        for d in db.decisions_for_tick(conn, tick_id)
+        if d.action == QUERIED_ACTION
+        for key in queried_keys(d.rationale)
+    }
+    return sorted((duties.tickets | found) - duties.exempt - set(conversation.stopped(conn)))
+
+
+def of_subject(duties: Duties, *, ticket: str | None = None, chores: bool = False) -> Duties:
+    """What a run given one subject owes of the tick's `duties` (DESIGN §40): its `ticket`'s decision, or the chores'.
+
+    A run given a PR owes no duty the harness checks, as a PR the overseer reviews is owed none today.
+
+    Returns:
+        The duties, cut to that subject.
+    """
+    return replace(
+        duties,
+        tickets=frozenset() if ticket is None else frozenset({ticket}),
+        chores=duties.chores if chores else frozenset(),
+        queried=False,
     )
 
 
@@ -125,26 +163,35 @@ def undone(conn: sqlite3.Connection, tick_id: int, duties: Duties) -> list[str]:
     """Each duty the overseer left undone this tick, in the procedure's order.
 
     A ticket's decision is any the overseer recorded about it: a `decide`, a dispatch or review and their refusals, or
-    an attention item. Each ticket the query found, in the `queried` the harness recorded, is owed one too. A ticket
-    stopped while the overseer ran is owed nothing, as one stopped before it. A ticket that came into the journal any
-    other way while it ran, such as one the operator started, is not owed one: the next tick's block carries it.
+    an attention item; or a run it asked for that the tick has yet to start, whose decision is recorded as it starts
+    (DESIGN §40), as a run given one subject is checked before the tick starts any. Each ticket the query found, in
+    the `queried` the harness recorded, is owed one too. A ticket stopped while the overseer ran is owed nothing, as
+    one stopped before it. A ticket that came into the journal any other way while it ran, such as one the operator
+    started, is not owed one: the next tick's block carries it.
 
     Returns:
         One phrase per kind of duty left undone, empty when the overseer did every one.
     """
     # The harness's own, before the overseer ran or after (DESIGN §37), are never the overseer's.
     made = db.decisions_for_tick(conn, tick_id)
-    recorded = [d for d in made if d.id > duties.harness and d.decider is not Decider.HARNESS]
-    queried = [d for d in made if d.action == QUERIED_ACTION]
+    # A refusal `decided` names a ticket the overseer was not given: no decision of its own.
+    recorded = [
+        d for d in made if d.id > duties.harness and d.decider is not Decider.HARNESS and d.action != _REFUSED_DECIDED
+    ]
     missing: list[str] = []
-    found = {key for d in queried for key in queried_keys(d.rationale)}
-    decided = {d.ticket_key for d in recorded if d.ticket_key is not None}
+    found = (
+        {key for d in made if d.action == QUERIED_ACTION for key in queried_keys(d.rationale)}
+        if duties.queried
+        else set()
+    )
+    asked = recorded_runs.of_tick(conn, tick_id)
+    decided = {d.ticket_key for d in [*recorded, *asked] if d.ticket_key is not None}
     exempt = duties.exempt | set(conversation.stopped(conn))
     tickets = sorted((duties.tickets | found) - exempt - decided)
     if tickets:
         named = ", ".join(tickets[:_NAMED]) + (f" and {len(tickets) - _NAMED} more" if len(tickets) > _NAMED else "")
         missing.append(f"no decision for {named}")
-    chores = sorted(duties.chores - {d.chore for d in recorded if d.chore is not None})
+    chores = sorted(duties.chores - {d.chore for d in [*recorded, *asked] if d.chore is not None})
     if chores:
         missing.append(f"no run or wait for chore {', '.join(chores)}")
     return missing

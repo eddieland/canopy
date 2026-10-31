@@ -93,6 +93,13 @@ an empty list or object is left out, at any depth: read an absent key as that, s
 `last_run` before its first run, a private ticket's `new_operator_messages` with none new, a chore's `due_at` when it
 is due now, or a clean review's `findings`. The block's times are UTC, to the minute, such as `2026-10-16T09:40Z`.
 
+The operator may have canopy run you once for each subject: a ticket, a PR to review, or the due chores. Then the
+message has a `## Subject` section after the state block, and this run is given the one its `subject` names. The state
+block's keys about subjects are there, cut to it: `tickets`, `reviews`, `chores`, `attention`, `running_workers`,
+`observations`' `tickets` and `review_prs`, and `capacity`, the workers left to you after the runs before yours. No
+run sees `harness`, `dispatches_to_come`, `stopped`, `recently_done`, or a query's result. Do what this prompt asks of a
+tick for that subject alone, and record nothing about any other: canopy refuses it (`decided`).
+
 ## Tools you have
 
 - No tracker or GitHub server, and no skill. canopy's `tracker` source reads the tickets and runs the query, and its

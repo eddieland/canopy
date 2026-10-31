@@ -3,7 +3,7 @@
 A revision is of a review's draft, which the operator's note asks for. Each verb is a request (`loop.tools.Request`) and
 a function, which the MCP server (`loop.mcp`) calls, as it does the overseer's other verbs. A review or a revision the
 overseer asks for is recorded, and the tick starts it once the overseer's run has ended (`spawn_review`,
-`spawn_revision`, DESIGN §40).
+`spawn_revision`, DESIGN §40). In a run given one subject, each verb about a PR not the subject's is refused `decided`.
 """
 
 from __future__ import annotations
@@ -28,6 +28,7 @@ from canopy.loop.tools import (
     Result,
     Text,
     one_of,
+    refuse_other_subject,
     required,
     running_tick,
     truncate,
@@ -112,9 +113,11 @@ def review_run(ctx: Context, request: ReviewRun) -> Outcome[ReviewsStarted]:
         The tool's text, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick, or a guard refused the review, which is recorded.
+        Refused: Outside a running tick, the run is given another subject, or a guard refused the review, each of which
+            is recorded.
     """
     current = running_tick(ctx)
+    refuse_other_subject(ctx, current.id, "review", key=request.ticket, pr=request.pr)
     asked = review_start.Request(pr=request.pr, sha=request.sha, ticket=request.ticket, repo=request.repo)
     try:
         due = review_start.due(ctx, asked)
@@ -260,11 +263,12 @@ def review_wait(ctx: Context, request: ReviewWait) -> Outcome[ReviewWaitRecorded
         The tool's text, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick, or reviews are off.
+        Refused: Outside a running tick, reviews are off, or the run is given another subject, which is recorded.
     """
     current = running_tick(ctx)
     if not review_requests.reviews_on(ctx.conn, ctx.config):
         raise Refused("reviews are off: no [review] agent_prs or query, and no open review request")
+    refuse_other_subject(ctx, current.id, "review wait", key=request.ticket, pr=request.pr)
     db.record_decision(ctx.conn, current.id, request.ticket, "wait", request.rationale, pr=request.pr)
     return Outcome(f"recorded wait for {request.pr}", ReviewWaitRecorded(pr=request.pr, ticket=request.ticket))
 
@@ -301,10 +305,12 @@ def review_end(ctx: Context, request: ReviewEnd) -> Outcome[ReviewEnded]:
         The tool's text, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick, or there is no open request to end, which is recorded.
+        Refused: Outside a running tick, the run is given another subject, or there is no open request to end, each of
+            which is recorded.
     """
     current = running_tick(ctx)
     tick_id, dry_run, pr, reason = current.id, current.dry_run, request.pr, request.reason
+    refuse_other_subject(ctx, tick_id, "review end", pr=pr)
     try:
         review_requests.end(ctx.conn, pr, reason, dry_run=dry_run)
     except conversation.Refused as r:
@@ -346,12 +352,14 @@ def review_revise(ctx: Context, request: ReviewRevise) -> Outcome[RevisionStarte
         The tool's text, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick, or a guard refused the revision, which is recorded.
+        Refused: Outside a running tick, the run is given another subject than the review's PR, or a guard refused the
+            revision, each of which is recorded.
     """
     current = running_tick(ctx)
     tick_id, run_id = current.id, request.run
     review = review_runs.get_review_run(ctx.conn, run_id)
     pr = review.pr_url if review is not None else None
+    refuse_other_subject(ctx, tick_id, "revision", pr=pr)
     try:
         if current.dry_run:
             target = revise.check(ctx, tick_id=tick_id, run_id=run_id)

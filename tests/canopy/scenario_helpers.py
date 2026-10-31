@@ -578,6 +578,7 @@ class Scenario:
         *moves: list[str] | Called,
         worker: Worker | None = None,
         workers: Mapping[str, Script] | None = None,
+        overseers: Mapping[str, Script] | None = None,
         dry_run: bool = False,
         hold: bool = False,
         code: int = 0,
@@ -593,7 +594,10 @@ class Scenario:
         script each ticket's run plays as made for that ticket, so `pushes()` pushes the branch of the ticket it runs
         for. With `hold`, each is held at work instead, and the tick's runs are left `working` for the test to finish
         or kill. The overseer ends on `result`, by default the line that ends a tick, and runs as `overseer` says
-        (`exit_code`, `says`, ...). The tick must exit `code`, and a failure says how it ended instead.
+        (`exit_code`, `says`, ...). Where the tick runs it once per subject, under `titled_overseer`, a run plays what
+        `overseers` gives for its subject instead, an `overseer_script`, by the word its session title starts with: a
+        ticket's key, a PR's URL, or `chores` (DESIGN §40). The tick must exit `code`, and a failure says how it ended
+        instead.
 
         Returns:
             What the tick did.
@@ -604,6 +608,7 @@ class Scenario:
             if worker is not None:
                 stack.enter_context(worker)
             stack.enter_context(_each_ticket(worker, workers or {}, moves))
+            stack.enter_context(_each_subject(overseers or {}))
             if hold:
                 stack.enter_context(self._held())
             exited, printed = _printing(lambda: main(argv))
@@ -1348,6 +1353,15 @@ def _each_ticket(
     assert all(script.role == "WORKER" for script in made.values()), made
     tickets = {key: dict(script.settings) for key, script in made.items()}
     with mock.patch.dict(os.environ, {"FAKE_WORKER_FOR": json.dumps(tickets)}):
+        yield
+
+
+@contextmanager
+def _each_subject(overseers: Mapping[str, Script]) -> Iterator[None]:
+    # Each subject's run reads its own script, by the first word of its session title.
+    assert all(script.role == "OVERSEER" for script in overseers.values()), overseers
+    subjects = {name: dict(script.settings) for name, script in overseers.items()}
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_FOR": json.dumps(subjects)}):
         yield
 
 

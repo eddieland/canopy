@@ -117,8 +117,8 @@ def write_private(path: Path, text: str) -> None:
         f.write(text)
 
 
-def open_private(path: Path) -> TextIO:
-    """Open `path` for writing from empty, readable only by the operator (TRUST_MODEL T2).
+def open_private(path: Path, *, append: bool = False) -> TextIO:
+    """Open `path` for writing from empty, or with `append` after what it holds, readable only by the operator (T2).
 
     The mode is set on the open file, so a file that already existed with a wider mode is narrowed too, and a symlink
     at `path` is refused rather than followed.
@@ -126,7 +126,7 @@ def open_private(path: Path) -> TextIO:
     Returns:
         The file, open for writing text; the caller closes it.
     """
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | (os.O_APPEND if append else os.O_TRUNC) | os.O_NOFOLLOW, 0o600)
     f = os.fdopen(fd, "w", encoding="utf-8")
     try:
         os.fchmod(f.fileno(), 0o600)

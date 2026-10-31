@@ -1,4 +1,9 @@
-"""The overseer's state block: the `## State` section that is each tick's whole message to it (DESIGN §6 step 4)."""
+"""The overseer's state block: the `## State` section that is each tick's whole message to it (DESIGN §6 step 4).
+
+A tick that runs the overseer once per subject (DESIGN §40) cuts the block in two: the part every run shares, rendered
+once and the same byte for byte in each (`shared_block`), and the part about the run's subject alone, its capacity last
+(`subject_block`). Nothing about another subject is in either, its key included.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,7 @@ import json
 import re
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
@@ -31,6 +37,30 @@ if TYPE_CHECKING:
 
 #: A time as the journal writes it (`db.format_time`): a value that is one, and nothing else, shows its minute.
 _JOURNAL_TIME = re.compile(r"([0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}):[0-9]{2}\.[0-9]{3}Z")
+#: The block's keys about its subjects, which a run given one subject reads in its subject's part, cut to it, or not at
+#: all: the tickets the harness decided or dispatches, those stopped or lately done, and the queue's result are no
+#: run's (DESIGN §40). `observations` keeps its bounds in the shared part.
+SUBJECT_KEYS = frozenset(
+    {
+        "tickets",
+        "stopped",
+        "recently_done",
+        "harness",
+        "dispatches_to_come",
+        "chores",
+        "reviews",
+        "attention",
+        "observations",
+        "capacity",
+        "running_workers",
+    },
+)
+#: What the shared part says of the run, before its JSON: the same in every run of a tick.
+_PER_SUBJECT = (
+    "This tick runs you once for each subject: a ticket, a PR to review, or the due chores. What follows is what every "
+    "run of the tick shares; your subject follows it, under `## Subject`, and its keys are the state block's, cut to "
+    "it. Decide that subject alone: canopy refuses anything you record about another (`decided`)."
+)
 
 
 class OverseerState(TypedDict):
@@ -227,7 +257,7 @@ class NoticeState(TypedDict):
     in_force: bool
 
 
-def state_block(
+def build(
     config: Config,
     repo_root: Path,
     *,
@@ -261,8 +291,8 @@ def state_block(
     operator_sent: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
     observations: ObservationsState,
     numbered: Mapping[int, records.ItemNumber] | None = None,
-) -> str:
-    """Render the `## State` section the harness sends the overseer as its message, after its prompt.
+) -> OverseerState:
+    """Build the state the harness sends the overseer as its message, after its prompt: `render` renders it.
 
     `tickets` leave out the tickets the operator stopped, which `stopped` names by key (DESIGN §22), and the tickets
     marked done; `recently_done` names by key those marked done lately, so the overseer leaves out one the
@@ -290,7 +320,7 @@ def state_block(
     holds the items the cursors name, by journal number.
 
     Returns:
-        The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
+        The state block's JSON, before it is rendered.
     """
     private = private or {}
     operator = operator or {}
@@ -346,9 +376,7 @@ def state_block(
 
     listed = [ticket_summary(t) for t in tickets]
     shown = _notices(notices, now, listed, observations)
-    # A listed ticket's title, which its observation then leaves out where the tracker's is the same.
-    titles = {t["key"]: t["title"] for t in listed}
-    state: OverseerState = {
+    return {
         "repository": str(repo_root),
         "workspace": {
             "name": workspace.name,
@@ -422,6 +450,93 @@ def state_block(
         "now": db.format_time(now),
         "dry_run": dry_run,
     }
+
+
+def render(state: OverseerState) -> str:
+    """Render `state` as the `## State` section the harness sends the overseer as its whole message.
+
+    Returns:
+        The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
+    """
+    shown = {
+        **state,
+        "tickets": _compact(state["tickets"]),
+        **({"chores": _compact(state["chores"])} if "chores" in state else {}),
+        **({"reviews": _by_unit(state["reviews"], state["tickets"])} if "reviews" in state else {}),
+        "observations": rendered_observations(state["observations"], _titles(state["tickets"])),
+    }
+    return "\n".join([*_heading(dry_run=state["dry_run"]), "```json", _json(shown), "```", ""])
+
+
+def shared_block(state: OverseerState) -> str:
+    """Render the part of `state` every run of a tick that runs the overseer once per subject shares (DESIGN §40).
+
+    It is `render`'s section without `SUBJECT_KEYS`, but the bounds of `observations`, and says how the runs go. It is
+    rendered once a tick, so it is the same byte for byte in each run, and a runtime that caches a message's start
+    reads it from the cache after the first (§6 step 4).
+
+    Returns:
+        The section as Markdown, its state as a fenced JSON block, ending with a blank line.
+    """
+    shared: dict[str, object] = {k: v for k, v in state.items() if k not in SUBJECT_KEYS}
+    observed = state["observations"]
+    shared["observations"] = {
+        "max_age_minutes": observed["max_age_minutes"],
+        "max_new_items": observed["max_new_items"],
+    }
+    return "\n".join([*_heading(dry_run=state["dry_run"]), _PER_SUBJECT, "", "```json", _json(shared), "```", ""])
+
+
+def subject_block(
+    state: OverseerState,
+    *,
+    name: str,
+    ticket: str | None,
+    prs: AbstractSet[str],
+    chores: bool,
+    capacity: CapacityState,
+) -> str:
+    """Render the part of `state` about one subject, which follows the shared part in that subject's run (DESIGN §40).
+
+    The subject is named `name`: ticket `ticket`, with the PRs of its units among `prs`; a PR among `prs`, with no
+    ticket; or, with `chores`, the due chores. It holds the block's keys about it alone: its ticket, its running
+    workers, the reviews of its PRs, its attention items and observations, or `chores` for the chores' run; then the
+    `capacity` left to it, after the harness's dispatches ranked above it and the runs those before it recorded. The
+    tickets the harness decided or dispatches, those stopped or lately done, and the queue's result, no run reads.
+
+    Returns:
+        The section as Markdown: its heading and its state as a fenced JSON block.
+    """
+    tickets = [t for t in state["tickets"] if t["key"] == ticket]
+    observed = state["observations"]
+    cut: ObservationsState = {
+        **observed,
+        "tickets": [o for o in observed["tickets"] if o["key"] == ticket],
+    }
+    if "review_prs" in observed:
+        cut["review_prs"] = [p for p in observed["review_prs"] if p["url"] in prs]
+    shown = rendered_observations(cut, _titles(tickets))
+    # The chores' run reviews nothing; every other run reads the reviews of its PRs, and their limits.
+    reviews = state.get("reviews") if not chores else None
+    part: dict[str, object] = {
+        "subject": name,
+        "tickets": _compact(tickets),
+        **({"chores": _compact(state["chores"])} if chores and "chores" in state else {}),
+        **({"reviews": _by_unit(_reviews_of(reviews, prs, ticket), tickets)} if reviews is not None else {}),
+        "attention": [i for i in state["attention"] if _about(i, ticket, prs)],
+        "observations": {k: shown[k] for k in ("tickets", "review_prs") if k in shown},
+        "running_workers": [w for w in state["running_workers"] if ticket is not None and w["ticket"] == ticket],
+        "capacity": capacity,
+    }
+    return "\n".join(["## Subject", "", "```json", _json(part), "```", ""])
+
+
+def _heading(*, dry_run: bool) -> list[str]:
+    """The lines a state block opens with: its heading, what it is, and whether the tick is a dry run.
+
+    Returns:
+        Them, each a line, ending with a blank one.
+    """
     if dry_run:
         mode = (
             "This is a dry run. `canopy_dispatch` checks its guards and records what it would have done, or the "
@@ -430,33 +545,62 @@ def state_block(
         )
     else:
         mode = "This is a live tick."
-    return "\n".join(
-        [
-            "## State",
-            "",
-            "Generated by the harness for this tick. It is the journal's view of what the loop did,",
-            "not what is true now.",
-            "",
-            mode,
-            "",
-            "```json",
-            # Compact: every step of the tick re-reads the block, and it is about 29% fewer tokens than indented.
-            json.dumps(
-                _to_the_minute(
-                    {
-                        **state,
-                        "tickets": _compact(state["tickets"]),
-                        **({"chores": _compact(state["chores"])} if "chores" in state else {}),
-                        **({"reviews": _by_unit(state["reviews"], state["tickets"])} if "reviews" in state else {}),
-                        "observations": rendered_observations(state["observations"], titles),
-                    },
-                ),
-                separators=(",", ":"),
-            ),
-            "```",
-            "",
-        ],
-    )
+    return [
+        "## State",
+        "",
+        "Generated by the harness for this tick. It is the journal's view of what the loop did,",
+        "not what is true now.",
+        "",
+        mode,
+        "",
+    ]
+
+
+def _json(value: object) -> str:
+    # Compact: every step of the tick re-reads the block, and it is about 29% fewer tokens than indented.
+    return json.dumps(_to_the_minute(value), separators=(",", ":"))
+
+
+def _titles(tickets: Iterable[TicketState]) -> dict[str, str | None]:
+    # A listed ticket's title, which its observation then leaves out where the tracker's is the same.
+    return {t["key"]: t["title"] for t in tickets}
+
+
+def _reviews_of(reviews: ReviewsSection, prs: AbstractSet[str], ticket: str | None) -> ReviewsSection:
+    """`reviews` cut to what is about `prs`, and the PRs of `ticket`: a subject's, in its run (DESIGN §40).
+
+    Returns:
+        A copy of `reviews` with those PRs alone, its limits and settings whole.
+    """
+
+    def ours(url: str, owner: str | None = None) -> bool:
+        return url in prs or (ticket is not None and owner == ticket)
+
+    cut: ReviewsSection = {
+        **reviews,
+        "running": [r for r in reviews["running"] if ours(r["pr"], r["ticket"])],
+        "settling": [h for h in reviews["settling"] if ours(h["pr"])],
+        "prs": [p for p in reviews["prs"] if ours(p["url"], p["ticket"])],
+        "requests": [r for r in reviews["requests"] if ours(r["url"])],
+    }
+    revisions = [r for r in reviews.get("revisions", []) if ours(r["pr"])]
+    if revisions:
+        cut["revisions"] = revisions
+    else:
+        cut.pop("revisions", None)
+    return cut
+
+
+def _about(item: OpenItem, ticket: str | None, prs: AbstractSet[str]) -> bool:
+    """Whether attention item `item` is about ticket `ticket`, or, with no ticket, about one of `prs`.
+
+    Returns:
+        True when it is the subject's.
+    """
+    about = item.get("ticket")
+    if about is not None:
+        return about == ticket
+    return item.get("pr") in prs
 
 
 def _to_the_minute(value: object) -> object:

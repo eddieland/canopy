@@ -135,6 +135,13 @@ Controls:
   derivation, so a row it misses waits until the overseer is given the ticket again. Its dispatches carry no
   model-written context: today it starts only a due chore with no `when`, whose `chore-run` and `chore-wait` the
   overseer is refused `decided`, and no ticket's run, since each rests on an observation.
+- With `loop.overseer_per_subject` on (DESIGN §40), private and off by default, a tick runs the overseer once for each
+  subject left to it: a ticket, a PR to review, or the due chores. A run's message is the state block's shared part,
+  the workspace's config, repositories, and the operator's notices, then its one subject's text, and nothing of any
+  other subject's. Its tools refuse anything it records about another subject (`decided`), and record the refusal. So
+  text on one ticket cannot steer a decision about another, nor its failing run hold up another's: each run owes its
+  own subject's duty, and the next goes on. Residual: a ticket's text still steers its own run, bounded as any
+  overseer decision is; the standing instructions and the notices, in the shared part, reach every run.
 - The attention items that need no judgment (`needs_reviewer`, `ready_to_merge`, `untrusted_review`, `attempt_limit`,
   `review_failed`, `review_limit`, `plan_review`, `plan_changed`) are the harness's, raised from the journal and the
   observations in its own words, and kept while an observation they rest on is stale (DESIGN §14). The overseer is
@@ -485,6 +492,9 @@ Controls in code, not prompts:
   it, after the overseer's run, under every guard again. One its tick did not start, because the tick ended early or
   its process died, is closed unstarted as that tick closes or by the next tick, counts toward no limit, and is never
   started by a later tick. A dry run records none.
+- Run once per subject (DESIGN §40), a tick makes at most one overseer run per subject, one at a time, each with
+  `runtime.overseer_timeout_minutes`; the tick starts the runs they recorded after the last. Once no worker is free, a
+  ticket of new work alone gets the harness's `wait` and no run.
 - Workers exit when their work is pushed. They may push again for a fix found after a push (D116), but do not poll
   CI or retry a rejected push; the run timeout bounds the rest.
 - A run's progress (DESIGN §41) neither extends a run nor holds a slot: what an agent says of where it stands changes
@@ -836,6 +846,9 @@ Controls:
   the reports their prompts read allowed: health, spend, decisions, a run's and a chore's page, the config's settings,
   and what each agent is offered for `canopy-introspect`, and memory's listings for `canopy-memory-tickets`. Neither
   has a shell.
+- With `loop.overseer_per_subject` on (DESIGN §40), each overseer run reads the state block's shared part and one
+  subject's state, not the workspace's whole, so what a steered run records, a rationale, a dispatch's context, an
+  attention item's detail, can carry nothing of another ticket's text.
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.

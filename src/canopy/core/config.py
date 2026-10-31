@@ -1017,6 +1017,10 @@ class Loop(Section):
     # A tick runs no overseer, so dispatches nothing, while the state directory's or the workspace's filesystem has less
     # than this many MiB free (DESIGN §6 step 5). `0` turns the check off.
     min_free_disk_mib: Annotated[Count, Scope.PRIVATE] = 2048
+    #: Whether a tick runs the overseer once for each subject left to it, each run given that subject alone (§40),
+    #: rather than once, given the whole state block. Off by default, chosen conservatively for the operator to turn on
+    #: ahead of M40's live check: it changes how often the overseer runs, so what it spends.
+    overseer_per_subject: Annotated[StrictBool, Scope.PRIVATE] = False
 
     @model_validator(mode="after")
     def _cap_not_below_interval(self) -> Loop:

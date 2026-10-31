@@ -112,7 +112,7 @@ def count(ctx: Context, outcome: tick.Outcome, idle_count: int, *, idle: bool, o
     """
     if outcome.status == TickStatus.OK and outcome.tick_id is not None:
         row = db.get_tick(ctx.conn, outcome.tick_id)
-        if row is not None and row.overseer_ran is False:
+        if row is not None and row.overseer_ran == 0:
             return idle_count
     return idle_count + 1 if on and idle else 0
 
