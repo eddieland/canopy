@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 
 /**
- * The seasons Sprig decorates for: a few days of the year each, when a little something stands beside it at the foot
- * of the rail (drawn in src/components/season.tsx), beside the Ghost too when it sits in Sprig's place. Read from the
- * browser's own clock and calendar, so the decoration comes and goes on the operator's local dates, with no setting:
- * turning Sprig off puts it away too.
+ * The seasons Sprig decorates for: a few days of the year each, when a little scene stands beside it at the foot of
+ * the rail (drawn in src/components/season.tsx), beside the Ghost too when it sits in Sprig's place, and some hang
+ * something over the header's logo (src/components/season-logo.tsx). Read from the browser's own clock and calendar,
+ * so the decoration comes and goes on the operator's local dates, with no setting: turning Sprig off puts it away too.
+ * Winter starts the day after the latest Thanksgiving can fall, so the lights go up once the pie is put away.
  */
 
 /** A season Sprig decorates for. */
@@ -31,7 +32,7 @@ export const SEASONS: readonly Season[] = [
     { id: 'spring', from: [3, 25], to: [4, 15] },
     { id: 'halloween', from: [10, 15], to: [10, 31] },
     { id: 'harvest', from: [11, 20], to: [11, 28] },
-    { id: 'winter', from: [12, 1], to: [12, 31] },
+    { id: 'winter', from: [11, 29], to: [12, 31] },
 ]
 
 /** How often a page left open looks at the calendar again, so a season comes and goes without a reload. */

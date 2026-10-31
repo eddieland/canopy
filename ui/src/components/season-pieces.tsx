@@ -26,6 +26,36 @@ const BUTTERFLY_WINGS = {
     lower: 'M10 8.4 C6 9 3.4 11.6 4.8 13.8 C6.4 15.6 9 12.6 10 8.4 Z',
 }
 
+/** The spokes of the cobweb in the corner, in degrees from the top edge round toward the side. */
+const WEB_SPOKES = [3, 24, 45, 66, 87]
+
+/** A point on the cobweb, `radius` out from the corner along the spoke at `degrees`. */
+function webPoint(radius: number, degrees: number): string {
+    const angle = (degrees * Math.PI) / 180
+    return `${(30 - radius * Math.cos(angle)).toFixed(2)} ${(radius * Math.sin(angle)).toFixed(2)}`
+}
+
+/** A cobweb strung in a top-right corner: its spokes, then its rings, each sagging toward the corner between spokes. */
+const WEB = [
+    ...WEB_SPOKES.map((degrees) => `M30 0 L${webPoint(29, degrees)}`),
+    ...[6, 12, 18, 24].map((radius) =>
+        [
+            `M${webPoint(radius, WEB_SPOKES[0] ?? 0)}`,
+            ...WEB_SPOKES.slice(1).map(
+                (degrees) => `Q${webPoint(radius * 0.82, degrees - 10.5)} ${webPoint(radius, degrees)}`,
+            ),
+        ].join(' '),
+    ),
+].join(' ')
+
+/** One side's four legs of the spider, from its body out; the other side is the same, mirrored. */
+const SPIDER_LEGS = [
+    'M5 15.6 Q2.6 13.4 1.2 15.2',
+    'M5 16.4 Q2.4 15.6 0.8 17.4',
+    'M5 17.2 Q2.6 17.6 1.6 19.8',
+    'M5.2 17.8 Q3.6 19.2 3.2 21.4',
+].join(' ')
+
 /** One piece on the floor: a drawing 26 units tall and `width` wide, over its shadow, as tall as the others. */
 export function Piece({ width, className, children }: { width: number; className: string; children: ReactNode }) {
     return (
@@ -141,5 +171,42 @@ export function Rainbow() {
                 <rect x="5" y="9" width="12.4" height="5" />
             </g>
         </svg>
+    )
+}
+
+/**
+ * A cobweb strung in a corner: its top-right one, or, mirrored by its class (`-scale-x-100`), its top-left. Faint, so
+ * what it hangs over still reads through it.
+ */
+export function Cobweb({ className }: { className: string }) {
+    return (
+        <svg viewBox="0 0 30 30" className={className}>
+            <path
+                d={WEB}
+                fill="none"
+                strokeWidth="0.4"
+                strokeLinecap="round"
+                className="stroke-buddy-ghost-facet opacity-70"
+            />
+        </svg>
+    )
+}
+
+/** A spider, googly-eyed, its body about 6 across and 16.4 down, in a drawing 12 units wide. */
+export function Spider() {
+    return (
+        <g>
+            <g fill="none" strokeWidth="0.6" strokeLinecap="round" className="stroke-buddy-hat">
+                <path d={SPIDER_LEGS} />
+                <path d={SPIDER_LEGS} transform="translate(12 0) scale(-1 1)" />
+            </g>
+            <ellipse cx="6" cy="17.6" rx="2.2" ry="2.5" className="fill-buddy-hat" />
+            <circle cx="6" cy="14.8" r="1.5" className="fill-buddy-hat" />
+            <ellipse cx="5.2" cy="16.8" rx="0.6" ry="0.9" className="fill-buddy-eye opacity-25" />
+            <circle cx="5.4" cy="14.6" r="0.55" className="fill-buddy-eye" />
+            <circle cx="6.6" cy="14.6" r="0.55" className="fill-buddy-eye" />
+            <circle cx="5.5" cy="14.75" r="0.25" className="fill-buddy-pupil" />
+            <circle cx="6.7" cy="14.75" r="0.25" className="fill-buddy-pupil" />
+        </g>
     )
 }

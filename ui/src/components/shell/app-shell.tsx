@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react'
 import { useEffect, useState, ViewTransition } from 'react'
 
 import { sessionQuery, tickQuery } from '@/api/queries'
+import { LogoDecoration } from '@/components/season-logo'
 import { SignIn } from '@/components/sign-in'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -16,6 +17,7 @@ import type { RailMode } from '@/hooks/use-rail-mode'
 import { useTickAsked } from '@/hooks/use-tick-asked'
 import { useBuddy } from '@/lib/buddy'
 import { IN_PAGE } from '@/lib/in-page'
+import { useSeason } from '@/lib/seasons'
 import { isSearchShortcut } from '@/lib/search'
 import { cn } from '@/lib/utils'
 import { usePalettes } from '@/theme/palette'
@@ -299,15 +301,21 @@ function RailButton() {
     )
 }
 
-/** The header's logo and name, alive with the stream and the latest tick, and with the tick Tick now asked for. */
+/**
+ * The header's logo and name, alive with the stream and the latest tick, and with the tick Tick now asked for. In a
+ * season, while Sprig is on, what the season hangs over the logo hangs there too.
+ */
 function LiveMark({ stream }: { stream: StreamStatus }) {
     const tick = useQuery(tickQuery).data?.tick
     const asked = useTickAsked()
+    const season = useSeason()
+    const buddy = useBuddy()
     return (
-        <>
+        <span className="relative flex items-center gap-2.5">
             <Mark live={stream === 'open'} ticking={tick?.status === 'running' || asked} beat={tick?.id} />
             <Wordmark beat={tick?.id} />
-        </>
+            {buddy === 'on' && season !== null ? <LogoDecoration id={season} /> : null}
+        </span>
     )
 }
 

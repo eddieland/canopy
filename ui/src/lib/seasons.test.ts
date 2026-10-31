@@ -34,6 +34,11 @@ describe('seasonOn', () => {
         }
     })
 
+    it('puts the lights up the day after Thanksgiving week', () => {
+        expect(seasonOn(on(11, 28))).toBe('harvest')
+        expect(seasonOn(on(11, 29))).toBe('winter')
+    })
+
     it('trades the gift for a party popper as the year turns', () => {
         expect(seasonOn(on(12, 31))).toBe('winter')
         expect(seasonOn(on(1, 1))).toBe('newyear')

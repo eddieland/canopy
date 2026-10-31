@@ -1,4 +1,4 @@
-import { Butterfly, Firework, Piece, Rainbow } from '@/components/season-pieces'
+import { Butterfly, Firework, Piece, Rainbow, Spider } from '@/components/season-pieces'
 import type { SeasonId } from '@/lib/seasons'
 import { cn } from '@/lib/utils'
 
@@ -110,36 +110,6 @@ const TREE_LIGHTS = [
 const BUNNY_EAR = 'M6.6 10.4 C5 6 5.2 1.8 6.8 1.6 C8.4 1.6 8.6 6 8 10 Z'
 /** The pink inside of a bunny's left ear. */
 const BUNNY_EAR_INSIDE = 'M6.9 9 C6 6 6.2 3.2 6.9 3 C7.6 3 7.7 6 7.5 8.8 Z'
-
-/** The spokes of the cobweb in the corner, in degrees from the top edge round toward the side. */
-const WEB_SPOKES = [3, 24, 45, 66, 87]
-
-/** A point on the cobweb, `radius` out from the corner along the spoke at `degrees`. */
-function webPoint(radius: number, degrees: number): string {
-    const angle = (degrees * Math.PI) / 180
-    return `${(30 - radius * Math.cos(angle)).toFixed(2)} ${(radius * Math.sin(angle)).toFixed(2)}`
-}
-
-/** A cobweb strung in a top-right corner: its spokes, then its rings, each sagging toward the corner between spokes. */
-const WEB = [
-    ...WEB_SPOKES.map((degrees) => `M30 0 L${webPoint(29, degrees)}`),
-    ...[6, 12, 18, 24].map((radius) =>
-        [
-            `M${webPoint(radius, WEB_SPOKES[0] ?? 0)}`,
-            ...WEB_SPOKES.slice(1).map(
-                (degrees) => `Q${webPoint(radius * 0.82, degrees - 10.5)} ${webPoint(radius, degrees)}`,
-            ),
-        ].join(' '),
-    ),
-].join(' ')
-
-/** One side's four legs of the spider, from its body out; the other side is the same, mirrored. */
-const SPIDER_LEGS = [
-    'M5 15.6 Q2.6 13.4 1.2 15.2',
-    'M5 16.4 Q2.4 15.6 0.8 17.4',
-    'M5 17.2 Q2.6 17.6 1.6 19.8',
-    'M5.2 17.8 Q3.6 19.2 3.2 21.4',
-].join(' ')
 
 /** A bat's left wing, scalloped along its trailing edge, from the body out; the right is the same, mirrored. */
 const BAT_WING =
@@ -629,30 +599,16 @@ export const SCENES: Record<SeasonId, Scene> = {
         ),
         air: (
             <>
-                <svg viewBox="0 0 30 30" className="absolute top-0 right-0 size-10">
-                    <path
-                        d={WEB}
-                        fill="none"
-                        strokeWidth="0.4"
-                        strokeLinecap="round"
-                        className="stroke-buddy-ghost-facet opacity-70"
-                    />
-                </svg>
-                {/* The spider hangs from the web's second ring, on a thread that stretches as it drops. */}
-                <svg viewBox="0 0 12 30" className="absolute top-3 right-1 h-10 w-4 overflow-visible">
-                    <path d="M6 0 L6 14" strokeWidth="0.3" className="animate-buddy-thread stroke-buddy-ghost-facet" />
+                {/* The spider hangs from above on a thread that stretches as it drops: its last 14 units stretch. */}
+                <svg viewBox="0 0 12 42" className="absolute top-0 right-1 h-14 w-4 overflow-visible">
+                    <g strokeWidth="0.3" className="stroke-buddy-ghost-facet">
+                        <path d="M6 0 L6 12" />
+                        <path d="M6 12 L6 26" className="animate-buddy-thread" />
+                    </g>
                     <g className="animate-buddy-dangle">
-                        <g fill="none" strokeWidth="0.6" strokeLinecap="round" className="stroke-buddy-hat">
-                            <path d={SPIDER_LEGS} />
-                            <path d={SPIDER_LEGS} transform="translate(12 0) scale(-1 1)" />
+                        <g transform="translate(0 12)">
+                            <Spider />
                         </g>
-                        <ellipse cx="6" cy="17.6" rx="2.2" ry="2.5" className="fill-buddy-hat" />
-                        <circle cx="6" cy="14.8" r="1.5" className="fill-buddy-hat" />
-                        <ellipse cx="5.2" cy="16.8" rx="0.6" ry="0.9" className="fill-buddy-eye opacity-25" />
-                        <circle cx="5.4" cy="14.6" r="0.55" className="fill-buddy-eye" />
-                        <circle cx="6.6" cy="14.6" r="0.55" className="fill-buddy-eye" />
-                        <circle cx="5.5" cy="14.75" r="0.25" className="fill-buddy-pupil" />
-                        <circle cx="6.7" cy="14.75" r="0.25" className="fill-buddy-pupil" />
                     </g>
                 </svg>
                 <svg viewBox="0 0 24 12" className="animate-buddy-drift absolute top-3 left-1 h-4 w-8">
