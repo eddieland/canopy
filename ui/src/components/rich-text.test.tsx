@@ -84,6 +84,41 @@ describe('RichText', () => {
     })
 })
 
+describe('RichText, further forms', () => {
+    it('lays out a quote, a rule, emphasis, and struck text, a URL inside each still linked', () => {
+        const text = '> CI said *flaky* at https://ci.example.test/7\n\n---\n\n~~v1~~ gone, _for good_'
+        render(<RichText text={text} />)
+
+        expect(screen.getByRole('blockquote').textContent).toBe('CI said flaky at https://ci.example.test/7')
+        expect(screen.getByRole('separator')).toBeDefined()
+        expect(screen.getAllByRole('emphasis').map((em) => em.textContent)).toEqual(['flaky', 'for good'])
+        expect(screen.getByRole('deletion').textContent).toBe('v1')
+        expect(screen.getByRole('link').getAttribute('href')).toBe('https://ci.example.test/7')
+    })
+
+    it('lays out a table with its head as column headers, its cells as text and only bare URLs linked', () => {
+        const text = [
+            '| Check | Log |',
+            '|---|---:|',
+            '| **lint** | https://ci.example.test/7 |',
+            '| <b>x</b> | [y](https://evil.test) |',
+        ]
+        render(<RichText text={text.join('\n')} />)
+
+        expect(screen.getAllByRole('columnheader').map((cell) => cell.textContent)).toEqual(['Check', 'Log'])
+        expect(screen.getAllByRole('cell').map((cell) => cell.textContent)).toEqual([
+            'lint',
+            'https://ci.example.test/7',
+            '<b>x</b>',
+            '[y](https://evil.test)',
+        ])
+        expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
+            'https://ci.example.test/7',
+            'https://evil.test',
+        ])
+    })
+})
+
 describe('InlineCode', () => {
     it('sets code spans as code, links the URLs outside them, and names a PR as the PR is anywhere', async () => {
         await renderRouted(
