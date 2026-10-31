@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { checklistCountsQuery } from '@/api/queries'
+import { Code } from '@/components/code'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
 import { RepoFilter } from '@/components/repo-picker'
 import { Clipped } from '@/components/tip'
@@ -19,7 +20,6 @@ import type { RepoItems } from '@/lib/checklist'
 import { repoListFrom, repoListOf, reposIn, reposWords } from '@/lib/repo-filter'
 import { windowName } from '@/lib/report-window'
 import { cn } from '@/lib/utils'
-import { Code } from '@/components/code'
 
 interface ChecklistSearch {
     days?: number | undefined

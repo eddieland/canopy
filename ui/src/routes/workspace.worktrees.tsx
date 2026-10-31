@@ -4,6 +4,7 @@ import { RotateCw } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { Code } from '@/components/code'
 import { LinkOutIcon } from '@/components/link-out-icon'
 import { WORKTREES_REFRESH_MS, worktreesQuery } from '@/api/queries'
 import { WORKTREE_STATES } from '@/api/types'
@@ -38,7 +39,6 @@ import {
 } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
 import { runKind } from '@/lib/words'
-import { Code } from '@/components/code'
 
 // What the page shows, the same on every visit: the title's help, so the description is left for the pools' state.
 const HELP =

@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Fragment } from 'react'
 
+import { Code } from '@/components/code'
 import { CodeTokens } from '@/components/code-tokens'
 import { useHighlightLines } from '@/hooks/use-highlight'
 import { anchor, plainText } from '@/lib/guide'
@@ -9,7 +10,6 @@ import type { CodeToken } from '@/lib/highlight'
 import { fenceLanguage } from '@/lib/languages'
 import type { Block, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
-import { Code } from '@/components/code'
 
 // Written out so Tailwind finds them.
 const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' }

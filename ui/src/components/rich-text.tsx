@@ -1,5 +1,6 @@
 import { Fragment, useState } from 'react'
 
+import { Code } from '@/components/code'
 import { LinkedText } from '@/components/linked-text'
 import { MoreLines } from '@/components/more-lines'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -11,7 +12,6 @@ import { splitRunRefs } from '@/lib/refs'
 import { clamp, codeSpans, parse } from '@/lib/rich-text'
 import type { Block, Inline, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
-import { Code } from '@/components/code'
 
 /** How many lines a summary or a rationale shows in a list's row before its toggle. */
 export const SUMMARY_LINES = 4

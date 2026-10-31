@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { CheckCheck } from 'lucide-react'
 
 import { reviewRequestsQuery, reviewsQuery } from '@/api/queries'
+import { Code } from '@/components/code'
 import { OrderToggle } from '@/components/order-toggle'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
@@ -15,7 +16,6 @@ import { countText, filterWords, prQueryOf, reposOf, requestShown, reviewShown }
 import type { PullRequestFilter } from '@/lib/pull-request-filter'
 import { repoListOf } from '@/lib/repo-filter'
 import { unseenOf, useMarkSeen } from '@/lib/seen-reviews'
-import { Code } from '@/components/code'
 
 /**
  * canopy's latest review runs, newest first: the shadow PR reviews it keeps, each on a PR the loop does not own also a

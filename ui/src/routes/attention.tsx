@@ -24,6 +24,7 @@ import { Age } from '@/components/age'
 import { ChoreFindingText } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
+import { Code } from '@/components/code'
 import { Copyable } from '@/components/copy-button'
 import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
@@ -74,7 +75,6 @@ import { taskTitle } from '@/lib/tasks'
 import { cn } from '@/lib/utils'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import type { Tone } from '@/lib/tone'
-import { Code } from '@/components/code'
 
 interface AttentionSearch {
     item?: string | undefined

@@ -4,6 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { choresQuery } from '@/api/queries'
 import type { ChoreSummary } from '@/api/types'
 import { ChoreLink } from '@/components/chore-link'
+import { Code } from '@/components/code'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot } from '@/components/status'
@@ -12,7 +13,6 @@ import { costText } from '@/lib/cost-total'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { Code } from '@/components/code'
 
 /** Each configured chore, as `canopy status` lists it. */
 export const Route = createFileRoute('/chores/')({

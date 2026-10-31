@@ -15,6 +15,7 @@ import type {
     TicketNotes,
 } from '@/api/types'
 import { Age } from '@/components/age'
+import { Code } from '@/components/code'
 import { Disclosure } from '@/components/disclosure'
 import { SearchField } from '@/components/input'
 import { MemoryBand, MemoryDigestFold, MemoryPurge, MemoryRows, ProposalFacts } from '@/components/memory'
@@ -46,7 +47,6 @@ import { repoListFrom, repoListOf, reposIn, reposWords } from '@/lib/repo-filter
 import { rowLineFrom } from '@/lib/rows'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { Code } from '@/components/code'
 
 /** The memory page's search params, each optional, so a link to the page names none. */
 interface MemorySearch {
