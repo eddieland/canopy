@@ -760,11 +760,16 @@ def test_the_planner_keeps_its_edit_tool_and_loses_its_shell(canopy_env: CanopyE
         assert _opencode_disabled(ruleset, permission)
 
 
+#: The operator's home, where `_opencode_ruleset` expands a pattern's `~/`.
+HOME = "/home/op"
+
+
 def _opencode_ruleset(definition: str) -> list[tuple[str, str, str]]:
     """The definition's permission rules as OpenCode's `Permission.fromConfig` makes them, in order.
 
     Each is (permission, path pattern, action): a scalar is its permission's rule for `*`, and a table one rule per
-    pattern. Only the frontmatter's two levels canopy writes are read, not YAML in general.
+    pattern, with a leading `~/` expanded to `HOME`, as OpenCode expands it to the operator's home. Only the
+    frontmatter's two levels canopy writes are read, not YAML in general.
     """
     frontmatter = definition.split("---")[1]
     rules: list[tuple[str, str, str]] = []
@@ -783,7 +788,7 @@ def _opencode_ruleset(definition: str) -> list[tuple[str, str, str]]:
         key, _, value = stripped.rpartition(":") if stripped.startswith('"') else stripped.partition(":")
         key, value = key.strip().strip('"'), value.strip()
         if line.startswith("    "):
-            rules.append((section, key, value))
+            rules.append((section, HOME + key.removeprefix("~") if key.startswith("~/") else key, value))
         elif value:
             rules.append((key, "*", value))
         else:
@@ -802,6 +807,53 @@ def _opencode_action(ruleset: Iterable[tuple[str, str, str]], permission: str, p
 def _opencode_disabled(ruleset: Iterable[tuple[str, str, str]], permission: str) -> bool:
     matching = [(pattern, a) for p, pattern, a in ruleset if fnmatch.fnmatchcase(permission, p)]
     return bool(matching) and matching[-1] == ("*", "deny")
+
+
+#: The directory of each file a tool reads under the operator's skills, as OpenCode asks `external_directory` for it.
+BESIDE_SKILLS = (
+    f"{HOME}/.claude/skills/*",
+    f"{HOME}/.claude/skills/deploy/*",
+    f"{HOME}/.claude/skills/deploy/references/*",
+    f"{HOME}/.agents/skills/deploy/scripts/*",
+    f"{HOME}/.config/opencode/skills/deploy/*",
+    f"{HOME}/.config/opencode/skill/deploy/*",
+)
+#: Directories outside the agent's own that hold no skill: secrets, the runtime's config, and a look-alike's.
+NOT_SKILLS = (
+    f"{HOME}/.ssh/*",
+    f"{HOME}/.claude/*",
+    f"{HOME}/.config/opencode/*",
+    f"{HOME}/.config/canopy/*",
+    f"{HOME}/.claude/skills-old/deploy/*",
+    "/etc/*",
+)
+
+
+@pytest.mark.parametrize("agent", [agents.REVIEWER, agents.CHORE, *sorted(CHORE_AGENTS)])
+def test_an_agent_that_writes_nothing_reads_beside_the_operators_skills_and_nowhere_else_outside(
+    canopy_env: CanopyEnv,
+    agent: str,
+) -> None:
+    """A skill in the operator's home may keep references and scripts beside its SKILL.md (REQUIREMENTS R7)."""
+    if agent in CHORE_AGENTS:
+        ruleset = _opencode_ruleset((resources.example_chores_dir() / "agents" / f"{agent}.md").read_text())
+    else:
+        ruleset = _ruleset(canopy_env, agent)
+    assert [d for d in BESIDE_SKILLS if _opencode_action(ruleset, "external_directory", d) != "allow"] == []
+    assert [d for d in NOT_SKILLS if _opencode_action(ruleset, "external_directory", d) != "deny"] == []
+    # What it may read there it can never change.
+    assert _opencode_disabled(ruleset, "edit")
+    assert _opencode_disabled(ruleset, "bash")
+
+
+@pytest.mark.parametrize("agent", [agents.WORKER, agents.PRIVATE_WORKER, agents.PLANNER, agents.OVERSEER])
+def test_an_agent_that_writes_reads_nothing_outside_its_directory(canopy_env: CanopyEnv, agent: str) -> None:
+    # A worker's edit tool would reach whatever `external_directory` allows: a skill rewritten there steers every later
+    # run and the operator's own sessions. The overseer loads no skill.
+    ruleset = _ruleset(canopy_env, agent)
+    assert [
+        d for d in (*BESIDE_SKILLS, *NOT_SKILLS) if _opencode_action(ruleset, "external_directory", d) != "deny"
+    ] == []
 
 
 def test_the_overseer_definition_carries_its_prompt_and_no_trackers_skill(canopy_env: CanopyEnv) -> None:

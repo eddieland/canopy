@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ticksQuery } from '@/api/queries'
+import { Code } from '@/components/code'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { TickNow } from '@/components/tick-now'
@@ -20,8 +21,7 @@ function TicksPage() {
         <>
             <PageHeader title="Ticks">
                 The latest ticks, newest first: what each found, what its overseer cost in dollars, tokens, and peak
-                context, and how many decisions it recorded, as{' '}
-                <code className="font-mono text-xs">canopy decisions</code> prints them.
+                context, and how many decisions it recorded, as <Code>canopy decisions</Code> prints them.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Ticks">
@@ -34,8 +34,8 @@ function TicksPage() {
                     <PanelSkeleton className="min-h-72" />
                 ) : data.length === 0 ? (
                     <Empty size="panel">
-                        no ticks yet: the loop runs one every{' '}
-                        <code className="font-mono text-xs">loop.interval_minutes</code>, or now with <TickNow inline />
+                        no ticks yet: the loop runs one every <Code>loop.interval_minutes</Code>, or now with{' '}
+                        <TickNow inline />
                     </Empty>
                 ) : (
                     <ul className="divide-y" data-testid="ticks">

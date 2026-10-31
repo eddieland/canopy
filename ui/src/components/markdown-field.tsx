@@ -225,7 +225,7 @@ export function MarkdownField({
                         {value.trim() === '' ? (
                             <p className="text-muted-foreground">nothing to preview yet</p>
                         ) : (
-                            // The field is raised, so code in the preview sits on the canvas to stand apart from it.
+                            // The field is raised, so a code block in the preview sits on the canvas to stand apart.
                             <RichText text={value} pullRequests={pullRequests} raised />
                         )}
                     </section>

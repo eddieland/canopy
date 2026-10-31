@@ -24,6 +24,7 @@ import { Age } from '@/components/age'
 import { ChoreFindingText } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
+import { Code } from '@/components/code'
 import { Copyable } from '@/components/copy-button'
 import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
@@ -167,8 +168,8 @@ function AttentionPage() {
     return (
         <>
             <PageHeader title="Attention">
-                What needs you, as <code className="font-mono text-xs">canopy status</code> lists it, most severe first.
-                An item leaves when its cause is gone.
+                What needs you, as <Code>canopy status</Code> lists it, most severe first. An item leaves when its cause
+                is gone.
             </PageHeader>
             <Counters />
             {items !== undefined && items.length === 0 ? (

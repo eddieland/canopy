@@ -15,6 +15,7 @@ import type {
     TicketNotes,
 } from '@/api/types'
 import { Age } from '@/components/age'
+import { Code } from '@/components/code'
 import { Disclosure } from '@/components/disclosure'
 import { SearchField } from '@/components/input'
 import { MemoryBand, MemoryDigestFold, MemoryPurge, MemoryRows, ProposalFacts } from '@/components/memory'
@@ -98,7 +99,7 @@ function MemoryPage() {
         <>
             <PageHeader title="Memory">
                 What workers learned, the proposals waiting on you, and the lessons you promoted. Decide them here or
-                with <code className="font-mono text-xs">canopy memory</code>.
+                with <Code>canopy memory</Code>.
             </PageHeader>
             {data === undefined ? (
                 <Panel>
@@ -107,7 +108,7 @@ function MemoryPage() {
             ) : data.state === null ? (
                 <Panel>
                     <Empty size="panel">
-                        memory is off now: set <code className="font-mono text-xs">[memory]</code> to record or use
+                        memory is off now: set <Code>[memory]</Code> to record or use
                     </Empty>
                 </Panel>
             ) : (
