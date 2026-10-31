@@ -208,8 +208,8 @@ prompt_overrides = "~/.config/canopy/prompts"
 # Optional: the persona each agent writes in, by name: its voice and what it weighs most, never what it may do. A run
 # whose persona has no file is refused, never run in canopy's voice instead (DESIGN §31).
 # [personas]
-# worker = "canopy"                             # every implement and resume; or "minimalist", "explainer"
-# planner = "canopy"                            # every plan; or "skeptic"
+# worker = "canopy"                             # every implement and resume; or "minimalist", "explainer", "eddie"
+# planner = "canopy"                            # every plan; or "skeptic", "eddie"
 # reviewer = "canopy"                           # every review; or "skeptic", "eddie"
 
 [notify]
