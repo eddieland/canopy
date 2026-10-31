@@ -42,6 +42,7 @@ const HEADING = /^(#{1,6})\s+(.*)$/u
 const BULLET = /^(\s*)[-*+]\s+(.*)$/u
 const NUMBERED = /^(\s*)(\d{1,9})[.)]\s+(.*)$/u
 const MAX_DEPTH = 3
+const CODE_SPAN = /`([^`\n]+)`/gu
 
 /** `text` as blocks: a blank line ends a paragraph or a list, and a line break inside one is kept. */
 export function parse(text: string): Block[] {
@@ -137,9 +138,35 @@ function depthOf(indent: number): number {
     return Math.max(0, Math.min(MAX_DEPTH, Math.floor(indent / 2)))
 }
 
-/** A line's `code` spans and **strong** runs; anything unclosed stays as it was written. */
+/** A line's `code` spans and **strong** runs, code inside strong too; anything unclosed stays as it was written. */
 export function inline(text: string): Line {
-    return pieces(text, /`([^`]+)`|\*\*(.+?)\*\*/gu)
+    return inlineWith(text, /\*\*(.+?)\*\*/dgu, ([, strong]) => strongRun(strong ?? ''))
+}
+
+/**
+ * `text` with each match of `pattern` read by `read`, from the groups the match holds, and the text between matches
+ * read for its `code` spans. A code span binds tighter than any match, as CommonMark's does: a match never starts or
+ * ends inside one, so `**a `b** c`` is code after `**a `, not strong. `pattern` takes the `d` and `g` flags. The guide
+ * reads its strong runs and links this way (`src/lib/guide.ts`).
+ */
+export function inlineWith<I>(
+    text: string,
+    pattern: RegExp,
+    read: (groups: readonly (string | undefined)[]) => I[],
+): (I | Inline)[] {
+    // Blanking the spans out keeps every offset, so a match in the blanked text is at the same place in the text.
+    const blanked = text.replaceAll(CODE_SPAN, (span) => ' '.repeat(span.length))
+    const line: (I | Inline)[] = []
+    let last = 0
+    for (const match of blanked.matchAll(pattern)) {
+        const groups = (match.indices ?? []).map((at: [number, number] | undefined) =>
+            at === undefined ? undefined : text.slice(at[0], at[1]),
+        )
+        line.push(...codeSpans(text.slice(last, match.index)), ...read(groups))
+        last = match.index + match[0].length
+    }
+    line.push(...codeSpans(text.slice(last)))
+    return line
 }
 
 /**
@@ -157,21 +184,13 @@ export function strongRun(text: string): Line {
  * breaks stay as written, and a span never crosses a line.
  */
 export function codeSpans(text: string): Line {
-    return pieces(text, /`([^`\n]+)`/gu)
-}
-
-function pieces(text: string, pattern: RegExp): Line {
     const line: Line = []
     let last = 0
-    for (const match of text.matchAll(pattern)) {
+    for (const match of text.matchAll(CODE_SPAN)) {
         if (match.index > last) {
             line.push({ kind: 'text', text: text.slice(last, match.index) })
         }
-        if (match[1] === undefined) {
-            line.push(...strongRun(match[2] ?? ''))
-        } else {
-            line.push({ kind: 'code', text: match[1] })
-        }
+        line.push({ kind: 'code', text: match[1] ?? '' })
         last = match.index + match[0].length
     }
     if (last < text.length) {

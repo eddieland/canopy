@@ -28,7 +28,7 @@ import slack from '@/guide/slack.md?raw'
 import tasks from '@/guide/tasks.md?raw'
 import tickets from '@/guide/tickets.md?raw'
 import ticks from '@/guide/ticks.md?raw'
-import { parseWith, strongRun } from '@/lib/rich-text'
+import { inlineWith, parseWith, strongRun } from '@/lib/rich-text'
 import type { Block, Inline, Line } from '@/lib/rich-text'
 import { SECTIONS } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
@@ -304,29 +304,14 @@ function embed(text: string): string {
 
 /** A line of a guide page on `slug`: `code`, **strong**, and `[text](href)`; a link going nowhere stays as written. */
 function guideLine(text: string, slug: string): Line<GuidePiece> {
-    const line: Line<GuidePiece> = []
-    let last = 0
-    for (const match of text.matchAll(/`([^`]+)`|\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)\s]+)\)/gu)) {
-        if (match.index > last) {
-            line.push({ kind: 'text', text: text.slice(last, match.index) })
-        }
-        line.push(...guidePieces(match, slug))
-        last = match.index + match[0].length
-    }
-    if (last < text.length) {
-        line.push({ kind: 'text', text: text.slice(last) })
-    }
-    return line
+    return inlineWith(text, /\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)\s]+)\)/dgu, (groups) => guidePieces(groups, slug))
 }
 
-function guidePieces(match: RegExpExecArray, slug: string): GuidePiece[] {
-    const [written, code, strong, label, href] = match
-    if (code !== undefined) {
-        return [{ kind: 'code', text: code }]
-    }
+function guidePieces(groups: readonly (string | undefined)[], slug: string): GuidePiece[] {
+    const [written, strong, label, href] = groups
     if (strong !== undefined) {
         return strongRun(strong)
     }
     const target = guideTarget(href ?? '', slug)
-    return [target === undefined ? { kind: 'text', text: written } : { kind: 'link', text: label ?? '', target }]
+    return [target === undefined ? { kind: 'text', text: written ?? '' } : { kind: 'link', text: label ?? '', target }]
 }

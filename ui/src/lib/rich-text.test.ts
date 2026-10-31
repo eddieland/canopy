@@ -127,6 +127,15 @@ describe('inline', () => {
     it('keeps an unclosed backtick inside a strong run as written', () => {
         expect(inline('**a `b**')).toEqual([{ kind: 'strong', text: 'a `b' }])
     })
+
+    it('reads a code span before a strong run, as CommonMark does, so asterisks inside code are code', () => {
+        expect(inline('**a `b** c`')).toEqual([text('**a '), { kind: 'code', text: 'b** c' }])
+        expect(inline('`**` and **`**`**')).toEqual([
+            { kind: 'code', text: '**' },
+            text(' and '),
+            { kind: 'code', text: '**', strong: true },
+        ])
+    })
 })
 
 describe('clamp', () => {
