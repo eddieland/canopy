@@ -1,7 +1,7 @@
 """What CI did on the PRs canopy observed (DESIGN §11): the CI page's report, over a journal of check runs by hand."""
 
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from canopy.core import ci
@@ -12,6 +12,7 @@ from tests.conftest import Journals
 NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
 PR_1 = "https://github.com/acme/web/pull/1"
 PR_2 = "https://github.com/acme/web/pull/2"
+PR_3 = "https://github.com/acme/web/pull/3"
 
 
 S, F, E, T, X, C, K, N = (
@@ -75,6 +76,97 @@ def test_a_head_is_green_first_time_when_no_checks_first_run_was_red(tmp_path: P
     found = ci.report(conn, NOW, 7)
     # a1 red first (its rerun passed), a2 green, b1 and b2 red, b3 neither; a0 before the window.
     assert (found.heads, found.green_first) == (4, 1)
+
+
+def test_a_rerun_on_a_head_its_check_was_red_on_is_counted_with_whether_it_passed(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """A run after a red one of its check on the same head is a rerun; one after a green run, or on a new head, not."""
+    conn = journals.open(tmp_path / "canopy.db")
+    check_ran(conn, PR_1, "h1", "e2e", F, earlier(NOW, 3))
+    check_ran(conn, PR_1, "h1", "unit", S, earlier(NOW, 3))
+    check_ran(conn, PR_1, "h1", "e2e", F, earlier(NOW, 3, -1))
+    check_ran(conn, PR_1, "h1", "unit", S, earlier(NOW, 3, -1))
+    check_ran(conn, PR_1, "h1", "e2e", S, earlier(NOW, 3, -2))
+    check_ran(conn, PR_1, "h2", "e2e", S, earlier(NOW, 2))
+    # Red before the window, rerun green in it: the rerun counts, the red run before it does not.
+    check_ran(conn, PR_2, "b1", "unit", F, earlier(NOW, 9))
+    check_ran(conn, PR_2, "b1", "unit", S, earlier(NOW, 1))
+    found = ci.report(conn, NOW, 7)
+    assert [(c.name, c.runs, c.reruns, c.reruns_green) for c in found.checks] == [("e2e", 4, 2, 1), ("unit", 3, 1, 1)]
+
+
+def test_each_day_counts_the_heads_first_checked_on_it(tmp_path: Path, journals: Journals) -> None:
+    """A head counts on the day its first check run was observed, green first time or not, as the window counts it."""
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_checks(conn)
+    found = ci.report(conn, NOW, 7)
+    assert [(d.day, d.heads, d.green_first) for d in found.per_day] == [
+        ("2026-10-02", 0, 0),
+        ("2026-10-03", 0, 0),
+        ("2026-10-04", 0, 0),
+        ("2026-10-05", 1, 0),
+        ("2026-10-06", 1, 1),
+        ("2026-10-07", 1, 0),
+        # b2 red, b3 nothing but neither, so not a head the page counts.
+        ("2026-10-08", 1, 0),
+    ]
+    assert sum(d.heads for d in found.per_day) == found.heads
+
+
+def test_a_prs_time_to_green_runs_from_its_first_red_run_to_its_first_green_head(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """Each PR observed in the window, the still red first, with its first red run and the green head after it."""
+    conn = journals.open(tmp_path / "canopy.db")
+    # Named by a run before the window, so its ticket is still known.
+    worker_ran(conn, RunKind.IMPLEMENT, earlier(NOW, 9), prs={"web": PR_1})
+    # PR 1 went red on h1, stayed red on h2, and went green two heads later, when its last check passed.
+    check_ran(conn, PR_1, "h1", "unit", S, earlier(NOW, 3, 1))
+    check_ran(conn, PR_1, "h1", "e2e", F, earlier(NOW, 3))
+    fix = worker_ran(conn, RunKind.RESUME, earlier(NOW, 2, 1), prs={"web": PR_1}, reasons=(ResumeReason.CI,))
+    check_ran(conn, PR_1, "h2", "e2e", F, earlier(NOW, 2))
+    check_ran(conn, PR_1, "h3", "e2e", S, earlier(NOW, 1))
+    check_ran(conn, PR_1, "h3", "preview", K, earlier(NOW, 1, -1))
+    check_ran(conn, PR_1, "h3", "unit", S, earlier(NOW, 1, -2))
+    # PR 2 was never red.
+    check_ran(conn, PR_2, "b1", "unit", S, earlier(NOW, 2))
+    # PR 3 is still red: a cancelled rerun clears nothing.
+    check_ran(conn, PR_3, "c1", "e2e", F, earlier(NOW, 1))
+    check_ran(conn, PR_3, "c1", "e2e", C, earlier(NOW, 1, -1))
+    stuck = worker_ran(
+        conn,
+        RunKind.RESUME,
+        earlier(NOW, 0, 2),
+        key="PROJ-3",
+        prs={"web": PR_3},
+        reasons=(ResumeReason.CI,),
+    )
+    found = ci.report(conn, NOW, 7)
+    assert [(p.url, p.ticket, p.red_at, p.green_at, p.to_green) for p in found.pull_requests] == [
+        (PR_3, "PROJ-3", earlier(NOW, 1), None, None),
+        (PR_1, "PROJ-1", earlier(NOW, 3), earlier(NOW, 1, -2), timedelta(days=2, hours=2)),
+        (PR_2, None, None, None, None),
+    ]
+    assert found.median_to_green == timedelta(days=2, hours=2)
+    assert {f.run_id: f.to_green for f in found.fixes} == {stuck: None, fix: timedelta(days=2, hours=2)}
+
+
+def test_a_red_head_rerun_green_is_its_prs_green_head(tmp_path: Path, journals: Journals) -> None:
+    """A PR whose red check passed on a rerun went green on that head, with no new commit."""
+    conn = journals.open(tmp_path / "canopy.db")
+    check_ran(conn, PR_1, "h1", "e2e", F, earlier(NOW, 1))
+    check_ran(conn, PR_1, "h1", "e2e", S, earlier(NOW, 1, -3))
+    check_ran(conn, PR_2, "b1", "e2e", F, earlier(NOW, 2))
+    check_ran(conn, PR_2, "b2", "e2e", S, earlier(NOW, 2, -5))
+    found = ci.report(conn, NOW, 7)
+    assert [(p.url, p.to_green) for p in found.pull_requests] == [
+        (PR_2, timedelta(hours=5)),
+        (PR_1, timedelta(hours=3)),
+    ]
+    assert found.median_to_green == timedelta(hours=4)
 
 
 def test_red_runs_by_day_name_the_top_checks_and_sum_the_rest(tmp_path: Path, journals: Journals) -> None:
@@ -175,3 +267,4 @@ def test_an_empty_window_lists_each_day_at_nothing(tmp_path: Path, journals: Jou
         ("2026-10-08", []),
     ]
     assert (list(found.fixes), list(found.kicks), list(found.kicked_prs)) == ([], [], [])
+    assert (list(found.pull_requests), found.median_to_green) == ([], None)

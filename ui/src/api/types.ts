@@ -205,6 +205,8 @@ export type CiFixedCheck = Schemas['CiFixedCheck']
 export type CiKick = Schemas['CiKick']
 /** A PR the window's kicks reran the checks of, against `trust.max_flaky_kicks`. */
 export type CiKickedPullRequest = Schemas['CiKickedPullRequest']
+/** A PR with a check run in a window: its first red run, and its first green head after it. */
+export type CiPullRequest = Schemas['CiPullRequest']
 /** How a check run counts: red, green, or neither. */
 export type CiVerdict = Schemas['CiVerdict']
 /** Where a window's review feedback came from, how long it took, and what answering it cost. */
