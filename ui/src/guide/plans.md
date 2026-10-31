@@ -90,7 +90,13 @@ Acceptance, Context, and so on down to Risks), so after a few plans you'll know 
 the menu still saves you the scrolling. As it opens it marks the section you're reading, for when a long plan has lost
 you.
 
-### Diagrams
+While a planner is writing, the editor is read only and says which run is writing. A plan that was replaced is read
+only too. Before the first plan, the page says whether a run is writing one or the next tick dispatches a planner; for
+a ticket that needs none, it says so and names `canopy plan KEY`. If a plan's file has gone missing or can't be read,
+the page names the problem and the path instead of opening an empty editor, since an empty plan approved is the most
+expensive kind.
+
+## Diagrams
 
 A code block fenced as `mermaid` is drawn as the diagram it describes: a flowchart, a sequence diagram, or a state
 diagram, which covers how modules fit, which side calls which, and what a status may become. A picture of the call
@@ -105,12 +111,6 @@ under it, `Not drawn:` and why.
 A planner's diagram comes from the ticket's text like the rest of the plan, so it's drawn as a picture and nothing
 more: its labels stay words, and nothing in it can run, click through, or load from anywhere. It can still be a
 confident drawing of the wrong thing, and so can a whiteboard.
-
-While a planner is writing, the editor is read only and says which run is writing. A plan that was replaced is read
-only too. Before the first plan, the page says whether a run is writing one or the next tick dispatches a planner; for
-a ticket that needs none, it says so and names `canopy plan KEY`. If a plan's file has gone missing or can't be read,
-the page names the problem and the path instead of opening an empty editor, since an empty plan approved is the most
-expensive kind.
 
 ## Commenting
 
