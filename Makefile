@@ -109,7 +109,7 @@ ui/node_modules: ui/package.json ui/package-lock.json
 	npm --prefix ui ci --no-audit --no-fund
 	@touch $@
 
-ui-fmt: ui/node_modules ## Format ui/ with oxfmt
+ui-fmt: ui/node_modules ## Format ui/: remove unused imports (oxlint), then format and sort imports (oxfmt)
 	npm --prefix ui run fmt
 
 # COVERAGE=1 also measures the unit tests' coverage and writes ui/coverage/lcov.info, which CI sends to Codecov.

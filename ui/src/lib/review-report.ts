@@ -5,9 +5,9 @@ import type { ReviewsDay, ReviewsReport, ReviewsRound } from '@/api/types'
 import type { DayBar, DayChartSeries } from '@/lib/chart'
 import type { Clock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
-import { hoursText } from '@/lib/reports'
 import { pickWindow, windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
+import { hoursText } from '@/lib/reports'
 import { dayLabel, dayName } from '@/lib/spend'
 
 /** The window the page opens on: the week, as the health and CI pages do. */

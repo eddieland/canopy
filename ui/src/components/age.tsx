@@ -1,5 +1,5 @@
-import { useClock } from '@/lib/clock'
 import { Tip } from '@/components/tip'
+import { useClock } from '@/lib/clock'
 import { age, localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 

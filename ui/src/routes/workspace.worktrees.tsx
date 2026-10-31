@@ -4,14 +4,14 @@ import { RotateCw } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { Code } from '@/components/code'
-import { LinkOutIcon } from '@/components/link-out-icon'
 import { WORKTREES_REFRESH_MS, worktreesQuery } from '@/api/queries'
 import { WORKTREE_STATES } from '@/api/types'
 import type { Pool, Worktree, WorktreeState } from '@/api/types'
 import { Age } from '@/components/age'
+import { Code } from '@/components/code'
 import { CopyButton } from '@/components/copy-button'
 import { Disclosure } from '@/components/disclosure'
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PoolCounters } from '@/components/pool-counters'
@@ -28,6 +28,8 @@ import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useWholePath } from '@/hooks/use-whole-path'
 import { slotRef } from '@/lib/refs'
 import { useNow } from '@/lib/time'
+import { cn } from '@/lib/utils'
+import { runKind } from '@/lib/words'
 import {
     overSize,
     poolsLine,
@@ -37,8 +39,6 @@ import {
     WORKTREE_DOT,
     WORKTREE_TEXT,
 } from '@/lib/worktree-state'
-import { cn } from '@/lib/utils'
-import { runKind } from '@/lib/words'
 
 // What the page shows, the same on every visit: the title's help, so the description is left for the pools' state.
 const HELP =

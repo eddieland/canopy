@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { E2E_SECRET } from './secret.ts'
 import { settled, signIn } from './helpers.ts'
+import { E2E_SECRET } from './secret.ts'
 
 // A write that fails says so in canopy's words, under what was clicked, and keeps what the operator wrote. Every
 // write here is answered by the route, so the root server's journal never changes.

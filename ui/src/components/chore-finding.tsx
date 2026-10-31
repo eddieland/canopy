@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 
-import { LinkOutIcon } from '@/components/link-out-icon'
 import type { ChoreFinding, ChoreRunFinding } from '@/api/types'
 import { Age } from '@/components/age'
 import { useDismissFinding } from '@/components/dismiss-finding'
+import { LinkOutIcon } from '@/components/link-out-icon'
 import { LinkedText } from '@/components/linked-text'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowLine } from '@/components/rows'
