@@ -72,6 +72,9 @@ characters:
   files and tests it touches and the test that proves it.
 - `## Risks`: what the changes could break, and what to watch in review.
 
+A ```` ```mermaid ```` diagram, a `flowchart`, `sequenceDiagram`, or `stateDiagram`, which canopy draws for the operator,
+belongs in an item only where its change moves which part calls which. Keep it small; it counts toward the limit.
+
 Every claim about the code is one you read at the PR's head, not one you guessed. Give names, signatures, and tests, not
 function bodies.
 
