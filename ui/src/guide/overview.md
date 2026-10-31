@@ -20,7 +20,8 @@ The guide comes in four parts, in the order you'll need them.
   surprises you, not after.
 - **Your work**: the pages where the loop waits on you. [Attention](attention) first, then [Tickets](tickets),
   [Plans](plans), and [Pull requests and reviews](pull-requests), with [Code review](code-review) on how to spend
-  your reviewing time when agents write most of the code.
+  your reviewing time when agents write most of the code, and [Checklists](checklists) for the rules you'd otherwise
+  keep writing in review comments.
 - **The loop**: the pages where you watch it work. [Runs and worktrees](runs), [Ticks](ticks), [Reports](reports),
   [Chores](chores), [Memory](memory), and [Settings](settings).
 - **Reference**: the [Glossary](glossary), every word the other pages assume you know, for when one of them does.
