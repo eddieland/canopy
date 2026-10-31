@@ -954,8 +954,9 @@ export type paths = {
          * Get the checklist's counts
          * @description How the worker runs that started in the window answered each item of their repositories' lists.
          *
-         *     As `canopy checklist` counts them: per repository and item, the runs reminded, then each answer. A held item's
-         *     reason is the worker's text, and stays on its run.
+         *     As `canopy checklist` counts them: per repository and item, the runs reminded, then each answer, with the newest
+         *     runs behind its `held` and `fixed` answers, each held one's reason the worker's text on a line. Then the same
+         *     counts per item and local ISO week of the window.
          */
         get: operations["getChecklistCounts"];
         put?: never;
@@ -2551,6 +2552,11 @@ export type components = {
             option: string;
         };
         /**
+         * @description Whose run gave a checklist answer: a worker's, or a one-off task's (DESIGN §36).
+         * @enum {string}
+         */
+        AnsweringRun: "run" | "task";
+        /**
          * AnswerRequest
          * @description The operator's answer to a running run's question, as `canopy reply run:ID LETTER` takes it.
          */
@@ -2820,12 +2826,18 @@ export type components = {
              * @description When it ends: local midnight after today.
              */
             until: string;
+            /**
+             * Weeks
+             * @description A row per item of `items` and ISO week the window touches, none skipped: the items in `items`' order, each
+             *     one's weeks oldest first.
+             */
+            weeks: components["schemas"]["ChecklistWeek"][];
         };
         /**
          * ChecklistItemCounts
          * @description How the worker runs of a window answered one item of one repository's checklist, by answer.
          *
-         *     Counts only: a `held` answer's reason is the worker's text, which stays on its run.
+         *     With the newest runs behind its `held` and `fixed` answers, and the reason each one held it.
          */
         ChecklistItemCounts: {
             /**
@@ -2834,10 +2846,20 @@ export type components = {
              */
             fixed: number;
             /**
+             * Fixed Runs
+             * @description The runs that answered `fixed`, the newest first, at most twenty: `fixed` counts them all.
+             */
+            fixed_runs: components["schemas"]["ChecklistRun"][];
+            /**
              * Held
              * @description How many answered `held`: the diff does not, and the run left it so, for a reason it gave.
              */
             held: number;
+            /**
+             * Held Runs
+             * @description The runs that answered `held`, the newest first, at most twenty: `held` counts them all.
+             */
+            held_runs: components["schemas"]["ChecklistRun"][];
             /**
              * Item
              * @description The item's id, as the operator's list names it: untrusted text, as every journal string is.
@@ -2868,6 +2890,87 @@ export type components = {
              * @description How many said nothing of it in their result.
              */
             unanswered: number;
+        };
+        /**
+         * ChecklistRun
+         * @description A run of the window that gave an item an answer: a worker's or a task's, with the reason it held it.
+         */
+        ChecklistRun: {
+            /**
+             * Id
+             * @description The run's id: a worker run's, or the task's run's.
+             */
+            id: number;
+            /** @description Whose run it is. */
+            kind: components["schemas"]["AnsweringRun"];
+            /**
+             * Reason
+             * @description Why it left the item failing, for a `held` answer: the worker's words, untrusted, on one line and cut as the
+             *     health report cuts a note; its run's page has them whole. None for a `fixed` one.
+             */
+            reason: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             * @description When it started, by which the window holds it.
+             */
+            started_at: string;
+            /**
+             * Task Id
+             * @description The task a task's run is of; None for a worker's.
+             */
+            task_id: number | null;
+        };
+        /**
+         * ChecklistWeek
+         * @description How the runs that started in one local ISO week of the window answered one item, by answer.
+         */
+        ChecklistWeek: {
+            /**
+             * Fixed
+             * @description How many answered `fixed`.
+             */
+            fixed: number;
+            /**
+             * Held
+             * @description How many answered `held`.
+             */
+            held: number;
+            /**
+             * Item
+             * @description The item's id, as the operator's list names it: untrusted text.
+             */
+            item: string;
+            /**
+             * Not Applicable
+             * @description How many answered `n/a`.
+             */
+            not_applicable: number;
+            /**
+             * Passed
+             * @description How many answered `pass`.
+             */
+            passed: number;
+            /**
+             * Reminded
+             * @description How many runs of the week were given the item; 0 for a week none was.
+             */
+            reminded: number;
+            /**
+             * Repo
+             * @description The repository whose list holds the item.
+             */
+            repo: string;
+            /**
+             * Unanswered
+             * @description How many said nothing of it.
+             */
+            unanswered: number;
+            /**
+             * Week
+             * @description The ISO week, `2026-W41`, of canopy's clock: Monday to Sunday. The window's first and last may be part weeks.
+             */
+            week: string;
         };
         /**
          * ChoreDetail
