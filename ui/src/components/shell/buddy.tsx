@@ -7,8 +7,11 @@ import { ShellCrest, ShellEye, ShellPlates, ShellRing } from '@/components/ghost
 import { HatDrawing } from '@/components/hat'
 import { SeasonDecoration } from '@/components/season'
 import { useFits } from '@/hooks/use-fits'
+import { useMediaQuery } from '@/hooks/use-media-query'
 import { NAMES, nextTip, setBuddy, tipsFor, typeBurst, useCompanion } from '@/lib/buddy'
 import type { Companion, View } from '@/lib/buddy'
+import { HIGH_SKY, LOW_SKY, inSky, nextLeg } from '@/lib/ghost-flight'
+import type { Spot } from '@/lib/ghost-flight'
 import { useWardrobe } from '@/lib/hats'
 import type { HatId } from '@/lib/hats'
 import { onRaveStart, useRave } from '@/lib/rave'
@@ -174,7 +177,7 @@ export function Buddy() {
                         )}
                     >
                         {companion === 'ghost' ? (
-                            <GhostFigure cue={offer.n} rave={rave} shell={shell} />
+                            <GhostFigure cue={offer.n} rave={rave} shell={shell} soar={room === 'roomy' && !shown} />
                         ) : (
                             <Figure cue={offer.n} hat={worn} rave={rave} />
                         )}
@@ -402,30 +405,133 @@ function useEyesOnPointer(figure: RefObject<SVGSVGElement | null>, most: number)
 
 /**
  * The Ghost that may sit in Sprig's place, in the shell it wears (bought in Settings; src/components/ghost-shell.tsx):
- * four great plates around one glowing eye, four lesser ones behind them on the diagonals, floating around its spot
- * over its shadow, leaning as it goes. Its light swells and dims, and flares with each new tip. The eye blinks now and
- * then and looks toward the pointer, and the great plates spread a little with each tip, as it talks.
- * While the lightswitch rave is on, its shell turns a quarter on each beat of the lights, and its light swells in time.
- * Under reduced motion all of it holds still.
+ * four great plates around one glowing eye, four lesser ones behind them on the diagonals, flying about its corner of
+ * the rail over its shadow (`useFlight`), and bobbing as it goes. Its light swells and dims, and flares with each new
+ * tip. The eye blinks now and then and looks toward the pointer, and the great plates spread a little with each tip, as
+ * it talks. While `soar` is on, the rail has room and no tip is up, so it may fly high. While the lightswitch rave is
+ * on, its shell turns a quarter on each beat of the lights, and its light swells in time. Under reduced motion all of
+ * it holds still.
  */
-function GhostFigure({ cue, rave, shell }: { cue: number; rave: boolean; shell: ShellId }) {
+function GhostFigure({ cue, rave, shell, soar }: { cue: number; rave: boolean; shell: ShellId; soar: boolean }) {
     const figure = useRef<SVGSVGElement>(null)
+    const body = useRef<SVGGElement>(null)
+    const shadow = useRef<SVGGElement>(null)
     useEyesOnPointer(figure, 1.8)
+    useFlight(body, shadow, soar)
     return (
         <svg ref={figure} viewBox="0 -6 48 92" className="h-24 w-[3.25rem] overflow-visible" aria-hidden>
-            <g className="animate-ghost-wander">
+            <g ref={shadow} className="origin-center transform-fill">
                 <ellipse cx="24" cy="76" rx="11" ry="2" className="animate-ghost-shadow fill-buddy-ghost-facet/30" />
+            </g>
+            <g ref={body} className="origin-center transform-fill">
                 <g data-testid="ghost-body" className="animate-ghost-float">
-                    <g className="animate-ghost-lean">
-                        <ShellPlates id={shell} cue={cue} rave={rave} />
-                        <ShellCrest id={shell} />
-                        <ShellRing id={shell} />
-                        <ShellEye id={shell} cue={cue} rave={rave} />
-                    </g>
+                    <ShellPlates id={shell} cue={cue} rave={rave} />
+                    <ShellCrest id={shell} />
+                    <ShellRing id={shell} />
+                    <ShellEye id={shell} cue={cue} rave={rave} />
                 </g>
             </g>
         </svg>
     )
+}
+
+/** How long the Ghost waits, once it shows, before its first leg, in milliseconds. */
+const FIRST_LEG_MS = 1200
+/**
+ * How long each leg's animation holds where it ended past when the next leg is due, in milliseconds, so a timer that
+ * fires late never shows it start the leg over.
+ */
+const HOLD_MS = 1000
+/** How much smaller and fainter the Ghost's shadow is at the top of its high sky. */
+const SHADOW_AT_TOP = { scale: 0.45, opacity: 0.4 }
+
+/**
+ * Flies the Ghost's `body` about its corner of the rail, a leg at a time (src/lib/ghost-flight.ts), over its `shadow`,
+ * which follows it along the floor and shrinks and fades as it rises. While `soar` is off its sky is low, and a Ghost
+ * flying high comes down as soon as the leg it is on ends. Each leg is an animation that repeats until the next
+ * replaces it, which a page that stops its animations, as a screenshot does, puts back where it rests. Under reduced
+ * motion it holds still where it rests.
+ */
+function useFlight(body: RefObject<SVGGElement | null>, shadow: RefObject<SVGGElement | null>, soar: boolean): void {
+    const still = useMediaQuery('(prefers-reduced-motion: reduce)')
+    const sky = useEffectEvent(() => (soar ? HIGH_SKY : LOW_SKY))
+    // Brings the Ghost down into a sky that came down, once the leg it is on ends; set while it flies.
+    const comeDown = useRef<(() => void) | null>(null)
+    useEffect(() => {
+        const flier = body.current
+        const floor = shadow.current
+        if (flier === null || floor === null || still) {
+            return
+        }
+        let at: Spot = { x: 0, y: 0 }
+        let flying: Animation[] = []
+        let timer: ReturnType<typeof globalThis.setTimeout> | undefined
+        // When the leg flying now lands.
+        let lands = 0
+        const fly = () => {
+            const leg = nextLeg(at, sky())
+            const span = leg.ms + leg.rest + HOLD_MS
+            const landed = leg.ms / span
+            const timing = { duration: span, iterations: Number.POSITIVE_INFINITY }
+            const easing = leg.dart ? 'cubic-bezier(0.2, 0, 0, 1)' : 'ease-in-out'
+            const next = [
+                flier.animate(
+                    [
+                        { translate: place(at), rotate: '0deg', easing },
+                        { rotate: `${leg.lean.toFixed(1)}deg`, offset: landed * 0.45, easing: 'ease-in-out' },
+                        { translate: place(leg.to), rotate: '0deg', offset: landed },
+                        { translate: place(leg.to), rotate: '0deg' },
+                    ],
+                    { ...timing, id: 'ghost-flight' },
+                ),
+                floor.animate([{ ...onFloor(at), easing }, { ...onFloor(leg.to), offset: landed }, onFloor(leg.to)], {
+                    ...timing,
+                    id: 'ghost-flight-shadow',
+                }),
+            ]
+            for (const animation of flying) {
+                animation.cancel()
+            }
+            flying = next
+            at = leg.to
+            lands = performance.now() + leg.ms
+            timer = globalThis.setTimeout(fly, leg.ms + leg.rest)
+        }
+        timer = globalThis.setTimeout(fly, FIRST_LEG_MS)
+        comeDown.current = () => {
+            if (!inSky(at, sky())) {
+                globalThis.clearTimeout(timer)
+                timer = globalThis.setTimeout(fly, Math.max(0, lands - performance.now()))
+            }
+        }
+        return () => {
+            globalThis.clearTimeout(timer)
+            for (const animation of flying) {
+                animation.cancel()
+            }
+            comeDown.current = null
+        }
+    }, [body, shadow, still])
+    useEffect(() => {
+        if (!soar) {
+            comeDown.current?.()
+        }
+    }, [soar])
+}
+
+/** Where the Ghost is at `spot`, as a CSS `translate`. */
+function place(spot: Spot): string {
+    return `${spot.x}px ${spot.y}px`
+}
+
+/** Its shadow under `spot`: along the floor beneath it, smaller and fainter the higher it is. */
+function onFloor(spot: Spot): { translate: string; scale: string; opacity: string } {
+    const height = Math.min(1, -spot.y / HIGH_SKY.rise)
+    return {
+        translate: `${spot.x}px 0px`,
+        scale: (1 - height * (1 - SHADOW_AT_TOP.scale)).toFixed(3),
+        opacity: (1 - height * (1 - SHADOW_AT_TOP.opacity)).toFixed(3),
+    }
 }
 
 /**

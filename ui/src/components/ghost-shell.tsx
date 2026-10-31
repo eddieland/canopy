@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+
 import type { ShellId } from '@/lib/shells'
 import { cn } from '@/lib/utils'
 
@@ -20,6 +22,8 @@ interface Look {
      * wire drawn as a line.
      */
     plate: { lit: string; shaded: string } | { wire: string }
+    /** A groove pressed into each great plate, in shade: its panel lines, a pumpkin's ribs, a Vex band. */
+    groove?: string
     /** One lesser plate, behind the great ones on the diagonals: its facets either side of the ridge, or one leaf. */
     spike: { lit: string; shaded: string } | { leaf: string }
     /** The fill of a plate's lit facet, or a wire plate's stroke. */
@@ -48,6 +52,7 @@ interface Look {
 /** A Generalist Shell's plates: a pyramid seen from the front, notched where the ridge meets the eye. */
 const FACETED = {
     plate: { lit: 'M0 -24 L-9 -10 L0 -12.5 Z', shaded: 'M0 -24 L0 -12.5 L9 -10 Z' },
+    groove: 'M-1.3 -19.8 L-5.2 -13.5 M1.3 -19.8 L5.2 -13.5',
     spike: { lit: 'M0 -20 L-5 -9 L0 -10.5 Z', shaded: 'M0 -20 L0 -10.5 L5 -9 Z' },
 }
 
@@ -90,6 +95,7 @@ const LOOKS: Record<ShellId, Look> = {
     },
     pumpkin: {
         plate: { lit: 'M0 -23 Q-10 -21 -9 -10 L0 -12.5 Z', shaded: 'M0 -23 L0 -12.5 L9 -10 Q10 -21 0 -23 Z' },
+        groove: 'M-4.2 -21.4 Q-6.4 -16.5 -5 -11.6 M4.2 -21.4 Q6.4 -16.5 5 -11.6',
         spike: { lit: 'M0 -19 Q-6 -15 -5 -9 L0 -10.5 Z', shaded: 'M0 -19 L0 -10.5 L5 -9 Q6 -15 0 -19 Z' },
         lit: 'fill-buddy-ghost-pumpkin',
         shaded: 'fill-buddy-ghost-pumpkin-shade',
@@ -123,6 +129,7 @@ const LOOKS: Record<ShellId, Look> = {
     },
     vex: {
         plate: { lit: 'M0 -24 L-8 -18 L-8 -10 L0 -12.5 Z', shaded: 'M0 -24 L0 -12.5 L8 -10 L8 -18 Z' },
+        groove: 'M-8 -15 L0 -17.5 L8 -15',
         spike: { lit: 'M-4 -19 L0 -19 L0 -10.5 L-5 -9 Z', shaded: 'M0 -19 L4 -19 L5 -9 L0 -10.5 Z' },
         lit: 'fill-buddy-ghost-vex',
         shaded: 'fill-buddy-ghost-vex-shade',
@@ -200,26 +207,49 @@ export function ShellPlates({ id, cue, rave = false }: { id: ShellId; cue?: numb
                     )}
                 </g>
             ))}
-            {PLATE_TURNS.map((turn) => (
+            {PLATE_TURNS.map((turn, n) => (
                 <g key={turn} transform={at(turn)}>
-                    <g key={cue} className={cn(cue !== undefined && 'animate-ghost-talk')}>
-                        {'wire' in look.plate ? (
-                            <path
-                                d={look.plate.wire}
-                                fill="none"
-                                strokeWidth="1.5"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                className={look.lit}
-                            />
-                        ) : (
-                            <Facets look={look} facets={look.plate} shades={shadesAt(turn)} />
-                        )}
+                    <g
+                        className={cn(cue !== undefined && 'animate-ghost-breathe')}
+                        style={cue === undefined ? undefined : breathing(n)}
+                    >
+                        <g key={cue} className={cn(cue !== undefined && 'animate-ghost-talk')}>
+                            {'wire' in look.plate ? (
+                                <path
+                                    d={look.plate.wire}
+                                    fill="none"
+                                    strokeWidth="1.5"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    className={look.lit}
+                                />
+                            ) : (
+                                <Facets look={look} facets={look.plate} shades={shadesAt(turn)} />
+                            )}
+                            {look.groove === undefined ? null : (
+                                <path
+                                    d={look.groove}
+                                    fill="none"
+                                    strokeWidth="0.45"
+                                    strokeLinecap="round"
+                                    strokeOpacity="0.45"
+                                    className="stroke-buddy-ghost-housing"
+                                />
+                            )}
+                        </g>
                     </g>
                 </g>
             ))}
         </g>
     )
+}
+
+/**
+ * How the great plate `n` breathes: each on a beat of its own, a little longer than the last, and out of step with it,
+ * so the shell never moves as one.
+ */
+function breathing(n: number): CSSProperties {
+    return { animationDuration: `${5.2 + n * 0.9}s`, animationDelay: `${-n * 1.7}s` }
 }
 
 /**
@@ -322,7 +352,7 @@ export function ShellEye({ id, cue, rave = false }: { id: ShellId; cue?: number;
                         strokeWidth="0.7"
                         strokeLinecap="round"
                         strokeOpacity="0.55"
-                        className="stroke-buddy-ghost-housing"
+                        className={cn('stroke-buddy-ghost-housing', animated && 'animate-ghost-iris')}
                     >
                         {BLADE_TURNS.map((turn) => (
                             <path key={turn} d="M0 -4.9 L1.6 -6.9" transform={at(turn)} />

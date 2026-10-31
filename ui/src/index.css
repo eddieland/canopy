@@ -797,57 +797,16 @@
 }
 
 /*
- * The Ghost that may sit in Sprig's place floats around its corner of the rail: it wanders right of where it rests,
- * never past the width of the bubble above it, and back, over its shadow, leaning into each way it goes, and bobs as
- * it goes, on a beat of its own so the two never fall into step; its shadow shrinks as it rises. Its light swells and
- * dims, and flares with each new tip. Its shell's plates spread a little with each tip too, as it talks, each along its
- * own point (`translateY` in the plate's own frame). At the lightswitch rave its shell turns a quarter on each of the
- * lights' 0.6-second beats, and its light swells on every other one. Each starts and ends where a still page shows it:
- * at rest, at its usual glow.
+ * The Ghost that may sit in Sprig's place flies about its corner of the rail on legs picked at random, which a script
+ * animates (`useFlight` in src/components/shell/buddy.tsx); here it bobs as it goes, on a beat of its own, and its
+ * shadow shrinks as it bobs up. Its light swells and dims, and flares with each new tip. Its shell's great plates
+ * breathe, each on a beat of its own, out from the eye and back, as a Ghost's shell shifts while it idles, and spread a
+ * little more with each tip, as it talks, each along its own point (`translateY` in the plate's own frame). Now and
+ * then its eye's iris turns an eighth, as a lens refocusing: its eight blades then stand where they started, so the
+ * turn starts over unseen. At the lightswitch rave its shell turns a quarter on each of the lights' 0.6-second beats,
+ * and its light swells on every other one. Each starts and ends where a still page shows it: at rest, at its usual
+ * glow.
  */
-@keyframes ghost-wander {
-    20% {
-        transform: translateX(18px);
-    }
-    40% {
-        transform: translateX(30px);
-    }
-    55% {
-        transform: translateX(12px);
-    }
-    75% {
-        transform: translateX(38px);
-    }
-}
-
-@keyframes ghost-lean {
-    0%,
-    40%,
-    55%,
-    75%,
-    100% {
-        transform: none;
-    }
-    10% {
-        transform: rotate(7deg);
-    }
-    20% {
-        transform: rotate(3deg);
-    }
-    30% {
-        transform: rotate(6deg);
-    }
-    47% {
-        transform: rotate(-6deg);
-    }
-    65% {
-        transform: rotate(8deg);
-    }
-    87% {
-        transform: rotate(-8deg);
-    }
-}
-
 @keyframes ghost-glow {
     25% {
         transform: scale(0.85);
@@ -897,6 +856,23 @@
     }
 }
 
+@keyframes ghost-breathe {
+    50% {
+        transform: translateY(-0.9px);
+    }
+}
+
+@keyframes ghost-iris {
+    0%,
+    80% {
+        transform: none;
+    }
+    90%,
+    100% {
+        transform: rotate(45deg);
+    }
+}
+
 @keyframes ghost-talk {
     30%,
     70% {
@@ -916,20 +892,6 @@
     }
     100% {
         transform: rotate(360deg);
-    }
-}
-
-@utility animate-ghost-wander {
-    @media (prefers-reduced-motion: no-preference) {
-        animation: ghost-wander 14s ease-in-out infinite;
-    }
-}
-
-@utility animate-ghost-lean {
-    transform-box: fill-box;
-    transform-origin: center;
-    @media (prefers-reduced-motion: no-preference) {
-        animation: ghost-lean 14s ease-in-out infinite;
     }
 }
 
@@ -975,6 +937,20 @@
     transform-origin: center;
     @media (prefers-reduced-motion: no-preference) {
         animation: ghost-shadow 3.2s ease-in-out infinite;
+    }
+}
+
+@utility animate-ghost-breathe {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-breathe 5.2s ease-in-out infinite;
+    }
+}
+
+@utility animate-ghost-iris {
+    transform-box: view-box;
+    transform-origin: 24px 40px;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: ghost-iris 11s cubic-bezier(0.5, 0, 0.2, 1) infinite;
     }
 }
 
