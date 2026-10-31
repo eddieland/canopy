@@ -22,7 +22,11 @@ def test_a_run_page_is_the_run_as_the_runs_list_shows_it(backend: Backend) -> No
     c = client(None, backend)
     listed = {r["id"]: r for r in c.get("/api/runs").json()}
     for run_id in (39, 41, 43):
-        assert c.get(f"/api/runs/{run_id}").json() == listed[run_id]
+        page = c.get(f"/api/runs/{run_id}").json()
+        # The checklist's answers are the page's alone: the list sends none.
+        assert listed[run_id].pop("checklist") == []
+        page.pop("checklist")
+        assert page == listed[run_id]
     run = c.get("/api/runs/43").json()
     # A path inside the workspace is shown from its root: the run's log, and the worktrees a running run holds.
     assert run["log_path"] == ".canopy/runs/43.log"

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ChecklistItemCounts } from '@/api/types'
+import type { ChecklistAnswer, ChecklistItemCounts } from '@/api/types'
 
-import { ANSWER_COLUMNS, checklistDays, checklistLine, itemsByRepo } from './checklist'
+import { ANSWER_COLUMNS, answersByRepo, answersLine, checklistDays, checklistLine, itemsByRepo } from './checklist'
 
 function item(repo: string, id: string, extra: Partial<ChecklistItemCounts> = {}): ChecklistItemCounts {
     return {
@@ -65,5 +65,35 @@ describe('checklistLine', () => {
 describe('ANSWER_COLUMNS', () => {
     it("names the answers in canopy checklist's words and order", () => {
         expect(ANSWER_COLUMNS.map((c) => c.label)).toEqual(['pass', 'fixed', 'held', 'n/a', 'unanswered'])
+    })
+})
+
+function answer(repo: string, id: string, said: ChecklistAnswer['answer'], reason: string | null = null) {
+    return { repo, item: id, answer: said, reason }
+}
+
+// A joint run's answers, as the server sends them: by repository, each list in its order.
+const ANSWERS: ChecklistAnswer[] = [
+    answer('api', 'newspaper', 'held', 'The module keeps its order.'),
+    answer('api', 'doc-comments', 'pass'),
+    answer('api', 'general-types', 'pass'),
+    answer('web', 'no-any', 'fixed'),
+    answer('web', 'query-keys', 'unanswered'),
+]
+
+describe('answersByRepo', () => {
+    it("groups a run's answers by repository, keeping each list's order", () => {
+        expect(answersByRepo(ANSWERS).map((g) => [g.repo, g.answers.map((a) => a.item)])).toEqual([
+            ['api', ['newspaper', 'doc-comments', 'general-types']],
+            ['web', ['no-any', 'query-keys']],
+        ])
+        expect(answersByRepo([])).toEqual([])
+    })
+})
+
+describe('answersLine', () => {
+    it("names one list's repository, or counts several, then each answer given, in canopy checklist's order", () => {
+        expect(answersLine(ANSWERS.slice(0, 3))).toBe('api · 2 pass · 1 held')
+        expect(answersLine(ANSWERS)).toBe('2 repositories · 2 pass · 1 fixed · 1 held · 1 unanswered')
     })
 })

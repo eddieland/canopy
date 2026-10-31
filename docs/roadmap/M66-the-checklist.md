@@ -113,5 +113,7 @@ held, still counts its items unanswered: `_run` does not read whether the hook h
 them too, per repository and item: the runs reminded, then pass, fixed, held, n/a, and unanswered, over `--days`
 local days by when each run started, as `canopy health` reads them, `--repo` for one repository and `--json` for
 data; a held item's reason stays on its run. The web UI shows the same counts on Reports' Checklist page, over 7, 14,
-or 30 days, with a repository filter, a held item's reason left on its run there too. The run's page and a task's run
-are next.
+or 30 days, with a repository filter, a held item's reason left on its run there too. The run's page shows them
+2026-10-30, as `show` prints them: a Checklist panel under the Run panel, an item a row in its list's order, a held
+item's reason under it as the worker's text, a joint run's lists each under its repository. A task's run is next: it
+is not yet given a list, since only `implement` and `resume` are reminded so far, so it has no answers to show.

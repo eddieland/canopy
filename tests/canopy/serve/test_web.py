@@ -16,9 +16,10 @@ import httpx2
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db, pause, review_runs, run_models
+from canopy.core import checklist_answers, config, conversation, db, pause, review_runs, run_models
+from canopy.core.checklist_answers import Answer, Checked
 from canopy.core.context import Context
-from canopy.core.vocab import ModelsRead, Phase, RunStatus, StartStatus, TickStatus
+from canopy.core.vocab import ItemAnswer, ModelsRead, Phase, RunStatus, StartStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import repeat, reread, tick_now, web
 from canopy.reviews import grants
@@ -30,6 +31,7 @@ from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
     KEY,
     FakeTime,
+    answered,
     console,
     context,
     decides,
@@ -93,6 +95,35 @@ def test_a_runs_spend_is_its_new_tokens_and_its_peak_context(ctx: Context) -> No
     db.set_run_report(ctx.conn, "runs", run_id, "ses_w1", usage)  # as a run recorded before the peak was kept
     run = c.get(f"/api/runs/{run_id}").json()
     assert (run["new_tokens"], run["peak_context"]) == (10_000, None)
+
+
+def test_a_runs_page_carries_its_checklist_answers_by_repository_with_a_held_items_reason(ctx: Context) -> None:
+    """As `canopy show run:ID` prints them: each list in its order, a held item's reason as printable text."""
+    run_id = answered(ctx.conn, db.format_time(datetime.now(UTC)), "web", no_any=ItemAnswer.PASSED)
+    checked = Checked(
+        answers=(
+            Answer("api", "newspaper", ItemAnswer.HELD, "The module\x07keeps its order.  \n<b>So</b> it stays."),
+            Answer("api", "general-types", ItemAnswer.UNANSWERED),
+        ),
+    )
+    checklist_answers.record(ctx.conn, run_id, checked)
+    given = running_run(ctx, KEY, private=False)
+
+    c, _ = signed_in_client(ctx)
+    found = c.get(f"/api/runs/{run_id}").json()["checklist"]
+    assert found == [
+        {
+            "repo": "api",
+            "item": "newspaper",
+            "answer": "held",
+            "reason": "The module keeps its order.\n<b>So</b> it stays.",
+        },
+        {"repo": "api", "item": "general-types", "answer": "unanswered", "reason": None},
+        {"repo": "web", "item": "no-any", "answer": "pass", "reason": None},
+    ]
+    assert c.get(f"/api/runs/{given}").json()["checklist"] == []
+    # On its page alone: the list carries none.
+    assert all(r["checklist"] == [] for r in c.get("/api/runs").json())
 
 
 def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has_read_them(ctx: Context) -> None:

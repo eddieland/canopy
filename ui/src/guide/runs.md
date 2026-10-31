@@ -106,6 +106,16 @@ harness's side of it (`the worker exited 1 without a result line`), which is tru
 agent's side, often something as mundane as a rate limit. Click it to jump to that row in the transcript instead of
 scrolling past a few hundred rows to find it. A chore run's page has the same field.
 
+A worker given your [checklist](reports#the-checklist-page) for its repository has a **Checklist** panel under the Run
+panel: what it answered of each item, in your list's order, the answer first, then the item. `pass` means the diff
+already held to it, `fixed` that the worker committed the fix, `n/a` that the diff touches nothing the item is about,
+and `unanswered` that its result said nothing of it; hover an answer for the same in a line. A `held` item, tinted, has
+the worker's reason under it, in its own words: the one answer a reviewer of the PR should read before arguing, since
+the worker already made its case. The header names the repository and counts the answers, `web · 3 pass · 1 held`; a
+run across several repositories lists each one's under its name, and counts the repositories instead. The answers
+arrive with the run's result, so a running run shows none yet, and a run given no list, or in a repository you keep
+none for, has no panel at all. It's what `canopy show run:ID` prints under `Checklist:`.
+
 The **Transcript** is the run's session, from its log, oldest first:
 
 - its text, with its reasoning set in italics and marked `thinking`. Long thinking shows its first four lines and

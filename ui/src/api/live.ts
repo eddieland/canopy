@@ -36,13 +36,20 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
                 if (shown === undefined) {
                     continue
                 }
-                client.setQueryData(keys.run(run.id), run)
+                // What only its page carries, the list sends empty: the plan it wrote and its checklist's answers stay
+                // as the page read them.
+                client.setQueryData(keys.run(run.id), {
+                    ...run,
+                    feedback_plan: shown.feedback_plan,
+                    checklist: shown.checklist,
+                })
                 if (logged(shown) !== logged(run)) {
                     void client.invalidateQueries({ queryKey: keys.runTranscript(run.id) })
                 }
-                // A run writes its memory as it ends.
+                // A run writes its memory, and records its checklist's answers, as it ends: its page reads them again.
                 if (shown.status !== run.status) {
                     void client.invalidateQueries({ queryKey: keys.runMemory(run.id) })
+                    void client.invalidateQueries({ queryKey: keys.run(run.id), exact: true })
                 }
             }
             break

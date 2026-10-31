@@ -33,13 +33,14 @@ from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunKind, RunStatus
 from canopy.runs import attachments
-from canopy.serve import draft_views, feedback_plan_views, memory_views
+from canopy.serve import checklist_views, draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,
     Attachments,
     AttentionItem,
     Capacity,
     CardStep,
+    ChecklistAnswer,
     Comment,
     CostTotal,
     Decision,
@@ -240,7 +241,9 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
     served = models_served(ctx.conn, "runs", run_id, ended=row["ended_at"] is not None, session_id=row["session_id"])
     wrote = feedback_plan_views.written(ctx, run_id) if row["kind"] == RunKind.FEEDBACK_PLAN else None
     limit = ctx.config.runtime.worker_timeout_minutes
-    return run(row, root, [shown_path(str(s.slot_path), root) for s in held], served, wrote, timeout_minutes=limit)
+    worktrees = [shown_path(str(s.slot_path), root) for s in held]
+    answers = checklist_views.run_answers(ctx.conn, run_id)
+    return run(row, root, worktrees, served, wrote, checklist=answers, timeout_minutes=limit)
 
 
 def models_served(
@@ -390,13 +393,14 @@ def run(
     models: ModelsServed | None = None,
     feedback_plan: FeedbackPlanWritten | None = None,
     *,
+    checklist: Sequence[ChecklistAnswer] = (),
     timeout_minutes: int | None = None,
 ) -> Run:
     """One run's row, with the worktrees it holds if it is running, its paths from the workspace `root`.
 
-    On the run's own page it carries `models`, the models that served it, and for a `feedback-plan` run
-    `feedback_plan`, the plan it wrote. `timeout_minutes`, a worker's time limit, says when a step in its progress is
-    stuck; with None, none is.
+    On the run's own page it carries `models`, the models that served it, for a `feedback-plan` run `feedback_plan`,
+    the plan it wrote, and `checklist`, what it answered of its repositories' lists. `timeout_minutes`, a worker's
+    time limit, says when a step in its progress is stuck; with None, none is.
 
     Returns:
         The run as the API sends it. A status it does not know reads as `failed`.
@@ -431,6 +435,7 @@ def run(
         model=str(row["model"]) if row["model"] is not None else None,
         models=models,
         feedback_plan=feedback_plan,
+        checklist=list(checklist),
     )
 
 

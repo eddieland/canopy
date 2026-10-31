@@ -75,6 +75,7 @@ export const mockRuns: Run[] = [
         model: null,
         models: { status: 'running', models: [], error: null },
         feedback_plan: null,
+        checklist: [],
     },
     {
         id: 42,
@@ -108,6 +109,7 @@ export const mockRuns: Run[] = [
             error: null,
         },
         feedback_plan: null,
+        checklist: [],
     },
 ]
 
