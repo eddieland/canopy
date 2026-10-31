@@ -154,10 +154,11 @@ If a run reported no cost, the totals say how many, so a gap in the figures neve
 
 ## The checklist page
 
-A checklist is your list of rules for a repository that no linter checks, one file per repository in
+A [checklist](checklists) is your list of rules for a repository that no linter checks, one file per repository in
 `paths.checklists`. Before a worker's first push, canopy holds it and asks the worker to check its diff against each
 item and answer it. The checklist page, which **Checklist** on [Reports](/reports) opens, counts those answers so you
-can tell which items earn their place. It's what `canopy checklist` prints.
+can tell which items earn their place. It's what `canopy checklist` prints; [Tuning the
+list](checklists#tuning-the-list) says what to do with the numbers.
 
 **By item** is one table, a group of rows per repository under its name, each item in its list's order. **reminded**
 is how many worker runs were given the item, a task's among them, by when they started; then how many answered

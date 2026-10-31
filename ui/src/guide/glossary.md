@@ -104,7 +104,7 @@ Where a ticket or a PR stands, as the overseer worked it out from live state thi
 
 The voice a run writes in: how a worker words its PR, how a planner lays out its plan, how hard a reviewer presses. It
 changes voice, never a guard. Chosen in `[personas]`, per ticket on its page, or for one run. See
-[Choosing a persona](tickets#choosing-a-persona).
+[Personas](personas).
 
 ### Plan
 

@@ -106,7 +106,7 @@ harness's side of it (`the worker exited 1 without a result line`), which is tru
 agent's side, often something as mundane as a rate limit. Click it to jump to that row in the transcript instead of
 scrolling past a few hundred rows to find it. A chore run's page has the same field.
 
-A worker given your [checklist](reports#the-checklist-page) for its repository has a **Checklist** panel under the Run
+A worker given your [checklist](checklists) for its repository has a **Checklist** panel under the Run
 panel: what it answered of each item, in your list's order, the answer first, then the item. `pass` means the diff
 already held to it, `fixed` that the worker committed the fix, `n/a` that the diff touches nothing the item is about,
 and `unanswered` that its result said nothing of it; hover an answer for the same in a line. A `held` item, tinted, has

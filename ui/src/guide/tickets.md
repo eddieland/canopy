@@ -116,9 +116,9 @@ two resumes for the same red check failed the same way, read their transcripts b
 
 ## Choosing a persona
 
-A persona is the voice a run writes in: how a worker words its PR, how a planner lays out its plan, how hard a
-reviewer presses. At the foot of **Work**, each of the ticket's agents has its own row: its workers (implement and
-resume), its planner, and its reviewer, each with the persona its next run gets and where that comes from: this
+A [persona](personas) is the voice a run writes in: how a worker words its PR, how a planner lays out its plan, how
+hard a reviewer presses. At the foot of **Work**, each of the ticket's agents has its own row: its workers (implement
+and resume), its planner, and its reviewer, each with the persona its next run gets and where that comes from: this
 ticket's override, `[personas]` in your config, or canopy's default.
 
 Open a row's menu and pick a persona to set this ticket's override, as `canopy persona KEY NAME --agent AGENT` does.
