@@ -49,6 +49,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `wait-1` to `wait-4` | The Reviews page's first reviews by how long each waited, the quickest first. |
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
+| `code-chip`, `code-size` | Inline code's chip, a tint of its own ink, and code's size against its line (Rich text). |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
 
 Rules:
@@ -168,7 +169,7 @@ Rules:
   spend windows, and a `panel-label`. A document, long-form prose (a guide page, a plan), has one step of its own,
   `text-base`, through its utilities alone (A document, under Primitives), so that is the only place it appears.
   Nothing larger, but a counter's value (`text-3xl`), and nothing smaller or between the steps: no arbitrary sizes
-  (`text-[0.625rem]`).
+  (`text-[0.625rem]`). Code in rich text is the one size set against its line, not a step (`text-code`, Rich text).
 - **An icon is the size of the text it sits with**: 16px (`size-4`) beside `text-sm` and in a button of the default or
   `sm` size, which sets it; 12px (`size-3`) beside `text-xs` or smaller, in an `xs` or `icon-xs` button and a segmented
   control, which set it too, and as a link out in a row. Nothing between, but a checkbox's tick, which fills its box,
@@ -1307,12 +1308,15 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary, a decision's rationale, and a conversation's message: line breaks kept, `-` and `1.` lists (nested by
   indent), `#` headings as a `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and
-  `code` (at `text-xs`) and **strong** inline.
+  `code` and **strong** inline. Code, inline or fenced, is `text-code`: a step under its line on a sans palette, where
+  the change of face sets it apart, and the line's own size on a mono one, where a smaller copy of the same face reads
+  as a mistake. Inline code sits on `code-chip`, a tint of its own ink, so it stands apart on any bubble or tint
+  without a tile darker than the text around it, and keeps its ends on each line it wraps to.
   It reads nothing else: other markup, a labelled link's included, stays characters. Every piece is React text, and
   its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
   A conversation's bubbles lay out their bodies with it too, their line breaks kept, since the operator and the
-  workers break lines on purpose; on a raised bubble its code sits on `background`.
+  workers break lines on purpose; on a raised bubble a fenced block sits on `background`.
 - **The guide** (`/guide/PAGE`, `src/lib/guide.ts`, `GuideText`) is the operator's documentation, a page each, as
   Markdown in `src/guide/` (docs/design/CONVERSATIONS.md §22), laid out as a documentation site rather than in panels.
   On the left, the pages by group (`SOURCES`), each group a heading over its pages on a hairline, the page shown in

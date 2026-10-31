@@ -176,6 +176,13 @@
     --face: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
     --face-mono: 'IBM Plex Mono', ui-monospace, monospace;
     --face-mono-compact: 'IBM Plex Mono Compact', 'IBM Plex Mono', ui-monospace, monospace;
+
+    /* Code inside a line of text (ui/DESIGN.md, "Rich text"): sized to its line, a step under the sans, where the
+     * change of face sets it apart, and at the line's own size on a palette whose every line is mono (`--code-size:
+     * 1em` there), where a smaller copy of the same face reads as a mistake. Its chip is a tenth of the ink it sits
+     * in, so it stands apart on any bubble or tint without a tile darker than the text around it. */
+    --code-size: 0.92em;
+    --code-chip: color-mix(in oklab, currentColor 10%, transparent);
 }
 
 .dark {
@@ -389,6 +396,7 @@
     --radius: 0.1875rem;
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
+    --code-size: 1em;
     --depth-panel: none;
     --depth-float: 4px 4px 0 oklch(from var(--foreground) l c h / 0.85);
     --depth-action: 3px 3px 0 oklch(from var(--foreground) l c h / 0.85);
@@ -570,6 +578,7 @@
     --radius: 0.1875rem;
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
+    --code-size: 1em;
     /* Its aurora is a stepped bar of solid blocks, an editor's status line; its name sits on a block of its yellow; the
      * nav's highlight is a solid block, the active item inked in the canvas's color, with no hairline. */
     --aurora-height: 0.25rem;
@@ -677,6 +686,7 @@
     --radius: 0.25rem;
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
+    --code-size: 1em;
     --aurora-bloom: blur(6px);
     --aurora-bloom-opacity: 1;
     --wordmark-glow: drop-shadow(0 0 6px oklch(from var(--accent) l c h / 0.6));
@@ -815,4 +825,8 @@
     /* A palette sets the face interface text is in (`--face`, above). */
     --font-sans: var(--face);
     --font-mono: var(--face-mono);
+
+    /* Inline code's size and chip, as `text-code` and `bg-code-chip` (`--code-size`, `--code-chip`, above). */
+    --text-code: var(--code-size);
+    --color-code-chip: var(--code-chip);
 }
