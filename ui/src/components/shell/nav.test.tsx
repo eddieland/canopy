@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mockAttention, mockCapacity, mockReviews } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { AttentionItem, LoopState, MemoryState, ReviewSummary } from '@/api/types'
+import { setFindingsHidden } from '@/lib/attention-findings'
 import { renderRouted } from '@/test-utils'
 
 import { Nav } from './nav'
@@ -171,6 +172,16 @@ describe('Nav', () => {
         expect(screen.getByTitle('1 broken, 2 waiting on you, 1 other')).toBeDefined()
         // The eye reads the three numbers, each in its part's color.
         expect(screen.getAllByText(/^\d$/u).map((count) => count.textContent)).toEqual(['1', '2', '1'])
+    })
+
+    it("leaves chores' findings out of Attention's count while Settings hides them", async () => {
+        setFindingsHidden(true)
+        try {
+            await renderNav({ at: '/workspace/runs', items: ITEMS })
+            expect(screen.getByRole('link', { name: 'Attention 1 broken, 1 waiting on you' })).toBeDefined()
+        } finally {
+            setFindingsHidden(false)
+        }
     })
 
     it.each<[string, AttentionItem[] | undefined]>([

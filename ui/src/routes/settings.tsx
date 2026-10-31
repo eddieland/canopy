@@ -24,6 +24,7 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { setFindingsHidden, useFindingsHidden } from '@/lib/attention-findings'
 import { NAMES, setBuddy, setCompanion, useBuddy, useCompanion } from '@/lib/buddy'
 import type { Companion } from '@/lib/buddy'
 import { setClock, useClock } from '@/lib/clock'
@@ -53,7 +54,8 @@ import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
 /**
- * What this browser keeps (the theme, the clock, the send key, the review personas, the fun, the session), the limits
+ * What this browser keeps (the theme, the clock, the send key, chores' findings on the attention list, the review
+ * personas, the fun, the session), the limits
  * and trust settings of the workspace's config, and reloading the loop's config.
  */
 export const Route = createFileRoute('/settings')({
@@ -116,12 +118,14 @@ function SettingsPage() {
     return (
         <>
             <PageHeader title="Settings">
-                The theme, the clock, the send key, your review personas, and the fun are kept in this browser.
-                Everything else canopy reads from its config files, whose limits and trust settings can be changed here.
+                The theme, the clock, the send key, chores&apos; findings on the attention list, your review personas,
+                and the fun are kept in this browser. Everything else canopy reads from its config files, whose limits
+                and trust settings can be changed here.
             </PageHeader>
             <ThemePanel />
             <ClockPanel />
             <SendKeyPanel />
+            <AttentionPanel />
             <ReviewsPanel />
             <NoticePanel />
             <LimitsPanel />
@@ -691,6 +695,40 @@ function SendKeyPanel() {
                         </ToggleGroupItem>
                     ))}
                 </ToggleGroup>
+            </div>
+        </Panel>
+    )
+}
+
+/**
+ * Whether the attention list shows chores' findings: its page, its counter, and the nav's badge. This browser's alone;
+ * `canopy status` and the loop never read it, and each chore's page lists its findings either way.
+ */
+function AttentionPanel() {
+    const hidden = useFindingsHidden()
+    return (
+        <Panel id="attention">
+            <PanelHeader label="Attention" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p id="attention-findings-about" className="max-w-3xl text-sm text-muted-foreground">
+                    Leave what your chores find off the attention list, its count, and the nav&apos;s badge, so the list
+                    holds only what needs you. Each chore&apos;s page still lists its findings, and the attention page
+                    says how many it leaves out. Only this browser hides them: <Code>canopy status</Code> lists them
+                    all.
+                </p>
+                <label
+                    htmlFor="attention-findings"
+                    className="inline-flex shrink-0 items-center gap-2 text-xs whitespace-nowrap"
+                >
+                    <Checkbox
+                        id="attention-findings"
+                        checked={hidden}
+                        aria-describedby="attention-findings-about"
+                        data-testid="attention-findings"
+                        onCheckedChange={(checked) => setFindingsHidden(checked === true)}
+                    />
+                    Hide chore findings
+                </label>
             </div>
         </Panel>
     )
