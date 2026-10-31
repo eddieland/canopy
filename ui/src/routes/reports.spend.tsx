@@ -18,10 +18,9 @@ import type {
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
 import { FirstCallChart } from '@/components/first-call-chart'
-import { None } from '@/components/none'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
-import { PullRequestLink } from '@/components/pull-request-link'
-import { Word } from '@/components/status'
+import { PullRequestTable } from '@/components/pull-request-table'
+import type { PullRequestColumn } from '@/components/pull-request-table'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Tip } from '@/components/tip'
@@ -30,7 +29,6 @@ import { UnnamedModel } from '@/components/unnamed-model'
 import { WindowToggle } from '@/components/window-toggle'
 import { useClock } from '@/lib/clock'
 import { firstKind, KIND_SERIES, seriesOf, seriesWeeks } from '@/lib/first-calls'
-import { phaseMeaning } from '@/lib/meanings'
 import { windowName } from '@/lib/report-window'
 import { unnamedHint, UNREAD, UNREAD_RUNS_HINT } from '@/lib/models'
 import {
@@ -71,7 +69,6 @@ import {
 import type { BudgetState, ModelRow, ToolRow } from '@/lib/spend'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
-import { NO_TICKET } from '@/lib/words'
 
 interface SpendSearch {
     days?: number | undefined
@@ -653,51 +650,25 @@ function PullRequests({ pullRequests, span }: { pullRequests: SpendPullRequest[]
         return <Empty size="panel">no run pushed to a PR, and none was reviewed, in these {span}</Empty>
     }
     return (
-        <PanelScroll label="Spend by pull request" className="max-h-96 px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="spend-pull-request-table">
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">pull request</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">ticket</th>
-                        <th className="panel-label pb-1.5 font-normal">runs</th>
-                        <th className="panel-label pb-1.5 font-normal">spent</th>
-                    </tr>
-                </thead>
-                <tbody className="text-xs">
-                    {pullRequests.map((pr) => (
-                        <tr key={pr.url} className="text-right" data-testid="spend-pull-request">
-                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
-                                <span className="flex min-w-0 items-center gap-2">
-                                    <PullRequestLink url={pr.url} className="min-w-0" />
-                                    {pr.phase !== null && (
-                                        <Word
-                                            word={pr.phase}
-                                            meaning={phaseMeaning(pr.phase)}
-                                            className="truncate text-muted-foreground"
-                                        />
-                                    )}
-                                </span>
-                            </th>
-                            <td className="pl-3 text-left whitespace-nowrap">
-                                {pr.ticket_key === null ? (
-                                    <None reason={NO_TICKET} brief className="font-mono text-xs" />
-                                ) : (
-                                    <TicketLink ticketKey={pr.ticket_key} />
-                                )}
-                            </td>
-                            <td className="readout pl-3" title={`${pr.runs} runs, ${pr.reviews} reviews`}>
-                                {pr.runs + pr.reviews}
-                            </td>
-                            <td className="readout pl-3">
-                                <Cost usd={pr.cost_usd} />
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <PullRequestTable
+            rows={pullRequests}
+            columns={PULL_REQUEST_COLUMNS}
+            label="Spend by pull request"
+            testId="spend"
+        />
     )
 }
+
+// What the spend page counts of each PR: its runs and reviews, and what they cost.
+const PULL_REQUEST_COLUMNS: readonly PullRequestColumn<SpendPullRequest>[] = [
+    {
+        key: 'runs',
+        label: 'runs',
+        cell: (pr) => pr.runs + pr.reviews,
+        title: (pr) => `${pr.runs} runs, ${pr.reviews} reviews`,
+    },
+    { key: 'spent', label: 'spent', cell: (pr) => <Cost usd={pr.cost_usd} /> },
+]
 
 /**
  * A panel's kind filter, in its header as the runs page's is: `all`, which sums every kind's rows, unless `every` is

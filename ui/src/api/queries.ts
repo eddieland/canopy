@@ -66,6 +66,8 @@ export const keys = {
     checklistCounts: (days: number) => ['spend', 'breakdown', 'checklist', days] as const,
     // Under the breakdowns' key too: a run's start or end, or a tick's decisions, changes how the runs ended.
     healthReport: (days: number) => ['spend', 'breakdown', 'health', days] as const,
+    // Under the breakdowns' key too: a fix's start or end, or a kick, changes the report.
+    ciReport: (days: number) => ['spend', 'breakdown', 'ci', days] as const,
     tick: ['tick'] as const,
     // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
     tickNow: ['tick-now'] as const,
@@ -257,6 +259,18 @@ export function healthReportQuery(days: number) {
         queryKey: keys.healthReport(days),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/reports/health', { params: { query: { days } }, signal })),
+    })
+}
+
+/**
+ * What CI did over the last `days` local days on the PRs canopy observed: each check's red runs, each day's, the
+ * fix-CI resumes, the flaky kicks, and the cooldown's refusals. Marked stale with the spend breakdowns.
+ */
+export function ciReportQuery(days: number) {
+    return queryOptions({
+        queryKey: keys.ciReport(days),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reports/ci', { params: { query: { days } }, signal })),
     })
 }
 
