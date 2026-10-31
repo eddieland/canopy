@@ -29,6 +29,7 @@ import { Route as ReportsIndexRouteImport } from './routes/reports.index'
 import { Route as ReportsChecklistRouteImport } from './routes/reports.checklist'
 import { Route as ReportsCiRouteImport } from './routes/reports.ci'
 import { Route as ReportsHealthRouteImport } from './routes/reports.health'
+import { Route as ReportsPlansRouteImport } from './routes/reports.plans'
 import { Route as ReportsReviewsRouteImport } from './routes/reports.reviews'
 import { Route as ReportsSpendRouteImport } from './routes/reports.spend'
 import { Route as ReviewsIndexRouteImport } from './routes/reviews.index'
@@ -158,6 +159,11 @@ const ReportsCiRoute = ReportsCiRouteImport.update({
 const ReportsHealthRoute = ReportsHealthRouteImport.update({
   id: '/reports/health',
   path: '/reports/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsPlansRoute = ReportsPlansRouteImport.update({
+  id: '/reports/plans',
+  path: '/reports/plans',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsReviewsRoute = ReportsReviewsRouteImport.update({
@@ -330,6 +336,7 @@ export interface FileRoutesByFullPath {
   '/reports/checklist': typeof ReportsChecklistRoute
   '/reports/ci': typeof ReportsCiRoute
   '/reports/health': typeof ReportsHealthRoute
+  '/reports/plans': typeof ReportsPlansRoute
   '/reports/reviews': typeof ReportsReviewsRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
@@ -382,6 +389,7 @@ export interface FileRoutesByTo {
   '/reports/checklist': typeof ReportsChecklistRoute
   '/reports/ci': typeof ReportsCiRoute
   '/reports/health': typeof ReportsHealthRoute
+  '/reports/plans': typeof ReportsPlansRoute
   '/reports/reviews': typeof ReportsReviewsRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
@@ -435,6 +443,7 @@ export interface FileRoutesById {
   '/reports/checklist': typeof ReportsChecklistRoute
   '/reports/ci': typeof ReportsCiRoute
   '/reports/health': typeof ReportsHealthRoute
+  '/reports/plans': typeof ReportsPlansRoute
   '/reports/reviews': typeof ReportsReviewsRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
@@ -489,6 +498,7 @@ export interface FileRouteTypes {
     | '/reports/checklist'
     | '/reports/ci'
     | '/reports/health'
+    | '/reports/plans'
     | '/reports/reviews'
     | '/reports/spend'
     | '/reviews/$id'
@@ -541,6 +551,7 @@ export interface FileRouteTypes {
     | '/reports/checklist'
     | '/reports/ci'
     | '/reports/health'
+    | '/reports/plans'
     | '/reports/reviews'
     | '/reports/spend'
     | '/reviews/$id'
@@ -593,6 +604,7 @@ export interface FileRouteTypes {
     | '/reports/checklist'
     | '/reports/ci'
     | '/reports/health'
+    | '/reports/plans'
     | '/reports/reviews'
     | '/reports/spend'
     | '/reviews/$id'
@@ -646,6 +658,7 @@ export interface RootRouteChildren {
   ReportsChecklistRoute: typeof ReportsChecklistRoute
   ReportsCiRoute: typeof ReportsCiRoute
   ReportsHealthRoute: typeof ReportsHealthRoute
+  ReportsPlansRoute: typeof ReportsPlansRoute
   ReportsReviewsRoute: typeof ReportsReviewsRoute
   ReportsSpendRoute: typeof ReportsSpendRoute
   ReviewsIdRoute: typeof ReviewsIdRoute
@@ -822,6 +835,13 @@ declare module '@tanstack/react-router' {
       path: '/reports/health'
       fullPath: '/reports/health'
       preLoaderRoute: typeof ReportsHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports/plans': {
+      id: '/reports/plans'
+      path: '/reports/plans'
+      fullPath: '/reports/plans'
+      preLoaderRoute: typeof ReportsPlansRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports/reviews': {
@@ -1054,6 +1074,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsChecklistRoute: ReportsChecklistRoute,
   ReportsCiRoute: ReportsCiRoute,
   ReportsHealthRoute: ReportsHealthRoute,
+  ReportsPlansRoute: ReportsPlansRoute,
   ReportsReviewsRoute: ReportsReviewsRoute,
   ReportsSpendRoute: ReportsSpendRoute,
   ReviewsIdRoute: ReviewsIdRoute,

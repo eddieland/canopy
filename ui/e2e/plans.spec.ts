@@ -240,14 +240,20 @@ test('a comment half written asks before the page is left, by a link or by closi
     await expect(ask).toContainText('What you wrote in a comment is not sent.')
     await ask.getByRole('button', { name: 'Stay' }).click()
     await expect(page.getByRole('form', { name: 'Comment' }).getByRole('textbox')).toHaveValue('Which timezone?')
+    // Resolved once the dialog is dismissed, not when it opens: a test that ends while it is still up closes its
+    // context under it, which fails the teardown.
     const asked = new Promise<string>((resolve) => {
         page.once('dialog', async (dialog) => {
-            resolve(dialog.type())
             await dialog.dismiss()
+            resolve(dialog.type())
         })
     })
     await page.close({ runBeforeUnload: true })
     expect(await asked).toBe('beforeunload')
+    // Dismissed, the tab stays open. Closed here without asking again, the page leaves nothing half closed for the
+    // context's teardown, which otherwise failed now and then closing a page whose close was refused under it.
+    expect(page.isClosed()).toBe(false)
+    await page.close()
 })
 
 test('writing a note on the whole plan never scrolls the page under it', async ({ page }) => {
