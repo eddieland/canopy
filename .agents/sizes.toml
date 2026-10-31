@@ -17,11 +17,11 @@
 "prompts/reviser.md" = 5811
 "prompts/task.md" = 8678
 "prompts/worker-feedback-plan.md" = 13141
-"prompts/worker-implement-private.md" = 9614
-"prompts/worker-implement.md" = 9925
+"prompts/worker-implement-private.md" = 9729
+"prompts/worker-implement.md" = 10040
 "prompts/worker-plan.md" = 13190
-"prompts/worker-resume-private.md" = 12858
-"prompts/worker-resume.md" = 13350
+"prompts/worker-resume-private.md" = 12973
+"prompts/worker-resume.md" = 13465
 "skills/canopy-artifacts/SKILL.md" = 3076
 "skills/tracker-github/SKILL.md" = 3883
 "skills/tracker-jira/SKILL.md" = 3245

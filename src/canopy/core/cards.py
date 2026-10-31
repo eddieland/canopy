@@ -91,7 +91,8 @@ type StepStatus = Literal["not_started", "working", "blocked", "done", "skipped"
 #: The share of a run's time limit a step may stay working before it is shown stuck: its last fifth's length.
 STUCK_SHARE = 5
 #: How many tool calls, or minutes, a running run may go with no update to its card before the card is shown stale.
-#: canopy's plugin asks the agent for one at the same count of calls (`.agents/plugins/canopy.js`, DESIGN §41).
+#: canopy's plugin asks the agent for one at the same count of calls, and sooner for its first
+#: (`.agents/plugins/canopy.js`, DESIGN §41).
 STALE_CALLS = 20
 STALE_MINUTES = 10
 #: The letters a question's options go by, in order, and so how many it may have.
