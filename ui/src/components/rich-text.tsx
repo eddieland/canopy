@@ -1,5 +1,6 @@
 import { Fragment, useState } from 'react'
 
+import { Code } from '@/components/code'
 import { LinkedText } from '@/components/linked-text'
 import { MoreLines } from '@/components/more-lines'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -66,7 +67,7 @@ export function RichText({
 export function InlineCode({ text, links = true }: { text: string; links?: boolean }) {
     return codeSpans(text).map((piece, i) =>
         piece.kind === 'code' ? (
-            <Code key={i} text={piece.text} />
+            <Code key={i}>{piece.text}</Code>
         ) : (
             <Fragment key={i}>
                 {splitLinks(piece.text).map((part, j) => (
@@ -171,12 +172,7 @@ function InlineView({ piece, look }: { piece: Inline; look: Look }) {
             )
         }
         case 'code': {
-            return <Code text={piece.text} />
+            return <Code>{piece.text}</Code>
         }
     }
-}
-
-// Sized to its line, on a tint of its own ink (`--code-size`, `--code-chip`), its ends kept on each line it wraps to.
-function Code({ text }: { text: string }) {
-    return <code className="rounded-sm bg-code-chip box-decoration-clone px-1 py-px font-mono text-code">{text}</code>
 }

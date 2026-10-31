@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { HOST_REFRESH_MS, hostQuery, hostSamplesQuery, metaQuery } from '@/api/queries'
 import type { Disk, HostHistory, HostResources } from '@/api/types'
 import { Age } from '@/components/age'
+import { Code } from '@/components/code'
 import { CopyButton } from '@/components/copy-button'
 import { Counter } from '@/components/counter'
 import { Field, Fields } from '@/components/fields'
@@ -358,8 +359,7 @@ function DiskRow({ disk }: { disk: Disk }) {
             </div>
             {disk.floor !== null && (
                 <span className="text-xs text-muted-foreground">
-                    Under {bytesText(disk.floor)} free, a tick runs no overseer (
-                    <code className="font-mono">loop.min_free_disk_mib</code>).
+                    Under {bytesText(disk.floor)} free, a tick runs no overseer (<Code>loop.min_free_disk_mib</Code>).
                 </span>
             )}
         </li>

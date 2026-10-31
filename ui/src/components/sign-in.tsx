@@ -5,6 +5,7 @@ import type { SubmitEvent } from 'react'
 import { ApiError } from '@/api/client'
 import { signIn } from '@/api/mutations'
 import { keys, unsentQuery } from '@/api/queries'
+import { Code } from '@/components/code'
 import { Notice } from '@/components/notice'
 import { Input } from '@/components/input'
 import { Mark } from '@/components/mark'
@@ -53,8 +54,8 @@ export function SignIn() {
                 <div className="flex flex-col gap-1">
                     <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
                     <p className="text-sm text-muted-foreground">
-                        Paste the listener secret. <code className="font-mono text-xs">canopy secret</code> prints it on
-                        the machine that runs the loop.
+                        Paste the listener secret. <Code>canopy secret</Code> prints it on the machine that runs the
+                        loop.
                     </p>
                     {unsent && (
                         <p className="text-sm text-status-failed">

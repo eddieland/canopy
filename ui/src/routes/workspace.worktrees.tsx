@@ -4,6 +4,7 @@ import { RotateCw } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
+import { Code } from '@/components/code'
 import { LinkOutIcon } from '@/components/link-out-icon'
 import { WORKTREES_REFRESH_MS, worktreesQuery } from '@/api/queries'
 import { WORKTREE_STATES } from '@/api/types'
@@ -123,8 +124,7 @@ function WorktreesPage() {
                     <Empty>no {state} slots now: no pool has one</Empty>
                 ) : shown.length === 0 ? (
                     <Empty>
-                        no pools yet: <code className="font-mono text-xs">canopy workspace sync</code> makes one for
-                        each repository
+                        no pools yet: <Code>canopy workspace sync</Code> makes one for each repository
                     </Empty>
                 ) : (
                     <div className="divide-y">
@@ -164,6 +164,7 @@ function FilterLink({ search, children }: { search: WorktreesSearch; children: R
 function PoolSection({ pool, state }: { pool: Pool; state: WorktreeState | undefined }) {
     const counts = WORKTREE_STATES.map((s) => [s, pool.worktrees.filter((w) => w.state === s).length] as const)
     const over = overSize(pool)
+    const overText = over === 1 ? '1 slot' : `${over} slots`
     const root = slotsRoot(pool.worktrees)
     return (
         <section aria-label={pool.repo} data-testid={`pool-${pool.repo}`}>
@@ -200,9 +201,8 @@ function PoolSection({ pool, state }: { pool: Pool; state: WorktreeState | undef
             </PoolHeader>
             {over > 0 && (
                 <p className="border-b px-3 py-2 text-xs text-status-blocked" data-testid="pool-over">
-                    {over === 1 ? '1 slot' : `${over} slots`} past the declared size.{' '}
-                    <code className="font-mono">canopy workspace sync</code> removes idle ones; one with work in it
-                    stays until it has none.
+                    {overText} past the declared size. <Code>canopy workspace sync</Code> removes idle ones; one with
+                    work in it stays until it has none.
                 </p>
             )}
             {pool.error === null ? (

@@ -17,6 +17,7 @@ import {
 } from '@/api/mutations'
 import { memoryQuery } from '@/api/queries'
 import type { MemoryEntry } from '@/api/types'
+import { Code } from '@/components/code'
 import { ForgetForm } from '@/components/forget-form'
 import { Textarea } from '@/components/input'
 import { MemoryText } from '@/components/memory-text'
@@ -417,12 +418,11 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
                     'Reading the lessons in force.'
                 ) : replaced === undefined ? (
                     <>
-                        No lesson is in force under <code className="font-mono">{source.key}</code>: it replaces none.
+                        No lesson is in force under <Code>{source.key}</Code>: it replaces none.
                     </>
                 ) : (
                     <>
-                        It replaces {memoryRef(replaced.id)}, the lesson in force under{' '}
-                        <code className="font-mono">{source.key}</code>
+                        It replaces {memoryRef(replaced.id)}, the lesson in force under <Code>{source.key}</Code>
                         {replaced.text !== null && (
                             <>
                                 : <MemoryText text={replaced.text} className="text-foreground" lines />

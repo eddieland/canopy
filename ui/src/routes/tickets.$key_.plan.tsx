@@ -3,6 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
 import { ticketPlansQuery, ticketQuery } from '@/api/queries'
+import { Code } from '@/components/code'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelLoading } from '@/components/panel'
 import { ChangesAsked } from '@/components/plan-card'
@@ -67,8 +68,7 @@ function PlanPage() {
             ) : (
                 <Panel>
                     <Empty size="panel">
-                        no plan: {key} needs none. <code className="font-mono text-xs">canopy plan {key}</code> asks for
-                        one.
+                        no plan: {key} needs none. <Code>canopy plan {key}</Code> asks for one.
                     </Empty>
                 </Panel>
             )}

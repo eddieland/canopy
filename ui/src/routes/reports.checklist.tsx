@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { checklistCountsQuery } from '@/api/queries'
+import { Code } from '@/components/code'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
 import { RepoFilter } from '@/components/repo-picker'
 import { Clipped } from '@/components/tip'
@@ -108,7 +109,7 @@ function ChecklistPage() {
                 ) : data.items.length === 0 ? (
                     <Empty size="panel">
                         no worker run of these {span} was given a checklist: each repository&apos;s is a file in{' '}
-                        <code>paths.checklists</code>
+                        <Code>paths.checklists</Code>
                     </Empty>
                 ) : (
                     <Items groups={itemsByRepo(data.items, search.repo)} repo={search.repo} span={span} />

@@ -7,6 +7,7 @@ import { dropDraft, editDraft, refreshThreads, sendDrafts, stageDrafts } from '@
 import { pullRequestThreadsQuery } from '@/api/queries'
 import type { Draft, DraftFromPlan, FeedbackPlanItem, PullRequestThreads, Reaction, ReviewThread } from '@/api/types'
 import { Age } from '@/components/age'
+import { Code } from '@/components/code'
 import { CommentText } from '@/components/comment-text'
 import { Disclosure } from '@/components/disclosure'
 import { DraftCardFrame, DraftForm, DraftVerbs, DropVerb, EditVerb } from '@/components/draft-card'
@@ -199,13 +200,12 @@ function RepliesPanel({
                     {threads.review_replies === 'approve' ? (
                         <>
                             Workers draft their replies, and nothing reaches the PR until you send it, as your own words
-                            and unmarked: <code className="font-mono text-xs">trust.review_replies</code> is approve.
+                            and unmarked: <Code>trust.review_replies</Code> is approve.
                         </>
                     ) : (
                         <>
-                            Workers post their own replies, marked:{' '}
-                            <code className="font-mono text-xs">trust.review_replies</code> is post. Drafts from runs
-                            under approve can still be sent.
+                            Workers post their own replies, marked: <Code>trust.review_replies</Code> is post. Drafts
+                            from runs under approve can still be sent.
                         </>
                     )}{' '}
                     {threads.read_at === null ? (

@@ -4,6 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { choresQuery } from '@/api/queries'
 import type { ChoreSummary } from '@/api/types'
 import { ChoreLink } from '@/components/chore-link'
+import { Code } from '@/components/code'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot } from '@/components/status'
@@ -35,10 +36,9 @@ function ChoresPage() {
                     <PanelSkeleton className="min-h-40" />
                 ) : data.length === 0 ? (
                     <Empty size="panel">
-                        no chores yet: <code className="font-mono text-xs">canopy chore install</code> lists the ones
-                        canopy ships, or define <code className="font-mono text-xs">[chores.NAME]</code> in{' '}
-                        <code className="font-mono text-xs">.canopy/config.toml</code>, with{' '}
-                        <code className="font-mono text-xs">capacity.max_chores</code> above 0
+                        no chores yet: <Code>canopy chore install</Code> lists the ones canopy ships, or define{' '}
+                        <Code>[chores.NAME]</Code> in <Code>.canopy/config.toml</Code>, with{' '}
+                        <Code>capacity.max_chores</Code> above 0
                     </Empty>
                 ) : (
                     <ul className="divide-y" data-testid="chores">

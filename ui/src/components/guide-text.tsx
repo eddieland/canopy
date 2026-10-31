@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Fragment } from 'react'
 
+import { Code } from '@/components/code'
 import { CodeTokens } from '@/components/code-tokens'
 import { useHighlightLines } from '@/hooks/use-highlight'
 import { anchor, plainText } from '@/lib/guide'
@@ -144,9 +145,7 @@ function PieceView({ piece }: { piece: GuidePiece }) {
             return <strong className="font-semibold">{piece.text}</strong>
         }
         case 'code': {
-            return (
-                <code className="rounded-sm bg-surface-raised px-1 py-px font-mono text-[0.875em]">{piece.text}</code>
-            )
+            return <Code>{piece.text}</Code>
         }
         case 'link': {
             return <GuideLink piece={piece} />
