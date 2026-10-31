@@ -596,8 +596,9 @@ Controls now:
 - The reviewer and the planner read git history through canopy's read-only git tools (DESIGN §27), never a shell: the
   reviewer has none, and the planner's runs only what `runtime.allow_bash` names, which canopy refuses git in.
   Their server reads only the checkouts the harness names on its command line for the run, its review's or its desk's
-  worktrees. Every argument is checked as a revision, a path inside the repository, or printable text to find, passed
-  after its option, before git sees it, never an option, and git reads commits, never the working tree, so no clean
+  worktrees. Every argument is checked as a revision, a path inside the repository, or printable text or a POSIX
+  regular expression to find, passed after its option, before git sees it, never an option, and git reads commits,
+  never the working tree, so no clean
   filter runs; it runs with no hook, filesystem monitor, external diff, textconv, pager, signature check, replace ref,
   submodule, or transport, whatever the repository's
   config or attributes name, with no `GIT_*` variable it inherited and no system config. What it returns is bounded,

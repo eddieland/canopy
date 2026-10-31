@@ -1044,9 +1044,9 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
         )
     # Its own tools, wherever it runs, a running tick included, and none of the overseer's.
     assert served.listed() == ["merge-base", "diff", "log", "show", "blame", "grep", "files"]
-    # log answers with records, as structured content and as its text's JSON; the rest with text alone.
+    # log and grep answer with records, as structured content and as their text's JSON; the rest with text alone.
     listed = {t["name"]: t for t in served.responses[1]["result"]["tools"]}
-    assert [name for name, t in listed.items() if "outputSchema" in t] == ["log"]
+    assert [name for name, t in listed.items() if "outputSchema" in t] == ["log", "grep"]
     output = listed["log"]["outputSchema"]
     for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
         validator.check_schema(output)
@@ -1079,6 +1079,38 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     found = served.structured(11)
     assert found is not None
     assert [c["commit"] for c in found["commits"]] == [sha]
+    assert (served.stderr, served.returncode) == ("", 0)
+
+
+def test_git_grep_answers_with_records_its_output_schema_holds(git_pool: GitPool, tmp_path: Path) -> None:
+    """The git server's grep answers with records, as structured content and as JSON text, each line marked a match."""
+    feature_commit(git_pool, tmp_path)
+    served = mcp_session(
+        LIST_TOOLS,
+        tool_call("grep", rev="feature", text="cal+\\(\\)", regex=True, context=1),
+        git=[f"checkout={tmp_path / 'seed'}"],
+    )
+    listed = {t["name"]: t for t in served.responses[1]["result"]["tools"]}
+    grep_output = listed["grep"]["outputSchema"]
+    for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
+        validator.check_schema(grep_output)
+    assert sorted(grep_output["required"]) == ["cut", "files", "matched_files", "matched_lines", "more"]
+    assert "$ref" not in json.dumps(grep_output)
+    grep_input = listed["grep"]["inputSchema"]
+    assert (sorted(grep_input["required"]), grep_input["properties"]["limit"]["maximum"]) == (
+        ["rev", "text"],
+        git_tools.MAX_GREP_LIMIT,
+    )
+    grepped, matches = served.said(2), served.structured(2)
+    assert matches is not None
+    assert not grepped.error
+    jsonschema.validate(matches, grep_output)
+    assert grepped.text == f"{git_tools.DATA_NOTE}\n\n{json.dumps(matches, separators=(',', ':'))}"
+    [retry] = matches["files"]
+    assert (retry["path"], [(line["text"], line["match"]) for line in retry["lines"]]) == (
+        "retry.py",
+        [("while True:", False), ("    call()", True)],
+    )
     assert (served.stderr, served.returncode) == ("", 0)
 
 

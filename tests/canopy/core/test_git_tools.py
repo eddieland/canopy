@@ -101,19 +101,161 @@ def test_grep_finds_a_text_in_the_files_at_a_commit(repo: Repo) -> None:
     at = repo.checkouts
 
     found = git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="retry()"))
-    assert found == f"{git_tools.DATA_NOTE}\n\nlib/use.py:2:retry()\nretry.py:1:def retry():"
+    assert listed(found) == ["lib/use.py:2:retry()", "retry.py:1:def retry():"]
+    assert [(f.path, f.matched_lines) for f in found.files] == [("lib/use.py", 1), ("retry.py", 1)]
+    assert (found.matched_lines, found.matched_files, found.more, found.cut) == (2, 2, False, None)
     # At the base, before the branch: the commit named, not the checkout's files.
-    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="main", text="return")).endswith("\n\nretry.py:2:    return 1")
-    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="RETRY", paths=["lib"])).endswith(
-        "\n\nlib/use.py:3:RETRY = 3",
-    )
+    assert listed(git_tools.grep(RUNNER, at, git_tools.Grep(rev="main", text="return"))) == ["retry.py:2:    return 1"]
+    caps = git_tools.Grep(rev="feature", text="RETRY", paths=["lib"])
+    assert listed(git_tools.grep(RUNNER, at, caps)) == ["lib/use.py:3:RETRY = 3"]
     either = git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="RETRY", ignore_case=True, paths=["lib"]))
-    assert either.count("lib/use.py:") == 3
-    # The text as written, never a pattern or an option; and a miss says so.
-    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="re.ry")).startswith(
-        "No file at feature holds",
+    assert either.matched_lines == 3
+    # Without regex, the text as written, never a pattern or an option; and a miss is no file, and nothing more.
+    for text in ("re.ry", "--all"):
+        missed = git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text=text))
+        assert (missed.files, missed.matched_lines, missed.matched_files, missed.more) == ([], 0, 0, False)
+
+
+def test_grep_reads_a_portable_regular_expression_whole_words_and_files_by_name(repo: Repo) -> None:
+    """A regular expression is POSIX extended, whatever the repository's config asks for."""
+    (repo.path / "plan.py").write_text("def make_plan():\n    retry_count = 3\n    retry(2)\n")
+    (repo.path / "plan.md").write_text("make_plan, then retry\n")
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "plan", cwd=repo.path)
+    git("config", "grep.patternType", "fixed", cwd=repo.path)
+    at = repo.checkouts
+
+    either = git_tools.Grep(rev="HEAD", text="def [a-z_]+_plan|return [0-9]+", regex=True)
+    assert listed(git_tools.grep(RUNNER, at, either)) == ["plan.py:1:def make_plan():", "retry.py:2:    return 2"]
+    # A whole word: not inside `retry_count`; and only files whose own name matches.
+    words = git_tools.grep(RUNNER, at, git_tools.Grep(rev="HEAD", text="retry", word=True, name="plan.*"))
+    assert listed(words) == ["plan.md:1:make_plan, then retry", "plan.py:3:    retry(2)"]
+    named = git_tools.grep(RUNNER, at, git_tools.Grep(rev="HEAD", text="retry", word=True, name="*.py"))
+    assert [f.path for f in named.files] == ["plan.py", "retry.py"]
+    assert named.matched_files == 2  # counted after the name, as listed
+    # An expression git cannot compile says so, and what to do.
+    with pytest.raises(git_tools.Refused) as refused:
+        git_tools.grep(RUNNER, at, git_tools.Grep(rev="HEAD", text="retry(", regex=True))
+    assert str(refused.value).startswith("the regular expression does not compile: ")
+    assert str(refused.value).endswith("; without regex, text is found as written")
+    escaped = git_tools.grep(RUNNER, at, git_tools.Grep(rev="HEAD", text="retry\\(2", regex=True))
+    assert listed(escaped) == ["plan.py:3:    retry(2)"]
+
+
+def test_grep_lists_context_around_each_match_once(repo: Repo) -> None:
+    (repo.path / "steps.txt").write_text("".join(f"step {n}\n" for n in range(1, 11)).replace("step 4", "go 4"))
+    (repo.path / "steps.txt").write_text((repo.path / "steps.txt").read_text().replace("step 6", "go 6"))
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "steps", cwd=repo.path)
+
+    found = git_tools.grep(RUNNER, repo.checkouts, git_tools.Grep(rev="HEAD", text="go", context=2))
+    # Two matches two lines apart: their context meets, and each line is listed once.
+    assert listed(found) == [
+        "steps.txt-2-step 2",
+        "steps.txt-3-step 3",
+        "steps.txt:4:go 4",
+        "steps.txt-5-step 5",
+        "steps.txt:6:go 6",
+        "steps.txt-7-step 7",
+        "steps.txt-8-step 8",
+    ]
+    # A match past the limit, listed as the first's context, is still marked a match; and it is not counted listed.
+    first = git_tools.grep(RUNNER, repo.checkouts, git_tools.Grep(rev="HEAD", text="go", context=2, limit=1))
+    assert [line.line for line in first.files[0].lines if line.match] == [4, 6]
+    assert (first.more, first.cut) == (
+        True,
+        (
+            "listed matching lines 1 to 1 of 2, in 1 of the 1 files that hold one: offset 1 lists the next, or narrow "
+            "the search with paths, name, or word, or count where they are"
+        ),
     )
-    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev="feature", text="--all")).startswith("No file at feature")
+
+
+def test_grep_pages_through_what_matches_and_counts_it_all(repo: Repo) -> None:
+    for name, n in [("a.txt", 3), ("b.txt", 1), ("c.txt", 4)]:
+        (repo.path / name).write_text("".join(f"hit {k}\n" for k in range(1, n + 1)))
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "hits", cwd=repo.path)
+    at = repo.checkouts
+
+    pages = [git_tools.grep(RUNNER, at, git_tools.Grep(rev="HEAD", text="hit", limit=3, offset=o)) for o in (0, 3, 6)]
+    assert [listed(page) for page in pages] == [
+        ["a.txt:1:hit 1", "a.txt:2:hit 2", "a.txt:3:hit 3"],
+        ["b.txt:1:hit 1", "c.txt:1:hit 1", "c.txt:2:hit 2"],
+        ["c.txt:3:hit 3", "c.txt:4:hit 4"],
+    ]
+    # Every page counts every match, and each file's count is its whole, though the page lists part of it.
+    assert {(page.matched_lines, page.matched_files) for page in pages} == {(8, 3)}
+    assert [(f.path, f.matched_lines) for f in pages[1].files] == [("b.txt", 1), ("c.txt", 4)]
+    assert [page.more for page in pages] == [True, True, False]
+    assert pages[0].cut is not None
+    assert pages[0].cut.startswith("listed matching lines 1 to 3 of 8, in 1 of the 3 files that hold one: offset 3 ")
+    assert pages[2].cut is None
+
+    counted = git_tools.grep(RUNNER, at, git_tools.Grep(rev="HEAD", text="hit", count=True, limit=2))
+    assert [(f.path, f.matched_lines, f.lines) for f in counted.files] == [("a.txt", 3, []), ("b.txt", 1, [])]
+    assert (counted.matched_lines, counted.matched_files, counted.more) == (8, 3, True)
+    assert (
+        counted.cut == "listed files 1 to 2 of the 3 that hold a match: offset 2 lists the next, or name fewer "
+        "paths, or a name"
+    )
+    rest = git_tools.grep(RUNNER, at, git_tools.Grep(rev="HEAD", text="hit", count=True, limit=2, offset=2))
+    assert ([f.path for f in rest.files], rest.more, rest.cut) == (["c.txt"], False, None)
+
+    for past, what in [
+        (git_tools.Grep(rev="HEAD", text="hit", offset=8), "8 lines match"),
+        (git_tools.Grep(rev="HEAD", text="hit", count=True, offset=3), "3 files hold a match"),
+    ]:
+        with pytest.raises(git_tools.Refused) as refused:
+            git_tools.grep(RUNNER, at, past)
+        assert str(refused.value) == f"offset {past.offset} is past the end: {what}"
+
+
+def test_grep_reads_the_lines_of_only_the_files_the_page_lists(repo: Repo) -> None:
+    """What git prints is bounded by the page, not the repository: the files past it are counted, never read."""
+    for name in ("a.txt", "b.txt", "c.txt"):
+        (repo.path / name).write_text("hit\nhit\n")
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "hits", cwd=repo.path)
+    runner = mock.create_autospec(procs.SubprocessRunner, instance=True)
+    runner.run.side_effect = RUNNER.run
+    found = git_tools.grep(runner, repo.checkouts, git_tools.Grep(rev="HEAD", text="hit", limit=3, context=1))
+    # The third match's context is b.txt's second line, which matches too, past the limit.
+    assert listed(found) == ["a.txt:1:hit", "a.txt:2:hit", "b.txt:1:hit", "b.txt:2:hit"]
+    greps = [call.args[0] for call in runner.run.call_args_list if "grep" in call.args[0]]
+    assert [argv[argv.index("--") + 1 :] for argv in greps] == [[], ["a.txt", "b.txt"], ["a.txt", "b.txt"]]
+
+
+def test_grep_reads_each_field_apart_and_bounds_each_line(repo: Repo) -> None:
+    """A path that holds what git's text output puts between fields, or a line break, is read as one path."""
+    odd = repo.path / "we:ird-1"
+    odd.mkdir()
+    (odd / "a:2:b.txt").write_text("needle\n")
+    (repo.path / "two\nlines.txt").write_text("needle \u202eevil\n")
+    (repo.path / "long.txt").write_text("needle" + "x" * 1000 + "\n")
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "odd", cwd=repo.path)
+
+    found = git_tools.grep(RUNNER, repo.checkouts, git_tools.Grep(rev="HEAD", text="needle"))
+    assert [f.path for f in found.files] == ["long.txt", "two<U+000A>lines.txt", "we:ird-1/a:2:b.txt"]
+    [cut], [named], [plain] = (f.lines for f in found.files)
+    assert cut.text == "needle" + "x" * (git_tools.MAX_LINE_CHARS - 6) + " [cut at 500 of 1006 characters]"
+    assert named.text == "needle <U+202E>evil"
+    assert (plain.line, plain.text, plain.match) == (1, "needle", True)
+
+
+def test_grep_refuses_a_line_whose_nul_would_put_its_fields_out_of_step(repo: Repo) -> None:
+    """A file is text to git by its first 8,000 bytes: a NUL past them is printed, and refused, never read as fields."""
+    forged = b"x" * 9000 + b"\nneedle\x00" + b"7\x00forged\n"
+    (repo.path / "late.txt").write_bytes(forged)
+    git("add", ".", cwd=repo.path)
+    git("commit", "--quiet", "-m", "late nul", cwd=repo.path)
+    with pytest.raises(git_tools.Refused) as refused:
+        git_tools.grep(RUNNER, repo.checkouts, git_tools.Grep(rev="HEAD", text="needle"))
+    assert str(refused.value) == "git grep printed what canopy cannot read: name other paths"
+    # Its count alone reads no line, and so is read.
+    counted = git_tools.grep(RUNNER, repo.checkouts, git_tools.Grep(rev="HEAD", text="needle", count=True))
+    assert [(f.path, f.matched_lines) for f in counted.files] == [("late.txt", 1)]
 
 
 def test_files_lists_the_paths_at_a_commit_by_name(repo: Repo) -> None:
@@ -281,6 +423,15 @@ def test_what_a_tool_returns_is_bounded(repo: Repo) -> None:
     assert len(body) <= 300 + len(git_tools.DATA_NOTE) + 2
     assert body.endswith("\n")  # cut at a line's end
     assert note == "[cut at 300 characters: name fewer paths, or a narrower range]"
+    # grep lists the matches that fit, and says where the next start.
+    with mock.patch.object(git_tools, "MAX_CHARS", 1500):
+        fitted = git_tools.grep(RUNNER, repo.checkouts, git_tools.Grep(rev="HEAD", text="line", limit=500))
+    [file] = fitted.files
+    assert 0 < len(file.lines) < 50
+    assert len(fitted.model_dump_json()) <= 1500
+    assert (fitted.matched_lines, fitted.more) == (1000, True)
+    assert fitted.cut is not None
+    assert f"offset {len(file.lines)} lists the next" in fitted.cut
     with mock.patch.object(git_tools, "MAX_FILE_BYTES", 100), pytest.raises(git_tools.Refused) as refused:
         git_tools.show(RUNNER, repo.checkouts, git_tools.Show(rev="feature", path="big.txt"))
     assert str(refused.value) == f"big.txt is {big.stat().st_size} bytes, past the 100 this tool reads"
@@ -340,7 +491,19 @@ def test_a_file_that_is_not_text_is_refused_and_a_hidden_character_is_named(repo
         (git_tools.Grep, {"rev": "main", "text": ""}, "at least 1 character"),
         (git_tools.Grep, {"rev": "main", "text": "a\nb"}, "printable"),
         (git_tools.Grep, {"rev": "main", "text": "x", "paths": ["../x"]}, "no `..`"),
-        (git_tools.Grep, {"rev": "main", "text": "x", "regex": True}, "Extra inputs are not permitted"),
+        (git_tools.Grep, {"rev": "main", "text": "x", "before": 2}, "Extra inputs are not permitted"),
+        (git_tools.Grep, {"rev": "main", "text": "\\d+", "regex": True}, "regex is POSIX extended"),
+        (git_tools.Grep, {"rev": "main", "text": "\\bretry", "regex": True}, "set word for \\b"),
+        (git_tools.Grep, {"rev": "main", "text": "(a)\\1", "regex": True}, "no backreference"),
+        (git_tools.Grep, {"rev": "main", "text": "(?i)x", "regex": True}, "(? group"),
+        (git_tools.Grep, {"rev": "main", "text": "a.*?b", "regex": True}, "lazy *?"),
+        (git_tools.Grep, {"rev": "main", "text": "a\\", "regex": True}, "before punctuation"),
+        (git_tools.Grep, {"rev": "main", "text": "x", "context": git_tools.MAX_CONTEXT + 1}, "less than or equal"),
+        (git_tools.Grep, {"rev": "main", "text": "x", "limit": 0}, "greater than or equal to 1"),
+        (git_tools.Grep, {"rev": "main", "text": "x", "limit": git_tools.MAX_GREP_LIMIT + 1}, "less than or equal"),
+        (git_tools.Grep, {"rev": "main", "text": "x", "offset": -1}, "greater than or equal to 0"),
+        (git_tools.Grep, {"rev": "main", "text": "x", "count": "yes"}, "valid boolean"),
+        (git_tools.Grep, {"rev": "main", "text": "x", "name": "a\tb"}, "printable"),
         (git_tools.Files, {"rev": "main", "name": "a\tb"}, "printable"),
         (git_tools.Files, {"rev": "main", "paths": ["/etc"]}, "never starts with"),
         (git_tools.Diff, {"base": "main", "head": "feature", "stat": "yes"}, "valid boolean"),
@@ -447,7 +610,9 @@ def test_nothing_the_repository_names_runs(repo: Repo, tmp_path: Path) -> None:
     assert git_tools.merge_base(RUNNER, at, git_tools.MergeBase(base="main", head=signed)) == repo.base
     assert len(git_tools.log(RUNNER, at, git_tools.Log(range=signed, search="hello")).commits) == 1
     assert git_tools.blame(RUNNER, at, git_tools.Blame(rev=signed, path="notes.md", start=1, end=1)).endswith("hello")
-    assert git_tools.grep(RUNNER, at, git_tools.Grep(rev=signed, text="hello")).endswith("notes.md:1:hello")
+    assert listed(git_tools.grep(RUNNER, at, git_tools.Grep(rev=signed, text="hello", context=1))) == [
+        "notes.md:1:hello",
+    ]
     assert git_tools.diff(RUNNER, at, git_tools.Diff(base="main", head=signed, stat=True)).endswith("retry.py")
     assert git_tools.files(RUNNER, at, git_tools.Files(rev=signed)).endswith("retry.py")
     past = git_tools.Blame(rev=signed, path="notes.md", start=1, end=1, moves=True, ignore_whitespace=True)
@@ -496,3 +661,12 @@ def test_the_tools_are_named_as_the_definitions_name_them() -> None:
         "canopy_git_files",
     ]
     assert git_tools.inherited(["GIT_DIR", "GIT_EXTERNAL_DIFF", "HOME", "XGIT"]) == {"GIT_DIR", "GIT_EXTERNAL_DIFF"}
+
+
+def listed(found: git_tools.Matches) -> list[str]:
+    """Each line `grep` listed as git's text prints it: `path:line:text` for a match, `path-line-text` for context."""
+    return [
+        f"{file.path}{':' if line.match else '-'}{line.line}{':' if line.match else '-'}{line.text}"
+        for file in found.files
+        for line in file.lines
+    ]
