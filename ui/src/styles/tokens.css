@@ -101,6 +101,14 @@
     --check-3: oklch(0.6 0.13 85);
     --check-4: oklch(0.55 0.15 5);
 
+    /* The Reviews page's first reviews by day (src/lib/review-report.ts): a ramp by how long each waited, the quickest
+     * lightest, cool hues apart from the status greens and reds, so a slow review never reads as a failure. Fills,
+     * never text. */
+    --wait-1: oklch(0.62 0.1 175);
+    --wait-2: oklch(0.56 0.11 200);
+    --wait-3: oklch(0.5 0.12 230);
+    --wait-4: oklch(0.44 0.14 260);
+
     /* A transcript's context chart (src/components/context-chart.tsx), as fills: what a model call carried from the
      * one before it, or the runtime's own overhead, in a neutral; what it added, canopy's prompt first, in a hue. */
     --context-carried: oklch(0.6 0.03 275);
@@ -231,6 +239,11 @@
     --check-2: oklch(0.74 0.1 215);
     --check-3: oklch(0.82 0.13 85);
     --check-4: oklch(0.72 0.14 5);
+
+    --wait-1: oklch(0.86 0.1 175);
+    --wait-2: oklch(0.79 0.11 200);
+    --wait-3: oklch(0.72 0.12 230);
+    --wait-4: oklch(0.65 0.14 260);
 
     --context-carried: oklch(0.58 0.035 270);
     --context-added: oklch(0.78 0.12 195);
@@ -725,6 +738,10 @@
     --color-check-3: var(--check-3);
     --color-check-4: var(--check-4);
     --color-check-other: var(--check-other);
+    --color-wait-1: var(--wait-1);
+    --color-wait-2: var(--wait-2);
+    --color-wait-3: var(--wait-3);
+    --color-wait-4: var(--wait-4);
     --color-context-carried: var(--context-carried);
     --color-context-added: var(--context-added);
 

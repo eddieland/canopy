@@ -163,6 +163,13 @@ export const GHOST_TIPS = {
         'Grimoire: a cooldown is a resume told to wait for its checks. Patience is a weapon.',
         'Dear Traveler, a check went green on the next head. Took a few tries. Like most of my revives.',
     ],
+    '/reports/reviews': [
+        'Eyes up, Guardian. A review requested. The wait begins.',
+        'Field report: changes requested. The Cabal call that diplomacy.',
+        'Grimoire: a trusted reviewer is a fireteam member. Everyone else waits at the gate.',
+        "Scanning... first review in under an hour. That's a raid-ready reviewer.",
+        "Dear Traveler, a feedback plan, approved by the planner itself. Bold. I've seen bolder.",
+    ],
     '/workspace/ticks/': [
         "Eyes up, Guardian. Between two ticks there's a tock. Nobody has survived seeing one.",
         'Grimoire: an idle tick is the overseer looking at everything and choosing a nap.',

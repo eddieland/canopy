@@ -1026,6 +1026,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get who reviewed over the last days
+         * @description Who reviewed the PRs canopy tracked, how soon first reviews came, the feedback rounds, and canopy's reviewer.
+         */
+        get: operations["getReviewsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/review-requests": {
         parameters: {
             query?: never;
@@ -7835,6 +7855,91 @@ export type components = {
             type: "review_requests.updated";
         };
         /**
+         * ReviewsDay
+         * @description One local day of the window: the first reviews that arrived on it, by how long each waited.
+         */
+        ReviewsDay: {
+            /**
+             * Day
+             * @description The day, `YYYY-MM-DD`, in the local time of the machine canopy runs on.
+             */
+            day: string;
+            /**
+             * First Reviews
+             * @description Its first reviews by wait: under an hour, one to four hours, four hours to a day, and a day or more.
+             */
+            first_reviews: number[];
+            /**
+             * Median Wait Hours
+             * @description Their median wait, in hours; None with none.
+             */
+            median_wait_hours: number | null;
+            /**
+             * Start
+             * Format: date-time
+             * @description When it starts: its local midnight, so a page can write it in its own zone.
+             */
+            start: string;
+        };
+        /**
+         * ReviewsDismissals
+         * @description The findings of canopy's reviews the operator dismissed in the window, for one reason.
+         */
+        ReviewsDismissals: {
+            /**
+             * Findings
+             * @description How many.
+             */
+            findings: number;
+            /**
+             * Reason
+             * @description `wrong`, `intentional`, `not_worth_it`, or `out_of_scope`; None for a dismissal from before canopy asked.
+             */
+            reason: string | null;
+        };
+        /**
+         * ReviewsDrafts
+         * @description The drafts of canopy's reviews made in the window that stand at one status (DESIGN §34).
+         */
+        ReviewsDrafts: {
+            /**
+             * Drafts
+             * @description How many.
+             */
+            drafts: number;
+            /**
+             * Status
+             * @description Where they stand: `published`, `discarded`, `waiting`, `staged`, `publishing`, or `unconfirmed`.
+             */
+            status: string;
+        };
+        /**
+         * ReviewsEffort
+         * @description The window's feedback plans of one effort as their planner judged it, beside the resumes that followed.
+         */
+        ReviewsEffort: {
+            /**
+             * Effort
+             * @description `small`, `medium`, or `large`; None for the plans whose planner gave no estimate.
+             */
+            effort: string | null;
+            /**
+             * Plans
+             * @description The plans.
+             */
+            plans: number;
+            /**
+             * Resume Cost Usd
+             * @description What those resumes cost, in US dollars; None when none reported a cost.
+             */
+            resume_cost_usd: number | null;
+            /**
+             * Resumes
+             * @description The `resume` runs that went ahead on them.
+             */
+            resumes: number;
+        };
+        /**
          * ReviewSendRequest
          * @description Some of a review run's findings to send to a worker, by number, with the submission id the form drew.
          */
@@ -7880,6 +7985,309 @@ export type components = {
              * @description The ticket the message went to.
              */
             ticket_key: string;
+        };
+        /**
+         * ReviewsPullRequest
+         * @description A PR in the window: its feedback in it, how soon its first review came, and what answering cost.
+         */
+        ReviewsPullRequest: {
+            /**
+             * Changes Requested
+             * @description Of those, the ones that asked for changes.
+             */
+            changes_requested: number;
+            /**
+             * Comments
+             * @description Its comments made in the window, from people other than its author and not bots.
+             */
+            comments: number;
+            /**
+             * Cost Usd
+             * @description What those plans' runs and the resumes that went ahead on them cost, in US dollars; None when none reported.
+             */
+            cost_usd: number | null;
+            /**
+             * First Review At
+             * @description When the first review at or after `waiting_since` came, in the window or before it; None without a start, or
+             *     with no review yet.
+             */
+            first_review_at: string | null;
+            /**
+             * First Review Hours
+             * @description From `waiting_since` to `first_review_at`, in hours; None without both.
+             */
+            first_review_hours: number | null;
+            /**
+             * Hours To Merge
+             * @description From `ready_at` to `merged_at`, in hours; None without both.
+             */
+            hours_to_merge: number | null;
+            /**
+             * Merged At
+             * @description When it merged, as GitHub says; None while open, or where the reader kept none.
+             */
+            merged_at: string | null;
+            /**
+             * Phase
+             * @description Its unit's phase (DESIGN §7); None for a PR no unit of the loop's has.
+             */
+            phase: string | null;
+            /**
+             * Ready At
+             * @description When it last became ready for review, as GitHub says; None where the reader kept none.
+             */
+            ready_at: string | null;
+            /**
+             * Reviews
+             * @description Its reviews made in the window, from people other than its author and not bots.
+             */
+            reviews: number;
+            /**
+             * Rounds
+             * @description The feedback plans made in the window that read it.
+             */
+            rounds: number;
+            /**
+             * Ticket Key
+             * @description The ticket that owns it: its unit's, else the ticket of the first run that named it.
+             */
+            ticket_key: string;
+            /**
+             * Url
+             * @description The PR.
+             */
+            url: string;
+            /**
+             * Waiting Since
+             * @description When it began waiting on a review, as GitHub says: the first review asked for once it was ready, or when it was
+             *     ready; None where the reader kept neither, as for a PR read before canopy kept them, or a draft.
+             */
+            waiting_since: string | null;
+        };
+        /**
+         * ReviewsReport
+         * @description Where the window's review feedback came from, how long it took, and what answering it cost.
+         */
+        ReviewsReport: {
+            /**
+             * Canopy Trusted
+             * @description Whether `trust.trusted_reviewers` names `canopy:review`, so a worker addresses canopy's own findings unasked.
+             */
+            canopy_trusted: boolean;
+            /**
+             * Days
+             * @description How many local days the window holds, today's so far included.
+             */
+            days: number;
+            /**
+             * Dismissals
+             * @description The most first.
+             */
+            dismissals: components["schemas"]["ReviewsDismissals"][];
+            /**
+             * Drafts
+             * @description The most first.
+             */
+            drafts: components["schemas"]["ReviewsDrafts"][];
+            /**
+             * Efforts
+             * @description `small` to `large`, then no estimate; only those with a plan.
+             */
+            efforts: components["schemas"]["ReviewsEffort"][];
+            /**
+             * First Reviews
+             * @description The first reviews that arrived in the window on a PR with a start, timed on GitHub's clock.
+             */
+            first_reviews: number;
+            /**
+             * Median First Review Hours
+             * @description Their median wait, in hours; None with none.
+             */
+            median_first_review_hours: number | null;
+            /**
+             * Per Day
+             * @description Every day of the window, oldest first.
+             */
+            per_day: components["schemas"]["ReviewsDay"][];
+            /**
+             * Pull Requests
+             * @description The window's PRs, the one a run named last first.
+             */
+            pull_requests: components["schemas"]["ReviewsPullRequest"][];
+            /**
+             * Review Runs
+             * @description By purpose, then by status.
+             */
+            review_runs: components["schemas"]["ReviewsRunCount"][];
+            /**
+             * Reviewers
+             * @description The most reviews first.
+             */
+            reviewers: components["schemas"]["ReviewsReviewer"][];
+            /**
+             * Reviews
+             * @description The reviews made in the window on its PRs.
+             */
+            reviews: number;
+            /**
+             * Rounds
+             * @description The newest first.
+             */
+            rounds: components["schemas"]["ReviewsRound"][];
+            /**
+             * Since
+             * Format: date-time
+             * @description When the window starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: local midnight after today.
+             */
+            until: string;
+            /**
+             * Untimed
+             * @description The window's PRs reviewed in it that have no start, read before canopy kept GitHub's times or a draft: counted
+             *     apart, never in a median.
+             */
+            untimed: number;
+            /**
+             * Waiting
+             * @description The window's open PRs that began waiting on a review and have none yet.
+             */
+            waiting: number;
+        };
+        /**
+         * ReviewsReviewer
+         * @description Someone who left feedback in the window on its PRs, by login.
+         */
+        ReviewsReviewer: {
+            /**
+             * Author
+             * @description Their login on the host.
+             */
+            author: string;
+            /**
+             * Changes Requested
+             * @description Of those, the ones that asked for changes.
+             */
+            changes_requested: number;
+            /**
+             * Comments
+             * @description Their comments made in the window.
+             */
+            comments: number;
+            /**
+             * Median Wait Hours
+             * @description The median, over the PRs they reviewed that have a start, of the wait from it to their first review at or after
+             *     it, in hours; None with no such PR.
+             */
+            median_wait_hours: number | null;
+            /**
+             * Pull Requests
+             * @description The PRs they reviewed.
+             */
+            pull_requests: number;
+            /**
+             * Reviews
+             * @description Their reviews made in the window.
+             */
+            reviews: number;
+            /**
+             * Trusted
+             * @description Whether `trust.trusted_reviewers` names them, so a worker may address their feedback unasked.
+             */
+            trusted: boolean;
+        };
+        /**
+         * ReviewsRound
+         * @description A feedback plan made in the window (DESIGN §32), with the resumes that went ahead on it.
+         */
+        ReviewsRound: {
+            /**
+             * Approved Channel
+             * @description How it was approved: by the operator through `web` or `cli`, or by the `planner` that judged it needs no
+             *     review; None while not approved.
+             */
+            approved_channel: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When it was written.
+             */
+            created_at: string;
+            /**
+             * Effort
+             * @description How much work its planner judged it, `small`, `medium`, or `large`; None when it gave no estimate.
+             */
+            effort: string | null;
+            /**
+             * Plan Cost Usd
+             * @description What its own run cost, in US dollars; None when it reported none.
+             */
+            plan_cost_usd: number | null;
+            /**
+             * Plan Id
+             * @description The plan.
+             */
+            plan_id: number;
+            /**
+             * Pull Requests
+             * @description The PRs it read.
+             */
+            pull_requests: string[];
+            /**
+             * Resume Cost Usd
+             * @description What they cost, in US dollars; None when none reported a cost.
+             */
+            resume_cost_usd: number | null;
+            /**
+             * Resumes
+             * @description The `resume` runs that went ahead on it.
+             */
+            resumes: number;
+            /**
+             * Run Id
+             * @description The feedback plan run that wrote it.
+             */
+            run_id: number;
+            /**
+             * Status
+             * @description Where it stands: `proposed`, `approved`, or `superseded`.
+             */
+            status: string;
+            /**
+             * Ticket Key
+             * @description Its ticket.
+             */
+            ticket_key: string;
+        };
+        /**
+         * ReviewsRunCount
+         * @description canopy's review runs that started in the window, of one purpose and one status.
+         */
+        ReviewsRunCount: {
+            /**
+             * Cost Usd
+             * @description What they cost, in US dollars; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /**
+             * Purpose
+             * @description Why they ran: `own` for a PR of a ticket's, `request` for one the operator asked for, `query` for the rest.
+             */
+            purpose: string;
+            /**
+             * Runs
+             * @description How many.
+             */
+            runs: number;
+            /**
+             * Status
+             * @description How they ended, or `running`.
+             */
+            status: string;
         };
         /**
          * ReviewSummary
@@ -14528,6 +14936,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonthlyReport"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getReviewsReport: {
+        parameters: {
+            query?: {
+                /** @description How many local days to read, today's so far included: 1 to 366. */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewsReport"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

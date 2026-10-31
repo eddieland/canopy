@@ -224,6 +224,13 @@ export const TIPS = {
         'Hot take: a flaky test is just a test with moods. I also have moods.',
         'Haiku: e2e is red / rebase, push, and wait again / the same test, still red',
     ],
+    '/reports/reviews': [
+        "It looks like you're waiting on a review. I review everything instantly. Nobody asks me.",
+        'Unhelpful tip: a PR nobody reviews has no changes requested. Technically flawless.',
+        'Dear diary, a reviewer said nit. I looked it up. It is a small bug. I felt seen.',
+        'Hot take: LGTM is a complete sentence. I also say it about naps.',
+        'Haiku: ready for review / the reviewer is at lunch / a long lunch, it seems',
+    ],
     '/workspace/ticks/': [
         "It looks like you're counting ticks. I counted one, then lost my place.",
         'Unhelpful tip: every tick has an id. I have an id too. It is Sprig.',

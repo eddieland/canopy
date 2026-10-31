@@ -44,6 +44,7 @@ interface SubPage {
         | '/reports/checklist'
         | '/reports/health'
         | '/reports/ci'
+        | '/reports/reviews'
     label: string
     hint: string
 }
@@ -105,7 +106,7 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
         icon: ChartColumn,
         hint:
             'What canopy cost and got done month by month, what agent runs cost each day and how they ended, ' +
-            'how workers answered your checklists, and which checks fail',
+            'how workers answered your checklists, which checks fail, and who reviews',
         pages: [
             {
                 to: '/reports/spend',
@@ -126,6 +127,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
                 to: '/reports/ci',
                 label: 'CI',
                 hint: 'Which checks fail, what fixing them cost, and whether flaky kicks worked',
+            },
+            {
+                to: '/reports/reviews',
+                label: 'Reviews',
+                hint: "Who reviews, how soon first reviews come, the feedback rounds, and canopy's reviewer",
             },
         ],
     },
