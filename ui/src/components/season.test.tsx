@@ -2,6 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { SeasonDecoration } from '@/components/season'
+import { SEASONS } from '@/lib/seasons'
 
 afterEach(cleanup)
 
@@ -18,8 +19,12 @@ describe('SeasonDecoration', () => {
         expect(screen.queryByTestId('buddy-season-air')).toBeNull()
     })
 
-    it('puts nothing in the air in a season with nothing to hang', () => {
-        render(<SeasonDecoration id="valentines" aloft />)
-        expect(screen.queryByTestId('buddy-season-air')).toBeNull()
+    it('brings every season company on the floor and in the air', () => {
+        for (const { id } of SEASONS) {
+            render(<SeasonDecoration id={id} aloft />)
+            expect(screen.getByTestId('buddy-season').dataset['season']).toBe(id)
+            expect(screen.getByTestId('buddy-season-air')).toBeDefined()
+            cleanup()
+        }
     })
 })

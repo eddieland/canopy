@@ -1,19 +1,24 @@
 import { useId } from 'react'
-import type { ReactNode } from 'react'
 
+import { Piece } from '@/components/season-pieces'
+import { HEART, SCENES, TWINKLE } from '@/components/season-scenes'
 import type { SeasonId } from '@/lib/seasons'
-import { cn } from '@/lib/utils'
 
 /**
- * What stands beside Sprig in a season (src/lib/seasons.ts), on the same floor as its keyboard, each piece over a soft
- * shadow: a party popper bursting with confetti, a glossy heart with a smaller one behind, a veined shamrock, a painted
- * egg in the grass, a carved jack-o'-lantern whose candle flickers, a steaming pumpkin pie, or a gift with a bow.
+ * What stands beside Sprig in a season (src/lib/seasons.ts), on the same floor as its keyboard: the season's drawing,
+ * and the company it brings (src/components/season-scenes.tsx).
  *
- * Some seasons bring company (`SCENES`). At Halloween a tombstone and a black cat that blinks stand by the
- * jack-o'-lantern, and overhead a cobweb hangs in the corner, a spider lets itself down from it and climbs back, and a
- * bat flaps by. At Thanksgiving a turkey fans its tail beside the pie. What hangs or flies is set only when `aloft`:
- * in a slot too short for Sprig's bubble, Sprig stands over the blocks above, and the air over the floor would cover
- * them. Decoration only, hidden from a screen reader.
+ * - New Year: a party popper bursting with confetti, a bottle of bubbly and a flute of it, under fireworks.
+ * - Valentine's: a glossy heart, a rose in a bud vase, and a love letter, with little hearts floating up.
+ * - St Patrick's: a veined shamrock, a pot of gold under a rainbow, and a leprechaun's hat.
+ * - Spring: a painted egg in the grass, a bunny that blinks, and a tulip, with butterflies about.
+ * - Halloween: a jack-o'-lantern whose candle flickers, a tombstone, and a black cat, under a cobweb with its spider,
+ *   and a bat flapping by.
+ * - Thanksgiving: a steaming pumpkin pie, a turkey, and two gourds, with leaves coming down.
+ * - Winter: a gift with a bow, a tree whose lights twinkle, and a snowman, in falling snow.
+ *
+ * What hangs or flies is set only when `aloft`: in a slot too short for Sprig's bubble, Sprig stands over the blocks
+ * above, and the air over the floor would cover them. Decoration only, hidden from a screen reader.
  */
 export function SeasonDecoration({ id, aloft }: { id: SeasonId; aloft: boolean }) {
     const scene = SCENES[id]
@@ -27,23 +32,13 @@ export function SeasonDecoration({ id, aloft }: { id: SeasonId; aloft: boolean }
             <Piece width={28} className="w-10">
                 {DRAWINGS[id]}
             </Piece>
-            {scene?.floor}
-            {aloft && scene?.air !== undefined ? (
+            {scene.floor}
+            {aloft ? (
                 <div data-testid="buddy-season-air" className="pointer-events-none absolute inset-0">
                     {scene.air}
                 </div>
             ) : null}
         </div>
-    )
-}
-
-/** One piece on the floor: a drawing 26 units tall and `width` wide, over its shadow, as tall as the others. */
-function Piece({ width, className, children }: { width: number; className: string; children: ReactNode }) {
-    return (
-        <svg viewBox={`0 0 ${width} 26`} className={cn('mb-1 h-9 shrink-0', className)}>
-            <ellipse cx={width / 2} cy="25" rx={width / 2 - 4} ry="1" className="fill-buddy-pupil opacity-15" />
-            {children}
-        </svg>
     )
 }
 
@@ -59,12 +54,6 @@ const FACE = [
 const LEAFLET = 'M14 15 C9 13 8 7 11 6 C13 5.5 14 7 14 8 C14 7 15 5.5 17 6 C20 7 19 13 14 15 Z'
 /** The right half of a leaflet, which the light misses. */
 const LEAFLET_SHADE = 'M14 15 C19 13 20 7 17 6 C15 5.5 14 7 14 8 Z'
-
-/** A heart, the size of the drawing. */
-const HEART = 'M14 24 C6 18 3 14 3 10 A5.5 5.5 0 0 1 14 7.5 A5.5 5.5 0 0 1 25 10 C25 14 22 18 14 24 Z'
-
-/** A four-pointed twinkle of light, centered on 0 0, a unit across each way. */
-const TWINKLE = 'M0 -1 Q0.15 -0.15 1 0 Q0.15 0.15 0 1 Q-0.15 0.15 -1 0 Q-0.15 -0.15 0 -1 Z'
 
 /** An egg standing on the floor, wider below its middle. */
 const EGG = [
@@ -339,239 +328,6 @@ const DRAWINGS: Record<SeasonId, React.JSX.Element> = {
             <path d={TWINKLE} transform="translate(23.6 3.4) scale(1.8)" className="fill-buddy-hat-gold" />
         </>
     ),
-}
-
-/** What a season brings besides its drawing: more on the floor, and what hangs or flies over it. */
-interface Scene {
-    /** Pieces on the floor beside the season's drawing. */
-    floor: React.JSX.Element
-    /** What hangs or flies over the floor, set only where Sprig has the room above it. */
-    air?: React.JSX.Element
-}
-
-/** The spokes of the cobweb in the corner, in degrees from the top edge round toward the side. */
-const WEB_SPOKES = [3, 24, 45, 66, 87]
-
-/** A point on the cobweb, `radius` out from the corner along the spoke at `degrees`. */
-function webPoint(radius: number, degrees: number): string {
-    const angle = (degrees * Math.PI) / 180
-    return `${(30 - radius * Math.cos(angle)).toFixed(2)} ${(radius * Math.sin(angle)).toFixed(2)}`
-}
-
-/** A cobweb strung in a top-right corner: its spokes, then its rings, each sagging toward the corner between spokes. */
-const WEB = [
-    ...WEB_SPOKES.map((degrees) => `M30 0 L${webPoint(29, degrees)}`),
-    ...[6, 12, 18, 24].map((radius) =>
-        [
-            `M${webPoint(radius, WEB_SPOKES[0] ?? 0)}`,
-            ...WEB_SPOKES.slice(1).map(
-                (degrees) => `Q${webPoint(radius * 0.82, degrees - 10.5)} ${webPoint(radius, degrees)}`,
-            ),
-        ].join(' '),
-    ),
-].join(' ')
-
-/** One side's four legs of the spider, from its body out; the other side is the same, mirrored. */
-const SPIDER_LEGS = [
-    'M5 15.6 Q2.6 13.4 1.2 15.2',
-    'M5 16.4 Q2.4 15.6 0.8 17.4',
-    'M5 17.2 Q2.6 17.6 1.6 19.8',
-    'M5.2 17.8 Q3.6 19.2 3.2 21.4',
-].join(' ')
-
-/** A bat's left wing, scalloped along its trailing edge, from the body out; the right is the same, mirrored. */
-const BAT_WING =
-    'M12 6 C10 3 7 2.4 4 3 C3 4 1.6 4.6 0.4 4.4 C1.6 5.6 2 7 2 8.4 C3.2 7.6 4.4 7.8 5.2 8.8 C6 7.8 7.4 7.6 8.6 8.4 Z'
-
-/** A turkey's tail feathers, fanned from behind its body: their angles from upright. */
-const FEATHERS = [-72, -48, -24, 0, 24, 48, 72]
-
-const SCENES: Partial<Record<SeasonId, Scene>> = {
-    halloween: {
-        floor: (
-            <>
-                <Piece width={18} className="w-6">
-                    {/* A tombstone, settled a little crooked, cracked at its shoulder. */}
-                    <g transform="rotate(-5 9 25)">
-                        <path
-                            d="M3 25 L3 10 C3 5 6 3 9 3 C12 3 15 5 15 10 L15 25 Z"
-                            className="fill-buddy-ghost-facet"
-                        />
-                        <path
-                            d="M9 3 C12 3 15 5 15 10 L15 25 L12.6 25 L12.6 10 C12.6 6 11 3.6 9 3 Z"
-                            className="fill-buddy-pupil opacity-20"
-                        />
-                        <path
-                            d="M4.4 11 C4.4 6.8 6.4 4.6 9 4.4"
-                            fill="none"
-                            strokeWidth="0.6"
-                            strokeLinecap="round"
-                            className="stroke-buddy-eye opacity-30"
-                        />
-                        <text
-                            x="8.6"
-                            y="13.4"
-                            textAnchor="middle"
-                            fontSize="4.4"
-                            fontWeight="700"
-                            className="fill-buddy-pupil opacity-50"
-                        >
-                            RIP
-                        </text>
-                        <g strokeWidth="0.6" strokeLinecap="round" className="stroke-buddy-pupil opacity-30">
-                            <path d="M5.6 16.4 L11.6 16.4" />
-                            <path d="M6.4 18.6 L10.8 18.6" />
-                        </g>
-                        <path
-                            d="M12.6 4.6 L11.6 6.6 L12.8 7.8 L12 9.8"
-                            fill="none"
-                            strokeWidth="0.45"
-                            strokeLinejoin="round"
-                            className="stroke-buddy-pupil opacity-50"
-                        />
-                    </g>
-                    <g className="fill-buddy-leaf">
-                        <path d="M1.6 25 L2.8 21.6 L4 25 Z" />
-                        <path d="M8 25 L9.4 22.6 L10.4 25 Z" />
-                        <path d="M14 25 L15.6 21.8 L16.6 25 Z" />
-                    </g>
-                    <g className="fill-buddy-leaf-shade">
-                        <path d="M3.4 25 L5 22.4 L5.6 25 Z" />
-                        <path d="M11.4 25 L12.4 23 L13.4 25 Z" />
-                    </g>
-                </Piece>
-                <Piece width={21} className="w-[1.8rem]">
-                    {/* A black cat sitting up, its tail curled round, its eyes catching the candlelight. */}
-                    <path
-                        d="M14 24.4 C19 24.6 19.8 18.4 17.6 15.4 C16.8 14.2 17.6 12.8 18.8 13.6"
-                        fill="none"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        className="stroke-buddy-hat"
-                    />
-                    <path d="M5 25 C4 20 5.4 15 10 14.4 C14.6 15 16 20 15 25 Z" className="fill-buddy-hat" />
-                    <path
-                        d="M6 23.6 C5.6 19.8 6.6 16.6 9 15.6"
-                        fill="none"
-                        strokeWidth="0.5"
-                        strokeLinecap="round"
-                        className="stroke-buddy-eye opacity-20"
-                    />
-                    <g className="fill-buddy-hat">
-                        <path d="M5.6 9.8 L5.8 4.6 L9 7.4 Z" />
-                        <path d="M14.4 9.8 L14.2 4.6 L11 7.4 Z" />
-                        <ellipse cx="10" cy="10.8" rx="4.8" ry="4" />
-                    </g>
-                    <g className="fill-buddy-hat-band opacity-60">
-                        <path d="M6.4 8 L6.5 5.8 L8 7.1 Z" />
-                        <path d="M13.6 8 L13.5 5.8 L12 7.1 Z" />
-                    </g>
-                    <g className="animate-buddy-blink">
-                        <ellipse cx="8.1" cy="10.4" rx="1.15" ry="1.25" className="fill-buddy-hat-gold" />
-                        <ellipse cx="11.9" cy="10.4" rx="1.15" ry="1.25" className="fill-buddy-hat-gold" />
-                        <ellipse cx="8.1" cy="10.4" rx="0.3" ry="0.95" className="fill-buddy-pupil" />
-                        <ellipse cx="11.9" cy="10.4" rx="0.3" ry="0.95" className="fill-buddy-pupil" />
-                    </g>
-                    <path d="M9.4 12.2 L10.6 12.2 L10 12.9 Z" className="fill-buddy-hat-band" />
-                    <g strokeWidth="0.25" strokeLinecap="round" className="stroke-buddy-ghost-shell opacity-60">
-                        <path d="M8.4 12.6 L4.6 12" />
-                        <path d="M8.4 13 L4.8 13.6" />
-                        <path d="M11.6 12.6 L15.4 12" />
-                        <path d="M11.6 13 L15.2 13.6" />
-                    </g>
-                </Piece>
-            </>
-        ),
-        air: (
-            <>
-                <svg viewBox="0 0 30 30" className="absolute top-0 right-0 size-10">
-                    <path
-                        d={WEB}
-                        fill="none"
-                        strokeWidth="0.4"
-                        strokeLinecap="round"
-                        className="stroke-buddy-ghost-facet opacity-70"
-                    />
-                </svg>
-                {/* The spider hangs from the web's second ring, on a thread that stretches as it drops. */}
-                <svg viewBox="0 0 12 30" className="absolute top-3 right-1 h-10 w-4 overflow-visible">
-                    <path d="M6 0 L6 14" strokeWidth="0.3" className="animate-buddy-thread stroke-buddy-ghost-facet" />
-                    <g className="animate-buddy-dangle">
-                        <g fill="none" strokeWidth="0.6" strokeLinecap="round" className="stroke-buddy-hat">
-                            <path d={SPIDER_LEGS} />
-                            <path d={SPIDER_LEGS} transform="translate(12 0) scale(-1 1)" />
-                        </g>
-                        <ellipse cx="6" cy="17.6" rx="2.2" ry="2.5" className="fill-buddy-hat" />
-                        <circle cx="6" cy="14.8" r="1.5" className="fill-buddy-hat" />
-                        <ellipse cx="5.2" cy="16.8" rx="0.6" ry="0.9" className="fill-buddy-eye opacity-25" />
-                        <circle cx="5.4" cy="14.6" r="0.55" className="fill-buddy-eye" />
-                        <circle cx="6.6" cy="14.6" r="0.55" className="fill-buddy-eye" />
-                        <circle cx="5.5" cy="14.75" r="0.25" className="fill-buddy-pupil" />
-                        <circle cx="6.7" cy="14.75" r="0.25" className="fill-buddy-pupil" />
-                    </g>
-                </svg>
-                <svg viewBox="0 0 24 12" className="animate-buddy-drift absolute top-3 left-1 h-4 w-8">
-                    <g className="animate-buddy-flap fill-buddy-hat">
-                        <path d={BAT_WING} />
-                        <path d={BAT_WING} transform="translate(24 0) scale(-1 1)" />
-                    </g>
-                    <g className="fill-buddy-hat">
-                        <ellipse cx="12" cy="6.8" rx="1.8" ry="2.6" />
-                        <circle cx="12" cy="4.2" r="1.6" />
-                        <path d="M10.8 3.4 L11 1.6 L11.8 2.8 Z" />
-                        <path d="M13.2 3.4 L13 1.6 L12.2 2.8 Z" />
-                    </g>
-                    <circle cx="11.4" cy="4.1" r="0.35" className="fill-buddy-hat-gold" />
-                    <circle cx="12.6" cy="4.1" r="0.35" className="fill-buddy-hat-gold" />
-                </svg>
-            </>
-        ),
-    },
-    harvest: {
-        floor: (
-            <Piece width={26} className="w-9">
-                {/* A turkey, its tail fanned behind it in three bands, gold at the tips. */}
-                {[
-                    { length: 11, width: 2.6, color: 'fill-buddy-hat-gold' },
-                    { length: 9.2, width: 2.4, color: 'fill-buddy-ghost-pumpkin-shade' },
-                    { length: 7.2, width: 2.2, color: 'fill-buddy-ghost-vex-shade' },
-                ].map(({ length, width, color }) => (
-                    <g key={length} className={color}>
-                        {FEATHERS.map((turn) => (
-                            <ellipse
-                                key={turn}
-                                cx="13"
-                                cy={17 - length / 2}
-                                rx={width}
-                                ry={length / 2}
-                                transform={`rotate(${turn} 13 17)`}
-                            />
-                        ))}
-                    </g>
-                ))}
-                <g strokeWidth="0.6" strokeLinecap="round" className="stroke-buddy-hat-gold">
-                    <path d="M11.4 22.6 L11 25 M11 25 L10 25.2 M11 25 L11.8 25.2" />
-                    <path d="M14.6 22.6 L15 25 M15 25 L14.2 25.2 M15 25 L16 25.2" />
-                </g>
-                <ellipse cx="13" cy="18.4" rx="5" ry="5.2" className="fill-buddy-ghost-vex-shade" />
-                <ellipse cx="13" cy="19.2" rx="3.2" ry="3.6" className="fill-buddy-ghost-vex" />
-                <path
-                    d="M11 11.6 C11 14 11.4 15.6 13 15.6 C14.6 15.6 15 14 15 11.6 Z"
-                    className="fill-buddy-ghost-vex-shade"
-                />
-                <circle cx="13" cy="11" r="2.6" className="fill-buddy-ghost-vex" />
-                <circle cx="12" cy="10.4" r="0.7" className="fill-buddy-eye" />
-                <circle cx="14" cy="10.4" r="0.7" className="fill-buddy-eye" />
-                <circle cx="12.1" cy="10.5" r="0.35" className="fill-buddy-pupil" />
-                <circle cx="14.1" cy="10.5" r="0.35" className="fill-buddy-pupil" />
-                <path d="M12.2 11.6 L13.8 11.6 L13 13 Z" className="fill-buddy-hat-gold" />
-                <path
-                    d="M13.5 12.4 C14.6 13.2 14.5 15 13.5 15.2 C12.9 14.4 13.1 13.2 13.5 12.4 Z"
-                    className="fill-flair-red"
-                />
-            </Piece>
-        ),
-    },
 }
 
 /**
