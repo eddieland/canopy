@@ -77,11 +77,14 @@ its one, given the whole block, its subject none, with how it ended (`ok`, `fail
 or `abandoned`), its session, the model asked for, and its cost; `ticks` keeps writing its own columns, so no reader
 moved, and the migration back-fills a run for each past tick that ran its overseer, ending as its tick did. Chosen
 conservatively, for the operator to change: the models that served a run are still read under its tick, which holds
-while a tick makes one run. Left: stage 1's live check, and the rest of stage 2. Chosen conservatively for stage
-2: runs one at a time, every run on the overseer's one model, a subject of new work waited by the harness with no run
-once capacity is out, and a tick with a failed run closing `overseer_failed`. Open for the operator: spawning a run's
-asks as soon as it ends (recommended: not until a tick's length is measured to delay work); runs in parallel
-(recommended: not before a long queue is measured to hold up the next tick); a model per run by phase (recommended: a
-private key from phase to model beside `runtime.models`, with the ticket's override for the overseer applying to its
-runs); and whether a tick with a failed run closes `ok` with an item on that subject (recommended: yes, once M38's
-attention list is held in code).
+while a tick makes one run. Left: stage 1's live check, and the rest of stage 2, parked 2026-10-31 at the operator's
+word until M39's re-measurement, as this milestone first gated it: an estimate, not a measurement, put one run per
+subject at about 1.1 times one run's cost for 5 to 15 active tickets, and 2 to 3 times should the later runs of a
+tick miss the cache, so it buys T1's isolation and little spend; its build waits unmerged in #1831. Chosen
+conservatively for stage 2: runs one at a time, every run on the overseer's one model, a subject of new work waited by
+the harness with no run once capacity is out, and a tick with a failed run closing `overseer_failed`. Open for the
+operator: spawning a run's asks as soon as it ends (recommended: not until a tick's length is measured to delay work);
+runs in parallel (recommended: not before a long queue is measured to hold up the next tick); a model per run by phase
+(recommended: a private key from phase to model beside `runtime.models`, with the ticket's override for the overseer
+applying to its runs); and whether a tick with a failed run closes `ok` with an item on that subject (recommended: yes,
+once M38's attention list is held in code).
