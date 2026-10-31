@@ -4,7 +4,8 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.core import prompts, replies, vocab
-from canopy.core.config import PlannerApproval, load
+from canopy.core.config import load
+from canopy.core.vocab import PlannerApproval
 from canopy.infra import resources
 from tests.canopy.helpers import PROMPT_VALUES, with_rebase
 from tests.conftest import CanopyEnv

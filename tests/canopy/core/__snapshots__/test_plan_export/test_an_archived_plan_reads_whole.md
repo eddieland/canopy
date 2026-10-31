@@ -12,6 +12,7 @@ approved_at: "<time>"
 approved_channel: "planner"
 approved_reason: "One endpoint, *no* schema change."
 effort: "small"
+approved_level: "normal"
 persona: "skeptic"
 model: "anthropic/claude-x@high"
 models: ["anthropic/claude-x@high", "anthropic/claude-y"]

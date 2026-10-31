@@ -31,7 +31,16 @@ from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import conversation, db, plans, prompts, records, replies, sql
 from canopy.core.conversation import Refused
-from canopy.core.vocab import PlanEffort, PlanItem, PlanStatus, Proposal, ResumeReason, RunKind, RunStatus
+from canopy.core.vocab import (
+    PlanEffort,
+    PlanItem,
+    PlannerApproval,
+    PlanStatus,
+    Proposal,
+    ResumeReason,
+    RunKind,
+    RunStatus,
+)
 from canopy.infra import lock
 from canopy.infra.text import printable
 from canopy.runs import feedback_items
@@ -145,23 +154,25 @@ def record(
     snapshot: feedback_items.Snapshot,
     event: Callable[[int, str | None], db.Event | None] | None = None,
     no_review: str | None = None,
+    level: PlannerApproval = PlannerApproval.OFF,
     effort: PlanEffort | None = None,
 ) -> records.FeedbackPlan:
     """Record the feedback plan run `run_id` wrote for `key`, after its file, as `proposed`, with its items.
 
     It supersedes the ticket's current feedback plan, waiting, approved, or spent. `snapshot` is what the run's read saw
     of its PRs, recorded with it, so what changed on them since can be told (DESIGN §32, Planning again). `no_review` is
-    its planner's reason for saying the plan needs no review, under `policy.planner_may_approve`: the plan is then
-    recorded `approved` as the planner wrote it, the planner's approval (`plans.PLANNER`), unless it replaces one no
-    `resume` has spent, which waited on the operator or was approved by them (DESIGN §32). `event` builds its event from
-    its id and that reason when it held, recorded in the same transaction (§20). `effort` is its planner's
-    estimate of the work, kept to show beside it.
+    its planner's reason for saying the plan needs no review, and `level` the operator's `policy.planner_may_approve`:
+    at any level but `off`, the plan is then recorded `approved` as the planner wrote it, the planner's approval
+    (`plans.PLANNER`), with the level it was approved under, unless it replaces one no `resume` has spent, which waited
+    on the operator or was approved by them (DESIGN §32). `event` builds its event from its id and that reason when it
+    held, recorded in the same transaction (§20). `effort` is its planner's estimate of the work, kept to show beside
+    it.
 
     Returns:
         The plan's row.
     """
     with db.transaction(conn):
-        reason = no_review if planner_may_approve(conn, key) else None
+        reason = no_review if level is not PlannerApproval.OFF and planner_may_approve(conn, key) else None
         _supersede(conn, key)
         approved = reason is not None
         now = db.now()
@@ -177,6 +188,7 @@ def record(
             approved_at=now if approved else None,
             approved_channel=plans.PLANNER if approved else None,
             approved_reason=reason,
+            approved_level=level if approved else None,
             effort=effort,
         ).returned(conn)
         records.insert_rows(
@@ -754,6 +766,7 @@ def _approved(
             approved_at=db.now(),
             approved_channel=channel,
             approved_reason=None,
+            approved_level=None,
             approved_message_id=replied.message_id,
         )
         .where("id = ?", plan.id)

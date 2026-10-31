@@ -706,7 +706,8 @@ def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, 
         run_id,
         written,
         event=outbox.plan_recorded(ctx.config, key=key, run_id=run_id),
-        no_review=parsed.no_review() if ctx.config.policy.planner_approves() else None,
+        no_review=parsed.no_review(),
+        level=ctx.config.policy.planner_may_approve,
         effort=parsed.effort,
     )
     log.info(
@@ -823,7 +824,8 @@ def _record_feedback_plan(
         matched.kept,
         snapshot=snapshot,
         event=outbox.plan_recorded(ctx.config, key=key, run_id=run_id, feedback=True),
-        no_review=parsed.no_review() if ctx.config.policy.planner_approves() else None,
+        no_review=parsed.no_review(),
+        level=ctx.config.policy.planner_may_approve,
         effort=parsed.effort,
     )
     log.info(

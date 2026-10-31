@@ -17,6 +17,7 @@ from canopy.core.vocab import (
     DraftStatus,
     PlanEffort,
     PlanItem,
+    PlannerApproval,
     PlanStatus,
     Proposal,
     ResumeReason,
@@ -451,6 +452,8 @@ def test_a_feedback_plan_its_planner_says_needs_no_review_is_approved_as_the_pla
 
     [plan] = feedback_plans.history(conn, KEY)
     assert (plan.status, plan.approved_channel, plan.approved_reason) == (PlanStatus.APPROVED, plans.PLANNER, reason)
+    # With the level it was approved under: `true` reads as `strict`.
+    assert plan.approved_level is PlannerApproval.STRICT
     # The planner's word writes no operator message: only the operator's channels write one.
     assert plan.approved_message_id is None
     rows = conn.execute("SELECT kind, fields FROM notify_events WHERE kind LIKE 'plan.%'").fetchall()

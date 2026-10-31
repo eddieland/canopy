@@ -72,6 +72,7 @@ from canopy.core.vocab import (
     Phase,
     PlanEffort,
     PlanItem,
+    PlannerApproval,
     PlanSetting,
     PlanStatus,
     PoolKind,
@@ -641,6 +642,9 @@ class Plan(Row):
     approved_reason: str | None
     #: How much work the plan is for its worker, as its planner judged; None when it gave no estimate.
     effort: PlanEffort | None
+    #: The `policy.planner_may_approve` level the harness approved it under on its planner's word; None for any other
+    #: approval, and for a planner's from before the level was recorded.
+    approved_level: PlannerApproval | None
 
 
 @dataclass(frozen=True)
@@ -671,6 +675,9 @@ class FeedbackPlan(Row):
     stale_shown: str | None
     #: The operator message its approval wrote on the ticket, naming its items; None unless the operator approved it.
     approved_message_id: int | None
+    #: The `policy.planner_may_approve` level the harness approved it under on its planner's word; None for any other
+    #: approval, and for a planner's from before the level was recorded.
+    approved_level: PlannerApproval | None
 
 
 @dataclass(frozen=True)

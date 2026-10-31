@@ -31,7 +31,7 @@ from typing import IO, TYPE_CHECKING, Literal, TypedDict
 
 from canopy.core import conversation, db, records, sql
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
-from canopy.core.vocab import PlanEffort, PlanSetting, PlanStatus, RunKind, RunStatus
+from canopy.core.vocab import PlanEffort, PlannerApproval, PlanSetting, PlanStatus, RunKind, RunStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -505,14 +505,16 @@ def record(
     *,
     event: Callable[[int, str | None], db.Event | None] | None = None,
     no_review: str | None = None,
+    level: PlannerApproval = PlannerApproval.OFF,
     effort: PlanEffort | None = None,
 ) -> records.Plan:
     """Record the plan the run `run_id` wrote for `key`, after its file, as `proposed`. It supersedes the current one.
 
-    `no_review` is its planner's reason for saying the plan needs no review, under `policy.planner_may_approve`: the
-    plan is then recorded `approved` as the planner wrote it, the planner's approval (`PLANNER`), not the operator's
-    (DESIGN §25). Unless the operator has had a word on the ticket's plan: it replaces a current plan, which they were
-    asked to approve or approved, or the ticket's own setting asks for a plan. Then it waits on them, as any plan does.
+    `no_review` is its planner's reason for saying the plan needs no review, and `level` the operator's
+    `policy.planner_may_approve`: at any level but `off`, the plan is then recorded `approved` as the planner wrote it,
+    the planner's approval (`PLANNER`), not the operator's, with the level it was approved under (DESIGN §25). Unless
+    the operator has had a word on the ticket's plan: it replaces a current plan, which they were asked to approve or
+    approved, or the ticket's own setting asks for a plan. Then it waits on them, as any plan does.
     `event` builds the plan's event from its id and that reason when it held, recorded in the same transaction (§20).
     `effort` is its planner's estimate of how much work the plan is, kept to show beside it.
 
@@ -520,7 +522,7 @@ def record(
         The plan's row.
     """
     with db.transaction(conn):
-        reason = no_review if planner_may_approve(conn, key) else None
+        reason = no_review if level is not PlannerApproval.OFF and planner_may_approve(conn, key) else None
         supersede(conn, key)
         approved = reason is not None
         now = db.now()
@@ -536,6 +538,7 @@ def record(
             approved_at=now if approved else None,
             approved_channel=PLANNER if approved else None,
             approved_reason=reason,
+            approved_level=level if approved else None,
             effort=effort,
         ).returned(conn)
         built = event(plan.id, reason) if event is not None else None
@@ -607,6 +610,7 @@ def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str
                 approved_at=db.now(),
                 approved_channel=channel,
                 approved_reason=None,
+                approved_level=None,
             )
             .where("id = ?", plan.id)
             .returned(conn)

@@ -38,7 +38,7 @@ credentials, destructive data changes, or migrations needs review, and the ticke
 costs no run of its own, as a judge before the plan did (D126): the planner has read the ticket and the code. It fails
 closed: only a `done` result that says so with a reason counts, and a plan that replaces a current one, or a ticket
 whose own setting asks for a plan, waits on the operator, who has had a word on it. The sinks hear of it (§20); the
-plan and its reason stay to read.
+plan, its reason, and the level it was approved under stay to read.
 
 ### The prompt
 

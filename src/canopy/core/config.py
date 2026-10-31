@@ -28,7 +28,7 @@ import stat
 import tomllib
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from enum import Enum, StrEnum
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, get_args
 from urllib.parse import urlsplit
@@ -49,7 +49,7 @@ from pydantic import (
 )
 
 from canopy.core import agent_models, bash_allows, chore_result, contract, hostgit
-from canopy.core.vocab import MemoryMode, PoolKind, ReplyMode
+from canopy.core.vocab import MemoryMode, PlannerApproval, PoolKind, ReplyMode
 from canopy.infra import procs
 from canopy.runtime import agents, invocation
 from canopy.runtime.agents import McpTools
@@ -568,22 +568,6 @@ class Tracker(Section):
         if default is None:
             return McpTools(server, tuple(allowed))
         return McpTools(server, tuple(allowed), default.create, default.pr_writes)
-
-
-class PlannerApproval(StrEnum):
-    """`policy.planner_may_approve`: how readily a planner may say its plan needs no review (DESIGN §25).
-
-    Each level but `off` renders its own bar in the planner's prompt; none relaxes the exclusions every level holds.
-    """
-
-    #: The planner is never asked: every plan waits on the operator.
-    OFF = "off"
-    #: Only a plan that leaves the operator nothing to judge.
-    STRICT = "strict"
-    #: A plan that follows the code's own patterns, within the scope the ticket settles.
-    NORMAL = "normal"
-    #: The planner's confident best reading, unless it leaves a real question open.
-    LENIENT = "lenient"
 
 
 def _approval_level(value: object) -> object:
