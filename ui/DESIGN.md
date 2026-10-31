@@ -744,8 +744,8 @@ side.
   preview is `tab`, Write and Preview at the toolbar's end, the preview at the text's height; `live`, beside the text
   once the box is `@2xl` wide, under it before; or `off`. A label names it through `htmlFor`, never around it. A field
   takes it when what it sends is later drawn by `RichText`, so the preview tells the truth: a reply, a task's text, and
-  a feedback plan's words, which land in a conversation. One drawn as plain text (a plan comment, the notice, a review
-  request's notes) stays a `Textarea` until it is drawn so.
+  a feedback plan's words, which land in a conversation, and a comment or reply on a plan, which its card draws so. One
+  drawn as plain text (the notice, a review request's notes) stays a `Textarea` until it is drawn so.
 - **`PanelSkeleton`** (`src/components/panel.tsx`): what a panel shows while its data has not arrived at all, `rows`
   shimmering bars, each shorter than the last. It takes the minimum height its content will, so nothing moves when
   the data lands: `min-h-72` for a page's main panel or a list that runs long (tickets, runs, ticks), `min-h-40` for
