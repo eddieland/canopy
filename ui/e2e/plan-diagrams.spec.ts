@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { plan, settled, signIn } from './helpers.ts'
+import { clickAtEnd, clickAtStart, plan, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -52,8 +52,7 @@ test('the caret moved into a diagram shows its source, and an edit there draws i
     await expect.poll(() => inSight(source)).toBe(false)
 
     // From the start of the heading after it, back into the end of its code, as the keyboard goes.
-    await doc.getByRole('heading', { name: 'Files' }).click()
-    await page.keyboard.press('Home')
+    await clickAtStart(doc.getByRole('heading', { name: 'Files' }))
     await page.keyboard.press('ArrowLeft')
     await expect.poll(() => inSight(source)).toBe(true)
     await page.keyboard.type('\nPage->>Page: says it is done')
@@ -63,6 +62,30 @@ test('the caret moved into a diagram shows its source, and an edit there draws i
     // Out of it again, the diagram is all there is.
     await doc.getByRole('heading', { name: 'Files' }).click()
     await expect.poll(() => inSight(source)).toBe(false)
+})
+
+test("the arrow keys go into a diagram's code from the line above and below it", async ({ page }) => {
+    const doc = plan(page)
+    await expect(doc.getByRole('img', { name: /^A sequence diagram/u })).toBeVisible()
+    const source = doc.getByText('participant Page as web: reports page')
+
+    // Down from the end of the paragraph above, to the start of its code.
+    await clickAtEnd(doc.locator('p', { hasText: 'which the route uses.' }))
+    await page.keyboard.press('ArrowDown')
+    await expect.poll(() => inSight(source)).toBe(true)
+    await page.keyboard.type('%% the export, row by row\n')
+
+    // Up from the heading below, to the end of its code.
+    await clickAtStart(doc.getByRole('heading', { name: 'Files' }))
+    await expect.poll(() => inSight(source)).toBe(false)
+    await page.keyboard.press('ArrowUp')
+    await expect.poll(() => inSight(source)).toBe(true)
+    await page.keyboard.type('\nPage->>Page: done')
+
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    const markdown = page.getByLabel('Plan Markdown')
+    await expect(markdown).toContainText('```mermaid\n%% the export, row by row\nsequenceDiagram')
+    await expect(markdown).toContainText('    end\nPage->>Page: done\n```')
 })
 
 test('a diagram mermaid cannot read, or of a kind not drawn here, shows its source and why', async ({ page }) => {
