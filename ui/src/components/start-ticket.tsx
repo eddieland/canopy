@@ -8,14 +8,26 @@ import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 
-/** Starts a ticket privately by its key (DESIGN §22), then opens its page. */
-export function StartTicket() {
+/**
+ * Starts a ticket privately by its key (DESIGN §22), then opens its page. The tickets page and the Start a ticket
+ * dialog (`TicketDialog`), which `T` opens from anywhere, both render it, so the two cannot drift.
+ */
+export function StartTicket({
+    focus = false,
+    onStarted,
+}: {
+    /** Whether the key field takes the focus as the form mounts: the dialog's, which opens on a key to type in. */
+    focus?: boolean
+    /** Hears the ticket start, as the form opens its page. */
+    onStarted?: () => void
+}) {
     const client = useQueryClient()
     const navigate = useNavigate()
     const mutation = useMutation({
         mutationFn: startTicket,
         onSuccess: (_started, key) => {
             void refreshTicket(client, key)
+            onStarted?.()
             void navigate({ to: '/tickets/$key', params: { key } })
         },
     })
@@ -29,9 +41,16 @@ export function StartTicket() {
     }
 
     return (
-        <form onSubmit={submit} aria-label="Start a ticket" className="flex flex-col gap-2 p-3">
+        <form onSubmit={submit} aria-label="Start a ticket" aria-keyshortcuts="T" className="flex flex-col gap-2 p-3">
             <div className="flex items-center gap-2">
-                <Input name="key" placeholder="PROJ-123" aria-label="Ticket key" className="max-w-56 font-mono" />
+                <Input
+                    name="key"
+                    placeholder="PROJ-123"
+                    aria-label="Ticket key"
+                    // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
+                    autoFocus={focus}
+                    className="max-w-56 font-mono"
+                />
                 <Button type="submit" variant="outline" disabled={mutation.isPending}>
                     <Play />
                     Start privately

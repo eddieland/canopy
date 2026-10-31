@@ -38,6 +38,11 @@ Type a key in **Start a ticket** and press **Start privately**. This is `canopy 
 as a private one: it needs no queue label, and its conversation stays in canopy, so workers read the ticket and write
 nothing to it. The next tick picks it up, and the form opens the ticket's page.
 
+You needn't go to the tickets page for it. Press `T` on any page, anywhere but a text field, and the same form opens
+over whatever you were reading, the cursor already in the key field: type the key, press Enter, and you're on the
+ticket's page. Escape closes it. A refusal keeps it open and says why, so a typo in the key costs you one more
+keystroke, not a trip back.
+
 A ticket you start is private from then on, whatever labels it carries or gains. To ask for a plan before the first
 implement, start it from the CLI with `canopy start KEY --plan`, or run `canopy plan KEY` afterwards.
 
