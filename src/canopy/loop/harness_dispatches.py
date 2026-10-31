@@ -315,7 +315,7 @@ def make_resume(ctx: Context, tick_id: int, run: TicketRun, *, dry_run: bool, lo
             )
             rationale = f"run {started.run_id}: resume {key} in {run.repo}, for {rows}"
     except dispatch.Refusal as r:
-        _record(ctx, tick_id, key, f"refused:{r.guard}", r.reason)
+        _record(ctx, tick_id, key, f"refused:{r.guard}", r.reason, kind=kind)
         if r.attention is not None:
             _record(ctx, tick_id, key, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, repo=r.repo)
         log.info("harness dispatch refused", extra={"ticket": key, "guard": r.guard, "reason": r.reason})
@@ -458,5 +458,16 @@ def _record(
     *,
     repo: str | None = None,
     chore: str | None = None,
+    kind: RunKind | None = None,
 ) -> None:
-    db.record_decision(ctx.conn, tick_id, key, action, rationale, repo=repo, chore=chore, decider=Decider.HARNESS)
+    db.record_decision(
+        ctx.conn,
+        tick_id,
+        key,
+        action,
+        rationale,
+        repo=repo,
+        chore=chore,
+        decider=Decider.HARNESS,
+        kind=kind,
+    )

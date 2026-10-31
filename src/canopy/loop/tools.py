@@ -625,9 +625,9 @@ def spawn_dispatch(ctx: Context, recorded: records.RecordedRun) -> None:
     )
 
 
-def _dispatch_refused(ctx: Context, tick_id: int, key: str, kind: str, r: dispatch.Refusal) -> None:
+def _dispatch_refused(ctx: Context, tick_id: int, key: str, kind: RunKind, r: dispatch.Refusal) -> None:
     """Record a guard's refusal of a dispatch, at the ask or at the spawn, and the attention item it raises, if any."""
-    db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
+    db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason, kind=kind)
     if r.attention is not None:
         # The overseer wants work a guard forbids, and only a human can lift it: the attempt limit, a retired
         # prompt override, or a persona canopy cannot use (DESIGN §8, §14, §31). In a workspace of several, the

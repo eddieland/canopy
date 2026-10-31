@@ -409,8 +409,9 @@ def test_a_resume_the_claims_refuse_moves_no_cursor(red: Scenario, github_state:
     github_state.write_text(json.dumps({"prs": {PR: {"checks": [FAILED]}}, "unread": [PR]}))
     with enabled(WITH_CURSORS), derived(*unit_at(KEY, Phase.CI_RED)):
         ticked = red.tick()
-    assert [(d.action, d.decider) for d in ticked.decisions if d.ticket_key == KEY] == [
-        ("refused:stale", Decider.HARNESS),
+    # The refusal keeps the kind it asked for, for the health report (DESIGN §11).
+    assert [(d.action, d.decider, d.kind) for d in ticked.decisions if d.ticket_key == KEY] == [
+        ("refused:stale", Decider.HARNESS, RunKind.RESUME),
     ]
     assert ticked.runs == []
     assert unit_cursors(red.conn) == (None, None)

@@ -22,6 +22,8 @@ from canopy.serve.schema.ci import (
     CiReport,
 )
 from canopy.serve.schema.health import (
+    HealthAsk,
+    HealthCause,
     HealthCounts,
     HealthDay,
     HealthFailure,
@@ -103,9 +105,9 @@ def health_report(backend: Backend, ctx: Context, days: int) -> HealthReport:
             for o in found.outcomes
         ],
         failures=[_failure(f) for f in found.failures],
-        refusals=[
-            HealthRefusal(guard=r.guard, decisions=r.decisions, ticks=r.ticks, last_tick=r.last_tick)
-            for r in found.refusals
+        refusals=[_refusal(r) for r in found.refusals],
+        causes=[
+            HealthCause(note=c.note, runs=c.runs, kinds=list(c.kinds), latest=_failure(c.latest)) for c in found.causes
         ],
         per_day=[
             HealthDay(day=d.day, start=db.parse_time(d.start), ended=_counts(d.ended), failed=_counts(d.failed))
@@ -183,14 +185,7 @@ def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
         ],
         median_hours_to_green=_hours(found.median_to_green),
         max_flaky_kicks=ctx.config.trust.max_flaky_kicks,
-        cooldown=None
-        if cooldown is None
-        else HealthRefusal(
-            guard=cooldown.guard,
-            decisions=cooldown.decisions,
-            ticks=cooldown.ticks,
-            last_tick=cooldown.last_tick,
-        ),
+        cooldown=None if cooldown is None else _refusal(cooldown),
     )
 
 
@@ -370,6 +365,26 @@ def _failure(found: health.Failure) -> HealthFailure:
         task_id=int(task) if task is not None and task.isdigit() else None,
         note=found.note,
         cost_usd=found.cost_usd,
+    )
+
+
+def _refusal(found: health.Refusal) -> HealthRefusal:
+    return HealthRefusal(
+        guard=found.guard,
+        decisions=found.decisions,
+        ticks=found.ticks,
+        last_tick=found.last_tick,
+        asks=[
+            HealthAsk(
+                ticket=a.ticket,
+                chore=a.chore,
+                pr=a.pr,
+                kind=a.kind,
+                decisions=a.decisions,
+                last_tick=a.last_tick,
+            )
+            for a in found.asks
+        ],
     )
 
 

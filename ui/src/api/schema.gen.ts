@@ -4898,6 +4898,67 @@ export type components = {
             repo?: string | null;
         };
         /**
+         * HealthAsk
+         * @description One thing a guard refused in the window, and how often: the ticket, chore, or PR it named, and the run's kind.
+         */
+        HealthAsk: {
+            /**
+             * Chore
+             * @description The chore it would have run; None for the rest.
+             */
+            chore: string | null;
+            /**
+             * Decisions
+             * @description How many of the guard's decisions refused it.
+             */
+            decisions: number;
+            /**
+             * Kind
+             * @description The kind of run a dispatch asked for: `implement`, `resume`, `plan`, `feedback-plan`; None for any other ask,
+             *     and for a refusal recorded before the journal kept it.
+             */
+            kind: string | null;
+            /**
+             * Last Tick
+             * @description The latest tick that asked for it.
+             */
+            last_tick: number;
+            /**
+             * Pr
+             * @description The PR it named, for a review; None for the rest.
+             */
+            pr: string | null;
+            /**
+             * Ticket
+             * @description The ticket it named; None for a chore's run, or a review of a PR no ticket of the loop's holds.
+             */
+            ticket: string | null;
+        };
+        /**
+         * HealthCause
+         * @description The window's failures the harness explained alike, or `other`: those an agent's own words explained.
+         */
+        HealthCause: {
+            /**
+             * Kinds
+             * @description The kinds of run among them, in the report's order of kinds.
+             */
+            kinds: components["schemas"]["SpendKind"][];
+            /** @description The newest of them, to open. */
+            latest: components["schemas"]["HealthFailure"];
+            /**
+             * Note
+             * @description The harness's note, as `HealthFailure.note`; None for `other`, the failures whose note is an agent's summary,
+             *     which never repeats, or that have none.
+             */
+            note: string | null;
+            /**
+             * Runs
+             * @description How many failed so.
+             */
+            runs: number;
+        };
+        /**
          * HealthCounts
          * @description A count of runs by kind, 0 for a kind with none.
          */
@@ -5054,6 +5115,12 @@ export type components = {
          */
         HealthRefusal: {
             /**
+             * Asks
+             * @description What it refused most often, at most five, the most often first, then the latest: one ask refused tick after
+             *     tick is the overseer stuck on it.
+             */
+            asks: components["schemas"]["HealthAsk"][];
+            /**
              * Decisions
              * @description How many decisions it refused.
              */
@@ -5079,6 +5146,12 @@ export type components = {
          * @description How the last days' runs ended, the newest failures, what the guards refused, and each day's counts.
          */
         HealthReport: {
+            /**
+             * Causes
+             * @description Every failure of the window by its cause: the harness's notes, the most runs first, then the newest, and
+             *     `other` last.
+             */
+            causes: components["schemas"]["HealthCause"][];
             /**
              * Days
              * @description How many local days the window holds, today's so far included.
