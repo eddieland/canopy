@@ -216,7 +216,8 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
 - **S27. An overnight loop** (M21). Leave `canopy loop` running overnight. Expect, in its output and log (`loop waits`
   lines), waits reaching `loop.idle_max_minutes` after a quiet evening, back at `loop.interval_minutes` within one tick
   of the first morning activity, and each run's end followed by a tick within a couple of minutes. Re-measure
-  afterwards with MEASUREMENTS' prompt; M39 waits on the result.
+  afterwards with MEASUREMENTS' prompt; M39 waits on the result. For M39's median latency from an external event to
+  the tick that acted on it, `canopy latency --days 2` reads it from the journal.
 - **S33. The overseer's prompt from the cache** (M34). Run two `canopy tick --dry-run` a minute apart, and read each
   tick's first model call from the journal: `SELECT id, tokens_first_call, tokens_first_cache_write, definitions_digest
   FROM ticks ORDER BY id DESC LIMIT 2` (DESIGN §13; the first `step_finish` event in `<state_dir>/ticks/<id>.log` holds
