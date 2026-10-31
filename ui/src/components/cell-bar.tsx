@@ -22,7 +22,7 @@ export function CellBar({
     return (
         <span className="flex items-center gap-2">
             <span className={cn('shrink-0', valueClassName)}>{children}</span>
-            <span aria-hidden className="h-1.5 min-w-8 flex-1 rounded-full bg-surface-raised" data-testid="cell-bar">
+            <span aria-hidden className="h-1.5 min-w-16 flex-1 rounded-full bg-surface-raised" data-testid="cell-bar">
                 <span
                     className={cn('block h-full rounded-full', fill)}
                     style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
