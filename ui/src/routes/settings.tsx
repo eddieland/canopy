@@ -39,6 +39,7 @@ import { dropDrafts } from '@/lib/reply-draft'
 import { setReviewPersonas, usablePersonas, useReviewPersonas } from '@/lib/review-personas'
 import { dropReviewRequestDraft } from '@/lib/review-request-draft'
 import { setQuips, useQuips } from '@/lib/run-phase'
+import { setSeasons, useSeasons } from '@/lib/seasons'
 import { setSendKey, useSendKey } from '@/lib/send-key'
 import type { SendKey } from '@/lib/send-key'
 import { buy as buyShell, SHELLS, setVault, shellsCents, useVault } from '@/lib/shells'
@@ -209,15 +210,17 @@ function PaletteRow<T extends ResolvedTheme>({
 }
 
 /**
- * The fun, in one place: an on/off for the ticker, for Sprig (named for whoever sits in its place), and for the rail's
- * quips, then who sits at the foot of the rail, picked whether it is on or not, since picking one turns it on, then the
- * ticker's pace, the pause between its headlines, and the topics they are drawn from. Its header hides a light switch.
+ * The fun, in one place: an on/off for the ticker, for Sprig (named for whoever sits in its place), for the seasons'
+ * decorations, and for the rail's quips, then who sits at the foot of the rail, picked whether it is on or not, since
+ * picking one turns it on, then the ticker's pace, the pause between its headlines, and the topics they are drawn
+ * from. Its header hides a light switch.
  */
 function FunPanel() {
     const { on, speed, gap, hidden } = useTickerSettings()
     const buddy = useBuddy()
     const companion = useCompanion()
     const quips = useQuips()
+    const seasons = useSeasons()
     return (
         <Panel>
             <PanelHeader label="Fun">
@@ -227,7 +230,8 @@ function FunPanel() {
                 <p id="fun-items" className="max-w-3xl text-sm text-muted-foreground">
                     The ticker crawls joke headlines across the header. Sprig, at the foot of the side rail, or a Ghost
                     in its place, has a tip for every page; none of them help. Each sits out a window with no room for
-                    it. Quips say what each run in the rail is doing, in words of their own.
+                    it. Seasons dress the rail and the logo for the holidays, Sprig or no Sprig. Quips say what each run
+                    in the rail is doing, in words of their own.
                 </p>
                 <fieldset aria-labelledby="fun-items" className="flex shrink-0 items-center gap-4">
                     <label htmlFor="fun-ticker" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
@@ -247,6 +251,15 @@ function FunPanel() {
                             onCheckedChange={(checked) => setBuddy(checked === true ? 'on' : 'off')}
                         />
                         {NAMES[companion]}
+                    </label>
+                    <label htmlFor="fun-seasons" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
+                        <Checkbox
+                            id="fun-seasons"
+                            checked={seasons === 'on'}
+                            data-testid="fun-seasons"
+                            onCheckedChange={(checked) => setSeasons(checked === true ? 'on' : 'off')}
+                        />
+                        Seasons
                     </label>
                     <label htmlFor="fun-quips" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
                         <Checkbox
