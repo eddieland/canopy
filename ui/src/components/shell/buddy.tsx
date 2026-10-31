@@ -68,7 +68,7 @@ interface Offer {
  * above, so a tip shows only when asked for, with a click, and Sprig lets the ones it would offer on its own pass. A
  * slot shorter still leaves Sprig out, rather than squeeze the blocks above.
  *
- * Settings can put a Destiny Ghost in Sprig's place: it floats where Sprig stands, in a voice of its own
+ * Settings can put a Ghost in Sprig's place: it floats where Sprig stands, in a voice of its own
  * (src/lib/ghost.ts), and keeps every rule above. A tip one of them offered is never shown under the other's name.
  *
  * In a season (src/lib/seasons.ts), a jack-o'-lantern or the like stands beside whichever of them is there, in the
@@ -404,7 +404,7 @@ function useEyesOnPointer(figure: RefObject<SVGSVGElement | null>, most: number)
  * The Ghost that may sit in Sprig's place, in the shell it wears (bought in Settings; src/components/ghost-shell.tsx):
  * four great plates around one glowing eye, four lesser ones behind them on the diagonals, floating around its spot
  * over its shadow, leaning as it goes. Its light swells and dims, and flares with each new tip. The eye blinks now and
- * then and looks toward the pointer, and the great plates spread a little with each tip, as a Ghost's do when it talks.
+ * then and looks toward the pointer, and the great plates spread a little with each tip, as it talks.
  * While the lightswitch rave is on, its shell turns a quarter on each beat of the lights, and its light swells in time.
  * Under reduced motion all of it holds still.
  */

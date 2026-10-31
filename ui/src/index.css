@@ -800,10 +800,10 @@
  * The Ghost that may sit in Sprig's place floats around its corner of the rail: it wanders right of where it rests,
  * never past the width of the bubble above it, and back, over its shadow, leaning into each way it goes, and bobs as
  * it goes, on a beat of its own so the two never fall into step; its shadow shrinks as it rises. Its light swells and
- * dims, and flares with each new tip. Its shell's plates spread a little with each tip too, as a Ghost's do when it
- * talks, each along its own point (`translateY` in the plate's own frame). At the lightswitch rave its shell turns a
- * quarter on each of the lights' 0.6-second beats, and its light swells on every other one. Each starts and ends where
- * a still page shows it: at rest, at its usual glow.
+ * dims, and flares with each new tip. Its shell's plates spread a little with each tip too, as it talks, each along its
+ * own point (`translateY` in the plate's own frame). At the lightswitch rave its shell turns a quarter on each of the
+ * lights' 0.6-second beats, and its light swells on every other one. Each starts and ends where a still page shows it:
+ * at rest, at its usual glow.
  */
 @keyframes ghost-wander {
     20% {
