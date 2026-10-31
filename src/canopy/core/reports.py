@@ -168,9 +168,13 @@ def read_health(ctx: Context, request: Health) -> str:
     """Report how the last `request.days` days' ticks and runs ended, as `canopy health --json` prints it.
 
     Returns:
-        The report's JSON.
+        The report's JSON, with how long each sort of run took against its timeout.
     """
-    return report_json(dataclasses.asdict(health.report(ctx.conn, datetime.now(UTC), request.days)))
+    now = datetime.now(UTC)
+    with db.read_snapshot(ctx.conn):
+        found = dataclasses.asdict(health.report(ctx.conn, now, request.days))
+        durations = health.durations(ctx.conn, now, request.days, ctx.config)
+    return report_json({**found, "durations": [dataclasses.asdict(d) for d in durations]})
 
 
 def read_spend(ctx: Context, request: Spend) -> str:
