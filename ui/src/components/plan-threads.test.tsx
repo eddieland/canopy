@@ -265,6 +265,14 @@ describe('ThreadCard', () => {
         expect(screen.queryByRole('img')).toBeNull()
         expect(screen.getByText(/<img src=x onerror="alert\(1\)">/u)).toBeDefined()
     })
+
+    it('draws a comment in the Markdown the conversation draws, as it was written in its field', () => {
+        const body = 'Keep **one** cache:\n- per `repo`\n- not per run'
+        renderCard({ thread: thread('t1', 'the cache', { body }) })
+        expect(screen.getByText('one').tagName).toBe('STRONG')
+        expect(screen.getByText('repo').tagName).toBe('CODE')
+        expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(['per repo', 'not per run'])
+    })
 })
 
 describe('AskForChanges', () => {

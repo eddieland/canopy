@@ -4,8 +4,9 @@ import type { KeyboardEvent, ReactNode, Ref, SubmitEvent } from 'react'
 
 import { Age } from '@/components/age'
 import { Textarea } from '@/components/input'
-import { LinkedText } from '@/components/linked-text'
+import { MarkdownField } from '@/components/markdown-field'
 import { Empty } from '@/components/panel'
+import { RichText } from '@/components/rich-text'
 import { SendKeycap } from '@/components/send-keycap'
 import { Chip } from '@/components/status'
 import { Disclosure } from '@/components/disclosure'
@@ -572,9 +573,7 @@ function Said({
 }) {
     return (
         <div className="flex flex-col gap-0.5">
-            <p className="text-sm break-words whitespace-pre-wrap">
-                <LinkedText text={body} />
-            </p>
+            <RichText text={body} />
             <div className="flex items-center gap-1">
                 <Age at={at} variant="ago" className="text-2xs" />
                 {onEdit !== undefined && (
@@ -660,14 +659,13 @@ function CommentForm({
 
     return (
         <form onSubmit={send} aria-label={label} className="mt-1.5 flex flex-col gap-1.5">
-            <Textarea
+            <MarkdownField
                 aria-label={label}
                 value={body}
                 maxLength={MAX_COMMENT}
-                onChange={(event) => setBody(event.target.value)}
+                onValueChange={setBody}
                 onKeyDown={onKey}
                 ref={field}
-                className="min-h-16"
             />
             <div className="flex items-center justify-end gap-1">
                 <Button type="button" variant="ghost" size="xs" onClick={onCancel}>

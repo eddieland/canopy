@@ -99,8 +99,9 @@ expensive kind.
 ## Commenting
 
 Select a passage and press **Comment**, in the bubble that appears or the toolbar, or Ctrl+Alt+M (⌘+Option+M on a Mac).
-Write your comment and press **Comment** again, or your [send key](settings#replies). Each comment is saved as you make
-it, and sits in the **Comments** panel, quoting its passage. Click the quote to find it in the plan.
+Write your comment and press **Comment** again, or your [send key](settings#replies). It takes the same Markdown a
+[reply](attention#replying) does, and its card shows it formatted. Each comment is saved
+as you make it, and sits in the **Comments** panel, quoting its passage. Click the quote to find it in the plan.
 
 A comment's card says what it can do in words: **reply**, **edit**, **resolve** (or **reopen**), and **delete**,
 which asks first. Comments hold onto
