@@ -173,7 +173,12 @@ So stage 2's harness that moved no cursor is gone. No row enabled moves one, sin
 `ci_red`'s and `changes_requested`'s rows enabled by hand. Chosen conservatively, for the operator to change: the
 harness's other decisions move no cursor, since a `wait` leaves what came meanwhile new for the run after it; and its
 `resume` moves only the defaults the overseer's would, so none on a private ticket, none for `ci` while a notice is in
-force or lately ended, and none past untrusted feedback with no go-ahead. Left: every other row, each on its
+force or lately ended, and none past untrusted feedback with no go-ahead. Built (2026-10-31): the measurement each row
+waits on, read from the journal. `canopy agreement` counts, per row of §7's table over `--days`, the tickets the live
+ticks that closed `ok` and ran their overseer compared, how many agreed and disagreed, and the distinct tickets the row
+held for, a floor on its situations; lists each disagreement once per ticket and reason, with the ticks it held across
+and the overseer's rationale, for the operator to attribute; counts stale tickets apart; and gives each source's runs
+and seconds per tick, so SCENARIOS S68 is one command (`--json` for data). Left: every other row, each on its
 measurement; the prompt cut to the judgment; and the design folded into the sections it names.
 Open for the operator: the bar a row clears in the measurement (recommended: at least three distinct situations, each
 disagreement the overseer's mistake), and whether `ci_red`'s `resume` needs a shared list of PR labels that hold a PR

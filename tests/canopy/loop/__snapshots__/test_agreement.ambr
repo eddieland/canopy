@@ -1,0 +1,18 @@
+# serializer version: 1
+# name: test_the_agreement_is_printed_as_tables
+  '''
+  
+  row     decisions  agree  disagree  situations  disagreeing
+  ready           3      2         1           1            1
+  ci_red          2      2         0           1            0
+  closed          1      1         0           1            0
+  Stale, counted apart: 1 decision on 1 ticket.
+  
+  Disagreements, newest first: the ticket, its rows, the ticks, and why; the overseer's rationale below.
+    PROJ-1  ready  tick N: decided wait, allowed attention:attempt_limit, dispatch:implement, dispatch:plan
+        no capacity
+  
+  source  kind     tick runs  poll runs  failed  median s  s per tick
+  jira    tracker          1          0       0       4.0         4.0
+  '''
+# ---

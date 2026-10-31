@@ -31,6 +31,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "tick": ("loop", "cmd_tick"),
     "status": ("loop", "cmd_status"),
     "decisions": ("loop", "cmd_decisions"),
+    "agreement": ("agreement", "cmd_agreement"),
     "spend": ("spend", "cmd_spend"),
     "agents": ("agents", "cmd_agents"),
     "personas": ("personas", "cmd_personas"),
