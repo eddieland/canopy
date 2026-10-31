@@ -2,9 +2,9 @@
 
 A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your limits and
 trust settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and the
-skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the clock, the send key, your
-review personas, and the fun are kept in this browser; everything else canopy reads from its config files, as it always
-did.
+skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the clock, the send key, whether
+attention lists chore findings, your review personas, and the fun are kept in this browser; everything else canopy reads
+from its config files, as it always did.
 
 ## Theme
 
@@ -52,6 +52,14 @@ Which key sends what you write: **Enter**, **Ctrl+Enter** (⌘+Enter on a Mac), 
 sent half a sentence to a worker and would rather not again. It holds in every box you write in to send: a reply, a
 note, a comment on a plan, the notes on a review request, a draft or a lesson in your words, and the notice to workers.
 Shift+Enter always makes a new line. The key you pick shows on each send button.
+
+## Attention
+
+**Hide chore findings** leaves what your [chores](chores) find off the [attention](attention) list, its counter, and
+the nav's badge, so the list holds only what needs you. Nothing is dismissed: each chore's page still lists its
+findings, and the attention page says how many it left out, with a link back here, so a hidden finding is never
+mistaken for none. It's this browser's alone. `canopy status` still lists every finding, and so does the next tab you
+sign in from on another machine.
 
 ## Reviews
 

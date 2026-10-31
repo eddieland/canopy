@@ -14,8 +14,9 @@ import type { LucideIcon } from 'lucide-react'
 import { Fragment } from 'react'
 import type { CSSProperties } from 'react'
 
-import { attentionQuery, loopQuery, reviewsQuery } from '@/api/queries'
+import { loopQuery, reviewsQuery } from '@/api/queries'
 import type { ReviewSummary } from '@/api/types'
+import { useAttention } from '@/hooks/use-attention'
 import { useSection } from '@/hooks/use-section'
 import { breakdown, breakdownText, countBySeverity } from '@/lib/attention'
 import type { BreakdownPart, Severity } from '@/lib/attention'
@@ -177,7 +178,7 @@ const SECTION_ACTIVE_INK: Record<Section, string> = {
  * under a section, so the section stays active on them.
  */
 export function Nav({ compact = false }: { compact?: boolean }) {
-    const attention = useQuery(attentionQuery)
+    const attention = useAttention()
     const counts = attention.data === undefined ? undefined : countBySeverity(attention.data)
     const waiting = useQuery(loopQuery).data?.memory?.proposals_waiting ?? 0
     const unseen = unseenOf(useQuery(reviewsQuery).data)
