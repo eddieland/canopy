@@ -160,7 +160,8 @@ about it, and the next plan gets it to propose again. Each such row says so, and
 button for the command it is, `canopy plan KEY --approve`, with `--item` naming the ones you ticked or `--leave` the
 ones you didn't, whichever list is shorter. Yes, the flag says leave; the page doesn't, since a `leave` proposal already
 means something else. Anything you write in **Your words, for its resume** goes after the message the approval writes
-on the ticket, which names the items to address and those for the next plan by number, never by quoting them.
+on the ticket, which names the items to address and those for the next plan by number, never by quoting them. The box
+takes the same Markdown a [reply](attention#replying) does, Preview included.
 
 A stale plan's button reads **Approve stale plan**, and the first press is refused by design, so you approve it knowing
 what changed: the panel says so calmly, not in red, and the button becomes **Approve as it is**. Press it and the plan

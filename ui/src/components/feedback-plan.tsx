@@ -10,8 +10,8 @@ import type { FeedbackPlan, FeedbackPlanItem, FeedbackPlanStatus } from '@/api/t
 import { Age } from '@/components/age'
 import { ApprovedBand } from '@/components/approved-band'
 import { Disclosure } from '@/components/disclosure'
-import { Textarea } from '@/components/input'
 import { LinkOutIcon } from '@/components/link-out-icon'
+import { MarkdownField } from '@/components/markdown-field'
 import { MemoryText } from '@/components/memory-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
@@ -306,13 +306,13 @@ function Approve({ plan, onChange }: { plan: FeedbackPlan; onChange: () => void 
                 <label className="panel-label" htmlFor={`${id}-words`}>
                     Your words, for its resume (optional)
                 </label>
-                <Textarea
+                <MarkdownField
                     id={`${id}-words`}
                     value={words}
-                    onChange={(event) => write(event.target.value)}
+                    onValueChange={write}
                     onKeyDown={sendKeys.onKeyDown}
                     spellCheck
-                    className="min-h-16"
+                    pullRequests
                 />
                 <span className="flex flex-wrap items-center gap-2">
                     <Button
