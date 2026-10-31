@@ -36,7 +36,8 @@ Monokai crisp and monospaced with a neon glow, Nord's light side a calm fade thr
 rule, Off-white panels lying on the page like paper, and Sage, Rosé Pine, Forest, and Plum round their corners, Plum
 most of all. Layout and sizes never change with a palette, so nothing moves when you switch, except under Gruvbox and
 Monokai, where monospace runs wider and a long line wraps a little sooner. Their text is drawn a step smaller to make
-up some of the width; every line keeps its height, so nothing shifts up or down.
+up some of the width; every line keeps its height, so nothing shifts up or down. This guide stays in its usual sans
+under both: monospace suits a readout, and a manual set in it reads like one long log line.
 
 ## Time
 

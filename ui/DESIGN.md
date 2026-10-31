@@ -131,7 +131,8 @@ Rules:
   Plex Sans, or in Plex Mono, as an editor sets it). Spacing, sizes, and layout never change with a palette, and
   neither do the status colors; only the mono face reflows text, since it runs wider, so it stays with the few palettes
   that are an editor's own look: Gruvbox's sides and Monokai. There it draws every line a step smaller, at 15/16 of
-  the size asked for, in the same line boxes, so the wider face crowds less and no line changes height. The defaults
+  the size asked for, in the same line boxes, so the wider face crowds less and no line changes height. The guide
+  keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono. The defaults
   take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the nineties, and
   black no edges, soft corners, and the glow.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient

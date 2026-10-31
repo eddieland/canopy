@@ -31,8 +31,9 @@ function GuidePageView() {
     return (
         // The pane is the container, so the rail's width counts. The page list comes in when the pane holds it, its
         // gap, and the article's whole 48rem (62.5rem); On this page when it holds that and 12rem and a gap more
-        // (76.5rem). A 1280px window gives the pane just over 62.5rem.
-        <div className="@container" data-testid="guide">
+        // (76.5rem). A 1280px window gives the pane just over 62.5rem. The guide reads in Plex Sans under every
+        // palette, an editor's mono one included (`guide-face`).
+        <div className="@container guide-face" data-testid="guide">
             <div
                 className={cn(
                     'mx-auto grid w-full max-w-7xl grid-cols-1 gap-x-8 gap-y-6',

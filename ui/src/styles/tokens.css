@@ -172,9 +172,12 @@
     /* The face interface text is set in: Plex Sans, or the mono data is set in (`--face-mono`), for an editor that
      * sets everything in it. Both are bundled and preloaded, so a palette that switches never paints in a fallback
      * face. Such a palette sets data in the mono a step smaller (`--face-mono-compact`, src/styles/mono-compact.css),
-     * and so every line: the same files, drawn at 15/16 of the size, in the same line boxes. */
-    --face: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
-    --face-mono: 'IBM Plex Mono', ui-monospace, monospace;
+     * and so every line: the same files, drawn at 15/16 of the size, in the same line boxes. The default faces keep
+     * names of their own, so the guide, which reads as prose under every palette (`guide-face`), can take them back. */
+    --face-sans: 'IBM Plex Sans Variable', ui-sans-serif, system-ui, sans-serif;
+    --face-mono-full: 'IBM Plex Mono', ui-monospace, monospace;
+    --face: var(--face-sans);
+    --face-mono: var(--face-mono-full);
     --face-mono-compact: 'IBM Plex Mono Compact', 'IBM Plex Mono', ui-monospace, monospace;
 }
 
