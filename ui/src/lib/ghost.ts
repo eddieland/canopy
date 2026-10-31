@@ -1,10 +1,9 @@
 /**
- * The Ghost's lines: a Destiny Ghost that Settings can put at the foot of the side rail in Sprig's place
- * (src/lib/buddy.ts). Like Sprig's, they are plain strings written here, never journal text, and none of them is real,
- * so none opens with "Tip:". They come in a Ghost's voices, mixed in each list so that no voice follows itself: an
- * "Eyes up, Guardian.", a "Scanning...", a "Grimoire:" entry that is no lore anyone wrote, a "Field report:", a "Dear
- * Traveler," log, and now and then a door it can open if you hold them off. Its keys are the views Sprig has tips for,
- * which src/lib/buddy.ts holds them to, so a new route needs the Ghost's tips as well as Sprig's.
+ * The Ghost's lines: a Ghost that Settings can put at the foot of the side rail in Sprig's place (src/lib/buddy.ts).
+ * Like Sprig's, they are plain strings written here, never journal text, and none of them is real, so none opens with
+ * "Tip:". They come in several voices of its own, mixed in each list so that no voice follows itself. Its keys are the
+ * views Sprig has tips for, which src/lib/buddy.ts holds them to, so a new route needs the Ghost's tips as well as
+ * Sprig's.
  */
 
 /** The Ghost's tips for each view, by its route id, as Sprig's are (`TIPS` in src/lib/buddy.ts). */

@@ -10,8 +10,8 @@ import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
  * voice follows itself: the paperclip's "It looks like you're...", an "Unhelpful tip:", a "Did you know?" or "Fun
  * fact:" that is not one, a "Hot take:", a "Dear diary," entry, a haiku, a riddle. While the lightswitch rave is on
  * (src/lib/rave.ts), Sprig has only the rave on its mind. It is off until Settings turns it on, which is kept in
- * localStorage like the theme, and synced across tabs. Settings can also put a Destiny Ghost in its place, with lines
- * of its own (src/lib/ghost.ts): the same setting turns either on and off.
+ * localStorage like the theme, and synced across tabs. Settings can also put a Ghost in its place, with lines of its
+ * own (src/lib/ghost.ts): the same setting turns either on and off.
  */
 
 /** Whether Sprig shows. */
