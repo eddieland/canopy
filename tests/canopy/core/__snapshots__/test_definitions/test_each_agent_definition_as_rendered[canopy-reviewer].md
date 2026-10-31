@@ -24,7 +24,17 @@ permission:
   # OpenCode 2's code mode runs the model's JavaScript, which can make HTTP requests of its own, so it is a web
   # tool too (D077). An MCP server reached only through it is then out of reach: give it `codemode: false`.
   execute: deny
-  external_directory: deny
+  # Reads outside its directory are denied, except in the skill directories of the operator's home, where OpenCode 1
+  # finds them: loading a skill reads its SKILL.md whatever this says, and these let the agent read the files beside it,
+  # its references and scripts. It writes nothing, so reading is all it can do there. OpenCode expands `~/`, and `*`
+  # crosses `/` (read from OpenCode 1.19.3). A table, unlike a scalar, is one a repository's config past the check D044
+  # makes could add a rule to (TRUST_MODEL T7).
+  external_directory:
+    "*": deny
+    "~/.claude/skills/*": allow
+    "~/.agents/skills/*": allow
+    "~/.config/opencode/skills/*": allow
+    "~/.config/opencode/skill/*": allow
   # Subagents run with their own, wider permissions; the reviewer must not reach them.
   task: deny
   # The operator's own `canopy` skill (`canopy skill --install`) is for their sessions, not canopy's agents.
