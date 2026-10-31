@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { Code } from '@/components/code'
 import { LinkedText } from '@/components/linked-text'
@@ -10,7 +11,7 @@ import type { Piece } from '@/lib/links'
 import { isPullRequest, pullRequestLabel } from '@/lib/pull-request-label'
 import { splitRunRefs } from '@/lib/refs'
 import { ALIGN, clamp, codeSpans, parse } from '@/lib/rich-text'
-import type { Align, Block, Inline, Line } from '@/lib/rich-text'
+import type { Align, Block, Inline, Line, Run } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
 
 /** How many lines a summary or a rationale shows in a list's row before its toggle. */
@@ -210,29 +211,33 @@ function InlineView({ piece, look }: { piece: Inline; look: Look }) {
         case 'text': {
             return <LinkedText text={piece.text} pullRequests={look.pullRequests} />
         }
-        case 'strong': {
-            return (
-                <strong className="font-semibold">
-                    <LinkedText text={piece.text} pullRequests={look.pullRequests} />
-                </strong>
-            )
-        }
-        case 'em': {
-            return (
-                <em className="italic">
-                    <LinkedText text={piece.text} pullRequests={look.pullRequests} />
-                </em>
-            )
-        }
+        case 'strong':
+        case 'em':
         case 'del': {
             return (
-                <del className="line-through">
+                <Mark run={piece.kind}>
                     <LinkedText text={piece.text} pullRequests={look.pullRequests} />
-                </del>
+                </Mark>
             )
         }
         case 'code': {
-            return <Code>{piece.text}</Code>
+            const code = <Code>{piece.text}</Code>
+            return piece.within === undefined ? code : <Mark run={piece.within}>{code}</Mark>
+        }
+    }
+}
+
+/** `children` set as a run of rich text is: **strong**, *emphasis*, or ~~struck~~. The guide sets its runs so too. */
+export function Mark({ run, children }: { run: Run; children: ReactNode }) {
+    switch (run) {
+        case 'strong': {
+            return <strong className="font-semibold">{children}</strong>
+        }
+        case 'em': {
+            return <em className="italic">{children}</em>
+        }
+        case 'del': {
+            return <del className="line-through">{children}</del>
         }
     }
 }

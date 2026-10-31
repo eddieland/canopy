@@ -42,6 +42,12 @@ describe('the guide', () => {
         expect(guidePage('config-files')?.body.at(-1)?.kind).toBe('paragraph')
     })
 
+    it('reads code inside bold as code, so no bold text keeps a backtick', () => {
+        const bold = GUIDE.flatMap((page) => [...page.lead, ...lines(page.body)]).flat()
+        expect(bold.filter((piece) => piece.kind === 'strong' && piece.text.includes('`'))).toEqual([])
+        expect(bold).toContainEqual({ kind: 'code', text: 'name', within: 'strong' })
+    })
+
     it('leaves a fence naming no example file as written', () => {
         expect(
             GUIDE.flatMap((page) => page.body).filter((block) => block.kind === 'code' && block.lines.length === 0),

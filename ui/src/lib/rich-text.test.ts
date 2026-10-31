@@ -202,6 +202,38 @@ describe('inline', () => {
         ])
     })
 
+    it('reads the code spans inside a run as code within it', () => {
+        expect(inline('**bold around `code` inside** and **`name`**')).toEqual([
+            { kind: 'strong', text: 'bold around ' },
+            { kind: 'code', text: 'code', within: 'strong' },
+            { kind: 'strong', text: ' inside' },
+            text(' and '),
+            { kind: 'code', text: 'name', within: 'strong' },
+        ])
+        expect(inline('*the `api` service* is ~~`v1`~~')).toEqual([
+            { kind: 'em', text: 'the ' },
+            { kind: 'code', text: 'api', within: 'em' },
+            { kind: 'em', text: ' service' },
+            text(' is '),
+            { kind: 'code', text: 'v1', within: 'del' },
+        ])
+    })
+
+    it('keeps an unclosed backtick inside a run as written', () => {
+        expect(inline('**a `b**')).toEqual([{ kind: 'strong', text: 'a `b' }])
+    })
+
+    it('reads a code span before a run, as CommonMark does, so markers inside code are code', () => {
+        expect(inline('**a `b** c`')).toEqual([text('**a '), { kind: 'code', text: 'b** c' }])
+        expect(inline('`**` and **`**`**, `_x_`')).toEqual([
+            { kind: 'code', text: '**' },
+            text(' and '),
+            { kind: 'code', text: '**', within: 'strong' },
+            text(', '),
+            { kind: 'code', text: '_x_' },
+        ])
+    })
+
     it('leaves a marker inside a word or beside a space as written', () => {
         for (const written of ['snake_case_name', '__init__', '2*3*4', 'a * b * c', '_ spaced _', '~~ spaced ~~']) {
             expect(inline(written)).toEqual([text(written)])

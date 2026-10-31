@@ -3,6 +3,7 @@ import { Fragment } from 'react'
 
 import { Code } from '@/components/code'
 import { CodeTokens } from '@/components/code-tokens'
+import { Mark } from '@/components/rich-text'
 import { useHighlightLines } from '@/hooks/use-highlight'
 import { anchor, plainText } from '@/lib/guide'
 import type { GuidePiece } from '@/lib/guide'
@@ -187,17 +188,14 @@ function PieceView({ piece }: { piece: GuidePiece }) {
         case 'text': {
             return piece.text
         }
-        case 'strong': {
-            return <strong className="font-semibold">{piece.text}</strong>
-        }
-        case 'em': {
-            return <em className="italic">{piece.text}</em>
-        }
+        case 'strong':
+        case 'em':
         case 'del': {
-            return <del className="line-through">{piece.text}</del>
+            return <Mark run={piece.kind}>{piece.text}</Mark>
         }
         case 'code': {
-            return <Code>{piece.text}</Code>
+            const code = <Code>{piece.text}</Code>
+            return piece.within === undefined ? code : <Mark run={piece.within}>{code}</Mark>
         }
         case 'link': {
             return <GuideLink piece={piece} />
