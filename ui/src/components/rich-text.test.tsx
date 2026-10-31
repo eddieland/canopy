@@ -82,6 +82,14 @@ describe('RichText', () => {
             'https://ci.example.test/7',
         ])
     })
+
+    it('sets code inside bold as code, in bold, without its backticks', () => {
+        render(<RichText text="Moved **the `billing` service** out." />)
+
+        expect(screen.getByRole('paragraph').textContent).toBe('Moved the billing service out.')
+        expect(screen.getByRole('code').textContent).toBe('billing')
+        expect(screen.getByRole('code').closest('strong')).not.toBeNull()
+    })
 })
 
 describe('InlineCode', () => {

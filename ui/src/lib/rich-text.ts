@@ -3,12 +3,14 @@
 // the result is data that `RichText` renders as React text, never HTML. Link syntax stays characters; a bare URL is
 // linked to itself by `LinkedText` (D113).
 
-/** A piece of a line: plain text, `code`, or **strong**. */
+/** A piece of a line: plain text, `code`, or **strong**; code inside a strong run is a code piece flagged `strong`. */
 export interface Inline {
     /** How the piece is set. */
     kind: 'text' | 'code' | 'strong'
     /** The piece's text, without its markers. */
     text: string
+    /** On a code piece, that it sits inside a strong run: `**the `api` service**`. */
+    strong?: true
 }
 
 /** One line of text, as its inline pieces: `Inline`'s, or another reader's (the guide's, which reads links too). */
@@ -141,6 +143,16 @@ export function inline(text: string): Line {
 }
 
 /**
+ * A **strong** run's text, without its markers, as its pieces: strong text, and its `code` spans flagged `strong`. The
+ * guide's reader shares it (`src/lib/guide.ts`).
+ */
+export function strongRun(text: string): Line {
+    return codeSpans(text).map((piece) =>
+        piece.kind === 'code' ? { kind: 'code', text: piece.text, strong: true } : { kind: 'strong', text: piece.text },
+    )
+}
+
+/**
  * Text's `code` spans and nothing else, for a line the harness writes (an attention item's detail): asterisks and line
  * breaks stay as written, and a span never crosses a line.
  */
@@ -156,7 +168,7 @@ function pieces(text: string, pattern: RegExp): Line {
             line.push({ kind: 'text', text: text.slice(last, match.index) })
         }
         if (match[1] === undefined) {
-            line.push({ kind: 'strong', text: match[2] ?? '' })
+            line.push(...strongRun(match[2] ?? ''))
         } else {
             line.push({ kind: 'code', text: match[1] })
         }

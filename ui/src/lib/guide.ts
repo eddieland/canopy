@@ -28,7 +28,7 @@ import slack from '@/guide/slack.md?raw'
 import tasks from '@/guide/tasks.md?raw'
 import tickets from '@/guide/tickets.md?raw'
 import ticks from '@/guide/ticks.md?raw'
-import { parseWith } from '@/lib/rich-text'
+import { parseWith, strongRun } from '@/lib/rich-text'
 import type { Block, Inline, Line } from '@/lib/rich-text'
 import { SECTIONS } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
@@ -310,7 +310,7 @@ function guideLine(text: string, slug: string): Line<GuidePiece> {
         if (match.index > last) {
             line.push({ kind: 'text', text: text.slice(last, match.index) })
         }
-        line.push(guidePiece(match, slug))
+        line.push(...guidePieces(match, slug))
         last = match.index + match[0].length
     }
     if (last < text.length) {
@@ -319,14 +319,14 @@ function guideLine(text: string, slug: string): Line<GuidePiece> {
     return line
 }
 
-function guidePiece(match: RegExpExecArray, slug: string): GuidePiece {
+function guidePieces(match: RegExpExecArray, slug: string): GuidePiece[] {
     const [written, code, strong, label, href] = match
     if (code !== undefined) {
-        return { kind: 'code', text: code }
+        return [{ kind: 'code', text: code }]
     }
     if (strong !== undefined) {
-        return { kind: 'strong', text: strong }
+        return strongRun(strong)
     }
     const target = guideTarget(href ?? '', slug)
-    return target === undefined ? { kind: 'text', text: written } : { kind: 'link', text: label ?? '', target }
+    return [target === undefined ? { kind: 'text', text: written } : { kind: 'link', text: label ?? '', target }]
 }

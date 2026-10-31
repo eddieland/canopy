@@ -145,7 +145,8 @@ function PieceView({ piece }: { piece: GuidePiece }) {
             return <strong className="font-semibold">{piece.text}</strong>
         }
         case 'code': {
-            return <Code>{piece.text}</Code>
+            const code = <Code>{piece.text}</Code>
+            return piece.strong ? <strong className="font-semibold">{code}</strong> : code
         }
         case 'link': {
             return <GuideLink piece={piece} />

@@ -113,6 +113,20 @@ describe('inline', () => {
     it('leaves an unclosed marker as written', () => {
         expect(inline('a `b and **c')).toEqual([text('a `b and **c')])
     })
+
+    it('reads code spans inside a strong run as code, set strong', () => {
+        expect(inline('**bold around `code` inside** and **`name`**')).toEqual([
+            { kind: 'strong', text: 'bold around ' },
+            { kind: 'code', text: 'code', strong: true },
+            { kind: 'strong', text: ' inside' },
+            text(' and '),
+            { kind: 'code', text: 'name', strong: true },
+        ])
+    })
+
+    it('keeps an unclosed backtick inside a strong run as written', () => {
+        expect(inline('**a `b**')).toEqual([{ kind: 'strong', text: 'a `b' }])
+    })
 })
 
 describe('clamp', () => {

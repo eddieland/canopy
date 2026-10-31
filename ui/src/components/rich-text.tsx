@@ -172,7 +172,8 @@ function InlineView({ piece, look }: { piece: Inline; look: Look }) {
             )
         }
         case 'code': {
-            return <Code>{piece.text}</Code>
+            const code = <Code>{piece.text}</Code>
+            return piece.strong ? <strong className="font-semibold">{code}</strong> : code
         }
     }
 }
