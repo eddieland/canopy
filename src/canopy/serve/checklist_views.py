@@ -32,8 +32,10 @@ def checklist_counts(backend: Backend, ctx: Context, days: int, *, repo: str | N
         answers, and its counts in each ISO week of the window; `repo`'s alone when it is named.
     """
     now = backend.clock()
-    found = checklist_answers.counts(ctx.conn, now, days, repo=repo)
-    grouped = checklist_answers.details(ctx.conn, now, days, repo=repo)
+    # One snapshot for both reads, so a run that ends between them cannot leave an item in one and out of the other.
+    with db.read_snapshot(ctx.conn):
+        found = checklist_answers.counts(ctx.conn, now, days, repo=repo)
+        grouped = checklist_answers.details(ctx.conn, now, days, repo=repo)
     runs = {(r.repo, r.item): r for r in grouped.items}
     return ChecklistCounts(
         since=db.parse_time(found.since),
