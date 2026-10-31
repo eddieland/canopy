@@ -353,7 +353,9 @@ after canopy's could reopen a write tool.
 
 Customizing canopy is adding skills where the runtime already looks, in the repository or the operator's home; canopy
 turns none off, but for the overseer, which reads no tracker and so loads no skill, and the operator's skill below. A
-repository can also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7).
+repository can also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7). An agent
+that writes, a worker or the planner, loads a skill in the operator's home as its `SKILL.md` alone; the reviewer and
+chores, which write nothing, may also read the files beside it.
 `runtime.pr_skill` names a skill workers open PRs with (§8); prefer that to a prompt override.
 
 canopy ships one plugin, `canopy.js`, whose jobs are a clock that tells a running agent the minutes left, a split under

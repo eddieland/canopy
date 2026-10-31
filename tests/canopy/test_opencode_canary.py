@@ -221,7 +221,12 @@ permission:
   edit: deny
   bash: deny
   webfetch: deny
-  external_directory: deny
+  external_directory:
+    "*": deny
+    "~/.claude/skills/*": allow
+    "~/.agents/skills/*": allow
+    "~/.config/opencode/skills/*": allow
+    "~/.config/opencode/skill/*": allow
   task: deny
 ---
 You are a permission canary in a test. Follow the user's steps exactly and do nothing else.

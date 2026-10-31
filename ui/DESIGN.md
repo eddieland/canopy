@@ -49,6 +49,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `wait-1` to `wait-4` | The Reviews page's first reviews by how long each waited, the quickest first. |
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
+| `code-chip`, `code-size` | Inline code's chip, a tint of its own ink, and code's size against its line (Rich text). |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
 
 Rules:
@@ -131,7 +132,8 @@ Rules:
   Plex Sans, or in Plex Mono, as an editor sets it). Spacing, sizes, and layout never change with a palette, and
   neither do the status colors; only the mono face reflows text, since it runs wider, so it stays with the few palettes
   that are an editor's own look: Gruvbox's sides and Monokai. There it draws every line a step smaller, at 15/16 of
-  the size asked for, in the same line boxes, so the wider face crowds less and no line changes height. The defaults
+  the size asked for, in the same line boxes, so the wider face crowds less and no line changes height. The guide
+  keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono. The defaults
   take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the nineties, and
   black no edges, soft corners, and the glow.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
@@ -168,7 +170,7 @@ Rules:
   spend windows, and a `panel-label`. A document, long-form prose (a guide page, a plan), has one step of its own,
   `text-base`, through its utilities alone (A document, under Primitives), so that is the only place it appears.
   Nothing larger, but a counter's value (`text-3xl`), and nothing smaller or between the steps: no arbitrary sizes
-  (`text-[0.625rem]`).
+  (`text-[0.625rem]`). Code is the one size set against its line, not a step (`text-code`, Rich text).
 - **An icon is the size of the text it sits with**: 16px (`size-4`) beside `text-sm` and in a button of the default or
   `sm` size, which sets it; 12px (`size-3`) beside `text-xs` or smaller, in an `xs` or `icon-xs` button and a segmented
   control, which set it too, and as a link out in a row. Nothing between, but a checkbox's tick, which fills its box,
@@ -684,9 +686,9 @@ side.
   `document-section`, a `#` or `##` heading, the page title's `text-xl` semibold; and `document-subsection`, a `###`
   or `####`, the body's size in semibold. Two steps of heading, so a section stands a quarter above the body and a
   subsection apart from it by weight alone; the guide's page title is its header's, so its body starts at a section.
-  Code sits a step down, `text-sm`. Its measure is fixed, 48rem at most (`max-w-3xl`) on both surfaces. The plan's
-  style menu previews each style in its utility. What lays a document out, the guide's rules between sections or a
-  plan's margin, is its surface's own; its type is not.
+  Code is set as everywhere else (`Code`, Rich text), a block on the raised surface. Its measure is fixed, 48rem at
+  most (`max-w-3xl`) on both surfaces. The plan's style menu previews each style in its utility. What lays a document
+  out, the guide's rules between sections or a plan's margin, is its surface's own; its type is not.
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go (`pr={false}`, `ticket={false}`), as a `ListRow`
   kind of their own (`own-review`, `own-run`). A run names the PRs it pushed to under its row, so on a PR's page
@@ -703,7 +705,7 @@ side.
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
   around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
   what to do (`no runs yet: the overseer starts one when it is due`); `now` for what comes and goes rather than `yet`
-  (`no open findings now`). A config key or a command in it is `code` (`capacity.max_chores`); a next step the UI can
+  (`no open findings now`). A config key or a command in it is `Code` (`capacity.max_chores`); a next step the UI can
   take itself is a link, or an inline button as Tick now is, never the CLI command that does the same. A search that
   finds nothing says so; a page whose subject is missing (a 404) says why. An error is never an `Empty`, and never a
   red sentence in a panel: it is a `Notice`, which names a refusal's guard and sets its `code` spans as code, as an
@@ -1318,12 +1320,18 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary, a decision's rationale, and a conversation's message: line breaks kept, `-` and `1.` lists (nested by
   indent), `#` headings as a `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and
-  `code` (at `text-xs`) and **strong** inline.
+  `code` and **strong** inline. Code, inline or fenced, is `text-code`: a step under its line on a sans palette, where
+  the change of face sets it apart, and the line's own size on a mono one, where a smaller copy of the same face reads
+  as a mistake. Inline code sits on `code-chip`, a tint of its own ink, so it stands apart on any bubble or tint
+  without a tile darker than the text around it, and keeps its ends on each line it wraps to. Every code span in a
+  sentence is drawn so, through `Code` (`src/components/code.tsx`): rich text's, a harness line's, the guide's, a
+  plan's, a `Notice`'s, and a command or key in a page's own copy, so one span never flips look beside another. A key
+  or path shown as data on its own line (a setting's name under its label, a config file's path) stays plain mono.
   It reads nothing else: other markup, a labelled link's included, stays characters. Every piece is React text, and
   its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
   A conversation's bubbles lay out their bodies with it too, their line breaks kept, since the operator and the
-  workers break lines on purpose; on a raised bubble its code sits on `background`.
+  workers break lines on purpose; on a raised bubble a fenced block sits on `background`.
 - **The guide** (`/guide/PAGE`, `src/lib/guide.ts`, `GuideText`) is the operator's documentation, a page each, as
   Markdown in `src/guide/` (docs/design/CONVERSATIONS.md §22), laid out as a documentation site rather than in panels.
   On the left, the pages by group (`SOURCES`), each group a heading over its pages on a hairline, the page shown in

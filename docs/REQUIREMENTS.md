@@ -117,8 +117,10 @@ Built. Command templates add canopy's definitions directory with `OPENCODE_CONFI
 operator's global and repository config rather than replacing it, so the operator's MCP servers and skills load in
 every run (§13). Constraints the operator should know:
 
-- A skill in `$HOME` that workers use must be a single `SKILL.md`: the worker's `external_directory: deny` lets it load
-  the skill but not read files beside it (§13).
+- A skill in `$HOME` that workers or the planner use must be a single `SKILL.md`: their `external_directory: deny` lets
+  them load the skill but not read files beside it, since their edit tool would reach whatever it allowed (§13). The
+  reviewer and chores, which write nothing, also read the files beside a skill in `~/.claude/skills`,
+  `~/.agents/skills`, and OpenCode's own skill directory.
 - A repository whose OpenCode config defines an agent named like canopy's is refused (D044).
 - Workers need MCP write scope (PR create and update, ticket comments and labels) that a read-only overseer setup does
   not give (M1's `Next`).
