@@ -248,7 +248,8 @@ function Plans({ plans, span }: { plans: PlansRow[]; span: string }) {
         <PanelScroll label="Each plan" className="max-h-96 overflow-x-auto px-3 pb-3">
             <table className="w-full border-collapse text-sm" data-testid="plans-plan-table">
                 <thead className={PADDED_HEAD}>
-                    <tr className="text-left">
+                    {/* The "how it went" column takes the slack, so each figure and its head keep to one line. */}
+                    <tr className="text-left whitespace-nowrap">
                         <th className="panel-label pb-1.5 font-normal">plan</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">ticket</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">level</th>
@@ -291,12 +292,12 @@ function Plan({ plan }: { plan: PlansRow }) {
                 <span title={OUTCOME_HINT[plan.outcome]}>{OUTCOME_WORD[plan.outcome]}</span>
                 {changes !== '' && <span>: {changes}</span>}
             </td>
-            <td className="readout pl-3 text-right text-muted-foreground">{sizeText(plan.size)}</td>
-            <td className="readout pl-3 text-right">
+            <td className="readout pl-3 text-right whitespace-nowrap text-muted-foreground">{sizeText(plan.size)}</td>
+            <td className="readout pl-3 text-right whitespace-nowrap">
                 {plan.outcome === 'planner' ? '–' : hoursText(plan.hours_to_approve)}
             </td>
             <td
-                className={cn('readout pl-3 text-right', plan.resumes > 0 && 'text-status-blocked')}
+                className={cn('readout pl-3 text-right whitespace-nowrap', plan.resumes > 0 && 'text-status-blocked')}
                 title={plan.implemented ? reasons : 'No implement followed it'}
             >
                 {plan.implemented ? plan.resumes : '–'}
