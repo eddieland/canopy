@@ -32,7 +32,7 @@ export default defineConfig({
         // Fonts are self-hosted and animations are frozen; what is left is antialiasing between Chromium builds.
         // The rail's version names the commit it was built from, so every commit would change every image: hidden.
         toHaveScreenshot: {
-            maxDiffPixelRatio: 0.01,
+            maxDiffPixels: 0,
             animations: 'disabled',
             caret: 'hide',
             stylePath: './e2e/screenshot.css',
