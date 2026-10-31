@@ -8,7 +8,8 @@ on:
     inputs:
       update:
         # `changed` (the default) rewrites only the images that fail the comparison. `all` rewrites every one: for a
-        # change subtle enough to pass within the threshold, which `changed` would leave showing the old look.
+        # change small enough to pass within the pixels playwright.config.ts allows, which `changed` would leave
+        # showing the old look.
         description: Which baselines to rewrite
         type: choice
         options: [changed, all]
@@ -60,8 +61,8 @@ jobs:
       - name: Install Playwright's Chromium
         uses: ./.github/actions/playwright-chromium # zizmor: ignore[self-repository]
 
-      # `changed` rewrites only the images that fail the comparison, and writes missing ones, so antialiasing noise
-      # within the threshold does not churn the rest; `all` rewrites every image. Only the spec files that take a
+      # `changed` rewrites only the images that fail the comparison, and writes missing ones, so the rest stay as they
+      # are; `all` rewrites every image. Only the spec files that take a
       # screenshot run, found by what they call, so a new one is picked up unlisted: the rest of the suite is three
       # quarters of the time and writes no image. A failing test in them fails the run and nothing is pushed; the CI
       # run started on the pushed commit runs the whole suite.
