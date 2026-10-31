@@ -733,6 +733,15 @@ side.
   magnifier, the field, what it says at its end (a count), and a ghost clear button while it holds text, in the place of
   what sits there empty (the rail's keycap). Its two sizes are the rail's and a list filter's (`h-8`, `text-sm`) and a
   panel's own line of data (`sm`, `h-7`, `text-xs`). No page builds a field by hand.
+- **`MarkdownField`** (`src/components/markdown-field.tsx`): a field the operator writes to an agent in, in the
+  Markdown `RichText` draws and nothing more (`src/lib/markdown-edit.ts`): bold, code, a heading, the two lists, and a
+  code block, from a `Toolbar` under the text and ⌘B and ⌘E, so what is written reads in the thread as it did in the
+  field. It is one box, the field's look, the text then the toolbar under a hairline, so Tab reaches the text first. An
+  edit goes through the browser, so its undo takes it back. Three sizes, each growing with its text and then
+  scrolling: `line`, one line high, beside a form's `Input`; `default`, a reply's few lines; `tall`, a long brief. Its
+  preview is `tab`, Write and Preview at the toolbar's end, the preview at the text's height; `live`, beside the text
+  once the box is `@2xl` wide, under it before; or `off`. A label names it through `htmlFor`, never around it. The
+  reply form uses it; a field that sends text an agent reads moves to it when its PR is already changing that form.
 - **`PanelSkeleton`** (`src/components/panel.tsx`): what a panel shows while its data has not arrived at all, `rows`
   shimmering bars, each shorter than the last. It takes the minimum height its content will, so nothing moves when
   the data lands: `min-h-72` for a page's main panel or a list that runs long (tickets, runs, ticks), `min-h-40` for
