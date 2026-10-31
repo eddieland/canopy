@@ -1,9 +1,12 @@
+import { useId } from 'react'
+
 import type { SeasonId } from '@/lib/seasons'
 
 /**
- * What stands beside Sprig in a season (src/lib/seasons.ts), on the same floor as its keyboard, over a soft shadow: a
- * carved jack-o'-lantern whose candle flickers, a gift with a bow, a glossy heart with a smaller one behind, or a
- * veined shamrock. Decoration only, hidden from a screen reader.
+ * What stands beside Sprig in a season (src/lib/seasons.ts), on the same floor as its keyboard, over a soft shadow:
+ * a party popper bursting with confetti, a glossy heart with a smaller one behind, a veined shamrock, a painted egg in
+ * the grass, a carved jack-o'-lantern whose candle flickers, a steaming pumpkin pie, or a gift with a bow. Decoration
+ * only, hidden from a screen reader.
  */
 export function SeasonDecoration({ id, className }: { id: SeasonId; className?: string }) {
     return (
@@ -33,7 +36,83 @@ const HEART = 'M14 24 C6 18 3 14 3 10 A5.5 5.5 0 0 1 14 7.5 A5.5 5.5 0 0 1 25 10
 /** A four-pointed twinkle of light, centered on 0 0, a unit across each way. */
 const TWINKLE = 'M0 -1 Q0.15 -0.15 1 0 Q0.15 0.15 0 1 Q-0.15 0.15 -1 0 Q-0.15 -0.15 0 -1 Z'
 
+/** An egg standing on the floor, wider below its middle. */
+const EGG = [
+    'M14 4.2 C18.8 4.2 21.6 11.6 21.6 16.6 C21.6 21.4 18.4 24.6 14 24.6',
+    'C9.6 24.6 6.4 21.4 6.4 16.6 C6.4 11.6 9.2 4.2 14 4.2 Z',
+].join(' ')
+
+/** The confetti a party popper throws: where each piece lands, how it turns, and its color. */
+const CONFETTI: readonly (readonly [x: number, y: number, turn: number, color: string])[] = [
+    [15.6, 9.4, 20, 'fill-flair-red'],
+    [19.4, 11.8, -30, 'fill-flair-cyan'],
+    [22.8, 7.6, 50, 'fill-flair-yellow'],
+    [17.8, 4.6, -60, 'fill-flair-green'],
+    [24.6, 13.2, 10, 'fill-flair-purple'],
+    [21.2, 2.6, 35, 'fill-flair-blue'],
+    [13.4, 5.8, -15, 'fill-flair-cyan'],
+    [25.4, 4.2, -40, 'fill-flair-red'],
+]
+
+/** A pie crust's crimped edge: where each pinch sits, round the rim. */
+const CRIMPS = Array.from({ length: 22 }, (_, i) => {
+    const angle = (i / 22) * 2 * Math.PI
+    return [14 + 10 * Math.cos(angle), 14.6 + 3.9 * Math.sin(angle)] as const
+})
+
 const DRAWINGS: Record<SeasonId, React.JSX.Element> = {
+    newyear: (
+        <>
+            {/* Streamers curling out of the popper's mouth. */}
+            <g fill="none" strokeWidth="0.7" strokeLinecap="round">
+                <path
+                    d="M11.4 12.6 C12.6 8.4 10.6 6.4 12.2 3.6 C13 2.2 14.6 2.4 14.8 1.4"
+                    className="stroke-flair-yellow"
+                />
+                <path
+                    d="M12.4 13.6 C15.8 11.2 17.4 13.6 19.8 10.4 C21.6 8 23.8 9.6 25.2 8.2"
+                    className="stroke-flair-cyan"
+                />
+                <path
+                    d="M12 13 C14.6 9.6 17 9.2 18.2 6.6 C19.2 4.4 21.4 5.4 23 3.2"
+                    className="stroke-buddy-hat-band"
+                />
+            </g>
+            {CONFETTI.map(([x, y, turn, color]) => (
+                <rect
+                    key={`${x} ${y}`}
+                    x={x - 0.7}
+                    y={y - 0.35}
+                    width="1.4"
+                    height="0.7"
+                    transform={`rotate(${turn} ${x} ${y})`}
+                    className={color}
+                />
+            ))}
+            <g className="animate-buddy-candle fill-buddy-hat-gold">
+                <path d={TWINKLE} transform="translate(20.6 15.8) scale(1.4)" />
+                <path d={TWINKLE} transform="translate(9 4.4) scale(1.2)" />
+                <path d={TWINKLE} transform="translate(26 10.8) scale(0.9)" />
+            </g>
+            {/* The popper, a striped cone tipped back on the floor with its mouth to the sky. */}
+            <g transform="translate(9.6 14.6) rotate(35)">
+                <path d="M-4 0 L0 11 L4 0 Z" className="fill-buddy-hat-band" />
+                <g className="fill-buddy-hat-gold">
+                    <path d="M-2.91 3 L2.91 3 L2.18 5 L-2.18 5 Z" />
+                    <path d="M-1.45 7 L1.45 7 L0.87 8.6 L-0.87 8.6 Z" />
+                </g>
+                <path d="M0 0 L4 0 L0 11 Z" className="fill-buddy-pupil opacity-20" />
+                <path
+                    d="M-2.6 1.4 L-0.6 8.4"
+                    strokeWidth="0.5"
+                    strokeLinecap="round"
+                    className="stroke-buddy-eye opacity-50"
+                />
+                <ellipse rx="4" ry="1.4" className="fill-buddy-hat-gold" />
+                <ellipse rx="3.2" ry="0.9" className="fill-buddy-pupil opacity-50" />
+            </g>
+        </>
+    ),
     halloween: (
         <>
             {/* The stem, a curl of vine, and a leaf. */}
@@ -154,6 +233,50 @@ const DRAWINGS: Record<SeasonId, React.JSX.Element> = {
             <path d={TWINKLE} transform="translate(3 3) scale(2)" className="fill-buddy-hat-gold" />
         </>
     ),
+    spring: <PaintedEgg />,
+    harvest: (
+        <>
+            {/* Steam rising off the pie, still warm. */}
+            <g
+                fill="none"
+                strokeWidth="0.7"
+                strokeLinecap="round"
+                className="animate-buddy-candle stroke-buddy-ghost-facet opacity-60"
+            >
+                <path d="M9.6 9.4 C8.4 7.6 10.8 6.4 9.6 4.4" />
+                <path d="M14 8.6 C12.8 6.4 15.2 5 14 2.4" />
+                <path d="M18.4 9.4 C17.2 7.6 19.6 6.4 18.4 4.4" />
+            </g>
+            {/* The dish, glazed, a little wider than the pie in it. */}
+            <path d="M1.6 15 L3.4 21.4 Q14 26 24.6 21.4 L26.4 15 Z" className="fill-buddy-hat-blue" />
+            <path d="M3.4 21.4 Q14 26 24.6 21.4 L25 20 Q14 24.4 3 20 Z" className="fill-buddy-pupil opacity-25" />
+            <ellipse cx="14" cy="15" rx="12.4" ry="5" className="fill-buddy-hat-blue" />
+            <path d="M3 13.6 Q6 10.6 11 10.2" fill="none" strokeWidth="0.5" className="stroke-buddy-eye opacity-50" />
+            {/* The crust, crimped round its rim, and the filling inside it. */}
+            <ellipse cx="14" cy="14.6" rx="10.8" ry="4.4" className="fill-buddy-hat-gold" />
+            <g className="fill-buddy-hat-gold stroke-buddy-ghost-gilt-shade" strokeWidth="0.35">
+                {CRIMPS.map(([x, y]) => (
+                    <circle key={`${x} ${y}`} cx={x} cy={y} r="1.2" />
+                ))}
+            </g>
+            <ellipse cx="14" cy="14.8" rx="8.4" ry="3.1" className="fill-buddy-ghost-pumpkin-shade" />
+            <ellipse cx="13.4" cy="14.4" rx="7" ry="2.3" className="fill-buddy-ghost-pumpkin" />
+            {/* A dollop of cream on top, swirled to a point. */}
+            <ellipse cx="14" cy="14.6" rx="2.8" ry="1.2" className="fill-buddy-ghost-shell" />
+            <path
+                d="M11.6 14.4 C11.4 12.6 16.6 12.6 16.4 14.2 C15.2 15 12.8 15 11.6 14.4 Z"
+                className="fill-buddy-hat-cloth"
+            />
+            <path
+                d="M12.6 13.2 C12.8 11.6 15.4 11.8 15 12.6 C14.6 13.6 13.4 13.6 12.6 13.2 Z"
+                className="fill-buddy-hat-cloth"
+            />
+            <path
+                d="M13.4 12.2 C13.6 11.2 14.4 10.8 14.8 10.6 C14.8 11.4 14.6 12 14.2 12.4 Z"
+                className="fill-buddy-hat-cloth"
+            />
+        </>
+    ),
     shamrock: (
         <>
             <path
@@ -186,4 +309,79 @@ const DRAWINGS: Record<SeasonId, React.JSX.Element> = {
             <path d={TWINKLE} transform="translate(23.6 3.4) scale(1.8)" className="fill-buddy-hat-gold" />
         </>
     ),
+}
+
+/**
+ * A painted egg standing in the grass, banded with a zigzag and dotted, beside a daisy. A component of its own, since
+ * its bands are clipped to its shell by an id each drawing must not share with another.
+ */
+function PaintedEgg() {
+    const shell = useId()
+    return (
+        <>
+            <clipPath id={shell}>
+                <path d={EGG} />
+            </clipPath>
+            <path d={EGG} className="fill-buddy-ghost-eye" />
+            <g clipPath={`url(#${shell})`}>
+                <rect x="4" y="9.6" width="20" height="1.6" className="fill-buddy-hat-gold" />
+                <path
+                    d="M4 15.2 L6 13.2 L8 15.2 L10 13.2 L12 15.2 L14 13.2 L16 15.2 L18 13.2 L20 15.2 L22 13.2 L24 15.2"
+                    fill="none"
+                    strokeWidth="1.3"
+                    strokeLinejoin="round"
+                    className="stroke-buddy-hat-band"
+                />
+                <rect x="4" y="18.4" width="20" height="2.4" className="fill-buddy-hat-cloth" />
+                <g className="fill-buddy-hat-band">
+                    <circle cx="9.6" cy="7.4" r="0.6" />
+                    <circle cx="14" cy="6.6" r="0.6" />
+                    <circle cx="18.4" cy="7.4" r="0.6" />
+                </g>
+                <g className="fill-buddy-hat-band">
+                    <circle cx="9" cy="19.6" r="0.5" />
+                    <circle cx="12" cy="19.6" r="0.5" />
+                    <circle cx="15" cy="19.6" r="0.5" />
+                    <circle cx="18" cy="19.6" r="0.5" />
+                </g>
+                {/* The side away from the light, then a gleam on the near one. */}
+                <path d="M17 3 C23 6 24.4 19 18 26 L26 26 L26 3 Z" className="fill-buddy-pupil opacity-15" />
+            </g>
+            <path d={EGG} fill="none" strokeWidth="0.4" className="stroke-buddy-pupil opacity-20" />
+            <ellipse
+                cx="10.4"
+                cy="9.8"
+                rx="1.1"
+                ry="2.2"
+                transform="rotate(20 10.4 9.8)"
+                className="fill-buddy-eye opacity-60"
+            />
+            {/* Grass round its foot. */}
+            <g className="fill-buddy-leaf">
+                <path d="M3 25 L4.2 20.4 L5.4 25 Z" />
+                <path d="M6 25 L8 21.4 L8.6 25 Z" />
+                <path d="M18.6 25 L20.4 21.6 L21.4 25 Z" />
+                <path d="M11 25 L12.4 22.6 L13.6 25 Z" />
+            </g>
+            <g className="fill-buddy-leaf-shade">
+                <path d="M4.6 25 L6.4 21.8 L7 25 Z" />
+                <path d="M15.4 25 L16.4 22.4 L17.6 25 Z" />
+                <path d="M21 25 L22 22.8 L23.2 25 Z" />
+            </g>
+            {/* A daisy beside it. */}
+            <path
+                d="M24.4 25 C24.4 22.4 25 20.6 24.6 18.6"
+                fill="none"
+                strokeWidth="0.6"
+                strokeLinecap="round"
+                className="stroke-buddy-leaf-shade"
+            />
+            <g strokeWidth="0.25" className="fill-buddy-hat-cloth stroke-buddy-ghost-facet">
+                {[0, 60, 120, 180, 240, 300].map((turn) => (
+                    <ellipse key={turn} cx="24.6" cy="16.6" rx="0.6" ry="1.2" transform={`rotate(${turn} 24.6 18)`} />
+                ))}
+            </g>
+            <circle cx="24.6" cy="18" r="0.75" className="fill-buddy-hat-gold" />
+        </>
+    )
 }

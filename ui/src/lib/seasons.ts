@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
  */
 
 /** A season Sprig decorates for. */
-export type SeasonId = 'valentines' | 'shamrock' | 'halloween' | 'winter'
+export type SeasonId = 'newyear' | 'valentines' | 'shamrock' | 'spring' | 'halloween' | 'harvest' | 'winter'
 
 /** A day of the year: its month, 1 for January, and its day of the month. */
 type Day = readonly [month: number, day: number]
@@ -25,9 +25,12 @@ export interface Season {
 
 /** The seasons, in the order of the year. None runs over the new year, and none overlaps another. */
 export const SEASONS: readonly Season[] = [
+    { id: 'newyear', from: [1, 1], to: [1, 6] },
     { id: 'valentines', from: [2, 7], to: [2, 14] },
     { id: 'shamrock', from: [3, 10], to: [3, 17] },
+    { id: 'spring', from: [3, 25], to: [4, 15] },
     { id: 'halloween', from: [10, 15], to: [10, 31] },
+    { id: 'harvest', from: [11, 20], to: [11, 28] },
     { id: 'winter', from: [12, 1], to: [12, 31] },
 ]
 
