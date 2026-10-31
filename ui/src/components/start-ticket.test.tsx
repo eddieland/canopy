@@ -3,7 +3,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
-import type { ConfigModels, ModelList, PersonaList } from '@/api/types'
+import type { ConfigModels, ConfigSettings, ModelList, PersonaList } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
 import { StartTicket } from './start-ticket'
@@ -32,6 +32,30 @@ const LISTED: ModelList = {
     error: null,
 }
 
+// The settings as `policy.plan` is set: `off`, or `approve` once a test sets it.
+function settings(plan: 'off' | 'approve'): ConfigSettings {
+    return {
+        keys: [
+            {
+                name: 'policy.plan',
+                value: plan,
+                source: 'default',
+                kind: 'stricter',
+                bound: null,
+                looser: null,
+                choices: ['off', 'approve'],
+            },
+        ],
+        private_file: '/home/me/.config/canopy/private.toml',
+        user_file: '/home/me/.config/canopy/config.toml',
+        workspace_file: '/repo/canopy.toml',
+        hash: '0',
+        repos: ['repo'],
+        every: null,
+    }
+}
+let policy: 'off' | 'approve' = 'off'
+
 // Every path the form posts to, the bodies sent, and what the server stand-in answers.
 let sent: string[] = []
 let bodies: unknown[] = []
@@ -42,7 +66,12 @@ let reads: string[] = []
 const server: Middleware = {
     async onRequest({ request }) {
         const url = new URL(request.url)
-        const read = { '/api/personas': PERSONAS, '/api/config/models': CONFIG, '/api/models': LISTED }[url.pathname]
+        const read = {
+            '/api/personas': PERSONAS,
+            '/api/config/models': CONFIG,
+            '/api/models': LISTED,
+            '/api/config': settings(policy),
+        }[url.pathname]
         if (read !== undefined) {
             reads.push(url.pathname)
             return Response.json(read)
@@ -60,6 +89,7 @@ beforeEach(() => {
     sent = []
     bodies = []
     reads = []
+    policy = 'off'
     answer = undefined
     api.use(server)
 })
@@ -108,8 +138,53 @@ describe('StartTicket', () => {
         })
         expect(sent).toEqual(['/api/tickets/ABC-1/start'])
         // It picks nothing, so it sets none of the ticket's overrides, and the menus, never shown, read nothing.
-        expect(bodies).toEqual([{ personas: [], models: [] }])
-        expect(reads).toEqual([])
+        expect(bodies).toEqual([{ personas: [], models: [], plan: null }])
+        expect(reads).toEqual(['/api/config'])
+    })
+
+    it('asks for a plan the policy would not, as canopy start --plan does', async () => {
+        await renderRouted(<StartTicket />)
+        const plan = screen.getByRole('checkbox', { name: 'Plan it first' })
+        await waitFor(() => {
+            expect(reads).toContain('/api/config')
+        })
+        expect(plan.getAttribute('aria-checked')).toBe('false')
+        expect(screen.queryByText('policy.plan')).toBeNull()
+        fireEvent.click(plan)
+        expect(plan.getAttribute('aria-checked')).toBe('true')
+        start('ABC-1')
+        await waitFor(() => {
+            expect(bodies).toEqual([{ personas: [], models: [], plan: true }])
+        })
+    })
+
+    it("is checked when Settings' policy.plan is approve, says so, and waives the plan once unchecked", async () => {
+        policy = 'approve'
+        await renderRouted(<StartTicket />)
+        const plan = screen.getByRole('checkbox', { name: 'Plan it first' })
+        await waitFor(() => {
+            expect(plan.getAttribute('aria-checked')).toBe('true')
+        })
+        expect(screen.getByText('policy.plan')).toBeTruthy()
+        fireEvent.click(plan)
+        expect(plan.getAttribute('aria-checked')).toBe('false')
+        expect(screen.queryByText('policy.plan')).toBeNull()
+        start('ABC-1')
+        await waitFor(() => {
+            expect(bodies).toEqual([{ personas: [], models: [], plan: false }])
+        })
+    })
+
+    it("leaves the ticket's own setting alone while the box agrees with policy.plan", async () => {
+        policy = 'approve'
+        await renderRouted(<StartTicket />)
+        await waitFor(() => {
+            expect(screen.getByRole('checkbox', { name: 'Plan it first' }).getAttribute('aria-checked')).toBe('true')
+        })
+        start('ABC-1')
+        await waitFor(() => {
+            expect(bodies).toEqual([{ personas: [], models: [], plan: null }])
+        })
     })
 
     it("shows each agent's persona and model, in the order a ticket meets them, each naming its default", async () => {
@@ -161,6 +236,7 @@ describe('StartTicket', () => {
             {
                 personas: [{ agent: 'planner', persona: 'skeptic' }],
                 models: [{ agent: 'reviewer', model: 'acme/deep-2@high' }],
+                plan: null,
             },
         ])
     })

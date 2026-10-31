@@ -17,10 +17,10 @@ import httpx2
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import checklist_answers, config, conversation, db, pause, review_runs, run_models
+from canopy.core import checklist_answers, config, conversation, db, pause, records, review_runs, run_models
 from canopy.core.checklist_answers import Answer, Checked
 from canopy.core.context import Context
-from canopy.core.vocab import ItemAnswer, ModelsRead, Phase, RunStatus, StartStatus, TickStatus
+from canopy.core.vocab import ItemAnswer, ModelsRead, Phase, PlanSetting, RunStatus, StartStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import repeat, reread, tick_now, web
 from canopy.reviews import grants
@@ -522,6 +522,37 @@ def test_a_start_from_the_web_sets_each_agents_persona_and_model_with_it_or_star
     # A start that chooses none leaves them be, and an empty body is a start that chooses none.
     assert start({}).json()["already"] is True
     assert len(overrides()) == 3
+
+
+def test_a_start_from_the_web_asks_for_a_plan_or_waives_one_whatever_the_policy(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+
+    def start(key: str, body: Mapping[str, object]) -> httpx2.Response:
+        return c.post(f"/api/tickets/{key}/start", json=body, headers=headers)
+
+    def setting(key: str) -> PlanSetting | None:
+        return present(db.get_ticket(ctx.conn, key)).plan_setting
+
+    # True is `canopy start --plan`'s, False `canopy plan --skip`'s, and none leaves the ticket's own setting be.
+    assert start(KEY, {"plan": True}).json()["already"] is False
+    assert setting(KEY) is PlanSetting.PLAN
+    assert start(KEY, {}).json()["already"] is True
+    assert setting(KEY) is PlanSetting.PLAN
+    assert start("PROJ-2", {"plan": False}).status_code == 200
+    assert setting("PROJ-2") is PlanSetting.SKIP
+
+    # A plan asked of work already started is refused, and so is the rest of the start with it.
+    records.update(records.Ticket).set(branch="agent/PROJ-2-work").where("key = ?", "PROJ-2").run(ctx.conn)
+    with_persona = {"plan": True, "personas": [{"agent": "planner", "persona": "skeptic"}]}
+    assert refused(start("PROJ-2", with_persona)) == (
+        "bad_plan: PROJ-2 already has work on agent/PROJ-2-work; a started ticket is not planned"
+    )
+    assert setting("PROJ-2") is PlanSetting.SKIP
+    assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
+    # Only the operator sets it: never from inside one of canopy's own runs.
+    with mock.patch.dict(os.environ, {conversation.RUN_ID_ENV: "7"}):
+        assert refused(start("PROJ-3", {"plan": True})).startswith("inside_run: ")
+    assert db.get_ticket(ctx.conn, "PROJ-3") is None
 
 
 def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_makes_it(

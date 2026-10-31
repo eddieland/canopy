@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { NO_PICKS, pickCount, startRequest, withPick } from './start-picks'
+import { NO_PICKS, pickCount, planAsked, startRequest, withPick } from './start-picks'
 
 describe('start picks', () => {
     it('sends nothing for a start that picks nothing', () => {
@@ -26,5 +26,11 @@ describe('start picks', () => {
     it('drops a pick set back to the default', () => {
         const picks = withPick(withPick(NO_PICKS, 'models', 'planner', 'acme/fake-model-1'), 'models', 'planner', null)
         expect(picks).toEqual(NO_PICKS)
+    })
+    it('asks the plan only where it differs from policy.plan', () => {
+        expect(planAsked(true, false)).toBe(true)
+        expect(planAsked(false, true)).toBe(false)
+        expect(planAsked(true, true)).toBeNull()
+        expect(planAsked(false, false)).toBeNull()
     })
 })

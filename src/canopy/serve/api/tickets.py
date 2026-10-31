@@ -5,12 +5,14 @@ Choosing is of the persona or the model one of the ticket's agents runs in or on
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Callable
 
 from fastapi import APIRouter, HTTPException
 
-from canopy.core import conversation, db, personas, ticket_models
-from canopy.infra import logs
+from canopy.core import conversation, db, personas, plans, ticket_models
+from canopy.core.vocab import PlanSetting
+from canopy.infra import lock, logs
 from canopy.runtime.report import ModelList
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
@@ -64,8 +66,9 @@ def ticket(key: TicketKey, backend: BackendDep) -> TicketDetail:
 def start(key: TicketKey, backend: BackendDep, body: StartRequest | None = None) -> Started:
     """`canopy start`: work the ticket privately, in place of a queue label; its conversation stays in the journal.
 
-    The body may also choose the persona and the model of any of the ticket's agents, as its overrides, as
-    `canopy persona` and `canopy model` do, with the start: the CLI's guards hold, and a choice refused starts nothing.
+    The body may also say whether it is planned first, as `canopy start --plan` and `canopy plan --skip` do, and choose
+    the persona and the model of any of its agents, as its overrides, as `canopy persona` and `canopy model` do, with
+    the start: the CLI's guards hold, and a choice refused starts nothing.
     """
     ref = ticket_ref(key, "start")
     chosen = body if body is not None else StartRequest()
@@ -76,9 +79,14 @@ def start(key: TicketKey, backend: BackendDep, body: StartRequest | None = None)
                 # held, and only for the operator, as a choice from `/models` reads it.
                 conversation.check_operator()
             models = [(m, backend.model_list_for(ctx, m.model)) for m in chosen.models]
-            # One transaction, so the start and its choices land together, or, one refused, none of them does.
-            with db.transaction(ctx.conn):
+            # The dispatch lock is held as the other plan verbs hold it, so a dispatch reads the plan setting before
+            # the start or after it; one transaction, so the start and its choices land together, or, one refused,
+            # none of them does.
+            held = lock.hold(ctx.dispatch_lock_path, wait=True) if chosen.plan is not None else contextlib.nullcontext()
+            with held, db.transaction(ctx.conn):
                 started = conversation.start(ctx.conn, ctx.config, ref, repo=ctx.repo, channel=WEB)
+                if chosen.plan is not None:
+                    plans.start_setting(ctx.conn, ref.id, PlanSetting.PLAN if chosen.plan else PlanSetting.SKIP)
                 for p in chosen.personas:
                     personas.choose(ctx.conn, ctx.config, ref.id, p.agent, p.persona, channel=WEB)
                 for m, listed in models:
@@ -98,6 +106,7 @@ def start(key: TicketKey, backend: BackendDep, body: StartRequest | None = None)
         extra={
             "ticket": ref.id,
             "already": started.already,
+            "plan": chosen.plan,
             "personas": {p.agent: p.persona for p in chosen.personas},
             "models": {m.agent: m.model for m in chosen.models},
             "channel": WEB,

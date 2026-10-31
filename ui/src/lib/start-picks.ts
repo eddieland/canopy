@@ -31,6 +31,16 @@ export function startRequest(picks: StartPicks): StartRequest {
     }
 }
 
+/**
+ * What a start sends for `Plan it first`, checked as `plan` against `policy.plan` at `approve` (`policy`): true to ask
+ * for a plan the policy would not, false to waive one it would, and null when it agrees with the policy, which leaves
+ * the ticket's own setting alone. So a ticket started again under `approve`, with work on a branch, is not refused
+ * for asking a plan of work already started.
+ */
+export function planAsked(plan: boolean, policy: boolean): boolean | null {
+    return plan === policy ? null : plan
+}
+
 /** How many choices `picks` holds, a persona and a model counted apart, which the closed overrides say. */
 export function pickCount(picks: StartPicks): number {
     return Object.keys(picks.personas).length + Object.keys(picks.models).length

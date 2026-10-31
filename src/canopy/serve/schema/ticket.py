@@ -90,12 +90,15 @@ class TicketDetail(Model):
 
 
 class StartRequest(Model):
-    """A start, and the persona and model each of the ticket's agents takes from it, as the ticket's override.
+    """A start, whether the ticket is planned first, and the persona and model each of its agents takes from it.
 
-    Each choice is the ticket page's (`PersonaRequest`, `ModelRequest`), set with the start or not at all: one refused
-    starts nothing.
+    Each persona and model is the ticket page's choice (`PersonaRequest`, `ModelRequest`), its override. All of it is
+    set with the start or not at all: one refused starts nothing.
     """
 
+    plan: bool | None = None
+    """Whether its implement waits on a plan the operator approves: True as `canopy start --plan` asks, False as
+    `canopy plan KEY --skip` waives it, whatever `policy.plan` says; None leaves the ticket's own setting as it is."""
     personas: Annotated[list[PersonaRequest], Field(max_length=3)] = []
     """A persona for each agent named, at most one each; none leaves the ticket's overrides as they are."""
     models: Annotated[list[ModelRequest], Field(max_length=3)] = []

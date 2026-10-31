@@ -51,8 +51,15 @@ reviewer on a bigger model is one form, not three trips. They go together or not
 model the runtime doesn't list refuses the start, and nothing is set. Fold the rows away and the button counts what you
 picked, so nothing rides along unseen.
 
-A ticket you start is private from then on, whatever labels it carries or gains. To ask for a plan before the first
-implement, start it from the CLI with `canopy start KEY --plan`, or run `canopy plan KEY` afterwards.
+**Plan it first**, beside the button, decides whether a planner writes down how the work will be done before anything
+is implemented, waiting on your approval. It starts checked when `policy.plan` is `approve` in
+[Settings](settings), and says `policy.plan` beside it so you know who checked it. Check it against an `off` policy
+and it's `canopy start KEY --plan`; uncheck it against `approve` and it's `canopy plan KEY --skip`, for the one-line
+fix that doesn't need a design review. Left as the policy has it, it changes nothing about the ticket's own setting,
+so starting a stopped ticket again doesn't trip over a plan it was never going to need.
+
+A ticket you start is private from then on, whatever labels it carries or gains. You can still ask for a plan
+afterwards with `canopy plan KEY`.
 
 ## A ticket's page
 

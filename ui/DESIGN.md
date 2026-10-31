@@ -1933,7 +1933,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   with no modifier, from anywhere but a text field or the plan editor (the rule `R` follows), opens it, never over
   another dialog. It is a `Dialog` placed as the review dialog is, titled `Start a ticket` in a panel's header, holding
   the tickets page's form (`StartTicket`), so they cannot drift, with the focus in the key field. A ticket that starts
-  closes it and opens the ticket's page; a refusal keeps it open, its `Notice` naming the guard. Under the key, a
+  closes it and opens the ticket's page; a refusal keeps it open, its `Notice` naming the guard. Beside the button,
+  a `Checkbox`, `Plan it first`, starts as `policy.plan` is in Settings, naming it while it does; it is sent only when
+  it differs from the policy, as `--plan` or `--skip`. Under the key, a
   `Disclosure` opens a row for each of the ticket's agents in the order the ticket meets them, planner, worker,
   reviewer, each a persona menu and a model menu (`ModelPicker`) naming its default until one is picked; the picks go
   with the start as the ticket's overrides, and folded, the disclosure says how many there are.

@@ -27,7 +27,7 @@ import re
 import secrets
 import stat
 from dataclasses import dataclass
-from typing import IO, TYPE_CHECKING, Literal, TypedDict
+from typing import IO, TYPE_CHECKING, Literal, TypedDict, assert_never
 
 from canopy.core import conversation, db, records, sql
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
@@ -163,6 +163,32 @@ def skip(conn: sqlite3.Connection, key: str, *, dispatch_lock: Path) -> Asked:
         already = ticket.plan_setting is PlanSetting.SKIP and superseded is None
         db.change_ticket(conn, key, "plan_setting", PlanSetting.SKIP)
     return Asked(superseded=superseded, already=already)
+
+
+def start_setting(conn: sqlite3.Connection, key: str, setting: PlanSetting) -> None:
+    """Set a ticket's own plan setting as the operator starts it (DESIGN §25), whatever the policy.
+
+    `plan` is `canopy start --plan`'s: its implement waits on a plan the operator approved, and a plan it already has,
+    waiting or approved, stands. `skip` waives its plan, superseding a current one, as `skip` does. Call inside the
+    start's transaction, after `conversation.start`, with the dispatch lock held, so a dispatch reads the setting
+    before the start or after it.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own ticks or runs; `bad_plan` while a plan run for it is running,
+            or for `plan` once it has a branch, since a plan then would describe work already started.
+    """
+    conversation.check_operator()
+    ticket = _ticket(conn, key)
+    _not_planning(conn, key)
+    match setting:
+        case PlanSetting.PLAN:
+            if ticket.branch:
+                raise Refused("bad_plan", f"{key} already has work on {ticket.branch}; a started ticket is not planned")
+        case PlanSetting.SKIP:
+            supersede(conn, key)
+        case _:
+            assert_never(setting)
+    db.change_ticket(conn, key, "plan_setting", setting)
 
 
 def _ticket(conn: sqlite3.Connection, key: str) -> records.Ticket:

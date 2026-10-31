@@ -14,6 +14,10 @@ let answer: Response | undefined
 
 const server: Middleware = {
     onRequest({ request }) {
+        // The settings the form reads for `policy.plan`: none set, so it follows `off`.
+        if (request.method === 'GET') {
+            return Response.json({ keys: [] })
+        }
         sent.push(new URL(request.url).pathname)
         return answer ?? Response.json({ already: false, running_run: null, running_private: null })
     },
