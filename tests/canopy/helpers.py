@@ -1238,6 +1238,11 @@ def logged(text: str) -> git_tools.Commits:
     return git_tools.Commits.model_validate_json(text.removeprefix(f"{git_tools.DATA_NOTE}\n\n"))
 
 
+def diffed(text: str) -> git_tools.Changes:
+    """The files the text of a call to the git tool `diff` holds: its JSON, after the note before it."""
+    return git_tools.Changes.model_validate_json(text.removeprefix(f"{git_tools.DATA_NOTE}\n\n"))
+
+
 def tool_call(name: str, /, **arguments: object) -> dict[str, object]:
     """A `tools/call` request of tool `name` with `arguments`, for `mcp_session`."""
     return {"method": "tools/call", "params": {"name": name, "arguments": arguments}}
