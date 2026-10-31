@@ -1,6 +1,6 @@
 """Reading PRs whole, many to a query, each page of each.
 
-Each PR's state and labels, the checks at its head, its reviews, and its review threads with every comment.
+Each PR's state, labels, and times, the checks at its head, its reviews, and its review threads with every comment.
 `canopy-connect-github` prints what this reads; `canopy-post-github` reads the threads to find the one each reply
 answers.
 """
@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from canopy_github import (
     Client,
@@ -16,6 +17,7 @@ from canopy_github import (
     Ref,
     Reply,
     ServerError,
+    backward,
     cut,
     error_types,
     items,
@@ -24,12 +26,13 @@ from canopy_github import (
     number,
     obj,
     pages,
+    parse_time,
     refusal,
     text,
 )
 
 #: PRs one query reads: GitHub refuses a query that could return more than 500,000 nodes, and each PR asks for some
-#: 5,300 (50 threads of 100 comments, and a page each of reviews, labels, and checks).
+#: 5,400 (50 threads of 100 comments, and a page each of reviews, labels, checks, and timeline events).
 BATCH = 20
 #: The most labels a PR's line carries: canopy refuses a line with more, so a PR with more is not read whole.
 MAX_LABELS = 100
@@ -70,20 +73,32 @@ fragment Contexts on StatusCheckRollupContextConnection {
 }
 """
 
-_PULL = (
-    """
-fragment Pull on PullRequest {
-  id url number title state isDraft headRefOid baseRefName mergeable mergeStateStatus
-  author { __typename login }
-  labels(first: 100) { pageInfo { hasNextPage endCursor } nodes { name } }
-  reviews(first: 100) { pageInfo { hasNextPage endCursor } nodes { ...Review } }
-  reviewThreads(first: 50) { pageInfo { hasNextPage endCursor } nodes { ...Thread } }
-  commits(last: 1) { nodes { commit { id oid statusCheckRollup { contexts(first: 100) { ...Contexts } } } } }
+# The timeline events a PR's ready and review-requested times are read from, read from the newest, as the latest ready
+# event matters and nothing before it does.
+_EVENTS = "itemTypes: [READY_FOR_REVIEW_EVENT, REVIEW_REQUESTED_EVENT], last: 100"
+_TIMELINE = """
+fragment Timeline on PullRequestTimelineItemsConnection {
+  pageInfo { hasPreviousPage startCursor }
+  nodes { __typename ... on ReadyForReviewEvent { createdAt } ... on ReviewRequestedEvent { createdAt } }
 }
+"""
+
+_PULL = (
+    f"""
+fragment Pull on PullRequest {{
+  id url number title state isDraft headRefOid baseRefName mergeable mergeStateStatus createdAt mergedAt closedAt
+  author {{ __typename login }}
+  labels(first: 100) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ name }} }}
+  reviews(first: 100) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ ...Review }} }}
+  reviewThreads(first: 50) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ ...Thread }} }}
+  commits(last: 1) {{ nodes {{ commit {{ id oid statusCheckRollup {{ contexts(first: 100) {{ ...Contexts }} }} }} }} }}
+  timelineItems({_EVENTS}) {{ ...Timeline }}
+}}
 """
     + _REVIEW
     + _THREAD
     + _CONTEXTS
+    + _TIMELINE
 )
 
 _REVIEWS = (
@@ -130,6 +145,15 @@ query Contexts($id: ID!, $after: String) {
 }
 """
     + _CONTEXTS
+)
+
+_MORE_TIMELINE = (
+    f"""
+query Timeline($id: ID!, $before: String) {{
+  node(id: $id) {{ ... on PullRequest {{ timelineItems({_EVENTS}, before: $before) {{ ...Timeline }} }} }}
+}}
+"""
+    + _TIMELINE
 )
 
 #: A commit status's state, as a check's status and conclusion: one expected is one no context has written yet.
@@ -300,7 +324,7 @@ def _pull(client: Client, ref: Ref, pr: Mapping[str, object]) -> list[Mapping[st
         found = obj(client.query(_REVIEWS, {"id": node, "after": after}).get("node"), "pull request")
         return obj(found.get("reviews"), "reviews")
 
-    lines: list[Mapping[str, object]] = [_pr_line(ref, pr, items(labels.get("nodes")))]
+    lines: list[Mapping[str, object]] = [_pr_line(ref, pr, items(labels.get("nodes")), _ready(client, pr))]
     lines.extend(_checks(client, ref, pr))
     lines.extend(_review(ref, review) for review in more(obj(pr.get("reviews"), "reviews"), reviews_after))
     first = obj(pr.get("reviewThreads"), "reviewThreads")
@@ -327,7 +351,12 @@ def _threads(client: Client, ref: Ref, first: Mapping[str, object] | None) -> It
         yield _thread(client, ref, node)
 
 
-def _pr_line(ref: Ref, pr: Mapping[str, object], labels: Sequence[Mapping[str, object]]) -> Mapping[str, object]:
+def _pr_line(
+    ref: Ref,
+    pr: Mapping[str, object],
+    labels: Sequence[Mapping[str, object]],
+    ready: tuple[str | None, str | None],
+) -> Mapping[str, object]:
     state = text(pr.get("state"))
     mergeable = text(pr.get("mergeable"))
     merge_state = text(pr.get("mergeStateStatus"))
@@ -347,7 +376,55 @@ def _pr_line(ref: Ref, pr: Mapping[str, object], labels: Sequence[Mapping[str, o
         # The author's text, which canopy cuts and marks; for display only.
         "title": text(pr.get("title")),
         "labels": [name for label in labels if (name := text(label.get("name"))) is not None],
+        "created_at": text(pr.get("createdAt")),
+        "ready_at": ready[0],
+        "review_requested_at": ready[1],
+        "merged_at": text(pr.get("mergedAt")),
+        "closed_at": text(pr.get("closedAt")),
     }
+
+
+def _ready(client: Client, pr: Mapping[str, object]) -> tuple[str | None, str | None]:
+    """When the PR last became ready for review, and when a review of it was first asked for at or after that.
+
+    Its timeline is read from the newest event back to the latest ready event, every page of it when it has none. A PR
+    opened ready has no ready event, so its creation is its ready time; a draft is not ready, and has neither time.
+
+    Returns:
+        The two times as GitHub wrote them, each None where there is none.
+
+    Raises:
+        GitHubError: An earlier page of the timeline could not be read.
+    """
+    if pr.get("isDraft") is True:
+        return None, None
+    node = text(pr.get("id")) or ""
+
+    def before(cursor: str) -> Mapping[str, object]:
+        found = obj(client.query(_MORE_TIMELINE, {"id": node, "before": cursor}).get("node"), "pull request")
+        return obj(found.get("timelineItems"), "timelineItems")
+
+    ready: tuple[datetime, str] | None = None
+    asked: list[tuple[datetime, str]] = []
+    for page in backward(obj(pr.get("timelineItems"), "timelineItems"), before):
+        for event in page:
+            at = text(event.get("createdAt"))
+            moment = parse_time(at)
+            if at is None or moment is None:
+                continue
+            if event.get("__typename") == "ReadyForReviewEvent" and (ready is None or ready[0] < moment):
+                ready = (moment, at)
+            elif event.get("__typename") == "ReviewRequestedEvent":
+                asked.append((moment, at))
+        # The latest ready event is on the newest page that holds one; every earlier page came before it.
+        if ready is not None:
+            break
+    created = text(pr.get("createdAt"))
+    opened = parse_time(created)
+    if ready is None and created is not None and opened is not None:
+        ready = (opened, created)
+    after = [a for a in asked if ready is None or a[0] >= ready[0]]
+    return (None if ready is None else ready[1]), (min(after)[1] if after else None)
 
 
 def _checks(client: Client, ref: Ref, pr: Mapping[str, object]) -> list[Mapping[str, object]]:

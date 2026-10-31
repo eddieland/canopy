@@ -82,6 +82,13 @@ class Pull:
     title: str = "Retry the upstream on a 503"
     author: str = "me"
     bot: bool = False
+    draft: bool = False
+    created: str = "2026-10-17T09:00:00Z"
+    merged: str | None = None
+    closed: str | None = None
+    # Its timeline's ready-for-review and review-requested events, oldest first: each its kind, `ready` or `asked`, and
+    # its time.
+    events: list[tuple[str, str]] = field(default_factory=list)
 
 
 def run(name: str, status: str = "COMPLETED", conclusion: str | None = "SUCCESS", id_: int = 1) -> dict[str, Any]:
@@ -173,6 +180,9 @@ class Fake:
             pull = self.pull_by_node(variables["id"].removeprefix("C_"))
             contexts = page(pull.contexts or [], variables["after"])
             return {"data": {"node": {"statusCheckRollup": {"contexts": contexts}}}}
+        if op == "Timeline":
+            pull = self.pull_by_node(variables["id"])
+            return {"data": {"node": {"timelineItems": last_page(self.event_nodes(pull), variables["before"])}}}
         if op == "Branches":
             found = self.branches.get((variables["owner"], variables["name"]))
             if found is None:
@@ -306,7 +316,10 @@ class Fake:
             "number": 7,
             "title": pull.title,
             "state": pull.state,
-            "isDraft": False,
+            "isDraft": pull.draft,
+            "createdAt": pull.created,
+            "mergedAt": pull.merged,
+            "closedAt": pull.closed,
             "headRefOid": HEAD,
             "baseRefName": "main",
             "mergeable": "MERGEABLE",
@@ -317,7 +330,12 @@ class Fake:
             "reviews": page(self.review_nodes(pull), None),
             "reviewThreads": page([self.thread_node(t) for t in pull.threads], None),
             "commits": {"nodes": [{"commit": {"id": f"C_{pull.node}", "oid": HEAD, "statusCheckRollup": rollup}}]},
+            "timelineItems": last_page(self.event_nodes(pull), None),
         }
+
+    def event_nodes(self, pull: Pull) -> list[dict[str, Any]]:
+        kinds = {"ready": "ReadyForReviewEvent", "asked": "ReviewRequestedEvent"}
+        return [{"__typename": kinds[kind], "createdAt": at} for kind, at in pull.events]
 
     def review_nodes(self, pull: Pull) -> list[dict[str, Any]]:
         return [
@@ -361,6 +379,13 @@ def page(nodes: list[dict[str, Any]], after: str | None) -> dict[str, Any]:
     start = 0 if after is None else int(after)
     end = start + PAGE
     return {"nodes": nodes[start:end], "pageInfo": {"hasNextPage": end < len(nodes), "endCursor": str(end)}}
+
+
+def last_page(nodes: list[dict[str, Any]], before: str | None) -> dict[str, Any]:
+    """The page of `nodes` that ends where `before` starts, or their last page: a connection read from its end."""
+    end = len(nodes) if before is None else int(before)
+    start = max(end - PAGE, 0)
+    return {"nodes": nodes[start:end], "pageInfo": {"hasPreviousPage": start > 0, "startCursor": str(start)}}
 
 
 class _Api(BaseHTTPRequestHandler):
@@ -545,6 +570,11 @@ def test_the_reader_prints_a_prs_reviews_and_threads_then_its_end(github: tuple[
         "author": "me",
         "title": "Retry the upstream on a 503",
         "labels": [],
+        "created_at": "2026-10-17T09:00:00Z",
+        "ready_at": "2026-10-17T09:00:00Z",
+        "review_requested_at": None,
+        "merged_at": None,
+        "closed_at": None,
     }
     assert review["state"] == "commented"
     assert review["body"] == "A few things."
@@ -609,6 +639,55 @@ def test_a_prs_line_carries_its_labels_and_mergeable_state(github: tuple[Fake, s
     pull.labels, pull.merge_state, pull.state = ["agent", "needs-human"], "BEHIND", "MERGED"
     _, [pr, *_], _ = read(url, {"prs": [PR]})
     assert (pr["labels"], pr["mergeable_state"], pr["state"]) == (["agent", "needs-human"], "behind", "merged")
+
+
+def test_a_pr_opened_ready_is_ready_when_created_and_asked_for_review_at_its_first_request(
+    github: tuple[Fake, str],
+) -> None:
+    fake, url = github
+    pull = fake.pulls["acme", "api", 7]
+    pull.events = [("asked", "2026-10-17T10:00:00Z"), ("asked", "2026-10-18T08:00:00Z")]
+    _, [pr, *_], _ = read(url, {"prs": [PR]})
+    times = (pr["created_at"], pr["ready_at"], pr["review_requested_at"])
+    assert times == ("2026-10-17T09:00:00Z", "2026-10-17T09:00:00Z", "2026-10-17T10:00:00Z")
+
+
+def test_a_draft_made_ready_is_ready_at_its_latest_ready_event_read_back_through_its_timeline(
+    github: tuple[Fake, str],
+) -> None:
+    """A request before the draft was last made ready does not count: the review asked for is the first after it."""
+    fake, url = github
+    pull = fake.pulls["acme", "api", 7]
+    pull.events = [
+        ("ready", "2026-10-17T10:00:00Z"),
+        ("asked", "2026-10-17T11:00:00Z"),
+        ("ready", "2026-10-18T08:00:00Z"),
+        ("asked", "2026-10-18T09:00:00Z"),
+        ("asked", "2026-10-18T12:00:00Z"),
+        ("asked", "2026-10-19T12:00:00Z"),
+        ("asked", "2026-10-20T12:00:00Z"),
+    ]
+    _, [pr, *_], _ = read(url, {"prs": [PR]})
+    assert (pr["ready_at"], pr["review_requested_at"]) == ("2026-10-18T08:00:00Z", "2026-10-18T09:00:00Z")
+    pages = [variables["before"] for op, _, variables in fake.seen if op == "Timeline"]
+    assert pages == ["5", "3"], "it reads back to the latest ready event, and no further"
+
+
+def test_a_draft_is_not_ready_and_waits_on_no_review(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    pull = fake.pulls["acme", "api", 7]
+    pull.draft, pull.events = True, [("ready", "2026-10-17T10:00:00Z"), ("asked", "2026-10-17T11:00:00Z")]
+    _, [pr, *_], _ = read(url, {"prs": [PR]})
+    assert (pr["draft"], pr["ready_at"], pr["review_requested_at"]) == (True, None, None)
+    assert "Timeline" not in fake.ops()
+
+
+def test_a_merged_pr_carries_its_merge_and_close_times(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    pull = fake.pulls["acme", "api", 7]
+    pull.state, pull.merged, pull.closed = "MERGED", "2026-10-19T15:00:00Z", "2026-10-19T15:00:00Z"
+    _, [pr, *_], _ = read(url, {"prs": [PR]})
+    assert (pr["state"], pr["merged_at"], pr["closed_at"]) == ("merged", "2026-10-19T15:00:00Z", "2026-10-19T15:00:00Z")
 
 
 def test_a_pr_with_more_labels_than_its_line_carries_is_not_read_whole(github: tuple[Fake, str]) -> None:
@@ -991,6 +1070,8 @@ def test_canopy_records_every_line_it_prints(github: tuple[Fake, str], canopy_en
     fake, url = github
     pull = fake.pulls["acme", "api", 7]
     pull.labels, pull.merge_state, pull.title = ["agent"], "BLOCKED", "Retry the upstream\non a 503"
+    pull.state, pull.merged, pull.closed = "MERGED", "2026-10-19T15:00:00Z", "2026-10-19T15:00:00Z"
+    pull.events = [("ready", "2026-10-18T08:00:00Z"), ("asked", "2026-10-18T09:00:00Z")]
     pull.contexts = [run("build", id_=11), status("deploy/approval", "PENDING"), run("lint", id_=12)]
     fake.branches["acme", "api"] = {"agent/PROJ-1": "bbbbbbb", "agent/PROJ-2": "ccccccc", "main": "aaaaaaa"}
     fake.searches["is:pr"] = [PR]
@@ -1017,6 +1098,13 @@ def test_canopy_records_every_line_it_prints(github: tuple[Fake, str], canopy_en
     [pr] = records.fetch_all(conn, records.ObservedPr, sql.select("*").from_("observed_prs"))
     assert (json.loads(pr.labels), pr.mergeable_state, pr.head_sha) == (["agent"], MergeState.BLOCKED, HEAD)
     assert pr.title == "Retry the upstream on a 503", "the author's text, on one line"
+    assert (pr.created_at, pr.ready_at, pr.review_requested_at, pr.merged_at, pr.closed_at) == (
+        "2026-10-17T09:00:00.000Z",
+        "2026-10-18T08:00:00.000Z",
+        "2026-10-18T09:00:00.000Z",
+        "2026-10-19T15:00:00.000Z",
+        "2026-10-19T15:00:00.000Z",
+    )
     checks = records.fetch_all(conn, records.ObservedCheck, sql.select("*").from_("observed_checks").order_by("name"))
     assert [(c.name, c.status, c.run_id) for c in checks] == [
         ("build", CheckStatus.COMPLETED, 11),

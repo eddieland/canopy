@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ReportMonth, ReportTokens } from '@/api/types'
+import type { ReportMonth, ReportTicket, ReportTokens } from '@/api/types'
 import { DEFAULT_CLOCK } from '@/lib/clock'
 import { stamp } from '@/lib/time'
 
 import {
+    clockShare,
     costPercent,
     hoursText,
     medianText,
@@ -14,7 +15,9 @@ import {
     reportLine,
     reportMonth,
     reportSpan,
+    reviewWaitHint,
     sentTokens,
+    toLandHint,
     wroteTokens,
 } from './reports'
 
@@ -50,6 +53,25 @@ function month(name: string, cost: number | null, extra: Partial<ReportMonth> = 
         median_pr_comments: null,
         median_hours_to_land: null,
         median_review_wait_hours: null,
+        ...extra,
+    }
+}
+
+function ticket(key: string, extra: Partial<ReportTicket> = {}): ReportTicket {
+    return {
+        key,
+        title: null,
+        landed_at: '2026-10-04T11:00:00Z',
+        started_at: '2026-09-28T10:00:00Z',
+        iterations: 1,
+        pr_comments: 0,
+        reviews: 1,
+        changes_requested: 0,
+        cost_usd: null,
+        hours_to_land: 125,
+        review_wait_hours: 3,
+        merged_at: null,
+        awaiting_review_at: null,
         ...extra,
     }
 }
@@ -142,5 +164,32 @@ describe('outsideHint', () => {
                 `as of ${stamp(at, DEFAULT_CLOCK)}.`,
         )
         expect(outsideHint(null, DEFAULT_CLOCK)).toMatch(/canopy loop has not read them yet, so none is counted\.$/u)
+    })
+})
+
+describe('which clock a figure ran on', () => {
+    const github = ticket('ABC-1', { merged_at: '2026-10-03T15:00:00Z', awaiting_review_at: '2026-09-29T16:00:00Z' })
+    const proxied = ticket('ABC-2')
+    const unknown = ticket('ABC-3', { hours_to_land: null, review_wait_hours: null })
+
+    it("names GitHub's time where canopy kept one, else the proxy that stood in", () => {
+        expect(toLandHint(github)).toBe("To its PR's merge, as GitHub timed it")
+        expect(toLandHint(proxied)).toMatch(/^To the tick that marked it done/u)
+        expect(reviewWaitHint(github)).toMatch(/^From when its PR began waiting on a review, as GitHub timed it/u)
+        expect(reviewWaitHint(proxied)).toMatch(/^From the end of its first worker run that ended done/u)
+        expect([toLandHint(unknown), reviewWaitHint(unknown)]).toEqual([undefined, undefined])
+    })
+
+    it("counts a month's figures that ran on GitHub's clock, leaving out the tickets with none", () => {
+        expect(clockShare(month('2026-10', 1, { landed: [github, proxied, unknown] }), 'to land')).toBe(
+            "1 of 2 from GitHub's times, the rest from proxies",
+        )
+        expect(clockShare(month('2026-10', 1, { landed: [github, github] }), 'review wait')).toBe(
+            "All 2 from GitHub's times",
+        )
+        expect(clockShare(month('2026-10', 1, { landed: [proxied] }), 'review wait')).toBe(
+            'From a proxy: canopy kept no time from GitHub',
+        )
+        expect(clockShare(month('2026-10', 1, { landed: [unknown] }), 'to land')).toBeUndefined()
     })
 })

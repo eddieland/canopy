@@ -79,7 +79,7 @@ class ReportTicket(Model):
     title: str | None = None
     """Its title, as the overseer named it; None before it did."""
     landed_at: datetime
-    """When the loop marked it done: the journal keeps no merge time of its own."""
+    """When the loop marked it done, which the month it counts in goes by."""
     started_at: datetime | None = None
     """When its first worker run started; None for a ticket that landed with none."""
     iterations: int
@@ -93,10 +93,18 @@ class ReportTicket(Model):
     cost_usd: float | None = None
     """What its runs and review runs that started before it landed cost, in US dollars; None when none reported."""
     hours_to_land: float | None = None
-    """From its first worker run's start to its landing, in hours; None with no worker run."""
+    """From its first worker run's start to its PRs' merge, `merged_at`, or to `landed_at` without it, in hours; None
+    with no worker run."""
     review_wait_hours: float | None = None
-    """From the end of its first worker run that ended `done`, when its PR was ready, to the first review after it, in
-    hours; None with no such run or no such review."""
+    """From when its PR began waiting on a review, `awaiting_review_at`, or without it the end of its first worker run
+    that ended `done`, to the first review after it, in hours; None with no start or no such review."""
+    merged_at: datetime | None = None
+    """When its PRs merged, as GitHub says, the latest of them; None where the reader kept no merge time, and its hours
+    to land end at `landed_at` instead."""
+    awaiting_review_at: datetime | None = None
+    """When its PR began waiting on a review, as GitHub says: the first review asked for once it was ready, or when it
+    was ready; None where the reader kept neither, and its review wait starts at its first worker run that ended
+    `done` instead."""
 
 
 class ReportMonth(Model):
