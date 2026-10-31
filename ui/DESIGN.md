@@ -735,9 +735,9 @@ side.
   magnifier, the field, what it says at its end (a count), and a ghost clear button while it holds text, in the place of
   what sits there empty (the rail's keycap). Its two sizes are the rail's and a list filter's (`h-8`, `text-sm`) and a
   panel's own line of data (`sm`, `h-7`, `text-xs`). No page builds a field by hand.
-- **`MarkdownField`** (`src/components/markdown-field.tsx`): a field the operator writes to an agent in, in the
-  Markdown `RichText` draws and nothing more (`src/lib/markdown-edit.ts`): bold, code, a heading, the two lists, and a
-  code block, from a `Toolbar` under the text and ⌘B and ⌘E, so what is written reads in the thread as it did in the
+- **`MarkdownField`** (`src/components/markdown-field.tsx`): a field the operator writes to an agent in, in the Markdown
+  `RichText` draws and nothing more (`src/lib/markdown-edit.ts`): bold, code, a heading, the two lists, and a code block
+  from a `Toolbar` under the text and ⌘B and ⌘E, the rest typed, so what is written reads in the thread as it did in the
   field. It is one box, the field's look, the text then the toolbar under a hairline, so Tab reaches the text first. An
   edit goes through the browser, so its undo takes it back. Three sizes, each growing with its text and then
   scrolling: `line`, one line high, beside a form's `Input`; `default`, a reply's few lines; `tall`, a long brief. Its
@@ -1319,16 +1319,18 @@ sliver beside four others; and its axis names short call numbers without measuri
   page alone.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary, a decision's rationale, and a conversation's message: line breaks kept, `-` and `1.` lists (nested by
-  indent), `#` headings as a `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and
-  `code` and **strong** inline. Code, inline or fenced, is `text-code`: a step under its line on a sans palette, where
-  the change of face sets it apart, and the line's own size on a mono one, where a smaller copy of the same face reads
-  as a mistake. Inline code sits on `code-chip`, a tint of its own ink, so it stands apart on any bubble or tint
+  indent), `#` headings as a `font-medium` line, `>` quotes as their own blocks, muted on a stroke at their left, a
+  `---` rule as a hairline, a pipe table with its head as column headers and its columns aligned by their colons,
+  scrolling sideways when wide, fenced code as a `surface-raised` block that scrolls sideways, and `code`, **strong**,
+  *emphasis*, and ~~struck~~ inline. Code, inline or fenced, is `text-code`: a step under its line on a sans palette,
+  where the change of face sets it apart, and the line's own size on a mono one, where a smaller copy of the same face
+  reads as a mistake. Inline code sits on `code-chip`, a tint of its own ink, so it stands apart on any bubble or tint
   without a tile darker than the text around it, and keeps its ends on each line it wraps to. Every code span in a
   sentence is drawn so, through `Code` (`src/components/code.tsx`): rich text's, a harness line's, the guide's, a
-  plan's, a `Notice`'s, and a command or key in a page's own copy, so one span never flips look beside another. A key
-  or path shown as data on its own line (a setting's name under its label, a config file's path) stays plain mono.
+  plan's, a `Notice`'s, and a command or key in a page's own copy, so one span never flips look beside another. A key or
+  path shown as data on its own line (a setting's name under its label, a config file's path) stays plain mono.
   It reads nothing else: other markup, a labelled link's included, stays characters. Every piece is React text, and
-  its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
+  every piece but code goes through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
   A conversation's bubbles lay out their bodies with it too, their line breaks kept, since the operator and the
   workers break lines on purpose; on a raised bubble a fenced block sits on `background`.
