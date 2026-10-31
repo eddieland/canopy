@@ -96,6 +96,22 @@ a ticket that needs none, it says so and names `canopy plan KEY`. If a plan's fi
 the page names the problem and the path instead of opening an empty editor, since an empty plan approved is the most
 expensive kind.
 
+## Diagrams
+
+A code block fenced as `mermaid` is drawn as the diagram it describes: a flowchart, a sequence diagram, or a state
+diagram, which covers how modules fit, which side calls which, and what a status may become. A picture of the call
+order is quicker to check than three paragraphs about it, and quicker to catch being wrong. It's drawn in your theme's
+colors, and again when you change them.
+
+The code is still the plan. **Source**, under the diagram, shows it; so does putting the cursor in it, which is how
+you edit one, with the diagram redrawn under it as you stop typing. A comment or a change marked in the code shows it
+too, since that's where those live. A diagram Mermaid can't read, or one of a kind not drawn here, shows its code and,
+under it, `Not drawn:` and why.
+
+A planner's diagram comes from the ticket's text like the rest of the plan, so it's drawn as a picture and nothing
+more: its labels stay words, and nothing in it can run, click through, or load from anywhere. It can still be a
+confident drawing of the wrong thing, and so can a whiteboard.
+
 ## Commenting
 
 Select a passage and press **Comment**, in the bubble that appears or the toolbar, or Ctrl+Alt+M (⌘+Option+M on a Mac).

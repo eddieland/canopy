@@ -14,6 +14,19 @@ which streams the report's rows as they are read, so a large report never sits w
 
 In **api**, \`ReportQuery\` gains an \`iter_rows()\` method beside \`rows()\`, which the route uses.
 
+\`\`\`mermaid
+sequenceDiagram
+    participant Page as web: reports page
+    participant Route as web: export.csv
+    participant Query as api: ReportQuery
+    Page->>Route: GET /reports/{id}/export.csv
+    loop each row, as it is read
+        Route->>Query: iter_rows()
+        Query-->>Route: a row
+        Route-->>Page: a CSV line
+    end
+\`\`\`
+
 ## Files
 
 | Repository | File | Why |

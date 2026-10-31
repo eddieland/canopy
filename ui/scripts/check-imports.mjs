@@ -71,6 +71,12 @@ const LIBRARIES = [
         where: 'src/lib/highlight.ts and src/lib/languages.ts (D121)',
     },
     {
+        name: 'mermaid',
+        pattern: /^mermaid(?:\/|$)/u,
+        files: /^src\/lib\/diagram(?:\.test)?\.ts$/u,
+        where: 'src/lib/diagram.ts',
+    },
+    {
         name: 'jsdiff',
         pattern: /^diff(?:\/|$)/u,
         files: /^src\/lib\/plan-diff(?:\.test)?\.ts$/u,

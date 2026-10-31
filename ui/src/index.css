@@ -1441,6 +1441,48 @@
         & .plan-verbatim-block {
             @apply text-muted-foreground;
         }
+        /* A Mermaid code block and the diagram it draws (src/lib/plan-diagram.ts). Once drawn, the code shows only when
+         * asked (Source), while the caret is in it, or while a comment or a change is marked in it. A diagram is drawn
+         * at its own size, or narrower to fit the plan, and Source sits under it, clear of what it draws. */
+        & .plan-diagram {
+            @apply flex flex-col gap-2;
+        }
+        &
+            .plan-diagram[data-diagram='drawn']:not([data-source], .plan-diagram-editing):not(
+                :has(.plan-comment, .plan-ins, .plan-del)
+            )
+            > pre {
+            /* Out of sight but still drawn, so the caret goes into it by the keyboard, which shows it, and a screen
+             * reader reads the code that draws the picture. */
+            @apply sr-only;
+        }
+        & .plan-diagram-figure {
+            @apply m-0 flex flex-col items-center gap-2 rounded-md border bg-surface p-3;
+        }
+        & .plan-diagram[data-diagram='pending'] .plan-diagram-figure {
+            @apply hidden;
+        }
+        & .plan-diagram-figure img {
+            @apply h-auto max-w-full;
+        }
+        & .plan-diagram-figure figcaption {
+            @apply self-start text-sm text-muted-foreground empty:hidden;
+        }
+        & .plan-diagram-toggle {
+            @apply self-end rounded-sm border bg-surface px-2 py-0.5 text-xs text-muted-foreground;
+            &:hover {
+                @apply bg-surface-raised text-foreground;
+            }
+            &[aria-pressed='true'] {
+                @apply bg-surface-raised text-foreground;
+            }
+            &:focus-visible {
+                @apply ring-2 ring-ring outline-none;
+            }
+        }
+        & .plan-diagram[data-diagram='failed'] .plan-diagram-toggle {
+            @apply hidden;
+        }
         & .ProseMirror-selectednode {
             @apply ring-2 ring-ring;
         }

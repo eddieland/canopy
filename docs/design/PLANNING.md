@@ -119,7 +119,8 @@ a few times a day, except while `archive_unpushed` is open; a tick that waits, a
 ### Commenting on a plan
 
 The web UI lets the operator comment on passages and edit a plan in place (D120). A plan is model text (T1): its HTML is
-never rendered, an image never fetched, and a link is not a link (D113). A comment is a thread anchored by its passage's
+never rendered, an image never fetched, and a link is not a link (D113). A Mermaid fence is drawn as its diagram, an
+image beside its code, which stays the document (D131). A comment is a thread anchored by its passage's
 words, found again on each new plan; asking for changes sends the open threads as one reply (§22). A saved edit never
 overwrites unseen one made elsewhere. Only the web channel writes threads and edits, behind its token (T8).
 
