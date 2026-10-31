@@ -34,7 +34,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal, LiteralString
 
 from pydantic import (
     AfterValidator,
@@ -302,23 +302,53 @@ def record_call(conn: sqlite3.Connection, table: CardTable, run_id: int, card: C
     Each of the card's working steps keeps the time it was first seen working on an earlier card, if it was working
     on the last; one newly working starts now. A question the last card asked too keeps when it was asked and its
     answer; any other starts now, with none. Nothing changes for a run not running.
+
+    A call that finds the run's card stale, by `is_stale`'s measure, counts a lapse unless the card was counted stale
+    already: the calls since it, this one included unless this one is the new card, or the time since; with no card, the
+    calls and the time since the run started. A new card is fresh again, so its own lapse counts anew.
     """
     running = records.update(records.of_table(table)).where("id = ? AND status = ?", run_id, _RUNNING[table])
     counted = running.set_to("tool_calls = tool_calls + 1")
+    moment = datetime.now(UTC)
     with db.transaction(conn):
+        before = records.fetch_one(conn, _Before, sql.select(_BEFORE).from_(table).where("id = ?", run_id))
+        if before is None:
+            return
+        calls = before.tool_calls + (1 if card is None else 0)
+        stale = went_stale(before.started_at, before.card_at, before.card_calls, calls, moment)
+        if stale and not before.card_stale:
+            counted = counted.set_to("card_lapses = card_lapses + 1")
+        counted = counted.set(card_stale=stale and card is None)
         if card is not None:
-            at = db.now()
-            row = sql.execute(
-                conn,
-                sql.select("card_json, card_asked_at, card_working_since").from_(table).where("id = ?", run_id),
-            ).fetchone()
+            at = db.format_time(moment)
             # Every assignment reads the row as it was, so the card's count is the calls made with this one.
             counted = counted.set(card_json=card.model_dump_json(), card_at=at).set_to("card_calls = tool_calls + 1")
-            counted = counted.set(card_working_since=_working_since(row, card, at))
-            if not _asks_still(row, card):
+            counted = counted.set(card_working_since=_working_since(before, card, at))
+            if not _asks_still(before, card):
                 asked = at if card.question is not None else None
                 counted = counted.set(card_asked_at=asked, card_answer=None, card_answered_at=None)
         counted.run(conn)
+
+
+#: The columns `record_call` reads of a run before it records a call.
+_BEFORE: LiteralString = (
+    "started_at, tool_calls, card_json, card_at, card_calls, card_working_since, card_asked_at, card_stale"
+)
+
+
+@dataclass(frozen=True)
+class _Before(records.View):
+    """A run's card as its row held it before a tool call, with what says whether it had gone stale."""
+
+    started_at: str
+    tool_calls: int
+    card_json: str | None
+    card_at: str | None
+    card_calls: int | None
+    card_working_since: str | None
+    card_asked_at: str | None
+    #: Whether the card, or the run with none, was counted stale already.
+    card_stale: bool
 
 
 def record_answer(conn: sqlite3.Connection, table: CardTable, run_id: int, letter: Letter, asked_at: datetime) -> bool:
@@ -507,6 +537,19 @@ def is_stale(standing: Standing, started_at: str, now: datetime | None = None) -
     return late or standing.calls_since >= STALE_CALLS
 
 
+def went_stale(started_at: str, card_at: str | None, card_calls: int | None, tool_calls: int, at: datetime) -> bool:
+    """Whether a run's card, recorded at `card_at` after `card_calls` tool calls, was stale at `at` after `tool_calls`.
+
+    By `is_stale`'s measure, so a lapse is counted as the card is shown: a run with no card counts from its start.
+
+    Returns:
+        True when it was stale.
+    """
+    when = db.parse_time(card_at) if card_at is not None else None
+    since = tool_calls - (card_calls or 0) if when is not None else tool_calls
+    return is_stale(Standing(None, when, max(since, 0)), started_at, at)
+
+
 def doing(standing: Standing, started_at: str, now: datetime | None = None) -> str | None:
     """A running run's progress on one line, for `canopy status`: what it does now, and when it last updated it.
 
@@ -626,26 +669,26 @@ def _progress(card: Card) -> str:
     return f"  {done}% done" + (f", stage {text.one_line(stage)}" if stage is not None else "")
 
 
-def _working_since(row: sqlite3.Row | None, card: Card, at: str) -> str | None:
+def _working_since(before: _Before, card: Card, at: str) -> str | None:
     """Each working step of `card`, by title, with when it was first seen working: on the run's last card, else `at`.
 
     Returns:
         The times as JSON, or None when no step is working.
     """
-    before = {title: db.format_time(when) for title, when in _since(row[2] if row is not None else None).items()}
-    working = {s.title: before.get(s.title, at) for s in card.steps if s.status == "working"}
+    earlier = {title: db.format_time(when) for title, when in _since(before.card_working_since).items()}
+    working = {s.title: earlier.get(s.title, at) for s in card.steps if s.status == "working"}
     return json.dumps(working) if working else None
 
 
-def _asks_still(row: sqlite3.Row | None, card: Card) -> bool:
+def _asks_still(before: _Before, card: Card) -> bool:
     """Whether `card` asks the very question the run's last card asked, as recorded with when it was asked.
 
     Returns:
         True when both ask the same question; False when either asks none, or they differ.
     """
-    if row is None or card.question is None or row[0] is None or row[1] is None:
+    if card.question is None or before.card_json is None or before.card_asked_at is None:
         return False
-    last = _parsed(str(row[0]))
+    last = _parsed(before.card_json)
     return last is not None and last.question == card.question
 
 

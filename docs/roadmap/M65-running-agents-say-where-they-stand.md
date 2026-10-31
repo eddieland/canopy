@@ -86,8 +86,10 @@ operator's go-ahead that day, and checked against the fakes: a card's question, 
 agent recommends, answered with a letter from `canopy reply run:ID` or `review:ID` or the card in the web UI, and
 written to the run's answers directory, which the sandbox lets the run read and not write, where canopy's plugin tells
 the agent on its next tool call. An answer is a letter, never words, so a forged `[canopy]` line can choose only one of
-the agent's own options (TRUST_MODEL T1). The live checks above, stage 3's among them, and the week of
-`MEASUREMENTS.md` wait on the operator.
+the agent's own options (TRUST_MODEL T1). Each run counts its card's lapses, from fresh to stale, as its tool calls
+and its end find them, and `canopy cards` reports them per role over the last days, so the week's measurement reads
+from the journal. The live checks above, stage 3's among them, and the week of `MEASUREMENTS.md` wait on the
+operator.
 
 [status]: https://github.com/fullstackhouse/paseo-status
 [progress]: https://github.com/stevecastaneda/paseo-plugins/tree/main/progress
