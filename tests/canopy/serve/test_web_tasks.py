@@ -8,8 +8,9 @@ import json
 from pathlib import Path
 
 from canopy.core import cards, conversation, db, pools, records
+from canopy.core.checklist_answers import Answer, Checked
 from canopy.core.context import Context
-from canopy.core.vocab import PoolKind, RunStatus
+from canopy.core.vocab import ItemAnswer, PoolKind, RunStatus
 from canopy.runs import tasks
 from canopy.serve.backend import Backend
 from canopy.serve.task_views import RUN_STANDINGS
@@ -127,6 +128,28 @@ def test_a_task_run_is_found_only_under_its_own_task_with_its_whole_result(backe
     for path in ("", "/transcript", "/report"):
         assert c.get(f"/api/tasks/{other.id}/runs/{run_id}{path}").status_code == 404
         assert c.get(f"/api/tasks/{task.id}/runs/99{path}").status_code == 404
+
+
+def test_a_task_runs_page_carries_its_checklist_answers_as_a_worker_runs_does(backend: Backend) -> None:
+    """In its list's order, a held item's reason as printable text (DESIGN §42); none for a run given no list."""
+    checked = Checked(
+        answers=(
+            Answer("web", "newspaper", ItemAnswer.HELD, "The module\x07keeps its order."),
+            Answer("web", "general-types", ItemAnswer.PASSED),
+        ),
+    )
+    with backend.open() as ctx:
+        task = submit(ctx)
+        run_id = start(ctx, task)
+        end(ctx, run_id, RunStatus.DONE, checklist=checked)
+        bare = start(ctx, task, replied=True)
+        end(ctx, bare, RunStatus.DONE)
+    c = client(None, backend)
+    assert c.get(f"/api/tasks/{task.id}/runs/{run_id}").json()["checklist"] == [
+        {"repo": "web", "item": "newspaper", "answer": "held", "reason": "The module keeps its order."},
+        {"repo": "web", "item": "general-types", "answer": "pass", "reason": None},
+    ]
+    assert c.get(f"/api/tasks/{task.id}/runs/{bare}").json()["checklist"] == []
 
 
 def test_a_task_runs_transcript_is_read_back_from_its_log(backend: Backend) -> None:
@@ -250,12 +273,23 @@ def end(
     prs: list[str] | None = None,
     head: str | None = None,
     tickets: list[str] | None = None,
+    checklist: Checked | None = None,
 ) -> None:
     """Close run `run_id` as `_task` does, with a result saying `summary`, and `question` for a blocked one."""
     result: dict[str, object] = {"status": str(status), "summary": summary, "prs": prs or []}
     if question is not None:
         result["question"] = question
-    assert tasks.close_run(ctx.conn, ctx.config, run_id, status, json.dumps(result), head=head, tickets=tickets or [])
+    closed = tasks.close_run(
+        ctx.conn,
+        ctx.config,
+        run_id,
+        status,
+        json.dumps(result),
+        head=head,
+        tickets=tickets or [],
+        checklist=checklist,
+    )
+    assert closed
 
 
 def test_a_tasks_runs_name_the_models_that_served_them_so_the_runs_page_lists_them_by_model(backend: Backend) -> None:

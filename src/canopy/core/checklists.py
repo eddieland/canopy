@@ -7,9 +7,9 @@ only the checklist review reads. A list is instructions in every run it reaches,
 characters a persona may not (DESIGN §31), and it is parsed here, so a run's answers can be held to its ids. A list
 canopy cannot use refuses the run (`bad_prompt`), never runs it without the list.
 
-Before a worker run that may push starts, the list of each of its repositories is written to its answers directory
-(§41), a file to a repository, where canopy's `pre-push` hook in that repository's slot finds it, to hold the worker's
-push and print it (`commit_hooks`).
+Before a worker run that may push starts, or a one-off task's (§36), the list of each of its repositories is written
+to its answers directory (§41), a file to a repository, where canopy's `pre-push` hook in that repository's slot finds
+it, to hold the worker's push and print it (`commit_hooks`).
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ Severity = Literal["blocking", "major", "minor"]
 SEVERITIES: tuple[Severity, ...] = ("blocking", "major", "minor")
 #: An item's severity unless its `severity:` line says another.
 DEFAULT_SEVERITY: Severity = "minor"
-#: The kinds of worker run that may push, and so hear their repositories' lists.
+#: The kinds of worker run that may push, and so hear their repositories' lists; a task's run, of no kind, hears its.
 REMINDED: frozenset[RunKind] = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
 #: An item's heading, which names its id.
 _HEADING = re.compile(r"## (.*)")

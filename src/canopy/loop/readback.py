@@ -142,7 +142,9 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
         lines.append(f"  harness: {said}")
     session = f"session {run['session_id']}" if run["session_id"] else "no session reported"
     lines.extend([f"  {session}{spent(run)}", f"  log {run['log_path']}"])
-    lines.extend(_checklist_lines(checklist_answers.of_run(ctx.conn, run_id)))
+    answered = checklist_lines(checklist_answers.of_run(ctx.conn, run_id))
+    if answered:
+        lines.extend(["\nChecklist:", *(f"  {line}" for line in answered)])
     # Its agent's progress, while it runs and its last once it ends (DESIGN §41).
     running = run["status"] == RunStatus.RUNNING
     standing = cards.of(run)
@@ -164,20 +166,19 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
     return "\n".join(lines)
 
 
-def _checklist_lines(answers: Sequence[records.ChecklistAnswer]) -> list[str]:
+def checklist_lines(answers: Sequence[records.ChecklistAnswer]) -> list[str]:
     """What a run answered of its repositories' checklists (DESIGN §42), an item a line; none for a run given no list.
 
-    A `held` item's reason is the worker's text, printed under it, indented, and made printable as a message is.
+    `canopy show run:ID` prints them under a heading, and `canopy show task:N` under each of its runs. A `held` item's
+    reason is the worker's text, printed under it, indented, and made printable as a message is.
 
     Returns:
-        The lines, under a heading.
+        The lines, unindented, each item's repository, id, and answer.
     """
-    if not answers:
-        return []
-    lines = ["\nChecklist:"]
+    lines: list[str] = []
     for a in answers:
-        lines.append(f"  {a.repo}  {a.item}  {a.answer}")
-        lines.extend(f"    {line}" for line in conversation.printable(a.reason or "").splitlines())
+        lines.append(f"{a.repo}  {a.item}  {a.answer}")
+        lines.extend(f"  {line}" for line in conversation.printable(a.reason or "").splitlines())
     return lines
 
 

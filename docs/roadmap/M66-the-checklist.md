@@ -115,5 +115,9 @@ local days by when each run started, as `canopy health` reads them, `--repo` for
 data; a held item's reason stays on its run. The web UI shows the same counts on Reports' Checklist page, over 7, 14,
 or 30 days, with a repository filter, a held item's reason left on its run there too. The run's page shows them
 2026-10-30, as `show` prints them: a Checklist panel under the Run panel, an item a row in its list's order, a held
-item's reason under it as the worker's text, a joint run's lists each under its repository. A task's run is next: it
-is not yet given a list, since only `implement` and `resume` are reminded so far, so it has no answers to show.
+item's reason under it as the worker's text, a joint run's lists each under its repository. A task's run hears its
+repository's list too, 2026-10-31, as a worker's does: its prompt says a push may be held, `_task` writes the list to an
+answers directory of the run's own, beside its log, which a sandboxed run may read, and canopy's `pre-push` holds its
+push; its answers are kept with the worker runs', a row naming the task run, so `canopy checklist` and Reports'
+Checklist page count them together, and `canopy show task:N` prints them under each run and the task run's page shows
+them in the same panel. Stage 1's live checks are next, then stage 2's two weeks.
