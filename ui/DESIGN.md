@@ -1362,8 +1362,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   guide is built, so a page never keeps a copy of one. A code block is colored as a diff's code is (A review), in the
   language its fence names, by Shiki's name or a file's extension (```` ```toml ````, ```` ```sh ````; `fenceLanguage`):
   plain until its grammar has loaded, then the same characters colored, and plain for good in a language canopy does
-  not map (```` ```text ````). A new page is a file there and a line in its group in
-  `SOURCES`; the rail's foot, under the version, opens the guide, and the book atop every other page opens its page
+  not map (```` ```text ````). A ```` ```mermaid ```` fence is drawn as its diagram, as a plan's is (D131): an image
+  on a hairline, named by its `accTitle`, drawn again when the theme or a palette changes; `guide.test.ts` fails on
+  one mermaid cannot read or with no `accTitle`. A diagram is for a shape the prose would take paragraphs to hold (a
+  tick's cycle, the phases), beside the prose, never instead of it. A new page is a file there and a line in its group
+  in `SOURCES`; the rail's foot, under the version, opens the guide, and the book atop every other page opens its page
   about that one.
 - **A question before losing work** (`AlertDialog`, `src/components/ui/alert-dialog.tsx`): a page that holds the
   operator's work not yet saved or sent asks before it is left, in a dialog centred over the canvas at 70%, on
