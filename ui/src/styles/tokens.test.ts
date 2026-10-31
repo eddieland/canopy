@@ -110,6 +110,11 @@ const SERIES = [
 // A transcript's context chart: fills on a panel's surface, and on the raised one behind the call picked.
 const CONTEXT = ['context-carried', 'context-added']
 
+// Inline code's chip: its own ink at the strength tokens.css mixes it (`--code-chip`), over what the text sits on.
+const CODE_CHIP = codeChip()
+// The operator's bubble in a conversation (`TONE` in src/components/conversation.tsx).
+const REPLY = 0.18
+
 // A status word also sits on its own tint: a chip (10%) in a selected inbox row (the accent at 14%), a destructive
 // button (12%, 20% hovered), a question's bubble (12%) on a raised surface. So does a feedback plan's proposal, a chip.
 const TINTED = TEXT.filter((name) => name.startsWith('status-') || name.startsWith('proposal-'))
@@ -207,6 +212,24 @@ describe.each(Object.entries(THEMES))('%s theme', (themeName, colors) => {
         expect(contrast(token('accent-foreground'), token('accent'))).toBeGreaterThanOrEqual(AA)
     })
 
+    // Code in a line sits on a tint of its ink: on the canvas and the panels, in each bubble of a conversation, the
+    // operator's on the accent's 18%, and in canopy's note, which is muted.
+    it('reads inline code on its chip', () => {
+        const ink = token('foreground')
+        const muted = token('muted-foreground')
+        const grounds = {
+            ...Object.fromEntries(BASES.map((base) => [base, token(base)])),
+            'a reply': over(token('accent'), REPLY, token('surface')),
+        }
+        const low = [
+            ...Object.entries(grounds).map(([where, ground]) =>
+                below(`code on its chip on ${where}`, ink, over(ink, CODE_CHIP, ground)),
+            ),
+            below('muted code on its chip in a note', muted, over(muted, CODE_CHIP, token('surface'))),
+        ].filter((line) => line !== null)
+        expect(low).toEqual([])
+    })
+
     // The approved band, a live readout, and the newer-build notice set accent text on the accent's own 14%.
     it('reads the accent on its own tint', () => {
         const low = ['surface', 'surface-raised']
@@ -217,6 +240,27 @@ describe.each(Object.entries(THEMES))('%s theme', (themeName, colors) => {
         expect(low).toEqual([])
     })
 })
+
+// A palette whose every line is mono sets code at its line's size: a smaller copy of the same face reads as a mistake.
+describe('inline code size', () => {
+    it.each(
+        (['light', 'dark'] as const).flatMap((mode) =>
+            PALETTES[mode].slice(1).map((palette) => [`${palette} ${mode}`, paletteRule(mode, palette)]),
+        ),
+    )('%s sets code at full size if and only if its face is mono', (_name, selector) => {
+        const body = rule(selector)
+        expect(body.includes('--code-size: 1em;')).toBe(body.includes('--face: var(--face-mono);'))
+    })
+})
+
+/** The strength `--code-chip` mixes its ink at, as a fraction; a chip written another way fails rather than passes. */
+function codeChip(): number {
+    const percent = /--code-chip: color-mix\(in oklab, currentColor ([\d.]+)%, transparent\);/u.exec(css)?.[1]
+    if (percent === undefined) {
+        throw new Error('tokens.css sets --code-chip in a form this test does not read')
+    }
+    return Number(percent) / 100
+}
 
 /** The selector of the rule that sets `palette` over `mode`'s default. */
 function paletteRule(mode: ResolvedTheme, palette: string): string {
