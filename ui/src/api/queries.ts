@@ -68,6 +68,8 @@ export const keys = {
     healthReport: (days: number) => ['spend', 'breakdown', 'health', days] as const,
     // Under the breakdowns' key too: a fix's start or end, or a kick, changes the report.
     ciReport: (days: number) => ['spend', 'breakdown', 'ci', days] as const,
+    // Under the breakdowns' key too: a plan, a resume, or a review run changes the report.
+    reviewsReport: (days: number) => ['spend', 'breakdown', 'reviews', days] as const,
     tick: ['tick'] as const,
     // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
     tickNow: ['tick-now'] as const,
@@ -271,6 +273,18 @@ export function ciReportQuery(days: number) {
         queryKey: keys.ciReport(days),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/reports/ci', { params: { query: { days } }, signal })),
+    })
+}
+
+/**
+ * Where the last `days` local days' review feedback came from: each first review's wait, who reviewed, the feedback
+ * rounds, canopy's own reviewer, and each PR. Marked stale with the spend breakdowns.
+ */
+export function reviewsReportQuery(days: number) {
+    return queryOptions({
+        queryKey: keys.reviewsReport(days),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reports/reviews', { params: { query: { days } }, signal })),
     })
 }
 

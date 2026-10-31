@@ -59,7 +59,11 @@ first worker run that ended `done`; the page says which a figure used, rather th
 clock. The spend page, by day, sits under it, and the health page, `canopy health`'s report over the same local days
 with each day's failed runs by kind, and the CI page: each check's red runs from the check runs canopy keeps (§35),
 whether a `resume` for `ci` turned them green on the next head, the only red-to-green rate the journal holds, and
-whether flaky kicks (§23) came back red. A commit status has no run, so it has no history there.
+whether flaky kicks (§23) came back red. A commit status has no run, so it has no history there. The Reviews page
+counts feedback as the monthly report does, by reviewer, trusted or not, with each first review's wait on GitHub's
+clock alone: a PR with no such time is counted apart, never given a proxy. Beside it, the feedback plans (§32) with how
+each was approved and the planner's estimate beside the resumes that followed, and canopy's own reviewer's runs,
+dismissals, and drafts.
 
 `spend.monthly_budget_usd` is what the operator means a local calendar month of agent spend to cost: canopy's runs and
 the runtime's sessions outside canopy (§13, Every session's spend), canopy's share shown beside the whole. `canopy

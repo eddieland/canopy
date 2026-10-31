@@ -28,6 +28,7 @@ import { Route as ReportsIndexRouteImport } from './routes/reports.index'
 import { Route as ReportsChecklistRouteImport } from './routes/reports.checklist'
 import { Route as ReportsCiRouteImport } from './routes/reports.ci'
 import { Route as ReportsHealthRouteImport } from './routes/reports.health'
+import { Route as ReportsReviewsRouteImport } from './routes/reports.reviews'
 import { Route as ReportsSpendRouteImport } from './routes/reports.spend'
 import { Route as ReviewsIndexRouteImport } from './routes/reviews.index'
 import { Route as ReviewsIdRouteImport } from './routes/reviews.$id'
@@ -151,6 +152,11 @@ const ReportsCiRoute = ReportsCiRouteImport.update({
 const ReportsHealthRoute = ReportsHealthRouteImport.update({
   id: '/reports/health',
   path: '/reports/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsReviewsRoute = ReportsReviewsRouteImport.update({
+  id: '/reports/reviews',
+  path: '/reports/reviews',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsSpendRoute = ReportsSpendRouteImport.update({
@@ -317,6 +323,7 @@ export interface FileRoutesByFullPath {
   '/reports/checklist': typeof ReportsChecklistRoute
   '/reports/ci': typeof ReportsCiRoute
   '/reports/health': typeof ReportsHealthRoute
+  '/reports/reviews': typeof ReportsReviewsRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
@@ -367,6 +374,7 @@ export interface FileRoutesByTo {
   '/reports/checklist': typeof ReportsChecklistRoute
   '/reports/ci': typeof ReportsCiRoute
   '/reports/health': typeof ReportsHealthRoute
+  '/reports/reviews': typeof ReportsReviewsRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
@@ -418,6 +426,7 @@ export interface FileRoutesById {
   '/reports/checklist': typeof ReportsChecklistRoute
   '/reports/ci': typeof ReportsCiRoute
   '/reports/health': typeof ReportsHealthRoute
+  '/reports/reviews': typeof ReportsReviewsRoute
   '/reports/spend': typeof ReportsSpendRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
@@ -470,6 +479,7 @@ export interface FileRouteTypes {
     | '/reports/checklist'
     | '/reports/ci'
     | '/reports/health'
+    | '/reports/reviews'
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
@@ -520,6 +530,7 @@ export interface FileRouteTypes {
     | '/reports/checklist'
     | '/reports/ci'
     | '/reports/health'
+    | '/reports/reviews'
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
@@ -570,6 +581,7 @@ export interface FileRouteTypes {
     | '/reports/checklist'
     | '/reports/ci'
     | '/reports/health'
+    | '/reports/reviews'
     | '/reports/spend'
     | '/reviews/$id'
     | '/runs/$id'
@@ -621,6 +633,7 @@ export interface RootRouteChildren {
   ReportsChecklistRoute: typeof ReportsChecklistRoute
   ReportsCiRoute: typeof ReportsCiRoute
   ReportsHealthRoute: typeof ReportsHealthRoute
+  ReportsReviewsRoute: typeof ReportsReviewsRoute
   ReportsSpendRoute: typeof ReportsSpendRoute
   ReviewsIdRoute: typeof ReviewsIdRoute
   RunsIdRoute: typeof RunsIdRoute
@@ -789,6 +802,13 @@ declare module '@tanstack/react-router' {
       path: '/reports/health'
       fullPath: '/reports/health'
       preLoaderRoute: typeof ReportsHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports/reviews': {
+      id: '/reports/reviews'
+      path: '/reports/reviews'
+      fullPath: '/reports/reviews'
+      preLoaderRoute: typeof ReportsReviewsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports/spend': {
@@ -1013,6 +1033,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsChecklistRoute: ReportsChecklistRoute,
   ReportsCiRoute: ReportsCiRoute,
   ReportsHealthRoute: ReportsHealthRoute,
+  ReportsReviewsRoute: ReportsReviewsRoute,
   ReportsSpendRoute: ReportsSpendRoute,
   ReviewsIdRoute: ReviewsIdRoute,
   RunsIdRoute: RunsIdRoute,

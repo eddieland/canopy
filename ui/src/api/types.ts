@@ -205,6 +205,20 @@ export type CiKick = Schemas['CiKick']
 export type CiKickedPullRequest = Schemas['CiKickedPullRequest']
 /** How a check run counts: red, green, or neither. */
 export type CiVerdict = Schemas['CiVerdict']
+/** Where a window's review feedback came from, how long it took, and what answering it cost. */
+export type ReviewsReport = Schemas['ReviewsReport']
+/** A PR in a window: its feedback, how soon its first review came, and what answering cost. */
+export type ReviewsPullRequest = Schemas['ReviewsPullRequest']
+/** Someone who left feedback in a window, trusted or not, with how soon they reviewed. */
+export type ReviewsReviewer = Schemas['ReviewsReviewer']
+/** One local day's first reviews, by how long each waited. */
+export type ReviewsDay = Schemas['ReviewsDay']
+/** A feedback plan made in a window, how it was approved, and the resumes after it. */
+export type ReviewsRound = Schemas['ReviewsRound']
+/** A window's feedback plans of one effort, beside the resumes that followed. */
+export type ReviewsEffort = Schemas['ReviewsEffort']
+/** canopy's review runs of one purpose and status in a window. */
+export type ReviewsRunCount = Schemas['ReviewsRunCount']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */
