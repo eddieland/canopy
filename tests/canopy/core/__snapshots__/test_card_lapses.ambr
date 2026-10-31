@@ -1,0 +1,12 @@
+# serializer version: 1
+# name: test_the_counts_are_printed_as_a_table
+  '''
+  Running cards over 7 days, since 2026-10-02 UTC, by role.
+  
+  role       runs  carded  lapsed  lapses  ended  ended stale
+  implement     2       2       1       2      2            1
+  plan          1       0       1       1      0            0
+  review        1       1       1       1      1            1
+  task          1       0       0       0      1            0
+  '''
+# ---
