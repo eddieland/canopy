@@ -37,6 +37,14 @@ type LimitKind = Annotated[
     Literal["implement", "resume", "review"],
     Field(description="What a limit counts: a unit's runs of one kind, or with `review` a PR's review runs."),
 ]
+type ItemAnswer = Annotated[
+    Literal["pass", "fixed", "held", "n/a", "unanswered"],
+    Field(
+        description="What a worker answered of an item of its checklist (DESIGN §42): `pass`, the diff held to it; "
+        "`fixed`, the run committed the fix; `held`, it left it failing, for a reason it gave; `n/a`, the diff changed "
+        "nothing it is about; `unanswered`, the run's result said nothing of it.",
+    ),
+]
 type StartStatus = Annotated[
     Literal["started", "stopped"],
     Field(description="Whether the operator's start of a ticket in canopy stands, or was stopped (DESIGN §22)."),
@@ -208,6 +216,19 @@ class FeedbackPlanWritten(Model):
     did, or superseded by a later plan or a request for one."""
 
 
+class ChecklistAnswer(Model):
+    """One item of a run's repository's checklist and what the run answered (DESIGN §42), as `canopy show` prints."""
+
+    repo: str
+    """The repository whose list holds the item."""
+    item: str
+    """The item's id, as the operator's list names it."""
+    answer: ItemAnswer
+    """What the run answered of it."""
+    reason: str | None = None
+    """For `held`, why the run left it failing: the worker's words, untrusted, line breaks kept. None otherwise."""
+
+
 class CardStep(Model):
     """A finished step in a running agent's progress, with what shows it is done."""
 
@@ -371,6 +392,9 @@ class Run(Model):
     feedback_plan: FeedbackPlanWritten | None = None
     """For a `feedback-plan` run, the plan it wrote, on its page alone; None for a run of another kind, one whose plan
     was never recorded, and in the lists."""
+    checklist: list[ChecklistAnswer] = []
+    """What it answered of its repositories' checklists (DESIGN §42), on its page alone: a row per item it was given,
+    by repository, each list in its order. Empty for a run given no list, one still running, and in the lists."""
 
 
 class WaitingFeedbackPlan(Model):

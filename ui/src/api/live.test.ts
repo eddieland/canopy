@@ -234,6 +234,27 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.ticket('ABC-102'))?.isInvalidated).toBe(true)
     })
 
+    it("keeps what only a run's page carries, and reads its page again once the run ends", () => {
+        const client = new QueryClient()
+        const [first] = mockRuns
+        if (!first) {
+            throw new Error('fixtures are empty')
+        }
+        const answers = [{ repo: 'web', item: 'no-any', answer: 'held', reason: 'Generated types.' }] as const
+        const plan = { id: 7, pr_urls: [], status: 'waiting' } as const
+        client.setQueryData(keys.run(first.id), { ...first, checklist: answers, feedback_plan: plan })
+
+        // The list sends neither: the page's stay.
+        applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...first, cost_usd: 9 }] })
+        const shown = client.getQueryData<Run>(keys.run(first.id))
+        expect([shown?.cost_usd, shown?.checklist, shown?.feedback_plan]).toEqual([9, answers, plan])
+        expect(client.getQueryState(keys.run(first.id))?.isInvalidated).toBe(false)
+
+        const ended = { ...first, status: 'done', state: 'done', ended_at: '2026-10-08T12:20:00Z' } as const
+        applyStreamEvent(client, { type: 'runs.updated', runs: [ended] })
+        expect(client.getQueryState(keys.run(first.id))?.isInvalidated).toBe(true)
+    })
+
     it('writes a run a page holds, and marks its transcript stale when its log has more in it', () => {
         const client = new QueryClient()
         const [first, second] = mockRuns
