@@ -64,6 +64,13 @@ fixed; how much goes under each is the persona's to set. A section with nothing 
 - `## Risks`: what could go wrong in the work or after it lands, and how to back out: data, migrations, compatibility,
   and the order the repositories' changes must land in.
 
+A diagram can show at a glance what takes a paragraph to say: how the modules in `Context` fit, which part calls which
+in a step, or the states a status moves through. Where one would, draw it under that prose in a ```` ```mermaid ````
+block, as a `flowchart`, `sequenceDiagram`, or `stateDiagram`, the kinds canopy draws for the operator; it shows any
+other as code. Keep it to a dozen nodes or so, its labels plain words naming what the plan names, with no styling,
+links, or configuration. The prose still says all the work needs, since the worker reads the diagram as code. One or
+two at most, and none where prose is as clear: a diagram counts toward the plan's length.
+
 Before you exit, check the plan against the ticket and the operator's messages, and fix any gap: a requirement with no
 `Acceptance` line or no step that meets it, a line that defers a decision, a name or signature spelled two ways, or a
 claim about the code that you guessed rather than read.

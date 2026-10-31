@@ -103,6 +103,10 @@ diagram, which covers how modules fit, which side calls which, and what a status
 order is quicker to check than three paragraphs about it, and quicker to catch being wrong. It's drawn in your theme's
 colors, and again when you change them.
 
+Planners draw one where it earns its place, usually in Context or Steps, and say the same in prose, since the worker
+after them reads the code, not the picture. Expect one or two in a plan that needs them and none in most, which is the
+right number for a typo fix.
+
 The code is still the plan. **Source**, under the diagram, shows it; so does putting the cursor in it, which is how
 you edit one, with the diagram redrawn under it as you stop typing. A comment or a change marked in the code shows it
 too, since that's where those live. A diagram Mermaid can't read, or one of a kind not drawn here, shows its code and,
