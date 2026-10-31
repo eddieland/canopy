@@ -141,6 +141,9 @@
     --buddy-ghost-facet: oklch(0.55 0.02 255);
     --buddy-ghost-eye: oklch(0.7 0.13 205);
     --buddy-ghost-core: oklch(0.98 0.03 205);
+    /* The dark body every Ghost's shell floats around, its eye's lens set in it; laid thin over a facet, the shade of
+     * one turned from the light. */
+    --buddy-ghost-housing: oklch(0.26 0.02 255);
     /* The Ghost's other shells (src/lib/shells.ts): the Sprig Shell's leaves in shade, a pumpkin's rind lit and in
      * shade (the jack-o'-lantern beside Sprig at Halloween wears them too), a gilded shell's shaded gold beside the
      * hats' lit one, and a Vex shell's bronze, its red eye and the eye's hot core. */
@@ -279,6 +282,7 @@
     --buddy-ghost-facet: oklch(0.52 0.02 255);
     --buddy-ghost-eye: oklch(0.82 0.13 205);
     --buddy-ghost-core: oklch(0.99 0.02 205);
+    --buddy-ghost-housing: oklch(0.22 0.02 260);
     --buddy-leaf-shade: oklch(0.55 0.13 145);
     --buddy-ghost-pumpkin: oklch(0.75 0.16 55);
     --buddy-ghost-pumpkin-shade: oklch(0.58 0.15 45);
@@ -779,6 +783,7 @@
     --color-buddy-ghost-facet: var(--buddy-ghost-facet);
     --color-buddy-ghost-eye: var(--buddy-ghost-eye);
     --color-buddy-ghost-core: var(--buddy-ghost-core);
+    --color-buddy-ghost-housing: var(--buddy-ghost-housing);
     --color-buddy-leaf-shade: var(--buddy-leaf-shade);
     --color-buddy-ghost-pumpkin: var(--buddy-ghost-pumpkin);
     --color-buddy-ghost-pumpkin-shade: var(--buddy-ghost-pumpkin-shade);
