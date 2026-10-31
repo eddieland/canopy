@@ -115,8 +115,10 @@ function BlockView({ block, prose, look }: { block: Block; prose: boolean; look:
             )
         }
         case 'heading': {
+            // Space above sets it apart from what it closes, and `#` and `##` a step over `###`; a small step, as the
+            // page's heading ladder does not apply inside a bubble.
             return (
-                <p className="font-medium">
+                <p className={cn('mt-2 font-semibold first:mt-0', block.level <= 2 ? 'text-base' : 'text-sm')}>
                     <LineView line={block.line} look={look} />
                 </p>
             )
