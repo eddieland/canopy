@@ -60,6 +60,17 @@
     letter-spacing: -0.01em;
 }
 
+/*
+ * The guide in the default faces under every palette: Plex Sans for its prose and Plex Mono at full size for its code.
+ * A palette that sets every line in mono (Gruvbox, Monokai) is an editor's look for the app's readouts, not for pages
+ * of prose, which read worse in it and wrap sooner.
+ */
+@utility guide-face {
+    --face: var(--face-sans);
+    --face-mono: var(--face-mono-full);
+    font-family: var(--face);
+}
+
 /* A small uppercase label above a value, as on a panel. */
 @utility panel-label {
     font-family: var(--font-mono);

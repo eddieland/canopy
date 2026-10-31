@@ -169,3 +169,27 @@ test.describe('palettes', () => {
         await expect(second.locator('html')).toHaveAttribute('data-light-palette', 'off-white')
     })
 })
+
+test.describe('the guide under a mono palette', () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page)
+    })
+
+    for (const [theme, palette] of [
+        ['dark', 'gruvbox'],
+        ['dark', 'monokai'],
+        ['light', 'gruvbox'],
+    ] as const) {
+        test(`${theme} ${palette} sets the app in mono and the guide in Plex Sans`, async ({ page }) => {
+            await storeTheme(page, theme)
+            await storePalette(page, theme, palette)
+            await page.goto('guide/settings')
+            await settled(page)
+
+            await expect(page.locator('body')).toHaveCSS('font-family', /^"IBM Plex Mono Compact"/u)
+            const guide = page.getByTestId('guide-page')
+            await expect(guide.getByRole('paragraph').first()).toHaveCSS('font-family', /^"IBM Plex Sans Variable"/u)
+            await expect(guide.locator('code').first()).toHaveCSS('font-family', /^"IBM Plex Mono"/u)
+        })
+    }
+})
