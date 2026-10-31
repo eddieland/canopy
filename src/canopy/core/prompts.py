@@ -23,9 +23,8 @@ from canopy.core.config import (
     DEFAULT_TRAILER_EMAIL,
     DEFAULT_TRAILER_NAME,
     KEY_PLACEHOLDER,
-    PlannerApproval,
 )
-from canopy.core.vocab import PlanItem, ResumeReason, RunKind
+from canopy.core.vocab import PlanItem, PlannerApproval, ResumeReason, RunKind
 from canopy.infra import resources
 
 if TYPE_CHECKING:
