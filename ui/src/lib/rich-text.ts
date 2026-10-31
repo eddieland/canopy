@@ -1,17 +1,22 @@
 // Agent-written text (a run's summary, a tick's, a decision's rationale) as blocks a page can lay out: paragraphs that
-// keep their line breaks, lists, headings, and code. It reads the few Markdown forms agents write and nothing more:
-// the result is data that `RichText` renders as React text, never HTML. Link syntax stays characters; a bare URL is
-// linked to itself by `LinkedText` (D113).
+// keep their line breaks, lists, headings, quotes, rules, tables, and code. It reads the Markdown forms agents write
+// and nothing more: the result is data that `RichText` renders as React text, never HTML. Link syntax stays
+// characters; a bare URL is linked to itself by `LinkedText` (D113).
 
-/** A piece of a line: plain text, `code`, or **strong**; code inside a strong run is a code piece flagged `strong`. */
+import { splitLinks } from '@/lib/links'
+
+/** A piece of a line: plain text, `code`, **strong**, *emphasis*, or ~~struck~~; code inside a run is its own piece. */
 export interface Inline {
     /** How the piece is set. */
-    kind: 'text' | 'code' | 'strong'
+    kind: 'text' | 'code' | 'strong' | 'em' | 'del'
     /** The piece's text, without its markers. */
     text: string
-    /** On a code piece, that it sits inside a strong run: `**the `api` service**`. */
-    strong?: true
+    /** On a code piece, the run it sits inside: `**the `api` service**` sets `api` as code within strong. */
+    within?: Run
 }
+
+/** A run of text set by its markers: **strong**, *emphasis*, or ~~struck~~. */
+export type Run = 'strong' | 'em' | 'del'
 
 /** One line of text, as its inline pieces: `Inline`'s, or another reader's (the guide's, which reads links too). */
 export type Line<I = Inline> = I[]
@@ -27,22 +32,39 @@ export interface Item<I = Inline> {
     lines: Line<I>[]
 }
 
+/** How a table's column sets its cells, from the colons of its delimiter row; `undefined` when it names none. */
+export type Align = 'left' | 'center' | 'right' | undefined
+
+/** The class that sets a table's cell as its column's `Align` asks, for rich text and the guide alike. */
+export const ALIGN: Readonly<Record<NonNullable<Align>, string>> = {
+    left: 'text-left',
+    center: 'text-center',
+    right: 'text-right',
+}
+
 /**
- * One block of agent-written text: a paragraph, a heading (`level` is its count of `#`), a list, or a code block's
- * lines as written, with `lang`, the first word after its opening fence, when it has one.
+ * One block of agent-written text: a paragraph, a heading (`level` is its count of `#`), a list, a quote's own blocks,
+ * a rule (`---`), a table, or a code block's lines as written, with `lang`, the first word after its opening fence,
+ * when it has one. A table's `align`, `head`, and every row of `rows` hold one entry a column.
  */
 export type Block<I = Inline> =
     | { kind: 'paragraph'; lines: Line<I>[] }
     | { kind: 'heading'; level: number; line: Line<I> }
     | { kind: 'list'; ordered: boolean; start: number; items: Item<I>[] }
+    | { kind: 'quote'; blocks: Block<I>[] }
+    | { kind: 'rule' }
+    | { kind: 'table'; align: Align[]; head: Line<I>[]; rows: Line<I>[][] }
     | { kind: 'code'; lines: string[]; lang?: string }
 
 const FENCE = /^\s*(`{3,}|~{3,})/u
 const HEADING = /^(#{1,6})\s+(.*)$/u
 const BULLET = /^(\s*)[-*+]\s+(.*)$/u
 const NUMBERED = /^(\s*)(\d{1,9})[.)]\s+(.*)$/u
+const QUOTE = /^ {0,3}> ?/u
+const RULE = /^ {0,3}(?:(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})$/u
+// A table's delimiter row: a cell of dashes a column, each with a colon at either end or both, between pipes.
+const DELIMITER = /^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$/u
 const MAX_DEPTH = 3
-const CODE_SPAN = /`([^`\n]+)`/gu
 
 /** `text` as blocks: a blank line ends a paragraph or a list, and a line break inside one is kept. */
 export function parse(text: string): Block[] {
@@ -54,8 +76,13 @@ export function parse(text: string): Block[] {
  * text and not an agent's, read their links this way (`src/lib/guide.ts`); agent text never does.
  */
 export function parseWith<I>(text: string, read: (line: string) => Line<I>): Block<I>[] {
+    return blocksOf(text.replaceAll(/\r\n?/gu, '\n').split('\n'), read, 0)
+}
+
+// The blocks of `lines`, a quote's among them at `depth`: a quote nested past `MAX_DEPTH` keeps its `>` as characters.
+function blocksOf<I>(lines: string[], read: (line: string) => Line<I>, depth: number): Block<I>[] {
     const blocks: Block<I>[] = []
-    const lines = text.replaceAll(/\r\n?/gu, '\n').split('\n')
+    const quotes = depth < MAX_DEPTH
     let i = 0
     while (i < lines.length) {
         const line = lines[i] ?? ''
@@ -77,10 +104,24 @@ export function parseWith<I>(text: string, read: (line: string) => Line<I>): Blo
             i += 1
             continue
         }
+        if (RULE.test(line)) {
+            blocks.push({ kind: 'rule' })
+            i += 1
+            continue
+        }
         const heading = HEADING.exec(line)
         if (heading) {
             blocks.push({ kind: 'heading', level: (heading[1] ?? '#').length, line: read(heading[2] ?? '') })
             i += 1
+            continue
+        }
+        if (quotes && QUOTE.test(line)) {
+            const inner: string[] = []
+            while (i < lines.length && QUOTE.test(lines[i] ?? '')) {
+                inner.push((lines[i] ?? '').replace(QUOTE, ''))
+                i += 1
+            }
+            blocks.push({ kind: 'quote', blocks: blocksOf(inner, read, depth + 1) })
             continue
         }
         const marker = listMarker(line)
@@ -93,7 +134,7 @@ export function parseWith<I>(text: string, read: (line: string) => Line<I>): Blo
             }
             while (i < lines.length) {
                 const next = lines[i] ?? ''
-                const item = listMarker(next)
+                const item = RULE.test(next) ? null : listMarker(next)
                 if (item && item.ordered === list.ordered) {
                     list.items.push({ depth: depthOf(item.indent), lines: [read(item.text)] })
                 } else if (!item && next.trim() !== '' && /^\s/u.test(next) && !FENCE.test(next)) {
@@ -107,10 +148,25 @@ export function parseWith<I>(text: string, read: (line: string) => Line<I>): Blo
             blocks.push(list)
             continue
         }
+        const columns = tableAt(lines, i)
+        if (columns > 0) {
+            const table = readTable(lines, i, columns, read)
+            blocks.push(table.block)
+            i = table.end
+            continue
+        }
         const paragraph: Line<I>[] = []
         while (i < lines.length) {
             const next = lines[i] ?? ''
-            if (next.trim() === '' || FENCE.test(next) || HEADING.test(next) || listMarker(next)) {
+            if (
+                next.trim() === '' ||
+                FENCE.test(next) ||
+                HEADING.test(next) ||
+                RULE.test(next) ||
+                (quotes && QUOTE.test(next)) ||
+                listMarker(next) ||
+                tableAt(lines, i) > 0
+            ) {
                 break
             }
             paragraph.push(read(next.trim()))
@@ -119,6 +175,62 @@ export function parseWith<I>(text: string, read: (line: string) => Line<I>): Blo
         blocks.push({ kind: 'paragraph', lines: paragraph })
     }
     return blocks
+}
+
+// How many columns the table starting at `lines[at]` has: its header row and then a delimiter row of as many cells,
+// each with a pipe; 0 when no table starts there.
+function tableAt(lines: string[], at: number): number {
+    const head = lines[at] ?? ''
+    const delimiter = lines[at + 1]
+    if (!head.includes('|') || delimiter === undefined || !delimiter.includes('|') || !DELIMITER.test(delimiter)) {
+        return 0
+    }
+    const columns = cells(head).length
+    return cells(delimiter).length === columns ? columns : 0
+}
+
+// The table starting at `lines[at]`, and the index of the line after it: its rows run to the first line without a pipe,
+// each cut or padded to `columns` cells.
+function readTable<I>(
+    lines: string[],
+    at: number,
+    columns: number,
+    read: (line: string) => Line<I>,
+): { block: Block<I>; end: number } {
+    const align = cells(lines[at + 1] ?? '').map((cell) => alignOf(cell))
+    const row = (line: string) => Array.from({ length: columns }, (_, column) => read(cells(line)[column] ?? ''))
+    const rows: Line<I>[][] = []
+    let i = at + 2
+    while (i < lines.length && (lines[i] ?? '').includes('|') && !FENCE.test(lines[i] ?? '')) {
+        rows.push(row(lines[i] ?? ''))
+        i += 1
+    }
+    return { block: { kind: 'table', align, head: row(lines[at] ?? ''), rows }, end: i }
+}
+
+// A table row's cells, trimmed: split on each pipe but an escaped one (`\|`), which stays in its cell as a pipe, and
+// without the pipes that may open and close the row.
+function cells(line: string): string[] {
+    let row = line.trim()
+    if (row.startsWith('|')) {
+        row = row.slice(1)
+    }
+    if (row.endsWith('|') && !row.endsWith('\\|')) {
+        row = row.slice(0, -1)
+    }
+    return row.split(/(?<!\\)\|/u).map((cell) => cell.trim().replaceAll('\\|', '|'))
+}
+
+function alignOf(cell: string): Align {
+    const left = cell.startsWith(':')
+    const right = cell.endsWith(':')
+    if (left && right) {
+        return 'center'
+    }
+    if (right) {
+        return 'right'
+    }
+    return left ? 'left' : undefined
 }
 
 function listMarker(line: string): { ordered: boolean; number: number; indent: number; text: string } | null {
@@ -138,45 +250,90 @@ function depthOf(indent: number): number {
     return Math.max(0, Math.min(MAX_DEPTH, Math.floor(indent / 2)))
 }
 
-/** A line's `code` spans and **strong** runs, code inside strong too; anything unclosed stays as it was written. */
+/**
+ * The runs rich text reads, as a pattern's source for a reader to build on (the guide adds its links): **strong**,
+ * ~~struck~~, and *emphasis* or _emphasis_. Code spans are read first and stand apart from them (`inlineWith`), so a
+ * run's markers inside code are code. Emphasis takes no space inside its markers' ends, nor a letter or digit outside
+ * them, so `2*3*4` and `snake_case_name` stay as written.
+ */
+export const INLINE = [
+    /\*\*(?<strong>.+?)\*\*/u,
+    /~~(?<del>[^\s~](?:.*?[^\s~])?)~~/u,
+    /(?<![\w*])\*(?<em>[^\s*](?:[^*]*?[^\s*])?)\*(?![\w*])/u,
+    /(?<![\w_])_(?<under>[^\s_](?:[^_]*?[^\s_])?)_(?![\w_])/u,
+]
+    .map((form) => form.source)
+    .join('|')
+
+const INLINE_PATTERN = new RegExp(INLINE, 'dgu')
+const CODE_SPAN = /`[^`\n]+`/gu
+// What a code span's characters read as while the runs around it are found: neither a space, a word character, nor a
+// marker, as the span's own backticks are not, so a run beside a span or holding one reads as it would with the span.
+const BLANK = '\u0000'
+
+/** A line's code spans, strong runs, struck runs, and emphasis (`INLINE`); an unclosed marker stays as written. */
 export function inline(text: string): Line {
-    return inlineWith(text, /\*\*(.+?)\*\*/dgu, ([, strong]) => strongRun(strong ?? ''))
+    const urls = urlSpans(text)
+    const inUrl = (at: number) => urls.some(([from, to]) => at >= from && at < to)
+    return inlineWith(text, INLINE_PATTERN, (match) => {
+        // An emphasis or struck marker inside a URL is part of its address (`https://x/_a_/b`), so it stays text.
+        const marker = match.groups.strong === undefined
+        return marker && (inUrl(match.at) || inUrl(match.end - 1)) ? undefined : runPieces(match)
+    })
+}
+
+/** A piece another reader makes of a line (the guide's links): how it is set, and its text. */
+interface Piece {
+    kind: string
+    text: string
+}
+
+/** A match of an inline pattern, as the line's own text has it, code spans and all. */
+export interface InlineMatch {
+    /** What it matched, markers included. */
+    written: string
+    /** Each named group's text, or `undefined` for a group that took no part. */
+    groups: Partial<Record<string, string>>
+    /** Where it starts in the line. */
+    at: number
+    /** Where it ends in the line. */
+    end: number
 }
 
 /**
- * `text` with each match of `pattern` read by `read`, from the groups the match holds, and the text between matches
- * read for its `code` spans. A code span binds tighter than any match, as CommonMark's does: a match never starts or
- * ends inside one, so `**a `b** c`` is code after `**a `, not strong. `pattern` takes the `d` and `g` flags. The guide
- * reads its strong runs and links this way (`src/lib/guide.ts`).
+ * `text`'s matches of `pattern`, each read by `read` (`undefined` keeps it as written), and its `code` spans around
+ * them. A code span binds tighter than any match, as CommonMark's does: a match never starts or ends inside one, so
+ * `**a `b** c`` is code after `**a `, not strong. `pattern` takes the `d` and `g` flags. The guide reads its runs and
+ * links this way (`src/lib/guide.ts`).
  */
-export function inlineWith<I>(
+export function inlineWith<I extends Piece>(
     text: string,
     pattern: RegExp,
-    read: (groups: readonly (string | undefined)[]) => I[],
+    read: (match: InlineMatch) => I[] | undefined,
 ): (I | Inline)[] {
     // Blanking the spans out keeps every offset, so a match in the blanked text is at the same place in the text.
-    const blanked = text.replaceAll(CODE_SPAN, (span) => ' '.repeat(span.length))
+    const blanked = text.replaceAll(CODE_SPAN, (span) => BLANK.repeat(span.length))
     const line: (I | Inline)[] = []
     let last = 0
     for (const match of blanked.matchAll(pattern)) {
-        const groups = (match.indices ?? []).map((at: [number, number] | undefined) =>
-            at === undefined ? undefined : text.slice(at[0], at[1]),
+        const at = match.index
+        const end = at + match[0].length
+        const groups = Object.fromEntries(
+            Object.entries(match.indices?.groups ?? {}).map(([name, span]: [string, [number, number] | undefined]) => [
+                name,
+                span === undefined ? undefined : text.slice(span[0], span[1]),
+            ]),
         )
-        line.push(...codeSpans(text.slice(last, match.index)), ...read(groups))
-        last = match.index + match[0].length
+        const pieces = read({ written: text.slice(at, end), groups, at, end })
+        if (pieces === undefined) {
+            continue
+        }
+        pushSpans(text.slice(last, at), line)
+        line.push(...pieces)
+        last = end
     }
-    line.push(...codeSpans(text.slice(last)))
+    pushSpans(text.slice(last), line)
     return line
-}
-
-/**
- * A **strong** run's text, without its markers, as its pieces: strong text, and its `code` spans flagged `strong`. The
- * guide's reader shares it (`src/lib/guide.ts`).
- */
-export function strongRun(text: string): Line {
-    return codeSpans(text).map((piece) =>
-        piece.kind === 'code' ? { kind: 'code', text: piece.text, strong: true } : { kind: 'strong', text: piece.text },
-    )
 }
 
 /**
@@ -185,18 +342,64 @@ export function strongRun(text: string): Line {
  */
 export function codeSpans(text: string): Line {
     const line: Line = []
+    pushSpans(text, line)
+    return line
+}
+
+/** The pieces a match of `INLINE` reads as, code spans within its run, or `undefined` for a form it does not name. */
+export function runPieces(match: InlineMatch): Inline[] | undefined {
+    const { strong, del, em, under } = match.groups
+    if (strong !== undefined) {
+        return inRun('strong', strong)
+    }
+    if (del !== undefined) {
+        return inRun('del', del)
+    }
+    const emphasis = em ?? under
+    return emphasis === undefined ? undefined : inRun('em', emphasis)
+}
+
+function inRun(run: Run, text: string): Inline[] {
+    return codeSpans(text).map((piece) =>
+        piece.kind === 'code' ? { kind: 'code', text: piece.text, within: run } : { kind: run, text: piece.text },
+    )
+}
+
+// Pushes `text`'s code spans and the text around them onto `line`. Text runs next to each other join, so a URL a kept
+// marker split still links whole.
+function pushSpans(text: string, line: Piece[]): void {
     let last = 0
     for (const match of text.matchAll(CODE_SPAN)) {
-        if (match.index > last) {
-            line.push({ kind: 'text', text: text.slice(last, match.index) })
-        }
-        line.push({ kind: 'code', text: match[1] ?? '' })
+        plain(text.slice(last, match.index), line)
+        line.push({ kind: 'code', text: match[0].slice(1, -1) })
         last = match.index + match[0].length
     }
-    if (last < text.length) {
-        line.push({ kind: 'text', text: text.slice(last) })
+    plain(text.slice(last), line)
+}
+
+function plain(run: string, line: Piece[]): void {
+    if (run === '') {
+        return
     }
-    return line
+    const previous = line.at(-1)
+    if (previous?.kind === 'text') {
+        previous.text += run
+    } else {
+        line.push({ kind: 'text', text: run })
+    }
+}
+
+// Where each URL `LinkedText` would link sits in `text`, as its start and end.
+function urlSpans(text: string): [number, number][] {
+    const spans: [number, number][] = []
+    let at = 0
+    for (const piece of splitLinks(text)) {
+        if (piece.href !== undefined) {
+            spans.push([at, at + piece.text.length])
+        }
+        at += piece.text.length
+    }
+    return spans
 }
 
 /**
@@ -206,8 +409,8 @@ export function codeSpans(text: string): Line {
 export const WRAP = 100
 
 /**
- * How many lines `blocks` take: a list item's or a code block's each count, and a line of text longer than `WRAP` as
- * the lines it wraps to. A code block scrolls rather than wraps.
+ * How many lines `blocks` take: a list item's, a table row's, a code block's, and a rule each count, and a line of text
+ * longer than `WRAP` as the lines it wraps to. A code block scrolls rather than wraps.
  */
 export function lineCount(blocks: Block[]): number {
     return blocks.reduce((sum, block) => sum + linesOf(block), 0)
@@ -223,6 +426,15 @@ function linesOf(block: Block): number {
         }
         case 'list': {
             return block.items.reduce((sum, item) => sum + wrapped(item.lines), 0)
+        }
+        case 'quote': {
+            return lineCount(block.blocks)
+        }
+        case 'rule': {
+            return 1
+        }
+        case 'table': {
+            return 1 + block.rows.length
         }
         case 'code': {
             return Math.max(1, block.lines.length)
@@ -248,16 +460,20 @@ export function clamp(blocks: Block[], max: number): { blocks: Block[]; hidden: 
     if (total <= max + 1) {
         return { blocks, hidden: 0 }
     }
+    return { blocks: cutBlocks(blocks, max), hidden: total - max }
+}
+
+function cutBlocks(blocks: Block[], room: number): Block[] {
     const shown: Block[] = []
-    let room = max
+    let left = room
     for (const block of blocks) {
-        if (room <= 0) {
+        if (left <= 0) {
             break
         }
-        shown.push(cutBlock(block, room))
-        room -= linesOf(block)
+        shown.push(cutBlock(block, left))
+        left -= linesOf(block)
     }
-    return { blocks: shown, hidden: total - max }
+    return shown
 }
 
 function cutBlock(block: Block, room: number): Block {
@@ -265,8 +481,16 @@ function cutBlock(block: Block, room: number): Block {
         case 'paragraph': {
             return { ...block, lines: cutLines(block.lines, room) }
         }
-        case 'heading': {
+        case 'heading':
+        case 'rule': {
             return block
+        }
+        case 'quote': {
+            return { ...block, blocks: cutBlocks(block.blocks, room) }
+        }
+        case 'table': {
+            // Its head counts as a line, so it shows with at least its first row when there is room for both.
+            return { ...block, rows: block.rows.slice(0, room - 1) }
         }
         case 'code': {
             return { ...block, lines: block.lines.slice(0, room) }

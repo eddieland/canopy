@@ -28,8 +28,8 @@ import slack from '@/guide/slack.md?raw'
 import tasks from '@/guide/tasks.md?raw'
 import tickets from '@/guide/tickets.md?raw'
 import ticks from '@/guide/ticks.md?raw'
-import { inlineWith, parseWith, strongRun } from '@/lib/rich-text'
-import type { Block, Inline, Line } from '@/lib/rich-text'
+import { INLINE, inlineWith, parseWith, runPieces } from '@/lib/rich-text'
+import type { Block, Inline, InlineMatch, Line } from '@/lib/rich-text'
 import { SECTIONS } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
 import type { FileRoutesById } from '@/routeTree.gen'
@@ -202,6 +202,8 @@ export const EMBEDS: Readonly<Record<string, string>> = {
 const SLUGS: ReadonlySet<string> = new Set(SOURCES.flatMap(({ pages }) => pages.map(([slug]) => slug)))
 const PAGE_REF = /^([a-z0-9-]*)(?:#([a-z0-9-]+))?$/u
 const WEB = /^https?:\/\/\S+$/u
+// What a line of the guide reads: rich text's inline forms, and a labelled link.
+const GUIDE_LINE = new RegExp(String.raw`${INLINE}|\[(?<label>[^\]]+)\]\((?<href>[^)\s]+)\)`, 'dgu')
 
 /** The guide's groups, each with its pages, in the sidebar's order. */
 export const GUIDE_GROUPS: readonly GuideGroup[] = SOURCES.map(({ title, pages }) => ({
@@ -302,16 +304,20 @@ function embed(text: string): string {
     })
 }
 
-/** A line of a guide page on `slug`: `code`, **strong**, and `[text](href)`; a link going nowhere stays as written. */
+/**
+ * A line of a guide page on `slug`: what rich text reads inline, and `[text](href)`; a link going nowhere stays as
+ * written.
+ */
 function guideLine(text: string, slug: string): Line<GuidePiece> {
-    return inlineWith(text, /\*\*(.+?)\*\*|\[([^\]]+)\]\(([^)\s]+)\)/dgu, (groups) => guidePieces(groups, slug))
+    return inlineWith(text, GUIDE_LINE, (match) => guidePieces(match, slug))
 }
 
-function guidePieces(groups: readonly (string | undefined)[], slug: string): GuidePiece[] {
-    const [written, strong, label, href] = groups
-    if (strong !== undefined) {
-        return strongRun(strong)
+function guidePieces(match: InlineMatch, slug: string): GuidePiece[] {
+    const run = runPieces(match)
+    if (run !== undefined) {
+        return run
     }
+    const { label, href } = match.groups
     const target = guideTarget(href ?? '', slug)
-    return [target === undefined ? { kind: 'text', text: written ?? '' } : { kind: 'link', text: label ?? '', target }]
+    return [target === undefined ? { kind: 'text', text: match.written } : { kind: 'link', text: label ?? '', target }]
 }

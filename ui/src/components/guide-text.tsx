@@ -3,12 +3,14 @@ import { Fragment } from 'react'
 
 import { Code } from '@/components/code'
 import { CodeTokens } from '@/components/code-tokens'
+import { Mark } from '@/components/rich-text'
 import { useHighlightLines } from '@/hooks/use-highlight'
 import { anchor, plainText } from '@/lib/guide'
 import type { GuidePiece } from '@/lib/guide'
 import type { CodeToken } from '@/lib/highlight'
 import { fenceLanguage } from '@/lib/languages'
-import type { Block, Line } from '@/lib/rich-text'
+import { ALIGN } from '@/lib/rich-text'
+import type { Align, Block, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
 
 // Written out so Tailwind finds them.
@@ -18,8 +20,8 @@ const LINK = 'text-accent underline underline-offset-4 hover:decoration-2'
 /**
  * A page of the guide laid out as a documentation site's article (`src/lib/guide.ts`), in a document's type as a plan
  * is (`document-text` in `src/index.css`): headings, each with its anchor as its id and a `#` link to itself on hover,
- * paragraphs, lists, code, and links. Its lines wrap as prose does, so a paragraph written across lines reads as one.
- * Every piece is a React element, never HTML.
+ * paragraphs, lists, quotes, rules, tables, code, and links. Its lines wrap as prose does, so a paragraph written
+ * across lines reads as one. Every piece is a React element, never HTML.
  */
 export function GuideText({ blocks, page }: { blocks: Block<GuidePiece>[]; page: string }) {
     return (
@@ -100,10 +102,55 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
                 <ul className={cn(list, 'list-disc')}>{items}</ul>
             )
         }
+        case 'quote': {
+            return (
+                <blockquote className="flex flex-col gap-4 border-l-2 pl-4 text-muted-foreground">
+                    {block.blocks.map((inner, i) => (
+                        <BlockView key={i} block={inner} page={page} />
+                    ))}
+                </blockquote>
+            )
+        }
+        case 'rule': {
+            return <hr />
+        }
+        case 'table': {
+            return (
+                <div className="overflow-x-auto">
+                    <table className="border-collapse text-left">
+                        <thead>
+                            <tr className="border-b">
+                                {block.head.map((line, i) => (
+                                    <th key={i} scope="col" className={cn(cellClass(block.align[i]), 'font-semibold')}>
+                                        <LineView line={line} />
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {block.rows.map((row, i) => (
+                                <tr key={i} className="border-b last:border-b-0">
+                                    {row.map((line, j) => (
+                                        <td key={j} className={cellClass(block.align[j])}>
+                                            <LineView line={line} />
+                                        </td>
+                                    ))}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )
+        }
         case 'code': {
             return <CodeBlock lines={block.lines} lang={block.lang} />
         }
     }
+}
+
+// A table cell's class, set as its column's delimiter row asks.
+function cellClass(align: Align): string {
+    return cn('px-3 py-2 align-top first:pl-0 last:pr-0', align && ALIGN[align])
 }
 
 // A code block, colored by the language its fence names once that grammar has read it, plain text until then.
@@ -141,12 +188,14 @@ function PieceView({ piece }: { piece: GuidePiece }) {
         case 'text': {
             return piece.text
         }
-        case 'strong': {
-            return <strong className="font-semibold">{piece.text}</strong>
+        case 'strong':
+        case 'em':
+        case 'del': {
+            return <Mark run={piece.kind}>{piece.text}</Mark>
         }
         case 'code': {
             const code = <Code>{piece.text}</Code>
-            return piece.strong ? <strong className="font-semibold">{code}</strong> : code
+            return piece.within === undefined ? code : <Mark run={piece.within}>{code}</Mark>
         }
         case 'link': {
             return <GuideLink piece={piece} />
