@@ -573,5 +573,6 @@ such as a shipped migration, may still cite one, and git history has its text.
 - `mermaid`, pinned, draws a plan's ```` ```mermaid ```` fence (flowchart, sequence, and state diagrams only); only
   `ui/src/lib/diagram.ts` imports it, on demand. Its code stays the document: comments, the diff, and the file see it.
 - A plan is model text (T1), so mermaid runs `strict`, with SVG labels, and its config locked against the diagram's own.
-- Its SVG is shown as an `<img>`, never put in the page: an image runs no script, follows no link, and fetches nothing,
-  so a gap in mermaid's sanitizer reaches nothing.
+- What is shown is only ever an `<img>` of its SVG: an image runs no script, follows no link, and fetches nothing, so
+  a gap in mermaid's sanitizer reaches nothing shown. While drawing, mermaid lays the SVG out off screen in the page,
+  where `strict` is the guard.

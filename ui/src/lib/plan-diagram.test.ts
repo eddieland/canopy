@@ -23,6 +23,17 @@ const PLAN = `# Plan\n\nIn order:\n\n${DIAGRAM}\n\nThen:\n\n\`\`\`python\nprint(
 
 const editors: Editor[] = []
 
+// The end of the document's code block, where text typed there goes.
+function codeEnd(editor: Editor): number {
+    let end = 0
+    editor.state.doc.descendants((node, pos) => {
+        if (node.type.name === 'codeBlock') {
+            end = pos + node.nodeSize - 1
+        }
+    })
+    return end
+}
+
 function open(markdown: string): { editor: Editor; root: HTMLElement } {
     const root = document.createElement('div')
     document.body.append(root)
@@ -79,12 +90,7 @@ describe('a Mermaid code block', () => {
         await within(root).findByRole('img')
         vi.useFakeTimers()
         try {
-            let end = 0
-            editor.state.doc.descendants((node, pos) => {
-                if (node.type.name === 'codeBlock') {
-                    end = pos + node.nodeSize - 1
-                }
-            })
+            const end = codeEnd(editor)
             editor.commands.insertContentAt(end, '\n    B->>A: bye')
             editor.commands.insertContentAt(end + 1, ' ')
             expect(drawDiagram).toHaveBeenCalledTimes(1)
@@ -98,5 +104,23 @@ describe('a Mermaid code block', () => {
         await vi.waitFor(() => {
             expect(drawDiagram).toHaveBeenCalledTimes(3)
         })
+    })
+
+    it('drops a draw of the code before an edit that ends after it', async () => {
+        let finish: ((drawn: Drawn) => void) | undefined
+        vi.mocked(drawDiagram).mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    finish = resolve
+                }),
+        )
+        const { editor, root } = open(DIAGRAM)
+        await vi.waitFor(() => {
+            expect(drawDiagram).toHaveBeenCalledTimes(1)
+        })
+        editor.commands.insertContentAt(codeEnd(editor), '\n    B->>A: bye')
+        finish?.({ svg: '<svg>before the edit</svg>', kind: 'sequence' })
+        const image = await within(root).findByRole('img')
+        expect(decodeURIComponent(image.getAttribute('src') ?? '')).toContain('B->>A: bye')
     })
 })

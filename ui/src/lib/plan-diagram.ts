@@ -122,6 +122,8 @@ class DiagramView implements NodeView {
         }
         if (node.textContent !== this.text) {
             this.text = node.textContent
+            // A draw of the code before this edit, still under way, is dropped when it ends.
+            this.draws += 1
             clearTimeout(this.timer)
             this.timer = setTimeout(() => {
                 this.draw()

@@ -3,7 +3,8 @@
 // than HTML (`htmlLabels: false`), and `secure` keeps a diagram's own front matter or `%%{init}%%` from setting any of
 // it back, or the theme, layout, or CSS. Only the kinds a plan has use for are drawn; any other is refused as such. The
 // SVG is a string for an `<img>` (src/lib/plan-diagram.ts), where the browser runs no script, follows no link, and
-// fetches nothing, so a gap in mermaid's sanitizer still reaches nothing on the page. Only this module imports
+// fetches nothing, so a gap in mermaid's sanitizer reaches nothing shown. While it draws, mermaid lays the SVG out in
+// the page, off screen, for a moment: there `strict` is the guard. Only this module imports
 // mermaid, and only on demand.
 //
 // An image draws with its own colors and fonts, not the page's: the colors are read from the theme's tokens as each

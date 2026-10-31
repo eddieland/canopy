@@ -26,7 +26,8 @@ memory, and do not upgrade in passing.
 - Shiki for a review's diff and the guide's code blocks alone (D121): only `src/lib/highlight.ts` and
   `src/lib/languages.ts`, its grammars, import it, and only on demand, each grammar its own chunk.
 - mermaid for a plan's diagrams alone (D131): only `src/lib/diagram.ts` imports it, and only on demand, from
-  `src/lib/plan-diagram.ts`, which shows what it draws as an image, never as SVG in the page.
+  `src/lib/plan-diagram.ts`, which shows what it draws only as an image (mermaid lays the SVG out off screen while it
+  draws, sanitized).
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
 - cmdk for the repository picker's, the model picker's, and the jump palette's searchable lists, which Radix has no
   primitive for: only `src/components/ui/command.tsx` imports it, and the lint refuses it elsewhere.
