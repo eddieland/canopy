@@ -380,8 +380,8 @@ promises:
   may name the variant it runs at, such as a reasoning effort, as
   `provider/model@variant`. `runtime.models` is private (T7): a model
   is what the operator's spend buys, and its provider is sent the ticket and the code. The override is set only by the
-  operator's `canopy model` or the ticket's page, through one function refused inside an agent run (T1); the
-  overseer, a dispatch, and ticket text choose none.
+  operator's `canopy model`, the ticket's page, or the web UI's start of the ticket, with the start or not at all,
+  through one function refused inside an agent run (T1); the overseer, a dispatch, and ticket text choose none.
 - **What is recorded is what served.** No event names the model a call went to, so canopy reads each run's session
   from the runtime's own record once the run ends: the process that ran it reads it as it closes the run, and the wait
   after a live tick reads the rest, one at a time, never-read runs the newest first, past ones among them. A read

@@ -14,6 +14,7 @@ what a revision of the review's draft should change, and `grant` allows its draf
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sys
 from datetime import UTC, datetime
@@ -41,8 +42,8 @@ from canopy.core import (
     review_revisions,
     review_runs,
 )
-from canopy.core.vocab import DismissalReason, PlanItem, PlanStatus, ReviewRunStatus, RunKind
-from canopy.infra import logs
+from canopy.core.vocab import DismissalReason, PlanItem, PlanSetting, PlanStatus, ReviewRunStatus, RunKind
+from canopy.infra import lock, logs
 from canopy.infra.text import one_line
 from canopy.loop import attention, readback
 from canopy.loop.render import phase_of
@@ -243,8 +244,13 @@ def _start_ticket(click_ctx: click.Context, subject: Ref, persona: str | None, *
         if persona is not None:
             # Checked first, so a persona no run could use starts nothing.
             personas.check(ctx.config, persona)
-        plan_lock = ctx.dispatch_lock_path if plan else None
-        started = conversation.start(ctx.conn, ctx.config, subject, repo=ctx.repo, channel=CLI, plan_lock=plan_lock)
+        # The dispatch lock is held as the other plan verbs hold it, so a dispatch reads the setting before the start
+        # or after it.
+        held = lock.hold(ctx.dispatch_lock_path, wait=True) if plan else contextlib.nullcontext()
+        with held, db.transaction(ctx.conn):
+            started = conversation.start(ctx.conn, ctx.config, subject, repo=ctx.repo, channel=CLI)
+            if plan:
+                plans.start_setting(ctx.conn, subject.id, PlanSetting.PLAN)
         if persona is not None:
             personas.choose_next(ctx.conn, ctx.config, subject.id, agent, persona, channel=CLI)
     except conversation.Refused as r:

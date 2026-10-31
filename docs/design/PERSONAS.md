@@ -56,9 +56,9 @@ canopy cannot read refuses the persona as any bad file does.
   dispatch that records the run spends a next run's choice. A review of a PR the operator requested (§21) has no ticket:
   its persona is the request's, else `[personas] reviewer`'s, and a request may name several, for one review in each
   (§21); `[personas] reviewers` does the same for the loop's own PRs, unless a ticket's override chooses one. Each is
-  set only by the operator, from `canopy persona`, `canopy start`, `canopy plan`, the ticket's page, or, for a
-  review request, the reviews page, and refused inside an agent run (T1). The overseer, a dispatch, ticket text, and
-  labels choose none.
+  set only by the operator, from `canopy persona`, `canopy start`, `canopy plan`, the ticket's page, the web UI's
+  start of the ticket, or, for a review request, the reviews page, and refused inside an agent run (T1). The overseer,
+  a dispatch, ticket text, and labels choose none.
 - **No silent fallback.** Setting a persona that names no file is refused, and a run whose persona's file is gone, or
   past its bounds, by the time it starts is refused with an attention item, spending no attempt and leasing no slot.
   It never falls back to `canopy`, since a run in a voice nobody chose would read as the chosen one's.

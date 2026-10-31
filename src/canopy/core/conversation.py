@@ -15,7 +15,6 @@ agent writes and no agent's prompt carries.
 
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 import hashlib
 import os
@@ -41,7 +40,7 @@ from canopy.core import (
 )
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
-from canopy.core.vocab import DismissalReason, PlanSetting, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
+from canopy.core.vocab import DismissalReason, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
 from canopy.infra import lock
 from canopy.infra.text import printable, quoted
 
@@ -280,21 +279,17 @@ def start(
     *,
     repo: str,
     channel: str,
-    plan_lock: Path | None = None,
 ) -> Started:
     """Start a ticket privately (DESIGN §22): write its start record, or mark a stopped one started again.
 
-    With `plan_lock`, the dispatch lock, the ticket's own plan setting asks for a plan, whatever `policy.plan` says, so
-    its implement waits on one the operator approved (DESIGN §25). A plan it already has, waiting or approved, stands.
-    The lock is held as the other plan verbs hold it, so a dispatch reads the setting before the start or after it.
+    `plans.start_setting`, called in the same transaction, sets whether it is planned first (DESIGN §25).
 
     Returns:
         Whether the ticket was already started, and the run working it, if one is.
 
     Raises:
-        Refused: `unsupported` for a subject that is not a ticket, `no_read_tools` when no tracker tools are known for
-            a private worker to read the ticket with, and with `plan_lock`, `bad_plan` for a ticket that has a branch,
-            since a plan then would describe work already started, or while a plan run for it is running.
+        Refused: `unsupported` for a subject that is not a ticket, and `no_read_tools` when no tracker tools are known
+            for a private worker to read the ticket with.
     """
     _check_ticket(ref, "start")
     if config.tracker.tools() is None:
@@ -303,18 +298,10 @@ def start(
             f"no tracker tools are known for provider {config.tracker.provider!r}: set tracker.mcp_server and "
             "tracker.read_tools in your user config, so a private worker can read the ticket and write nothing to it",
         )
-    held = lock.hold(plan_lock, wait=True) if plan_lock is not None else contextlib.nullcontext()
-    with held, db.transaction(conn):
+    with db.transaction(conn):
         record = db.get_start(conn, TICKET, ref.id)
-        ticket = db.get_ticket(conn, ref.id)
         running = db.running_run_of(conn, ref.id)
-        if plan_lock is not None and ticket is not None and ticket.branch:
-            raise Refused("bad_plan", f"{ref} already has work on {ticket.branch}; a started ticket is not planned")
-        if plan_lock is not None and running is not None and running.kind == RunKind.PLAN:
-            raise Refused("bad_plan", f"plan run {running.id} for {ref} is running; wait for it to end")
         db.touch_ticket(conn, ref.id, repo)
-        if plan_lock is not None:
-            db.change_ticket(conn, ref.id, "plan_setting", PlanSetting.PLAN)
         # A ticket the overseer marked done is worked again: the operator asked for it.
         db.change_ticket(conn, ref.id, "done", 0)
         db.set_start(conn, TICKET, ref.id, status=StartStatus.STARTED, channel=channel)

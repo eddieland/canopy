@@ -5,17 +5,31 @@ Choosing is of the persona or the model one of the ticket's agents runs in or on
 
 from __future__ import annotations
 
+import contextlib
+from collections.abc import Callable
+
 from fastapi import APIRouter, HTTPException
 
-from canopy.core import conversation, personas, ticket_models
-from canopy.infra import logs
+from canopy.core import conversation, db, personas, plans, ticket_models
+from canopy.core.vocab import PlanSetting
+from canopy.infra import lock, logs
+from canopy.runtime.report import ModelList
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, TicketKey, not_found, ticket_ref
 from canopy.serve.schema import Granted, Replied, ReplyRequest, TicketSummary
 from canopy.serve.schema.model import AgentModel, ModelRequest
 from canopy.serve.schema.persona import AgentPersona, PersonaRequest
-from canopy.serve.schema.ticket import ForgetRequest, Forgot, GrantRequest, Started, Stopped, StopRequest, TicketDetail
+from canopy.serve.schema.ticket import (
+    ForgetRequest,
+    Forgot,
+    GrantRequest,
+    Started,
+    StartRequest,
+    Stopped,
+    StopRequest,
+    TicketDetail,
+)
 
 TAG = "tickets"
 router = APIRouter(tags=[TAG])
@@ -49,15 +63,55 @@ def ticket(key: TicketKey, backend: BackendDep) -> TicketDetail:
 
 
 @router.post("/tickets/{key}/start", operation_id="startTicket", summary="Start a ticket", responses=REFUSED)
-def start(key: TicketKey, backend: BackendDep) -> Started:
-    """`canopy start`: work the ticket privately, in place of a queue label; its conversation stays in the journal."""
+def start(key: TicketKey, backend: BackendDep, body: StartRequest | None = None) -> Started:
+    """`canopy start`: work the ticket privately, in place of a queue label; its conversation stays in the journal.
+
+    The body may also say whether it is planned first, as `canopy start --plan` and `canopy plan --skip` do, and choose
+    the persona and the model of any of its agents, as its overrides, as `canopy persona` and `canopy model` do, with
+    the start: the CLI's guards hold, and a choice refused starts nothing.
+    """
     ref = ticket_ref(key, "start")
+    chosen = body if body is not None else StartRequest()
     with backend.open() as ctx:
         try:
-            started = conversation.start(ctx.conn, ctx.config, ref, repo=ctx.repo, channel=WEB)
+            if chosen.models:
+                # Each model's list is read first, so the runtime is never started while the journal's write lock is
+                # held, and only for the operator, as a choice from `/models` reads it.
+                conversation.check_operator()
+            models = [(m, backend.model_list_for(ctx, m.model)) for m in chosen.models]
+            # The dispatch lock is held as the other plan verbs hold it, so a dispatch reads the plan setting before
+            # the start or after it; one transaction, so the start and its choices land together, or, one refused,
+            # none of them does.
+            held = lock.hold(ctx.dispatch_lock_path, wait=True) if chosen.plan is not None else contextlib.nullcontext()
+            with held, db.transaction(ctx.conn):
+                started = conversation.start(ctx.conn, ctx.config, ref, repo=ctx.repo, channel=WEB)
+                if chosen.plan is not None:
+                    plans.start_setting(ctx.conn, ref.id, PlanSetting.PLAN if chosen.plan else PlanSetting.SKIP)
+                for p in chosen.personas:
+                    personas.choose(ctx.conn, ctx.config, ref.id, p.agent, p.persona, channel=WEB)
+                for m, listed in models:
+                    ticket_models.choose(
+                        ctx.conn,
+                        ctx.config,
+                        ref.id,
+                        m.agent,
+                        m.model,
+                        listing=_read(listed),
+                        channel=WEB,
+                    )
         except conversation.Refused as r:
             raise RefusedError(r) from None
-    _log.info("ticket started", extra={"ticket": ref.id, "already": started.already, "channel": WEB})
+    _log.info(
+        "ticket started",
+        extra={
+            "ticket": ref.id,
+            "already": started.already,
+            "plan": chosen.plan,
+            "personas": {p.agent: p.persona for p in chosen.personas},
+            "models": {m.agent: m.model for m in chosen.models},
+            "channel": WEB,
+        },
+    )
     run = started.running
     return Started(
         already=started.already,
@@ -201,3 +255,12 @@ def model(key: TicketKey, body: ModelRequest, backend: BackendDep) -> AgentModel
         extra={"ticket": ref.id, "agent": body.agent, "model": body.model, "channel": WEB},
     )
     return views.agent_model(now, served)
+
+
+def _read(listed: ModelList) -> Callable[[bool], ModelList]:
+    """A choice's `listing` that hands back the list already read for it.
+
+    Returns:
+        The listing.
+    """
+    return lambda _variants: listed

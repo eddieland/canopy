@@ -57,6 +57,8 @@ export type Message = Schemas['Message']
 export type Unit = Schemas['Unit']
 /** A guard refused the operator's action: which guard, and why, as the CLI says it. */
 export type Refusal = Schemas['Refusal']
+/** A start, and the persona and model each of the ticket's agents takes from it, as the ticket's override. */
+export type StartRequest = Schemas['StartRequest']
 /** What a start did: whether it was already started, and a run already working it. */
 export type Started = Schemas['Started']
 /** What a stop did: whether it was already stopped, the run still working it, and whether `now` ended it. */
