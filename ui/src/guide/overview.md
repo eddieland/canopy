@@ -87,7 +87,9 @@ The bar across the top of every page. From the left:
 
 - **The logo.** While the page hears the loop over its stream, the dot beside `canopy` breathes; while a tick runs, an
   arc sweeps its ring. If the dot stops breathing, the page has stopped hearing from the loop. Each new tick sends a
-  ripple off the ring and a wash of color through the name, which is purely for morale.
+  ripple off the ring and a wash of color through the name, which is purely for morale. Around Halloween a cobweb
+  moves in over it, and from the day after Thanksgiving it wears a string of lights; the foot of the rail dresses up
+  for each holiday too. **Seasons** in [Settings](settings) puts it all away, if you must.
 - **The stream**, in a pill beside the name: `LIVE`, `OPENING`, `RETRYING` just after a drop, or `DOWN · 2M` once it
   has been down a while. Before it, a `mock` pill when the server runs over a sample journal
   (`python -m canopy.serve --mock`) instead of your workspace's. No loop runs behind that one, and nothing you do there

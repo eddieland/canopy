@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react'
 import { useEffect, useState, ViewTransition } from 'react'
 
 import { sessionQuery, tickQuery } from '@/api/queries'
+import { LogoDecoration } from '@/components/season-logo'
 import { SignIn } from '@/components/sign-in'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -16,6 +17,7 @@ import type { RailMode } from '@/hooks/use-rail-mode'
 import { useTickAsked } from '@/hooks/use-tick-asked'
 import { useBuddy } from '@/lib/buddy'
 import { IN_PAGE } from '@/lib/in-page'
+import { useSeason } from '@/lib/seasons'
 import { isSearchShortcut } from '@/lib/search'
 import { cn } from '@/lib/utils'
 import { usePalettes } from '@/theme/palette'
@@ -34,6 +36,7 @@ import { NewerBuild } from './newer-build'
 import { RailFooter, RailSpend, RailWorking } from './rail'
 import { Rave } from './rave'
 import { ReviewDialog } from './review-dialog'
+import { SeasonSlot } from './season-slot'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
 import { TicketDialog } from './ticket-dialog'
@@ -262,7 +265,8 @@ function SkipToContent() {
 /**
  * What the rail holds, whether beside the page or in the sheet, in two groups (DESIGN's Shape and space): the top, the
  * search box, the nav, and what is working, and the foot, the spend standing on the footer. The room left between them
- * is one gap, Sprig's slot when it is on, so Sprig stands on the foot.
+ * is one gap, Sprig's slot when it is on, so Sprig stands on the foot; with Sprig off, a season's scene stands there
+ * alone.
  */
 function RailColumn({ buddy, onJump }: { buddy: boolean; onJump: () => void }) {
     return (
@@ -273,7 +277,7 @@ function RailColumn({ buddy, onJump }: { buddy: boolean; onJump: () => void }) {
                 <Nav />
                 <RailWorking />
             </div>
-            {buddy ? <Buddy /> : <div className="flex-1" />}
+            {buddy ? <Buddy /> : <SeasonSlot />}
             <div data-testid="rail-foot">
                 <RailSpend />
                 <RailFooter />
@@ -299,15 +303,20 @@ function RailButton() {
     )
 }
 
-/** The header's logo and name, alive with the stream and the latest tick, and with the tick Tick now asked for. */
+/**
+ * The header's logo and name, alive with the stream and the latest tick, and with the tick Tick now asked for. In a
+ * season, what the season hangs over the logo hangs there too.
+ */
 function LiveMark({ stream }: { stream: StreamStatus }) {
     const tick = useQuery(tickQuery).data?.tick
     const asked = useTickAsked()
+    const season = useSeason()
     return (
-        <>
+        <span className="relative flex items-center gap-2.5">
             <Mark live={stream === 'open'} ticking={tick?.status === 'running' || asked} beat={tick?.id} />
             <Wordmark beat={tick?.id} />
-        </>
+            {season === null ? null : <LogoDecoration id={season} />}
+        </span>
     )
 }
 
