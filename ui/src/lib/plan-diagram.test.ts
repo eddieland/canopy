@@ -1,5 +1,5 @@
-import { Editor } from '@tiptap/core'
 import { within } from '@testing-library/dom'
+import { Editor } from '@tiptap/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { drawDiagram } from '@/lib/diagram'

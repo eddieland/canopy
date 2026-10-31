@@ -1,7 +1,7 @@
+import { Placeholder } from '@tiptap/extensions'
+import { PluginKey } from '@tiptap/pm/state'
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
-import { PluginKey } from '@tiptap/pm/state'
-import { Placeholder } from '@tiptap/extensions'
 import { BubbleMenu } from '@tiptap/react/menus'
 import {
     Bold,
@@ -30,7 +30,6 @@ import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
 import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
-import { Toggle } from '@/components/ui/toggle'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -40,6 +39,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Toggle } from '@/components/ui/toggle'
 import {
     Toolbar,
     ToolbarButton,
@@ -47,9 +47,9 @@ import {
     ToolbarToggleGroup,
     ToolbarToggleItem,
 } from '@/components/ui/toolbar'
+import { changesKey, outlineOf, PlanChanges } from '@/lib/plan-diff'
 import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } from '@/lib/plan-highlights'
 import type { Range } from '@/lib/plan-highlights'
-import { changesKey, outlineOf, PlanChanges } from '@/lib/plan-diff'
 import { alignComments, floatUnder, releaseComments } from '@/lib/plan-margin'
 import { planOutline, sectionAt } from '@/lib/plan-outline'
 import type { OutlineEntry } from '@/lib/plan-outline'
@@ -66,8 +66,8 @@ import {
 } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
 import { isApple } from '@/lib/send-key'
-import { cn } from '@/lib/utils'
 import { ariaKeys, keysLabel } from '@/lib/shortcut'
+import { cn } from '@/lib/utils'
 
 const APPLE = isApple(navigator.userAgent)
 // The selection's bubble, by its key, so opening a comment can hide it.

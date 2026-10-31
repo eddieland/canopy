@@ -25,6 +25,8 @@ import { useHighlight } from '@/hooks/use-highlight'
 import { fileType, fileTypes, fileTypesLabel, hiddenFilesText } from '@/lib/file-types'
 import type { FileType } from '@/lib/file-types'
 import type { CodeToken } from '@/lib/highlight'
+import { editable, placeReviewCards } from '@/lib/review-drafts'
+import type { Adding, ReviewCard } from '@/lib/review-drafts'
 import {
     fileFoldedText,
     foldedText,
@@ -36,8 +38,6 @@ import {
     shownAtFirst,
 } from '@/lib/review-folds'
 import type { Piece, Span } from '@/lib/review-folds'
-import { editable, placeReviewCards } from '@/lib/review-drafts'
-import type { Adding, ReviewCard } from '@/lib/review-drafts'
 import { findingAnchor, SEVERITY_TONE } from '@/lib/reviews'
 import type { Numbered, Placed } from '@/lib/reviews'
 import { cn } from '@/lib/utils'

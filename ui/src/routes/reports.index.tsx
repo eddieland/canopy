@@ -12,6 +12,7 @@ import { Clipped } from '@/components/tip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { UnnamedModel } from '@/components/unnamed-model'
 import { useClock } from '@/lib/clock'
+import { unnamedHint } from '@/lib/models'
 import {
     clockShare,
     costPercent,
@@ -30,7 +31,6 @@ import {
     toLandHint,
     wroteTokens,
 } from '@/lib/reports'
-import { unnamedHint } from '@/lib/models'
 import { modelKey, shareText } from '@/lib/spend'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'

@@ -1,5 +1,5 @@
-import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import type { AnyRouter, RouterHistory } from '@tanstack/react-router'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SEARCH_DEBOUNCE_MS } from '@/lib/search'

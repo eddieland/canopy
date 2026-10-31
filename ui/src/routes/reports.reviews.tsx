@@ -21,9 +21,9 @@ import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { WindowToggle } from '@/components/window-toggle'
 import { useClock } from '@/lib/clock'
-import { hoursText } from '@/lib/reports'
 import { windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
+import { hoursText } from '@/lib/reports'
 import {
     apartText,
     approvedText,

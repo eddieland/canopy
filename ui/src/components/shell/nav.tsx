@@ -22,9 +22,9 @@ import { breakdown, breakdownText, countBySeverity } from '@/lib/attention'
 import type { BreakdownPart, Severity } from '@/lib/attention'
 import { counted } from '@/lib/descriptions'
 import { verdictTone } from '@/lib/reviews'
-import { unseenOf, unseenText, worstOf } from '@/lib/seen-reviews'
 import { SECTION_FILL, SECTION_LABEL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
+import { unseenOf, unseenText, worstOf } from '@/lib/seen-reviews'
 import { cn } from '@/lib/utils'
 
 // Each part of the attention count's color: broken in the failure color, waiting on the operator's answer in theirs.
