@@ -1391,11 +1391,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   on hover, never a link. A Mermaid code block is drawn as its diagram (`src/lib/plan-diagram.ts`), an image on
   `surface` in a hairline box, at its own size or narrower to fit, colored from the tokens and drawn again when the
   theme or palette changes, with an outlined `Source` toggle under it at the right; its code shows above it while
-  toggled on, while the cursor is in it, or while a comment or a change is marked in it, and out of sight it is
-  clipped, not removed, so the keyboard and a screen reader still reach it. One that cannot be drawn shows its code,
-  and under it `Not drawn:` and why, in `muted-foreground`. The toolbar (`Toolbar`, below) is `icon-xs` toggles in
-  groups split by hairlines: undo and redo, the paragraph's style, the marks and the blocks (each on or off, raised
-  while on at the cursor), then `Comment`, enabled while text is selected. Each control's
+  toggled on, while the cursor is in it, or while a comment or a change is marked in it. An arrow key from the line
+  above or below puts the cursor in it, and out of sight it is clipped, not removed, so a screen reader still reads it.
+  One that cannot be drawn shows its code, and under it `Not drawn:` and why, in `muted-foreground`. The toolbar
+  (`Toolbar`, below) is `icon-xs` toggles in groups split by hairlines: undo and redo, the paragraph's style, the marks
+  and the blocks (each on or off, raised while on at the cursor), then `Comment`, enabled while text is selected. Each
+  control's
   tooltip names it and the shortcut the editor binds to it, on this keyboard (`Bold (⌘B)`, `Bold (Ctrl+B)` elsewhere),
   and declares the same keys as `aria-keyshortcuts`. The paragraph's style is a menu, as a document's is: its button
   names the style in force (`Heading 2 ▾`), and it lists Text and Heading 1 to 4, each set as the plan sets it, with its

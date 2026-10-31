@@ -3,14 +3,15 @@
 // diagram is the code's picture, drawn as an image, which shows nothing the code does not say. Once it is drawn, the
 // code hides behind a Source toggle, and shows again while the caret is in it (being edited, under the picture it
 // draws), while a comment's highlight or a change is marked in it, and when the diagram cannot be drawn, under why.
+// An arrow key at the edge of the block beside a diagram puts the caret in its code, so the keyboard always reaches it.
 //
 // A code block of any other language draws as it always has, a `pre` around a `code`, as `CodeBlock` renders it.
 import { Extension } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
+import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
 import type { EditorState } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
-import type { NodeView, ViewMutationRecord } from '@tiptap/pm/view'
+import type { EditorView, NodeView, ViewMutationRecord } from '@tiptap/pm/view'
 
 import type { Drawn, NotDrawn } from '@/lib/diagram'
 
@@ -20,6 +21,13 @@ const LANGUAGE = 'mermaid'
 const REST_MS = 400
 // The class the code block holding the caret wears, which shows its code.
 const EDITING = 'plan-diagram-editing'
+// The arrow keys, and the way each goes.
+const ARROWS: Partial<Record<string, 'left' | 'right' | 'up' | 'down'>> = {
+    ArrowLeft: 'left',
+    ArrowRight: 'right',
+    ArrowUp: 'up',
+    ArrowDown: 'down',
+}
 
 /** Draws a plan's Mermaid code blocks as their diagrams. */
 export const PlanDiagrams = Extension.create({
@@ -32,6 +40,7 @@ export const PlanDiagrams = Extension.create({
                 props: {
                     nodeViews: { codeBlock: (node) => (isDiagram(node) ? new DiagramView(node) : codeView(node)) },
                     decorations: (state) => (editor.isEditable ? editing(state) : DecorationSet.empty),
+                    handleKeyDown: (view, event) => editor.isEditable && enterDiagram(view, event),
                 },
             }),
         ]
@@ -51,6 +60,30 @@ function editing(state: EditorState): DecorationSet {
     }
     const start = $from.before()
     return DecorationSet.create(state.doc, [Decoration.node(start, start + $from.parent.nodeSize, { class: EDITING })])
+}
+
+// An arrow key at the edge of a block, going toward a diagram beside it, puts the caret in the diagram's code: at its
+// end going back, at its start going on. Left to the browser, the caret would have to cross the picture, which is no
+// part of the document, into code clipped out of sight, and it stops on either side of the picture as it pleases.
+function enterDiagram(view: EditorView, event: KeyboardEvent): boolean {
+    const way = ARROWS[event.key]
+    const { selection, doc } = view.state
+    const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey
+    if (way === undefined || modified || !selection.empty || selection.$from.depth === 0) {
+        return false
+    }
+    if (!view.endOfTextblock(way)) {
+        return false
+    }
+    const back = way === 'left' || way === 'up'
+    const $edge = doc.resolve(back ? selection.$from.before() : selection.$from.after())
+    const beside = back ? $edge.nodeBefore : $edge.nodeAfter
+    if (beside === null || !isDiagram(beside)) {
+        return false
+    }
+    const caret = back ? $edge.pos - 1 : $edge.pos + 1
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(doc, caret)).scrollIntoView())
+    return true
 }
 
 // A code block that is not a diagram, as `CodeBlock` renders one.
