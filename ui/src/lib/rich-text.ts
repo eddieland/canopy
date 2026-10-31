@@ -3,6 +3,8 @@
 // and nothing more: the result is data that `RichText` renders as React text, never HTML. Link syntax stays
 // characters; a bare URL is linked to itself by `LinkedText` (D113).
 
+import { splitLinks } from '@/lib/links'
+
 /** A piece of a line: plain text, `code`, **strong**, *emphasis*, or ~~struck~~. */
 export interface Inline {
     /** How the piece is set. */
@@ -292,18 +294,52 @@ export function inlinePiece(match: RegExpExecArray): Inline | undefined {
 
 function pieces(text: string, pattern: RegExp): Line {
     const line: Line = []
+    const urls = urlSpans(text)
+    const inUrl = (at: number) => urls.some(([from, to]) => at >= from && at < to)
+    // Text runs next to each other join, so a URL a kept marker split still links whole.
+    const plain = (run: string) => {
+        const previous = line.at(-1)
+        if (previous?.kind === 'text') {
+            previous.text += run
+        } else {
+            line.push({ kind: 'text', text: run })
+        }
+    }
     let last = 0
     for (const match of text.matchAll(pattern)) {
         if (match.index > last) {
-            line.push({ kind: 'text', text: text.slice(last, match.index) })
+            plain(text.slice(last, match.index))
         }
-        line.push(inlinePiece(match) ?? { kind: 'text', text: match[0] })
-        last = match.index + match[0].length
+        const piece = inlinePiece(match)
+        const end = match.index + match[0].length
+        // An emphasis or struck marker inside a URL is part of its address (`https://x/_a_/b`), so it stays text.
+        if (
+            piece === undefined ||
+            ((piece.kind === 'em' || piece.kind === 'del') && (inUrl(match.index) || inUrl(end - 1)))
+        ) {
+            plain(match[0])
+        } else {
+            line.push(piece)
+        }
+        last = end
     }
     if (last < text.length) {
-        line.push({ kind: 'text', text: text.slice(last) })
+        plain(text.slice(last))
     }
     return line
+}
+
+// Where each URL `LinkedText` would link sits in `text`, as its start and end.
+function urlSpans(text: string): [number, number][] {
+    const spans: [number, number][] = []
+    let at = 0
+    for (const piece of splitLinks(text)) {
+        if (piece.href !== undefined) {
+            spans.push([at, at + piece.text.length])
+        }
+        at += piece.text.length
+    }
+    return spans
 }
 
 /**

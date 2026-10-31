@@ -189,6 +189,19 @@ describe('inline', () => {
         ])
     })
 
+    it('keeps an emphasis or struck marker inside a URL as text, so the URL links whole', () => {
+        for (const written of [
+            'see https://ci.example.test/_a_/b',
+            'at https://x.test/~~old~~/new',
+            'https://x.test/*a*',
+        ]) {
+            expect(inline(written)).toEqual([text(written)])
+        }
+        expect(inline('*see https://ci.example.test/7*')).toEqual([
+            { kind: 'em', text: 'see https://ci.example.test/7' },
+        ])
+    })
+
     it('leaves a marker inside a word or beside a space as written', () => {
         for (const written of ['snake_case_name', '__init__', '2*3*4', 'a * b * c', '_ spaced _', '~~ spaced ~~']) {
             expect(inline(written)).toEqual([text(written)])
