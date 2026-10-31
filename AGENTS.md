@@ -60,10 +60,12 @@ If code and the design disagree, the design doc wins until a decision entry says
     `milestone` (tracks a ROADMAP milestone; the roadmap is the record, the issue holds the discussion).
   - **Priority**, one: `P0` next up (misleads the operator, wastes runs, or blocks other work), `P1` high, `P2`
     medium, `P3` low or waiting on something else, `P4` parked on purpose, such as a deferred milestone. Keep P0 and
-    P1 short enough to mean something; when a tier crowds, move something down.
+    P1 short enough to mean something; when a tier crowds, move something down. An issue marked `needs-live-check`
+    takes none.
   - **Area**, one or more: `area: ui`, `loop`, `runs`, `reviews`, `workspaces`, `trust`, `prompts`, `memory`.
-  - **Status**, only when it applies: `needs-decision` when the operator must settle something first, and `blocked`
-    when it waits on another issue, which its body or a comment names.
+  - **Status**, only when it applies: `needs-decision` when the operator must settle something first, `blocked`
+    when it waits on another issue, which its body or a comment names, and `needs-live-check` when it is built and
+    waits only on the operator's live check in real use.
 
   Other labels are canopy's own: the queue label and `needs-human`, which the loop reads and writes, and `agent` on
   its PRs. Never set those by hand to file an issue.
