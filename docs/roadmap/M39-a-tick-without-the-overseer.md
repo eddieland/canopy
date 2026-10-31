@@ -158,4 +158,9 @@ permission with a `_`. Built (2026-10-29): the design folded into the sections i
 harness's `wait` on a stale or unobserved subject is §37's, a tick that runs no overseer and the polls that end the
 wait §6's. Left: Accept's live checks, S27 re-measured over a day and a night and a source stopped for a few polls.
 Still open for the operator: whether `runtime.allow_bash`'s overseer entry goes with its MCP servers (recommended: yes,
-and that entry with it), the fifth bullet's.
+and that entry with it), the fifth bullet's. Built (2026-10-31) for S27's re-measurement: `canopy latency`
+(`loop/latency.py`), read only, gives Accept's median latency per kind of external event (a tracker comment, a review or
+review comment of a ticket's PR, a check run), from its source time to the first live tick that decided about its
+ticket after canopy observed it, a cursor moved or a refusal not counted, with its 90th percentile, canopy's own part,
+how many a poll's tick acted on, and those not acted on. A check run carries no source time in the contract, so only
+canopy's part of its wait is known.
