@@ -32,7 +32,7 @@ export const SEASONS: readonly Season[] = [
     { id: 'valentines', from: [2, 7], to: [2, 14] },
     { id: 'shamrock', from: [3, 10], to: [3, 17] },
     { id: 'spring', from: [3, 25], to: [4, 15] },
-    { id: 'halloween', from: [10, 15], to: [10, 31] },
+    { id: 'halloween', from: [10, 15], to: [11, 1] },
     { id: 'harvest', from: [11, 20], to: [11, 28] },
     { id: 'winter', from: [11, 29], to: [12, 31] },
 ]

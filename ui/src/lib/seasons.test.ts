@@ -8,12 +8,12 @@ function on(month: number, day: number): Date {
 }
 
 describe('seasonOn', () => {
-    it("puts a jack-o'-lantern out for the second half of October", () => {
+    it("puts a jack-o'-lantern out for the second half of October, and leaves it out for November 1st", () => {
         expect(seasonOn(on(10, 14))).toBeNull()
         expect(seasonOn(on(10, 15))).toBe('halloween')
-        expect(seasonOn(on(10, 30))).toBe('halloween')
         expect(seasonOn(on(10, 31))).toBe('halloween')
-        expect(seasonOn(on(11, 1))).toBeNull()
+        expect(seasonOn(on(11, 1))).toBe('halloween')
+        expect(seasonOn(on(11, 2))).toBeNull()
     })
 
     it('decorates for each season on its first and last day, and not the days around it', () => {
