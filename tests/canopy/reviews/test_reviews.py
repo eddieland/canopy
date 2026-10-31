@@ -39,6 +39,7 @@ from tests.canopy.helpers import (
     agent_runs,
     calls,
     decisions,
+    diffed,
     granted_meanwhile,
     has_deadline,
     in_run,
@@ -985,7 +986,8 @@ def test_a_reviewer_reads_its_checkouts_history_through_canopys_git_tools(
     fork, diff, log, root, escape, option = reviewer["tools"]
     assert [call["error"] for call in (fork, diff, log, root)] == [False] * 4, [fork, diff, log, root]
     assert fork["text"] == head(git_pool)
-    assert "+while True:\n+    call()" in diff["text"]
+    [added] = diffed(diff["text"]).files
+    assert (added.status, added.path, added.patch) == ("A", "retry.py", "@@ -0,0 +1,2 @@\n+while True:\n+    call()")
     [commit] = logged(log["text"]).commits
     assert (commit.commit, [(f.status, f.path) for f in commit.files]) == (sha, [("A", "retry.py")])
     assert root["text"] == "Nothing at . in origin/main."

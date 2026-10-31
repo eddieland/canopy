@@ -57,8 +57,9 @@ line for that run, never the agent. An argument is a revision, a path inside the
 (for `grep`, optionally POSIX extended regex alone, which every git reads alike) joined to its option or after `-e`,
 never an option itself; git reads commits only, inherits no `GIT_*` variable, and runs no hook, filesystem monitor,
 external diff, textconv, pager, signature check, submodule, or transport; output is bounded, `grep`'s by pages.
-`log` and `grep` answer with records, each commit's or line's fields apart, as structured content and as JSON in their
-text, so no message, line, or path in a PR can pass for another; the rest answer with git's text. Their definitions
+`log`, `grep`, and `diff` answer with records, each commit's, line's, or file's fields apart, as structured content and
+as JSON in their text, so no message, line, path, or patch in a PR can pass for another; the rest answer with git's
+text. Their definitions
 deny bash, the planner's but for what `runtime.allow_bash` names (§13), deny `canopy_*`, and then allow each by exact
 name; every other definition denies them. Workers keep their shell, for git's writes.
 
