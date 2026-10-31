@@ -8,9 +8,10 @@ each day's red runs by check; each PR's time to green; each `resume` for `ci`, a
 whether the next run of each check it found red, on the head after it started, passed; and each flaky kick, with whether
 the check came back red.
 
-A PR's time to green runs from the first red run observed on it to the first head, its red one or a later one, on which
-no check's last red or green run was red and one was green, at the observation of the last of those runs. It is
-approximate: `observed_at` is when a source saw a run completed, not when it finished, and a head whose other checks
+A PR's spell of red runs from a red run observed on it to the first head, its red one or a later one, on which no
+check's last red or green run was red and one was green, at the observation of the last of those runs; the next spell
+starts at the first red run after that on that head or a later one. Its time to green is how long the spell lasted. It
+is approximate: `observed_at` is when a source saw a run completed, not when it finished, and a head whose other checks
 are still running reads green until a source sees one go red.
 
 Red is `failure`, `error`, `timed_out`, or `startup_failure`; green is `success`; the rest (`cancelled`, `skipped`,
@@ -46,6 +47,8 @@ TOP_CHECKS = 4
 
 #: How a check run ended, as the page counts it.
 type Verdict = Literal["green", "red", "neither"]
+#: A PR's spell of red: when it began, and when it ended, None while it lasts; journal times.
+type Spell = tuple[str, str | None]
 
 
 @dataclass(frozen=True)
@@ -104,7 +107,8 @@ class Fix:
     cost_usd: float | None
     #: The checks red on its PRs' heads when it started; none when no source had observed one.
     checks: Sequence[FixedCheck]
-    #: The longest time to green of its PRs that went red; None while one of them is still red, or none went red.
+    #: The longest time to green of the spells of red its PRs were in when it started; None while one of them is still
+    #: red, or when none was red.
     to_green: timedelta | None
 
 
@@ -116,14 +120,14 @@ class PullRequest:
     #: The ticket that owns it and its unit's phase, as `tracked_prs` reads them; None for a PR no run named.
     ticket: str | None
     phase: Phase | None
-    #: When the first red run of a check on it was observed, a journal time; None when none was red.
+    #: When its latest spell of red (the module's docstring) began, a journal time; None when none was red.
     red_at: str | None
-    #: When its first head from that one on went green (the module's docstring); None while none has, or never red.
+    #: When that spell ended, on its first green head; None while it lasts, or when none was red.
     green_at: str | None
 
     @property
     def to_green(self) -> timedelta | None:
-        """From its first red run to its first green head after it; None without both."""
+        """How long its latest spell of red lasted; None while it lasts, or when none was red."""
         if self.red_at is None or self.green_at is None:
             return None
         return db.parse_time(self.green_at) - db.parse_time(self.red_at)
@@ -225,7 +229,7 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Ci:
     series = _series(in_window)
     window_kicks = [k for k in kicks if k.kicked_at >= since]
     found_kicks = [_kick(k, kicks, kick_runs, runs) for k in reversed(window_kicks)]
-    red_spans = {url: _red_span(pr_runs) for url, pr_runs in by_pr.items()}
+    spells = {url: _red_spells(pr_runs) for url, pr_runs in by_pr.items()}
     return Ci(
         since=since,
         until=until,
@@ -235,10 +239,10 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Ci:
         checks=_checks(in_window, by_pr),
         series=series,
         per_day=_per_day(in_window, series, starts, first_heads),
-        fixes=[_fix(r, fix_prs[r.id], by_pr, red_spans) for r in fixes],
+        fixes=[_fix(r, fix_prs[r.id], by_pr, spells) for r in fixes],
         kicks=found_kicks,
         kicked_prs=_kicked_prs(found_kicks, tracked, kick_runs),
-        pull_requests=_pull_requests({r.pr_url for r in in_window}, red_spans, named),
+        pull_requests=_pull_requests({r.pr_url for r in in_window}, spells, named),
     )
 
 
@@ -428,21 +432,40 @@ def _per_day(
     ]
 
 
-# When a PR's first red run was observed, and when its first head from that one's on went green after it, as the
-# module's docstring says: (None, None) when none was red, and a None green while none has gone green.
-def _red_span(runs: Sequence[records.ObservedCheckRun]) -> tuple[str | None, str | None]:
-    first_red = next((r for r in runs if _verdict(r.conclusion) == "red"), None)
-    if first_red is None:
-        return None, None
+# A PR's spells of red, oldest first, as the module's docstring says: when each began, and when it ended, None for one
+# that lasts, which is the last.
+def _red_spells(runs: Sequence[records.ObservedCheckRun]) -> list[Spell]:
     by_head: dict[str, list[records.ObservedCheckRun]] = {}
     for run in runs:
         by_head.setdefault(run.head_sha, []).append(run)
-    order = list(by_head)
-    for head in order[order.index(first_red.head_sha) :]:
-        green_at = _green_at(by_head[head])
-        if green_at is not None:
-            return first_red.observed_at, green_at
-    return first_red.observed_at, None
+    order = {head: i for i, head in enumerate(by_head)}
+    green = {head: _green_at(head_runs) for head, head_runs in by_head.items()}
+    found: list[Spell] = []
+    after, floor = "", 0
+    while True:
+        red = next(
+            (
+                r
+                for r in runs
+                if _verdict(r.conclusion) == "red" and r.observed_at > after and order[r.head_sha] >= floor
+            ),
+            None,
+        )
+        if red is None:
+            return found
+        ended = next(
+            (
+                (head, at)
+                for head in list(by_head)[order[red.head_sha] :]
+                if (at := green[head]) is not None and at >= red.observed_at
+            ),
+            None,
+        )
+        if ended is None:
+            return [*found, (red.observed_at, None)]
+        head, after = ended
+        found.append((red.observed_at, after))
+        floor = order[head]
 
 
 # When a head's runs, oldest first, went green: no check's last red or green run red and one green, at the latest of
@@ -459,13 +482,13 @@ def _green_at(runs: Iterable[records.ObservedCheckRun]) -> str | None:
 
 def _pull_requests(
     urls: Iterable[str],
-    red_spans: Mapping[str, tuple[str | None, str | None]],
+    spells: Mapping[str, Sequence[Spell]],
     named: Mapping[str, tracked_prs.TrackedPr],
 ) -> list[PullRequest]:
     found: list[PullRequest] = []
     for url in urls:
         pr = named.get(url)
-        red_at, green_at = red_spans[url]
+        red_at, green_at = spells[url][-1] if spells[url] else (None, None)
         found.append(
             PullRequest(
                 url=url,
@@ -494,7 +517,7 @@ def _fix(
     run: records.Run,
     prs: Collection[str],
     by_pr: Mapping[str, Sequence[records.ObservedCheckRun]],
-    red_spans: Mapping[str, tuple[str | None, str | None]],
+    spells: Mapping[str, Sequence[Spell]],
 ) -> Fix:
     checks: list[FixedCheck] = []
     for url in prs:
@@ -520,16 +543,19 @@ def _fix(
         started_at=run.started_at,
         cost_usd=run.cost_usd,
         checks=checks,
-        to_green=_longest_to_green(red_spans.get(url, (None, None)) for url in prs),
+        to_green=_longest_to_green(run.started_at, (spells.get(url, ()) for url in prs)),
     )
 
 
-# The longest of the spans from red to green; None while one is still red, or none went red.
-def _longest_to_green(spans: Iterable[tuple[str | None, str | None]]) -> timedelta | None:
+# The longest of the spells of red, one PR's to each sequence, that were on at `started`: began at or before it and
+# had not ended; None while one of them lasts, or when none was on.
+def _longest_to_green(started: str, spells: Iterable[Sequence[Spell]]) -> timedelta | None:
     found: list[timedelta] = []
-    for red_at, green_at in spans:
-        if red_at is None:
+    for pr_spells in spells:
+        on = next((s for s in pr_spells if s[0] <= started and (s[1] is None or s[1] > started)), None)
+        if on is None:
             continue
+        red_at, green_at = on
         if green_at is None:
             return None
         found.append(db.parse_time(green_at) - db.parse_time(red_at))

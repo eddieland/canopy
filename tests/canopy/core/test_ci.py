@@ -154,6 +154,24 @@ def test_a_prs_time_to_green_runs_from_its_first_red_run_to_its_first_green_head
     assert {f.run_id: f.to_green for f in found.fixes} == {stuck: None, fix: timedelta(days=2, hours=2)}
 
 
+def test_a_pr_red_again_after_green_is_in_a_new_spell_of_red(tmp_path: Path, journals: Journals) -> None:
+    """A PR's row is its latest spell of red, and a fix's span is the spell it started in, not the PR's first."""
+    conn = journals.open(tmp_path / "canopy.db")
+    worker_ran(conn, RunKind.IMPLEMENT, earlier(NOW, 9), prs={"web": PR_1})
+    check_ran(conn, PR_1, "h1", "e2e", F, earlier(NOW, 5))
+    first = worker_ran(conn, RunKind.RESUME, earlier(NOW, 5, -1), prs={"web": PR_1}, reasons=(ResumeReason.CI,))
+    check_ran(conn, PR_1, "h2", "e2e", S, earlier(NOW, 4))
+    # Red again on a later head, which a second fix has not turned green.
+    check_ran(conn, PR_1, "h3", "e2e", F, earlier(NOW, 2))
+    second = worker_ran(conn, RunKind.RESUME, earlier(NOW, 2, -1), prs={"web": PR_1}, reasons=(ResumeReason.CI,))
+    # A rerun at the old green head is no new spell: it is behind the head that ended the first.
+    check_ran(conn, PR_1, "h1", "e2e", F, earlier(NOW, 1))
+    found = ci.report(conn, NOW, 7)
+    assert [(p.red_at, p.green_at) for p in found.pull_requests] == [(earlier(NOW, 2), None)]
+    assert found.median_to_green is None
+    assert {f.run_id: f.to_green for f in found.fixes} == {first: timedelta(days=1), second: None}
+
+
 def test_a_red_head_rerun_green_is_its_prs_green_head(tmp_path: Path, journals: Journals) -> None:
     """A PR whose red check passed on a rerun went green on that head, with no new commit."""
     conn = journals.open(tmp_path / "canopy.db")

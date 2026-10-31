@@ -88,8 +88,8 @@ class CiFix(Model):
     checks: list[CiFixedCheck]
     """The checks red on its PRs' heads when it started; empty when no source had observed one."""
     hours_to_green: float | None = None
-    """The longest time to green of its PRs that went red, as `CiPullRequest.hours_to_green` measures it; None while
-    one of them is still red, or none went red."""
+    """The longest time to green of the spells of red its PRs were in when it started, as `CiPullRequest` measures
+    one; None while one of them is still red, or when none was red."""
 
 
 class CiPullRequest(Model):
@@ -103,10 +103,11 @@ class CiPullRequest(Model):
     phase: str | None = None
     """Its unit's phase (DESIGN §7); None for a PR no unit of the loop's has."""
     red_at: datetime | None = None
-    """When a source first observed a red run of a check on it; None when none was red."""
+    """When its latest spell of red began: the first red run a source observed on it after the spell before ended;
+    None when none was red."""
     green_at: datetime | None = None
-    """When its first head from the red one on went green: no check's last red or green run on it red, and one green,
-    at the observation of the last of those; None while none has, or when it was never red."""
+    """When that spell ended: its first head from the red one on with no check's last red or green run red and one
+    green, at the observation of the last of those; None while it lasts, or when none was red."""
     hours_to_green: float | None = None
     """From `red_at` to `green_at`, in hours; None without both. Approximate: each time is when a source saw a run
     completed, not when it finished, and a head whose other checks still run reads green until one is seen red."""
