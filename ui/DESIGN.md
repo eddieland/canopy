@@ -744,8 +744,10 @@ side.
   edit goes through the browser, so its undo takes it back. Three sizes, each growing with its text and then
   scrolling: `line`, one line high, beside a form's `Input`; `default`, a reply's few lines; `tall`, a long brief. Its
   preview is `tab`, Write and Preview at the toolbar's end, the preview at the text's height; `live`, beside the text
-  once the box is `@2xl` wide, under it before; or `off`. A label names it through `htmlFor`, never around it. The
-  reply form uses it; a field that sends text an agent reads moves to it when its PR is already changing that form.
+  once the box is `@2xl` wide, under it before; or `off`. A label names it through `htmlFor`, never around it. A field
+  takes it when what it sends is later drawn by `RichText`, so the preview tells the truth: a reply, a task's text, and
+  a feedback plan's words, which land in a conversation. One drawn as plain text (a plan comment, the notice, a review
+  request's notes) stays a `Textarea` until it is drawn so.
 - **`PanelSkeleton`** (`src/components/panel.tsx`): what a panel shows while its data has not arrived at all, `rows`
   shimmering bars, each shorter than the last. It takes the minimum height its content will, so nothing moves when
   the data lands: `min-h-72` for a page's main panel or a list that runs long (tickets, runs, ticks), `min-h-40` for
@@ -919,11 +921,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   The tasks waiting on the operator's reply come first, the rest newest first, so it has no `OrderToggle`. Narrow, the
   repository goes first, then the age, then where it stands. A repository picker (`?repo=`) narrows it.
   Above it, as the reviews page's `Review a PR` panel is, a `Submit a task` panel (`TaskSubmitForm`) on one line: the
-  text in a `Textarea` one line high that grows as it is written (to `15rem`, then scrolls), the repository it runs in
-  (`RepoSelect`, only with several, starting at the one the list is narrowed to, else the newest task's), the tracker
-  project in monospace, and an outline `Submit` with its send keycap; under them one muted line says what a task may
-  do, which a refusal replaces. On success a toast says what the CLI says and the form opens the task's page; the row
-  arrives on the stream, never added by the page.
+  text in a `MarkdownField` one line high, with no toolbar, that grows as it is written (to `15rem`, then scrolls), the
+  repository it runs in (`RepoSelect`, only with several, starting at the one the list is narrowed to, else the newest
+  task's), the tracker project in monospace, and an outline `Submit` with its send keycap; under them one muted line
+  says what a task may do, which a refusal replaces. On success a toast says what the CLI says and the form opens the
+  task's page; the row arrives on the stream, never added by the page.
 - **A task** (`/tasks/$id`) is one story: its title `task:N` and its text's first line, its description where it
   stands (in its look's color), its runs, and when it was submitted. Then the detail skeleton, with the story as its
   thread: a Conversation panel (`TaskStory`) whose oldest end is the operator's instruction, whole, as their own bubble
