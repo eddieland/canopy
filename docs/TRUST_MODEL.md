@@ -816,9 +816,13 @@ Controls:
   replying anywhere, submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth;
   the operator's runtime need not grant it a write tool at all. Off a GitHub tracker, the tracker's server is denied
   whole but its read tools, allowed by name, as for the planner, so a write there no pattern names fails closed.
+  Outside its directory it reads only the skill directories in the operator's home (`~/.claude/skills`,
+  `~/.agents/skills`, OpenCode's own), so a skill's references and scripts load with it; it changes nothing there, and
+  what it reads can reach its result line as the skills' own text does. Every agent that writes is denied them.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, subagent, or shell tools,
   one tool of canopy's, `canopy_chore_history`, which reads its own chore's earlier runs and writes nothing, and denies
-  MCP write tools by name. That tool's server is named in the chore run's environment alone (DESIGN §27), lists nothing
+  MCP write tools by name. Outside its directory it reads only the operator's skill directories, as the reviewer does.
+  That tool's server is named in the chore run's environment alone (DESIGN §27), lists nothing
   outside a chore's run, refuses another chore's history as the command does, and every other definition denies it.
   A chore's run is also given a server of canopy's read-only reports of the whole workspace, `canopy_reports`: health,
   spend, the three listings of agent memory, the config's settings, and what each agent is offered, as their commands
@@ -974,7 +978,9 @@ agent's name, or the `canopy` server's, out of JSON escapes or `{file:...}` subs
 add bash rules to canopy's agents, or set the environment of the overseer's server. A scalar rule canopy sets (the
 worker's `edit`, `external_directory`, and `task`) replaces whatever such an
 agent sets for it, but OpenCode matches each permission key as a wildcard on the permission's name: an agent that sets
-the same permission and then a key such as `external_*` keeps that key after canopy's rule, and loosens it. These
+the same permission and then a key such as `external_*` keeps that key after canopy's rule, and loosens it. A table,
+such as the reviewer's and chores' `external_directory`, is merged with such an agent's key by key (D044), so it could
+add a directory they read; they write nothing. These
 rules are defense in depth (T4), as the bash rules are, with branch protection (§7) the boundary for what a worker can
 push.
 
