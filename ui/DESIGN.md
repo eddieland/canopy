@@ -771,15 +771,27 @@ side.
   its `panel-label` and what names it, its text, then its verbs in a row under it, `sm` buttons with the CLI's command
   on hover, `Edit` outline (`EditVerb`) and `Drop` ghost (`DropVerb`). `Edit` opens `DraftForm`: a `Textarea` with its
   count against 4,000, `Save` disabled past it or while the text is not one the draft may hold, and `Cancel`.
-- **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
-  `panel-label` type, its figures right-aligned readouts. A row head that names something (a ticket, a tool) is its
-  name in medium weight at the table's size, as `TicketTitle` sets a ticket's title, after its reference (a ticket's
+- **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel where its rows name
+  something that wants the room (Landed, By ticket); one with a short name and a few figures (Delivery, Checklist, a
+  chart's days, who reviews) sizes to its content at the panel's left, so a row reads in one glance. Its column heads
+  are in `panel-label` type, its figures right-aligned readouts. A row head that names something (a ticket, a tool) is
+  its name in medium weight at the table's size, as `TicketTitle` sets a ticket's title, after its reference (a ticket's
   key, a PR) in its monospace link; a day or a group of ticks is in the table's own type. Its panel's header repeats
   none of its rows. Rows in groups (the checklist page's items, by repository) stay one table, so their columns line
   up: a `tbody` per group, headed by a row whose `rowgroup` cell names it in the table's own type, medium weight.
-- **Figures** (the Spend page's totals) are a window's sums, not a count of what is now, so they are not `Counter`s:
-  each a `panel-label` over a `text-lg` readout, in a grid inside their panel, with what a label counts on its hover.
-  A `Counter` stays the attention and worktrees pages' count of the present, with its state's color.
+- **Readout tiles** (`ReadoutTiles`, `src/components/readout-tiles.tsx`) are a report window's headline figures: its
+  sums, not a count of what is now, so they are not `Counter`s. Each is a `panel-label` name over a `readout text-xl`
+  figure in a `dl`, what it counts in the name's tip, and, when the page has the window before's figure, a muted line
+  under it saying how it moved (`+3 on the 7 days before`, `same as ...`), in `status-failed` only where the page says
+  which way is better and it moved the other (a rising failure rate; never rising spend). A row of them sits under a
+  report's description (Health, CI); the Spend page's Totals are a grid of them in their panel. A figure still being
+  read holds its place. A `Counter` stays the attention and worktrees pages' count of the present, with its state's
+  color.
+- **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest
+  (`barPercent`), where comparing the rows is the point: spent by month, by ticket, and by model, the bytes a tool
+  returned, a check's failure rate. The figure, at a fixed width so the bars start at one edge, then a 6px rounded bar
+  on `surface-raised` filled in `muted-foreground`, or the series' own fill; never a state's color. It is the eye's,
+  `aria-hidden`.
 
 ## Charts
 
@@ -800,7 +812,9 @@ Patterns names what is its own.
 - **A value is on hover**, with its unit: `$1.50`, `30.2k sent`.
 - **No data is `Empty`**, saying what there was none of: never an empty plot under a legend.
 - **A table holds the same numbers** wherever the chart is `aria-hidden`, for a screen reader and for a value too small
-  to see.
+  to see. Under a day chart it folds (`ChartTable`): a `Disclosure` with its rows on its line, `Show 7 days as a table`,
+  closed on arrival, the table still in the page for a screen reader while it is. The legend says what each series
+  counts, in its name's tip, so the table's heads are plain.
 
 A measure over time (`TrendChart`, `src/lib/trend.ts`, the system resources page's graphs) is a line, not bars: 2px
 in the accent with round joins, the area under it the accent at 10%, from zero on a 1px `border` baseline, broken where
@@ -849,8 +863,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   shadow and no motion, as a menu is, and the fact is in monospace where it is the CLI's spelling. Inside a link, a
   button, or an element with a `title` of its own, a tip is the plain `title` it was: the keyboard stops on the control
   already, and a stop inside it would be a control in a control. What the operator acts on is in the text, never only
-  in a tip (the `canopy grant` command under its button). A `title` that explains rather than informs, a button's
-  hint or what a column counts, stays a `title`.
+  in a tip (the `canopy grant` command under its button). What a report's column or figure counts is a tip too, on its
+  name (`Hinted`), with a muted dotted underline saying there is one. A `title` that explains rather than informs, a
+  button's hint, stays a `title`.
 - **A link's page at a glance is a hover card** (`HoverCard` in `src/components/ui/hover-card.tsx`): more than a tip
   holds, a few rows of what the page it opens shows, as each header readout shows its page (`ReadoutCard`). It opens
   on hover after half a second, as a tip does, and on the keyboard's focus, and stays while the pointer moves onto
@@ -1014,13 +1029,14 @@ sliver beside four others; and its axis names short call numbers without measuri
   and `idle ticks` the part of it idle ticks made, drawn under the rest. So the totals and the table say the overseer's
   whole, and a bar's hover says its day, then each series' cost, `overseer $1.00 (idle ticks $0.25)`. The page's
   description is the window's state, `$10.51 over 7 days · 2 tickets done` (`spendLine`); what the page shows on
-  every visit is its title's help. The chart is `aria-hidden`: the table under it, newest day first,
-  holds the same numbers for a screen reader, each a `Cost`, every cell after the first `pl-3` from the one before, and
-  scrolls past a week (`PanelScroll`), sideways when the pane is too narrow for its columns. A week names every day on
-  the axis; 30 days every fifth, back from today. A window where no run reported a cost is one `Empty` line in place of
-  the chart, its legend, and its table; the totals then leave out idle ticks' share while the overseer spent nothing,
-  and what reported no cost while no run ended. The window is a segmented control (`ToggleGroup`) in the totals' panel
-  header, kept in `?days=`. By model and By tool sum each model's or tool's rows over every kind under `all`; the
+  every visit is its title's help. The chart is `aria-hidden`: the table folded under it (`ChartTable`), newest day
+  first, holds the same numbers for a screen reader, each a `Cost`, every cell after the first `pl-3` from the one
+  before, and, opened, scrolls past a week, sideways when the pane is too narrow for its columns. A week names every
+  day on the axis; 30 days every fifth, back from today. A window where no run reported a cost is one `Empty` line in
+  place of the chart, its legend, and its table; the totals then leave out idle ticks' share while the overseer spent
+  nothing, and what reported no cost while no run ended. The window is a segmented control (`WindowToggle`) in the
+  page header's controls, as on every report, so it is in one place whatever the page and however long it is; kept in
+  `?days=`. By model and By tool sum each model's or tool's rows over every kind under `all`; the
   runs page's kind filter in each one's header keeps one kind's (`?model_kind=`, `?tool_kind=`), and offers only the
   kinds the window has rows of. A window switch keeps both filters. By model's ids link the runs page's runs on the
   model (`?model=`), with the kind shown (`?kind=`, `RUNS_KIND`: a plan run is a worker run there); one the runs page
@@ -1031,13 +1047,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   bar's hover says the day's failures out of its ended runs, and the table under it holds each kind's failures with
   the day's failed and ended runs, since a failure's weight is its share. A window where nothing failed is one `Empty`
   line. Its window, a week or 30 days, is the same segmented control as the spend page's (`WindowToggle`), in the
-  outcomes panel's header, kept in `?days=`.
+  page header, kept in `?days=`.
 - **The red checks chart** (the CI page) is the same `DayChart`: a bar per local day of the red check runs, a series
   per check the server names apart, by rank in the check fills, and the rest summed as `other` in `check-other`, the
-  legend and a table of the same numbers under it. Its window is the health page's, in the checks panel's header.
+  legend and a table of the same numbers under it. Its window is the health page's.
 - **The first reviews chart** (the Reviews page) is the same `DayChart`: a bar per local day of the first reviews that
   arrived, stacked by wait in the wait fills, the quickest at the bottom, the day's median on hover, the legend and a
-  table of the same numbers under it. Its window is the health page's, in the first reviews panel's header.
+  table of the same numbers under it. Its window is the health page's.
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
   with its unit's phase, its ticket, then the page's own figures. The spend page's By pull request, the CI page's
   flaky kicks, and the Reviews page's By pull request use it.

@@ -4,17 +4,18 @@ import type { ReactNode } from 'react'
 
 import { monthlyReportQuery } from '@/api/queries'
 import type { ReportKind, ReportModel, ReportMonth, ReportTicket } from '@/api/types'
+import { CellBar } from '@/components/cell-bar'
 import { Cost } from '@/components/cost'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { Clipped } from '@/components/tip'
+import { Clipped, Hinted, Tip, Tipped } from '@/components/tip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { UnnamedModel } from '@/components/unnamed-model'
+import { barPercent } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
 import {
     clockShare,
-    costPercent,
     DEFAULT_MONTHS,
     hoursText,
     medianText,
@@ -91,7 +92,32 @@ function ReportsPage() {
     const failed = months === undefined && query.error !== null
     return (
         <>
-            <PageHeader title="Reports" help={HELP}>
+            <PageHeader
+                title="Reports"
+                help={HELP}
+                controls={
+                    <ToggleGroup
+                        type="single"
+                        value={String(span)}
+                        aria-label="Span"
+                        onValueChange={(value) => {
+                            const n = REPORT_SPANS.find((s) => String(s) === value)
+                            // Pressing the span shown turns it off: keep it. A year, the default, needs no search.
+                            if (n !== undefined) {
+                                void navigate({
+                                    search: (prev) => ({ ...prev, months: n === DEFAULT_MONTHS ? undefined : n }),
+                                })
+                            }
+                        }}
+                    >
+                        {REPORT_SPANS.map((n) => (
+                            <ToggleGroupItem key={n} value={String(n)} data-testid={`reports-span-${n}`}>
+                                {n} months
+                            </ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
+                }
+            >
                 {months === undefined ? (query.isPending ? 'reading the months' : null) : reportLine(months)}
             </PageHeader>
             <Panel data-testid="reports-months">
@@ -111,26 +137,6 @@ function ReportsPage() {
                         >
                             Checklist
                         </Link>
-                        <ToggleGroup
-                            type="single"
-                            value={String(span)}
-                            aria-label="Span"
-                            onValueChange={(value) => {
-                                const n = REPORT_SPANS.find((s) => String(s) === value)
-                                // Pressing the span shown turns it off: keep it. A year, the default, needs no search.
-                                if (n !== undefined) {
-                                    void navigate({
-                                        search: (prev) => ({ ...prev, months: n === DEFAULT_MONTHS ? undefined : n }),
-                                    })
-                                }
-                            }}
-                        >
-                            {REPORT_SPANS.map((n) => (
-                                <ToggleGroupItem key={n} value={String(n)} data-testid={`reports-span-${n}`}>
-                                    {n} months
-                                </ToggleGroupItem>
-                            ))}
-                        </ToggleGroup>
                     </span>
                 </PanelHeader>
                 {months === undefined ? (
@@ -235,22 +241,22 @@ function Months({ months, picked }: { months: readonly ReportMonth[]; picked: st
                         <th className="panel-label pb-1.5 text-left font-normal">month</th>
                         <th className={cn(HEAD, 'w-full text-left')}>spent</th>
                         <th className={HEAD}>runs</th>
-                        <th className={HEAD} title={SENT_HINT}>
-                            sent
+                        <th className={HEAD}>
+                            <Hinted hint={SENT_HINT}>sent</Hinted>
                         </th>
-                        <th className={HEAD} title={WROTE_HINT}>
-                            wrote
+                        <th className={HEAD}>
+                            <Hinted hint={WROTE_HINT}>wrote</Hinted>
                         </th>
-                        <th className={HEAD} title={CACHE_HINT}>
-                            cache hit
+                        <th className={HEAD}>
+                            <Hinted hint={CACHE_HINT}>cache hit</Hinted>
                         </th>
                         <th className={HEAD}>landed</th>
                         <th className={HEAD}>closed</th>
-                        <th className={HEAD} title={PRS_HINT}>
-                            PRs
+                        <th className={HEAD}>
+                            <Hinted hint={PRS_HINT}>PRs</Hinted>
                         </th>
-                        <th className={HEAD} title={PER_LANDED_HINT}>
-                            per landed
+                        <th className={HEAD}>
+                            <Hinted hint={PER_LANDED_HINT}>per landed</Hinted>
                         </th>
                     </tr>
                 </thead>
@@ -259,15 +265,15 @@ function Months({ months, picked }: { months: readonly ReportMonth[]; picked: st
                         <tr key={m.month} className="text-right" data-testid="reports-month">
                             <MonthCell month={m.month} picked={picked} />
                             <td className="pl-3 text-left">
-                                <span className="flex items-center gap-2">
-                                    <Cost usd={m.cost_usd} className="w-20 shrink-0" />
-                                    <span aria-hidden className="h-1.5 min-w-8 flex-1 rounded-full bg-surface-raised">
-                                        <span
-                                            className="block h-full rounded-full bg-muted-foreground"
-                                            style={{ width: `${costPercent(m, months)}%` }}
-                                        />
-                                    </span>
-                                </span>
+                                <CellBar
+                                    percent={barPercent(
+                                        m.cost_usd,
+                                        months.map((n) => n.cost_usd),
+                                    )}
+                                    valueClassName="w-20"
+                                >
+                                    <Cost usd={m.cost_usd} />
+                                </CellBar>
                             </td>
                             <Readout>{m.runs}</Readout>
                             <Readout>{tokenCount(sentTokens(m.tokens))}</Readout>
@@ -287,11 +293,11 @@ function Months({ months, picked }: { months: readonly ReportMonth[]; picked: st
     )
 }
 
-/** A number in a table's row, right aligned, with what it ran on, if said, on its hover. */
-function Readout({ children, title }: { children: ReactNode; title?: string | undefined }) {
+/** A number in a table's row, right aligned, with what it ran on, if said, in its tip. */
+function Readout({ children, hint }: { children: ReactNode; hint?: string | undefined }) {
     return (
-        <td className="readout pl-3" title={title}>
-            {children}
+        <td className="readout pl-3">
+            <Tipped fact={hint}>{children}</Tipped>
         </td>
     )
 }
@@ -300,22 +306,22 @@ function Readout({ children, title }: { children: ReactNode; title?: string | un
 function Delivery({ months, picked }: { months: readonly ReportMonth[]; picked: string | undefined }) {
     return (
         <PanelScroll label="Delivery" className="px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="reports-delivery-table">
+            <table className="border-collapse text-sm" data-testid="reports-delivery-table">
                 <thead className={PADDED_HEAD}>
                     <tr className="text-right">
-                        <th className="panel-label w-full pb-1.5 text-left font-normal">month</th>
+                        <th className="panel-label pb-1.5 text-left font-normal">month</th>
                         <th className={HEAD}>landed</th>
-                        <th className={HEAD} title={ITERATIONS_HINT}>
-                            iterations
+                        <th className={HEAD}>
+                            <Hinted hint={ITERATIONS_HINT}>iterations</Hinted>
                         </th>
-                        <th className={HEAD} title={COMMENTS_HINT}>
-                            PR comments
+                        <th className={HEAD}>
+                            <Hinted hint={COMMENTS_HINT}>PR comments</Hinted>
                         </th>
-                        <th className={HEAD} title={TO_LAND_HINT}>
-                            to land
+                        <th className={HEAD}>
+                            <Hinted hint={TO_LAND_HINT}>to land</Hinted>
                         </th>
-                        <th className={HEAD} title={WAIT_HINT}>
-                            review wait
+                        <th className={HEAD}>
+                            <Hinted hint={WAIT_HINT}>review wait</Hinted>
                         </th>
                     </tr>
                 </thead>
@@ -326,10 +332,10 @@ function Delivery({ months, picked }: { months: readonly ReportMonth[]; picked: 
                             <Readout>{m.landed.length}</Readout>
                             <Readout>{medianText(m.median_iterations ?? null)}</Readout>
                             <Readout>{medianText(m.median_pr_comments ?? null)}</Readout>
-                            <Readout title={clockShare(m, 'to land')}>
+                            <Readout hint={clockShare(m, 'to land')}>
                                 {hoursText(m.median_hours_to_land ?? null)}
                             </Readout>
-                            <Readout title={clockShare(m, 'review wait')}>
+                            <Readout hint={clockShare(m, 'review wait')}>
                                 {hoursText(m.median_review_wait_hours ?? null)}
                             </Readout>
                         </tr>
@@ -358,14 +364,14 @@ function Kinds({ month, readAt }: { month: ReportMonth; readAt: string | null })
                         <th className="panel-label w-full pb-1.5 text-left font-normal">kind</th>
                         <th className={HEAD}>runs</th>
                         <th className={HEAD}>spent</th>
-                        <th className={HEAD} title={SENT_HINT}>
-                            sent
+                        <th className={HEAD}>
+                            <Hinted hint={SENT_HINT}>sent</Hinted>
                         </th>
-                        <th className={HEAD} title={WROTE_HINT}>
-                            wrote
+                        <th className={HEAD}>
+                            <Hinted hint={WROTE_HINT}>wrote</Hinted>
                         </th>
-                        <th className={HEAD} title={CACHE_HINT}>
-                            cache hit
+                        <th className={HEAD}>
+                            <Hinted hint={CACHE_HINT}>cache hit</Hinted>
                         </th>
                     </tr>
                 </thead>
@@ -385,8 +391,8 @@ function Kinds({ month, readAt }: { month: ReportMonth; readAt: string | null })
                         </tr>
                     ))}
                     <tr className="border-t border-border text-right" data-testid="reports-outside">
-                        <th scope="row" className="py-0.5 text-left font-normal" title={outsideHint(readAt, clock)}>
-                            outside canopy
+                        <th scope="row" className="py-0.5 text-left font-normal">
+                            <Hinted hint={outsideHint(readAt, clock)}>outside canopy</Hinted>
                         </th>
                         <Readout>{outside.sessions}</Readout>
                         <td className="readout pl-3">
@@ -424,13 +430,13 @@ function Models({ month }: { month: ReportMonth }) {
                 <tbody className="font-mono text-xs">
                     {month.models.map((m: ReportModel) => (
                         <tr key={modelKey(m)} className="text-right" data-testid="reports-model">
-                            <th
-                                scope="row"
-                                className="w-full max-w-0 py-0.5 text-left font-normal"
-                                title={m.model === null ? unnamedHint(m.unread) : undefined}
-                            >
+                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
                                 {m.model === null ? (
-                                    <UnnamedModel unread={m.unread} className="block truncate" />
+                                    <Tip fact={unnamedHint(m.unread)}>
+                                        <span className="block truncate">
+                                            <UnnamedModel unread={m.unread} />
+                                        </span>
+                                    </Tip>
                                 ) : (
                                     <Clipped text={m.model} className="block readout" />
                                 )}
@@ -461,20 +467,20 @@ function Landed({ month }: { month: ReportMonth }) {
                 <thead className={PADDED_HEAD}>
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">ticket</th>
-                        <th className={HEAD} title={ITERATIONS_HINT}>
-                            iterations
+                        <th className={HEAD}>
+                            <Hinted hint={ITERATIONS_HINT}>iterations</Hinted>
                         </th>
-                        <th className={HEAD} title={COMMENTS_HINT}>
-                            PR comments
+                        <th className={HEAD}>
+                            <Hinted hint={COMMENTS_HINT}>PR comments</Hinted>
                         </th>
-                        <th className={HEAD} title={REVIEWS_HINT}>
-                            reviews
+                        <th className={HEAD}>
+                            <Hinted hint={REVIEWS_HINT}>reviews</Hinted>
                         </th>
-                        <th className={HEAD} title={TO_LAND_HINT}>
-                            to land
+                        <th className={HEAD}>
+                            <Hinted hint={TO_LAND_HINT}>to land</Hinted>
                         </th>
-                        <th className={HEAD} title={WAIT_HINT}>
-                            review wait
+                        <th className={HEAD}>
+                            <Hinted hint={WAIT_HINT}>review wait</Hinted>
                         </th>
                         <th className={HEAD}>spent</th>
                     </tr>
@@ -496,8 +502,8 @@ function Landed({ month }: { month: ReportMonth }) {
                                     <span className="text-status-blocked"> ({t.changes_requested})</span>
                                 )}
                             </Readout>
-                            <Readout title={toLandHint(t)}>{hoursText(t.hours_to_land ?? null)}</Readout>
-                            <Readout title={reviewWaitHint(t)}>{hoursText(t.review_wait_hours ?? null)}</Readout>
+                            <Readout hint={toLandHint(t)}>{hoursText(t.hours_to_land ?? null)}</Readout>
+                            <Readout hint={reviewWaitHint(t)}>{hoursText(t.review_wait_hours ?? null)}</Readout>
                             <td className="readout pl-3">
                                 <Cost usd={t.cost_usd ?? null} />
                             </td>

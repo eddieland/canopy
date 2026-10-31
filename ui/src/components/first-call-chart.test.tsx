@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { SpendFirstCallWeek } from '@/api/types'
+import { tipOf } from '@/test-utils'
 
 import { FirstCallChart } from './first-call-chart'
 
@@ -78,6 +79,6 @@ describe('FirstCallChart', () => {
             ['Sep 21', '1', '22.4k', '57%'],
             ['Sep 14', '2', '24.2k', '85%'],
         ])
-        expect(within(table).getByRole('rowheader', { name: 'Sep 28' }).getAttribute('title')).toBe('2026-W40')
+        expect(tipOf(within(table).getByText('Sep 28'))).toBe('2026-W40')
     })
 })

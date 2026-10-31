@@ -4,25 +4,32 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ciReportQuery } from '@/api/queries'
 import type { CiCheck, CiDay, CiFix, CiFixedCheck, CiKick, CiKickedPullRequest, CiReport } from '@/api/types'
 import { Age } from '@/components/age'
+import { CellBar } from '@/components/cell-bar'
+import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { PullRequestTable } from '@/components/pull-request-table'
 import type { PullRequestColumn } from '@/components/pull-request-table'
+import { ReadoutTiles } from '@/components/readout-tiles'
+import type { ReadoutTile } from '@/components/readout-tiles'
 import { RunLink } from '@/components/run-link'
 import { Word } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
+import { Clipped, Hinted } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
 import {
     CI_WINDOWS,
     ciBars,
+    ciFigures,
     ciLine,
     ciSeries,
     ciWindow,
     DEFAULT_CI_WINDOW,
     failureRate,
+    failureShare,
     fixRateText,
     kickText,
     LIMITS_TEXT,
@@ -31,10 +38,12 @@ import {
     redSum,
     VERDICTS_TEXT,
 } from '@/lib/ci'
+import { barPercent } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
+import { counted } from '@/lib/descriptions'
 import { windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
-import { dayName } from '@/lib/spend'
+import { dayName, shareText } from '@/lib/spend'
 import { cn } from '@/lib/utils'
 
 interface CiSearch {
@@ -47,6 +56,11 @@ const HELP = [
     'it, the red checks by day, the resumes that fixed CI and what they cost, the flaky kicks, and the cooldown.',
     LIMITS_TEXT,
 ].join(' ')
+
+// What a column counts, in its name's tip.
+const RATE_HINT = "Its red runs' share of its red and green ones"
+const NEXT_HEAD_HINT = 'Of its red runs a run on a new head of the same PR followed, how many passed'
+const FIXED_HINT = "The checks red on its PR's head when it started, and how each ran on the next head"
 
 // A fixed check's next run, in its state's color: green passed, red failed again, the rest muted.
 const NEXT_TONE: Record<string, string> = {
@@ -77,11 +91,10 @@ function CiPage() {
     const failed = data === undefined && query.error !== null
     return (
         <>
-            <PageHeader title="CI" help={HELP}>
-                {data === undefined ? (query.isPending ? 'reading the check runs' : null) : ciLine(data)}
-            </PageHeader>
-            <Panel data-testid="ci-checks">
-                <PanelHeader label="Checks by name">
+            <PageHeader
+                title="CI"
+                help={HELP}
+                controls={
                     <WindowToggle
                         windows={CI_WINDOWS}
                         shown={shown}
@@ -90,7 +103,13 @@ function CiPage() {
                             void navigate({ search: { days: picked === DEFAULT_CI_WINDOW ? undefined : picked.days } })
                         }}
                     />
-                </PanelHeader>
+                }
+                links={!failed && <ReadoutTiles tiles={ciTiles(data)} testId="ci" />}
+            >
+                {data === undefined ? (query.isPending ? 'reading the check runs' : null) : ciLine(data)}
+            </PageHeader>
+            <Panel data-testid="ci-checks">
+                <PanelHeader label="Checks by name" />
                 {data === undefined ? (
                     <PanelLoading query={query} className="min-h-40" />
                 ) : (
@@ -145,6 +164,22 @@ function CiPage() {
     )
 }
 
+/** The window's headline figures, each held in its place while the report is read. */
+function ciTiles(found: CiReport | undefined): ReadoutTile[] {
+    const figures = found === undefined ? undefined : ciFigures(found)
+    return [
+        { key: 'heads', label: 'PR heads', hint: 'The PR heads first checked in the window', value: figures?.heads },
+        {
+            key: 'green-first',
+            label: 'green first time',
+            hint: 'Of those heads, the share whose first run of every check was not red',
+            value: figures === undefined ? undefined : shareText(figures.greenFirst),
+        },
+        { key: 'red', label: 'red runs', hint: 'The check runs that went red, every check', value: figures?.red },
+        { key: 'fixes', label: 'fix-CI resumes', hint: 'The resumes for CI that started', value: figures?.fixes },
+    ]
+}
+
 /**
  * Each check by name, the worst first: its runs, its red runs, its share of red among red and green, and how often
  * its next run on a new head passed after a red one. Under it, what counts as red, and what the page cannot see.
@@ -162,29 +197,33 @@ function Checks({ checks, span }: { checks: CiCheck[]; span: string }) {
                                 <th className="panel-label pb-1.5 text-left font-normal">check</th>
                                 <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
                                 <th className="panel-label pb-1.5 pl-3 font-normal">red</th>
-                                <th
-                                    className="panel-label pb-1.5 pl-3 font-normal"
-                                    title="Its red runs' share of its red and green ones"
-                                >
-                                    failure rate
+                                <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                                    <Hinted hint={RATE_HINT}>failure rate</Hinted>
                                 </th>
-                                <th
-                                    className="panel-label pb-1.5 pl-3 font-normal"
-                                    title="Of its red runs a run on a new head of the same PR followed, how many passed"
-                                >
-                                    next head green
+                                <th className="panel-label pb-1.5 pl-3 font-normal">
+                                    <Hinted hint={NEXT_HEAD_HINT}>next head green</Hinted>
                                 </th>
                             </tr>
                         </thead>
                         <tbody className="font-mono text-xs">
                             {checks.map((c) => (
                                 <tr key={c.name} className="text-right" data-testid="ci-check">
-                                    <th scope="row" className="max-w-0 truncate py-0.5 text-left font-normal">
-                                        <span title={c.name}>{c.name}</span>
+                                    <th scope="row" className="max-w-0 py-0.5 text-left font-normal">
+                                        <Clipped text={c.name} className="block" />
                                     </th>
                                     <td className="readout pl-3 text-muted-foreground">{c.runs}</td>
                                     <td className={cn('readout pl-3', c.red > 0 && 'text-status-failed')}>{c.red}</td>
-                                    <td className="readout pl-3">{failureRate(c)}</td>
+                                    <td className="pl-3">
+                                        <CellBar
+                                            percent={barPercent(
+                                                failureShare(c),
+                                                checks.map((check) => failureShare(check)),
+                                            )}
+                                            valueClassName="readout w-10 text-right"
+                                        >
+                                            {failureRate(c)}
+                                        </CellBar>
+                                    </td>
                                     <td className="readout pl-3 text-muted-foreground">{nextHeadText(c)}</td>
                                 </tr>
                             ))}
@@ -215,13 +254,17 @@ function ByDay({ found, span }: { found: CiReport; span: string }) {
             {/* Measured afresh for each window: another count of bars is another pitch. */}
             <DayChart key={found.per_day.length} bars={ciBars(found.per_day, series, clock)} testId="ci" />
             <DayChartLegend series={series} testId="ci" />
-            <PanelScroll label="Red checks by day" className="max-h-60 overflow-x-auto">
+            <ChartTable
+                what={counted(found.per_day.length, 'day')}
+                label="Red checks by day"
+                className="max-h-60 overflow-x-auto"
+            >
                 <table className="w-full border-collapse text-sm" data-testid="ci-table">
                     <thead className="sticky top-0 bg-surface">
                         <tr className="text-right">
                             <th className="panel-label pb-1.5 text-left font-normal">day</th>
                             {series.map((s) => (
-                                <th key={s.key} className="panel-label pb-1.5 pl-3 font-normal" title={s.hint}>
+                                <th key={s.key} className="panel-label pb-1.5 pl-3 font-normal">
                                     {s.label}
                                 </th>
                             ))}
@@ -246,7 +289,7 @@ function ByDay({ found, span }: { found: CiReport; span: string }) {
                         ))}
                     </tbody>
                 </table>
-            </PanelScroll>
+            </ChartTable>
         </div>
     )
 }
@@ -268,11 +311,8 @@ function Fixes({ fixes, span }: { fixes: CiFix[]; span: string }) {
                         <th className="panel-label pb-1.5 font-normal">run</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">ticket</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">ended</th>
-                        <th
-                            className="panel-label pb-1.5 pl-3 font-normal"
-                            title="The checks red on its PR's head when it started, and how each ran on the next head"
-                        >
-                            checks, then the next head
+                        <th className="panel-label pb-1.5 pl-3 font-normal">
+                            <Hinted hint={FIXED_HINT}>checks, then the next head</Hinted>
                         </th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">spent</th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">started</th>
@@ -320,9 +360,7 @@ function FixedChecks({ checks }: { checks: CiFixedCheck[] }) {
             {checks.map((c) => (
                 <li key={`${c.pr_url}:${c.name}`} className="flex min-w-0 items-center gap-2" data-testid="ci-fixed">
                     <PullRequestLink url={c.pr_url} className="shrink-0" />
-                    <span className="min-w-0 truncate font-mono" title={c.name}>
-                        {c.name}
-                    </span>
+                    <Clipped text={c.name} mono className="min-w-0 font-mono" />
                     <span className={cn('font-mono', NEXT_TONE[c.next ?? ''] ?? 'text-muted-foreground')}>
                         {nextText(c.next)}
                     </span>

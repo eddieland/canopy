@@ -1,4 +1,5 @@
 import type { SpendFirstCallWeek } from '@/api/types'
+import { Hinted, Tipped } from '@/components/tip'
 import { HEADROOM } from '@/lib/chart'
 import { weekChanges, weekHint, weekLabel } from '@/lib/first-calls'
 import { shareText } from '@/lib/spend'
@@ -61,23 +62,21 @@ export function FirstCallChart({ weeks, fill }: { weeks: SpendFirstCallWeek[]; f
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">week of</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap" title={FIRST_CALL_HINT}>
-                            first call
+                        <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
+                            <Hinted hint={FIRST_CALL_HINT}>first call</Hinted>
                         </th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal" title={FROM_CACHE_HINT}>
-                            from cache
+                        <th className="panel-label pb-1.5 pl-3 font-normal">
+                            <Hinted hint={FROM_CACHE_HINT}>from cache</Hinted>
                         </th>
                     </tr>
                 </thead>
                 <tbody className="font-mono text-xs">
                     {weeks.toReversed().map((week) => (
                         <tr key={week.week} className="text-right" data-testid={`first-call-week-${week.week}`}>
-                            <th
-                                scope="row"
-                                className="readout py-0.5 text-left font-normal whitespace-nowrap"
-                                title={week.week}
-                            >
-                                {weekLabel(week.week)}
+                            <th scope="row" className="readout py-0.5 text-left font-normal whitespace-nowrap">
+                                <Tipped fact={week.week} mono>
+                                    {weekLabel(week.week)}
+                                </Tipped>
                             </th>
                             <td className="readout pl-3">{week.runs}</td>
                             <td className="readout pl-3">{tokenCount(week.first_call)}</td>

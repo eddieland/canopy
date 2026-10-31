@@ -52,6 +52,32 @@ export function healthLine(found: Pick<HealthReport, 'days' | 'per_day'>): strin
     return ended === 0 ? `no run ended over ${over}` : `${failed} of ${counted(ended, 'run')} failed over ${over}`
 }
 
+/** The window's headline figures, as the page's tiles show them. */
+export interface HealthFigures {
+    /** The runs that ended. */
+    runs: number
+    /** Of those, the runs that failed. */
+    failed: number
+    /** The failed runs' share of the ended ones; null with none ended. */
+    rate: number | null
+    /** What the failed runs cost, in US dollars; null when none of them reported a cost. */
+    failedUsd: number | null
+}
+
+/** The window's runs, its failures, their share, and what they cost, over every kind. */
+export function healthFigures(found: Pick<HealthReport, 'per_day' | 'outcomes'>): HealthFigures {
+    const runs = found.per_day.reduce((sum, day) => sum + countSum(day.ended), 0)
+    const failed = found.per_day.reduce((sum, day) => sum + countSum(day.failed), 0)
+    const costs = found.outcomes.filter((o) => o.failed).map((o) => o.cost_usd ?? null)
+    const priced = costs.filter((usd) => usd !== null)
+    return {
+        runs,
+        failed,
+        rate: runs === 0 ? null : failed / runs,
+        failedUsd: priced.length === 0 ? null : priced.reduce((sum, usd) => sum + usd, 0),
+    }
+}
+
 /**
  * A day's bar on hover: its date, its failed and ended runs, and each kind that failed, by the legend's names:
  * `Oct 7: 3 failed of 12 ended, overseer 1, workers 2`.

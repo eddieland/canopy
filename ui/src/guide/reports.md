@@ -5,11 +5,16 @@ dollar and token here is what the agent runtime reported, so if a runtime under-
 mirror, not an audit. Beside them, the checklist page counts how workers answered your checklists, item by item, the
 CI page says which checks fail, and the Reviews page says who reviews canopy's PRs and how soon.
 
+Every report keeps its window in the same place, at the top right beside its title, so changing it from the bottom of
+a long page is one scroll up rather than a hunt. A column name with a dotted underline has more to say about what it
+counts: hover it, tab to it, or tap it. A chart's numbers are under it too, folded: **Show 7 days as a table** opens
+them, and a screen reader reads them whether or not you do.
+
 ## The reports page
 
 [Reports](/reports) puts the calendar months side by side, a year of them by default; **6 months** and **24 months**
-narrow or widen it. A month runs midnight to midnight on the clock of the machine canopy runs on, like the spend
-page's days. The line under the title is the month so far: what it cost, the tickets it landed, and its PRs.
+in the header narrow or widen it. A month runs midnight to midnight on the clock of the machine canopy runs on, like
+the spend page's days. The line under the title is the month so far: what it cost, the tickets it landed, and its PRs.
 
 **Month by month** is the bill, the whole of it: canopy's runs and the sessions outside canopy alike, so a month you
 spent pairing with an agent by hand doesn't pass for a cheap one. For each month: what it **spent**, with a bar against
@@ -35,9 +40,9 @@ every run cold.
   ticket's first worker run that ended done stands in for ready. A ticket nobody reviewed has none, and isn't counted.
 
 Both are GitHub's own times wherever canopy has them, and a proxy only where it doesn't: an older PR, read before
-canopy kept them, is never filled in after the fact. Hover a median for how many of its tickets ran on GitHub's clock,
-and a ticket's figure under **Landed** for which clock it ran on. A month of mostly proxies reads a little slow, by a
-tick here and a worker's wrap-up there.
+canopy kept them, is never filled in after the fact. Hover or tap a median for how many of its tickets ran on GitHub's
+clock, and a ticket's figure under **Landed** for which clock it ran on. A month of mostly proxies reads a little slow,
+by a tick here and a worker's wrap-up there.
 
 Click a month to see it in detail below; the page opens on the latest.
 
@@ -91,7 +96,8 @@ Each split has one name everywhere on the page, in the totals, the chart's legen
 the overseer spent, idle ticks included, as `canopy spend` counts it, and **idle ticks** is the part of it that went
 on deciding there was nothing to do. Hover a name for what it counts.
 
-**By day** stacks each day's spend by the same split, with a table under it that also counts the tickets done that day.
+**By day** stacks each day's spend by the same split, with a table folded under it that also counts the tickets done
+that day.
 A day runs midnight to midnight on the clock of the machine canopy runs on, so your evening's work lands on today and
 not on a UTC tomorrow. The dearest day has its total printed over its bar, so you can read the scale without hovering;
 hover any bar for that day's figures. A day that cost nothing is a flat line on the baseline, not a gap. Idle ticks sit
@@ -175,15 +181,17 @@ counts every item of a run it gave a list to, pushed or not, and errs toward too
 Why a worker held an item is its own words, so it stays on the run rather than here: the [run's page](runs#a-runs-page)
 shows it, and `canopy show run:ID` prints it, or `task:N` for a task's. Pick **7 days**, **14 days**, or **30 days** in
 the header; a day runs midnight to midnight on canopy's clock, as the spend page's do. Two weeks is the measurement the
-checklist was built to take. With lists in more than one repository, the picker beside it narrows the table to the ones
-you choose. With no list answered in the window, the page says so, and names `paths.checklists`, where the lists live.
+checklist was built to take. With lists in more than one repository, the picker in **By item**'s header narrows the
+table to the ones you choose. With no list answered in the window, the page says so, and names `paths.checklists`,
+where the lists live.
 
 ## The health page
 
 The health page, **Health** under [Reports](/reports) in the nav, is `canopy health` with a chart: how the runs of the
 last **7 days** or **30 days** ended, the failures among them, and what the guards refused. A day runs midnight to
 midnight on the clock of the machine canopy runs on, as on the spend page, and a run counts on the day it started. The
-line under the title is the window at a glance, `3 of 140 runs failed over 7 days`.
+line under the title is the window at a glance, `3 of 140 runs failed over 7 days`, and the figures under it are its
+headline: the runs that ended, how many failed, their share, and what the failures cost.
 
 A failure is a run that didn't do what it was started for: a tick that didn't close `ok`, or a run that ended
 `failed`, `unknown`, `unpushed`, `crashed`, or `timeout`. A worker that stopped to ask you a question did its job, and
@@ -193,9 +201,9 @@ so did one you stopped yourself. Neither counts, however much the question annoy
   cost. A tick's sort is `live`, `dry run`, or `no overseer`; a worker's is its run kind; a chore's is its name. A
   failed ending is in red. Under it, which runs reported no cost, so a gap in the dollars never passes for a cheap week.
 - **Failures by day**: a bar per day of the failed runs, stacked by kind in the spend page's colors, so a kind is one
-  color across Reports. Hover a bar for that day's failures of each kind out of the runs that ended. The table under it
-  holds the same numbers, with each day's ended runs beside its failures, because three failures out of four runs and
-  three out of three hundred are different afternoons.
+  color across Reports. Hover a bar for that day's failures of each kind out of the runs that ended. The table folded
+  under it holds the same numbers, with each day's ended runs beside its failures, because three failures out of four
+  runs and three out of three hundred are different afternoons.
 - **Newest failures**: the latest twenty, each with how it ended, its id to open (`tick:`, `run:`, `chore:`,
   `review:`, or `task:`), what it was about, its sort, the note it left, what it cost, and when it started. The note is
   the harness's word on what went wrong, or else the agent's summary, cut to a line; open the run for the rest.
@@ -210,7 +218,8 @@ The CI page, **CI** under [Reports](/reports) in the nav, says which checks fail
 cost, and whether rerunning the flaky ones worked, over the last **7 days** or **30 days**. A check run counts on the
 day a source first saw it finish, on the clock of the machine canopy runs on. The line under the title is the window
 at a glance, `71% of PR heads green first time · 4 flaky kicks over 7 days`: a head is green first time when the
-first run of every check on it passed, before anyone reran anything.
+first run of every check on it passed, before anyone reran anything. The figures under it are the window's headline:
+the PR heads checked, the share green first time, the red runs, and the fix-CI resumes.
 
 Red means `failure`, `error`, `timed_out`, or `startup_failure`; green means `success`. `cancelled`, `skipped`,
 `neutral`, `stale`, and `action_required` count as neither, so a check you cancelled never passes for one that broke.
@@ -219,7 +228,7 @@ Red means `failure`, `error`, `timed_out`, or `startup_failure`; green means `su
   green), and how often the next run on a new head of the same PR passed after a red one. A rerun on the same head is
   not a new head, which is the point: it tells a fix from a retry.
 - **Red checks by day**: a bar per day of the red runs, a color per check for the few most often red and the rest
-  summed as `other`. Hover a bar for that day's checks; the table under it holds the same numbers.
+  summed as `other`. Hover a bar for that day's checks; the table folded under it holds the same numbers.
 - **Fix-CI resumes**: each resume for `ci` (and each old `fix-ci`), with how it ended, what it cost, and the checks
   red on its PR when it started, each with how its first run on the next head went: `green`, `red`, or `not yet`. That
   is the only red-to-green rate the journal can give, and the panel's header sums it.
@@ -247,8 +256,8 @@ than the PR's author, bots left out. canopy posts as you, so its own replies nev
 - **First reviews by day**: how long each PR waited for its first review, on GitHub's clock: from the first review
   asked for once the PR was ready, or from ready if nobody was asked, to the first review after that. Each bar is a day
   of first reviews, stacked by wait (under an hour, up to four, up to a day, longer); hover it for the day's median,
-  and the table under it holds the same numbers. A PR canopy read before it kept GitHub's times, or one still a draft,
-  has no start, so its reviews are counted apart and say so, rather than drag the median somewhere imaginary.
+  and the table folded under it holds the same numbers. A PR canopy read before it kept GitHub's times, or one still a
+  draft, has no start, so its reviews are counted apart and say so, rather than drag the median somewhere imaginary.
 - **Who reviews**: each reviewer with their reviews, the ones that asked for changes, comments, the PRs they
   reviewed, and their median wait from a PR's start to their own first review of it. A reviewer in
   `trust.trusted_reviewers` is marked **trusted**: a worker acts on their feedback without asking you.

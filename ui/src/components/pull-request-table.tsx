@@ -5,6 +5,7 @@ import { PanelScroll } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { Hinted, Tipped } from '@/components/tip'
 import { phaseMeaning } from '@/lib/meanings'
 import { cn } from '@/lib/utils'
 import { NO_TICKET } from '@/lib/words'
@@ -29,11 +30,11 @@ export interface PullRequestColumn<T> {
     key: string
     /** Its head. */
     label: string
-    /** What it counts, on its head's hover. */
+    /** What it counts, in its head's tip. */
     hint?: string
     /** A row's figure. */
     cell: (row: T) => ReactNode
-    /** A row's figure on hover, where the figure sums or cuts something. */
+    /** A row's figure in its tip, where the figure sums or cuts something. */
     title?: (row: T) => string
     /** Whether the cell is muted, as a secondary figure is. */
     muted?: boolean
@@ -64,12 +65,8 @@ export function PullRequestTable<T extends PullRequestRow>({
                         <th className="panel-label pb-1.5 text-left font-normal">pull request</th>
                         <th className="panel-label pb-1.5 pl-3 text-left font-normal">ticket</th>
                         {columns.map((column) => (
-                            <th
-                                key={column.key}
-                                className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap"
-                                title={column.hint}
-                            >
-                                {column.label}
+                            <th key={column.key} className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
+                                <Hinted hint={column.hint}>{column.label}</Hinted>
                             </th>
                         ))}
                     </tr>
@@ -100,9 +97,8 @@ export function PullRequestTable<T extends PullRequestRow>({
                                 <td
                                     key={column.key}
                                     className={cn('readout pl-3', column.muted === true && 'text-muted-foreground')}
-                                    title={column.title?.(pr)}
                                 >
-                                    {column.cell(pr)}
+                                    <Tipped fact={column.title?.(pr)}>{column.cell(pr)}</Tipped>
                                 </td>
                             ))}
                         </tr>

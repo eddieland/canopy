@@ -11,6 +11,7 @@ import type {
     ReviewsRound,
 } from '@/api/types'
 import { Age } from '@/components/age'
+import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
@@ -19,8 +20,10 @@ import type { PullRequestColumn } from '@/components/pull-request-table'
 import { RunLink } from '@/components/run-link'
 import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { Clipped, Hinted } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
 import { useClock } from '@/lib/clock'
+import { counted } from '@/lib/descriptions'
 import { hoursText } from '@/lib/reports'
 import { windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
@@ -53,6 +56,9 @@ const HELP = [
     LIMITS_TEXT,
 ].join(' ')
 
+// What the reviewer table's median wait counts, in its name's tip.
+const WAIT_HINT = 'From when each PR began waiting on a review to their first review of it, the median'
+
 // What a trusted reviewer's chip means, on its hover.
 const TRUSTED_MEANING = 'In trust.trusted_reviewers: a worker addresses their feedback unasked'
 
@@ -81,11 +87,10 @@ function ReviewsPage() {
     const failed = data === undefined && query.error !== null
     return (
         <>
-            <PageHeader title="Reviews" help={HELP}>
-                {data === undefined ? (query.isPending ? 'reading the reviews' : null) : reviewsLine(data)}
-            </PageHeader>
-            <Panel data-testid="reviews-waits">
-                <PanelHeader label="First reviews by day">
+            <PageHeader
+                title="Reviews"
+                help={HELP}
+                controls={
                     <WindowToggle
                         windows={REVIEWS_WINDOWS}
                         shown={shown}
@@ -96,7 +101,12 @@ function ReviewsPage() {
                             })
                         }}
                     />
-                </PanelHeader>
+                }
+            >
+                {data === undefined ? (query.isPending ? 'reading the reviews' : null) : reviewsLine(data)}
+            </PageHeader>
+            <Panel data-testid="reviews-waits">
+                <PanelHeader label="First reviews by day" />
                 {data === undefined ? (
                     <PanelLoading query={query} className="min-h-72" />
                 ) : (
@@ -175,13 +185,17 @@ function Waits({ found, span }: { found: ReviewsReport; span: string }) {
                     {/* Measured afresh for each window: another count of bars is another pitch. */}
                     <DayChart key={found.per_day.length} bars={reviewsBars(found.per_day, clock)} testId="reviews" />
                     <DayChartLegend series={WAIT_SERIES} testId="reviews" />
-                    <PanelScroll label="First reviews by day" className="max-h-60 overflow-x-auto">
+                    <ChartTable
+                        what={counted(found.per_day.length, 'day')}
+                        label="First reviews by day"
+                        className="max-h-60 overflow-x-auto"
+                    >
                         <table className="w-full border-collapse text-sm" data-testid="reviews-table">
                             <thead className="sticky top-0 bg-surface">
                                 <tr className="text-right">
                                     <th className="panel-label pb-1.5 text-left font-normal">day</th>
                                     {WAIT_SERIES.map((s) => (
-                                        <th key={s.key} className="panel-label pb-1.5 pl-3 font-normal" title={s.hint}>
+                                        <th key={s.key} className="panel-label pb-1.5 pl-3 font-normal">
                                             {s.label}
                                         </th>
                                     ))}
@@ -208,7 +222,7 @@ function Waits({ found, span }: { found: ReviewsReport; span: string }) {
                                 ))}
                             </tbody>
                         </table>
-                    </PanelScroll>
+                    </ChartTable>
                 </>
             )}
             <p className="text-xs text-muted-foreground" data-testid="reviews-limits">
@@ -229,7 +243,7 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
     }
     return (
         <PanelScroll label="Who reviews" className="max-h-96 overflow-x-auto px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="reviews-reviewer-table">
+            <table className="border-collapse text-sm" data-testid="reviews-reviewer-table">
                 <thead className={PADDED_HEAD}>
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">reviewer</th>
@@ -237,11 +251,8 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
                         <th className="panel-label pb-1.5 pl-3 font-normal">changes</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">comments</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">PRs</th>
-                        <th
-                            className="panel-label pb-1.5 pl-3 font-normal"
-                            title="From when each PR began waiting on a review to their first review of it, the median"
-                        >
-                            median wait
+                        <th className="panel-label pb-1.5 pl-3 font-normal">
+                            <Hinted hint={WAIT_HINT}>median wait</Hinted>
                         </th>
                     </tr>
                 </thead>
@@ -250,9 +261,7 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
                         <tr key={r.author} className="text-right" data-testid="reviews-reviewer">
                             <th scope="row" className="py-0.5 text-left font-normal">
                                 <span className="flex min-w-0 items-center gap-2">
-                                    <span className="truncate font-mono" title={r.author}>
-                                        {r.author}
-                                    </span>
+                                    <Clipped text={r.author} mono className="font-mono" />
                                     {r.trusted && (
                                         <Word
                                             word="trusted"
@@ -393,7 +402,7 @@ function CanopyReviewer({ found, span }: { found: ReviewsReport; span: string })
                         {found.review_runs.map((r) => (
                             <tr key={`${r.purpose}:${r.status}`} className="text-right" data-testid="reviews-run">
                                 <th scope="row" className="py-0.5 text-left font-normal">
-                                    <span title={PURPOSE_HINT[r.purpose]}>{r.purpose}</span>
+                                    <Hinted hint={PURPOSE_HINT[r.purpose]}>{r.purpose}</Hinted>
                                 </th>
                                 <td className="pl-3 text-left text-muted-foreground">
                                     <Word word={r.status} />
