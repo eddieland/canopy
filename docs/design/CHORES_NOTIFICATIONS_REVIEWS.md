@@ -385,10 +385,10 @@ reviewer's prompt names that branch; a PR it has not read falls back to the pool
 at lines the operator confirmed, or known clean. Each is reviewed as a PR's first review, in the persona and on the
 model named; a finding within a few lines of a confirmed one finds the bug, and every finding on a clean case is a false
 alarm. The score, with digests of the prompt and persona and the model, is saved in the state directory and gates
-nothing. The journal holds nothing of an eval, so none reaches a worker, a draft, or the attention list. A case
-authorizes a review as `review.query` does, so only the operator runs one, never in a tick or a run, and a case the
-review guards refuse is skipped, not scored. Rejected: review runs for an eval, which would count against PRs' limits
-and make drafts.
+nothing; `canopy status` says when no saved score is of the reviewer as config has it now. The journal holds nothing of
+an eval, so none reaches a worker, a draft, or the attention list. A case authorizes a review as `review.query` does, so
+only the operator runs one, never in a tick or a run, and a case the review guards refuse is skipped, not scored.
+Rejected: review runs for an eval, which would count against PRs' limits and make drafts.
 
 ### Open
 

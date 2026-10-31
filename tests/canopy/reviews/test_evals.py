@@ -17,6 +17,7 @@ import pytest
 
 from canopy.core import records, sql
 from canopy.core.context import Context
+from canopy.infra import resources
 from canopy.reviews import evals
 from tests.canopy.helpers import agent_runs, listed, personas_dir, pool_statuses, told
 from tests.canopy.review_helpers import CLEAN, PR, REPORT, THEIRS, feature_commit, head, reviewer_reports
@@ -255,3 +256,50 @@ def test_only_the_operator_runs_an_eval(scenario: Scenario, commits: tuple[str, 
     assert agent_runs(agent_log) == []
     rows = records.fetch_all(scenario.conn, records.ReviewRun, sql.select("*").from_("review_runs"))
     assert rows == []
+
+
+def test_status_says_when_no_score_is_of_the_reviewer_as_configured_now(
+    scenario: Scenario,
+    commits: tuple[str, str],
+    opencode_state: Path,
+) -> None:
+    def said() -> list[str]:
+        return [line for line in scenario.operator("status").out.splitlines() if line.startswith("Review eval:")]
+
+    assert said() == []
+    sha, base = commits
+    cases(scenario, case("retry", sha, base, "retry.py:1"))
+    assert said() == ["Review eval: the reviewer has no score on your cases yet; run `canopy review eval` to score it."]
+    # An eval that scores no case is no score.
+    with reviewer_reports("no result line"):
+        scenario.operator("review", "eval")
+    assert len(said()) == 1
+    with reviewer_reports(CLEAN):
+        scenario.operator("review", "eval")
+    assert said() == []
+    newest = saved(scenario.env)["started_at"][:10]
+
+    (personas_dir(scenario.env) / "terse.md").write_text("Be terse.\n")
+    scenario.configures(personas={"reviewer": "terse"}, runtime={"models": {"reviewer": MODEL}})
+    overrides = scenario.env.user_file.parent / "prompts"
+    overrides.mkdir(exist_ok=True)
+    (overrides / "reviewer.md").write_text((resources.prompts_dir() / "reviewer.md").read_text() + "\nBe kind.\n")
+    assert said() == [
+        (
+            f"Review eval: the reviewer's prompt, persona and model changed since its newest score, {newest}; "
+            "run `canopy review eval` to score it."
+        ),
+    ]
+    # An eval of something else scores nothing that runs now; one of what runs now does.
+    listed(opencode_state, MODEL, "acme/another-model")
+    with reviewer_reports(CLEAN):
+        scenario.operator("review", "eval", "--model", "acme/another-model")
+    assert said() == [
+        (
+            f"Review eval: the reviewer's model changed since its newest score, {newest}; "
+            "run `canopy review eval` to score it."
+        ),
+    ]
+    with reviewer_reports(CLEAN):
+        scenario.operator("review", "eval")
+    assert said() == []

@@ -13,7 +13,8 @@ end, or `resume` comes of it, and nothing the loop reads changes. Its slot is le
 leaves alone, and the eval returns it, or the next eval does if this one died holding it. Each case starts under the
 guards that hold any review's start (`start.check_room`), though the loop does not count the eval among its running
 reviews. The score is written to `<state_dir>/review-evals/`, with digests of the prompt and the persona and the model,
-so two evals can be compared. It gates nothing.
+so two evals can be compared. It gates nothing; `canopy status` says when no saved score is of the reviewer as config
+has it now (`unscored`).
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import operator
 import os
 import shutil
 from collections import Counter
@@ -28,6 +30,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
+
+from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr, ValidationError
 
 from canopy.core import agent_models, config, definitions, hostgit, personas, pools, prompts
 from canopy.core import review_result as result
@@ -61,6 +65,35 @@ SEVERITIES = ("blocking", "major", "minor")
 #: The status of a case no review started for: a guard refused it, or its slot could not be leased.
 REFUSED = "refused"
 _GIT_TIMEOUT_SECONDS = 300
+
+
+class _Digest(BaseModel):
+    """A saved eval's prompt or persona, by the digest it ran with."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    digest: StrictStr
+
+
+class _Count(BaseModel):
+    """A saved eval's recall or false alarms, by how many cases of the kind it scored."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    of: StrictInt
+
+
+class _Saved(BaseModel):
+    """What `unscored` reads of a saved eval: when it started, what it ran with, and whether it scored any case."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    started_at: StrictStr
+    prompt: _Digest
+    persona: _Digest
+    model: StrictStr | None
+    recall: _Count
+    false_alarms: _Count
 
 
 class EvalError(Exception):
@@ -183,13 +216,10 @@ def prepare(ctx: Context, *, names: Sequence[str] = (), persona: str | None = No
     except personas.PersonaError as e:
         raise EvalError(f"{e.guard}: {e.reason}") from e
     name, models = _model(ctx, model)
-    path = prompts.prompt_path(cfg, prompts.REVIEWER)
     try:
-        text = path.read_text(encoding="utf-8")
-        instructions = prompts.reviewer_instructions(cfg)
+        path, digest = _prompt(cfg)
     except (OSError, UnicodeDecodeError, prompts.PromptError) as e:
         raise EvalError(f"the reviewer's prompt cannot be read: {e}") from e
-    digest = hashlib.sha256(f"{text}\0{instructions}".encode()).hexdigest()
     setup = Setup(path, digest, chosen, name, models, cases)
     try:
         # Rendered once now, so a prompt that cannot be used refuses the eval rather than every case.
@@ -310,6 +340,75 @@ def lines(done: Eval) -> list[str]:
         "",
         f"Recall: {found} of {bugs} bug cases. False alarms: {alarmed} of {clean} clean cases, {severities}.{cost}",
     ]
+
+
+def unscored(ctx: Context) -> str | None:
+    """Say that the reviewer as config has it now has no score on the operator's cases, for `canopy status`.
+
+    A saved eval scores the reviewer when it ran with the prompt, standing instructions, persona, and model a review
+    gets now, and scored at least one case. The model is config's as written, unchecked against the runtime's list, so
+    reading this runs nothing.
+
+    Returns:
+        A line naming what changed since the newest score, or that there is none yet; None when a saved eval scores the
+        reviewer now, when there are no cases, or when its prompt or persona cannot be read, which an eval would say.
+    """
+    cfg = ctx.config
+    if not cfg.review.eval_cases:
+        return None
+    try:
+        _, digest = _prompt(cfg)
+        persona = personas.chosen(cfg, "reviewer").digest
+    except (OSError, UnicodeDecodeError, prompts.PromptError, personas.PersonaError):
+        return None
+    chosen = agent_models.of_template(cfg.runtime.models, cfg.runtime.review_cmd)
+    now = (digest, persona, chosen.name if chosen is not None else None)
+    scores = _scores(ctx.state_dir / EVALS_DIR)
+    if any((s.prompt.digest, s.persona.digest, s.model) == now for s in scores):
+        return None
+    run = "run `canopy review eval` to score it"
+    if not scores:
+        return f"Review eval: the reviewer has no score on your cases yet; {run}."
+    newest = scores[-1]
+    ran = (newest.prompt.digest, newest.persona.digest, newest.model)
+    changed = [what for what, old, new in zip(("prompt", "persona", "model"), ran, now, strict=True) if old != new]
+    words = ", ".join(changed[:-1]) + f" and {changed[-1]}" if len(changed) > 1 else changed[0]
+    return f"Review eval: the reviewer's {words} changed since its newest score, {newest.started_at[:10]}; {run}."
+
+
+def _prompt(cfg: config.Config) -> tuple[Path, str]:
+    """The reviewer's prompt file, and the digest of its text with the operator's standing instructions to reviewers.
+
+    Returns:
+        The file, the operator's override or canopy's, and the sha256 in hex.
+
+    Raises:
+        OSError: The prompt cannot be read.
+        UnicodeDecodeError: The prompt is not UTF-8.
+        prompts.PromptError: The standing instructions cannot be used.
+    """
+    path = prompts.prompt_path(cfg, prompts.REVIEWER)
+    text = path.read_text(encoding="utf-8")
+    instructions = prompts.reviewer_instructions(cfg)
+    return path, hashlib.sha256(f"{text}\0{instructions}".encode()).hexdigest()
+
+
+def _scores(where: Path) -> list[_Saved]:
+    """The evals saved in `where` that scored at least one case, oldest first, skipping a file not read as one.
+
+    Returns:
+        The evals, by when each started, then by when it was saved, since two can start in the same second.
+    """
+    found: list[tuple[str, int, _Saved]] = []
+    for path in where.glob("*.json"):
+        try:
+            saved = _Saved.model_validate_json(path.read_bytes())
+            written = path.stat().st_mtime_ns
+        except (OSError, ValidationError):
+            continue
+        if saved.recall.of + saved.false_alarms.of:
+            found.append((saved.started_at, written, saved))
+    return [saved for _, _, saved in sorted(found, key=operator.itemgetter(0, 1))]
 
 
 def _chosen_cases(cases: Sequence[EvalCase], names: Sequence[str]) -> list[EvalCase]:
