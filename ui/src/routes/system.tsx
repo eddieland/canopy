@@ -434,7 +434,7 @@ function Machine({ host }: { host: HostResources }) {
                     {host.python}
                 </Field>
                 <Field label="canopy" mono>
-                    {version ?? '–'}
+                    <span data-testid="host-version">{version ?? '–'}</span>
                 </Field>
             </Fields>
         </Panel>

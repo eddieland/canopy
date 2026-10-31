@@ -10,8 +10,11 @@
     font-size: var(--text-2xs);
 }
 
-/* The config files' paths are under the mock's temporary directory, so they change with every run, not the page. */
+/* The config files' and a missing plan's paths are under the mock's temporary directory, and the system page's version
+ * names the commit, so they change with every run, not the page. */
 [data-testid='config-private-file'],
-[data-testid='config-models-file'] {
+[data-testid='config-models-file'],
+[data-testid='feedback-plan-path'],
+[data-testid='host-version'] {
     visibility: hidden;
 }

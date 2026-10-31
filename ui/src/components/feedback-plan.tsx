@@ -97,7 +97,8 @@ export function FeedbackPlanPanel({ plan, onChange }: { plan: FeedbackPlan; onCh
             {open ? <Approve key={plan.id} plan={plan} onChange={onChange} /> : <ItemRows items={plan.items} />}
             {plan.text === null ? (
                 <p className="border-t px-3 py-1.5 text-xs text-muted-foreground" data-testid="feedback-plan-no-file">
-                    Its file is {plan.problem ?? 'unreadable'}: {plan.path}
+                    Its file is {plan.problem ?? 'unreadable'}:{' '}
+                    <span data-testid="feedback-plan-path">{plan.path}</span>
                 </p>
             ) : (
                 <Collapsible open={shown} onOpenChange={setShown} className="border-t">
