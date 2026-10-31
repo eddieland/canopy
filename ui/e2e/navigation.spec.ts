@@ -411,7 +411,10 @@ test("a ticket's reply is the first stop after its conversation, and Stop and Fo
         }
     }
     await expect(panel.getByRole('textbox', { name: 'Reply to message 5' })).toBeFocused()
-    // The send button waits for something to send, so the next stop is the ticket's first verb.
+    // Its formatting is one stop under it, and the send button waits for something to send, so the next stop after
+    // that is the ticket's first verb.
+    await page.keyboard.press('Tab')
+    await expect(panel.getByRole('toolbar', { name: 'Formatting' }).getByRole('button').first()).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(page.getByTestId('ticket-actions').getByRole('button').first()).toBeFocused()
 })
