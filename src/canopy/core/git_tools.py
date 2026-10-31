@@ -6,17 +6,19 @@ named on its command line by the harness, never by the agent: the review's check
 desk.
 
 Every argument is checked before git sees it: a revision is plain revision syntax, never an option, a range, or a path;
-a path is relative, inside the repository, and never an option; text to search for is printable and passed joined to
-its option, or after `-e`; each revision must name a commit there. git then runs through `procs` with nothing it would
+a path is relative, inside the repository, and never an option; text to search for is printable, and passed joined to
+its option or after `-e`, as is `grep`'s regular expression, which holds only syntax every git reads alike; each
+revision must name a commit there. git then runs through `procs` with nothing it would
 run unasked: no hooks, filesystem monitor, external diff, textconv, pager, signature check, replace refs, submodule, or
 transport, so not the lazy fetch a promisor remote in the repository's config could ask for. The server drops every
 `GIT_*` variable it inherits, and system config is skipped. Every read is of commits, never the working tree, so no
 clean filter runs. What a call returns is cut at `MAX_CHARS`, every hidden character named, as the PR's own text is
 untrusted.
 
-`log` answers with records, `Commits`, which its tool lists as its output schema and returns as structured content and,
-since the runtime shows the model only a tool's text, as JSON in its text: no commit's message or path can pass for
-another commit, or for a field. The rest answer with git's text.
+`log` and `grep` answer with records, `Commits` and `Matches`, which each tool lists as its output schema and returns as
+structured content and, since the runtime shows the model only a tool's text, as JSON in its text: no commit's message
+or path can pass for another commit, no line or path for another file's line, and none for a field. git prints `grep`'s
+fields apart with NUL (`-z`), which no path, and no line of a text file, holds. The rest answer with git's text.
 """
 
 from __future__ import annotations
@@ -65,6 +67,14 @@ MAX_LIMIT = 100
 MAX_SEARCH_CHARS = 200
 #: The most lines one `blame` reads.
 MAX_BLAME_LINES = 400
+#: How many matching lines `grep` lists unless asked for another number, and the most it may ask for: or with `count`,
+#: how many files.
+DEFAULT_GREP_LIMIT = 100
+MAX_GREP_LIMIT = 500
+#: The most lines of context `grep` lists before and after each matching line.
+MAX_CONTEXT = 10
+#: The longest line `grep` lists whole; one past it is cut, and says so, as a minified file's single line would be.
+MAX_LINE_CHARS = 500
 #: How long one git command may take.
 TIMEOUT_SECONDS = 60
 #: A commit's full id, as `log` reads one: SHA-1's or SHA-256's.
@@ -194,12 +204,40 @@ def _text(value: str) -> str:
     return value
 
 
+def _portable(pattern: str) -> None:
+    """Refuse a regular expression git's regex libraries read differently, or not at all, from one machine to another.
+
+    POSIX's extended syntax is read alike everywhere; its extensions are not: glibc reads a backslashed `w` as a word
+    character, where another regex library need not, and the same search would find less there and say nothing of it.
+    So a backslash goes only before punctuation, and there is no `(?` group or lazy quantifier, which are Perl's.
+
+    Raises:
+        ValueError: It holds what is not portable, saying what to write instead.
+    """
+    at = 0
+    while at < len(pattern):
+        here, after = pattern[at], pattern[at + 1 : at + 2]
+        if here == "\\" and (not after or after.isalnum()):
+            raise ValueError(_NOT_PORTABLE)
+        if (here == "(" and after == "?") or (here in "*+?}" and after == "?"):
+            raise ValueError(_NOT_PORTABLE)
+        at += 2 if here == "\\" else 1
+
+
+#: What `grep` says of a regular expression `_portable` refuses.
+_NOT_PORTABLE = (
+    "regex is POSIX extended, read alike by every git: write [0-9] for \\d, [[:alnum:]_] for \\w, [[:space:]] for "
+    "\\s, and set word for \\b; a backslash goes only before punctuation, as \\. or \\(, and there is no "
+    "backreference, (? group, or lazy *?"
+)
+
+
 #: A revision, checked to be one before git sees it.
 Revision = Annotated[StrictStr, AfterValidator(_revision)]
 #: A path in the repository, checked to stay inside it.
 RepoPath = Annotated[StrictStr, Field(max_length=MAX_PATH_CHARS), AfterValidator(_path)]
-#: Text `log` and `grep` search for, as written: never a pattern, and passed joined to its option or after `-e`, so
-#: never one itself.
+#: Text `log` and `grep` search for, as written but for `grep`'s regular expression, and passed joined to its option
+#: or after `-e`, so never an option itself.
 SearchText = Annotated[StrictStr, Field(min_length=1, max_length=MAX_SEARCH_CHARS), AfterValidator(_text)]
 
 
@@ -347,19 +385,87 @@ class Blame(Request):
 
 
 class Grep(Request):
-    """`grep`: the lines of the files at one commit that hold a text."""
+    """`grep`: the lines of the files at one commit that hold a text, or match a regular expression."""
 
     #: The commit whose files to search.
     rev: Annotated[Revision, Field(description="The commit whose files to search, such as the merge base or HEAD.")]
     #: The text to find.
-    text: Annotated[SearchText, Field(description="The exact text to find, as written: never a pattern.")]
+    text: Annotated[
+        SearchText,
+        Field(description="The text to find, on one line: as written, or with regex a regular expression."),
+    ]
+    #: Whether the text is a regular expression.
+    regex: Annotated[
+        StrictBool,
+        Field(
+            description="Read text as a POSIX extended regular expression, as `git grep -E` does: `a|b` for either, "
+            "`( )`, `[ ]` with classes such as `[[:space:]]`, `.`, `*`, `+`, `?`, `{n,m}`, `^`, and `$`. No `\\d`, "
+            "`\\w`, `\\s`, `\\b`, backreference, `(?` group, or lazy `*?`: write `[0-9]`, `[[:alnum:]_]`, "
+            "`[[:space:]]`, or set word. A backslash goes only before punctuation, such as `\\.` or `\\(`.",
+        ),
+    ] = False
+    #: Whether only whole words match.
+    word: Annotated[
+        StrictBool,
+        Field(
+            description="Match only whole words: no letter, digit, or `_` just before or after, so `retry` finds "
+            "`retry()` but not `retry_count`.",
+        ),
+    ] = False
+    #: Whether case is ignored.
+    ignore_case: Annotated[StrictBool, Field(description="Match the text whatever its case.")] = False
     #: Only these paths.
     paths: Annotated[
         Sequence[RepoPath],
         Field(max_length=MAX_PATHS, description="Only files under these paths, relative to the repository's root."),
     ] = ()
-    #: Whether case is ignored.
-    ignore_case: Annotated[StrictBool, Field(description="Match the text whatever its case.")] = False
+    #: Only files whose own name matches this.
+    name: Annotated[
+        SearchText | None,
+        Field(
+            description="Only files whose own name, not its directory, matches this: a name, or a glob such as "
+            "`*.py` or `test_*`, case sensitive.",
+        ),
+    ] = None
+    #: Lines listed before and after each matching line.
+    context: Annotated[
+        StrictInt,
+        Field(
+            ge=0,
+            le=MAX_CONTEXT,
+            description="List this many lines before and after each matching line, as context: enough to read a call "
+            "or a definition without show.",
+        ),
+    ] = 0
+    #: Each file's count of matching lines, in place of the lines.
+    count: Annotated[
+        StrictBool,
+        Field(
+            description="List each file that matches and how many of its lines do, in place of the lines: a wide "
+            "search's shape, before reading its lines a few paths at a time.",
+        ),
+    ] = False
+    #: The most matching lines, or files, to list.
+    limit: Annotated[
+        StrictInt,
+        Field(ge=1, le=MAX_GREP_LIMIT, description="List at most this many matching lines, or with count files."),
+    ] = DEFAULT_GREP_LIMIT
+    #: How many matching lines, or files, to skip first.
+    offset: Annotated[
+        StrictInt,
+        Field(
+            ge=0,
+            le=10_000_000,
+            description="Skip this many matching lines, or with count files, before listing: the next page, as cut "
+            "says.",
+        ),
+    ] = 0
+
+    @model_validator(mode="after")
+    def _portable_regex(self) -> Self:
+        if self.regex:
+            _portable(self.text)
+        return self
 
 
 class Files(Request):
@@ -445,6 +551,62 @@ class Commits(Result):
     cut: Annotated[
         StrictStr | None,
         Field(description=f"What was left out to fit {MAX_CHARS} characters; null when nothing was."),
+    ]
+
+
+class Line(BaseModel):
+    """One line `grep` lists: a match, or context around one."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    #: Its number.
+    line: Annotated[StrictInt, Field(description="Its number in the file, counting from 1.")]
+    #: Its text.
+    text: Annotated[
+        StrictStr,
+        Field(
+            description=f"Its text, every hidden character named; past {MAX_LINE_CHARS} characters it is cut, and "
+            "says so.",
+        ),
+    ]
+    #: Whether it matches.
+    match: Annotated[StrictBool, Field(description="Whether it matches; false for a line listed as context.")]
+
+
+class Found(BaseModel):
+    """One file `grep` lists, and its lines that it lists."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
+
+    #: Its path.
+    path: Annotated[StrictStr, Field(description="Its path, relative to the repository's root.")]
+    #: How many of its lines match.
+    matched_lines: Annotated[StrictInt, Field(description="How many of its lines match, listed or not.")]
+    #: Its lines listed.
+    lines: Annotated[
+        Sequence[Line],
+        Field(description="Its lines listed, in order, with context around each match if asked; none with count."),
+    ]
+
+
+class Matches(Result):
+    """What `grep` returns: the files whose lines match, by path, and how many match in all."""
+
+    #: The files listed.
+    files: Annotated[Sequence[Found], Field(description="The files listed, by path; none when none match.")]
+    #: How many lines match.
+    matched_lines: Annotated[StrictInt, Field(description="How many lines match, in every file, listed or not.")]
+    #: How many files hold a match.
+    matched_files: Annotated[StrictInt, Field(description="How many files hold a match, listed or not.")]
+    #: Whether more match than are listed.
+    more: Annotated[
+        StrictBool,
+        Field(description="Whether matches are left out after these: past limit, or left out to fit."),
+    ]
+    #: What was left out, and how to list it.
+    cut: Annotated[
+        StrictStr | None,
+        Field(description="What was left out, and the offset that lists the next; null when nothing was."),
     ]
 
 
@@ -602,37 +764,43 @@ def blame(runner: procs.Runner, checkouts: Mapping[str, Path], request: Blame) -
     return _said(_out(done, "blame"))
 
 
-def grep(runner: procs.Runner, checkouts: Mapping[str, Path], request: Grep) -> str:
-    """Find the lines of the files at `request.rev` that hold `request.text`, in `request.paths` if it names any.
+def grep(runner: procs.Runner, checkouts: Mapping[str, Path], request: Grep) -> Matches:
+    """Find the lines of the files at `request.rev` that match `request.text`, in `request.paths` if it names any.
+
+    git counts the matches in each file first, then reads the lines of only the files the page lists, so what it
+    prints is bounded by the page and not by the repository; with context, it reads them again with their context, as
+    git prints a context line as it prints a match under `-z`.
 
     Returns:
-        Each line as `path:number:text`, cut at `MAX_CHARS`, or a line saying there is none. Files that are not text
-        are left out.
+        The files that match, each with its lines listed, or with `request.count` its count alone, at most
+        `request.limit` after `request.offset`, every hidden character named; and how many match in all.
 
     Raises:
-        Refused: The checkout or the revision is unknown, or git failed.
+        Refused: The checkout or the revision is unknown, the regular expression does not compile, the offset is past
+            every match, or git failed.
     """
     where = _checkout(checkouts, request.repo)
     commit = _commit(runner, where, request.rev)
-    # Every setting the repository's config could change is set: the text as written, line numbers, no column, no
-    # submodule. git 2.43's grep takes no `--end-of-options`; the commit is a full id, and the text follows `-e`.
-    args = (
-        "--no-color",
-        "--fixed-strings",
-        "--line-number",
-        "--no-column",
-        "--full-name",
-        "--no-textconv",
-        "--no-recurse-submodules",
-        "-I",
-        *(("--ignore-case",) if request.ignore_case else ()),
-    )
-    done = _git(runner, where, "grep", *args, "-e", request.text, commit, "--", *_paths(request.paths))
-    if done.returncode == 1 and not done.stdout:
-        return f"No file at {request.rev} holds that text, in what was asked."
-    # git names each line's file after the commit it searched, `<commit>:path:number:text`: the commit goes.
-    found = "".join(line.removeprefix(f"{commit}:") for line in _out(done, "grep").splitlines(keepends=True))
-    return _said(found)
+    counts = [
+        (path, n)
+        for path, n in _read_counts(_grep(runner, where, commit, request, "--count"), commit)
+        if request.name is None or _named(path, request.name)
+    ]
+    matched = sum(n for _, n in counts)
+    shown = len(counts) if request.count else matched
+    if request.offset and request.offset >= shown:
+        what = "files hold a match" if request.count else "lines match"
+        raise Refused(f"offset {request.offset} is past the end: {shown} {what}")
+    if request.count:
+        return _counted(counts, request.offset, request.limit, matched=matched)
+    window = _window(counts, request.offset, request.limit)
+    paths = [path for path, *_ in window]
+    found = _read_lines(_grep(runner, where, commit, request, "--line-number", paths=paths), commit) if paths else {}
+    around = found
+    if request.context and paths:
+        context = _grep(runner, where, commit, request, "--line-number", f"--context={request.context}", paths=paths)
+        around = _read_lines(context, commit)
+    return _listed(window, found, around, request, matched=matched, files=len(counts))
 
 
 def files(runner: procs.Runner, checkouts: Mapping[str, Path], request: Files) -> str:
@@ -652,9 +820,240 @@ def files(runner: procs.Runner, checkouts: Mapping[str, Path], request: Files) -
     named = [
         path
         for path in _out(done, "ls-tree").split("\0")
-        if path and (request.name is None or fnmatch.fnmatchcase(PurePosixPath(path).name, request.name))
+        if path and (request.name is None or _named(path, request.name))
     ]
     return _said("\n".join(named)) if named else f"No file at {request.rev} is named so, in what was asked."
+
+
+def _grep(runner: procs.Runner, where: Path, commit: str, request: Grep, *how: str, paths: Sequence[str] = ()) -> str:
+    """Run `git grep` for `request`'s text at `commit`, printing as `how` says, in `paths`, or else `request.paths`.
+
+    Returns:
+        What it printed, NUL between each field (`-z`); empty when nothing matches.
+
+    Raises:
+        Refused: The regular expression does not compile, or git failed.
+    """
+    # Every setting the repository's config could change is set: the syntax, no column, full names, no submodule, and
+    # no textconv. git 2.43's grep takes no `--end-of-options`; the commit is a full id, and the text follows `-e`.
+    args = (
+        "--no-color",
+        "--null",
+        "--no-column",
+        "--full-name",
+        "--no-textconv",
+        "--no-recurse-submodules",
+        "-I",
+        "--extended-regexp" if request.regex else "--fixed-strings",
+        *(("--word-regexp",) if request.word else ()),
+        *(("--ignore-case",) if request.ignore_case else ()),
+        *how,
+    )
+    named = list(paths) if paths else _paths(request.paths)
+    done = _git(runner, where, "grep", *args, "-e", request.text, commit, "--", *named)
+    if done.returncode == 1 and not done.stdout:
+        return ""
+    if request.regex and done.returncode == 128:  # noqa: PLR2004  (git's exit for an expression it cannot compile)
+        said = done.stderr.strip().splitlines()
+        why = visible(said[0].removeprefix("fatal: "))[:300] if said else "git refused it"
+        raise Refused(f"the regular expression does not compile: {why}; without regex, text is found as written")
+    return _out(done, "grep")
+
+
+def _read_counts(out: str, commit: str) -> list[tuple[str, int]]:
+    """Read what `git grep --count -z` printed: each file's path, NUL, and its count of matching lines.
+
+    Returns:
+        Each file's path, as git's tree names it, and its count, in git's order, by path.
+
+    Raises:
+        Refused: git printed what is not in that form.
+    """
+    if not out:
+        return []
+    # `<commit>:path NUL n LF <commit>:path NUL n LF`: split on NUL, each field after the first is a count, a line
+    # break, and the next file's path, which may hold a line break of its own, but never a NUL.
+    fields = out.split("\0")
+    found: list[tuple[str, int]] = []
+    path = fields[0]
+    for field in fields[1:]:
+        n, _, after = field.partition("\n")
+        if not n.isdigit():
+            raise Refused(_UNREAD)
+        found.append((_tree_path(path, commit), int(n)))
+        path = after
+    if path:
+        raise Refused(_UNREAD)
+    return found
+
+
+def _read_lines(out: str, commit: str) -> dict[str, dict[int, str]]:
+    """Read what `git grep --line-number -z` printed: each line's path, NUL, number, NUL, and text.
+
+    A line of a text file holds no NUL where git looks for one, its first 8,000 bytes; one past them would put its
+    fields out of step, and every field is checked for its place, so it is refused, never read as another line.
+
+    Returns:
+        Each file's lines, by number, as git's tree names the file.
+
+    Raises:
+        Refused: git printed what is not in that form.
+    """
+    if not out:
+        return {}
+    # `<commit>:path NUL n NUL text LF`, then the next line's `<commit>:path`, after `--` LF between context's groups:
+    # split on NUL, the fields are the first path, then each line's number and its text, line break, and next path.
+    fields = out.split("\0")
+    if len(fields) % 2 == 0:
+        raise Refused(_UNREAD)
+    found: dict[str, dict[int, str]] = {}
+    path = _tree_path(fields[0], commit)
+    for at in range(1, len(fields), 2):
+        n, (line, broke, after) = fields[at], fields[at + 1].partition("\n")
+        last = at + 2 == len(fields)
+        if not n.isdigit() or not broke or bool(after) == last:
+            raise Refused(_UNREAD)
+        found.setdefault(path, {})[int(n)] = line
+        if not last:
+            path = _tree_path(after if after.startswith(f"{commit}:") else after.removeprefix("--\n"), commit)
+    return found
+
+
+#: What a git tool says of what git printed that is not in the form it reads.
+_UNREAD = "git grep printed what canopy cannot read: name other paths"
+
+
+def _tree_path(field: str, commit: str) -> str:
+    """The path in a field `git grep` printed, after the commit it searched.
+
+    Returns:
+        The path.
+
+    Raises:
+        Refused: The field does not start with the commit.
+    """
+    if not field.startswith(f"{commit}:"):
+        raise Refused(_UNREAD)
+    return field.removeprefix(f"{commit}:")
+
+
+def _named(path: str, name: str) -> bool:
+    """Whether the file at `path` has a name that `name`, a name or a glob, matches.
+
+    Returns:
+        Whether it does, by the file's own name, never its directory.
+    """
+    return fnmatch.fnmatchcase(PurePosixPath(path).name, name)
+
+
+def _counted(counts: Sequence[tuple[str, int]], offset: int, limit: int, *, matched: int) -> Matches:
+    """`grep`'s answer with `count`: each file and its count, at most `limit` after `offset`, as many as fit.
+
+    Returns:
+        The files listed, and what was left out.
+    """
+    budget = MAX_CHARS - 1000  # the fields around the files, and the note on what was cut
+    listed: list[Found] = []
+    used = 0
+    for path, n in counts[offset : offset + limit]:
+        file = Found(path=visible(path), matched_lines=n, lines=[])
+        used += len(file.model_dump_json()) + 1
+        if used > budget:
+            break
+        listed.append(file)
+    after = offset + len(listed)
+    more = after < len(counts)
+    cut = (
+        f"listed files {offset + 1} to {after} of the {len(counts)} that hold a match: offset {after} lists the "
+        "next, or name fewer paths, or a name"
+        if more
+        else None
+    )
+    return Matches(files=listed, matched_lines=matched, matched_files=len(counts), more=more, cut=cut)
+
+
+def _window(counts: Sequence[tuple[str, int]], offset: int, limit: int) -> list[tuple[str, int, int, int]]:
+    """The files that hold the matching lines `offset` to `offset + limit`, counting in path order.
+
+    Returns:
+        Each one's path, the first of its matching lines to list, how many to list, and how many match in it.
+    """
+    window: list[tuple[str, int, int, int]] = []
+    start = 0
+    for path, n in counts:
+        first = max(offset - start, 0)
+        listed = min(n, offset + limit - start) - first
+        if listed > 0:
+            window.append((path, first, listed, n))
+        start += n
+        if start >= offset + limit:
+            break
+    return window
+
+
+def _listed(
+    window: Sequence[tuple[str, int, int, int]],
+    found: Mapping[str, Mapping[int, str]],
+    around: Mapping[str, Mapping[int, str]],
+    request: Grep,
+    *,
+    matched: int,
+    files: int,
+) -> Matches:
+    """`grep`'s answer: the matching lines `window` names, each with its context from `around`, as many as fit.
+
+    A line is listed once, though it is context to two matches, and a line that matches is marked so though it is
+    context to another, listed before the offset or past the limit.
+
+    Returns:
+        The files listed, and what was left out.
+    """
+    budget = MAX_CHARS - 1000  # the fields around the files, and the note on what was cut
+    listed: list[Found] = []
+    used = 0
+    shown = 0
+    full = False
+    for path, first, count, n in window:
+        hits, lines = found.get(path, {}), around.get(path, {})
+        kept: list[Line] = []
+        for number in sorted(hits)[first : first + count]:
+            after = kept[-1].line if kept else 0
+            span = range(max(number - request.context, after + 1), number + request.context + 1)
+            group = [Line(line=k, text=_line_text(lines[k]), match=k in hits) for k in span if k in lines]
+            size = sum(len(line.model_dump_json()) + 1 for line in group)
+            if used + size > budget:
+                full = True
+                break
+            used += size
+            kept += group
+            shown += 1
+        if kept:
+            listed.append(Found(path=visible(path), matched_lines=n, lines=kept))
+            used += len(listed[-1].model_copy(update={"lines": ()}).model_dump_json())
+        if full:
+            break
+    after = request.offset + shown
+    more = after < matched
+    cut = (
+        f"listed matching lines {request.offset + 1} to {after} of {matched}, in {len(listed)} of the {files} files "
+        "that hold one: offset "
+        f"{after} lists the next, or narrow the search with paths, name, or word, or count where they are"
+        if more
+        else None
+    )
+    return Matches(files=listed, matched_lines=matched, matched_files=files, more=more, cut=cut)
+
+
+def _line_text(line: str) -> str:
+    """A line `grep` lists: every hidden character named but its tabs, cut past `MAX_LINE_CHARS`.
+
+    Returns:
+        The text.
+    """
+    shown = _shown(line)
+    if len(shown) <= MAX_LINE_CHARS:
+        return shown
+    return f"{shown[:MAX_LINE_CHARS]} [cut at {MAX_LINE_CHARS} of {len(shown)} characters]"
 
 
 def _read_log(out: str) -> list[Commit]:
