@@ -255,6 +255,13 @@ export const TIPS = {
         'Hot take: a clean worktree is just a worktree nobody has used yet.',
         'Did you know? Every worktree gets its own copy of the bugs. Fair is fair.',
     ],
+    '/components': [
+        "It looks like you're looking at buttons. Would you like me to press one? I can't. No hands.",
+        'Unhelpful tip: every chip here is a different color, and none of them is green. I asked.',
+        'Fun fact: this page has every button canopy owns. Not one of them waters a plant.',
+        'Dear diary, typed **bold** into the field and it was bold. Finally, someone listens.',
+        'Hot take: a component library is a junk drawer with good lighting.',
+    ],
     '/plan-editor': [
         'It looks like you\'re writing a plan. Would you like me to add a step called "wing it"?',
         'Unhelpful tip: nothing here is saved, so write your boldest plans. Nobody will ever know.',

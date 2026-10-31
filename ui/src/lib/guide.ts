@@ -126,7 +126,8 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
 /**
  * The guide's page about each page of the app, by its route id, as a link in the guide names it (`runs#a-runs-page`):
  * what the book in a page's header opens. Every route is here but those with no page of their own (the root and the
- * redirects) and the guide's, so a new route fails the type check until it names one; a test fails on a page or a
+ * redirects), the guide's, and the components sample, which is for whoever builds the UI rather than the operator
+ * (ui/DESIGN.md, "Primitives"), so a new route fails the type check until it names one; a test fails on a page or a
  * heading the guide lacks.
  */
 export const PAGE_GUIDES = {
@@ -183,6 +184,7 @@ export const PAGE_GUIDES = {
         | '/runs/worktrees'
         | '/guide/'
         | '/guide/$page'
+        | '/components'
     >,
     string
 >

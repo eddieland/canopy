@@ -643,7 +643,9 @@ under a `canopy-*` key of its own, all synced across tabs.
 
 Every list and detail page is built from the same few pieces, so a new page lines up with the others without anyone
 measuring. A page that needs something they do not offer extends them here first; it never builds a row, a field
-list, an empty state, or a skeleton by hand.
+list, an empty state, or a skeleton by hand. The components page (`/components`, over the mock journal alone, linked
+from nowhere) draws each one live in its sizes and states, so a change to one is seen whole there and in its screenshot;
+a primitive a page can show without data of its own adds itself there.
 
 **A layout step inside the content pane is a container query, never a viewport breakpoint** (`@container` on the
 pane's part or its `Panel`, then `@min-[…]:` or a named size). The rail takes 13rem from the pane at `lg`, so a step
