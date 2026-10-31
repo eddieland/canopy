@@ -40,6 +40,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "health": ("health", "cmd_health"),
     "checklist": ("checklist", "cmd_checklist"),
     "agreement": ("agreement", "cmd_agreement"),
+    "latency": ("latency", "cmd_latency"),
     "gc": ("gc", "cmd_gc"),
     "pause": ("conversation", "cmd_pause"),
     "resume": ("conversation", "cmd_resume"),
