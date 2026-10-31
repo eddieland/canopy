@@ -205,6 +205,24 @@ class PlanEffort(StrEnum):
     LARGE = "large"
 
 
+class PlannerApproval(StrEnum):
+    """`policy.planner_may_approve`: how readily a planner may say its plan needs no review (DESIGN §25).
+
+    Each level but `off` renders its own bar in the planner's prompt; none relaxes the exclusions every level holds.
+    `plans.approved_level` and `feedback_plans.approved_level` hold the level a planner's approval was made under,
+    never `off`; NULL for any other approval.
+    """
+
+    #: The planner is never asked: every plan waits on the operator.
+    OFF = "off"
+    #: Only a plan that leaves the operator nothing to judge.
+    STRICT = "strict"
+    #: A plan that follows the code's own patterns, within the scope the ticket settles.
+    NORMAL = "normal"
+    #: The planner's confident best reading, unless it leaves a real question open.
+    LENIENT = "lenient"
+
+
 class Proposal(StrEnum):
     """What a feedback plan proposes for one of its items, `feedback_plan_items.proposal` (DESIGN §32)."""
 

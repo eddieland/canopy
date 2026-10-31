@@ -11,7 +11,7 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.core import conversation, db, plans
-from canopy.core.vocab import PlanEffort, PlanStatus, RunKind, RunStatus
+from canopy.core.vocab import PlanEffort, PlannerApproval, PlanStatus, RunKind, RunStatus
 from canopy.notify import message
 from canopy.runs import policy
 from tests.canopy.helpers import (
@@ -347,9 +347,13 @@ def test_a_plan_its_planner_says_needs_no_review_is_approved_as_the_planners_and
     assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, plans.PLANNER)
     assert plan.approved_sha256 == plan.sha256
     assert plan.approved_reason == "A one-line copy fix the ticket spells out."
-    # Every approval of the planner's carries its reason, and no other approval carries one.
+    # With the level it was approved under: `true` reads as `strict`.
+    assert plan.approved_level is PlannerApproval.STRICT
+    # Every approval of the planner's carries its reason, and no other approval carries one, nor a level.
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("UPDATE plans SET approved_reason = NULL WHERE id = ?", (plan.id,))
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("UPDATE plans SET approved_level = 'off' WHERE id = ?", (plan.id,))
     # The sinks hear of it with nothing waiting on the operator, and nothing of the plan's text.
     rows = conn.execute("SELECT kind, fields FROM notify_events ORDER BY id").fetchall()
     found = {str(r["kind"]): json.loads(str(r["fields"])) for r in rows}
@@ -378,7 +382,7 @@ def test_a_plan_its_planner_says_needs_no_review_is_approved_as_the_planners_and
     plan_file(scenario.env, run.id).write_text(TEXT + "\nAnd the docs.\n")
     scenario.operator("plan", KEY, "--approve")
     again = present(plans.current(conn, KEY))
-    assert (again.approved_channel, again.approved_reason) == ("cli", None)
+    assert (again.approved_channel, again.approved_reason, again.approved_level) == ("cli", None, None)
 
 
 @pytest.mark.parametrize(
@@ -403,7 +407,12 @@ def test_a_plan_waits_on_the_operator_unless_the_key_is_on_and_its_planner_says_
     assert run.status == RunStatus.DONE
     assert ("## Whether the operator reviews this plan" in run.prompt) is on
     [plan] = plans.history(scenario.conn, KEY)
-    assert (plan.status, plan.approved_channel, plan.approved_reason) == (PlanStatus.PROPOSED, None, None)
+    assert (plan.status, plan.approved_channel, plan.approved_reason, plan.approved_level) == (
+        PlanStatus.PROPOSED,
+        None,
+        None,
+        None,
+    )
 
 
 @pytest.mark.parametrize(
@@ -428,6 +437,8 @@ def test_at_each_level_the_planner_hears_its_bar_and_its_word_approves_the_plan(
     assert "touches security, credentials," in run.prompt
     [plan] = plans.history(scenario.conn, KEY)
     assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, plans.PLANNER)
+    # The level it was approved under is recorded with it.
+    assert plan.approved_level == level
 
 
 def test_a_plan_the_operator_had_a_word_on_waits_on_them_whatever_its_planner_says(

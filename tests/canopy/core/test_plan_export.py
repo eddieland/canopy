@@ -14,7 +14,7 @@ from syrupy.assertion import SnapshotAssertion
 from canopy.cli.main import main
 from canopy.core import conversation, db, plan_export, plan_threads, plans, records, run_models, sql
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import ModelsRead, PlanEffort, PlanStatus, RunKind, RunStatus
+from canopy.core.vocab import ModelsRead, PlanEffort, PlannerApproval, PlanStatus, RunKind, RunStatus
 from canopy.runs import feedback_items, feedback_plans
 from canopy.runtime.report import ModelUse, Usage
 from tests.canopy.helpers import (
@@ -280,7 +280,15 @@ def test_an_archived_plan_reads_whole(
     run_models.record(conn, run_models.Due("runs", run_id, f"ses_{run_id}", attempts=0), ModelsRead.FOUND, used)
     text = f"# Plan: {KEY} Export reports as CSV\n\n## api\n\nAdd `GET /reports.csv`.\n"
     written = plans.write(state_dir, KEY, run_id, text)
-    plans.record(conn, KEY, run_id, written, no_review="One endpoint, *no* schema change.", effort=PlanEffort.SMALL)
+    plans.record(
+        conn,
+        KEY,
+        run_id,
+        written,
+        no_review="One endpoint, *no* schema change.",
+        level=PlannerApproval.NORMAL,
+        effort=PlanEffort.SMALL,
+    )
     # A feedback plan after it: no persona, no model chosen, its session not read.
     feedback = priced_run(conn, state_dir, "feedback-plan", 0.125)
     written = plans.write(state_dir, KEY, feedback, f"# Feedback plan: {KEY} Answer the review\n")
@@ -383,6 +391,7 @@ def test_a_name_carries_a_slug_of_the_title(heading: str, slug: str) -> None:
         approved_channel=None,
         approved_reason=None,
         effort=None,
+        approved_level=None,
     )
     assert plan_export.name("plan", plan, f"{heading}\n\n## Goal\n") == f"7-PROPOSED{slug}.md"
 
@@ -956,6 +965,7 @@ def test_a_reason_the_planner_wrote_stays_one_value() -> None:
         effort=None,
         stale_shown=None,
         approved_message_id=None,
+        approved_level=PlannerApproval.STRICT,
     )
     head, _, _ = plan_export.document("feedback plan", plan, "# Plan\n").decode().partition("---\n\n")
     assert 'approved_reason: "trivial\\n---\\nstatus: approved"\n' in head

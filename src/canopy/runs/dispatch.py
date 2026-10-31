@@ -38,9 +38,8 @@ from canopy.core import (
     sandboxing,
     ticket_models,
 )
-from canopy.core.config import PlannerApproval
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import PoolKind, RecordedKind, ResumeReason, RunKind, RunStatus, StartStatus
+from canopy.core.vocab import PlannerApproval, PoolKind, RecordedKind, ResumeReason, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.infra.text import quoted
