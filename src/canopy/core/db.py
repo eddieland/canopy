@@ -366,9 +366,9 @@ def set_tick_query(conn: sqlite3.Connection, tick_id: int, *, due: bool) -> None
     records.update(records.Tick).set(query_due=int(due)).where("id = ?", tick_id).run(conn)
 
 
-def set_tick_overseer(conn: sqlite3.Connection, tick_id: int, *, ran: bool) -> None:
-    """Record whether a tick runs its overseer: not when it is halted, nor when nothing is left to it (DESIGN §39)."""
-    records.update(records.Tick).set(overseer_ran=int(ran)).where("id = ?", tick_id).run(conn)
+def set_tick_overseer(conn: sqlite3.Connection, tick_id: int, *, runs: int) -> None:
+    """Record how many runs of its overseer a tick made (DESIGN §40): none when halted, or with nothing left to it."""
+    records.update(records.Tick).set(overseer_ran=runs).where("id = ?", tick_id).run(conn)
 
 
 def last_query_at(conn: sqlite3.Connection) -> str | None:

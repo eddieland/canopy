@@ -324,6 +324,50 @@ def total(calls: Sequence[Call]) -> Usage:
     )
 
 
+def together(usages: Sequence[Usage]) -> Usage | None:
+    """What several runs cost together, as one tick's runs of the overseer do (DESIGN §40).
+
+    Returns:
+        Their summed cost and tokens, the largest peak context any reported, and what the first run's first call was
+        sent, wrote to the cache, and read from it; None when there were none.
+    """
+    if not usages:
+        return None
+    first = usages[0]
+    peaks = [u.peak_context for u in usages if u.peak_context is not None]
+    return Usage(
+        cost_usd=sum(u.cost_usd for u in usages),
+        input=sum(u.input for u in usages),
+        output=sum(u.output for u in usages),
+        reasoning=sum(u.reasoning for u in usages),
+        cache_read=sum(u.cache_read for u in usages),
+        cache_write=sum(u.cache_write for u in usages),
+        peak_context=max(peaks) if peaks else None,
+        first_call=first.first_call,
+        first_cache_write=first.first_cache_write,
+        first_cache_read=first.first_cache_read,
+    )
+
+
+def tools_together(runs: Iterable[Sequence[ToolUse]]) -> tuple[ToolUse, ...]:
+    """Several runs' tool calls, each rolled up by tool, rolled up by tool together.
+
+    Returns:
+        A use per tool, in the order each tool was first called.
+    """
+    found: dict[str, ToolUse] = {}
+    for run in runs:
+        for t in run:
+            was = found.get(t.tool, ToolUse(t.tool, 0, 0, 0))
+            found[t.tool] = ToolUse(
+                t.tool,
+                was.calls + t.calls,
+                was.errors + t.errors,
+                was.result_chars + t.result_chars,
+            )
+    return tuple(found.values())
+
+
 class Tools:
     """A run's tool calls rolled up by tool as they end, within `MAX_TOOLS` tools whose names are `MAX_TOOL_NAME`."""
 

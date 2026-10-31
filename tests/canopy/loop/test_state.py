@@ -48,8 +48,41 @@ def test_the_state_block_of_a_new_workspace(canopy_env: CanopyEnv, markdown_snap
 
 
 def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
-    # Every section the block can have: a chore, reviews, a notice, tickets in each state the block tells apart, and
-    # the harness's dispatches to come.
+    ctx, tick_id, leased = busy(canopy_env)
+    with mock.patch.object(harness_dispatches, "ROWS", {Phase.CONFLICTED: CONFLICTED}):
+        assert rendered(canopy_env, ctx, tick_id, dry_run=True, running=1, leased=leased) == markdown_snapshot
+
+
+def test_the_messages_of_a_busy_workspace_run_once_per_subject(
+    canopy_env: CanopyEnv,
+    markdown_snapshot: SnapshotAssertion,
+) -> None:
+    """Each run's message, in the order the runs go: the shared part, the same in each, then its subject (§40)."""
+    ctx, tick_id, leased = busy(canopy_env)
+    capacity = reconcile.Capacity(max_workers=ctx.config.capacity.max_workers, running=1)
+    with mock.patch.object(harness_dispatches, "ROWS", {Phase.CONFLICTED: CONFLICTED}):
+        said = tick.subject_messages(
+            ctx,
+            tick_id=tick_id,
+            dry_run=True,
+            now=NOW,
+            reconciled=reconcile.Reconciled(capacity, {"repo": leased}),
+        )
+    [shared] = {message.split("## Subject\n", 1)[0] for _, message in said}
+    shown = [f"# {subject.name}\n\n{indented(message.removeprefix(shared))}" for subject, message in said]
+    whole = "\n".join([f"# Shared by every run\n\n{indented(shared)}", *shown])
+    assert whole.replace(str(canopy_env.root), WORKSPACE) == markdown_snapshot
+
+
+def busy(canopy_env: CanopyEnv) -> tuple[Context, int, list[pools.Slot]]:
+    """A busy workspace's journal, and a dry-run tick in it with the slots leased then.
+
+    Every section the block can have: a chore, reviews, a notice, tickets in each state the block tells apart, and the
+    harness's dispatches to come.
+
+    Returns:
+        Its context, the tick's id, and the slots leased.
+    """
     prompts(canopy_env, "build-health", "deps")
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
     user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{template}'\n", 1)
@@ -222,8 +255,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             leased_at=stamp("09:55"),
         ),
     ]
-    with mock.patch.object(harness_dispatches, "ROWS", {Phase.CONFLICTED: CONFLICTED}):
-        assert rendered(canopy_env, ctx, tick_id, dry_run=True, running=1, leased=leased) == markdown_snapshot
+    return ctx, tick_id, leased
 
 
 def test_the_state_block_shows_a_time_to_the_minute_and_text_as_written(canopy_env: CanopyEnv) -> None:
@@ -366,7 +398,14 @@ def rendered(
         now=NOW,
         reconciled=reconcile.Reconciled(capacity, {"repo": leased}),
     )
-    head, rest = block.split("```json\n", 1)
-    compact, tail = rest.split("\n```", 1)
-    state = json.dumps(json.loads(compact), indent=2, ensure_ascii=False)
-    return f"{head}```json\n{state}\n```{tail}".replace(str(env.root), WORKSPACE)
+    return indented(block).replace(str(env.root), WORKSPACE)
+
+
+def indented(text: str) -> str:
+    """`text` with the JSON of each fenced block in it indented, so a change to it is a readable diff."""
+    head, *blocks = text.split("```json\n")
+    found = [head]
+    for block in blocks:
+        compact, tail = block.split("\n```", 1)
+        found.append(f"```json\n{json.dumps(json.loads(compact), indent=2, ensure_ascii=False)}\n```{tail}")
+    return "".join(found)

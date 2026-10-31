@@ -47,6 +47,7 @@ from canopy.core import (
     db,
     kept_items,
     memory,
+    overseer_runs,
     sql,
 )
 from canopy.core.items import ACTION_PREFIX, Item, age, fingerprint, one_line, subject
@@ -66,10 +67,11 @@ if TYPE_CHECKING:
 # Where a ticket key would be, an item about a chore names it so, and one about a PR with no ticket. A ticket key has
 # no colon (DESIGN §17), so neither can equal one.
 CHORE_PREFIX = "chore:"
-PR_PREFIX = "pr:"
+PR_PREFIX = overseer_runs.PR_PREFIX
 #: Where a ticket key would be, an item about a one-off task names it so (DESIGN §36).
 TASK_PREFIX = "task:"
-#: What the overseer's verb about a ticket the harness decided records, refused (DESIGN §37, `loop.tools`).
+#: What the overseer's verb about a ticket the harness decided records, refused (DESIGN §37, `loop.tools`); and about
+#: anything but its run's subject, when the tick runs it once per subject (§40).
 REFUSED_DECIDED = "refused:decided"
 
 
@@ -217,10 +219,11 @@ def current(conn: sqlite3.Connection) -> list[Item]:
     It is the latest `ok` tick's items, each open since the first tick of its unbroken run. An item the harness raises
     is recorded every tick its cause holds, so it is open only while the latest `ok` tick recorded it. One the overseer
     recorded is held besides through every `ok` tick that did not give the overseer its subject (`_gave`), such as a
-    ticket the harness decided there (DESIGN §37), or one that ran no overseer at all (§39): the overseer cannot record
-    again what it was not shown. It goes the first tick the overseer is given its subject and leaves it out, or once
-    its ticket is done or stopped. One the overseer keeps is open while any record of it is held, whatever the ticks
-    since recorded (`kept_items.held`), open since the oldest of them.
+    ticket the harness decided there (DESIGN §37), a PR no run of a tick that ran it once per subject was given (§40),
+    or one that ran no overseer at all (§39): the overseer cannot record again what it was not shown. It goes the first
+    tick the overseer is given its subject and leaves it out, or once its ticket is done or stopped. One the overseer
+    keeps is open while any record of it is held, whatever the ticks since recorded (`kept_items.held`), open since
+    the oldest of them.
     """
     rows = sql.execute(
         conn,
@@ -234,6 +237,7 @@ def current(conn: sqlite3.Connection) -> list[Item]:
     given = _given(conn, ticks, subjects)
     # A tick from before it was recorded that closed `ok` ran its overseer (DESIGN §39).
     ran = frozenset(int(r[0]) for r in rows if r[1] != 0)
+    runs = overseer_runs.subjects(conn, ticks)
     open_items: dict[_ItemId, _Open] = {}
     for tick_id in reversed(ticks):
         now: dict[_ItemId, _Open] = {}
@@ -241,7 +245,7 @@ def current(conn: sqlite3.Connection) -> list[Item]:
             earlier = open_items.get(item_id)
             now[item_id] = r if earlier is None else replace(r, since=earlier.since)
         for item_id, r in open_items.items():
-            if item_id not in now and r.held and not _gave(item_id[0], tick_id, given, ran):
+            if item_id not in now and r.held and not _gave(item_id[0], tick_id, given, ran, runs):
                 now[item_id] = r
         open_items = now
     ended = kept_items.ended_tickets(conn, {i[0] for i, r in open_items.items() if r.held and i[0] is not None})
@@ -338,18 +342,31 @@ def _given(conn: sqlite3.Connection, ticks: Collection[int], keys: Collection[st
     return found
 
 
-def _gave(key: str | None, tick_id: int, given: Mapping[int, AbstractSet[str]], ran: AbstractSet[int]) -> bool:
+def _gave(
+    key: str | None,
+    tick_id: int,
+    given: Mapping[int, AbstractSet[str]],
+    ran: AbstractSet[int],
+    runs: Mapping[int, AbstractSet[str | None]],
+) -> bool:
     """Whether tick `tick_id` gave the overseer `key`, the subject of an item it recorded (`current`).
 
-    A ticket is given where the overseer recorded a decision about it (`_given`); a PR, a chore, or the workspace
-    wherever the overseer ran.
+    A ticket is given where the overseer recorded a decision about it (`_given`); the workspace wherever the overseer
+    ran; and a PR or a chore wherever it ran given the whole state block, or, run once per subject, where one of `runs`,
+    the subjects each tick's runs were given, was that PR or the due chores (DESIGN §40).
 
     Returns:
         True when an item the tick left out ends there.
     """
-    if key is None or key.startswith((PR_PREFIX, CHORE_PREFIX)):
-        return tick_id in ran
-    return key in given[tick_id]
+    if key is not None and not key.startswith((PR_PREFIX, CHORE_PREFIX)):
+        return key in given[tick_id]
+    if tick_id not in ran:
+        return False
+    subjects = runs.get(tick_id)
+    # A tick from before its runs were recorded gave its one run the whole block.
+    if key is None or subjects is None or None in subjects:
+        return True
+    return key in subjects or (key.startswith(CHORE_PREFIX) and overseer_runs.CHORES in subjects)
 
 
 def _halted(conn: sqlite3.Connection, last_ok: int | None) -> list[Item]:

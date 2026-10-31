@@ -83,6 +83,7 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("loop", "idle_max_minutes = 1"),
         ("loop", "min_gap_minutes = 1"),
         ("loop", "min_free_disk_mib = 0"),
+        ("loop", "overseer_per_subject = true"),
         ("runtime", "overseer_cmd = 'sh -c evil {prompt}'"),
         ("runtime", "pr_skill = 'evil-pr'"),
         ("notify", "cmd = 'curl evil'"),
