@@ -36,7 +36,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   never by a merge commit, and push with `--force-with-lease`. A fix to one of the PR's own commits, such as one a
   review asks for, is a `fixup!` commit (`git commit --fixup=<sha>`), not a new "address review" commit, so the
   reviewer sees just the fix; fold them in with `git rebase -i --autosquash` (`GIT_SEQUENCE_EDITOR=:` where no editor
-  can open) before the PR merges. Rewrite only a branch you own: never someone else's.
+  can open) before the PR merges. Rewrite only a branch you own: never someone else's. Where your harness refuses a
+  rebase or a force-push, do not work around it: merge the base in, push fixes as plain commits, and say so in the PR.
 - A PR description fills `.github/pull_request_template.md` briefly: a reviewer takes it in at a glance, and the
   detail stays in the diff. Not a wall of text.
 - The design (`docs/design/`) is a map, not a spec of every behavior: what each part promises, the guards, the
@@ -105,9 +106,10 @@ If code and the design disagree, the design doc wins until a decision entry says
     for a new import, module, or test helper, `test_frozen.py` for a dataclass, `test_prompt_sizes.py` for a prompt,
     `core/test_db.py` and `core/test_records.py` for a migration or row type. A change to a shared fixture or helper
     in `tests/` runs the modules that use it. Under `ui/`, the unit tests and specs `ui/AGENTS.md` names.
-  - Rebasing onto the base branch: the tests of the files whose conflicts you resolved by hand, and
-    `core/test_db.py` and `core/test_records.py` for a migration you renumbered. A rebase git made alone runs no
-    tests: CI runs the suite on the result. Never a whole directory, nor again the tests the branch ran before.
+  - Rebasing onto the base branch, or merging it in where you cannot rebase: the tests of the files whose conflicts
+    you resolved by hand, and `core/test_db.py` and `core/test_records.py` for a migration you renumbered. A rebase
+    or merge git made alone runs no tests: CI runs the suite on the result. Never a whole directory, nor again the
+    tests the branch ran before.
 
   CI skips every check on a pull request that changes only docs, and the Python tests on one that changes only `ui/`
   and docs, so there the checks you run are the only ones.
