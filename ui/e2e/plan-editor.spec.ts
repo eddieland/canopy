@@ -446,7 +446,8 @@ test('Markdown pasted into a code block stays code, as its characters', async ({
     await page.keyboard.press('Enter')
     await page.getByRole('button', { name: 'Code block', exact: true }).click()
     await paste(page, '- name: web\n- name: api\n# both deploy')
-    await expect(plan(page).locator('pre')).toContainText('- name: web')
+    // The new block, after the sample's diagram.
+    await expect(plan(page).locator('pre').last()).toContainText('- name: web')
     await expect(plan(page).locator('li').filter({ hasText: 'name: web' })).toHaveCount(0)
     await expect(plan(page).getByRole('heading', { name: 'both deploy' })).toHaveCount(0)
     await page.getByRole('button', { name: 'Show Markdown' }).click()

@@ -25,6 +25,8 @@ memory, and do not upgrade in passing.
   whose plan card does not import it.
 - Shiki for a review's diff and the guide's code blocks alone (D121): only `src/lib/highlight.ts` and
   `src/lib/languages.ts`, its grammars, import it, and only on demand, each grammar its own chunk.
+- mermaid for a plan's diagrams alone (D131): only `src/lib/diagram.ts` imports it, and only on demand, from
+  `src/lib/plan-diagram.ts`, which shows what it draws as an image, never as SVG in the page.
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
 - cmdk for the repository picker's, the model picker's, and the jump palette's searchable lists, which Radix has no
   primitive for: only `src/components/ui/command.tsx` imports it, and the lint refuses it elsewhere.
@@ -114,7 +116,8 @@ dozen. When every screenshot differs, check the browser before the change.
   (`src/components/linked-text.tsx`), which links its http and https URLs and nothing else (D113), except inside an
   element that is already a link. A plan in the plan editor is the one exception, not rendered by React: ProseMirror
   draws it from its schema (`src/lib/plan-schema.ts`), which keeps HTML and images as their characters and draws no
-  link, so it stays text all the same. A node added to that schema keeps it so.
+  link, so it stays text all the same. A node added to that schema keeps it so. A Mermaid fence is drawn beside its
+  code as an image (D131), which runs no script and fetches nothing.
 - **Formatting:** oxfmt, 120 columns, 4-space indent (the repository's `.editorconfig`). A formatter does not split a
   long string: split class lists across `cn()` or `cva()` arguments. The lint fails on a line over 120.
 - **Mocks are flagged.** `python -m canopy.serve --mock` serves the real API over a journal seeded from

@@ -567,3 +567,11 @@ such as a shipped migration, may still cite one, and git history has its text.
   a request that never left from one that may have been carried out, so only what cannot happen twice is sent again.
 - The harness imports neither it nor httpx2 (`tests/canopy/test_layers.py`), as it imports no stdlib network module.
 - Rejected: urllib in each program (its errors escape `OSError`, so a reply cut off crashed a run; each copy drifted).
+
+## D131. A plan's Mermaid diagram is drawn by mermaid, as an image, in the web UI alone
+
+- `mermaid`, pinned, draws a plan's ```` ```mermaid ```` fence (flowchart, sequence, and state diagrams only); only
+  `ui/src/lib/diagram.ts` imports it, on demand. Its code stays the document: comments, the diff, and the file see it.
+- A plan is model text (T1), so mermaid runs `strict`, with SVG labels, and its config locked against the diagram's own.
+- Its SVG is shown as an `<img>`, never put in the page: an image runs no script, follows no link, and fetches nothing,
+  so a gap in mermaid's sanitizer reaches nothing.
