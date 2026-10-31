@@ -3,14 +3,19 @@ import { Fragment } from 'react'
 
 import { Code } from '@/components/code'
 import { CodeTokens } from '@/components/code-tokens'
+import { Mark } from '@/components/rich-text'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useDiagram } from '@/hooks/use-diagram'
 import { useHighlightLines } from '@/hooks/use-highlight'
-import { anchor, plainText } from '@/lib/guide'
+import { DIAGRAM_FENCE, anchor, diagramTitle, plainText } from '@/lib/guide'
 import type { GuidePiece } from '@/lib/guide'
 import type { CodeToken } from '@/lib/highlight'
 import { fenceLanguage } from '@/lib/languages'
 import { ALIGN } from '@/lib/rich-text'
 import type { Align, Block, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
+import { usePalettes } from '@/theme/palette'
+import { useTheme } from '@/theme/use-theme'
 
 // Written out so Tailwind finds them.
 const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' }
@@ -142,7 +147,11 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
             )
         }
         case 'code': {
-            return <CodeBlock lines={block.lines} lang={block.lang} />
+            return block.lang === DIAGRAM_FENCE ? (
+                <Diagram lines={block.lines} />
+            ) : (
+                <CodeBlock lines={block.lines} lang={block.lang} />
+            )
         }
     }
 }
@@ -150,6 +159,34 @@ function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) 
 // A table cell's class, set as its column's delimiter row asks.
 function cellClass(align: Align): string {
     return cn('px-3 py-2 align-top first:pl-0 last:pr-0', align && ALIGN[align])
+}
+
+// A Mermaid fence, drawn as its diagram: an image named by its `accTitle`, drawn again when the theme or a palette
+// changes. A placeholder holds its place while mermaid loads; a diagram it cannot draw shows its code and why.
+function Diagram({ lines }: { lines: string[] }) {
+    const { resolved } = useTheme()
+    const { light, dark } = usePalettes()
+    const drawn = useDiagram(lines.join('\n'), `${resolved} ${light} ${dark}`)
+    if (drawn === undefined) {
+        return <Skeleton className="h-64 w-full rounded-md" />
+    }
+    if ('error' in drawn) {
+        return (
+            <figure className="flex flex-col gap-2">
+                <CodeBlock lines={lines} lang={DIAGRAM_FENCE} />
+                <figcaption className="text-sm text-muted-foreground">Not drawn: {drawn.error}.</figcaption>
+            </figure>
+        )
+    }
+    return (
+        <figure className="overflow-x-auto rounded-md border px-4 py-5">
+            <img
+                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawn.svg)}`}
+                alt={diagramTitle(lines) ?? 'A diagram'}
+                className="mx-auto h-auto max-w-full"
+            />
+        </figure>
+    )
 }
 
 // A code block, colored by the language its fence names once that grammar has read it, plain text until then.
@@ -187,17 +224,14 @@ function PieceView({ piece }: { piece: GuidePiece }) {
         case 'text': {
             return piece.text
         }
-        case 'strong': {
-            return <strong className="font-semibold">{piece.text}</strong>
-        }
-        case 'em': {
-            return <em className="italic">{piece.text}</em>
-        }
+        case 'strong':
+        case 'em':
         case 'del': {
-            return <del className="line-through">{piece.text}</del>
+            return <Mark run={piece.kind}>{piece.text}</Mark>
         }
         case 'code': {
-            return <Code>{piece.text}</Code>
+            const code = <Code>{piece.text}</Code>
+            return piece.within === undefined ? code : <Mark run={piece.within}>{code}</Mark>
         }
         case 'link': {
             return <GuideLink piece={piece} />

@@ -5,13 +5,18 @@
 
 import { splitLinks } from '@/lib/links'
 
-/** A piece of a line: plain text, `code`, **strong**, *emphasis*, or ~~struck~~. */
+/** A piece of a line: plain text, `code`, **strong**, *emphasis*, or ~~struck~~; code inside a run is its own piece. */
 export interface Inline {
     /** How the piece is set. */
     kind: 'text' | 'code' | 'strong' | 'em' | 'del'
     /** The piece's text, without its markers. */
     text: string
+    /** On a code piece, the run it sits inside: `**the `api` service**` sets `api` as code within strong. */
+    within?: Run
 }
+
+/** A run of text set by its markers: **strong**, *emphasis*, or ~~struck~~. */
+export type Run = 'strong' | 'em' | 'del'
 
 /** One line of text, as its inline pieces: `Inline`'s, or another reader's (the guide's, which reads links too). */
 export type Line<I = Inline> = I[]
@@ -246,13 +251,12 @@ function depthOf(indent: number): number {
 }
 
 /**
- * The inline forms rich text reads, as a pattern's source for a reader to build on (the guide adds its links): `code`,
- * **strong**, ~~struck~~, and *emphasis* or _emphasis_. A run is read as one piece, so markers inside it stay
- * characters. Emphasis takes no space inside its markers' ends, nor a letter or digit outside them, so `2*3*4` and
- * `snake_case_name` stay as written.
+ * The runs rich text reads, as a pattern's source for a reader to build on (the guide adds its links): **strong**,
+ * ~~struck~~, and *emphasis* or _emphasis_. Code spans are read first and stand apart from them (`inlineWith`), so a
+ * run's markers inside code are code. Emphasis takes no space inside its markers' ends, nor a letter or digit outside
+ * them, so `2*3*4` and `snake_case_name` stay as written.
  */
 export const INLINE = [
-    /`(?<code>[^`]+)`/u,
     /\*\*(?<strong>.+?)\*\*/u,
     /~~(?<del>[^\s~](?:.*?[^\s~])?)~~/u,
     /(?<![\w*])\*(?<em>[^\s*](?:[^*]*?[^\s*])?)\*(?![\w*])/u,
@@ -261,11 +265,75 @@ export const INLINE = [
     .map((form) => form.source)
     .join('|')
 
-const INLINE_PATTERN = new RegExp(INLINE, 'gu')
+const INLINE_PATTERN = new RegExp(INLINE, 'dgu')
+const CODE_SPAN = /`[^`\n]+`/gu
+// What a code span's characters read as while the runs around it are found: neither a space, a word character, nor a
+// marker, as the span's own backticks are not, so a run beside a span or holding one reads as it would with the span.
+const BLANK = '\u0000'
 
 /** A line's code spans, strong runs, struck runs, and emphasis (`INLINE`); an unclosed marker stays as written. */
 export function inline(text: string): Line {
-    return pieces(text, INLINE_PATTERN)
+    const urls = urlSpans(text)
+    const inUrl = (at: number) => urls.some(([from, to]) => at >= from && at < to)
+    return inlineWith(text, INLINE_PATTERN, (match) => {
+        // An emphasis or struck marker inside a URL is part of its address (`https://x/_a_/b`), so it stays text.
+        const marker = match.groups.strong === undefined
+        return marker && (inUrl(match.at) || inUrl(match.end - 1)) ? undefined : runPieces(match)
+    })
+}
+
+/** A piece another reader makes of a line (the guide's links): how it is set, and its text. */
+interface Piece {
+    kind: string
+    text: string
+}
+
+/** A match of an inline pattern, as the line's own text has it, code spans and all. */
+export interface InlineMatch {
+    /** What it matched, markers included. */
+    written: string
+    /** Each named group's text, or `undefined` for a group that took no part. */
+    groups: Partial<Record<string, string>>
+    /** Where it starts in the line. */
+    at: number
+    /** Where it ends in the line. */
+    end: number
+}
+
+/**
+ * `text`'s matches of `pattern`, each read by `read` (`undefined` keeps it as written), and its `code` spans around
+ * them. A code span binds tighter than any match, as CommonMark's does: a match never starts or ends inside one, so
+ * `**a `b** c`` is code after `**a `, not strong. `pattern` takes the `d` and `g` flags. The guide reads its runs and
+ * links this way (`src/lib/guide.ts`).
+ */
+export function inlineWith<I extends Piece>(
+    text: string,
+    pattern: RegExp,
+    read: (match: InlineMatch) => I[] | undefined,
+): (I | Inline)[] {
+    // Blanking the spans out keeps every offset, so a match in the blanked text is at the same place in the text.
+    const blanked = text.replaceAll(CODE_SPAN, (span) => BLANK.repeat(span.length))
+    const line: (I | Inline)[] = []
+    let last = 0
+    for (const match of blanked.matchAll(pattern)) {
+        const at = match.index
+        const end = at + match[0].length
+        const groups = Object.fromEntries(
+            Object.entries(match.indices?.groups ?? {}).map(([name, span]: [string, [number, number] | undefined]) => [
+                name,
+                span === undefined ? undefined : text.slice(span[0], span[1]),
+            ]),
+        )
+        const pieces = read({ written: text.slice(at, end), groups, at, end })
+        if (pieces === undefined) {
+            continue
+        }
+        pushSpans(text.slice(last, at), line)
+        line.push(...pieces)
+        last = end
+    }
+    pushSpans(text.slice(last), line)
+    return line
 }
 
 /**
@@ -273,60 +341,52 @@ export function inline(text: string): Line {
  * breaks stay as written, and a span never crosses a line.
  */
 export function codeSpans(text: string): Line {
-    return pieces(text, /`(?<code>[^`\n]+)`/gu)
+    const line: Line = []
+    pushSpans(text, line)
+    return line
 }
 
-/** The piece a match of `INLINE` reads as, or `undefined` for a match of a form it does not name. */
-export function inlinePiece(match: RegExpExecArray): Inline | undefined {
-    const { code, strong, del, em, under } = match.groups ?? {}
-    if (code !== undefined) {
-        return { kind: 'code', text: code }
-    }
+/** The pieces a match of `INLINE` reads as, code spans within its run, or `undefined` for a form it does not name. */
+export function runPieces(match: InlineMatch): Inline[] | undefined {
+    const { strong, del, em, under } = match.groups
     if (strong !== undefined) {
-        return { kind: 'strong', text: strong }
+        return inRun('strong', strong)
     }
     if (del !== undefined) {
-        return { kind: 'del', text: del }
+        return inRun('del', del)
     }
     const emphasis = em ?? under
-    return emphasis === undefined ? undefined : { kind: 'em', text: emphasis }
+    return emphasis === undefined ? undefined : inRun('em', emphasis)
 }
 
-function pieces(text: string, pattern: RegExp): Line {
-    const line: Line = []
-    const urls = urlSpans(text)
-    const inUrl = (at: number) => urls.some(([from, to]) => at >= from && at < to)
-    // Text runs next to each other join, so a URL a kept marker split still links whole.
-    const plain = (run: string) => {
-        const previous = line.at(-1)
-        if (previous?.kind === 'text') {
-            previous.text += run
-        } else {
-            line.push({ kind: 'text', text: run })
-        }
-    }
+function inRun(run: Run, text: string): Inline[] {
+    return codeSpans(text).map((piece) =>
+        piece.kind === 'code' ? { kind: 'code', text: piece.text, within: run } : { kind: run, text: piece.text },
+    )
+}
+
+// Pushes `text`'s code spans and the text around them onto `line`. Text runs next to each other join, so a URL a kept
+// marker split still links whole.
+function pushSpans(text: string, line: Piece[]): void {
     let last = 0
-    for (const match of text.matchAll(pattern)) {
-        if (match.index > last) {
-            plain(text.slice(last, match.index))
-        }
-        const piece = inlinePiece(match)
-        const end = match.index + match[0].length
-        // An emphasis or struck marker inside a URL is part of its address (`https://x/_a_/b`), so it stays text.
-        if (
-            piece === undefined ||
-            ((piece.kind === 'em' || piece.kind === 'del') && (inUrl(match.index) || inUrl(end - 1)))
-        ) {
-            plain(match[0])
-        } else {
-            line.push(piece)
-        }
-        last = end
+    for (const match of text.matchAll(CODE_SPAN)) {
+        plain(text.slice(last, match.index), line)
+        line.push({ kind: 'code', text: match[0].slice(1, -1) })
+        last = match.index + match[0].length
     }
-    if (last < text.length) {
-        plain(text.slice(last))
+    plain(text.slice(last), line)
+}
+
+function plain(run: string, line: Piece[]): void {
+    if (run === '') {
+        return
     }
-    return line
+    const previous = line.at(-1)
+    if (previous?.kind === 'text') {
+        previous.text += run
+    } else {
+        line.push({ kind: 'text', text: run })
+    }
 }
 
 // Where each URL `LinkedText` would link sits in `text`, as its start and end.
