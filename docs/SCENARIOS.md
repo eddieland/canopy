@@ -32,6 +32,11 @@ any OpenCode upgrade, and before relying on a permission they check.
   pass: denied tools refused, a repository's definition not loosening canopy's, a desk worker editing through its links
   and nothing beside them (with the workspace a plain directory and a git checkout), a reviewer reading only its
   checkout, and a worker refused Bazel's output base by its own path.
+- **S70. Reading beside a skill** (taken on request 2026-10-31). Confirmed in OpenCode's source (1.19.3), not in a
+  run. Put a skill in `~/.agents/skills/` with a file beside its `SKILL.md`, such as `references/notes.md`, that a
+  review's or a chore's prompt sends it to. Expect the run to read the file, and a worker asked to read it refused
+  (`external_directory`). Under OpenCode 2, check that it still expands `~/` in a permission's pattern: if not, the
+  read is refused, failing closed.
 - **S3. The private worker's wildcard deny** (M18). Confirmed in OpenCode's source (1.18.35), not in a run. Start a
   ticket privately and check that its worker can call the tracker's `tracker.read_tools` and is refused every other
   tool of the tracker's server, and the tracker CLIs in bash.
