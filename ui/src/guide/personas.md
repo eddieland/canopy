@@ -36,11 +36,11 @@ in `canopy` instead, since a run in a voice nobody chose would read as the chose
   and few words. Written for workers and planners.
 - `explainer`: writes for a coworker new to the code, so PRs, commits, replies, and plans say why as well as what.
   Best on a worker whose PRs someone else will review.
-- `eddie`: reviews like Eddie: short comments labeled in Conventional Comments that ask whether the code needs to
-  exist at all, blocking only on what would break.
+- `eddie`: works like Eddie: asks whether the code needs to exist at all, keeps the diff and the words small, and
+  blocks only on what would break. Reviews in short comments labeled in Conventional Comments.
 
 A persona speaks to each job in a paragraph of its own (`When you plan,`, `When you review,`), so one file can serve
-more than one agent; most of the above do, and `eddie` is for reviews alone. `canopy personas` lists them, with yours.
+more than one agent; most of the above do. `canopy personas` lists them, with yours.
 
 ## Choosing one
 
