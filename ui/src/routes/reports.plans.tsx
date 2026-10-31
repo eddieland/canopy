@@ -26,9 +26,9 @@ import {
     reasonsText,
     resumedText,
 } from '@/lib/plan-report'
-import { hoursText } from '@/lib/reports'
 import { windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
+import { hoursText } from '@/lib/reports'
 import { cn } from '@/lib/utils'
 
 interface PlansSearch {
