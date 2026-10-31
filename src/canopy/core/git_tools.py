@@ -15,15 +15,18 @@ transport, so not the lazy fetch a promisor remote in the repository's config co
 clean filter runs. What a call returns is cut at `MAX_CHARS`, every hidden character named, as the PR's own text is
 untrusted.
 
-`log` and `grep` answer with records, `Commits` and `Matches`, which each tool lists as its output schema and returns as
-structured content and, since the runtime shows the model only a tool's text, as JSON in its text: no commit's message
-or path can pass for another commit, no line or path for another file's line, and none for a field. git prints `grep`'s
-fields apart with NUL (`-z`), which no path, and no line of a text file, holds. The rest answer with git's text.
+`log`, `grep`, and `diff` answer with records, `Commits`, `Matches`, and `Changes`, which each tool lists as its output
+schema and returns as structured content and, since the runtime shows the model only a tool's text, as JSON in its
+text: no commit's message or path can pass for another commit, no line or path for another file's line, no line of a
+patch for another file's, and none for a field. git prints `grep`'s fields, and each file `diff` lists, apart with NUL
+(`-z`), which no path, and no line of a text file, holds; then `diff`'s patches, in the same order, each started by a
+line of git's own, which are counted. The rest answer with git's text.
 """
 
 from __future__ import annotations
 
 import fnmatch
+import itertools
 import re
 import sys
 from collections.abc import Mapping, Sequence
@@ -31,6 +34,7 @@ from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Annotated, Self
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, model_validator
+from pydantic_core import to_json
 
 from canopy.core import config, hostgit
 from canopy.core.memory_text import visible
@@ -278,12 +282,12 @@ class Diff(Request):
         Sequence[RepoPath],
         Field(max_length=MAX_PATHS, description="Only these paths, relative to the repository's root."),
     ] = ()
-    #: Each file changed with its lines added and removed, in place of the patch.
+    #: Each file changed with its lines added and removed, without its patch.
     stat: Annotated[
         StrictBool,
         Field(
-            description="List each file changed with its lines added and removed, in place of the patch: a large "
-            "change's shape, before reading its patch a few paths at a time.",
+            description="List each file changed with its lines added and removed, without its patch: a large "
+            "change's shape, before reading its patches a few paths at a time.",
         ),
     ] = False
 
@@ -554,6 +558,55 @@ class Commits(Result):
     ]
 
 
+class FileDiff(Changed):
+    """A file `diff` lists: how it changed, and its patch."""
+
+    #: Its mode before.
+    old_mode: Annotated[
+        StrictStr,
+        Field(
+            description="Its mode before, as git writes it: 100644 a file, 100755 an executable, 120000 a symlink, "
+            "160000 a submodule; 000000 when it was added.",
+        ),
+    ]
+    #: Its mode after.
+    mode: Annotated[StrictStr, Field(description="Its mode after, as old_mode is written; 000000 when it was deleted.")]
+    #: Whether git reads it as binary.
+    binary: Annotated[
+        StrictBool,
+        Field(description="Whether git reads it as binary, so its lines are neither counted nor shown."),
+    ]
+    #: How many lines it added.
+    added: Annotated[StrictInt | None, Field(description="How many lines it added; null for a binary file.")]
+    #: How many lines it removed.
+    removed: Annotated[StrictInt | None, Field(description="How many lines it removed; null for a binary file.")]
+    #: Its hunks.
+    patch: Annotated[
+        StrictStr | None,
+        Field(
+            description="Its hunks, each `@@` line and the lines after it, every hidden character named but tabs and "
+            "line breaks: empty when only its mode or path changed; null for a binary file, or with stat.",
+        ),
+    ]
+
+
+class Changes(Result):
+    """What `diff` returns: each file changed from one commit to another, by path."""
+
+    #: The files.
+    files: Annotated[Sequence[FileDiff], Field(description="The files changed, by path; none when none did.")]
+    #: Whether more changed than are listed.
+    more: Annotated[
+        StrictBool,
+        Field(description="Whether files changed after these are left out, to fit."),
+    ]
+    #: What was left out, and how to read it.
+    cut: Annotated[
+        StrictStr | None,
+        Field(description=f"What was left out or cut to fit {MAX_CHARS} characters; null when nothing was."),
+    ]
+
+
 class Line(BaseModel):
     """One line `grep` lists: a match, or context around one."""
 
@@ -636,23 +689,25 @@ def merge_base(runner: procs.Runner, checkouts: Mapping[str, Path], request: Mer
     return _out(done, "merge-base").strip()
 
 
-def diff(runner: procs.Runner, checkouts: Mapping[str, Path], request: Diff) -> str:
+def diff(runner: procs.Runner, checkouts: Mapping[str, Path], request: Diff) -> Changes:
     """Show what changed from `request.base` to `request.head`, in `request.paths` if it names any.
 
+    git prints each file's status, modes, and paths (`--raw`) and its lines added and removed (`--numstat`), every
+    field ended by NUL (`-z`), then, unless `request.stat`, every file's patch in the same order.
+
     Returns:
-        The diff, or with `request.stat` each file's lines added and removed and its path, cut at `MAX_CHARS`; or a
-        line saying there is none.
+        Each file changed, with its patch unless `request.stat`, every hidden character named, those that do not fit
+        `MAX_CHARS` left out.
 
     Raises:
-        Refused: The checkout or a revision is unknown, or git failed.
+        Refused: The checkout or a revision is unknown, git failed, or a file's patch holds what reads as another's.
     """
     where = _checkout(checkouts, request.repo)
     base, head = _commit(runner, where, request.base), _commit(runner, where, request.head)
     args = ("--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", "--submodule=short")
-    shape = ("--numstat",) if request.stat else ()
+    shape = ("--raw", "--numstat", "-z", *(() if request.stat else ("--patch",)))
     done = _git(runner, where, "diff", *args, *shape, "--end-of-options", base, head, "--", *_paths(request.paths))
-    text = _out(done, "diff")
-    return _said(text) if text else f"No difference between {base} and {head} in what was asked."
+    return _fitted_diff(_read_diff(_out(done, "diff"), patches=not request.stat))
 
 
 def log(runner: procs.Runner, checkouts: Mapping[str, Path], request: Log) -> Commits:
@@ -1054,6 +1109,169 @@ def _line_text(line: str) -> str:
     if len(shown) <= MAX_LINE_CHARS:
         return shown
     return f"{shown[:MAX_LINE_CHARS]} [cut at {MAX_LINE_CHARS} of {len(shown)} characters]"
+
+
+def _read_diff(out: str, *, patches: bool) -> list[FileDiff]:
+    """Read what `diff` printed with `--raw --numstat -z`, and `--patch` when `patches`.
+
+    Each file's raw record is a field of its modes, ids, and status, then one path, or two for a rename or a copy. Its
+    numstat record follows them all, in the same order: its counts and path in a field, or for a rename or a copy its
+    counts alone and then both paths. The paths are counted, never matched, so no path is read as a record.
+
+    Returns:
+        The files, every hidden character named but a patch's line breaks and tabs.
+
+    Raises:
+        Refused: git printed what is not in that form, or a patch holds what reads as the start of another.
+    """
+    fields = out.split("\0")
+    at = 0
+    raw: list[tuple[Sequence[str], Sequence[str]]] = []
+    while at < len(fields) and fields[at].startswith(":"):
+        # `:old_mode mode old_id id status`, then its paths.
+        meta = fields[at].removeprefix(":").split(" ")
+        moved = meta[-1][:1] in {"R", "C"}
+        paths = fields[at + 1 : at + 2 + moved]
+        if (
+            len(meta) != _RAW_FIELDS
+            or not all(_MODE_RE.fullmatch(mode) for mode in meta[:2])
+            or not _STATUS_RE.fullmatch(meta[-1])
+            or len(paths) != 1 + moved
+        ):
+            raise Refused(_UNREAD_DIFF)
+        raw.append((meta, paths))
+        at += 1 + len(paths)
+    counts: list[tuple[int, int] | None] = []
+    for _, paths in raw:
+        moved = len(paths) > 1
+        added, _, rest = fields[at].partition("\t") if at < len(fields) else ("", "", "")
+        removed, tab, path = rest.partition("\t")
+        if not tab or (fields[at + 1 : at + 3] if moved else [path]) != list(paths) or (moved and path):
+            raise Refused(_UNREAD_DIFF)
+        if (added, removed) == ("-", "-"):
+            counts.append(None)
+        elif added.isdecimal() and removed.isdecimal():
+            counts.append((int(added), int(removed)))
+        else:
+            raise Refused(_UNREAD_DIFF)
+        at += 1 + 2 * moved
+    # The patches follow the records after one more NUL, as text that may hold a NUL of its own.
+    if fields[at : at + 1] not in ([], [""]) or (not patches and fields[at + 1 :]):
+        raise Refused(_UNREAD_DIFF)
+    sections = [2 if _split(meta[0], meta[1]) else 1 for meta, _ in raw]
+    hunks = _patches("\0".join(fields[at + 1 :]), sections) if patches else [None] * len(raw)
+    return [
+        FileDiff(
+            status=meta[-1][0],
+            path=visible(paths[-1]),
+            old_path=visible(paths[0]) if len(paths) > 1 else None,
+            old_mode=meta[0],
+            mode=meta[1],
+            binary=count is None,
+            added=None if count is None else count[0],
+            removed=None if count is None else count[1],
+            patch=None if count is None else patch,
+        )
+        for (meta, paths), count, patch in zip(raw, counts, hunks, strict=True)
+    ]
+
+
+#: How many fields a raw record's first field holds: two modes, two ids, and a status.
+_RAW_FIELDS = 5
+#: A file's mode as a raw record writes it: six octal digits, all zero on the side where the file is not.
+_MODE_RE = re.compile(r"[0-7]{6}")
+#: How git starts each file's patch, as none of the file's lines in it starts: each after a space, `+`, `-`, or `\`.
+_PATCH_START = "diff --git "
+#: What `diff` says of what git printed that is not in the form it reads.
+_UNREAD_DIFF = "git diff printed what canopy cannot read: name other paths"
+
+
+def _split(old_mode: str, mode: str) -> bool:
+    """Whether git prints a file's patch as two, a deletion and a creation: when it changed between kinds of file.
+
+    Returns:
+        Whether it does: both sides are there, a file, a symlink, or a submodule, and not the same kind.
+    """
+    kind = 0o170000
+    before, after = int(old_mode, 8), int(mode, 8)
+    return bool(before and after) and before & kind != after & kind
+
+
+def _patches(text: str, sections: Sequence[int]) -> list[str]:
+    """Each file's hunks in `text`, the patches `diff` printed, in order, as many for each file as `sections` says.
+
+    Each patch starts with a line of git's own that starts with `_PATCH_START`, then more of git's own up to its first
+    `@@` line, then the file's lines, each after a mark, never a letter. But `procs` reads a carriage return alone as a
+    line break, so one in a file's line could start a line with `_PATCH_START`: the patches are counted, and one more
+    than git prints for the files is refused, never read as the next file's.
+
+    Returns:
+        Each file's hunks, from its first `@@` line, every hidden character named but line breaks and tabs.
+
+    Raises:
+        Refused: The patches do not start with one, or there are more or fewer of them than git prints for the files.
+    """
+    lines = text.split("\n")
+    if lines[-1:] == [""]:
+        lines.pop()
+    starts = [n for n, line in enumerate(lines) if line.startswith(_PATCH_START)]
+    if (lines and starts[:1] != [0]) or len(starts) < sum(sections):
+        raise Refused(_UNREAD_DIFF)
+    if len(starts) > sum(sections):
+        raise Refused(
+            "a file's patch holds a line that reads as the start of another's, after a carriage return: list the "
+            "files with stat, and read that one with show",
+        )
+    each: list[str] = []
+    for start, end in itertools.pairwise([*starts, len(lines)]):
+        body = lines[start + 1 : end]
+        first = next((n for n, line in enumerate(body) if line.startswith("@@")), len(body))
+        each.append("\n".join(body[first:]))
+    found: list[str] = []
+    for count in sections:
+        found.append(_shown("\n".join(part for part in each[:count] if part)))
+        each = each[count:]
+    return found
+
+
+def _fitted_diff(files: Sequence[FileDiff]) -> Changes:
+    """`files` as `diff` returns them: as many as fit `MAX_CHARS` as JSON, in git's order.
+
+    When not even the first fits, it is returned with its patch cut at a line's end to fit.
+
+    Returns:
+        The files, and what was left out, if anything.
+    """
+    budget = MAX_CHARS - 1000  # the fields around the files, and the note on what was cut
+    kept: list[FileDiff] = []
+    used = 0
+    for file in files:
+        used += len(file.model_dump_json()) + 1
+        if used > budget:
+            break
+        kept.append(file)
+    if len(kept) == len(files):
+        return Changes(files=kept, more=False, cut=None)
+    if kept:
+        cut = (
+            f"listed {len(kept)} of the {len(files)} files changed: read the rest a few paths at a time, or list "
+            "them all with stat"
+        )
+        return Changes(files=kept, more=True, cut=cut)
+    first = files[0]
+    room = budget - len(first.model_copy(update={"patch": ""}).model_dump_json())
+    lines: list[str] = []
+    for line in (first.patch or "").split("\n"):
+        room -= len(to_json(line))  # the line as JSON writes it, its quotes the room for the `\n` after it
+        if room < 0:
+            break
+        lines.append(line)
+    more = len(files) > 1
+    cut = (
+        f"the first file's patch alone is past {MAX_CHARS} characters: it is cut at a line's end"
+        f"{', and the files after it left out' if more else ''}; read that file with show, or name other paths"
+    )
+    return Changes(files=[first.model_copy(update={"patch": "\n".join(lines)})], more=more, cut=cut)
 
 
 def _read_log(out: str) -> list[Commit]:

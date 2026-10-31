@@ -18,7 +18,7 @@ only where CANOPY_RUN_ID names such a run: a call is validated and writes nothin
 from the call in the events the agent prints; it opens no workspace.
 
 An overseer's tool lists its result's schema as its output schema, and answers with its text and
-the result as structured content; git's `log` and `grep` do too, their text the result as JSON. A refusal or an
+the result as structured content; git's `log`, `grep`, and `diff` do too, their text the result as JSON. A refusal or an
 invalid argument is a tool error, `isError`, with text that says why and no structured content, and the server goes
 on. It writes nothing to stderr, which the runtime never reads, and logs no argument's text.
 """
@@ -467,10 +467,13 @@ def git_mode(runner: procs.Runner, checkouts: Mapping[str, Path]) -> Mode:
         ),
         _git_tool(
             git_tools.DIFF,
-            "Show the diff from one commit to another, in the paths named if any, or with stat each file changed and "
-            f"its lines added and removed. Commits only, never the working tree. {_CUT}",
+            "Show the diff from one commit to another as JSON, in the paths named if any: each file changed, by path, "
+            "with its status, the path a rename came from, its modes, whether it is binary, its lines added and "
+            "removed, and its patch, the hunks of its lines. stat leaves the patches out, for a large change's shape. "
+            "Commits only, never the working tree. more says whether files are left out to fit.",
             git_tools.Diff,
             git_tools.diff,
+            result=git_tools.Changes,
             runner=runner,
             checkouts=checkouts,
         ),

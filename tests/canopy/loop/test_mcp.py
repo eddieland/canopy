@@ -1044,14 +1044,16 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
         )
     # Its own tools, wherever it runs, a running tick included, and none of the overseer's.
     assert served.listed() == ["merge-base", "diff", "log", "show", "blame", "grep", "files"]
-    # log and grep answer with records, as structured content and as their text's JSON; the rest with text alone.
+    # diff, log, and grep answer with records, as structured content and as their text's JSON; the rest with text alone.
     listed = {t["name"]: t for t in served.responses[1]["result"]["tools"]}
-    assert [name for name, t in listed.items() if "outputSchema" in t] == ["log", "grep"]
-    output = listed["log"]["outputSchema"]
-    for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
-        validator.check_schema(output)
+    assert [name for name, t in listed.items() if "outputSchema" in t] == ["diff", "log", "grep"]
+    output, diff_output = listed["log"]["outputSchema"], listed["diff"]["outputSchema"]
+    for schema_of in (output, diff_output):
+        for validator in (jsonschema.Draft202012Validator, jsonschema.Draft7Validator):
+            validator.check_schema(schema_of)
+        assert "$ref" not in json.dumps(schema_of)
     assert sorted(output["required"]) == ["commits", "cut", "more"]
-    assert "$ref" not in json.dumps(output)
+    assert sorted(diff_output["required"]) == ["cut", "files", "more"]
     schema = listed["log"]["inputSchema"]
     assert (schema["required"], schema["additionalProperties"]) == (["range"], False)
     assert schema["properties"]["limit"]["maximum"] == git_tools.MAX_LIMIT
@@ -1062,8 +1064,14 @@ def test_a_review_or_a_plan_is_served_read_only_git_in_its_checkout_alone(
     jsonschema.validate(structured, output)
     assert log.text == f"{git_tools.DATA_NOTE}\n\n{json.dumps(structured, separators=(',', ':'))}"
     assert [c["commit"] for c in structured["commits"]] == [sha]
-    assert served.structured(3) is None
-    assert "+while True:\n+    call()" in diff.text
+    changes = served.structured(3)
+    assert changes is not None
+    jsonschema.validate(changes, diff_output)
+    assert diff.text == f"{git_tools.DATA_NOTE}\n\n{json.dumps(changes, separators=(',', ':'))}"
+    [added] = changes["files"]
+    assert (added["status"], added["path"]) == ("A", "retry.py")
+    assert added["patch"] == "@@ -0,0 +1,2 @@\n+while True:\n+    call()"
+    assert served.structured(4) is None
     assert show.text.endswith("while True:\n    call()")
     assert base.text == git("rev-parse", "main", cwd=seed)
     escape, option, other = (served.said(n) for n in (6, 7, 8))
