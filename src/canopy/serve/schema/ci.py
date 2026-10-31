@@ -38,10 +38,14 @@ class CiCheck(Model):
     """Its red runs that a later run of it on a new head of the same PR followed."""
     passed: int
     """Of those, the ones whose next run on the new head was green."""
+    reruns: int
+    """Its runs in the window on a head of a PR where a run of it was red before: reruns with no change to the code."""
+    reruns_green: int
+    """Of those, the green ones: a check that passed on a head it had failed on, flaky without anyone's say-so."""
 
 
 class CiDay(Model):
-    """One local day of the window: its red check runs, by the chart's series."""
+    """One local day of the window: its red check runs, by the chart's series, and the PR heads first checked on it."""
 
     day: str
     """The day, `YYYY-MM-DD`, in the local time of the machine canopy runs on."""
@@ -49,6 +53,10 @@ class CiDay(Model):
     """When it starts: its local midnight, so a page can write it in its own zone."""
     red: list[int]
     """Each series' red runs, in `CiReport.series` order."""
+    heads: int
+    """The PR heads whose first check run was observed on the day, counted as `CiReport.heads` counts them."""
+    green_first: int
+    """Of those, the heads whose first run of every check was not red."""
 
 
 class CiFixedCheck(Model):
@@ -79,6 +87,30 @@ class CiFix(Model):
     """What it cost, in US dollars; None when it reported none."""
     checks: list[CiFixedCheck]
     """The checks red on its PRs' heads when it started; empty when no source had observed one."""
+    hours_to_green: float | None = None
+    """The longest time to green of the spells of red its PRs were in when it started, as `CiPullRequest` measures
+    one; None while one of them is still red, or when none was red."""
+
+
+class CiPullRequest(Model):
+    """A PR with a check run observed in the window, and how long it stayed red."""
+
+    url: str
+    """The PR."""
+    ticket_key: str | None = None
+    """The ticket that owns it: its unit's, else the ticket of the first run that named it; None for a PR no run
+    named."""
+    phase: str | None = None
+    """Its unit's phase (DESIGN §7); None for a PR no unit of the loop's has."""
+    red_at: datetime | None = None
+    """When its latest spell of red began: the first red run a source observed on it after the spell before ended;
+    None when none was red."""
+    green_at: datetime | None = None
+    """When that spell ended: its first head from the red one on with no check's last red or green run red and one
+    green, at the observation of the last of those; None while it lasts, or when none was red."""
+    hours_to_green: float | None = None
+    """From `red_at` to `green_at`, in hours; None without both. Approximate: each time is when a source saw a run
+    completed, not when it finished, and a head whose other checks still run reads green until one is seen red."""
 
 
 class CiKick(Model):
@@ -147,6 +179,10 @@ class CiReport(Model):
     """The newest first."""
     kicked_pull_requests: list[CiKickedPullRequest]
     """The most kicked first."""
+    pull_requests: list[CiPullRequest]
+    """Still red first, the oldest red first; then the longest time to green first; then those never red."""
+    median_hours_to_green: float | None = None
+    """The median of `pull_requests`' hours to green, over those that went green; None with none."""
     max_flaky_kicks: int
     """`trust.max_flaky_kicks`: how many kicks a head of work gets; 0 when canopy kicks none."""
     cooldown: HealthRefusal | None = None

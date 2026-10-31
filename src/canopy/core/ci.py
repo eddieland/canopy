@@ -1,10 +1,18 @@
 """What CI did on the PRs canopy observed (DESIGN §11), for the web UI's CI page.
 
 Reads only. Over the same window as `canopy spend` and `canopy health` (whole local days, today's so far included),
-by when a source first observed each check run completed: how many PR heads were green the first time their checks ran;
-each check's runs, red runs, and how often its next run on a new head passed; each day's red runs by check; each
-`resume` for `ci`, a retired `fix-ci` among them, with whether the next run of each check it found red, on the head
-after it started, passed; and each flaky kick, with whether the check came back red.
+by when a source first observed each check run completed: how many PR heads were green the first time their checks ran,
+in the window and by day; each check's runs, red runs, how often its next run on a new head passed, and how often a
+rerun on the same head after a red run passed, which is flakiness by the only definition that needs nobody's opinion;
+each day's red runs by check; each PR's time to green; each `resume` for `ci`, a retired `fix-ci` among them, with
+whether the next run of each check it found red, on the head after it started, passed; and each flaky kick, with whether
+the check came back red.
+
+A PR's spell of red runs from a red run observed on it to the first head, its red one or a later one, on which no
+check's last red or green run was red and one was green, at the observation of the last of those runs; the next spell
+starts at the first red run after that on that head or a later one. Its time to green is how long the spell lasted. It
+is approximate: `observed_at` is when a source saw a run completed, not when it finished, and a head whose other checks
+are still running reads green until a source sees one go red.
 
 Red is `failure`, `error`, `timed_out`, or `startup_failure`; green is `success`; the rest (`cancelled`, `skipped`,
 `neutral`, `stale`, `action_required`) count as neither. Only the check runs a `vcs` source observed are kept
@@ -15,7 +23,9 @@ has no history and is not counted.
 from __future__ import annotations
 
 import json
+import statistics
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import TYPE_CHECKING, Literal, cast
 
 from canopy.core import contract, db, records, spend, tracked_prs
@@ -23,7 +33,7 @@ from canopy.core.vocab import CheckConclusion, ResumeReason, RunKind
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Collection, Iterable, Mapping, Sequence
     from datetime import datetime
 
     from canopy.core.vocab import Phase, RunStatus
@@ -37,6 +47,8 @@ TOP_CHECKS = 4
 
 #: How a check run ended, as the page counts it.
 type Verdict = Literal["green", "red", "neither"]
+#: A PR's spell of red: when it began, and when it ended, None while it lasts; journal times.
+type Spell = tuple[str, str | None]
 
 
 @dataclass(frozen=True)
@@ -51,11 +63,15 @@ class Check:
     followed: int
     #: Of those, the ones whose next run on the new head was green.
     passed: int
+    #: Its runs on a head of a PR where a run of it was red before: reruns with no change to the code.
+    reruns: int
+    #: Of those, the green ones: a check that passed on a head it had failed on.
+    reruns_green: int
 
 
 @dataclass(frozen=True)
 class Day:
-    """One local day of the window: its red check runs, by the chart's series."""
+    """One local day of the window: its red check runs, by the chart's series, and the heads first checked on it."""
 
     #: The day, `YYYY-MM-DD`, as `spend.local_day` names it.
     day: str
@@ -63,6 +79,10 @@ class Day:
     start: str
     #: Each series' red runs, in `Ci.series` order.
     red: Sequence[int]
+    #: The PR heads whose first check run was observed on the day, counted as `Ci.heads` counts them.
+    heads: int
+    #: Of those, the heads whose first run of every check was not red.
+    green_first: int
 
 
 @dataclass(frozen=True)
@@ -87,6 +107,30 @@ class Fix:
     cost_usd: float | None
     #: The checks red on its PRs' heads when it started; none when no source had observed one.
     checks: Sequence[FixedCheck]
+    #: The longest time to green of the spells of red its PRs were in when it started; None while one of them is still
+    #: red, or when none was red.
+    to_green: timedelta | None
+
+
+@dataclass(frozen=True)
+class PullRequest:
+    """A PR with a check run observed in the window, and how long it stayed red."""
+
+    url: str
+    #: The ticket that owns it and its unit's phase, as `tracked_prs` reads them; None for a PR no run named.
+    ticket: str | None
+    phase: Phase | None
+    #: When its latest spell of red (the module's docstring) began, a journal time; None when none was red.
+    red_at: str | None
+    #: When that spell ended, on its first green head; None while it lasts, or when none was red.
+    green_at: str | None
+
+    @property
+    def to_green(self) -> timedelta | None:
+        """How long its latest spell of red lasted; None while it lasts, or when none was red."""
+        if self.red_at is None or self.green_at is None:
+            return None
+        return db.parse_time(self.green_at) - db.parse_time(self.red_at)
 
 
 @dataclass(frozen=True)
@@ -143,6 +187,14 @@ class Ci:
     fixes: Sequence[Fix]
     kicks: Sequence[Kick]
     kicked_prs: Sequence[KickedPr]
+    #: Still red first, the oldest red first; then the longest time to green first; then those never red, by URL.
+    pull_requests: Sequence[PullRequest]
+
+    @property
+    def median_to_green(self) -> timedelta | None:
+        """The median time to green of the PRs that went green; None with none."""
+        spans = [span for pr in self.pull_requests if (span := pr.to_green) is not None]
+        return timedelta(seconds=statistics.median(s.total_seconds() for s in spans)) if spans else None
 
 
 def report(conn: sqlite3.Connection, now: datetime, days: int) -> Ci:
@@ -155,7 +207,9 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Ci:
     since, until = db.format_time(start), db.format_time(end)
     starts = spend.day_starts(start, days)
     with db.read_snapshot(conn):
-        tracked = tracked_prs.tracked(conn, since, until)
+        named = tracked_prs.tracked(conn, "", until)
+        # The PRs a window's run named: the last run before its end that named one started in it.
+        tracked = {url: pr for url, pr in named.items() if pr.last_named >= since}
         fixes = _fix_runs(conn, since, until)
         kicks = records.select(records.FlakyKick).where("kicked_at < ?", until).order_by("kicked_at, run_id").all(conn)
         fix_prs = {r.id: _prs_of(r, tracked) for r in fixes}
@@ -171,22 +225,24 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Ci:
     for run in runs:
         by_pr.setdefault(run.pr_url, []).append(run)
     in_window = [r for r in runs if since <= r.observed_at < until]
-    heads, green_first = _first_heads(by_pr, since, until)
+    first_heads = _first_heads(by_pr, since, until)
     series = _series(in_window)
     window_kicks = [k for k in kicks if k.kicked_at >= since]
     found_kicks = [_kick(k, kicks, kick_runs, runs) for k in reversed(window_kicks)]
+    spells = {url: _red_spells(pr_runs) for url, pr_runs in by_pr.items()}
     return Ci(
         since=since,
         until=until,
         days=days,
-        heads=heads,
-        green_first=green_first,
+        heads=len(first_heads),
+        green_first=sum(green for _, green in first_heads),
         checks=_checks(in_window, by_pr),
         series=series,
-        per_day=_per_day(in_window, series, starts),
-        fixes=[_fix(r, fix_prs[r.id], by_pr) for r in fixes],
+        per_day=_per_day(in_window, series, starts, first_heads),
+        fixes=[_fix(r, fix_prs[r.id], by_pr, spells) for r in fixes],
         kicks=found_kicks,
         kicked_prs=_kicked_prs(found_kicks, tracked, kick_runs),
+        pull_requests=_pull_requests({r.pr_url for r in in_window}, spells, named),
     )
 
 
@@ -251,14 +307,15 @@ def _check_runs(
     return query.all(conn)
 
 
-# How many PR heads first checked in the window had a red or green first run of a check, and how many of those had no
-# red one: each check's first run on the head is what the head's push got, before any rerun.
+# Each PR head first checked in the window that had a red or green first run of a check, as the local day it was first
+# checked and whether it had no red one: each check's first run on the head is what the head's push got, before any
+# rerun.
 def _first_heads(
     by_pr: Mapping[str, Sequence[records.ObservedCheckRun]],
     since: str,
     until: str,
-) -> tuple[int, int]:
-    heads = green = 0
+) -> list[tuple[str, bool]]:
+    found: list[tuple[str, bool]] = []
     for runs in by_pr.values():
         first_seen: dict[str, str] = {}
         first_runs: dict[str, dict[str, Verdict]] = {}
@@ -269,12 +326,12 @@ def _first_heads(
             verdicts = set(first_runs[head].values())
             if not since <= seen < until or verdicts == {"neither"}:
                 continue
-            heads += 1
-            green += "red" not in verdicts
-    return heads, green
+            found.append((spend.local_day(seen), "red" not in verdicts))
+    return found
 
 
-# Each check's runs in the window, the worst first, with how often a red one's next run on a new head passed.
+# Each check's runs in the window, the worst first, with how often a red one's next run on a new head passed, and how
+# often a rerun on a head it had been red on did.
 def _checks(
     in_window: Iterable[records.ObservedCheckRun],
     by_pr: Mapping[str, Sequence[records.ObservedCheckRun]],
@@ -282,11 +339,13 @@ def _checks(
     by_name: dict[str, list[records.ObservedCheckRun]] = {}
     for run in in_window:
         by_name.setdefault(run.name, []).append(run)
+    reruns = _reruns(by_pr)
     found: list[Check] = []
     for name, runs in by_name.items():
         verdicts = [_verdict(r.conclusion) for r in runs]
         after = [_next_on_new_head(by_pr[r.pr_url], r) for r in runs if _verdict(r.conclusion) == "red"]
         followed = [r for r in after if r is not None]
+        rerun = [r for r in runs if (r.pr_url, r.run_id) in reruns]
         found.append(
             Check(
                 name=name,
@@ -295,9 +354,24 @@ def _checks(
                 green=verdicts.count("green"),
                 followed=len(followed),
                 passed=sum(1 for r in followed if _verdict(r.conclusion) == "green"),
+                reruns=len(rerun),
+                reruns_green=sum(1 for r in rerun if _verdict(r.conclusion) == "green"),
             ),
         )
     return sorted(found, key=lambda c: (-c.red, -_share(c), c.name))
+
+
+# The runs, by PR and id, observed after a red run of their check on their PR's same head.
+def _reruns(by_pr: Mapping[str, Sequence[records.ObservedCheckRun]]) -> set[tuple[str, int]]:
+    found: set[tuple[str, int]] = set()
+    for url, runs in by_pr.items():
+        red: set[tuple[str, str]] = set()
+        for run in runs:
+            if (run.head_sha, run.name) in red:
+                found.add((url, run.run_id))
+            elif _verdict(run.conclusion) == "red":
+                red.add((run.head_sha, run.name))
+    return found
 
 
 def _share(check: Check) -> float:
@@ -335,9 +409,16 @@ def _per_day(
     in_window: Iterable[records.ObservedCheckRun],
     series: Sequence[str | None],
     starts: Mapping[str, str],
+    first_heads: Iterable[tuple[str, bool]],
 ) -> list[Day]:
     other = series.index(None) if None in series else None
     red = {day: [0] * len(series) for day in starts}
+    heads = dict.fromkeys(starts, 0)
+    green_first = dict.fromkeys(starts, 0)
+    for day, green in first_heads:
+        if day in heads:
+            heads[day] += 1
+            green_first[day] += green
     for run in in_window:
         day = red.get(spend.local_day(run.observed_at))
         if day is None or _verdict(run.conclusion) != "red":
@@ -345,15 +426,98 @@ def _per_day(
         index = series.index(run.name) if run.name in series else other
         if index is not None:
             day[index] += 1
-    return [Day(day=day, start=at, red=red[day]) for day, at in starts.items()]
+    return [
+        Day(day=day, start=at, red=red[day], heads=heads[day], green_first=green_first[day])
+        for day, at in starts.items()
+    ]
+
+
+# A PR's spells of red, oldest first, as the module's docstring says: when each began, and when it ended, None for one
+# that lasts, which is the last.
+def _red_spells(runs: Sequence[records.ObservedCheckRun]) -> list[Spell]:
+    by_head: dict[str, list[records.ObservedCheckRun]] = {}
+    for run in runs:
+        by_head.setdefault(run.head_sha, []).append(run)
+    order = {head: i for i, head in enumerate(by_head)}
+    green = {head: _green_at(head_runs) for head, head_runs in by_head.items()}
+    found: list[Spell] = []
+    after, floor = "", 0
+    while True:
+        red = next(
+            (
+                r
+                for r in runs
+                if _verdict(r.conclusion) == "red" and r.observed_at > after and order[r.head_sha] >= floor
+            ),
+            None,
+        )
+        if red is None:
+            return found
+        ended = next(
+            (
+                (head, at)
+                for head in list(by_head)[order[red.head_sha] :]
+                if (at := green[head]) is not None and at >= red.observed_at
+            ),
+            None,
+        )
+        if ended is None:
+            return [*found, (red.observed_at, None)]
+        head, after = ended
+        found.append((red.observed_at, after))
+        floor = order[head]
+
+
+# When a head's runs, oldest first, went green: no check's last red or green run red and one green, at the latest of
+# those runs' observations; None when they are not green.
+def _green_at(runs: Iterable[records.ObservedCheckRun]) -> str | None:
+    deciding: dict[str, records.ObservedCheckRun] = {}
+    for run in runs:
+        if _verdict(run.conclusion) != "neither":
+            deciding[run.name] = run
+    if not deciding or any(_verdict(r.conclusion) == "red" for r in deciding.values()):
+        return None
+    return max(r.observed_at for r in deciding.values())
+
+
+def _pull_requests(
+    urls: Iterable[str],
+    spells: Mapping[str, Sequence[Spell]],
+    named: Mapping[str, tracked_prs.TrackedPr],
+) -> list[PullRequest]:
+    found: list[PullRequest] = []
+    for url in urls:
+        pr = named.get(url)
+        red_at, green_at = spells[url][-1] if spells[url] else (None, None)
+        found.append(
+            PullRequest(
+                url=url,
+                ticket=None if pr is None else pr.ticket,
+                phase=None if pr is None else pr.phase,
+                red_at=red_at,
+                green_at=green_at,
+            ),
+        )
+    return sorted(found, key=_red_order)
+
+
+# Still red first, the oldest red first; then the longest time to green first; then those never red, by URL.
+def _red_order(pr: PullRequest) -> tuple[int, str, float, str]:
+    if pr.red_at is None:
+        return 2, "", 0.0, pr.url
+    span = pr.to_green
+    if span is None:
+        return 0, pr.red_at, 0.0, pr.url
+    return 1, "", -span.total_seconds(), pr.url
 
 
 # A fix's checks: on each of its PRs, the checks red on the head its PR had when it started, and how each one's first
 # run on the next head, the first one a source observed after it started, ended.
 def _fix(
     run: records.Run,
-    prs: Iterable[str],
+    prs: Collection[str],
     by_pr: Mapping[str, Sequence[records.ObservedCheckRun]],
+    spells: Mapping[str, Sequence[Spell]],
 ) -> Fix:
     checks: list[FixedCheck] = []
     for url in prs:
@@ -379,7 +543,23 @@ def _fix(
         started_at=run.started_at,
         cost_usd=run.cost_usd,
         checks=checks,
+        to_green=_longest_to_green(run.started_at, (spells.get(url, ()) for url in prs)),
     )
+
+
+# The longest of the spells of red, one PR's to each sequence, that were on at `started`: began at or before it and
+# had not ended; None while one of them lasts, or when none was on.
+def _longest_to_green(started: str, spells: Iterable[Sequence[Spell]]) -> timedelta | None:
+    found: list[timedelta] = []
+    for pr_spells in spells:
+        on = next((s for s in pr_spells if s[0] <= started and (s[1] is None or s[1] > started)), None)
+        if on is None:
+            continue
+        red_at, green_at = on
+        if green_at is None:
+            return None
+        found.append(db.parse_time(green_at) - db.parse_time(red_at))
+    return max(found, default=None)
 
 
 # A kick, with the checks red on the head it replaced and how each one's first run on the head it pushed ended.

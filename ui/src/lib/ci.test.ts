@@ -20,7 +20,7 @@ import {
 const H24: Clock = { hours: '24', zone: false }
 
 function day(name: string, red: number[]): CiDay {
-    return { day: name, start: `${name}T00:00:00Z`, red }
+    return { day: name, start: `${name}T00:00:00Z`, red, heads: 0, green_first: 0 }
 }
 
 describe('ci', () => {
