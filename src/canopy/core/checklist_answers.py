@@ -8,13 +8,16 @@ row for every item of every list, naming the run, a worker's or a task's: the an
 result said nothing of. An answer to an item or a repository the run's lists do not hold is dropped, and named in the
 run's note; a result with no `checklist` is never refused, since its push is already made. The reason is the worker's
 text, which read the PR: it is shown as data, made printable, and authorizes nothing. `canopy checklist` counts the
-answers per repository and item over a window (`counts`), so an item earns its place or is dropped.
+answers per repository and item over a window (`counts`), so an item earns its place or is dropped; the web UI's
+checklist page also groups them by the runs behind each `held` and `fixed` answer, and by week (`details`).
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import date, timedelta
 from typing import TYPE_CHECKING, Literal, assert_never, cast
 
 from pydantic import BaseModel, ConfigDict
@@ -36,8 +39,12 @@ MAX_REASON = 1000
 MAX_NAMED = 10
 #: The answers a worker may give: `unanswered` is the harness's alone.
 GIVEN: frozenset[ItemAnswer] = frozenset(ItemAnswer) - {ItemAnswer.UNANSWERED}
+#: How many runs `details` names behind each item's `held` answers, and its `fixed`: the newest, which a page lists.
+MAX_RUNS = 20
 #: The tables of the runs that answer a checklist: a worker's, and a one-off task's (DESIGN §36).
 type RunTable = Literal["runs", "task_runs"]
+#: Whose run gave an answer, as the API names it: a worker's, or a task's.
+type RunKindOf = Literal["run", "task"]
 
 
 @dataclass(frozen=True)
@@ -137,6 +144,68 @@ class Counts:
                 for c in self.items
             ],
         }
+
+
+@dataclass(frozen=True)
+class AnsweredBy:
+    """A run that gave an item an answer: a worker's, or a one-off task's (DESIGN §36)."""
+
+    kind: RunKindOf
+    #: The run's id in its table: `runs` for a worker's, `task_runs` for a task's.
+    id: int
+    #: The task a task's run is of; None for a worker's.
+    task_id: int | None
+    started_at: str
+    #: Why it left the item failing, for `held`, the worker's text, whole; None for any other answer.
+    reason: str | None
+
+
+@dataclass(frozen=True)
+class ItemRuns:
+    """The runs of a window behind one item's `held` and `fixed` answers, the newest first, at most `MAX_RUNS` each."""
+
+    repo: str
+    item: str
+    held: Sequence[AnsweredBy] = ()
+    fixed: Sequence[AnsweredBy] = ()
+
+
+@dataclass(frozen=True)
+class WeekCounts:
+    """How the runs that started in one local ISO week of a window answered one item."""
+
+    #: The ISO week, `2026-W41`, of this machine's local time: Monday to Sunday.
+    week: str
+    #: The item's counts in the week alone: all zero for a week no run was given it.
+    counts: ItemCounts
+
+
+@dataclass(frozen=True)
+class Details:
+    """The answers `counts` counts over a window, grouped by the runs behind each item's and by week (`details`)."""
+
+    #: An entry per item, in `counts`' order.
+    items: Sequence[ItemRuns] = ()
+    #: An entry per item and ISO week the window touches: the items in `counts`' order, each one's weeks oldest first.
+    weeks: Sequence[WeekCounts] = ()
+
+
+@dataclass(frozen=True)
+class _Answered(records.View):
+    """One answer of the window, with the run that gave it and when that run started."""
+
+    repo: str
+    item: str
+    answer: ItemAnswer
+    reason: str | None
+    #: The run's id in its table: `runs`, or `task_runs` when `task_id` is set.
+    id: int
+    task_id: int | None
+    started_at: str
+
+    def kind(self) -> RunKindOf:
+        """Return the table the run is of: a task's when it names one."""
+        return "run" if self.task_id is None else "task"
 
 
 class _Reported(BaseModel):
@@ -239,7 +308,7 @@ def counts(conn: sqlite3.Connection, now: datetime, days: int, *, repo: str | No
     """
     start, end = spend.window(now, days)
     since, until = db.format_time(start), db.format_time(end)
-    query = (
+    query = _in_window(
         sql.select(
             "a.repo, a.item, count(*) AS reminded, sum(a.answer = ?) AS passed, sum(a.answer = ?) AS fixed, "
             "sum(a.answer = ?) AS held, sum(a.answer = ?) AS not_applicable, sum(a.answer = ?) AS unanswered",
@@ -248,18 +317,71 @@ def counts(conn: sqlite3.Connection, now: datetime, days: int, *, repo: str | No
             ItemAnswer.HELD,
             ItemAnswer.NOT_APPLICABLE,
             ItemAnswer.UNANSWERED,
-        )
-        .from_("checklist_answers a")
-        .left_join("runs r ON r.id = a.run_id")
-        .left_join("task_runs t ON t.id = a.task_run_id")
-        .where("coalesce(r.started_at, t.started_at) >= ? AND coalesce(r.started_at, t.started_at) < ?", since, until)
+        ),
+        since,
+        until,
+        repo,
     )
-    if repo is not None:
-        query = query.where("a.repo = ?", repo)
     # An answer's rowid follows its list's order, as `record` wrote them, so the window's first run orders the items.
     query = query.group_by("a.repo, a.item").order_by("a.repo, min(a.rowid)")
     items = tuple(records.fetch_all(conn, ItemCounts, query))
     return Counts(since=since, until=until, days=days, repo=repo, items=items)
+
+
+def details(
+    conn: sqlite3.Connection,
+    now: datetime,
+    days: int,
+    *,
+    repo: str | None = None,
+    limit: int = MAX_RUNS,
+) -> Details:
+    """Group the answers `counts` counts once more: by the runs that held or fixed each item, and by local ISO week.
+
+    The window, the runs in it, and the items' order are `counts`'.
+
+    Returns:
+        For each item, the newest `limit` runs that held it and that fixed it, and its counts in every ISO week the
+        window touches, none skipped; `repo`'s items alone when it is named.
+    """
+    start, end = spend.window(now, days)
+    query = _in_window(
+        sql.select(
+            "a.repo, a.item, a.answer, a.reason, coalesce(a.run_id, a.task_run_id) AS id, t.task_id, "
+            "coalesce(r.started_at, t.started_at) AS started_at",
+        ),
+        db.format_time(start),
+        db.format_time(end),
+        repo,
+    ).order_by("a.repo, a.rowid")
+    rows = records.fetch_all(conn, _Answered, query)
+    # The items in `counts`' order: by repository, then as the window's first run given each listed them.
+    order = list(dict.fromkeys((row.repo, row.item) for row in rows))
+    shown = {ItemAnswer.HELD, ItemAnswer.FIXED}
+    runs: dict[tuple[str, str, ItemAnswer], list[_Answered]] = {}
+    tally: dict[tuple[str, str, str], Counter[ItemAnswer]] = {}
+    for row in rows:
+        if row.answer in shown:
+            runs.setdefault((row.repo, row.item, row.answer), []).append(row)
+        week = _week_of(db.parse_time(row.started_at).astimezone().date())
+        tally.setdefault((row.repo, row.item, week), Counter())[row.answer] += 1
+
+    def newest(repo: str, item: str, answer: ItemAnswer) -> tuple[AnsweredBy, ...]:
+        found = sorted(runs.get((repo, item, answer), ()), key=lambda r: (r.started_at, r.id), reverse=True)
+        return tuple(AnsweredBy(r.kind(), r.id, r.task_id, r.started_at, r.reason) for r in found[:limit])
+
+    weeks = _weeks(start, end)
+    return Details(
+        items=tuple(
+            ItemRuns(repo, item, held=newest(repo, item, ItemAnswer.HELD), fixed=newest(repo, item, ItemAnswer.FIXED))
+            for repo, item in order
+        ),
+        weeks=tuple(
+            WeekCounts(week, _counted(repo, item, tally.get((repo, item, week), Counter())))
+            for repo, item in order
+            for week in weeks
+        ),
+    )
 
 
 def contract_text(lists: Sequence[Checklist]) -> str:
@@ -318,6 +440,44 @@ def _answer(repo: str, item: str, said: object) -> Answer:
     if not isinstance(reason, str) or not reason.strip():
         raise ValueError("`held` gives no reason")
     return Answer(repo, item, answer, reason.strip()[:MAX_REASON])
+
+
+def _in_window(query: sql.Select, since: str, until: str, repo: str | None) -> sql.Select:
+    # `query`'s answers: those of the worker and task runs that started in `[since, until)`, of `repo` when named.
+    query = (
+        query.from_("checklist_answers a")
+        .left_join("runs r ON r.id = a.run_id")
+        .left_join("task_runs t ON t.id = a.task_run_id")
+        .where("coalesce(r.started_at, t.started_at) >= ? AND coalesce(r.started_at, t.started_at) < ?", since, until)
+    )
+    return query if repo is None else query.where("a.repo = ?", repo)
+
+
+def _counted(repo: str, item: str, answers: Mapping[ItemAnswer, int]) -> ItemCounts:
+    # An item's counts, from how many runs gave each answer.
+    return ItemCounts(
+        repo=repo,
+        item=item,
+        reminded=sum(answers.values()),
+        passed=answers.get(ItemAnswer.PASSED, 0),
+        fixed=answers.get(ItemAnswer.FIXED, 0),
+        held=answers.get(ItemAnswer.HELD, 0),
+        not_applicable=answers.get(ItemAnswer.NOT_APPLICABLE, 0),
+        unanswered=answers.get(ItemAnswer.UNANSWERED, 0),
+    )
+
+
+def _weeks(start: datetime, end: datetime) -> list[str]:
+    # Every local ISO week the window `[start, end)` touches, oldest first.
+    first, last = start.astimezone().date(), (end.astimezone() - timedelta(days=1)).date()
+    days = (last - first).days + 1
+    return list(dict.fromkeys(_week_of(first + timedelta(days=n)) for n in range(days)))
+
+
+def _week_of(day: date) -> str:
+    # The ISO week a local day is in, as `2026-W41`: Monday to Sunday, as `spend`'s first-call weeks are.
+    year, week, _ = day.isocalendar()
+    return f"{year}-W{week:02d}"
 
 
 def _column(table: RunTable) -> Literal["run_id", "task_run_id"]:

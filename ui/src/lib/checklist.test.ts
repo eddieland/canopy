@@ -14,6 +14,8 @@ function item(repo: string, id: string, extra: Partial<ChecklistItemCounts> = {}
         held: 0,
         not_applicable: 0,
         unanswered: 0,
+        held_runs: [],
+        fixed_runs: [],
         ...extra,
     }
 }
