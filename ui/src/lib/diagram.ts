@@ -1,11 +1,11 @@
-// A diagram a plan writes as a Mermaid fence, drawn as SVG. A plan is model-written (TRUST_MODEL T1), so mermaid runs
-// at its strictest: `strict` sanitizes labels with DOMPurify and drops `click` handlers, labels are SVG text rather
-// than HTML (`htmlLabels: false`), and `secure` keeps a diagram's own front matter or `%%{init}%%` from setting any of
-// it back, or the theme, layout, or CSS. Only the kinds a plan has use for are drawn; any other is refused as such. The
-// SVG is a string for an `<img>` (src/lib/plan-diagram.ts), where the browser runs no script, follows no link, and
-// fetches nothing, so a gap in mermaid's sanitizer reaches nothing shown. While it draws, mermaid lays the SVG out in
-// the page, off screen, for a moment: there `strict` is the guard. Only this module imports
-// mermaid, and only on demand.
+// A diagram a plan or a guide page writes as a Mermaid fence, drawn as SVG. A plan is model-written (TRUST_MODEL T1),
+// so mermaid runs at its strictest: `strict` sanitizes labels with DOMPurify and drops `click` handlers, labels are SVG
+// text rather than HTML (`htmlLabels: false`), and `secure` keeps a diagram's own front matter or `%%{init}%%` from
+// setting any of it back, or the theme, layout, or CSS. Only the kinds a plan has use for are drawn; any other is
+// refused as such. The SVG is a string for an `<img>` (src/lib/plan-diagram.ts, src/hooks/use-diagram.ts), where the
+// browser runs no script, follows no link, and fetches nothing, so a gap in mermaid's sanitizer reaches nothing shown.
+// While it draws, mermaid lays the SVG out in the page, off screen, for a moment: there `strict` is the guard. Only
+// this module imports mermaid, and only on demand.
 //
 // An image draws with its own colors and fonts, not the page's: the colors are read from the theme's tokens as each
 // diagram is drawn, so a theme or palette changed redraws it, and the font is the system's, which the image can use,
@@ -61,6 +61,16 @@ const MAX_TEXT = 20_000
 // The font every system has, which an image can draw with.
 const FONT = 'ui-sans-serif, system-ui, sans-serif'
 
+// How a diagram is read, drawn or not: at mermaid's strictest, whatever the diagram asks.
+const READ: MermaidConfig = {
+    startOnLoad: false,
+    securityLevel: 'strict',
+    secure: SECURE,
+    htmlLabels: false,
+    suppressErrorRendering: true,
+    maxTextSize: MAX_TEXT,
+}
+
 let drawn = 0
 
 /**
@@ -70,16 +80,38 @@ let drawn = 0
 export async function drawDiagram(source: string): Promise<Drawn | NotDrawn> {
     mermaid.initialize(configuration())
     try {
-        const { diagramType } = await mermaid.parse(source)
-        if (!KINDS.has(diagramType)) {
-            return { error: `a ${diagramType} diagram is not drawn here, only ${KIND_NAMES}` }
+        const read = await kindOf(source)
+        if (typeof read !== 'string') {
+            return read
         }
         drawn += 1
         const { svg } = await mermaid.render(`plan-diagram-${drawn}`, source)
-        return { svg, kind: diagramType }
+        return { svg, kind: read }
     } catch (error) {
         return { error: firstLine(error) }
     }
+}
+
+/**
+ * Why `source` would not be drawn, or `undefined` when it would: it is read as `drawDiagram` reads it, without being
+ * drawn, so a test can hold a diagram to what is drawn where nothing can be laid out (the guide's, `guide.test.ts`).
+ */
+export async function readDiagram(source: string): Promise<NotDrawn | undefined> {
+    mermaid.initialize(READ)
+    try {
+        const read = await kindOf(source)
+        return typeof read === 'string' ? undefined : read
+    } catch (error) {
+        return { error: firstLine(error) }
+    }
+}
+
+// The kind of diagram `source` is, or why it is not drawn here; mermaid throws on a diagram it cannot read.
+async function kindOf(source: string): Promise<string | NotDrawn> {
+    const { diagramType } = await mermaid.parse(source)
+    return KINDS.has(diagramType)
+        ? diagramType
+        : { error: `a ${diagramType} diagram is not drawn here, only ${KIND_NAMES}` }
 }
 
 function configuration(): MermaidConfig {
@@ -93,12 +125,7 @@ function configuration(): MermaidConfig {
     // would make the image as wide as whatever holds it rather than as wide as it is.
     const natural = { useMaxWidth: false }
     return {
-        startOnLoad: false,
-        securityLevel: 'strict',
-        secure: SECURE,
-        htmlLabels: false,
-        suppressErrorRendering: true,
-        maxTextSize: MAX_TEXT,
+        ...READ,
         theme: 'base',
         look: 'classic',
         layout: 'dagre',

@@ -1,6 +1,7 @@
 import { cleanup, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { drawDiagram } from '@/lib/diagram'
 import type { GuidePiece } from '@/lib/guide'
 import type { Block } from '@/lib/rich-text'
 import { renderRouted } from '@/test-utils'
@@ -10,8 +11,13 @@ import { GuideLines, GuideText } from './guide-text'
 // A code block's colors, which Shiki stops giving a line it has read for too long: a busy runner's (`untimedShiki`).
 vi.mock('shiki/core', async (importOriginal) => (await import('@/test-utils')).untimedShiki(await importOriginal()))
 
+// mermaid lays a diagram out in the page, which happy-dom cannot: the guide's diagrams are read by `guide.test.ts`, and
+// drawn by Playwright.
+vi.mock('@/lib/diagram', () => ({ drawDiagram: vi.fn<typeof drawDiagram>() }))
+
 afterEach(() => {
     cleanup()
+    vi.mocked(drawDiagram).mockReset()
 })
 
 const text = (words: string): GuidePiece => ({ kind: 'text', text: words })
@@ -91,6 +97,32 @@ describe('GuideText', () => {
         )
 
         expect(container.textContent).toBe(lines.join('\n'))
+    })
+})
+
+describe('a diagram in the guide', () => {
+    const lines = ['flowchart TD', '    accTitle: A tick, then a wait', '    wait --> tick']
+
+    it('is drawn as an image named by its accTitle', async () => {
+        vi.mocked(drawDiagram).mockResolvedValue({
+            svg: '<svg xmlns="http://www.w3.org/2000/svg"/>',
+            kind: 'flowchart',
+        })
+        await renderRouted(<GuideText blocks={[{ kind: 'code', lines, lang: 'mermaid' }]} page="overview" />)
+
+        const image = await screen.findByRole('img', { name: 'A tick, then a wait' })
+        expect(image.getAttribute('src')).toMatch(/^data:image\/svg\+xml/u)
+        expect(drawDiagram).toHaveBeenCalledWith(lines.join('\n'))
+        expect(screen.queryByText('wait --> tick', { exact: false })).toBeNull()
+    })
+
+    it('shows its code, and why, when it cannot be drawn', async () => {
+        vi.mocked(drawDiagram).mockResolvedValue({ error: 'Parse error on line 3' })
+        await renderRouted(<GuideText blocks={[{ kind: 'code', lines, lang: 'mermaid' }]} page="overview" />)
+
+        expect(await screen.findByText('Not drawn: Parse error on line 3.')).toBeDefined()
+        expect(screen.getByText('wait --> tick', { exact: false })).toBeDefined()
+        expect(screen.queryByRole('img')).toBeNull()
     })
 })
 

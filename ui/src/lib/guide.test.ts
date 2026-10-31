@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import { readDiagram } from './diagram'
 import {
     anchor,
+    DIAGRAM_FENCE,
+    diagramTitle,
     EMBEDS,
     GUIDE,
     GUIDE_GROUPS,
@@ -40,6 +43,29 @@ describe('the guide', () => {
         const files = Object.values(EMBEDS).map((file) => file.replace(/\n$/u, '').split('\n'))
         expect(code).toEqual(files)
         expect(guidePage('config-files')?.body.at(-1)?.kind).toBe('paragraph')
+    })
+
+    it('has diagrams mermaid reads as a kind it draws, each named for a screen reader', async () => {
+        const diagrams = GUIDE.flatMap((page) =>
+            page.body.flatMap((block) =>
+                block.kind === 'code' && block.lang === DIAGRAM_FENCE ? [{ page: page.slug, source: block.lines }] : [],
+            ),
+        )
+        expect(diagrams.length).toBeGreaterThan(0)
+        const problems = await Promise.all(
+            diagrams.map(async ({ page, source }) => {
+                const found: string[] = []
+                const unread = await readDiagram(source.join('\n'))
+                if (unread !== undefined) {
+                    found.push(`${page}: ${unread.error}`)
+                }
+                if (diagramTitle(source) === undefined) {
+                    found.push(`${page}: a diagram with no accTitle`)
+                }
+                return found
+            }),
+        )
+        expect(problems.flat()).toEqual([])
     })
 
     it('reads code inside bold as code, so no bold text keeps a backtick', () => {

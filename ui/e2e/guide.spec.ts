@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { FULL_RAIL, settled, signIn, windowWidth } from './helpers.ts'
+import { FULL_RAIL, settled, signIn, storeTheme, windowWidth } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -96,6 +96,29 @@ test("a code block is colored by its fence's language once the grammar loads", a
     await expect(config).toContainText('labels = ["agent-ready-yourname"]')
     await expect(config.getByText(/^# Your queue\./u)).toHaveClass('text-muted-foreground')
     await expect(config.getByText('"agent-ready-yourname"', { exact: true }).first()).toHaveClass('text-syntax-string')
+})
+
+test('a diagram is drawn as its picture, named for a screen reader, and drawn again in the other theme', async ({
+    page,
+}) => {
+    await storeTheme(page, 'dark')
+    await page.goto('guide/how-the-loop-works')
+    const guide = page.getByTestId('guide-page')
+    for (const name of [
+        'The loop: a tick, then a wait until the next one',
+        'A run, from the worktree it leases to how it ends',
+        "A ticket's usual path, from ready to merged",
+    ]) {
+        const diagram = guide.getByRole('img', { name })
+        await expect(diagram).toBeVisible()
+        expect(await diagram.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(100)
+    }
+    await expect(guide.getByText('accTitle', { exact: false })).toHaveCount(0)
+
+    const run = guide.getByRole('img', { name: 'A run, from the worktree it leases to how it ends' })
+    const dark = await run.getAttribute('src')
+    await page.getByTestId('theme-toggle').click()
+    await expect(run).not.toHaveAttribute('src', dark ?? '')
 })
 
 test('a page the guide does not have is the 404', async ({ page }) => {

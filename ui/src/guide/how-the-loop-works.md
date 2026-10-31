@@ -34,6 +34,21 @@ source that fails ends the wait once, so the tick reads it again and tells you i
 keeps to its timer until a poll reads everything again, and that poll ends the wait too. A
 [reply from Slack](slack#replying-from-slack) is yours, so it ends the wait like any other.
 
+All of that, one turn of the loop at a time:
+
+```mermaid
+flowchart TD
+    accTitle: The loop: a tick, then a wait until the next one
+    news["You act, a run ends, a poll finds news"]
+    wait["Wait, longer while nothing is new"]
+    tidy["Tidy up, read your sources"]
+    overseer["The overseer decides each ticket, when any are left to decide"]
+    start["Start the runs it asked for, and canopy's own"]
+    close["Close the tick, publish attention"]
+    news -. ends the wait early .-> wait
+    wait --> tidy --> overseer --> start --> close --> wait
+```
+
 ## Runs
 
 A run is a worker agent doing one piece of work on one ticket. The overseer asks for it, and the tick starts it once the
@@ -58,6 +73,19 @@ A run ends `done`; `waiting on you`, when the worker stopped to ask you somethin
 failed, in one of several ways: `failed`, `crashed`, `timeout`, `unpushed` (it said done, with work it never pushed),
 or `unknown` (its last words weren't a result canopy could read). Every failed run reaches the attention list.
 
+```mermaid
+stateDiagram-v2
+    accTitle: A run, from the worktree it leases to how it ends
+    state "waiting on you" as blocked
+    state "failed, crashed, timeout, unpushed, or unknown" as failed
+    [*] --> running: the tick starts it, leasing a worktree
+    running --> done: its work is finished
+    running --> blocked: the worker asks you something
+    running --> stopped: you stop it
+    running --> failed: it went wrong
+    note right of failed: Every one reaches the attention list
+```
+
 Every run has a timeout, and near it, each tool call tells the agent how many minutes it has left, so a worker pushes
 what it has rather than losing it with its slot. That's advice: the timeout is still what ends the run.
 
@@ -72,6 +100,27 @@ is `ready`, `running`, `needs human`, `human replied`, `blocked` (on another tic
 goes through phases such as `ci running`, `ci red`, `review pending`, `review findings`, `changes requested`,
 `green unreviewed`, `approved`, and `merged`. The UI writes them with spaces; hover over one, or Tab to it, for the
 CLI's spelling and what the phase means.
+
+Most tickets take some version of this path. It's the usual way through, not every way: a conflict, a stacked
+blocker, or a plan adds a phase or two of its own. canopy's own review runs only with `review.agent_prs` set; without
+it, passing checks go straight to `green unreviewed`.
+
+```mermaid
+flowchart TD
+    accTitle: A ticket's usual path, from ready to merged
+    ready(["ready"]) -- implement --> running("running")
+    running -- the worker opens the PR --> ci_running("ci running")
+    ci_running -- checks pass --> review_pending("review pending")
+    review_pending -- the review is clean --> green_unreviewed("green unreviewed")
+    green_unreviewed -- a reviewer approves --> approved("approved")
+    approved -- you merge it --> merged(["merged"])
+    ci_running -- a check fails --> ci_red("ci red")
+    review_pending -- canopy's review finds something --> review_findings("review findings")
+    green_unreviewed -- a reviewer asks for changes --> changes_requested("changes requested")
+    running -- the worker asks you --> needs_human("needs human")
+    needs_human -- you reply --> human_replied("human replied")
+    ci_red & review_findings & changes_requested & human_replied -. resume .-> running
+```
 
 The overseer derives a phase from live state every tick and never takes the journal's word for it. If a PR merged at
 lunch, the next tick knows, whatever canopy last wrote down.
