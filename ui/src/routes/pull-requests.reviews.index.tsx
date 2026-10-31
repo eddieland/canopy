@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { CheckCheck } from 'lucide-react'
 
 import { reviewRequestsQuery, reviewsQuery } from '@/api/queries'
+import { Code } from '@/components/code'
 import { OrderToggle } from '@/components/order-toggle'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
@@ -54,9 +55,8 @@ function ReviewsPage() {
         <>
             <PageHeader title="Reviews">
                 canopy&apos;s own adversarial reviews, newest first. They stay in the journal: this page,{' '}
-                <code className="font-mono text-xs">canopy review show</code>, and the workers sent to fix their
-                findings are the only places they are. A review of a PR the loop does not own is also a draft you may
-                publish, word for word, as your own.
+                <Code>canopy review show</Code>, and the workers sent to fix their findings are the only places they
+                are. A review of a PR the loop does not own is also a draft you may publish, word for word, as your own.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Review a PR" />
@@ -95,10 +95,8 @@ function ReviewsPage() {
                     <PanelSkeleton className="min-h-72" />
                 ) : count === 0 ? (
                     <Empty size="panel">
-                        no reviews yet: ask for one above, or set{' '}
-                        <code className="font-mono text-xs">review.agent_prs</code> or{' '}
-                        <code className="font-mono text-xs">review.query</code>, with{' '}
-                        <code className="font-mono text-xs">capacity.max_reviews</code> above 0
+                        no reviews yet: ask for one above, or set <Code>review.agent_prs</Code> or{' '}
+                        <Code>review.query</Code>, with <Code>capacity.max_reviews</Code> above 0
                     </Empty>
                 ) : shownCount === 0 ? (
                     <Empty size="panel">{`no reviews${filterWords(filter)}`}</Empty>

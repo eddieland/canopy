@@ -1,6 +1,7 @@
 import { Unplug } from 'lucide-react'
 
 import { Age } from '@/components/age'
+import { Code } from '@/components/code'
 import { useLoopDown } from '@/hooks/use-loop-down'
 import { cn } from '@/lib/utils'
 
@@ -32,9 +33,8 @@ export function LoopDownBand() {
                     <Age at={new Date(down.since).toISOString()} variant="ago" className="text-sm" />.
                 </p>
                 <p className="text-xs text-muted-foreground">
-                    Start it again with <code className="font-mono">canopy loop</code>, or{' '}
-                    <code className="font-mono">canopy daemon start</code> to run it detached. This band goes when it
-                    answers.
+                    Start it again with <Code>canopy loop</Code>, or <Code>canopy daemon start</Code> to run it
+                    detached. This band goes when it answers.
                 </p>
             </div>
         </section>
