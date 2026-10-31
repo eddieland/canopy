@@ -41,8 +41,9 @@ In order, it:
    keeps in a cache, such as OpenCode's snapshots or Go's module sources, whose objects would then go when the run's
    directory does. A git run by its absolute path gets neither, and in a worktree cannot write objects at all.
 6. For a worker or a review, allows reading, never writing, the run's answers directory, `CANOPY_ANSWERS`, where canopy
-   writes the operator's answer to the question the run asks (DESIGN §41), when canopy passes one: it is the
-   run's own, beside its other files in the workspace's `.canopy/`, which the policy denies.
+   writes the operator's answer to the question the run asks (DESIGN §41), and its repositories' checklists (§42),
+   when canopy passes one: it is the run's own, beside its other files in the workspace's `.canopy/`, which the policy
+   denies. A one-off task's run has one only for its checklist.
 7. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
    The `srt` is the one `canopy sandbox setup` installed, pinned by `runtime/package-lock.json`, in
    `$XDG_DATA_HOME/canopy/sandbox-runtime/` (`~/.local/share/canopy/sandbox-runtime/` when that is unset), or else
@@ -125,8 +126,10 @@ OBJECTS_ENV = "CANOPY_GIT_OBJECTS"
 #: The run's answers directory, which canopy passes a run that keeps its progress, and the roles that run one.
 ANSWERS_ENV = "CANOPY_ANSWERS"
 ANSWERING = ("worker", "review")
-#: An answers directory's name: `7.answers`, in `<state>/runs/` or `<state>/reviews/`.
+#: An answers directory's name: `7.answers`, in `<state>/runs/`, `<state>/reviews/`, or `<state>/task-runs/`.
 ANSWERS_NAME = re.compile(r"[0-9]{1,18}\.answers")
+#: Where canopy keeps a one-off task run's files in the state directory, its answers directory among them.
+TASK_RUNS = "task-runs"
 # What canopy leaves in a joint run's desk (DESIGN §18); every other entry there links to a worktree.
 DESK_MARKER = ".canopy-desk"
 # The workspace's state directory, which holds the run directories canopy passes (D016), and the directories in it
@@ -526,14 +529,16 @@ def objects_dir(role: str) -> Path | None:
 
 
 def answers_dir(role: str) -> Path | None:
-    """Return the run's answers directory, which canopy passes a worker's, a planner's, or a review's run.
+    """Return the run's answers directory, which canopy passes a worker's, a planner's, a review's, or a task's run.
+
+    A one-off task's run has one only when its repository has a checklist (DESIGN §42).
 
     Returns:
-        The directory, or None for another role, or a run canopy passes none, such as a one-off task's.
+        The directory, or None for another role, or a run canopy passes none, such as a task's with no checklist.
 
     Raises:
         SandboxError: it is not a run's answers directory in a workspace's `.canopy/`: an absolute path to a directory,
-            not a link, named `<id>.answers` in `runs/` or `reviews/` there.
+            not a link, named `<id>.answers` in `runs/`, `reviews/`, or `task-runs/` there.
     """
     if role not in ANSWERING:
         return None
@@ -541,7 +546,8 @@ def answers_dir(role: str) -> Path | None:
     if not value:
         return None
     path = Path(value)
-    placed = path.is_absolute() and path.parent.name in RUN_PARENTS and path.parent.parent.name == STATE_DIR
+    parents = (*RUN_PARENTS, TASK_RUNS)
+    placed = path.is_absolute() and path.parent.name in parents and path.parent.parent.name == STATE_DIR
     named = ANSWERS_NAME.fullmatch(path.name) is not None
     if not (placed and named and path.is_dir() and not path.is_symlink()):
         raise SandboxError(f"{ANSWERS_ENV} is not a run's answers directory in a workspace's {STATE_DIR}: {value!r}")

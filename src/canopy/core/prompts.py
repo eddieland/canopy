@@ -1001,6 +1001,8 @@ def render_task(
     """
     values = {
         "ATTACHMENTS": None,
+        # Empty for a run in a repository without a checklist (DESIGN §42), whose push is never held.
+        "CHECKLIST": "",
         **values,
         **_standing_values(standing_instructions(config), "private"),
         "NOTICE": notice,

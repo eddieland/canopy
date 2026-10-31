@@ -14,6 +14,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/component
 import { PromptPanel } from '@/components/prompt-panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
+import { ChecklistPanel } from '@/components/run-checklist'
 import { ProgressPanel } from '@/components/run-progress'
 import { TaskLink } from '@/components/task-link'
 import { TicketLink } from '@/components/ticket-link'
@@ -96,6 +97,7 @@ function Loaded({ task, run }: { task: number; run: number }) {
             <div className="stagger flex flex-col gap-6">
                 {data.run.card !== null && <ProgressPanel card={data.run.card} running={data.run.ended_at === null} />}
                 <RunPanel detail={data} transcript={transcript} onShow={view.show} />
+                <ChecklistPanel answers={data.checklist} />
                 <TranscriptPanel
                     transcript={transcript}
                     running={data.run.state === 'running'}

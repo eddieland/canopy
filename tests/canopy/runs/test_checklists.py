@@ -96,8 +96,15 @@ def test_a_runs_answers_are_recorded_and_shown(scenario: Scenario, git_pool: Git
     # An answer to an item or a repository its lists do not hold is dropped, and the run's result kept.
     assert run.status == RunStatus.DONE
     assert checklist_answers.of_run(scenario.conn, run.id) == [
-        records.ChecklistAnswer(run.id, "repo", "general-types", ItemAnswer.FIXED, None),
-        records.ChecklistAnswer(run.id, "repo", "newspaper", ItemAnswer.HELD, "The helper\u202e stays where it is."),
+        records.ChecklistAnswer(run.id, "repo", "general-types", ItemAnswer.FIXED, None, None),
+        records.ChecklistAnswer(
+            run.id,
+            "repo",
+            "newspaper",
+            ItemAnswer.HELD,
+            "The helper\u202e stays where it is.",
+            None,
+        ),
     ]
     note = contract.stored_note(contract.stored_object(run.row["result_json"]))
     assert note == "checklist answers dropped: 'other': no list of the run's; repo 'made-up': not an item of its list"

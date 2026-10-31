@@ -1,21 +1,21 @@
 """What a worker answered of its repositories' checklists (DESIGN §42, The reminder).
 
-A worker run that may push is given the list of each of its repositories that has one, in its answers directory, and
-canopy's `pre-push` holds its push to ask it (`commit_hooks`). It answers each item in its result line's `checklist`
-field, by repository and item id: `pass`, `fixed`, `held` with its reason, or `n/a`. `_run` checks the answers against
-the lists the run was given, read back from its answers directory, and records a row for every item of every list:
-the answer, or `unanswered` for an item its result said nothing of. An answer to an item or a repository the run's
-lists do not hold is dropped, and named in the run's note; a result with no `checklist` is never refused, since its push
-is already made. The reason is the worker's text, which read the PR: it is shown as data, made printable, and
-authorizes nothing. `canopy checklist` counts the answers per repository and item over a window (`counts`), so an item
-earns its place or is dropped.
+A worker run that may push, or a one-off task's (§36), is given the list of each of its repositories that has one, in
+its answers directory, and canopy's `pre-push` holds its push to ask it (`commit_hooks`). It answers each item in its
+result line's `checklist` field, by repository and item id: `pass`, `fixed`, `held` with its reason, or `n/a`. `_run`,
+or `_task`, checks the answers against the lists the run was given, read back from its answers directory, and records a
+row for every item of every list, naming the run, a worker's or a task's: the answer, or `unanswered` for an item its
+result said nothing of. An answer to an item or a repository the run's lists do not hold is dropped, and named in the
+run's note; a result with no `checklist` is never refused, since its push is already made. The reason is the worker's
+text, which read the PR: it is shown as data, made printable, and authorizes nothing. `canopy checklist` counts the
+answers per repository and item over a window (`counts`), so an item earns its place or is dropped.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, assert_never, cast
+from typing import TYPE_CHECKING, Literal, assert_never, cast
 
 from pydantic import BaseModel, ConfigDict
 
@@ -36,6 +36,8 @@ MAX_REASON = 1000
 MAX_NAMED = 10
 #: The answers a worker may give: `unanswered` is the harness's alone.
 GIVEN: frozenset[ItemAnswer] = frozenset(ItemAnswer) - {ItemAnswer.UNANSWERED}
+#: The tables of the runs that answer a checklist: a worker's, and a one-off task's (DESIGN §36).
+type RunTable = Literal["runs", "task_runs"]
 
 
 @dataclass(frozen=True)
@@ -108,7 +110,7 @@ class ItemCounts(records.View):
 
 @dataclass(frozen=True)
 class Counts:
-    """The answers of the worker runs that started in a window, `[since, until)`, per repository and item."""
+    """The answers of the worker and task runs that started in a window, `[since, until)`, per repository and item."""
 
     since: str
     until: str
@@ -198,30 +200,39 @@ def check(lists: Iterable[Checklist], reported: object) -> Checked:
     return Checked(answers=tuple(answers), dropped=tuple(dropped))
 
 
-def record(conn: sqlite3.Connection, run_id: int, checked: Checked | None) -> None:
-    """Record the answers of run `run_id`, in the transaction that closes it: none for a run given no list."""
+def record(conn: sqlite3.Connection, run_id: int, checked: Checked | None, *, table: RunTable = "runs") -> None:
+    """Record the answers of run `run_id` of `table`, in the transaction that closes it; none for one given no list."""
     if checked is None or not checked.answers:
         return
-    records.insert_rows(records.ChecklistAnswer, ["run_id", "repo", "item", "answer", "reason"]).many(
+    column = _column(table)
+    records.insert_rows(records.ChecklistAnswer, [column, "repo", "item", "answer", "reason"]).many(
         conn,
         [(run_id, a.repo, a.item, a.answer, a.reason) for a in checked.answers],
     )
 
 
-def of_run(conn: sqlite3.Connection, run_id: int) -> list[records.ChecklistAnswer]:
-    """Return what run `run_id` answered of its lists, by repository and in each list's order.
+def of_run(conn: sqlite3.Connection, run_id: int, *, table: RunTable = "runs") -> list[records.ChecklistAnswer]:
+    """Return what run `run_id` of `table` answered of its lists, by repository and in each list's order.
 
     Returns:
         A row per item it was given; none for a run given no list.
     """
-    return records.select(records.ChecklistAnswer).where("run_id = ?", run_id).order_by("repo, rowid").all(conn)
+    query = records.select(records.ChecklistAnswer)
+    match table:
+        case "runs":
+            query = query.where("run_id = ?", run_id)
+        case "task_runs":
+            query = query.where("task_run_id = ?", run_id)
+        case _:
+            assert_never(table)
+    return query.order_by("repo, rowid").all(conn)
 
 
 def counts(conn: sqlite3.Connection, now: datetime, days: int, *, repo: str | None = None) -> Counts:
     """Count the answers of the runs that started in the last `days` local days, today's so far included.
 
-    The window is `canopy spend`'s and `canopy health`'s (`spend.window`), and a run is in it by when it started. A run
-    still running has recorded no answers yet.
+    The window is `canopy spend`'s and `canopy health`'s (`spend.window`), and a run, a worker's or a task's, is in it
+    by when it started. A run still running has recorded no answers yet.
 
     Returns:
         A count per repository and item a run of the window was given; `repo`'s alone when it is named.
@@ -239,8 +250,9 @@ def counts(conn: sqlite3.Connection, now: datetime, days: int, *, repo: str | No
             ItemAnswer.UNANSWERED,
         )
         .from_("checklist_answers a")
-        .join("runs r ON r.id = a.run_id")
-        .where("r.started_at >= ? AND r.started_at < ?", since, until)
+        .left_join("runs r ON r.id = a.run_id")
+        .left_join("task_runs t ON t.id = a.task_run_id")
+        .where("coalesce(r.started_at, t.started_at) >= ? AND coalesce(r.started_at, t.started_at) < ?", since, until)
     )
     if repo is not None:
         query = query.where("a.repo = ?", repo)
@@ -306,6 +318,17 @@ def _answer(repo: str, item: str, said: object) -> Answer:
     if not isinstance(reason, str) or not reason.strip():
         raise ValueError("`held` gives no reason")
     return Answer(repo, item, answer, reason.strip()[:MAX_REASON])
+
+
+def _column(table: RunTable) -> Literal["run_id", "task_run_id"]:
+    # The column an answer names a run of `table` in.
+    match table:
+        case "runs":
+            return "run_id"
+        case "task_runs":
+            return "task_run_id"
+        case _:
+            assert_never(table)
 
 
 def _named(key: object) -> str:

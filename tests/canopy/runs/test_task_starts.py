@@ -16,10 +16,22 @@ import pytest
 from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import cards, config, conversation, db, prompts, records, run_models, spend, sql
+from canopy.core import (
+    cards,
+    checklist_answers,
+    checklists,
+    config,
+    conversation,
+    db,
+    prompts,
+    records,
+    run_models,
+    spend,
+    sql,
+)
 from canopy.core.context import Context
 from canopy.core.items import Item
-from canopy.core.vocab import Decider, RunStatus
+from canopy.core.vocab import Decider, ItemAnswer, RunStatus
 from canopy.infra import logs
 from canopy.loop import attention
 from canopy.notify import message
@@ -30,6 +42,7 @@ from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
     calls,
+    checklists_dir,
     commit_and_push,
     has_deadline,
     in_run,
@@ -57,6 +70,13 @@ from tests.conftest import CanopyEnv, GitPool, git
 BRANCH = "agent/task/1"
 TEXT = "Find out why the build is slow, and push a fix if one is small."
 DONE: dict[str, object] = {"status": "done", "summary": "found it", "branch": BRANCH, "prs": []}
+#: The task's repository's checklist, of two items, as the operator writes it (DESIGN §42).
+CHECKLIST = (
+    "## general-types\npaths: src/\n\nA parameter takes the most general type its body needs.\n\n"
+    "## newspaper\n\nPublic names first.\n"
+)
+#: What the fake worker runs to show the list it was handed, where canopy's `pre-push` reads it.
+SHOW_LIST = ["sh", "-c", f'cat "${cards.ANSWERS_ENV}/{checklists.DIR}/repo{checklists.SUFFIX}"']
 #: What a task's run writes nothing to: every table a ticket's work is recorded in.
 TICKETS_WORK = (
     sql.select("count(*)").from_("tickets"),
@@ -530,6 +550,144 @@ def test_no_row_a_task_writes_names_a_ticket(inline: Context) -> None:
     with private_worker_does(*commit_and_push(BRANCH), result=DONE):
         run_task(inline, started.run_id)
     assert [sql.execute(inline.conn, query).fetchone()[0] for query in TICKETS_WORK] == [0] * len(TICKETS_WORK)
+
+
+# The checklist (DESIGN §42)
+
+
+@pytest.fixture
+def checking(canopy_env: CanopyEnv, git_pool: GitPool) -> Context:
+    """`inline`, made once `paths.checklists` is set, so a tick that starts a task reads the operator's lists."""
+    assert git_pool.slots
+    checklists_dir(canopy_env)
+    return inline_context(canopy_env)
+
+
+def test_a_task_hears_its_repositorys_checklist_and_its_answers_are_recorded_shown_and_counted(
+    capsys: pytest.CaptureFixture[str],
+    canopy_env: CanopyEnv,
+    checking: Context,
+    agent_log: Path,
+) -> None:
+    (checklists_dir(canopy_env) / "repo.md").write_text(CHECKLIST)
+    submit()
+    [started] = start(checking)
+    held = {"answer": "held", "reason": "The helper\u202e stays where it is."}
+    answered = {"repo": {"general-types": "fixed", "newspaper": held, "made-up": "pass"}}
+    with private_worker_does(SHOW_LIST, result={**DONE, "checklist": answered}):
+        run = run_task(checking, started.run_id)
+    [worker] = agent_runs(agent_log)
+    assert "The operator keeps a checklist for `repo`" in told(worker)
+    # Where canopy's `pre-push` reads it, beside the run's log, gone with the run.
+    [shown] = worker["commands"]
+    assert shown["stdout"] == CHECKLIST
+    assert worker["env"]["CANOPY_ANSWERS"] == str(task_starts.answers_dir(Path(run.log_path)))
+    assert not task_starts.answers_dir(Path(run.log_path)).exists()
+    # An answer to an item its list does not hold is dropped, and the run's result kept.
+    assert run.status is RunStatus.DONE
+    assert checklist_answers.of_run(checking.conn, run.id, table="task_runs") == [
+        records.ChecklistAnswer(None, "repo", "general-types", ItemAnswer.FIXED, None, run.id),
+        records.ChecklistAnswer(
+            None,
+            "repo",
+            "newspaper",
+            ItemAnswer.HELD,
+            "The helper\u202e stays where it is.",
+            run.id,
+        ),
+    ]
+    assert checklist_answers.of_run(checking.conn, run.id) == []
+    note = json.loads(present(run.result_json))["harness"]
+    assert note == "checklist answers dropped: repo 'made-up': not an item of its list"
+    capsys.readouterr()
+    assert operator("show", "task:1") == 0
+    # The reason is the worker's text: printed under its item, made printable as a message is.
+    shown_task = capsys.readouterr().out
+    assert (
+        "\n    checklist:\n      repo  general-types  fixed\n      repo  newspaper  held\n        The helper  stays"
+        in (shown_task)
+    )
+    # Counted with the worker runs' answers, by when the task's run started.
+    assert operator("checklist", "--json") == 0
+    counted = json.loads(capsys.readouterr().out)["items"]
+    assert [(c["item"], c["reminded"], c["fixed"], c["held"]) for c in counted] == [
+        ("general-types", 1, 1, 0),
+        ("newspaper", 1, 0, 1),
+    ]
+
+
+def test_a_tasks_first_push_is_held_for_its_checklist_and_the_next_goes_through(
+    canopy_env: CanopyEnv,
+    checking: Context,
+    git_pool: GitPool,
+    agent_log: Path,
+) -> None:
+    (checklists_dir(canopy_env) / "repo.md").write_text(CHECKLIST)
+    submit()
+    [started] = start(checking)
+    commit, push = commit_and_push(BRANCH, "task 1: the fix")
+    with private_worker_does(commit, push, push, result=DONE):
+        run = run_task(checking, started.run_id)
+    [worker] = agent_runs(agent_log)
+    _, held, sent = worker["commands"]
+    assert held["returncode"] != 0
+    assert str(held["stderr"]).startswith("[canopy] Push held, not rejected: nothing was sent.")
+    assert f"\n\n{CHECKLIST}" in str(held["stderr"])
+    assert sent["returncode"] == 0
+    assert (run.status, run.head) == (RunStatus.DONE, git_pool.remote_head(BRANCH))
+    # A result that answers nothing is never refused: its push is made, and each item counted unanswered.
+    assert [(a.item, a.answer) for a in checklist_answers.of_run(checking.conn, run.id, table="task_runs")] == [
+        ("general-types", ItemAnswer.UNANSWERED),
+        ("newspaper", ItemAnswer.UNANSWERED),
+    ]
+
+
+def test_a_task_in_a_repository_without_a_list_hears_none_and_is_not_held(
+    canopy_env: CanopyEnv,
+    checking: Context,
+    agent_log: Path,
+) -> None:
+    (checklists_dir(canopy_env) / "other.md").write_text(CHECKLIST)
+    submit()
+    [started] = start(checking)
+    checklist = {"repo": {"general-types": "pass"}}
+    with private_worker_does(*commit_and_push(BRANCH), result={**DONE, "checklist": checklist}):
+        run = run_task(checking, started.run_id)
+    [worker] = agent_runs(agent_log)
+    assert "keeps a checklist" not in told(worker)
+    assert "CANOPY_ANSWERS" not in worker["env"]
+    assert all(c["returncode"] == 0 for c in worker["commands"])
+    assert run.status is RunStatus.DONE
+    assert checklist_answers.of_run(checking.conn, run.id, table="task_runs") == []
+
+
+def test_a_task_whose_checklist_canopy_cannot_use_never_runs_without_it(
+    canopy_env: CanopyEnv,
+    checking: Context,
+    agent_log: Path,
+    treehouse_state: Path,
+) -> None:
+    path = checklists_dir(canopy_env) / "repo.md"
+    path.write_text("Our rules.\n\n" + CHECKLIST)
+    reason = f"the checklist of repo at {path}: line 1: each item opens with a '## <id>' heading"
+    submit()
+    # Refused as its prompt is rendered: the run is closed `crashed`, saying why, and its slot given back.
+    assert start(checking) == []
+    [refused] = every_run(checking.conn)
+    assert refused.status is RunStatus.CRASHED
+    assert json.loads(present(refused.result_json))["harness"] == f"could not start the task's worker: {reason}"
+    assert set(pool_statuses(treehouse_state)) == {"available"}
+    # A list spoiled after the tick read it stops the run as it starts, before its worker.
+    path.write_text(CHECKLIST)
+    assert operator("reply", "task:1", "Try again.") == 0
+    [started] = start(checking)
+    path.write_text("Our rules.\n\n" + CHECKLIST)
+    with private_worker_does(result=DONE):
+        run = run_task(checking, started.run_id)
+    assert run.status is RunStatus.CRASHED
+    assert json.loads(present(run.result_json))["harness"] == reason
+    assert agent_runs(agent_log) == []
+    assert checklist_answers.of_run(checking.conn, run.id, table="task_runs") == []
 
 
 # Stopping, and a run whose process died

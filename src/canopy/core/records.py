@@ -1826,11 +1826,14 @@ class ReviewAnswer(Row):
 
 @dataclass(frozen=True)
 class ChecklistAnswer(Row):
-    """What a worker run answered of an item of its repository's checklist (DESIGN §42): its word, untrusted."""
+    """What a worker's or a task's run answered of an item of its repository's checklist (DESIGN §42): untrusted.
+
+    It names one run: a worker's in `run_id`, or a task's in `task_run_id`, the other None.
+    """
 
     TABLE: ClassVar[LiteralString] = "checklist_answers"
 
-    run_id: int
+    run_id: int | None
     #: The repository whose list holds the item.
     repo: str
     #: The item's id in that list, as the run was given it.
@@ -1838,6 +1841,7 @@ class ChecklistAnswer(Row):
     answer: ItemAnswer
     #: Why the run left the item failing, for `held`; None for any other answer.
     reason: str | None
+    task_run_id: int | None
 
 
 @dataclass(frozen=True)

@@ -9684,6 +9684,13 @@ export type components = {
          */
         TaskRunDetail: {
             /**
+             * Checklist
+             * @description What it answered of its repository's checklist (DESIGN §42), as a worker run's page has it: a row per item it
+             *     was given, in its list's order. Empty for a run given no list, and one still running.
+             * @default []
+             */
+            checklist: components["schemas"]["ChecklistAnswer"][];
+            /**
              * Model
              * @description The model canopy asked the runtime for, for its private worker (DESIGN §13, Each agent's model), as
              *     `provider/model[@variant]`; None when it asked for none, so the runtime's default served it, and for a run from
