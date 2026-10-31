@@ -939,7 +939,16 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             "report",
             "run",
             38,
-            "Moved billing to the v2 endpoint and removed the v1 client.\nhttps://github.com/acme/web/pull/91",
+            # Markdown, as workers write it: what rich text reads in a bubble (inline code, a heading, a list, a fence)
+            # shows in ABC-103's screenshots, its Gruvbox one included.
+            (
+                "Moved billing to the v2 endpoint and removed the v1 client.\n\n"
+                "## What changed\n"
+                "- `InvoiceClient` calls `/v2/invoices`; `LegacyInvoiceClient` is gone.\n"
+                "- `make check` passes, `test_invoices.py` included.\n\n"
+                "```\nuv run pytest -q tests/invoices\n12 passed\n```\n\n"
+                "https://github.com/acme/web/pull/91"
+            ),
             None,
         ),
         (
