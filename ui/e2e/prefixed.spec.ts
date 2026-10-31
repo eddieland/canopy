@@ -311,6 +311,34 @@ test('T opens Start a ticket from any page, which starts it and lands on its pag
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-201')
 })
 
+test("Start a ticket sets its agents' personas and models with the start, as the ticket's overrides", async ({
+    page,
+}) => {
+    await page.goto('workspace/runs')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
+    await page.keyboard.press('t')
+    const dialog = page.getByRole('dialog', { name: 'Start a ticket' })
+    await dialog.getByLabel('Ticket key').fill('ABC-202')
+    await dialog.getByRole('button', { name: 'Show persona and model overrides' }).click()
+    await dialog.getByRole('button', { name: 'planner persona: canopy (default)' }).click()
+    await page.getByRole('menuitemradio', { name: 'skeptic' }).click()
+    await dialog.getByRole('button', { name: 'worker model: default' }).click()
+    const list = page.getByRole('listbox', { name: 'Models' })
+    const first = list.getByRole('option', { name: /^[\w.-]+\/[\w.:/+-]+ \(default\)$/u }).first()
+    const model = ((await first.getAttribute('aria-label')) ?? '').replace(/ \(default\)$/u, '')
+    await first.click()
+    await expect(dialog.getByRole('button', { name: `worker model: ${model}` })).toBeVisible()
+    await dialog.getByRole('button', { name: 'Start privately' }).click()
+    await expect(dialog).toBeHidden()
+    await expect(page).toHaveURL(/\/canopy\/tickets\/ABC-202$/u)
+    // The ticket's page shows each pick as its override, the agents left alone on their defaults.
+    const agents = page.getByTestId('ticket-agents')
+    await expect(agents.getByRole('button', { name: 'planner persona: skeptic' })).toBeVisible()
+    await expect(agents.getByRole('button', { name: 'worker persona: canopy' })).toBeVisible()
+    await expect(agents.getByRole('button', { name: `worker model: ${model}` })).toBeVisible()
+    await expect(agents.getByRole('button', { name: 'planner model: runtime default' })).toBeVisible()
+})
+
 test('a refusal names its guard', async ({ page }) => {
     await page.goto('tickets')
     await page.getByLabel('Ticket key').fill('run:4')

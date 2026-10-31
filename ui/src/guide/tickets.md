@@ -43,6 +43,14 @@ over whatever you were reading, the cursor already in the key field: type the ke
 ticket's page. Escape closes it. A refusal keeps it open and says why, so a typo in the key costs you one more
 keystroke, not a trip back.
 
+Under the key, **Show persona and model overrides** opens a row for each of the ticket's agents, in the order the
+ticket meets them: its planner, its worker, and its reviewer. Each has a persona menu and a model menu, both naming
+the default until you pick something. A pick is set as this ticket's override with the start, exactly as
+[Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model) set one later, so a skeptical
+reviewer on a bigger model is one form, not three trips. They go together or not at all: a persona with no file or a
+model the runtime doesn't list refuses the start, and nothing is set. Fold the rows away and the button counts what you
+picked, so nothing rides along unseen.
+
 A ticket you start is private from then on, whatever labels it carries or gains. To ask for a plan before the first
 implement, start it from the CLI with `canopy start KEY --plan`, or run `canopy plan KEY` afterwards.
 

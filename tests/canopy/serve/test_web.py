@@ -8,6 +8,7 @@ import dataclasses
 import json
 import os
 import time
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
@@ -463,6 +464,64 @@ def test_a_persona_chosen_from_the_web_is_the_tickets_override_as_canopy_persona
     # No persona clears it, as `--clear` does.
     assert choose({"agent": "reviewer"}).json()["source"] == "default"
     assert ctx.conn.execute("SELECT count(*) FROM ticket_overrides").fetchone()[0] == 0
+
+
+def test_a_start_from_the_web_sets_each_agents_persona_and_model_with_it_or_starts_nothing(
+    ctx: Context,
+    opencode_state: Path,
+) -> None:
+    opencode_state.write_text(
+        json.dumps({"models": ["acme/fake-model-1"], "variants": {"acme/fake-model-1": ["high"]}}),
+    )
+    c, headers = signed_in_client(ctx)
+
+    def start(body: Mapping[str, object]) -> httpx2.Response:
+        return c.post(f"/api/tickets/{KEY}/start", json=body, headers=headers)
+
+    def overrides() -> list[tuple[str, str, str]]:
+        rows = ctx.conn.execute("SELECT agent, kind, value FROM ticket_overrides ORDER BY agent, kind").fetchall()
+        return [tuple(row) for row in rows]
+
+    # A choice refused starts nothing, and sets none of the others.
+    both = {"personas": [{"agent": "planner", "persona": "skeptic"}], "models": [{"model": "acme/nope"}]}
+    assert refused(start(both)).startswith("unknown_model: ")
+    assert refused(start({"personas": [{"agent": "planner", "persona": "lenient"}]})).startswith("unknown_persona: ")
+    assert conversation.start_of(ctx.conn, KEY) is None
+    assert overrides() == []
+    # One choice per agent, and only a ticket's agents.
+    assert start({"personas": [{"persona": "skeptic"}, {"persona": "minimalist"}]}).status_code == 422
+    assert start({"models": [{"agent": "overseer", "model": "acme/fake-model-1"}]}).status_code == 422
+    with mock.patch.dict(os.environ, {conversation.TICK_ID_ENV: "7"}):
+        assert refused(start({"models": [{"model": "acme/fake-model-1"}]})).startswith("inside_run: ")
+
+    body = {
+        "personas": [{"agent": "planner", "persona": "skeptic"}, {"agent": "worker", "persona": "minimalist"}],
+        "models": [{"agent": "reviewer", "model": "acme/fake-model-1@high"}],
+    }
+    assert start(body).json() == {"already": False, "running_run": None, "running_private": None}
+    assert present(conversation.start_of(ctx.conn, KEY)).channel == "web"
+    assert overrides() == [
+        ("planner", "persona", "skeptic"),
+        ("reviewer", "model", "acme/fake-model-1@high"),
+        ("worker", "persona", "minimalist"),
+    ]
+    channels = {row[0] for row in ctx.conn.execute("SELECT channel FROM ticket_overrides")}
+    assert channels == {"web"}
+    # The ticket's page shows them, as it shows a choice made there.
+    got = c.get(f"/api/tickets/{KEY}").json()
+    assert [(p["agent"], p["persona"], p["source"]) for p in got["personas"]] == [
+        ("worker", "minimalist", "ticket"),
+        ("planner", "skeptic", "ticket"),
+        ("reviewer", "canopy", "default"),
+    ]
+    assert [(m["agent"], m["model"], m["source"]) for m in got["models"]] == [
+        ("worker", None, "default"),
+        ("planner", None, "default"),
+        ("reviewer", "acme/fake-model-1@high", "ticket"),
+    ]
+    # A start that chooses none leaves them be, and an empty body is a start that chooses none.
+    assert start({}).json()["already"] is True
+    assert len(overrides()) == 3
 
 
 def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_makes_it(

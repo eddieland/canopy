@@ -6,14 +6,14 @@ Built on `schema.Model`, as every API type is; the ticket as the tickets list sh
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from canopy.serve.schema import Attachments, CostTotal, Decision, Limit, Message, Model, Run, TicketSummary
 from canopy.serve.schema.draft import Draft
-from canopy.serve.schema.model import AgentModel
-from canopy.serve.schema.persona import AgentPersona
+from canopy.serve.schema.model import AgentModel, ModelRequest
+from canopy.serve.schema.persona import AgentPersona, PersonaRequest
 from canopy.serve.schema.spend import SpendModel
 
 type GrantKind = Annotated[
@@ -87,6 +87,30 @@ class TicketDetail(Model):
     worker runs on the same model: Spend's By model for it, at 30 days, narrowed to workers."""
     attachments: Attachments
     """The files the operator attached to it, which its runs read (DESIGN §22)."""
+
+
+class StartRequest(Model):
+    """A start, and the persona and model each of the ticket's agents takes from it, as the ticket's override.
+
+    Each choice is the ticket page's (`PersonaRequest`, `ModelRequest`), set with the start or not at all: one refused
+    starts nothing.
+    """
+
+    personas: Annotated[list[PersonaRequest], Field(max_length=3)] = []
+    """A persona for each agent named, at most one each; none leaves the ticket's overrides as they are."""
+    models: Annotated[list[ModelRequest], Field(max_length=3)] = []
+    """A model for each agent named, at most one each; none leaves the ticket's overrides as they are."""
+
+    @model_validator(mode="after")
+    def _one_each(self) -> Self:
+        for kind, agents in (
+            ("persona", [p.agent for p in self.personas]),
+            ("model", [m.agent for m in self.models]),
+        ):
+            if len(set(agents)) < len(agents):
+                msg = f"one {kind} per agent"
+                raise ValueError(msg)
+        return self
 
 
 class Started(Model):
