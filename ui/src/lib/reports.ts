@@ -1,7 +1,7 @@
 // The reports page: what each local calendar month cost, in dollars and tokens, and what it got done. The numbers are
 // the server's (`canopy.serve.monthly`); this lays them out.
 
-import type { ReportMonth, ReportTokens } from '@/api/types'
+import type { ReportMonth, ReportTicket, ReportTokens } from '@/api/types'
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
@@ -85,6 +85,59 @@ export function medianText(n: number | null): string {
         return '–'
     }
     return Number.isInteger(n) ? String(n) : n.toFixed(1)
+}
+
+/**
+ * Which clock a landed ticket's time to land ran on, on its figure's hover: GitHub's merge time, or the tick that
+ * marked it done standing in where canopy kept none. Undefined with no figure.
+ */
+export function toLandHint(ticket: ReportTicket): string | undefined {
+    if (ticket.hours_to_land === null) {
+        return undefined
+    }
+    return ticket.merged_at === null
+        ? 'To the tick that marked it done: canopy kept no merge time from GitHub for its PR'
+        : "To its PR's merge, as GitHub timed it"
+}
+
+/**
+ * Which clock a landed ticket's review wait ran on, on its figure's hover: GitHub's, from the first review asked for
+ * once its PR was ready, or from ready; or its first worker run that ended done standing in. Undefined with no figure.
+ */
+export function reviewWaitHint(ticket: ReportTicket): string | undefined {
+    if (ticket.review_wait_hours === null) {
+        return undefined
+    }
+    return ticket.awaiting_review_at === null
+        ? 'From the end of its first worker run that ended done: canopy kept no ready time from GitHub for its PR'
+        : GITHUB_WAIT_HINT
+}
+
+/** Where a review wait on GitHub's clock starts. */
+const GITHUB_WAIT_HINT =
+    'From when its PR began waiting on a review, as GitHub timed it: the first review asked for once it was ready, ' +
+    'or when it was ready'
+
+/**
+ * How many of a month's medians' figures ran on GitHub's clock, on the median's hover: `2 of 3 from GitHub's times,
+ * the rest from proxies`. Undefined when no ticket has the figure.
+ */
+export function clockShare(month: ReportMonth, figure: 'to land' | 'review wait'): string | undefined {
+    const known =
+        figure === 'to land'
+            ? month.landed.filter((t) => t.hours_to_land !== null)
+            : month.landed.filter((t) => t.review_wait_hours !== null)
+    if (known.length === 0) {
+        return undefined
+    }
+    const github = known.filter((t) => (figure === 'to land' ? t.merged_at : t.awaiting_review_at) !== null).length
+    if (github === known.length) {
+        return known.length === 1 ? "From GitHub's times" : `All ${known.length} from GitHub's times`
+    }
+    if (github === 0) {
+        return known.length === 1 ? 'From a proxy: canopy kept no time from GitHub' : `All ${known.length} from proxies`
+    }
+    return `${github} of ${known.length} from GitHub's times, the rest from proxies`
 }
 
 /** A month's cost as a share of the dearest month's, 0 to 100, for its bar; 0 when nothing cost anything. */

@@ -487,6 +487,11 @@ class _Pr(_Line):
     author: _Login | None = None
     labels: Annotated[list[_Name], Field(max_length=MAX_LIST)] = []
     title: _Title | None = None
+    created_at: Time | None = None
+    ready_at: Time | None = None
+    review_requested_at: Time | None = None
+    merged_at: Time | None = None
+    closed_at: Time | None = None
 
     @property
     def of(self) -> str:
@@ -744,6 +749,11 @@ def _insert(
                 labels=json.dumps(line.labels),
                 mergeable_state=line.mergeable_state,
                 title=line.title,
+                created_at=line.created_at,
+                ready_at=line.ready_at,
+                review_requested_at=line.review_requested_at,
+                merged_at=line.merged_at,
+                closed_at=line.closed_at,
             ).or_replace().run(conn)
         case _Review():
             _insert_review(conn, line, now)

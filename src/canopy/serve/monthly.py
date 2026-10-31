@@ -6,9 +6,11 @@ runs, and task runs; and beside them the runtime's sessions outside canopy, as `
 canopy's, so a month's cost and tokens are all its agent spend, as the budget counts it. Beside them, what the month
 got done: the tickets marked done as merged in it, each with the
 worker runs it took, the comments and reviews people other than the PR's author left on its PRs, how long it took
-from its first worker run, and how long its PR waited for its first review. The journal keeps no merge time and no
-history of a ticket's phase, so a ticket lands when the loop marks it done, and its PR is ready for review when its
-first worker run ends `done`.
+from its first worker run, and how long its PR waited for its first review. Each of those two ends at GitHub's times
+where the `vcs` source read them (DESIGN §30): a ticket lands when its PRs merged, and its PR waits from when a review
+of it was first asked for once it was ready, or from when it was ready. Where a PR has no such time read, as one read
+before canopy read them, a proxy stands in: the tick that marked the ticket done, and the end of its first worker run
+that ended `done`. Neither is backfilled, and there is no history of a ticket's phase.
 """
 
 from __future__ import annotations
@@ -19,9 +21,9 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, run_models, runtime_sessions, sql, tracked_prs
+from canopy.core import contract, db, records, run_models, runtime_sessions, sql, tracked_prs
 from canopy.core.spend import KIND_TABLES, KINDS, done_in
-from canopy.core.vocab import RunKind, RunStatus
+from canopy.core.vocab import PrState, RunKind, RunStatus
 
 if TYPE_CHECKING:
     import sqlite3
@@ -137,10 +139,18 @@ class Landed:
     changes_requested: int
     #: What its runs and review runs that started before it landed cost; None when none reported a cost.
     cost_usd: float | None
-    #: From its first worker run's start to its landing; None with no worker run.
+    #: From its first worker run's start to its landing, its PRs' merge when known; None with no worker run.
     to_land: timedelta | None
-    #: From the end of its first worker run that ended `done` to the first review after it; None with neither.
+    #: From when its PR began waiting on a review, or the end of its first worker run that ended `done`, to the first
+    #: review after it; None with no start or no such review.
     review_wait: timedelta | None
+    #: When its PRs merged, as GitHub says, the latest of them, where `to_land` ends; None when one merged with no merge
+    #: time read, and `to_land` ends at `landed_at` instead.
+    merged_at: str | None = None
+    #: When its PRs began waiting on a review, as GitHub says: the first review asked for once one was ready, or when it
+    #: was ready, the earliest of them, where `review_wait` starts; None when none has either time read, and it starts
+    #: at the end of its first worker run that ended `done` instead.
+    awaiting_review_at: str | None = None
 
 
 @dataclass(frozen=True)
@@ -393,6 +403,7 @@ class _Run:
 class _Review:
     """A comment or a review on a landed ticket's PR, from someone other than the PR's author."""
 
+    pr_url: str
     item: str
     state: str | None
     created_at: datetime | None
@@ -426,14 +437,17 @@ def _landed(conn: sqlite3.Connection, landed: Mapping[str, str]) -> list[Landed]
         prs.setdefault(str(key), set()).add(str(url))
     for key, found in runs.items():
         prs.setdefault(key, set()).update(url for run in found for url in run.prs)
-    reviews = _reviews(conn, sorted({url for urls in prs.values() for url in urls}))
+    urls = sorted({url for found in prs.values() for url in found})
+    reviews = _reviews(conn, urls)
+    observed = {p.url: p for p in records.select(records.ObservedPr).where_in("url", urls).all(conn)}
     return [
         _ticket(
             key,
             titles.get(key),
             at,
             runs.get(key, []),
-            [r for url in sorted(prs.get(key, ())) for r in reviews.get(url, [])],
+            said=[r for url in sorted(prs.get(key, ())) for r in reviews.get(url, [])],
+            prs=[observed[url] for url in sorted(prs.get(key, ())) if url in observed],
         )
         for key, at in landed.items()
     ]
@@ -454,6 +468,7 @@ def _reviews(conn: sqlite3.Connection, urls: Sequence[str]) -> dict[str, list[_R
     for url, item, state, created in sql.execute(conn, said):
         found.setdefault(str(url), []).append(
             _Review(
+                pr_url=str(url),
                 item=str(item),
                 state=None if state is None else str(state),
                 created_at=None if created is None else db.parse_time(str(created)),
@@ -462,16 +477,30 @@ def _reviews(conn: sqlite3.Connection, urls: Sequence[str]) -> dict[str, list[_R
     return found
 
 
-def _ticket(key: str, title: str | None, landed_at: str, runs: Sequence[_Run], said: Sequence[_Review]) -> Landed:
+def _ticket(
+    key: str,
+    title: str | None,
+    landed_at: str,
+    runs: Sequence[_Run],
+    *,
+    said: Sequence[_Review],
+    prs: Sequence[records.ObservedPr],
+) -> Landed:
     landed = db.parse_time(landed_at)
     before = sorted((r for r in runs if r.started_at <= landed), key=lambda r: r.started_at)
     work = [r for r in before if r.kind in _WORK_KINDS]
-    ready = next((r.ended_at for r in work if r.status == RunStatus.DONE and r.ended_at is not None), None)
     judged = [r for r in said if r.item == "review"]
-    first_review = min(
-        (r.created_at for r in judged if r.created_at is not None and ready is not None and r.created_at >= ready),
-        default=None,
-    )
+    merged = _merged(prs)
+    # Each PR's start, as GitHub says: a review of it asked for once ready, or its ready time.
+    starts = {p.url: db.parse_time(start) for p in prs if (start := p.review_requested_at or p.ready_at) is not None}
+    awaiting = min(starts.values(), default=None)
+    # Without GitHub's times, a PR of the ticket is ready when its first worker run ends `done`.
+    ready = next((r.ended_at for r in work if r.status == RunStatus.DONE and r.ended_at is not None), None)
+    # Each PR starts on GitHub's clock where the reader kept it, else on the proxy: a PR read before canopy kept its
+    # times still counts its reviews beside one read after.
+    begun = {url: starts.get(url) or ready for url in {p.url for p in prs} | {r.pr_url for r in judged}}
+    waited_from = min((start for start in begun.values() if start is not None), default=None)
+    first_review = _first_review(judged, begun)
     return Landed(
         key=key,
         title=title,
@@ -482,9 +511,37 @@ def _ticket(key: str, title: str | None, landed_at: str, runs: Sequence[_Run], s
         reviews=len(judged),
         changes_requested=sum(1 for r in judged if r.state == "changes_requested"),
         cost_usd=_sum(r.cost_usd for r in before),
-        to_land=landed - work[0].started_at if work else None,
-        review_wait=first_review - ready if first_review is not None and ready is not None else None,
+        to_land=(merged or landed) - work[0].started_at if work else None,
+        review_wait=first_review - waited_from if first_review is not None and waited_from is not None else None,
+        merged_at=None if merged is None else db.format_time(merged),
+        awaiting_review_at=None if awaiting is None else db.format_time(awaiting),
     )
+
+
+def _first_review(judged: Iterable[_Review], starts: Mapping[str, datetime | None]) -> datetime | None:
+    """The first review at or after its PR's start; a review of a PR with no start counts for nothing.
+
+    Returns:
+        Its time; None with no such review.
+    """
+    found: datetime | None = None
+    for review in judged:
+        start, at = starts.get(review.pr_url), review.created_at
+        if start is not None and at is not None and at >= start and (found is None or at < found):
+            found = at
+    return found
+
+
+def _merged(prs: Sequence[records.ObservedPr]) -> datetime | None:
+    """When a landed ticket's PRs merged, as GitHub says: the latest merge of those observed merged.
+
+    Returns:
+        It; None when none was observed merged, or one was with no merge time read.
+    """
+    merges = [p.merged_at for p in prs if p.state is PrState.MERGED]
+    if not merges or None in merges:
+        return None
+    return max(db.parse_time(at) for at in merges if at is not None)
 
 
 # The sum of the values that are not None; None when every one is.

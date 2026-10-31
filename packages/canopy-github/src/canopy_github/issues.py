@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import operator
 import re
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TextIO
@@ -42,6 +42,7 @@ from canopy_github import (
     InputError,
     Reply,
     ServerError,
+    backward,
     client_for,
     cut,
     emit,
@@ -51,6 +52,7 @@ from canopy_github import (
     number,
     obj,
     pages,
+    parse_time,
     read_input,
     refusal,
     text,
@@ -229,7 +231,7 @@ def _request(raw: Mapping[str, object]) -> Request:
         if not isinstance(key, str) or not _ASKED.fullmatch(key):
             raise InputError(f"{key!r} is not a ticket's key")
         since = fields.get("comments_since")
-        moment = None if since is None else _moment(since)
+        moment = None if since is None else parse_time(since)
         if since is not None and moment is None:
             raise InputError(f"{key}'s comments_since {since!r} is not an ISO 8601 time")
         match = _KEY.fullmatch(key)
@@ -433,7 +435,7 @@ class _Reader:
             ],
             "blockers": [_key(n) for n in self._blockers_of(issue)],
         }
-        updated = _moment(issue.get("updatedAt"))
+        updated = parse_time(issue.get("updatedAt"))
         if updated is not None:
             line["updated_at"] = _format(updated)
         return line
@@ -479,11 +481,11 @@ class _Reader:
         def before(cursor: str) -> Mapping[str, object]:
             return obj(self._more(_MORE_LABELED, issue_number, cursor).get("timelineItems"), "timelineItems")
 
-        for page in _backward(obj(issue.get("timelineItems"), "timelineItems"), before):
+        for page in backward(obj(issue.get("timelineItems"), "timelineItems"), before):
             for event in page:
                 label = event.get("label")
                 name = text(obj(label, "label").get("name")) if isinstance(label, dict) else None
-                moment = _moment(event.get("createdAt"))
+                moment = parse_time(event.get("createdAt"))
                 if name in labels and moment is not None and (name not in added or added[name] < moment):
                     added[name] = moment
             if labels <= added.keys():
@@ -504,7 +506,7 @@ class _Reader:
             return obj(self._more(_MORE_COMMENTS, issue_number, cursor).get("comments"), "comments")
 
         found: list[tuple[datetime, dict[str, object]]] = []
-        for page in _backward(obj(issue.get("comments"), "comments"), before):
+        for page in backward(obj(issue.get("comments"), "comments"), before):
             lines = [_comment(ticket.key, node) for node in page]
             found.extend(c for c in lines if ticket.since is None or c[0] >= ticket.since)
             if ticket.since is not None and any(c[0] < ticket.since for c in lines):
@@ -579,32 +581,6 @@ def _about(error: Mapping[str, object], alias: str) -> bool:
     return not isinstance(path, list) or len(path) < 2 or path[1] == alias  # noqa: PLR2004
 
 
-def _backward(
-    last: Mapping[str, object],
-    fetch: Callable[[str], Mapping[str, object]],
-) -> Iterator[list[Mapping[str, object]]]:
-    """Each page of a connection read from its end, its last page in hand and each earlier one fetched by its cursor.
-
-    Yields:
-        Each page's nodes, the newest page first, each page in GitHub's order.
-
-    Raises:
-        GitHubError: The pages never end: GitHub sent a page's cursor twice.
-    """
-    seen: set[str] = set()
-    page = last
-    while True:
-        yield items(page.get("nodes"))
-        info = obj(page.get("pageInfo"), "pageInfo")
-        cursor = info.get("startCursor")
-        if info.get("hasPreviousPage") is not True or not isinstance(cursor, str):
-            return
-        if cursor in seen:
-            raise GitHubError("its pages never end: GitHub sent a page's cursor twice", certain=True)
-        seen.add(cursor)
-        page = fetch(cursor)
-
-
 def _key(issue_number: int) -> str:
     return f"{PREFIX}-{issue_number}"
 
@@ -675,7 +651,7 @@ def _comment(key: str, node: Mapping[str, object]) -> tuple[datetime, dict[str, 
         GitHubError: The comment has no id or no time.
     """
     id_ = number(node.get("fullDatabaseId"))
-    moment = _moment(node.get("createdAt"))
+    moment = parse_time(node.get("createdAt"))
     if id_ is None or moment is None:
         raise GitHubError(f"a comment on {key} has no id or time", certain=True)
     line: dict[str, object] = {
@@ -696,21 +672,6 @@ def _author(author: object) -> str:
         The login; a deleted account's is `ghost`.
     """
     return login(author) or _GHOST
-
-
-def _moment(value: object) -> datetime | None:
-    """A time as GitHub writes it, `2026-10-18T10:00:00Z`, or as canopy does, in ISO 8601.
-
-    Returns:
-        The time, in UTC when it names no offset; None for anything else.
-    """
-    if not isinstance(value, str):
-        return None
-    try:
-        moment = datetime.fromisoformat(value)
-    except ValueError:
-        return None
-    return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
 
 
 def _format(moment: datetime) -> str:
