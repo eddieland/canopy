@@ -26,6 +26,8 @@ class TrackedPr:
     url: str
     #: When the first run whose result named it started, a journal time: the window's run or one before it.
     first_named: str
+    #: When the last run before the window's end whose result named it started, a journal time.
+    last_named: str
     #: The ticket that owns it: its unit's, else the ticket of the first run that named it.
     ticket: str
     #: Its unit's phase (DESIGN §7); None for a PR no unit holds, or one whose unit has no phase yet.
@@ -42,6 +44,7 @@ def tracked(conn: sqlite3.Connection, since: str, until: str) -> dict[str, Track
         Each PR by URL, the first named first.
     """
     first: dict[str, tuple[str, str]] = {}
+    last: dict[str, str] = {}
     seen: set[str] = set()
     pushed = (
         sql.select("ticket_key, started_at, result_json")
@@ -52,6 +55,7 @@ def tracked(conn: sqlite3.Connection, since: str, until: str) -> dict[str, Track
     for key, started, result in sql.execute(conn, pushed):
         for url in contract.stored_prs(contract.stored_object(result)):
             first.setdefault(url, (str(key), str(started)))
+            last[url] = str(started)
             if str(started) >= since:
                 seen.add(url)
     urls = [url for url in first if url in seen]
@@ -65,6 +69,7 @@ def tracked(conn: sqlite3.Connection, since: str, until: str) -> dict[str, Track
         url: TrackedPr(
             url=url,
             first_named=first[url][1],
+            last_named=last[url],
             ticket=owned[url].ticket_key if url in owned else first[url][0],
             phase=owned[url].phase if url in owned else None,
         )

@@ -46,6 +46,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
 | `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
+| `wait-1` to `wait-4` | The Reviews page's first reviews by how long each waited, the quickest first. |
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
@@ -101,6 +102,9 @@ Rules:
   check by its rank that window, the most often red first, never by its name, and the rest in `check-other`, the dry
   run's neutral. Hues apart from the spend series and the status reds and greens, so a check never reads as a kind of
   run or as a verdict. Fills, never text; each reaches 3:1 on `surface`, which `tokens.test.ts` measures.
+- **Wait fills** (`wait-1` to `wait-4`; `src/lib/review-report.ts`) color the Reviews page's first reviews by day: a
+  ramp of cool hues by how long a first review waited, the quickest lightest, never a status color, so a slow review
+  never reads as a failure. Fills, never text; each reaches 3:1 on `surface`, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
   with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
   legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
@@ -1015,9 +1019,12 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **The red checks chart** (the CI page) is the same `DayChart`: a bar per local day of the red check runs, a series
   per check the server names apart, by rank in the check fills, and the rest summed as `other` in `check-other`, the
   legend and a table of the same numbers under it. Its window is the health page's, in the checks panel's header.
+- **The first reviews chart** (the Reviews page) is the same `DayChart`: a bar per local day of the first reviews that
+  arrived, stacked by wait in the wait fills, the quickest at the bottom, the day's median on hover, the legend and a
+  table of the same numbers under it. Its window is the health page's, in the first reviews panel's header.
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
-  with its unit's phase, its ticket, then the page's own figures. The spend page's By pull request and the CI page's
-  flaky kicks use it.
+  with its unit's phase, its ticket, then the page's own figures. The spend page's By pull request, the CI page's
+  flaky kicks, and the Reviews page's By pull request use it.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every

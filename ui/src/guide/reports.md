@@ -2,8 +2,8 @@
 
 What canopy cost and what it got done, month by month, what agent runs cost each day, and how they ended. Every
 dollar and token here is what the agent runtime reported, so if a runtime under-reports, so does this page. It is a
-mirror, not an audit. Beside them, the checklist page counts how workers answered your checklists, item by item, and
-the CI page says which checks fail.
+mirror, not an audit. Beside them, the checklist page counts how workers answered your checklists, item by item, the
+CI page says which checks fail, and the Reviews page says who reviews canopy's PRs and how soon.
 
 ## The reports page
 
@@ -231,3 +231,35 @@ Red means `failure`, `error`, `timed_out`, or `startup_failure`; green means `su
 The page sees only the PRs canopy observed, and only their check runs from M36 on, when canopy started keeping every
 one. A commit status has no check run, so it has no history here and isn't counted. If your CI reports by status
 alone, this page will look suspiciously calm.
+
+## The Reviews page
+
+The Reviews page, **Reviews** under [Reports](/reports) in the nav, says where feedback on canopy's PRs comes from, how
+long it takes to arrive, what answering it cost, and how canopy's own reviewer did, over the last **7 days** or
+**30 days**. The line under the title is the window at a glance, `38 reviews on 15 PRs · median first review 4.0h over
+30 days`. A PR is in the window when anything happened to it there: a run named it, someone reviewed or commented, it
+became ready, a review was asked for, or it merged.
+
+Feedback is counted the way the [reports page](#the-reports-page) counts it: reviews and comments from people other
+than the PR's author, bots left out. canopy posts as you, so its own replies never count as feedback it received.
+
+- **First reviews by day**: how long each PR waited for its first review, on GitHub's clock: from the first review
+  asked for once the PR was ready, or from ready if nobody was asked, to the first review after that. Each bar is a day
+  of first reviews, stacked by wait (under an hour, up to four, up to a day, longer); hover it for the day's median,
+  and the table under it holds the same numbers. A PR canopy read before it kept GitHub's times, or one still a draft,
+  has no start, so its reviews are counted apart and say so, rather than drag the median somewhere imaginary.
+- **Who reviews**: each reviewer with their reviews, the ones that asked for changes, comments, the PRs they
+  reviewed, and their median wait from a PR's start to their own first review of it. A reviewer in
+  `trust.trusted_reviewers` is marked **trusted**: a worker acts on their feedback without asking you.
+- **Feedback rounds**: each feedback plan written in the window, with its ticket, who approved it (you on the web, you
+  from the CLI, or the planner when it judged the plan needs no review), its effort, and the resumes that went ahead on
+  it with what the round spent. Above them, the planner's estimates beside what followed: if `small` plans keep
+  needing three resumes, the planner is an optimist, and now you have the receipts.
+- **canopy's reviewer**: its review runs by purpose (`own` for a ticket's PR, `request` for one you asked for) and how
+  they ended, with what they cost; the findings you dismissed, by reason; and its drafts, published or not. The last
+  line says whether `canopy:review` is in `trust.trusted_reviewers`.
+- **By pull request**: each PR with its ticket, time to first review, reviews, changes requested, comments, feedback
+  rounds, what those rounds cost, and the time from ready to merge.
+
+The page sees only the PRs canopy's runs named and a source observed. canopy keeps no history of a ticket's phases, so
+time a PR spent red in CI or conflicted with its base isn't here; the [CI page](#the-ci-page) has the red part.

@@ -35,7 +35,7 @@ def ran(conn: sqlite3.Connection, key: str, started: str, result: dict[str, obje
 
 
 def test_a_pr_is_tracked_from_the_first_run_that_named_it(tmp_path: Path, journals: Journals) -> None:
-    """A window's PRs are those its runs named, each dated by the first run ever to name it, and owned by its unit."""
+    """A window's PRs are those its runs named, dated by the first and the last run to name it, owned by its unit."""
     conn = journals.open(tmp_path / "canopy.db")
     since, until = earlier(NOW, 7), earlier(NOW, -1)
     # Named before the window and again in it: tracked, from the first.
@@ -51,8 +51,20 @@ def test_a_pr_is_tracked_from_the_first_run_that_named_it(tmp_path: Path, journa
     records.insert(records.TicketUnit, ticket_key="PROJ-9", repo="api", pr_url=PR_2, phase=Phase.CI_RED).run(conn)
     found = tracked_prs.tracked(conn, since, until)
     assert list(found.values()) == [
-        tracked_prs.TrackedPr(url=PR_1, first_named=earlier(NOW, 10), ticket="PROJ-1", phase=None),
-        tracked_prs.TrackedPr(url=PR_2, first_named=earlier(NOW, 2), ticket="PROJ-9", phase=Phase.CI_RED),
+        tracked_prs.TrackedPr(
+            url=PR_1,
+            first_named=earlier(NOW, 10),
+            last_named=earlier(NOW, 2),
+            ticket="PROJ-1",
+            phase=None,
+        ),
+        tracked_prs.TrackedPr(
+            url=PR_2,
+            first_named=earlier(NOW, 2),
+            last_named=earlier(NOW, 2),
+            ticket="PROJ-9",
+            phase=Phase.CI_RED,
+        ),
     ]
 
 

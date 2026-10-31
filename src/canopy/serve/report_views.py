@@ -1,14 +1,15 @@
 """The reports, as the API sends them (DESIGN §11), by the backend's clock.
 
-What each local calendar month cost and got done, how the last days' runs ended, as `canopy health` reads them, and
-what CI did on the PRs canopy observed.
+What each local calendar month cost and got done, how the last days' runs ended, as `canopy health` reads them, what
+CI did on the PRs canopy observed, and where their review feedback came from.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import ci, db, health, runtime_sessions, spend
+from canopy.core import ci, db, health, review_report, runtime_sessions, spend
+from canopy.core.config import CANOPY_REVIEWER
 from canopy.serve import monthly
 from canopy.serve.schema.ci import (
     CiCheck,
@@ -36,11 +37,22 @@ from canopy.serve.schema.reports import (
     ReportTicket,
     ReportTokens,
 )
+from canopy.serve.schema.review_report import (
+    ReviewsDay,
+    ReviewsDismissals,
+    ReviewsDrafts,
+    ReviewsEffort,
+    ReviewsPullRequest,
+    ReviewsReport,
+    ReviewsReviewer,
+    ReviewsRound,
+    ReviewsRunCount,
+)
 from canopy.serve.schema.spend import SpendUnpriced
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from datetime import timedelta
+    from datetime import datetime, timedelta
 
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
@@ -146,6 +158,60 @@ def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
             ticks=cooldown.ticks,
             last_tick=cooldown.last_tick,
         ),
+    )
+
+
+def reviews_report(backend: Backend, ctx: Context, days: int) -> ReviewsReport:
+    """Where the last `days` local days' review feedback came from, by the backend's clock, and what answering cost.
+
+    Returns:
+        The report, each reviewer marked trusted or not by `trust.trusted_reviewers`.
+    """
+    found = review_report.report(ctx.conn, backend.clock(), days)
+    trusted = set(ctx.config.trust.trusted_reviewers)
+    return ReviewsReport(
+        days=found.days,
+        since=db.parse_time(found.since),
+        until=db.parse_time(found.until),
+        reviews=found.reviews,
+        first_reviews=len(found.waits),
+        median_first_review_hours=_hours(found.median_wait),
+        untimed=found.untimed,
+        waiting=found.waiting,
+        per_day=[
+            ReviewsDay(
+                day=d.day,
+                start=db.parse_time(d.start),
+                first_reviews=list(d.first_reviews),
+                median_wait_hours=_hours(d.median_wait),
+            )
+            for d in found.per_day
+        ],
+        reviewers=[
+            ReviewsReviewer(
+                author=r.author,
+                trusted=r.author in trusted,
+                reviews=r.reviews,
+                changes_requested=r.changes_requested,
+                comments=r.comments,
+                pull_requests=r.prs,
+                median_wait_hours=_hours(r.median_wait),
+            )
+            for r in found.reviewers
+        ],
+        pull_requests=[_reviewed(p) for p in found.prs],
+        rounds=[_round(r) for r in found.rounds],
+        efforts=[
+            ReviewsEffort(effort=e.effort, plans=e.plans, resumes=e.resumes, resume_cost_usd=e.resume_cost_usd)
+            for e in found.efforts
+        ],
+        review_runs=[
+            ReviewsRunCount(purpose=r.purpose, status=r.status, runs=r.runs, cost_usd=r.cost_usd)
+            for r in found.review_runs
+        ],
+        dismissals=[ReviewsDismissals(reason=d.reason, findings=d.findings) for d in found.dismissals],
+        drafts=[ReviewsDrafts(status=d.status, drafts=d.drafts) for d in found.drafts],
+        canopy_trusted=CANOPY_REVIEWER in trusted,
     )
 
 
@@ -268,3 +334,42 @@ def _kick(found: ci.Kick) -> CiKick:
         still_red=list(found.still_red),
         checked=found.checked,
     )
+
+
+def _reviewed(found: review_report.ReviewedPr) -> ReviewsPullRequest:
+    return ReviewsPullRequest(
+        url=found.url,
+        ticket_key=found.ticket,
+        phase=found.phase,
+        waiting_since=_time(found.waiting_since),
+        first_review_at=_time(found.first_review_at),
+        first_review_hours=_hours(found.first_review),
+        reviews=found.reviews,
+        changes_requested=found.changes_requested,
+        comments=found.comments,
+        rounds=found.rounds,
+        cost_usd=found.cost_usd,
+        ready_at=_time(found.ready_at),
+        merged_at=_time(found.merged_at),
+        hours_to_merge=_hours(found.to_merge),
+    )
+
+
+def _round(found: review_report.Round) -> ReviewsRound:
+    return ReviewsRound(
+        plan_id=found.plan_id,
+        ticket_key=found.ticket,
+        run_id=found.run_id,
+        created_at=db.parse_time(found.created_at),
+        status=found.status,
+        approved_channel=found.approved_channel,
+        effort=found.effort,
+        pull_requests=list(found.prs),
+        plan_cost_usd=found.plan_cost_usd,
+        resumes=found.resumes,
+        resume_cost_usd=found.resume_cost_usd,
+    )
+
+
+def _time(stamp: str | None) -> datetime | None:
+    return None if stamp is None else db.parse_time(stamp)

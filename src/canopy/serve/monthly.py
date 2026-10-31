@@ -21,9 +21,9 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, records, run_models, runtime_sessions, sql, tracked_prs
+from canopy.core import contract, db, pr_feedback, records, run_models, runtime_sessions, sql, tracked_prs
 from canopy.core.spend import KIND_TABLES, KINDS, done_in
-from canopy.core.vocab import PrState, RunKind, RunStatus
+from canopy.core.vocab import PrState, ReviewState, RunKind, RunStatus
 
 if TYPE_CHECKING:
     import sqlite3
@@ -41,8 +41,6 @@ DEFAULT_MONTHS = 12
 _WORK_KINDS = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
 # The local month a row started in, as `YYYY-MM`: SQLite reads the journal's UTC time in the local time Python does.
 _MONTH_FORMAT = "%Y-%m"
-# A review that judged the PR, as against one GitHub keeps while its author is still writing it, or one dismissed.
-_JUDGED = ("approved", "changes_requested", "commented")
 # A month's row by model: its model, and for no model, whether its runs are unread.
 type _ModelKey = tuple[str | None, bool]
 
@@ -399,16 +397,6 @@ class _Run:
     prs: Sequence[str]
 
 
-@dataclass(frozen=True)
-class _Review:
-    """A comment or a review on a landed ticket's PR, from someone other than the PR's author."""
-
-    pr_url: str
-    item: str
-    state: str | None
-    created_at: datetime | None
-
-
 # Each ticket that landed, by when, with what getting it there took.
 def _landed(conn: sqlite3.Connection, landed: Mapping[str, str]) -> list[Landed]:
     keys = json.dumps(sorted(landed))
@@ -438,7 +426,7 @@ def _landed(conn: sqlite3.Connection, landed: Mapping[str, str]) -> list[Landed]
     for key, found in runs.items():
         prs.setdefault(key, set()).update(url for run in found for url in run.prs)
     urls = sorted({url for found in prs.values() for url in found})
-    reviews = _reviews(conn, urls)
+    reviews = pr_feedback.feedback(conn, urls)
     observed = {p.url: p for p in records.select(records.ObservedPr).where_in("url", urls).all(conn)}
     return [
         _ticket(
@@ -453,46 +441,22 @@ def _landed(conn: sqlite3.Connection, landed: Mapping[str, str]) -> list[Landed]
     ]
 
 
-# The comments and reviews on each PR from someone other than its author, not a bot's. canopy writes, replies, and
-# reviews as the operator, who authors its PRs, so this is what other people said of the work.
-def _reviews(conn: sqlite3.Connection, urls: Sequence[str]) -> dict[str, list[_Review]]:
-    said = (
-        sql.select("r.pr_url, r.item, r.state, r.created_at")
-        .from_("observed_reviews r")
-        .join("observed_prs p ON p.url = r.pr_url")
-        .where("r.pr_url IN (SELECT value FROM json_each(?))", json.dumps(urls))
-        .where("r.bot = 0 AND (p.author IS NULL OR r.author IS NOT p.author)")
-        .where("r.item = 'comment' OR r.state IN (SELECT value FROM json_each(?))", json.dumps(_JUDGED))
-    )
-    found: dict[str, list[_Review]] = {}
-    for url, item, state, created in sql.execute(conn, said):
-        found.setdefault(str(url), []).append(
-            _Review(
-                pr_url=str(url),
-                item=str(item),
-                state=None if state is None else str(state),
-                created_at=None if created is None else db.parse_time(str(created)),
-            ),
-        )
-    return found
-
-
 def _ticket(
     key: str,
     title: str | None,
     landed_at: str,
     runs: Sequence[_Run],
     *,
-    said: Sequence[_Review],
+    said: Sequence[pr_feedback.Feedback],
     prs: Sequence[records.ObservedPr],
 ) -> Landed:
     landed = db.parse_time(landed_at)
     before = sorted((r for r in runs if r.started_at <= landed), key=lambda r: r.started_at)
     work = [r for r in before if r.kind in _WORK_KINDS]
-    judged = [r for r in said if r.item == "review"]
+    judged = [r for r in said if r.judged]
     merged = _merged(prs)
     # Each PR's start, as GitHub says: a review of it asked for once ready, or its ready time.
-    starts = {p.url: db.parse_time(start) for p in prs if (start := p.review_requested_at or p.ready_at) is not None}
+    starts = {p.url: db.parse_time(start) for p in prs if (start := pr_feedback.waiting_since(p)) is not None}
     awaiting = min(starts.values(), default=None)
     # Without GitHub's times, a PR of the ticket is ready when its first worker run ends `done`.
     ready = next((r.ended_at for r in work if r.status == RunStatus.DONE and r.ended_at is not None), None)
@@ -507,9 +471,9 @@ def _ticket(
         landed_at=landed_at,
         started_at=db.format_time(work[0].started_at) if work else None,
         iterations=len(work),
-        pr_comments=sum(1 for r in said if r.item == "comment"),
+        pr_comments=sum(1 for r in said if not r.judged),
         reviews=len(judged),
-        changes_requested=sum(1 for r in judged if r.state == "changes_requested"),
+        changes_requested=sum(1 for r in judged if r.state is ReviewState.CHANGES_REQUESTED),
         cost_usd=_sum(r.cost_usd for r in before),
         to_land=(merged or landed) - work[0].started_at if work else None,
         review_wait=first_review - waited_from if first_review is not None and waited_from is not None else None,
@@ -518,18 +482,24 @@ def _ticket(
     )
 
 
-def _first_review(judged: Iterable[_Review], starts: Mapping[str, datetime | None]) -> datetime | None:
+def _first_review(
+    judged: Sequence[pr_feedback.Feedback],
+    starts: Mapping[str, datetime | None],
+) -> datetime | None:
     """The first review at or after its PR's start; a review of a PR with no start counts for nothing.
 
     Returns:
         Its time; None with no such review.
     """
-    found: datetime | None = None
-    for review in judged:
-        start, at = starts.get(review.pr_url), review.created_at
-        if start is not None and at is not None and at >= start and (found is None or at < found):
-            found = at
-    return found
+    firsts = (
+        pr_feedback.first_review([r for r in judged if r.pr_url == url], db.format_time(start))
+        for url, start in starts.items()
+        if start is not None
+    )
+    return min(
+        (db.parse_time(r.created_at) for r in firsts if r is not None and r.created_at is not None),
+        default=None,
+    )
 
 
 def _merged(prs: Sequence[records.ObservedPr]) -> datetime | None:

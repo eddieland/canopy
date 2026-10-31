@@ -101,6 +101,11 @@ const SERIES = [
     'check-3',
     'check-4',
     'check-other',
+    // The Reviews page's first reviews by wait, the same kind of fill.
+    'wait-1',
+    'wait-2',
+    'wait-3',
+    'wait-4',
 ]
 // A transcript's context chart: fills on a panel's surface, and on the raised one behind the call picked.
 const CONTEXT = ['context-carried', 'context-added']

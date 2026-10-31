@@ -1,7 +1,8 @@
 """The reports (DESIGN §11, §42): what each local calendar month cost, in dollars and tokens, and what it got done.
 
 And how worker runs answered each repository's checklist over the last days, how the last days' runs ended, as
-`canopy health` reads them, and what CI did on the PRs canopy observed. Reads only.
+`canopy health` reads them, what CI did on the PRs canopy observed, and where their review feedback came from. Reads
+only.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from canopy.serve.schema.checklist import ChecklistCounts
 from canopy.serve.schema.ci import CiReport
 from canopy.serve.schema.health import HealthReport
 from canopy.serve.schema.reports import MonthlyReport
+from canopy.serve.schema.review_report import ReviewsReport
 
 TAG = "reports"
 router = APIRouter(tags=[TAG])
@@ -103,3 +105,20 @@ def ci_report(
     """Each check's red runs and how often a new head fixed it, each day's, the fixes and kicks, and the cooldown."""
     with backend.open() as ctx:
         return report_views.ci_report(backend, ctx, days)
+
+
+@router.get("/reports/reviews", operation_id="getReviewsReport", summary="Get who reviewed over the last days")
+def reviews_report(
+    backend: BackendDep,
+    days: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=spending.MAX_DAYS,
+            description=f"How many local days to read, today's so far included: 1 to {spending.MAX_DAYS}.",
+        ),
+    ] = spending.DEFAULT_DAYS,
+) -> ReviewsReport:
+    """Who reviewed the PRs canopy tracked, how soon first reviews came, the feedback rounds, and canopy's reviewer."""
+    with backend.open() as ctx:
+        return report_views.reviews_report(backend, ctx, days)
