@@ -7,11 +7,12 @@ stands](PROGRESS.md).
 
 ## 40. The overseer per decision
 
-Built in part (ROADMAP M40): the tick starts every run (below), and §6, §8, §27, and TRUST_MODEL T3 and T4 say so; and
-a tick records its overseer's run as What each run owes says, its one run given the whole block. The rest of the runs
-per subject is designed, not built; until they are, §5, §6, §8, §11, §13, §15, and TRUST_MODEL
-describe canopy as it is, this section says what changes, and the PR that finishes it changes those sections and cuts
-this one to what is left.
+Built in part (ROADMAP M40): the tick starts every run (below), and §6, §8, §27, and TRUST_MODEL T3 and T4 say so; a
+tick records each overseer run as What each run owes says; and the runs per subject are built behind a private switch,
+off until the live check, which TRUST_MODEL T1, T3, and T6 name. Not built: a run's cost counted toward its ticket.
+Until the switch is on by default, §5, §6, §8, §11, §13, and §15 describe canopy as it is, one run a tick given the
+whole block, this section says what changes, and the PR that makes it the default changes those sections and cuts this
+one to what is left.
 
 Once the harness decides what needs no judgment (§37) and the overseer runs only when something is left (§6), its
 runs on a quiet queue come hours apart, past the provider's cache of its prompt (§6 step 4), and each is handed every
