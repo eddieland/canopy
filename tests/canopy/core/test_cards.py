@@ -12,7 +12,7 @@ from unittest import mock
 import pytest
 from pydantic import ValidationError
 
-from canopy.core import cards, conversation, db, review_runs
+from canopy.core import cards, conversation, db, records, review_runs
 from canopy.core.vocab import ReviewRunStatus, RunStatus
 from canopy.runtime.report import Called
 from tests.canopy.helpers import in_tick, plan_run, present
@@ -178,6 +178,67 @@ def test_a_card_gone_too_many_tool_calls_without_an_update_is_stale(conn: sqlite
     doing = cards.doing(standing, started)
     assert doing is not None
     assert doing.endswith(f"  no update in {cards.STALE_CALLS} tool calls")
+
+
+def lapses(conn: sqlite3.Connection, run_id: int) -> tuple[int, bool]:
+    """How many times run `run_id`'s card has lapsed, and whether it stands counted stale."""
+    run = present(records.select(records.Run).where("id = ?", run_id).one(conn))
+    return run.card_lapses, run.card_stale
+
+
+def calls(conn: sqlite3.Connection, run_id: int, count: int) -> None:
+    """Run `run_id` ends `count` tool calls that are not `status` calls."""
+    for _ in range(count):
+        cards.record_call(conn, "runs", run_id, None)
+
+
+def test_a_card_gone_stale_lapses_once_however_many_calls_find_it_so(conn: sqlite3.Connection, running: int) -> None:
+    """The lapse is the change from fresh to stale; a new card is fresh again, and its own lapse counts anew."""
+    cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
+    calls(conn, running, cards.STALE_CALLS - 1)
+    assert lapses(conn, running) == (0, False)
+    calls(conn, running, 1)
+    assert lapses(conn, running) == (1, True)
+    calls(conn, running, 5)
+    assert lapses(conn, running) == (1, True)
+    cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
+    assert lapses(conn, running) == (1, False)
+    calls(conn, running, cards.STALE_CALLS)
+    assert lapses(conn, running) == (2, True)
+    # Once the run ends, nothing more is counted.
+    db.finish_run(conn, "runs", running, RunStatus.DONE, "{}")
+    cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
+    assert lapses(conn, running) == (2, True)
+
+
+def test_a_run_with_no_card_yet_lapses_once_by_its_calls_or_its_minutes(
+    conn: sqlite3.Connection,
+    running: int,
+    tmp_path: Path,
+) -> None:
+    """It counts from its start, and its first card, late, ends a lapse already counted."""
+    calls(conn, running, cards.STALE_CALLS)
+    assert lapses(conn, running) == (1, True)
+    calls(conn, running, 3)
+    cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
+    assert lapses(conn, running) == (1, False)
+    # A run gone quiet past the minutes lapses at the first call that finds it so.
+    quiet = plan_run(conn, tmp_path, key="PROJ-2")
+    records.update(records.Run).set(started_at=OLD).where("id = ?", quiet).run(conn)
+    calls(conn, quiet, 1)
+    assert lapses(conn, quiet) == (1, True)
+
+
+def test_an_update_that_comes_too_late_counts_the_lapse_it_ends(conn: sqlite3.Connection, running: int) -> None:
+    """A card gone past the minutes with no call between is stale when its update arrives: one lapse, then fresh."""
+    cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
+    records.update(records.Run).set(card_at=OLD).where("id = ?", running).run(conn)
+    cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
+    assert lapses(conn, running) == (1, False)
+    # The update that is the stale-making call itself is in time.
+    calls(conn, running, cards.STALE_CALLS - 1)
+    cards.record_call(conn, "runs", running, cards.Card.model_validate(CARD))
+    assert lapses(conn, running) == (1, False)
 
 
 QUESTION: dict[str, object] = {

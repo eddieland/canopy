@@ -413,6 +413,10 @@ class ReviewRun(Row):
     #: The model canopy chose for its reviewer, its ticket's override or `runtime.models`' (DESIGN §13), as it asked
     #: the runtime for it; None when it chose none, and on a run from before canopy recorded it.
     model: str | None
+    #: How many times its card went stale while it ran, counted once each as a tool call found it (DESIGN §41), and
+    #: whether its card as it stands, or the run with none yet, has been counted stale.
+    card_lapses: int
+    card_stale: bool
 
 
 @dataclass(frozen=True)
@@ -500,6 +504,10 @@ class TaskRun(Row):
     card_asked_at: str | None
     card_answer: str | None
     card_answered_at: str | None
+    #: How many times its card went stale while it ran, counted once each as a tool call found it (DESIGN §41), and
+    #: whether its card as it stands, or the run with none yet, has been counted stale.
+    card_lapses: int
+    card_stale: bool
 
 
 @dataclass(frozen=True)
@@ -1654,6 +1662,10 @@ class Run(Row):
     card_asked_at: str | None
     card_answer: str | None
     card_answered_at: str | None
+    #: How many times its card went stale while it ran, counted once each as a tool call found it (DESIGN §41), and
+    #: whether its card as it stands, or the run with none yet, has been counted stale.
+    card_lapses: int
+    card_stale: bool
 
 
 @dataclass(frozen=True)

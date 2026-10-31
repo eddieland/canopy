@@ -61,6 +61,9 @@ time as many calls go by unanswered, so one ask ignored does not leave the run s
 session has updated, and when it last asked, and nothing else, as the clock keeps whether it has warned. A forged line
 can only ask for an update, so it fails safe, as the clock's do (§33).
 
+The harness counts each time a run's progress goes stale, by the measure it is shown stale by, once from fresh to
+stale, as a tool call or the run's end finds it; `canopy cards` counts those lapses per role over the last days.
+
 A run's progress is shown to the operator and never put in another agent's prompt, so neither the overseer's cache
 (§6) nor its trust in worker text changes (TRUST_MODEL T1). Nothing in its progress extends a run or holds a slot (T3).
 
