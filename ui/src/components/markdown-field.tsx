@@ -233,7 +233,18 @@ export function MarkdownField({
                 )}
             </div>
             {(toolbar || preview === 'tab') && (
-                <Toolbar aria-label="Formatting" aria-controls={fieldId} className="border-t px-1 py-0.5">
+                <Toolbar
+                    aria-label="Formatting"
+                    aria-controls={fieldId}
+                    // While the preview shows, the text is hidden and the focus is here, so the key switches back here.
+                    onKeyDown={(event) => {
+                        if (preview === 'tab' && isPressed(PREVIEW_KEYS, event, APPLE)) {
+                            event.preventDefault()
+                            showPreview(!previewing)
+                        }
+                    }}
+                    className="border-t px-1 py-0.5"
+                >
                     {toolbar && (
                         <>
                             <Tools tools={MARKS} disabled={!showsText || props.disabled === true} onTool={format} />

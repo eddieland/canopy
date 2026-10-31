@@ -58,6 +58,12 @@ describe('toggleCodeBlock', () => {
         expect(run('intro\n```\nmake [te]st\n```\nend', toggleCodeBlock)).toBe('intro\n[make test]\nend')
     })
 
+    it('fences text between two blocks rather than fuse them', () => {
+        expect(run('```\na\n```\npl|ain\n```\nb\n```', toggleCodeBlock)).toBe(
+            '```\na\n```\n```\npl|ain\n```\n```\nb\n```',
+        )
+    })
+
     it('opens an empty block with the cursor inside', () => {
         expect(run('|', toggleCodeBlock)).toBe('```\n|\n```')
     })

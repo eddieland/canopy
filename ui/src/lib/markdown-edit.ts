@@ -62,7 +62,8 @@ export function toggleMark(text: string, selection: Selection, mark: Mark): Edit
 }
 
 /**
- * Fences the selection's lines as a code block, or unfences them when the lines either side are already its fences.
+ * Fences the selection's lines as a code block, or unfences them when they sit in one whose fences are the lines either
+ * side.
  * A cursor on an empty line opens an empty block with the cursor inside it.
  */
 export function toggleCodeBlock(text: string, selection: Selection): Edit {
@@ -74,7 +75,10 @@ export function toggleCodeBlock(text: string, selection: Selection): Edit {
         before !== undefined &&
         after !== undefined &&
         isFence(text.slice(before, from - 1)) &&
-        isFence(text.slice(to + 1, after))
+        isFence(text.slice(to + 1, after)) &&
+        // The fences either side are one block's only when the lines sit inside it: text between two blocks has a
+        // closing fence above and an opening one below.
+        inCodeBlock(text, from)
     ) {
         const body = text.slice(from, to)
         return { from: before, to: after, insert: body, selection: { start: before, end: before + body.length } }

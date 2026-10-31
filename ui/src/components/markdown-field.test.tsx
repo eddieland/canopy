@@ -106,6 +106,15 @@ describe('MarkdownField', () => {
         expect(field().value).toBe('**Use** the `v2` API')
     })
 
+    it('switches back from the preview on the same key, from the toolbar the focus is in', () => {
+        render(<Holder initial="text" />)
+        fireEvent.keyDown(field(), { key: 'P', ctrlKey: true, shiftKey: true })
+        expect(screen.getByRole('region', { name: 'Preview' })).toBeDefined()
+        fireEvent.keyDown(screen.getByRole('radio', { name: 'Write' }), { key: 'P', ctrlKey: true, shiftKey: true })
+        expect(screen.queryByRole('region', { name: 'Preview' })).toBeNull()
+        expect(field().hidden).toBe(false)
+    })
+
     it('says when there is nothing to preview', () => {
         render(<Holder initial="  " />)
         fireEvent.click(screen.getByRole('radio', { name: 'Preview' }))
