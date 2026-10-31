@@ -39,7 +39,9 @@ The key is a level, for how much you'd rather not read. The planner may waive yo
 `true` still means `strict` and `false` still means `off`, so a file written for the old switch keeps working. No level
 waives review of a plan that touches security, credentials, a change that could lose data, or migrations, and a
 ticket that asks the planner to skip your review gets one. `strict` approves very little, which is the point of it;
-if you've watched it decline plan after plan you'd have waved through, `normal` is the next notch.
+if you've watched it decline plan after plan you'd have waved through, `normal` is the next notch. The
+[Plans page](reports#the-plans-page) shows how each level's approvals went, and whether their PRs needed a resume, so
+you loosen it on evidence rather than a hunch.
 
 A feedback plan, the one for what came back to a PR, lives on that PR's page, not here: see
 [The feedback plan](pull-requests#the-feedback-plan). While one waits on you, the ticket's page leads with a card

@@ -402,6 +402,7 @@ def test_a_plan_waits_on_the_operator_unless_the_key_is_on_and_its_planner_says_
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=result))
     assert run.status == RunStatus.DONE
     assert ("## Whether the operator reviews this plan" in run.prompt) is on
+    assert run.row["plan_review"] == ("strict" if on else "off")
     [plan] = plans.history(scenario.conn, KEY)
     assert (plan.status, plan.approved_channel, plan.approved_reason) == (PlanStatus.PROPOSED, None, None)
 
@@ -424,6 +425,8 @@ def test_at_each_level_the_planner_hears_its_bar_and_its_word_approves_the_plan(
     run = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=NO_REVIEW))
     assert run.status == RunStatus.DONE
     assert bar in run.prompt
+    # Its run keeps the level it was asked at, which the Plans report splits by.
+    assert run.row["plan_review"] == level
     # No level waives these.
     assert "touches security, credentials," in run.prompt
     [plan] = plans.history(scenario.conn, KEY)
@@ -446,6 +449,7 @@ def test_a_plan_the_operator_had_a_word_on_waits_on_them_whatever_its_planner_sa
     # The first planner was told how to say so; neither after it is, since its word would not count.
     assert "## Whether the operator reviews this plan" in first.prompt
     assert "## Whether the operator reviews this plan" not in second.prompt
+    assert (first.row["plan_review"], second.row["plan_review"]) == ("strict", "off")
     # One the operator asked for by name, with `canopy plan KEY`.
     scenario.operator("plan", KEY)
     third = scenario.run(PLAN, worker=planner_does(plan=TEXT, result=NO_REVIEW))

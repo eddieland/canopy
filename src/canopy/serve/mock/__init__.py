@@ -59,6 +59,7 @@ from canopy.serve.mock import (
     host,
     memory,
     personas,
+    plan_approvals,
     plans,
     review_waits,
     reviews,
@@ -373,6 +374,8 @@ def seed(directory: Path) -> Backend:
             )
             _every_kind(ctx.conn)
             review_waits.seed(ctx.conn, at)
+            # Last, so its runs take ids after every other fixture's.
+            plan_approvals.seed(ctx.conn, ws.state_dir, root)
         reviews.drafts(ctx.conn, at)
     transcripts.write(ws.state_dir, T0)
     return backend

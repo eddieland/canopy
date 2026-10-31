@@ -63,7 +63,10 @@ whether flaky kicks (§23) came back red. A commit status has no run, so it has 
 counts feedback as the monthly report does, by reviewer, trusted or not, with each first review's wait on GitHub's
 clock alone: a PR with no such time is counted apart, never given a proxy. Beside it, the feedback plans (§32) with how
 each was approved and the planner's estimate beside the resumes that followed, and canopy's own reviewer's runs,
-dismissals, and drafts.
+dismissals, and drafts. The Plans page sorts each ticket plan by how it went (the planner's approval, the operator's as
+written or after a change, sent back) and by the level of `policy.planner_may_approve` its run was offered (§25),
+which the run keeps, with the time to approve against the plan's length and the `resume` runs its ticket needed after,
+so the key is loosened on what each level let through.
 
 `spend.monthly_budget_usd` is what the operator means a local calendar month of agent spend to cost: canopy's runs and
 the runtime's sessions outside canopy (§13, Every session's spend), canopy's share shown beside the whole. `canopy

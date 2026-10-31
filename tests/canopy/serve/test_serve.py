@@ -1143,6 +1143,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/reports/health",
         "/api/reports/ci",
         "/api/reports/reviews",
+        "/api/reports/plans",
         "/api/tick",
         "/api/tickets",
         "/api/tickets/{key}",

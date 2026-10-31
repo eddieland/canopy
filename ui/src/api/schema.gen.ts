@@ -1026,6 +1026,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reports/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get how the last days' plans were approved
+         * @description Each plan written in the window, how it was approved and how long that took, and the resumes its ticket needed.
+         *
+         *     Split by the level of `policy.planner_may_approve` each plan's run was offered, and by who approved it.
+         */
+        get: operations["getPlansReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports/reviews": {
         parameters: {
             query?: never;
@@ -6312,6 +6334,16 @@ export type components = {
             text: string | null;
         };
         /**
+         * @description A level of `policy.planner_may_approve` (DESIGN §25): `off` where the planner was asked nothing.
+         * @enum {string}
+         */
+        PlanLevel: "off" | "strict" | "normal" | "lenient";
+        /**
+         * @description How a plan went: approved by its `planner`, by the operator `as_written` or `revised` (edited, commented on, or after an earlier plan was sent back), `replaced` by a newer plan, `dropped` with none after, or `waiting` on the operator.
+         * @enum {string}
+         */
+        PlanOutcome: "planner" | "as_written" | "revised" | "replaced" | "dropped" | "waiting";
+        /**
          * PlanReplyRequest
          * @description A reply in a comment thread on a plan.
          */
@@ -6375,6 +6407,227 @@ export type components = {
              * @description Its size in bytes.
              */
             size: number;
+        };
+        /**
+         * PlansGroup
+         * @description The window's approved plans of one level and one outcome, and what their tickets needed after.
+         */
+        PlansGroup: {
+            /**
+             * Done
+             * @description Those whose ticket the loop marked done, so their count is final.
+             */
+            done: number;
+            /**
+             * Implemented
+             * @description Those an `implement` followed.
+             */
+            implemented: number;
+            /** @description The level their plan runs were offered; None for the runs that kept none. */
+            level: components["schemas"]["PlanLevel"] | null;
+            /**
+             * Median Hours To Approve
+             * @description The median of their times to approval, in hours; None with none.
+             */
+            median_hours_to_approve: number | null;
+            /**
+             * Median Size
+             * @description The median of their sizes, in bytes.
+             */
+            median_size: number;
+            /**
+             * Outcome
+             * @description How they were approved.
+             * @enum {string}
+             */
+            outcome: "planner" | "as_written" | "revised";
+            /**
+             * Plans
+             * @description How many.
+             */
+            plans: number;
+            /**
+             * Resumes
+             * @description The `resume` runs their tickets started once they were approved.
+             */
+            resumes: number;
+            /**
+             * With Resume
+             * @description Of those, the ones whose ticket needed at least one `resume`.
+             */
+            with_resume: number;
+        };
+        /**
+         * PlansLength
+         * @description The window's plans the operator approved, of one size, and how long approving them took.
+         */
+        PlansLength: {
+            /**
+             * As Written
+             * @description Of those, the ones approved as written.
+             */
+            as_written: number;
+            /**
+             * High
+             * @description The size it holds up to, not included, in bytes; None for the largest.
+             */
+            high: number | null;
+            /**
+             * Low
+             * @description The smallest size it holds, in bytes.
+             */
+            low: number;
+            /**
+             * Median Hours To Approve
+             * @description The median of their times to approval, in hours.
+             */
+            median_hours_to_approve: number | null;
+            /**
+             * Plans
+             * @description How many.
+             */
+            plans: number;
+        };
+        /**
+         * PlansReport
+         * @description How the window's plans were approved, by the level their planners were offered, and what their PRs needed.
+         */
+        PlansReport: {
+            /**
+             * Days
+             * @description How many local days the window holds, today's so far included.
+             */
+            days: number;
+            /**
+             * Groups
+             * @description By level, `off` to `lenient`, then none kept; within each, the planner's, as written, then revised.
+             */
+            groups: components["schemas"]["PlansGroup"][];
+            /**
+             * Lengths
+             * @description The smallest first; only those with a plan.
+             */
+            lengths: components["schemas"]["PlansLength"][];
+            /** @description The level `policy.planner_may_approve` is at now, for the page to say beside the levels the plans were at. */
+            level: components["schemas"]["PlanLevel"];
+            /**
+             * Outcomes
+             * @description How many of the window's plans went each way, every outcome named, 0 for none.
+             */
+            outcomes: {
+                [key: string]: number;
+            };
+            /**
+             * Plans
+             * @description The newest first.
+             */
+            plans: components["schemas"]["PlansRow"][];
+            /**
+             * Since
+             * Format: date-time
+             * @description When the window starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: local midnight after today.
+             */
+            until: string;
+        };
+        /**
+         * PlansRow
+         * @description A ticket plan written in the window: how it went, how long approving it took, and what its ticket needed.
+         */
+        PlansRow: {
+            /**
+             * Approved At
+             * @description When it was approved; None when it was not.
+             */
+            approved_at: string | null;
+            /**
+             * Comments
+             * @description The operator's comments and replies on its ticket's plan while it was the ticket's plan.
+             */
+            comments: number;
+            /**
+             * Cost Usd
+             * @description What its own run cost, in US dollars; None when it reported none.
+             */
+            cost_usd: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When it was written.
+             */
+            created_at: string;
+            /**
+             * Done
+             * @description Whether the loop has marked its ticket done, so its resumes are all in.
+             */
+            done: boolean;
+            /**
+             * Earlier
+             * @description Its ticket's plans before it, which it replaced.
+             */
+            earlier: number;
+            /**
+             * Edited
+             * @description Whether its file was edited before its approval.
+             */
+            edited: boolean;
+            /**
+             * Effort
+             * @description How much work its planner judged it, `small`, `medium`, or `large`; None when it gave no estimate.
+             */
+            effort: string | null;
+            /**
+             * Hours To Approve
+             * @description From when it was written to its approval, in hours; None when it was not approved.
+             */
+            hours_to_approve: number | null;
+            /**
+             * Implemented
+             * @description Whether an `implement` followed it.
+             */
+            implemented: boolean;
+            /** @description The level its plan run's prompt offered its planner; None for a run from before canopy kept it. */
+            level: components["schemas"]["PlanLevel"] | null;
+            /** @description How it went. */
+            outcome: components["schemas"]["PlanOutcome"];
+            /**
+             * Plan Id
+             * @description The plan.
+             */
+            plan_id: number;
+            /**
+             * Reasons
+             * @description How many of those named each reason, `ci`, `review`, `reply`, `conflict`, `no_pr`, or `retarget`; a resume may
+             *     name several.
+             */
+            reasons: {
+                [key: string]: number;
+            };
+            /**
+             * Resumes
+             * @description The `resume` runs its ticket started once it was approved.
+             */
+            resumes: number;
+            /**
+             * Run Id
+             * @description The plan run that wrote it.
+             */
+            run_id: number;
+            /**
+             * Size
+             * @description Its file's size as its planner wrote it, in bytes.
+             */
+            size: number;
+            /**
+             * Ticket Key
+             * @description Its ticket.
+             */
+            ticket_key: string;
         };
         /**
          * PlanSummary
@@ -15009,6 +15262,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonthlyReport"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getPlansReport: {
+        parameters: {
+            query?: {
+                /** @description How many local days to read, today's so far included: 1 to 366. */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlansReport"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

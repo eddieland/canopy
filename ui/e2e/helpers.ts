@@ -50,6 +50,7 @@ export const ROUTES = [
     'reports/health',
     'reports/ci',
     'reports/reviews',
+    'reports/plans',
     'settings',
     'settings/limits',
     'settings/skills',

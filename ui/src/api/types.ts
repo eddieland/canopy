@@ -221,6 +221,18 @@ export type ReviewsRound = Schemas['ReviewsRound']
 export type ReviewsEffort = Schemas['ReviewsEffort']
 /** canopy's review runs of one purpose and status in a window. */
 export type ReviewsRunCount = Schemas['ReviewsRunCount']
+/** How a window's plans were approved, by the level their planners were offered, and what their PRs needed. */
+export type PlansReport = Schemas['PlansReport']
+/** A ticket plan written in a window: how it went, how long approving it took, and the resumes its ticket needed. */
+export type PlansRow = Schemas['PlansRow']
+/** A window's approved plans of one level and one outcome, and what their tickets needed after. */
+export type PlansGroup = Schemas['PlansGroup']
+/** A window's plans the operator approved, of one size, and how long approving them took. */
+export type PlansLength = Schemas['PlansLength']
+/** A level of `policy.planner_may_approve`: `off` where the planner was asked nothing. */
+export type PlanLevel = Schemas['PlanLevel']
+/** How a plan went: approved by its planner or by you, as written or revised, replaced, dropped, or waiting. */
+export type PlanOutcome = Schemas['PlanOutcome']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */

@@ -159,6 +159,7 @@ export const PAGE_GUIDES = {
     '/reports/health': 'reports#the-health-page',
     '/reports/ci': 'reports#the-ci-page',
     '/reports/reviews': 'reports#the-reviews-page',
+    '/reports/plans': 'reports#the-plans-page',
     '/memory': 'memory',
     '/search': 'overview#search',
     '/system': 'overview#system-resources',

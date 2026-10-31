@@ -70,6 +70,8 @@ export const keys = {
     ciReport: (days: number) => ['spend', 'breakdown', 'ci', days] as const,
     // Under the breakdowns' key too: a plan, a resume, or a review run changes the report.
     reviewsReport: (days: number) => ['spend', 'breakdown', 'reviews', days] as const,
+    // Under the breakdowns' key too: a plan, its approval, or a resume changes the report.
+    plansReport: (days: number) => ['spend', 'breakdown', 'plans', days] as const,
     tick: ['tick'] as const,
     // Tick now's request, a mutation's key: every Tick now shares it, so the header sees the one asked for.
     tickNow: ['tick-now'] as const,
@@ -285,6 +287,18 @@ export function reviewsReportQuery(days: number) {
         queryKey: keys.reviewsReport(days),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/reports/reviews', { params: { query: { days } }, signal })),
+    })
+}
+
+/**
+ * How the plans written over the last `days` local days were approved, by the level their planners were offered, and
+ * the resumes their tickets needed after. Marked stale with the spend breakdowns.
+ */
+export function plansReportQuery(days: number) {
+    return queryOptions({
+        queryKey: keys.plansReport(days),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/reports/plans', { params: { query: { days } }, signal })),
     })
 }
 

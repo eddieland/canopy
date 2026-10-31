@@ -330,6 +330,24 @@ class ReplyMode(StrEnum):
     POST = "post"
 
 
+class PlannerApproval(StrEnum):
+    """`policy.planner_may_approve`: how readily a planner may say its plan needs no review (DESIGN §25).
+
+    And the level a plan run's prompt offered its planner, `runs.plan_review`: `off` where it was asked nothing.
+
+    Each level but `off` renders its own bar in the planner's prompt; none relaxes the exclusions every level holds.
+    """
+
+    #: The planner is never asked: every plan waits on the operator.
+    OFF = "off"
+    #: Only a plan that leaves the operator nothing to judge.
+    STRICT = "strict"
+    #: A plan that follows the code's own patterns, within the scope the ticket settles.
+    NORMAL = "normal"
+    #: The planner's confident best reading, unless it leaves a real question open.
+    LENIENT = "lenient"
+
+
 class DraftKind(StrEnum):
     """Where a draft goes, `drafts.kind` (DESIGN §29)."""
 

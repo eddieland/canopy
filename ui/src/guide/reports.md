@@ -3,7 +3,8 @@
 What canopy cost and what it got done, month by month, what agent runs cost each day, and how they ended. Every
 dollar and token here is what the agent runtime reported, so if a runtime under-reports, so does this page. It is a
 mirror, not an audit. Beside them, the checklist page counts how workers answered your checklists, item by item, the
-CI page says which checks fail, and the Reviews page says who reviews canopy's PRs and how soon.
+CI page says which checks fail, the Reviews page says who reviews canopy's PRs and how soon, and the Plans page says
+how you approve plans and what their PRs needed after.
 
 ## The reports page
 
@@ -264,3 +265,33 @@ than the PR's author, bots left out. canopy posts as you, so its own replies nev
 
 The page sees only the PRs canopy's runs named and a source observed. canopy keeps no history of a ticket's phases, so
 time a PR spent red in CI or conflicted with its base isn't here; the [CI page](#the-ci-page) has the red part.
+
+## The Plans page
+
+The Plans page, **Plans** under [Reports](/reports) in the nav, says how the plans written over the last **30 days**
+or **90 days** were approved, and whether the PR that followed each one needed a `resume`. Read it before you loosen
+[`policy.planner_may_approve`](plans#when-the-planner-says-a-plan-needs-no-review): a plan you approved in a minute
+without a word says little about the plan, and a lot about your Tuesday. Whether its PR then needed three resumes says
+more. The line under the title is the window at a glance, `9 plans · 5 approved, 2
+by the planner · 2 of 5 PRs needed a resume over 30 days`.
+
+Each plan went one of six ways: approved **by the planner**, on its word that it needs no review; approved by you
+**as written**, the ticket's first plan with no edit and no comment; **revised**, approved after you edited it,
+commented on it, or sent an earlier plan back; **sent back**, replaced by a newer plan before you approved it;
+**dropped**, superseded with nothing after it (a skip, or a forget); or still **waiting on you**.
+
+- **Approvals by level**: the approved plans, by the level of `policy.planner_may_approve` their plan run was offered
+  and how each went ahead, with the median time from written to approved, the median length, how many of the PRs that
+  followed needed at least one resume, every resume after them, and how many of their tickets are done. A planner's
+  approval takes no time, so it shows a dash. The level is the one the planner was actually asked at: a plan that
+  replaced one you had a word on was asked nothing, so it counts as `off` whatever the key said. Under the table, the
+  level the key is at now, and how many plans were sent back or wait on you.
+- **Time to approve by length**: the plans you approved, by size, with the median time you took and how many went as
+  written. If the long ones go through as fast as the short ones, either the long ones are easy or you're skimming.
+- **Each plan**: every plan written in the window, with its run, its ticket, its level, how it went and what changed
+  first, its length, how long approving it took, and the resumes its ticket started after, their reasons on hover.
+
+A ticket's resumes after its plan's approval are its PR's, since canopy never plans a ticket that has a branch. They
+keep coming until the ticket is done, so an open ticket's count can still grow; the **done** column says how many are
+final. A plan run from before canopy kept the level it was offered shows as **not recorded**. Feedback plans are on
+the [Reviews page](#the-reviews-page), which says who approved each.

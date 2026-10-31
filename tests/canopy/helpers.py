@@ -391,8 +391,12 @@ def worker_ran(
     prs: Mapping[str, str] | None = None,
     reasons: Iterable[ResumeReason] = (),
     cost: float | None = None,
+    plan_id: int | None = None,
 ) -> int:
-    """A worker run on `key` that started at `started`, whose result named `prs`, for `reasons`; its id."""
+    """A worker run on `key` that started at `started`, whose result named `prs`, for `reasons`; its id.
+
+    `plan_id` is the approved plan it follows.
+    """
     db.touch_ticket(conn, key, "/ws")
     tick = records.insert(records.Tick, started_at=started, dry_run=0).run(conn).lastrowid
     result = None if prs is None else json.dumps({"summary": "s", "prs": dict(prs)})
@@ -407,6 +411,7 @@ def worker_ran(
         result_json=result,
         log_path="l",
         cost_usd=cost,
+        plan_id=plan_id,
     ).run(conn)
     run_id = present(run.lastrowid)
     for reason in reasons:

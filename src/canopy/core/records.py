@@ -72,6 +72,7 @@ from canopy.core.vocab import (
     Phase,
     PlanEffort,
     PlanItem,
+    PlannerApproval,
     PlanSetting,
     PlanStatus,
     PoolKind,
@@ -1666,6 +1667,9 @@ class Run(Row):
     #: whether its card as it stands, or the run with none yet, has been counted stale.
     card_lapses: int
     card_stale: bool
+    #: The level of `policy.planner_may_approve` a plan or feedback plan run's prompt offered its planner (DESIGN
+    #: §25), `off` where it was asked nothing; None for any other kind, and a plan run from before canopy kept it.
+    plan_review: PlannerApproval | None
 
 
 @dataclass(frozen=True)

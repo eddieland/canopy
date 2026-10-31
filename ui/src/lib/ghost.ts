@@ -169,6 +169,13 @@ export const GHOST_TIPS = {
         "Scanning... first review in under an hour. That's a raid-ready reviewer.",
         "Dear Traveler, a feedback plan, approved by the planner itself. Bold. I've seen bolder.",
     ],
+    '/reports/plans': [
+        'Eyes up, Guardian. A plan, approved as written. Read, or skimmed? The PR will tell us.',
+        'Field report: the planner says no review needed. The Fallen said that about their walls too.',
+        'Grimoire: strict is a locked door. Lenient is the same door, propped open with a chair.',
+        'Scanning... no resumes after that approval. Clean run, Guardian.',
+        'Dear Traveler, a plan sent back twice. Third time, it walked out of the Darkness on its own.',
+    ],
     '/workspace/ticks/': [
         "Eyes up, Guardian. Between two ticks there's a tock. Nobody has survived seeing one.",
         'Grimoire: an idle tick is the overseer looking at everything and choosing a nap.',

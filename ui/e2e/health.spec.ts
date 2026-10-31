@@ -68,7 +68,7 @@ test('the window switches to 30 days and back, and the guards say what they refu
     await expect(page.getByTestId('health-refusal').getByRole('link', { name: 'tick:2' })).toBeVisible()
     await page.getByTestId('health-window-30').click()
     await expect(page).toHaveURL(/\/reports\/health\?days=30$/u)
-    await expect(page.locator('main header p')).toHaveText('3 of 40 runs failed over 30 days')
+    await expect(page.locator('main header p')).toHaveText('3 of 46 runs failed over 30 days')
     await expect(page.getByTestId('health-table').locator('tbody tr')).toHaveCount(30)
     // The week, the default, needs no search.
     await page.getByTestId('health-window-7').click()
