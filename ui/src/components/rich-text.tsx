@@ -25,7 +25,8 @@ const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' 
  * it wraps to, so one long paragraph folds too. With `prose`, a paragraph's or an item's lines join with a space, as
  * Markdown's soft breaks do, for a file wrapped at a column (a persona) rather than written a line a thought. With
  * `pullRequests`, a GitHub PR's address is its `PullRequestLink`, as `LinkedText` names it. With `raised`, on a
- * surface already raised (a conversation's bubble), code sits on the canvas's color so it still stands apart.
+ * surface already raised (a conversation's bubble), a fenced block sits on the canvas's color so it still stands apart;
+ * inline code needs no flag, its chip a tint of the ink it sits in.
  */
 export function RichText({
     text,
@@ -91,7 +92,7 @@ function HarnessText({ part, links }: { part: Piece; links: boolean }) {
     return links ? <LinkedText text={part.text} /> : part.text
 }
 
-// How a piece is drawn where the text sits: its PRs named, and its code on the canvas when the surface is raised.
+// How a piece is drawn where the text sits: its PRs named, and a fenced block on the canvas when the surface is raised.
 interface Look {
     pullRequests: boolean
     raised: boolean
@@ -142,7 +143,7 @@ function BlockView({ block, prose, look }: { block: Block; prose: boolean; look:
             return (
                 <pre
                     className={cn(
-                        'overflow-x-auto rounded-sm border px-2 py-1.5 font-mono text-xs',
+                        'overflow-x-auto rounded-sm border px-2 py-1.5 font-mono text-code leading-relaxed',
                         look.raised ? 'bg-background' : 'bg-surface-raised',
                     )}
                 >
@@ -170,15 +171,12 @@ function InlineView({ piece, look }: { piece: Inline; look: Look }) {
             )
         }
         case 'code': {
-            return <Code text={piece.text} raised={look.raised} />
+            return <Code text={piece.text} />
         }
     }
 }
 
-function Code({ text, raised = false }: { text: string; raised?: boolean }) {
-    return (
-        <code className={cn('rounded-sm px-1 py-px font-mono text-xs', raised ? 'bg-background' : 'bg-surface-raised')}>
-            {text}
-        </code>
-    )
+// Sized to its line, on a tint of its own ink (`--code-size`, `--code-chip`), its ends kept on each line it wraps to.
+function Code({ text }: { text: string }) {
+    return <code className="rounded-sm bg-code-chip box-decoration-clone px-1 py-px font-mono text-code">{text}</code>
 }
