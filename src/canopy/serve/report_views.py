@@ -18,6 +18,7 @@ from canopy.serve.schema.ci import (
     CiFixedCheck,
     CiKick,
     CiKickedPullRequest,
+    CiPullRequest,
     CiReport,
 )
 from canopy.serve.schema.health import (
@@ -133,11 +134,29 @@ def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
         heads=found.heads,
         green_first=found.green_first,
         checks=[
-            CiCheck(name=c.name, runs=c.runs, red=c.red, green=c.green, followed=c.followed, passed=c.passed)
+            CiCheck(
+                name=c.name,
+                runs=c.runs,
+                red=c.red,
+                green=c.green,
+                followed=c.followed,
+                passed=c.passed,
+                reruns=c.reruns,
+                reruns_green=c.reruns_green,
+            )
             for c in found.checks
         ],
         series=list(found.series),
-        per_day=[CiDay(day=d.day, start=db.parse_time(d.start), red=list(d.red)) for d in found.per_day],
+        per_day=[
+            CiDay(
+                day=d.day,
+                start=db.parse_time(d.start),
+                red=list(d.red),
+                heads=d.heads,
+                green_first=d.green_first,
+            )
+            for d in found.per_day
+        ],
         fixes=[_fix(f) for f in found.fixes],
         kicks=[_kick(k) for k in found.kicks],
         kicked_pull_requests=[
@@ -151,6 +170,18 @@ def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
             )
             for p in found.kicked_prs
         ],
+        pull_requests=[
+            CiPullRequest(
+                url=p.url,
+                ticket_key=p.ticket,
+                phase=p.phase,
+                red_at=_time(p.red_at),
+                green_at=_time(p.green_at),
+                hours_to_green=_hours(p.to_green),
+            )
+            for p in found.pull_requests
+        ],
+        median_hours_to_green=_hours(found.median_to_green),
         max_flaky_kicks=ctx.config.trust.max_flaky_kicks,
         cooldown=None
         if cooldown is None
@@ -362,6 +393,7 @@ def _fix(found: ci.Fix) -> CiFix:
         started_at=db.parse_time(found.started_at),
         cost_usd=found.cost_usd,
         checks=[CiFixedCheck(pr_url=c.pr_url, name=c.name, next=c.next) for c in found.checks],
+        hours_to_green=_hours(found.to_green),
     )
 
 

@@ -23,13 +23,13 @@ const REPORT: CiReport = {
     heads: 4,
     green_first: 3,
     checks: [
-        { name: 'e2e', runs: 5, red: 2, green: 3, followed: 2, passed: 1 },
-        { name: 'lint', runs: 4, red: 0, green: 3, followed: 0, passed: 0 },
+        { name: 'e2e', runs: 5, red: 2, green: 3, followed: 2, passed: 1, reruns: 1, reruns_green: 1 },
+        { name: 'lint', runs: 4, red: 0, green: 3, followed: 0, passed: 0, reruns: 0, reruns_green: 0 },
     ],
     series: ['e2e'],
     per_day: [
-        { day: '2026-10-07', start: '2026-10-07T00:00:00Z', red: [1] },
-        { day: '2026-10-08', start: '2026-10-08T00:00:00Z', red: [1] },
+        { day: '2026-10-07', start: '2026-10-07T00:00:00Z', red: [1], heads: 2, green_first: 1 },
+        { day: '2026-10-08', start: '2026-10-08T00:00:00Z', red: [1], heads: 2, green_first: 2 },
     ],
     fixes: [
         {
@@ -40,6 +40,7 @@ const REPORT: CiReport = {
             started_at: '2026-10-08T10:00:00Z',
             cost_usd: 0.4,
             checks: [{ pr_url: PR, name: 'e2e', next: 'green' }],
+            hours_to_green: 4,
         },
     ],
     kicks: [
@@ -56,6 +57,8 @@ const REPORT: CiReport = {
         },
     ],
     kicked_pull_requests: [{ url: PR, ticket_key: 'PROJ-1', phase: 'ci_red', kicks: 1, most: 1, still_red: 1 }],
+    pull_requests: [],
+    median_hours_to_green: null,
     max_flaky_kicks: 2,
     cooldown: { guard: 'cooldown', decisions: 3, ticks: 2, last_tick: 9 },
 }

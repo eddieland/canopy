@@ -3404,6 +3404,16 @@ export type components = {
              */
             red: number;
             /**
+             * Reruns
+             * @description Its runs in the window on a head of a PR where a run of it was red before: reruns with no change to the code.
+             */
+            reruns: number;
+            /**
+             * Reruns Green
+             * @description Of those, the green ones: a check that passed on a head it had failed on, flaky without anyone's say-so.
+             */
+            reruns_green: number;
+            /**
              * Runs
              * @description Its runs a source observed completed in the window.
              */
@@ -3411,7 +3421,7 @@ export type components = {
         };
         /**
          * CiDay
-         * @description One local day of the window: its red check runs, by the chart's series.
+         * @description One local day of the window: its red check runs, by the chart's series, and the PR heads first checked on it.
          */
         CiDay: {
             /**
@@ -3419,6 +3429,16 @@ export type components = {
              * @description The day, `YYYY-MM-DD`, in the local time of the machine canopy runs on.
              */
             day: string;
+            /**
+             * Green First
+             * @description Of those, the heads whose first run of every check was not red.
+             */
+            green_first: number;
+            /**
+             * Heads
+             * @description The PR heads whose first check run was observed on the day, counted as `CiReport.heads` counts them.
+             */
+            heads: number;
             /**
              * Red
              * @description Each series' red runs, in `CiReport.series` order.
@@ -3446,6 +3466,12 @@ export type components = {
              * @description What it cost, in US dollars; None when it reported none.
              */
             cost_usd: number | null;
+            /**
+             * Hours To Green
+             * @description The longest time to green of the spells of red its PRs were in when it started, as `CiPullRequest` measures
+             *     one; None while one of them is still red, or when none was red.
+             */
+            hours_to_green: number | null;
             /**
              * Kind
              * @description Its kind: `resume`, or `fix-ci` for a run from before a `resume` fixed CI.
@@ -3580,6 +3606,46 @@ export type components = {
             url: string;
         };
         /**
+         * CiPullRequest
+         * @description A PR with a check run observed in the window, and how long it stayed red.
+         */
+        CiPullRequest: {
+            /**
+             * Green At
+             * @description When that spell ended: its first head from the red one on with no check's last red or green run red and one
+             *     green, at the observation of the last of those; None while it lasts, or when none was red.
+             */
+            green_at: string | null;
+            /**
+             * Hours To Green
+             * @description From `red_at` to `green_at`, in hours; None without both. Approximate: each time is when a source saw a run
+             *     completed, not when it finished, and a head whose other checks still run reads green until one is seen red.
+             */
+            hours_to_green: number | null;
+            /**
+             * Phase
+             * @description Its unit's phase (DESIGN §7); None for a PR no unit of the loop's has.
+             */
+            phase: string | null;
+            /**
+             * Red At
+             * @description When its latest spell of red began: the first red run a source observed on it after the spell before ended;
+             *     None when none was red.
+             */
+            red_at: string | null;
+            /**
+             * Ticket Key
+             * @description The ticket that owns it: its unit's, else the ticket of the first run that named it; None for a PR no run
+             *     named.
+             */
+            ticket_key: string | null;
+            /**
+             * Url
+             * @description The PR.
+             */
+            url: string;
+        };
+        /**
          * CiReport
          * @description Which checks failed in the window, what fixing them cost, and whether the flaky kicks worked.
          */
@@ -3627,10 +3693,20 @@ export type components = {
              */
             max_flaky_kicks: number;
             /**
+             * Median Hours To Green
+             * @description The median of `pull_requests`' hours to green, over those that went green; None with none.
+             */
+            median_hours_to_green: number | null;
+            /**
              * Per Day
              * @description Every day of the window, oldest first.
              */
             per_day: components["schemas"]["CiDay"][];
+            /**
+             * Pull Requests
+             * @description Still red first, the oldest red first; then the longest time to green first; then those never red.
+             */
+            pull_requests: components["schemas"]["CiPullRequest"][];
             /**
              * Series
              * @description The check names the red-by-day chart names apart, the most often red first, then None for every other check

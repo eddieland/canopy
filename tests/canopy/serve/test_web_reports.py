@@ -318,3 +318,52 @@ def test_the_ci_report_reads_kicks_fixes_and_the_cooldown_from_the_journal(canop
     ]
     assert found["max_flaky_kicks"] == 2
     assert found["cooldown"] == {"guard": "cooldown", "decisions": 2, "ticks": 1, "last_tick": tick}
+
+
+def test_the_ci_report_reads_reruns_heads_by_day_and_time_to_green(canopy_env: CanopyEnv) -> None:
+    """A rerun that passed on one head, two heads first checked on one day, and a PR green two heads after its red."""
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    conn, now = ctx.conn, datetime.now(UTC)
+    flaky, fixed = "https://github.com/acme/web/pull/7", "https://github.com/acme/web/pull/8"
+    worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 4), prs={"web": flaky})
+    worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 4), key="PROJ-2", prs={"web": fixed})
+    # PR 7's `e2e` failed and passed on a rerun at the same head an hour later.
+    check_ran(conn, flaky, "h1", "e2e", CheckConclusion.FAILURE, earlier(now, 3))
+    check_ran(conn, flaky, "h1", "unit", CheckConclusion.SUCCESS, earlier(now, 3))
+    check_ran(conn, flaky, "h1", "e2e", CheckConclusion.SUCCESS, earlier(now, 3, -1))
+    # PR 8 went red on two heads first checked together, and green on the head after them, a day later.
+    check_ran(conn, fixed, "g1", "unit", CheckConclusion.FAILURE, earlier(now, 2))
+    check_ran(conn, fixed, "g2", "unit", CheckConclusion.FAILURE, earlier(now, 2))
+    fix = worker_ran(
+        conn,
+        RunKind.RESUME,
+        earlier(now, 2, -1),
+        key="PROJ-2",
+        prs={"web": fixed},
+        reasons=(ResumeReason.CI,),
+    )
+    check_ran(conn, fixed, "g3", "unit", CheckConclusion.SUCCESS, earlier(now, 1))
+    c, _ = signed_in_client(ctx)
+    found = c.get("/api/reports/ci").json()
+    assert [(k["name"], k["runs"], k["red"], k["reruns"], k["reruns_green"]) for k in found["checks"]] == [
+        ("unit", 4, 2, 0, 0),
+        ("e2e", 2, 1, 1, 1),
+    ]
+    by_day = {d["day"]: (d["heads"], d["green_first"]) for d in found["per_day"] if d["heads"]}
+    assert by_day == {
+        spend.local_day(earlier(now, 3)): (1, 0),
+        spend.local_day(earlier(now, 2)): (2, 0),
+        spend.local_day(earlier(now, 1)): (1, 1),
+    }
+    assert [(p["url"], p["ticket_key"], p["hours_to_green"]) for p in found["pull_requests"]] == [
+        (fixed, "PROJ-2", pytest.approx(24)),
+        (flaky, "PROJ-1", pytest.approx(1)),
+    ]
+    [pr] = [p for p in found["pull_requests"] if p["url"] == fixed]
+    assert (db.parse_time(pr["red_at"]), db.parse_time(pr["green_at"])) == (
+        db.parse_time(earlier(now, 2)),
+        db.parse_time(earlier(now, 1)),
+    )
+    assert found["median_hours_to_green"] == pytest.approx(12.5)
+    assert [(f["run_id"], f["hours_to_green"]) for f in found["fixes"]] == [(fix, pytest.approx(24))]
