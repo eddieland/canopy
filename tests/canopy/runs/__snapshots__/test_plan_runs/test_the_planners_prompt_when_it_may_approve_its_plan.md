@@ -146,7 +146,8 @@ The operator lets you say that this plan needs no review. canopy then approves i
 ## Result
 
 The operator reads your `summary` and `question` in canopy as Markdown: paragraphs, `-` and `1.` lists, `code`,
-fenced code, and **bold**. Nothing else is read, and a link shows its address, so write a URL as itself.
+fenced code, **bold**, *italics*, `>` quotes, `---` rules, and tables. Nothing else is read, and a link shows its
+address, so write a URL as itself.
 
 Your last line of stdout must be exactly one JSON object and nothing after it. Only `done` records a plan, and only
 when `.canopy-new-plan.md` holds one: not empty, and at most 100,000 characters, a limit and not a length to aim
