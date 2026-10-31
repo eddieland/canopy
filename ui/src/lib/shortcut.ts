@@ -49,6 +49,27 @@ export function isTextField(target: unknown): boolean {
     )
 }
 
+/**
+ * Whether a key press is `letter` alone, pressed rather than held, in either case (Caps Lock types it upper case with
+ * no Shift), and not taken already: the keys the shell's dialogs open on, `R` and `T`.
+ */
+export function isBareKey(letter: string, event: KeyboardEvent): boolean {
+    return (
+        event.key.toLowerCase() === letter.toLowerCase() &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        !event.repeat &&
+        !event.defaultPrevented
+    )
+}
+
+/** Whether a dialog is open already, as the jump palette, 2048, or the rail's sheet each is: one at a time. */
+export function dialogOpen(): boolean {
+    return document.querySelector('[role="dialog"], [role="alertdialog"]') !== null
+}
+
 const APPLE_NAMES: Partial<Record<string, string>> = { Mod: '⌘', Alt: '⌥', Shift: '⇧' }
 const OTHER_NAMES: Partial<Record<string, string>> = { Mod: 'Ctrl' }
 

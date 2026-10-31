@@ -36,6 +36,7 @@ import { Rave } from './rave'
 import { ReviewDialog } from './review-dialog'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
+import { TicketDialog } from './ticket-dialog'
 import { Ticker } from './ticker'
 import { TickNow } from '@/components/tick-now'
 import { NoticeBanner } from './worker-notice'
@@ -50,10 +51,11 @@ export const PAGE_SCROLLER = 'page'
  * The frame every page renders in: header (with its ticker), side rail (search, navigation, what is working now, Sprig
  * once Settings turns it on and the rail has room for it, and at its foot the spend over a footer), the routed page,
  * and over it all the jump palette while ⌘K has it open (`JumpPalette`), the Review a PR dialog while `R` or a pasted
- * PR's URL has it open (`ReviewDialog`), and the lightswitch rave while Settings' light switch is
- * on, 2048 once it is typed away from a field (`Game2048`), and the tab's icon (`Favicon`). Coming back to the tab
- * after a while away, a note of what changed (`useAwayNote`). Signed out, the sign-in page instead, whatever the
- * route: every API route but the session's needs a session (DESIGN §22).
+ * PR's URL has it open (`ReviewDialog`), the Start a ticket dialog while `T` has it open (`TicketDialog`), and
+ * the lightswitch rave while Settings' light switch is on, 2048 once it is typed away from a field (`Game2048`), and
+ * the tab's icon (`Favicon`). Coming back to the tab after a while away, a note of what changed (`useAwayNote`).
+ * Signed out, the sign-in page instead, whatever the route: every API route but the session's needs a session
+ * (DESIGN §22).
  *
  * The header stays put and only what is under it scrolls (`PAGE_SCROLLER`), so the header spans the window's width:
  * a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header.
@@ -216,6 +218,7 @@ export function AppShell() {
                 )}
                 <JumpPalette open={jumpOpen} onOpenChange={jump} />
                 <ReviewDialog />
+                <TicketDialog />
                 <Rave />
                 <Game2048 />
             </Sheet>

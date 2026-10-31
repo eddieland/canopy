@@ -1935,6 +1935,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   field, or in the notes once the URL is filled in. A request that goes through closes it and opens the PR's page; a
   refusal keeps it open, its `Notice` naming the guard. What is written outlives closing it, kept in the tab's
   `sessionStorage` (`src/lib/review-request-draft.ts`) until a request goes through or the operator signs out.
+- **The ticket dialog** (`TicketDialog`, `src/components/shell/ticket-dialog.tsx`) starts a ticket from anywhere: `T`,
+  with no modifier, from anywhere but a text field or the plan editor (the rule `R` follows), opens it, never over
+  another dialog. It is a `Dialog` placed as the review dialog is, titled `Start a ticket` in a panel's header, holding
+  the tickets page's form (`StartTicket`), so they cannot drift, with the focus in the key field. A ticket that starts
+  closes it and opens the ticket's page; a refusal keeps it open, its `Notice` naming the guard.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.
   Signed out by a 401 to an action, the card says under its heading, in `status-failed`, that the action was not sent
   (`unsentQuery`). A reply being written outlives the page that held it: the reply form keeps what is written, with its

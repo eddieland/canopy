@@ -263,6 +263,15 @@ test('the review dialog with a model chosen in dark', async ({ page }) => {
     await expect(dialog).toHaveScreenshot('review-dialog-model-dark.png')
 })
 
+// Start a ticket over the attention page, opened by T: the box alone, as the review dialog's.
+test('the ticket dialog in dark', async ({ page }) => {
+    await openInDark(page, 'attention')
+    await page.keyboard.press('t')
+    const dialog = page.getByTestId('ticket-dialog')
+    await expect(dialog.getByLabel('Ticket key')).toBeFocused()
+    await expect(dialog).toHaveScreenshot('ticket-dialog-dark.png')
+})
+
 // The interface is a quarter larger from a 2560px window. The images are of the operator's window, which already
 // uses the width (2xl), so a wider one's would only repeat them larger.
 test('the root size grows with the window', async ({ page }) => {

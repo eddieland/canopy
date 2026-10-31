@@ -298,6 +298,19 @@ test('starting a ticket from the list opens it, private', async ({ page }) => {
     await expect(page.locator('header').getByText('private', { exact: true })).toBeVisible()
 })
 
+test('T opens Start a ticket from any page, which starts it and lands on its page', async ({ page }) => {
+    await page.goto('workspace/runs')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
+    await page.keyboard.press('t')
+    const dialog = page.getByRole('dialog', { name: 'Start a ticket' })
+    await expect(dialog.getByLabel('Ticket key')).toBeFocused()
+    await page.keyboard.type('ABC-201')
+    await page.keyboard.press('Enter')
+    await expect(dialog).toBeHidden()
+    await expect(page).toHaveURL(/\/canopy\/tickets\/ABC-201$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('ABC-201')
+})
+
 test('a refusal names its guard', async ({ page }) => {
     await page.goto('tickets')
     await page.getByLabel('Ticket key').fill('run:4')

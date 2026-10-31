@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { pullRequestUrl } from '@/lib/pull-request-label'
 import { dropReviewRequestDraft, keepReviewRequestDraft, readReviewRequestDraft } from '@/lib/review-request-draft'
 import type { ReviewRequestDraft } from '@/lib/review-request-draft'
-import { isTextField } from '@/lib/shortcut'
+import { dialogOpen, isBareKey, isTextField } from '@/lib/shortcut'
 import { cn } from '@/lib/utils'
 
 /**
@@ -33,7 +33,7 @@ export function ReviewDialog() {
     }
 
     const onKey = useEffectEvent((event: KeyboardEvent) => {
-        if (isReviewKey(event) && !isTextField(event.target) && !dialogOpen()) {
+        if (isBareKey('r', event) && !isTextField(event.target) && !dialogOpen()) {
             event.preventDefault()
             open(here)
         }
@@ -96,22 +96,4 @@ export function ReviewDialog() {
             </DialogContent>
         </Dialog>
     )
-}
-
-// `R` alone, pressed rather than held, in either case: Caps Lock types it upper case with no Shift.
-function isReviewKey(event: KeyboardEvent): boolean {
-    return (
-        event.key.toLowerCase() === 'r' &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !event.altKey &&
-        !event.shiftKey &&
-        !event.repeat &&
-        !event.defaultPrevented
-    )
-}
-
-// Whether a dialog is open already, as the jump palette, 2048, or the rail's sheet each is: one at a time.
-function dialogOpen(): boolean {
-    return document.querySelector('[role="dialog"], [role="alertdialog"]') !== null
 }
