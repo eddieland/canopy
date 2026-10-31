@@ -36,6 +36,7 @@ import { NewerBuild } from './newer-build'
 import { RailFooter, RailSpend, RailWorking } from './rail'
 import { Rave } from './rave'
 import { ReviewDialog } from './review-dialog'
+import { SeasonSlot } from './season-slot'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
 import { TicketDialog } from './ticket-dialog'
@@ -264,7 +265,8 @@ function SkipToContent() {
 /**
  * What the rail holds, whether beside the page or in the sheet, in two groups (DESIGN's Shape and space): the top, the
  * search box, the nav, and what is working, and the foot, the spend standing on the footer. The room left between them
- * is one gap, Sprig's slot when it is on, so Sprig stands on the foot.
+ * is one gap, Sprig's slot when it is on, so Sprig stands on the foot; with Sprig off, a season's scene stands there
+ * alone.
  */
 function RailColumn({ buddy, onJump }: { buddy: boolean; onJump: () => void }) {
     return (
@@ -275,7 +277,7 @@ function RailColumn({ buddy, onJump }: { buddy: boolean; onJump: () => void }) {
                 <Nav />
                 <RailWorking />
             </div>
-            {buddy ? <Buddy /> : <div className="flex-1" />}
+            {buddy ? <Buddy /> : <SeasonSlot />}
             <div data-testid="rail-foot">
                 <RailSpend />
                 <RailFooter />
@@ -303,18 +305,17 @@ function RailButton() {
 
 /**
  * The header's logo and name, alive with the stream and the latest tick, and with the tick Tick now asked for. In a
- * season, while Sprig is on, what the season hangs over the logo hangs there too.
+ * season, what the season hangs over the logo hangs there too.
  */
 function LiveMark({ stream }: { stream: StreamStatus }) {
     const tick = useQuery(tickQuery).data?.tick
     const asked = useTickAsked()
     const season = useSeason()
-    const buddy = useBuddy()
     return (
         <span className="relative flex items-center gap-2.5">
             <Mark live={stream === 'open'} ticking={tick?.status === 'running' || asked} beat={tick?.id} />
             <Wordmark beat={tick?.id} />
-            {buddy === 'on' && season !== null ? <LogoDecoration id={season} /> : null}
+            {season === null ? null : <LogoDecoration id={season} />}
         </span>
     )
 }

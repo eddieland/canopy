@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 
+import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
+
 /**
- * The seasons Sprig decorates for: a few days of the year each, when a little scene stands beside it at the foot of
- * the rail (drawn in src/components/season.tsx), beside the Ghost too when it sits in Sprig's place, and some hang
- * something over the header's logo (src/components/season-logo.tsx). Read from the browser's own clock and calendar,
- * so the decoration comes and goes on the operator's local dates, with no setting: turning Sprig off puts it away too.
+ * The seasons canopy decorates for: a few days of the year each, when a little scene stands at the foot of the rail
+ * (drawn in src/components/season.tsx), beside Sprig or the Ghost when one is there, and some hang something over the
+ * header's logo (src/components/season-logo.tsx). Read from the browser's own clock and calendar, so the decoration
+ * comes and goes on the operator's local dates. Settings turns the seasons off, on their own, whoever sits in the rail.
  * Winter starts the day after the latest Thanksgiving can fall, so the lights go up once the pie is put away.
  */
 
-/** A season Sprig decorates for. */
+/** A season canopy decorates for. */
 export type SeasonId = 'newyear' | 'valentines' | 'shamrock' | 'spring' | 'halloween' | 'harvest' | 'winter'
 
 /** A day of the year: its month, 1 for January, and its day of the month. */
@@ -44,14 +46,43 @@ export function seasonOn(date: Date): SeasonId | null {
     return SEASONS.find((season) => order(season.from) <= today && today <= order(season.to))?.id ?? null
 }
 
-/** The season today, looked at again every hour while the page is open. */
+/** Whether canopy decorates for the seasons. */
+export type SeasonsSetting = 'on' | 'off'
+
+/** Where localStorage keeps the setting. */
+export const STORAGE_KEY = 'canopy-seasons'
+/** The setting until the operator turns the seasons off: on. */
+export const DEFAULT: SeasonsSetting = 'on'
+
+/** The setting as stored, or the default for anything it does not recognize. */
+export function parseSeasons(raw: string | null): SeasonsSetting {
+    return raw === 'on' || raw === 'off' ? raw : DEFAULT
+}
+
+const setting = storedSetting({ key: STORAGE_KEY, parse: parseSeasons, serialize: (value: SeasonsSetting) => value })
+
+/**
+ * The season to decorate for today, looked at again every hour while the page is open: null on a day with none, or
+ * while Settings has the seasons off.
+ */
 export function useSeason(): SeasonId | null {
+    const on = useSeasons() === 'on'
     const [season, setSeason] = useState(() => seasonOn(new Date()))
     useEffect(() => {
         const timer = globalThis.setInterval(() => setSeason(seasonOn(new Date())), RECHECK_MS)
         return () => globalThis.clearInterval(timer)
     }, [])
-    return season
+    return on ? season : null
+}
+
+/** Whether the seasons are decorated for. Re-renders on a change from this tab or another. */
+export function useSeasons(): SeasonsSetting {
+    return useStoredSetting(setting)
+}
+
+/** Stores the setting and applies it now. */
+export function setSeasons(next: SeasonsSetting): void {
+    setting.set(next)
 }
 
 /** A day as one number that sorts as the days of the year do. */
