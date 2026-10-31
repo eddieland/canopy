@@ -462,6 +462,50 @@ export async function clickAtEnd(target: Locator): Promise<void> {
     }).toPass({ timeout: 5000 })
 }
 
+/**
+ * Clicks just before the first character of `target`, an element in the plan, as the operator would to write ahead of
+ * it, and waits for the editor to hold its cursor at the element's start. Not a click and Home, for the reason
+ * `clickAtEnd` gives against End: a loaded machine can put the cursor back where the click left it.
+ */
+export async function clickAtStart(target: Locator): Promise<void> {
+    await expect(async () => {
+        await target.click({ position: await target.evaluate(startPoint) })
+        await expect.poll(() => target.evaluate(holdsCursorAtStart), { timeout: 250 }).toBe(true)
+    }).toPass({ timeout: 5000 })
+}
+
+// Where in `element`, from its top left corner, a click puts the cursor before its first character: the first
+// character's left half, on its line.
+function startPoint(element: Element): { x: number; y: number } {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    let first: Text | null = null
+    for (let node = walker.nextNode(); node !== null && first === null; node = walker.nextNode()) {
+        if ((node.textContent ?? '') !== '') {
+            first = node as Text
+        }
+    }
+    if (first === null) {
+        throw new Error('the element has no text to click before')
+    }
+    const range = document.createRange()
+    range.setStart(first, 0)
+    range.setEnd(first, 1)
+    const char = range.getBoundingClientRect()
+    const box = element.getBoundingClientRect()
+    return { x: char.left - box.left + 1, y: char.top + char.height / 2 - box.top }
+}
+
+// Whether the plan's editor holds its cursor, and nothing selected, at the start of `element`'s content.
+function holdsCursorAtStart(element: Element): boolean {
+    const root = element.closest('[contenteditable]') as (Element & { editor: { view: PlanView } }) | null
+    if (root === null) {
+        return false
+    }
+    const { view } = root.editor
+    const { from, to } = view.state.selection
+    return from === to && from === view.posAtDOM(element, 0)
+}
+
 // Where in `element`, from its top left corner, a click puts the cursor after its last character: the last character's
 // right half, on its line.
 function endPoint(element: Element): { x: number; y: number } {
