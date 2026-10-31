@@ -42,6 +42,7 @@ import { RUN_TEXT } from '@/lib/run-state'
 import { useClock } from '@/lib/clock'
 import { localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { Code } from '@/components/code'
 
 // What `MemoryPurge` copies: the verb alone, since what it purges is the operator's to name in the shell.
 const PURGE_COMMAND = 'canopy memory purge'
@@ -576,9 +577,8 @@ export function MemoryPurge() {
             <span>Purge deletes the text of many memories at once, from your shell alone:</span>
             <Copyable text={PURGE_COMMAND} label="purge command" className="font-mono text-foreground" />
             <span>
-                with <code className="font-mono">--ticket KEY</code> for what a ticket&apos;s runs wrote,{' '}
-                <code className="font-mono">--run ID</code> for a run&apos;s, or{' '}
-                <code className="font-mono">--all</code> for every memory, your lessons included.
+                with <Code>--ticket KEY</Code> for what a ticket&apos;s runs wrote, <Code>--run ID</Code> for a
+                run&apos;s, or <Code>--all</Code> for every memory, your lessons included.
             </span>
         </p>
     )

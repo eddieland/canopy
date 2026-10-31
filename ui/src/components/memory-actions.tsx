@@ -42,6 +42,7 @@ import { useSendKeys } from '@/lib/send-key'
 import type { SendKeys } from '@/lib/send-key'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { Code } from '@/components/code'
 
 // The operator's verbs on agent memory from the page that shows it (DESIGN §28, ROADMAP M52): each the function its
 // `canopy memory` verb calls, with its guards. A verb's row can leave once it is done (a promoted or rejected
@@ -417,12 +418,11 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
                     'Reading the lessons in force.'
                 ) : replaced === undefined ? (
                     <>
-                        No lesson is in force under <code className="font-mono">{source.key}</code>: it replaces none.
+                        No lesson is in force under <Code>{source.key}</Code>: it replaces none.
                     </>
                 ) : (
                     <>
-                        It replaces {memoryRef(replaced.id)}, the lesson in force under{' '}
-                        <code className="font-mono">{source.key}</code>
+                        It replaces {memoryRef(replaced.id)}, the lesson in force under <Code>{source.key}</Code>
                         {replaced.text !== null && (
                             <>
                                 : <MemoryText text={replaced.text} className="text-foreground" lines />

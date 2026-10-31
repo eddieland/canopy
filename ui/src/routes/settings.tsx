@@ -50,6 +50,7 @@ import type { Palette } from '@/theme/palette'
 import type { ResolvedTheme, ThemePreference } from '@/theme/store'
 import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
+import { Code } from '@/components/code'
 
 /**
  * What this browser keeps (the theme, the clock, the send key, the review personas, the fun, the session), the limits
@@ -769,8 +770,8 @@ function ReviewsPanel() {
                     <p className="max-w-3xl text-sm text-muted-foreground">
                         The personas a review you request on the Reviews page, or from a PR&apos;s page, is written in,
                         one review in each. Both start from them; you can still pick others for one request. The default
-                        leaves it to your config&apos;s <code className="font-mono text-xs">[personas] reviewer</code>.
-                        This choice is yours alone: the loop&apos;s own reviews never read it.
+                        leaves it to your config&apos;s <Code>[personas] reviewer</Code>. This choice is yours alone:
+                        the loop&apos;s own reviews never read it.
                     </p>
                     {left.length > 0 && (
                         <p className="max-w-3xl text-sm text-status-blocked" data-testid="review-personas-left">
@@ -803,9 +804,9 @@ function NoticePanel() {
                 <NoticeForm submit="Set notice" label="Notice to workers" testId="notice">
                     <p className="max-w-3xl text-sm text-muted-foreground">
                         Tell every run dispatched from now on about something passing outside the work, such as a CI
-                        outage, as <code className="font-mono text-xs">canopy notice</code> does. Workers, reviews, and
-                        chores hear it, and the overseer holds a failed check it explains. It lapses on its own; setting
-                        another replaces it. A run already running keeps the prompt it started with.
+                        outage, as <Code>canopy notice</Code> does. Workers, reviews, and chores hear it, and the
+                        overseer holds a failed check it explains. It lapses on its own; setting another replaces it. A
+                        run already running keeps the prompt it started with.
                     </p>
                 </NoticeForm>
             </div>
@@ -827,10 +828,9 @@ function ConfigPanel() {
             <div className="flex items-center justify-between gap-4 p-3">
                 <div className="flex flex-col gap-1">
                     <p className="max-w-3xl text-sm text-muted-foreground">
-                        The loop reads the workspace file and your{' '}
-                        <code className="font-mono text-xs">config.toml</code> when it starts. Reload reads them again,
-                        as <code className="font-mono text-xs">kill -HUP</code> does; a running tick finishes first. A
-                        file that does not load changes nothing.
+                        The loop reads the workspace file and your <Code>config.toml</Code> when it starts. Reload reads
+                        them again, as <Code>kill -HUP</Code> does; a running tick finishes first. A file that does not
+                        load changes nothing.
                     </p>
                     {/* A config error names its file and key, a line each. */}
                     <Notice error={mutation.error} className="whitespace-pre-line">
@@ -876,7 +876,7 @@ function SessionPanel() {
                 <div className="flex flex-col gap-1">
                     <p className="max-w-3xl text-sm text-muted-foreground">
                         Signed in with the listener secret for 30 days. To sign every browser out, run{' '}
-                        <code className="font-mono text-xs">canopy secret --rotate</code> and restart the loop.
+                        <Code>canopy secret --rotate</Code> and restart the loop.
                     </p>
                     <Notice error={mutation.error} />
                 </div>

@@ -33,6 +33,7 @@ import { age, useNow } from '@/lib/time'
 import { trend } from '@/lib/trend'
 import type { Trend } from '@/lib/trend'
 import { cn } from '@/lib/utils'
+import { Code } from '@/components/code'
 
 // What the page shows, the same on every visit: the title's help, so the description is left for the machine.
 const HELP =
@@ -358,8 +359,7 @@ function DiskRow({ disk }: { disk: Disk }) {
             </div>
             {disk.floor !== null && (
                 <span className="text-xs text-muted-foreground">
-                    Under {bytesText(disk.floor)} free, a tick runs no overseer (
-                    <code className="font-mono">loop.min_free_disk_mib</code>).
+                    Under {bytesText(disk.floor)} free, a tick runs no overseer (<Code>loop.min_free_disk_mib</Code>).
                 </span>
             )}
         </li>

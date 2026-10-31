@@ -49,6 +49,7 @@ import {
 } from '@/lib/outcomes'
 import { shortSha, threadAnchor } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
+import { Code } from '@/components/code'
 
 /**
  * A PR's review threads on the diff its latest run kept, each draft under the thread it answers (DESIGN §29, On the
@@ -199,13 +200,12 @@ function RepliesPanel({
                     {threads.review_replies === 'approve' ? (
                         <>
                             Workers draft their replies, and nothing reaches the PR until you send it, as your own words
-                            and unmarked: <code className="font-mono text-xs">trust.review_replies</code> is approve.
+                            and unmarked: <Code>trust.review_replies</Code> is approve.
                         </>
                     ) : (
                         <>
-                            Workers post their own replies, marked:{' '}
-                            <code className="font-mono text-xs">trust.review_replies</code> is post. Drafts from runs
-                            under approve can still be sent.
+                            Workers post their own replies, marked: <Code>trust.review_replies</Code> is post. Drafts
+                            from runs under approve can still be sent.
                         </>
                     )}{' '}
                     {threads.read_at === null ? (

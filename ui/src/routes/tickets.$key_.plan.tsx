@@ -9,6 +9,7 @@ import { ChangesAsked } from '@/components/plan-card'
 import { PlanState, TicketPlan } from '@/components/ticket-plan'
 import { useViewedTicket } from '@/lib/recent-tickets'
 import { planRef } from '@/lib/refs'
+import { Code } from '@/components/code'
 
 /**
  * A ticket's plan on a page of its own (docs/design/PLANNING.md §25): its newest plan in the plan editor, with its
@@ -67,8 +68,7 @@ function PlanPage() {
             ) : (
                 <Panel>
                     <Empty size="panel">
-                        no plan: {key} needs none. <code className="font-mono text-xs">canopy plan {key}</code> asks for
-                        one.
+                        no plan: {key} needs none. <Code>canopy plan {key}</Code> asks for one.
                     </Empty>
                 </Panel>
             )}

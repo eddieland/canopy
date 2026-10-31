@@ -74,6 +74,7 @@ import { taskTitle } from '@/lib/tasks'
 import { cn } from '@/lib/utils'
 import { pullRequestLabel } from '@/lib/pull-request-label'
 import type { Tone } from '@/lib/tone'
+import { Code } from '@/components/code'
 
 interface AttentionSearch {
     item?: string | undefined
@@ -167,8 +168,8 @@ function AttentionPage() {
     return (
         <>
             <PageHeader title="Attention">
-                What needs you, as <code className="font-mono text-xs">canopy status</code> lists it, most severe first.
-                An item leaves when its cause is gone.
+                What needs you, as <Code>canopy status</Code> lists it, most severe first. An item leaves when its cause
+                is gone.
             </PageHeader>
             <Counters />
             {items !== undefined && items.length === 0 ? (

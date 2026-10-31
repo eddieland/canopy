@@ -1386,15 +1386,17 @@
         & blockquote {
             @apply border-l-2 pl-3 text-muted-foreground;
         }
-        /* Code a step down from the prose, as the guide sets it. */
+        /* Code as every other span sets it (`Code`, src/components/code.tsx): sized to its line, on a tint of its own
+         * ink. A block keeps its raised surface, and the code in it the block's size. */
         & code {
-            @apply rounded-xs bg-surface-raised px-1 py-px font-mono text-sm;
+            @apply rounded-sm bg-code-chip box-decoration-clone px-1 py-px font-mono text-code;
         }
         & pre {
-            @apply overflow-x-auto rounded-md border bg-surface-raised px-3 py-2 font-mono text-sm/6;
+            @apply overflow-x-auto rounded-md border bg-surface-raised px-3 py-2 font-mono text-code leading-relaxed;
         }
         & pre code {
             @apply bg-transparent p-0;
+            font-size: inherit;
         }
         & hr {
             @apply my-1 border-t;

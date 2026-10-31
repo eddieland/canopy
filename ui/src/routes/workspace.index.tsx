@@ -11,6 +11,7 @@ import { SubjectRunsTable } from '@/components/runs-table'
 import { TickNow } from '@/components/tick-now'
 import { TickRow } from '@/components/tick-row'
 import { busy, runningTasks, subjectRuns } from '@/lib/run-state'
+import { Code } from '@/components/code'
 
 // How many of the latest ticks the overview shows; the rest are on the ticks page.
 const TICKS_SHOWN = 5
@@ -91,8 +92,8 @@ function WorkspacePage() {
                     <PanelLoading query={ticksRead} className="min-h-40" />
                 ) : ticks.length === 0 ? (
                     <Empty>
-                        no ticks yet: the loop runs one every{' '}
-                        <code className="font-mono text-xs">loop.interval_minutes</code>, or now with <TickNow inline />
+                        no ticks yet: the loop runs one every <Code>loop.interval_minutes</Code>, or now with{' '}
+                        <TickNow inline />
                     </Empty>
                 ) : (
                     <ul className="divide-y" data-testid="workspace-ticks">

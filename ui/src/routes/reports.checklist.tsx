@@ -19,6 +19,7 @@ import type { RepoItems } from '@/lib/checklist'
 import { repoListFrom, repoListOf, reposIn, reposWords } from '@/lib/repo-filter'
 import { windowName } from '@/lib/report-window'
 import { cn } from '@/lib/utils'
+import { Code } from '@/components/code'
 
 interface ChecklistSearch {
     days?: number | undefined
@@ -108,7 +109,7 @@ function ChecklistPage() {
                 ) : data.items.length === 0 ? (
                     <Empty size="panel">
                         no worker run of these {span} was given a checklist: each repository&apos;s is a file in{' '}
-                        <code>paths.checklists</code>
+                        <Code>paths.checklists</Code>
                     </Empty>
                 ) : (
                     <Items groups={itemsByRepo(data.items, search.repo)} repo={search.repo} span={span} />

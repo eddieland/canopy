@@ -9,6 +9,7 @@ import type { CodeToken } from '@/lib/highlight'
 import { fenceLanguage } from '@/lib/languages'
 import type { Block, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
+import { Code } from '@/components/code'
 
 // Written out so Tailwind finds them.
 const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' }
@@ -144,9 +145,7 @@ function PieceView({ piece }: { piece: GuidePiece }) {
             return <strong className="font-semibold">{piece.text}</strong>
         }
         case 'code': {
-            return (
-                <code className="rounded-sm bg-surface-raised px-1 py-px font-mono text-[0.875em]">{piece.text}</code>
-            )
+            return <Code>{piece.text}</Code>
         }
         case 'link': {
             return <GuideLink piece={piece} />
