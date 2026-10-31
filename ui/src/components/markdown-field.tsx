@@ -28,10 +28,11 @@ export type MarkdownFieldSize = 'line' | 'default' | 'tall'
 export type MarkdownPreview = 'off' | 'tab' | 'live'
 
 // Each size's text, as tall as what it holds between its least and its most (`field-sizing-content`), then scrolling.
-// `line` is one line, beside a form's `Input` and buttons; `default` a reply's few lines; `tall` a long note or brief.
+// `line` is one line, an `Input`'s `h-9` with the box's hairline; `default` a reply's few lines; `tall` a long note or
+// brief.
 // Written out so Tailwind finds them.
 const SIZE: Record<MarkdownFieldSize, { text: string; most: string }> = {
-    line: { text: 'min-h-9 py-1.75 leading-5', most: 'max-h-60' },
+    line: { text: 'min-h-8.5 py-1.75 leading-5', most: 'max-h-60' },
     default: { text: 'min-h-24 py-2 leading-relaxed', most: 'max-h-96' },
     tall: { text: 'min-h-60 py-2 leading-relaxed', most: 'max-h-144' },
 }

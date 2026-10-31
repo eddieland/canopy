@@ -24,7 +24,8 @@ open a terminal and an agent session for twenty minutes, it's a task.
 
 The **Submit a task** panel at the top of [Tasks](/tasks) takes your text. It starts one line high and grows as you
 write, so a paragraph is fine. Enter submits it, Shift+Enter starts a new line, and Settings can change the send key as
-it does for a reply. Beside the text:
+it does for a reply. It takes the same Markdown a [reply](attention#replying) does, with ⌘B and ⌘E for bold and code;
+there's no toolbar here, to keep the panel one line high. Beside the text:
 
 - **The repository** it runs in, shown only when the workspace has more than one. It starts at the one the list is
   narrowed to, else the one your newest task ran in, so a run of tasks against one repository needs no clicking.

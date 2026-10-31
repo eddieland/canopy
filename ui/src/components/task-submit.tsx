@@ -7,7 +7,8 @@ import type { SubmitEvent } from 'react'
 import { submitTask } from '@/api/mutations'
 import { metaQuery } from '@/api/queries'
 import type { TaskSummary } from '@/api/types'
-import { Input, Textarea } from '@/components/input'
+import { Input } from '@/components/input'
+import { MarkdownField } from '@/components/markdown-field'
 import { Notice } from '@/components/notice'
 import { RepoSelect } from '@/components/repo-picker'
 import { SendKeycap } from '@/components/send-keycap'
@@ -59,16 +60,19 @@ export function TaskSubmitForm({ tasks, filter }: { tasks: readonly TaskSummary[
     return (
         <form onSubmit={submit} aria-label="Submit a task" className="flex flex-col gap-2 p-3">
             <div className="flex flex-wrap items-start gap-2">
-                <Textarea
+                <MarkdownField
                     aria-label="Task"
                     rows={1}
+                    size="line"
+                    // One line high, as the fields beside it are, so it keeps its shortcuts and lists but no toolbar.
+                    toolbar={false}
+                    preview="off"
                     value={text}
                     maxLength={MAX_TEXT}
-                    onChange={(event) => setText(event.target.value)}
+                    onValueChange={setText}
                     onKeyDown={sendKeys.onKeyDown}
                     placeholder="What to find out, try, or plan"
-                    // One line high, as the field beside it is, until it holds more: it grows to 15rem, then scrolls.
-                    className="field-sizing-content max-h-60 min-h-9 min-w-64 flex-1 resize-none py-1.75 leading-5"
+                    className="min-w-64 flex-1"
                 />
                 {repos.length > 1 && repo !== null && (
                     <span className="flex h-9 items-center">
