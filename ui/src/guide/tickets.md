@@ -43,8 +43,23 @@ over whatever you were reading, the cursor already in the key field: type the ke
 ticket's page. Escape closes it. A refusal keeps it open and says why, so a typo in the key costs you one more
 keystroke, not a trip back.
 
-A ticket you start is private from then on, whatever labels it carries or gains. To ask for a plan before the first
-implement, start it from the CLI with `canopy start KEY --plan`, or run `canopy plan KEY` afterwards.
+Under the key, **Show persona and model overrides** opens a row for each of the ticket's agents, in the order the
+ticket meets them: its planner, its worker, and its reviewer. Each has a persona menu and a model menu, both naming
+the default until you pick something. A pick is set as this ticket's override with the start, exactly as
+[Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model) set one later, so a skeptical
+reviewer on a bigger model is one form, not three trips. They go together or not at all: a persona with no file or a
+model the runtime doesn't list refuses the start, and nothing is set. Fold the rows away and the button counts what you
+picked, so nothing rides along unseen.
+
+**Plan it first**, beside the button, decides whether a planner writes down how the work will be done before anything
+is implemented, waiting on your approval. It starts checked when `policy.plan` is `approve` in
+[Settings](settings), and says `policy.plan` beside it so you know who checked it. Check it against an `off` policy
+and it's `canopy start KEY --plan`; uncheck it against `approve` and it's `canopy plan KEY --skip`, for the one-line
+fix that doesn't need a design review. Left as the policy has it, it changes nothing about the ticket's own setting,
+so starting a stopped ticket again doesn't trip over a plan it was never going to need.
+
+A ticket you start is private from then on, whatever labels it carries or gains. You can still ask for a plan
+afterwards with `canopy plan KEY`.
 
 ## A ticket's page
 

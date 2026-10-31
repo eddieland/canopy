@@ -49,6 +49,7 @@ import type {
     Session,
     PromoteRequest,
     Started,
+    StartRequest,
     Stopped,
     TaskSubmitted,
     TaskReplied,
@@ -77,9 +78,12 @@ export async function signOut(): Promise<Session> {
     return unwrap(await api.DELETE('/api/session'))
 }
 
-/** `canopy start`: the ticket is started privately, and the next tick picks it up. */
-export async function startTicket(key: string): Promise<Started> {
-    return unwrap(await api.POST('/api/tickets/{key}/start', { params: { path: { key } } }))
+/**
+ * `canopy start`: the ticket is started privately, and the next tick picks it up. `chosen` also sets each of its
+ * agents' persona and model it names, as the ticket's override, with the start or not at all.
+ */
+export async function startTicket(key: string, chosen?: StartRequest): Promise<Started> {
+    return unwrap(await api.POST('/api/tickets/{key}/start', { params: { path: { key } }, body: chosen }))
 }
 
 /** `canopy stop`, or `canopy stop --now` with `now`, which also ends the run working it. */

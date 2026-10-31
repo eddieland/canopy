@@ -2288,6 +2288,10 @@ export type paths = {
         /**
          * Start a ticket
          * @description `canopy start`: work the ticket privately, in place of a queue label; its conversation stays in the journal.
+         *
+         *     The body may also say whether it is planned first, as `canopy start --plan` and `canopy plan --skip` do, and choose
+         *     the persona and the model of any of its agents, as its overrides, as `canopy persona` and `canopy model` do, with
+         *     the start: the CLI's guards hold, and a choice refused starts nothing.
          */
         post: operations["startTicket"];
         delete?: never;
@@ -9821,6 +9825,33 @@ export type components = {
              * @description A run already working the ticket, if one is.
              */
             running_run: number | null;
+        };
+        /**
+         * StartRequest
+         * @description A start, whether the ticket is planned first, and the persona and model each of its agents takes from it.
+         *
+         *     Each persona and model is the ticket page's choice (`PersonaRequest`, `ModelRequest`), its override. All of it is
+         *     set with the start or not at all: one refused starts nothing.
+         */
+        StartRequest: {
+            /**
+             * Models
+             * @description A model for each agent named, at most one each; none leaves the ticket's overrides as they are.
+             * @default []
+             */
+            models: components["schemas"]["ModelRequest"][];
+            /**
+             * Personas
+             * @description A persona for each agent named, at most one each; none leaves the ticket's overrides as they are.
+             * @default []
+             */
+            personas: components["schemas"]["PersonaRequest"][];
+            /**
+             * Plan
+             * @description Whether its implement waits on a plan the operator approves: True as `canopy start --plan` asks, False as
+             *     `canopy plan KEY --skip` waives it, whatever `policy.plan` says; None leaves the ticket's own setting as it is.
+             */
+            plan?: boolean | null;
         };
         /**
          * @description Whether the operator's start of a ticket in canopy stands, or was stopped (DESIGN §22).
@@ -20345,7 +20376,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StartRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
