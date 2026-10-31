@@ -215,23 +215,34 @@ test.describe('turned on', () => {
         await expect(pupil).toHaveAttribute('transform', /^translate\(-[\d.]+ -[\d.]+\)$/u)
     })
 
-    test('the Ghost floats around, its light swells and dims, faster at the rave, still under reduced motion', async ({
+    test('the Ghost flies around, its light swells and dims, faster at the rave, still under reduced motion', async ({
         page,
     }) => {
-        // The Ghost's running animations, by name, and how long a round of each takes.
+        // The Ghost's running animations, by name, and how long a round of each takes: a CSS animation by its name, a
+        // leg of its flight, which a script starts, by its id.
         const moving = () =>
             page.evaluate(() =>
                 Object.fromEntries(
                     document
                         .getAnimations()
-                        .filter((a) => a instanceof CSSAnimation && a.animationName.startsWith('ghost-'))
-                        .map((a) => [(a as CSSAnimation).animationName, a.effect?.getTiming().duration]),
+                        .map((a): [string, unknown] => [
+                            a instanceof CSSAnimation ? a.animationName : a.id,
+                            a.effect?.getTiming().duration,
+                        ])
+                        .filter(([name]) => name.startsWith('ghost-')),
                 ),
             )
         await page.addInitScript(() => globalThis.localStorage.setItem('canopy-companion', 'ghost'))
         await page.goto('settings')
         await settled(page)
-        await expect.poll(moving).toMatchObject({ 'ghost-wander': 14_000, 'ghost-glow': 4200, 'ghost-light': 4200 })
+        await expect.poll(moving).toMatchObject({
+            'ghost-flight': expect.any(Number),
+            'ghost-flight-shadow': expect.any(Number),
+            'ghost-breathe': expect.any(Number),
+            'ghost-iris': 11_000,
+            'ghost-glow': 4200,
+            'ghost-light': 4200,
+        })
 
         await page.getByTestId('light-switch').click()
         await expect.poll(moving).toMatchObject({ 'ghost-glow': 1200, 'ghost-spin': 2400 })
