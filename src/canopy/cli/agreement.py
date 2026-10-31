@@ -85,7 +85,7 @@ def _counted(n: int, noun: str) -> str:
 
 
 def _rows(found: Agreement) -> list[str]:
-    width = max(len("row"), *(len(r.row) for r in found.rows))
+    width = max([len("row"), *(len(r.row) for r in found.rows)])
     lines = [f"{'row':<{width}}" + "".join(f"  {h}" for h in _ROW_COUNTS)]
     lines.extend(
         f"{r.row:<{width}}"

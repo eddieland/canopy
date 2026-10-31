@@ -175,6 +175,18 @@ def test_each_source_counts_its_runs_and_seconds(canopy_env: CanopyEnv, conn: sq
     assert (jira.median_seconds, jira.seconds_per_tick) == (2.5, 4.5)
 
 
+def test_a_window_of_only_stale_tickets_prints_no_row(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    """A tick whose every ticket was stale fills no row: the table is its header, and the stale count says why."""
+    stale = phases.Derived("PROJ-4", None, stale="PROJ-4 never observed")
+    ticked(canopy_env, conn, [stale], {"PROJ-4": [("wait", "stale", Decider.OVERSEER)]})
+    found = agreement.agreement(conn, datetime.now(UTC), 1)
+    assert (list(found.rows), found.stale) == ([], 1)
+    assert agreement_cli.render(found)[2:4] == [
+        "row  decisions  agree  disagree  situations  disagreeing",
+        "Stale, counted apart: 1 decision on 1 ticket.",
+    ]
+
+
 def test_an_empty_window_says_so(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     """With nothing compared, the report says so rather than printing empty tables."""
     del canopy_env
