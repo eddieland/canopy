@@ -47,7 +47,9 @@ The items come in four groups, in this order, and within a group the one open lo
    one check still pending an hour after every other check on it finished (`check stuck`). It's usually a merge
    queue's status or a sign-off, neither of which turns green on an open PR, however long you wait; the item names the
    line to add under `[repos.<repo>.checks]` if it isn't CI. If it is, the item leaves when the build finally does.
-4. **Findings**: what your chores found.
+4. **Findings**: what your chores found. If you'd rather read them on each chore's page, **Hide chore findings** in
+   [Settings](settings#attention) leaves them off the list, its counter, and the nav's badge, and a line above the
+   list says how many it left out.
 
 Forgot what `review late` is? Hover over a reason, or Tab to it, and its tip says what it means under the CLI's
 spelling. Nobody memorizes forty reasons, and nobody should have to.

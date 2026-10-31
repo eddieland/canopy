@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { mockAttention, mockRuns, mockTasks, mockTickets } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { AttentionItem, Run, TaskSummary, TicketSummary } from '@/api/types'
+import { setFindingsHidden } from '@/lib/attention-findings'
 import { DEFAULT_CLOCK } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import { tipOf } from '@/test-utils'
@@ -130,6 +131,17 @@ describe('Counters', () => {
         const finding = { ...mockAttention[0], id: 'a3', reason: 'deps', finding: true } as AttentionItem
         renderCounters({ attention: [...mockAttention, broken, finding] })
         expect(counter('attention').textContent).toBe('Attention3')
+    })
+
+    it("leaves chores' findings out of the attention count while Settings hides them", () => {
+        const finding = { ...mockAttention[0], id: 'a3', reason: 'deps', finding: true } as AttentionItem
+        setFindingsHidden(true)
+        try {
+            renderCounters({ attention: [...mockAttention, finding] })
+            expect(counter('attention').textContent).toBe(`Attention${mockAttention.length}`)
+        } finally {
+            setFindingsHidden(false)
+        }
     })
 
     it('says waiting on you once, in the counter that counts it', () => {

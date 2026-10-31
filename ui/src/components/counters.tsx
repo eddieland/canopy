@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 
-import { attentionQuery, runsQuery, tasksQuery, ticketsQuery } from '@/api/queries'
+import { runsQuery, tasksQuery, ticketsQuery } from '@/api/queries'
 import { Age } from '@/components/age'
 import { Counter } from '@/components/counter'
+import { useAttention } from '@/hooks/use-attention'
 import { answered } from '@/lib/acknowledged'
 import { countBySeverity } from '@/lib/attention'
 import { runningTasks } from '@/lib/run-state'
@@ -12,13 +13,14 @@ import { runningTasks } from '@/lib/run-state'
  * in the rail, on every page. Only Waiting on you has a line under its value, the oldest question's age, since it has
  * no other home: what waits on you is that counter's value, and how the list splits is the nav's badge. Running and
  * Waiting on you count tasks as they count tickets: a task's run running, and a task waiting on your reply. A ticket
- * waits on you while it waits on your reply, or its feedback plan on your approval (DESIGN §32).
+ * waits on you while it waits on your reply, or its feedback plan on your approval (DESIGN §32). Attention counts the
+ * list as the page shows it, without chores' findings while Settings hides them.
  */
 export function Counters() {
     const runs = useQuery(runsQuery)
     const tickets = useQuery(ticketsQuery)
     const tasks = useQuery(tasksQuery).data
-    const attention = useQuery(attentionQuery)
+    const attention = useAttention()
 
     const running =
         runs.data === undefined

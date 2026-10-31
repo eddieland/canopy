@@ -51,6 +51,7 @@ import { LinkOutButton } from '@/components/ticket-links'
 import { TicketTitle } from '@/components/ticket-title'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useAttention } from '@/hooks/use-attention'
 import { useToast } from '@/hooks/use-toast'
 import { answered } from '@/lib/acknowledged'
 import {
@@ -66,6 +67,8 @@ import {
     shownDetail,
 } from '@/lib/attention'
 import type { Ask, Severity } from '@/lib/attention'
+import { useFindingsHidden } from '@/lib/attention-findings'
+import { counted } from '@/lib/descriptions'
 import { settled, withLeaving } from '@/lib/leaving'
 import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
@@ -119,7 +122,7 @@ function AttentionPage() {
     const { item: wanted } = Route.useSearch()
     const navigate = Route.useNavigate()
     const toast = useToast()
-    const { data } = useQuery(attentionQuery)
+    const { data } = useAttention()
     const tickets = useQuery(ticketsQuery).data
     const tasks = useQuery(tasksQuery).data
     const items = data === undefined ? undefined : bySeverity(data)
@@ -172,6 +175,7 @@ function AttentionPage() {
                 is gone.
             </PageHeader>
             <Counters />
+            <HiddenFindings />
             {items !== undefined && items.length === 0 ? (
                 <EmptyAttention />
             ) : (
@@ -243,6 +247,27 @@ function AttentionPage() {
                 </div>
             )}
         </>
+    )
+}
+
+/**
+ * While Settings hides chores' findings from the list, how many it leaves out, so a hidden finding is never mistaken
+ * for none: a muted line linking to the setting. Nothing while none is hidden.
+ */
+function HiddenFindings() {
+    const hidden = useFindingsHidden()
+    const findings = useQuery(attentionQuery).data?.filter((item) => item.finding).length ?? 0
+    if (!hidden || findings === 0) {
+        return null
+    }
+    return (
+        <p className="text-sm text-muted-foreground" data-testid="attention-findings-hidden">
+            {counted(findings, 'chore finding')} hidden from this list, as your{' '}
+            <Link to="/settings" hash="attention" className="text-accent underline-offset-4 hover:underline">
+                settings
+            </Link>{' '}
+            ask. Each chore&apos;s page still lists its own.
+        </p>
     )
 }
 

@@ -1083,7 +1083,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   `attempt_limit`, `chore_failed`, the review reasons, and a run refused its model, `model_missing` and
   `model_list_failed`, which only the operator clears), then what waits on the operator's answer (`awaiting_reply`,
   `untrusted_review`, `plan_review`), then every other reason, then chores' findings; within each, the item open longest
-  first. A row reads as an inbox's: its reason, subject, and age, then its ticket's title (`TicketTitle`, semibold) when
+  first. Settings can hide the findings, in this browser alone (`useAttention`): the list, its counter, and the nav's
+  badge leave them out, and a muted line above the list counts what it hid, so a hidden finding never reads as none.
+  A row reads as an inbox's: its reason, subject, and age, then its ticket's title (`TicketTitle`, semibold) when
   it is about a ticket, or its task's text's first line when it is about a task, as a message's subject, then its
   detail, muted, as the preview; the selected item's head puts
   the title, semibold, after the key. A reason chip takes `status-failed` or `status-blocked` for the first two, plain

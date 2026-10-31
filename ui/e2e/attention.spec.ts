@@ -240,6 +240,34 @@ test("a chore's finding opens the chore's notes and an open form for another", a
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })
 
+test("Settings hides chores' findings from the list and its counts, and the list says how many", async ({ page }) => {
+    await page.goto('settings')
+    await settled(page)
+    const hide = page.getByRole('checkbox', { name: 'Hide chore findings' })
+    await hide.check()
+    await expect(hide).toBeChecked()
+
+    await page
+        .getByRole('navigation', { name: 'Main' })
+        .getByRole('link', { name: /^Attention/u })
+        .click()
+    await settled(page)
+    const rows = page.getByTestId('attention-list').getByRole('link')
+    await expect(rows).toHaveCount(10)
+    await expect(rows.filter({ hasText: 'lodash-advisory' })).toHaveCount(0)
+    await expect(page.getByTestId('counter-attention')).toContainText('10')
+    const hidden = page.getByTestId('attention-findings-hidden')
+    await expect(hidden).toContainText('1 chore finding hidden from this list')
+
+    // The line leads back to the setting, which shows them again.
+    await hidden.getByRole('link', { name: 'settings' }).click()
+    await page.getByRole('checkbox', { name: 'Hide chore findings' }).uncheck()
+    await page.goto('attention')
+    await settled(page)
+    await expect(rows).toHaveCount(11)
+    await expect(page.getByTestId('attention-findings-hidden')).toHaveCount(0)
+})
+
 test('an item about no ticket offers the command that fixes it, with nothing to answer', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
