@@ -91,3 +91,29 @@ test('a long conversation scrolls in its panel, opening at its newest end, which
     // A refetch of the ticket can still be in the padding route when the page closes (padMessages).
     await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
+
+test('a reply is written in the Markdown the thread draws: formatted from the keyboard, undone, and previewed', async ({
+    page,
+}) => {
+    await page.goto('tickets/ABC-103')
+    await settled(page)
+    const field = page.getByRole('textbox', { name: 'Reply' })
+    await field.fill('use the v2 API')
+    await field.press('Shift+Home')
+    await field.press('ControlOrMeta+b')
+    await expect(field).toHaveValue('**use the v2 API**')
+    // The browser makes the edit, so its own undo takes it back, as it does typing.
+    await field.press('ControlOrMeta+z')
+    await expect(field).toHaveValue('use the v2 API')
+
+    await field.fill('- first')
+    await field.press('Shift+Enter')
+    await field.pressSequentially('second')
+    await expect(field).toHaveValue('- first\n- second')
+
+    const form = page.getByRole('form', { name: 'Reply' })
+    await form.getByRole('radio', { name: 'Preview' }).click()
+    await expect(form.getByRole('region', { name: 'Preview' }).getByRole('listitem')).toHaveText(['first', 'second'])
+    await form.getByRole('radio', { name: 'Write' }).click()
+    await expect(field).toHaveValue('- first\n- second')
+})

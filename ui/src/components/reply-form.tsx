@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { Send } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { SubmitEvent } from 'react'
 
 import {
@@ -14,7 +14,7 @@ import {
     replyTicket,
 } from '@/api/mutations'
 import type { Replied } from '@/api/types'
-import { Textarea } from '@/components/input'
+import { MarkdownField } from '@/components/markdown-field'
 import { Notice } from '@/components/notice'
 import { SendKeycap } from '@/components/send-keycap'
 import { Button } from '@/components/ui/button'
@@ -49,6 +49,7 @@ export type ReplyTarget =
  * It is always open, on any ticket, any chore, and any task not stopped, so a note for the next worker is never a click
  * away; what it is for is said by its label and placeholder: the message it answers (`waiting`), an untrusted review
  * waiting on the go-ahead (`untrusted`), where a reply on a public ticket goes, or that a task's next run reads it.
+ * It is written in a `MarkdownField`, in the Markdown the conversation draws, with a Preview of how it will read there.
  *
  * `onReplied` hears each reply recorded, after the form has said what it did, with that line: the attention page moves
  * on to the next item that waits on the operator.
@@ -68,6 +69,7 @@ export function ReplyForm({
 }) {
     const client = useQueryClient()
     const sendKeys = useSendKeys()
+    const fieldId = useId()
     const stored = draftKey(subjectOf(target))
     // The parent keys the form by its subject, so the draft is read once for it, on mount.
     const [draft] = useState(() => readDraft(stored))
@@ -145,21 +147,25 @@ export function ReplyForm({
                 className,
             )}
         >
-            <label className="flex flex-col gap-1.5">
-                <span className={cn('panel-label', answering && 'text-status-blocked')}>{label}</span>
-                <Textarea
+            <div className="flex flex-col gap-1.5">
+                <label htmlFor={fieldId} className={cn('panel-label', answering && 'text-status-blocked')}>
+                    {label}
+                </label>
+                <MarkdownField
+                    id={fieldId}
                     name="body"
                     value={body}
                     maxLength={MAX_REPLY}
-                    onChange={(event) => {
-                        setBody(event.target.value)
-                        keepDraft(stored, { body: event.target.value, submission })
+                    onValueChange={(next) => {
+                        setBody(next)
+                        keepDraft(stored, { body: next, submission })
                     }}
                     onKeyDown={sendKeys.onKeyDown}
                     placeholder={placeholder}
-                    className="focus-visible:bg-accent/8"
+                    pullRequests
+                    className="focus-within:bg-accent/8"
                 />
-            </label>
+            </div>
             <div className="flex items-center justify-between gap-3">
                 <Notice error={mutation.error}>{said}</Notice>
                 {near && (

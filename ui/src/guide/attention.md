@@ -160,6 +160,12 @@ question the ticket waits on, and can say anything else a worker should know: wh
 the flaky test is flaky. A reply holds up to 4000 characters, counted beside the button, and the box takes no more;
 from the CLI, a longer one is refused, not cut.
 
+The box takes the same Markdown the conversation draws, and no more: **bold**, `code`, a `##` heading, bulleted and
+numbered lists, and fenced code blocks. The buttons under the text write it for you, or press ⌘B and ⌘E (Ctrl+B and
+Ctrl+E) for bold and code; Shift+Enter in a list starts the next item, and on an empty one ends the list. ⌘Z undoes a
+button as it undoes typing. **Preview** shows the reply as the thread will, which is the cheapest way to find the
+backtick you didn't close; ⌘⇧P switches back and forth.
+
 Until it's sent, what you've written stays with the tab. If your session ends mid-reply, the sign-in page says your
 last action wasn't sent, and once you're back in, the reply is still in its box, waiting for you to press **Reply**
 again. Sending it twice after an unclear failure records it once. If canopy can't be reached at all, the line under
