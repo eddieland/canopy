@@ -64,7 +64,11 @@ export function PullRequestTable<T extends PullRequestRow>({
                         <th className="panel-label pb-1.5 text-left font-normal">pull request</th>
                         <th className="panel-label pb-1.5 pl-3 text-left font-normal">ticket</th>
                         {columns.map((column) => (
-                            <th key={column.key} className="panel-label pb-1.5 font-normal" title={column.hint}>
+                            <th
+                                key={column.key}
+                                className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap"
+                                title={column.hint}
+                            >
                                 {column.label}
                             </th>
                         ))}
