@@ -72,13 +72,13 @@ def tick_of(row: records.Tick, decisions: int) -> Tick:
     )
 
 
-def ticks(ctx: Context) -> list[Tick]:
-    """The latest ticks, newest first.
+def ticks(ctx: Context, *, idle: bool = False) -> list[Tick]:
+    """The latest ticks, newest first, or the latest live ticks the loop found idle when `idle` is set.
 
     Returns:
         At most `TICKS` ticks, each with how many decisions it recorded.
     """
-    return list(starmap(tick_of, db.recent_ticks(ctx.conn, TICKS)))
+    return list(starmap(tick_of, db.recent_ticks(ctx.conn, TICKS, idle=idle)))
 
 
 def tick_detail(ctx: Context, tick_id: int) -> TickDetail | None:

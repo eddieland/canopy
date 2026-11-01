@@ -57,10 +57,26 @@ test('the window switches from the toggle, and idle spend is its own series with
     const today = page.getByTestId('spend-day-2026-10-08')
     await expect(today.locator('td').first()).toHaveText('$0.31')
 
-    const ticks = page.getByTestId('spend-idle-tick-list')
+    // The Ticks panel links the ticks page's idle ticks, where the mock's one idle tick is all there is.
+    await page.getByTestId('spend-idle-link').click()
+    await expect(page).toHaveURL(/\/workspace\/ticks\?idle=true$/u)
+    const ticks = page.getByTestId('ticks')
     await expect(ticks.getByTestId(/^tick-\d+$/u)).toHaveCount(1)
     await ticks.getByRole('link', { name: 'tick:2' }).click()
     await expect(page).toHaveURL(/\/workspace\/ticks\/2$/u)
+})
+
+test('the ticks page keeps its idle ticks from its filter, and every tick again from all', async ({ page }) => {
+    await page.goto('workspace/ticks')
+    await settled(page)
+    const filter = page.getByTestId('ticks-filter')
+    await expect(page.getByTestId('ticks').getByTestId(/^tick-\d+$/u)).toHaveCount(2)
+    await filter.getByRole('link', { name: 'idle' }).click()
+    await expect(page).toHaveURL(/\/workspace\/ticks\?idle=true$/u)
+    await expect(page.getByTestId('ticks').getByTestId(/^tick-\d+$/u)).toHaveCount(1)
+    await filter.getByRole('link', { name: 'all' }).click()
+    await expect(page).toHaveURL(/\/workspace\/ticks$/u)
+    await expect(page.getByTestId('ticks').getByTestId(/^tick-\d+$/u)).toHaveCount(2)
 })
 
 test("each series has one name in the totals, the legend, and the table, and the description is the window's", async ({
@@ -86,7 +102,8 @@ test("each series has one name in the totals, the legend, and the table, and the
     ]
     await expect(page.getByTestId('spend-legend').getByRole('listitem')).toHaveText(series)
     await expect(page.getByTestId('spend-table').locator('thead th')).toHaveText(['day', ...series, 'total', 'done'])
-    // The totals name the overseer's whole before idle ticks' part of it, as canopy spend's columns do.
+    // The totals name the overseer's whole before idle ticks' part of it, as canopy spend's columns do. The mock's
+    // week has no dry run, and its loop never read the sessions outside canopy: the line under the tiles says so.
     const totals = page.getByTestId('spend-totals').locator('dt')
     await expect(totals).toHaveText([
         'total',
@@ -97,11 +114,12 @@ test("each series has one name in the totals, the legend, and the table, and the
         'chores',
         'reviews',
         'tasks',
-        'dry runs',
-        'outside canopy',
         'tickets done',
         'per ticket done',
     ])
+    await expect(page.getByTestId('spend-total-folded')).toHaveText(
+        'No dry runs, sessions outside canopy not read yet.',
+    )
     await expect(page.getByText('other ticks')).toHaveCount(0)
 })
 
@@ -128,6 +146,24 @@ test('24 hours read by the hour, each named by its time and in full in the table
     await page.getByTestId('spend-window-7').click()
     await expect(page).toHaveURL(/\/reports\/spend$/u)
     await expect(page.getByTestId('spend-by-day').getByText('By day')).toBeVisible()
+})
+
+test("30 days read by the week from By day's pitch, which a shorter window does not offer", async ({ page }) => {
+    await page.goto('reports/spend?days=30')
+    await settled(page)
+    const byDay = page.getByTestId('spend-by-day')
+    await byDay.getByTestId('spend-pitch-week').click()
+    await expect(page).toHaveURL(/\/reports\/spend\?days=30&pitch=week$/u)
+    await expect(byDay.getByText('By week', { exact: true })).toBeVisible()
+    // The mock's 30 days end on a Thursday, so they start on a Wednesday: five weeks, part ones at both ends.
+    await expect(page.getByTestId('spend-chart').getByTestId(/^spend-bar-/u)).toHaveCount(5)
+    await expect(page.getByTestId('spend-table').locator('thead th').first()).toHaveText('week')
+    await expect(page.getByTestId('spend-table').locator('tbody th').first()).toHaveText(/^week of Oct \d+$/u)
+    // The week's window draws its days whatever the pitch kept in the search.
+    await page.getByTestId('spend-window-7').click()
+    await expect(byDay.getByText('By day', { exact: true })).toBeVisible()
+    await expect(byDay.getByTestId('spend-pitch-week')).toHaveCount(0)
+    await expect(page.getByTestId('spend-chart').getByTestId(/^spend-bar-/u)).toHaveCount(7)
 })
 
 test('a window the page does not offer reads as the week', async ({ page }) => {
@@ -214,27 +250,6 @@ test("the ticket, PR, model, and tool tables scroll under their column names, fl
             })
             .toBeLessThanOrEqual(1)
     }
-})
-
-test('a long list of idle ticks scrolls in its panel', async ({ page }) => {
-    // The mock has one idle tick: repeat it, under ids of its own, past the region's height.
-    await page.route('**/api/spend/breakdown*', async (route) => {
-        const response = await route.fetch()
-        const found = (await response.json()) as { idle_ticks: { id: number }[] }
-        const [tick] = found.idle_ticks
-        found.idle_ticks = Array.from({ length: 40 }, (_, i) => ({ ...tick, id: 1000 + i }))
-        await route.fulfill({ response, json: found })
-    })
-    await page.goto('reports/spend')
-    await settled(page)
-    const list = page.getByTestId('spend-idle-tick-list')
-    await expect(list.getByTestId(/^tick-\d+$/u)).toHaveCount(40)
-    const region = page.getByRole('region', { name: 'Idle ticks' })
-    // It scrolls itself, rather than spilling its rows past a capped height.
-    await region.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
-    await expect.poll(() => region.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
-    // A live event refetches the breakdown, which can still be in the route when the page closes (`padDecisions`).
-    await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
 test("each ticket's and PR's own runs, the costliest first, open their pages beside the tickets done", async ({
@@ -557,7 +572,8 @@ test('this month reads against the budget whatever the window, and is headed ove
     const budget = page.getByTestId('spend-budget')
     await expect(budget).toContainText('October 2026')
     await expect(page.getByTestId('spend-budget-text')).toContainText('Headed over')
-    await expect(page.getByTestId('spend-budget-text')).toContainText('$15.76 of $40 (39%), on pace for')
+    await expect(page.getByTestId('spend-budget-text')).toHaveText('Headed over: $15.76 of $40 (39%)')
+    await expect(page.getByTestId('spend-budget-pace')).toHaveText(/^On pace to spend \$[\d.]+ of \$40\.$/u)
     // The mock's loop never read the runtime's sessions, so the month is canopy's runs alone, and says so.
     await expect(page.getByTestId('spend-budget-parts')).toHaveText(
         "Canopy's runs $15.76. Sessions outside canopy count once canopy loop has read them.",
@@ -568,10 +584,14 @@ test('this month reads against the budget whatever the window, and is headed ove
     await expect(page.getByTestId('spend-sessions')).toContainText(
         "canopy loop has not read the runtime's sessions yet",
     )
-    await expect(page.getByTestId('spend-total-outside')).toHaveText('–')
-    // The mock alerts at half and four fifths of the budget too: each a tick under the bar, and named under it.
-    await expect(page.getByTestId('spend-budget-alert-50')).toBeAttached()
-    await expect(page.getByTestId('spend-budget-alert-80')).toBeAttached()
+    // Nor do the totals give them a tile of a dash: the line under the tiles says they wait on the loop.
+    await expect(page.getByTestId('spend-total-outside')).toHaveCount(0)
+    await expect(page.getByTestId('spend-total-folded')).toContainText('sessions outside canopy not read yet')
+    // The mock alerts at half and four fifths of the budget too: each a tick over the bar labelled with its percent,
+    // and the mark across it labelled with the day.
+    await expect(page.getByTestId('spend-budget-alert-50')).toHaveText('50%')
+    await expect(page.getByTestId('spend-budget-alert-80')).toHaveText('80%')
+    await expect(page.getByTestId('spend-budget-day')).toHaveText(/^day \d+ of 31$/u)
     await expect(page.getByTestId('spend-budget-alerts')).toContainText('hears at 50%, 80%, and 100%.')
 })
 
