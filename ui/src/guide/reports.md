@@ -197,26 +197,39 @@ The health page, **Health** under [Reports](/reports) in the nav, is `canopy hea
 last **7 days** or **30 days** ended, the failures among them, and what the guards refused. A day runs midnight to
 midnight on the clock of the machine canopy runs on, as on the spend page, and a run counts on the day it started. The
 line under the title is the window at a glance, `3 of 140 runs failed over 7 days`, and the figures under it are its
-headline: the runs that ended, how many failed, their share, and what the failures cost.
+headline: the runs that ended, how many failed, their share, and what the failures cost. The failure rate is the one
+to watch.
 
 A failure is a run that didn't do what it was started for: a tick that didn't close `ok`, or a run that ended
 `failed`, `unknown`, `unpushed`, `crashed`, or `timeout`. A worker that stopped to ask you a question did its job, and
 so did one you stopped yourself. Neither counts, however much the question annoyed you.
 
-- **How runs ended**: each kind's runs, the overseer's ticks first, by their sort and how they ended, with what they
-  cost. A tick's sort is `live`, `dry run`, or `no overseer`; a worker's is its run kind; a chore's is its name. A
-  failed ending is in red. Under it, which runs reported no cost, so a gap in the dollars never passes for a cheap week.
+- **How runs ended**: a group of rows per kind, the overseer's ticks first. The kind's own row has its runs, what
+  they cost, and a red bar of how many of them failed; under it, a row per sort with how its runs ended as chips,
+  `done 3` `failed 1`, a failed ending in red. A tick's sort is `live`, `dry run`, or `no overseer`; a worker's is its
+  run kind; a chore's is its name. Under the table, which runs reported no cost, so a gap in the dollars never passes
+  for a cheap week.
 - **Failures by day**: a bar per day of the failed runs, stacked by kind in the spend page's colors, so a kind is one
   color across Reports. Hover a bar for that day's failures of each kind out of the runs that ended. The table folded
-  under it holds the same numbers, with each day's ended runs beside its failures, because three failures out of four
-  runs and three out of three hundred are different afternoons.
+  under it holds the same numbers, with each day's ended runs and its failure rate beside its failures, because three
+  failures out of four runs and three out of three hundred are different afternoons.
+- **Failures by cause**: the window's failures grouped by the note the harness left on them, the most runs first, with
+  the kinds of run among them and the newest to open. Twelve runs that all say `the reviewer's last line was not a
+  valid result` are one problem, and this is where it stops pretending to be twelve. Failures an agent explained in its
+  own words never repeat, so they're counted together as `other` at the end.
 - **Newest failures**: the latest twenty, each with how it ended, its id to open (`tick:`, `run:`, `chore:`,
   `review:`, or `task:`), what it was about, its sort, the note it left, what it cost, and when it started. The note is
   the harness's word on what went wrong, or else the agent's summary, cut to a line; open the run for the rest.
 - **What the guards refused**: each guard that turned the overseer down, the most often first, with how many asks it
-  refused, in how many ticks, and the latest tick to open. A guard refusing the same thing tick after tick is the
-  overseer asking for something your limits don't allow; [Limits and trust](settings#limits-and-trust) is where that
-  argument is settled.
+  refused, the latest tick to open, and in how many ticks. Under each, what it refused most often: the ticket, chore,
+  or PR the ask named, the kind of run it wanted, how often, and the latest tick that asked. A guard refusing the same
+  ticket tick after tick is the overseer stuck on it, asking for something your limits don't allow;
+  [Limits and trust](settings#limits-and-trust) is where that argument is settled.
+- **How long runs take**: each sort of run, grouped by kind, against the timeout it's held to: its runs, the median,
+  the length nine in ten came in under (`p90`), the longest, the timeout, and how many ended `timeout`. The spread is a
+  bar of its runs by their share of the timeout, the quickest lightest and the ones at the limit in red; hover it for
+  the counts. A median at three quarters of the timeout or more is in amber: that sort wants more time, or less work,
+  before it starts timing out for a living. A run counts here when it started in the window and has ended.
 
 ## The CI page
 

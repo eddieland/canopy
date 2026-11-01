@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest'
 
-import type { HealthCounts, HealthDay, HealthOutcome } from '@/api/types'
+import type { HealthCounts, HealthDay, HealthDuration, HealthOutcome } from '@/api/types'
 import type { Clock } from '@/lib/clock'
 
 import {
+    binsText,
     countSum,
+    dayRateText,
+    durationsByKind,
     HEALTH_SERIES,
     healthBars,
     healthDayHint,
     healthFigures,
     healthLine,
     healthWindow,
+    minutesText,
+    nearLimit,
+    outcomeTree,
     previousHealthFigures,
 } from './health'
 
@@ -23,6 +29,21 @@ function day(name: string, ended: Partial<HealthCounts>, failed: Partial<HealthC
 
 function outcome(failed: boolean, usd: number | null): HealthOutcome {
     return { kind: 'workers', what: 'implement', status: failed ? 'failed' : 'done', failed, runs: 1, cost_usd: usd }
+}
+
+// A sort's durations, as the report lists them, one run of a minute each.
+function took(kind: HealthDuration['kind'], what: string): HealthDuration {
+    return {
+        kind,
+        what,
+        runs: 1,
+        median_minutes: 1,
+        p90_minutes: 1,
+        longest_minutes: 1,
+        timeouts: 0,
+        limit_minutes: 15,
+        bins: null,
+    }
 }
 
 describe('health', () => {
@@ -82,5 +103,63 @@ describe('health', () => {
             ['reviews', 1],
         ])
         expect(countSum({ ...NONE, plans: 2, tasks: 1 })).toBe(3)
+    })
+
+    it('reads the outcomes as a tree: a kind over its sorts, each with its statuses, the most runs first', () => {
+        const rows: HealthOutcome[] = [
+            { kind: 'overseer', what: 'live', status: 'ok', failed: false, runs: 2, cost_usd: 0.5 },
+            { kind: 'workers', what: 'implement', status: 'blocked', failed: false, runs: 1, cost_usd: 1 },
+            { kind: 'workers', what: 'implement', status: 'done', failed: false, runs: 3, cost_usd: null },
+            { kind: 'workers', what: 'implement', status: 'failed', failed: true, runs: 1, cost_usd: 0.25 },
+            { kind: 'workers', what: 'resume', status: 'done', failed: false, runs: 1, cost_usd: null },
+        ]
+        const [overseer, workers] = outcomeTree(rows)
+        expect(overseer).toEqual({
+            kind: 'overseer',
+            runs: 2,
+            failed: 0,
+            costUsd: 0.5,
+            sorts: [{ what: 'live', runs: 2, costUsd: 0.5, statuses: [{ status: 'ok', failed: false, runs: 2 }] }],
+        })
+        expect([workers?.runs, workers?.failed, workers?.costUsd]).toEqual([6, 1, 1.25])
+        expect(workers?.sorts.map((s) => [s.what, s.runs, s.costUsd])).toEqual([
+            ['implement', 5, 1.25],
+            // A cost nothing reported stays apart from a cost of nothing.
+            ['resume', 1, null],
+        ])
+        expect(workers?.sorts[0]?.statuses.map((st) => `${st.status} ${st.runs}`)).toEqual([
+            'done 3',
+            'blocked 1',
+            'failed 1',
+        ])
+    })
+
+    it("says a day's failure rate, or a dash with nothing ended", () => {
+        expect(dayRateText(day('2026-10-07', { workers: 3, reviews: 1 }, { workers: 1 }))).toBe('25%')
+        expect(dayRateText(day('2026-10-08', {}))).toBe('–')
+    })
+
+    it("times a run in the readout's units, and calls a median close to its timeout", () => {
+        expect([0.5, 4.25, 27.5, 90].map((m) => minutesText(m))).toEqual(['30s', '4.3m', '28m', '1.5h'])
+        expect(nearLimit({ median_minutes: 34, limit_minutes: 45 })).toBe(true)
+        expect(nearLimit({ median_minutes: 30, limit_minutes: 45 })).toBe(false)
+        expect(nearLimit({ median_minutes: 30, limit_minutes: null })).toBe(false)
+    })
+
+    it("says a sort's spread against its timeout in words, the bands with runs alone", () => {
+        const bins = { under_quarter: 2, under_half: 0, under_three_quarters: 1, under_limit: 0, over_limit: 1 }
+        expect(binsText(bins)).toBe('2 under 25%, 1 at 50–75%, 1 at the limit')
+    })
+
+    it("groups the durations by kind, in the report's order", () => {
+        const groups = durationsByKind([
+            took('workers', 'implement'),
+            took('workers', 'resume'),
+            took('chores', 'deps'),
+        ])
+        expect(groups.map((g) => [g.kind, g.sorts.map((d) => d.what)])).toEqual([
+            ['workers', ['implement', 'resume']],
+            ['chores', ['deps']],
+        ])
     })
 })
