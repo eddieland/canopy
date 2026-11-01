@@ -41,10 +41,15 @@ test("the month counts the PRs read before GitHub's times apart, and the planner
     const approved = page.getByTestId('reviews-pull-request').filter({ hasText: 'web#78' })
     await expect(approved.getByRole('cell').nth(4)).toHaveText('1')
     await expect(approved.getByRole('cell').nth(7)).toHaveText('0')
-    // No round of the mock's was answered by a push it saw, so canopy's turnaround is a dash, its tip saying so.
-    await expect(page.getByTestId('reviews-turnaround')).toHaveText('–')
+    // PR 61's round is the month's one answered: dana's review, the plan, its approval, the resume, and its push's
+    // checks, 1.65 hours end to end, each part in the tile's tip.
+    await expect(page.getByTestId('reviews-turnaround')).toHaveText('1.6h')
     await page.getByTestId('reviews-tiles').getByText('median turnaround').hover()
-    await expect(page.getByRole('tooltip')).toContainText('no round was answered in the window')
+    await expect(page.getByRole('tooltip')).toContainText(
+        "over 1 answered round. Each part's own median: review to plan 56m, plan to approval 12m, " +
+            'approval to resume 5m, resume to push 26m',
+    )
+    await expect(page.getByTestId('reviews-round-5').getByTestId('reviews-round-turnaround')).toHaveText('1.6h')
     await expect(page.getByTestId('reviews-efforts').getByTestId('reviews-effort')).toHaveCount(3)
     await expect(page.getByTestId('reviews-round-4')).toContainText('the planner')
     await page.getByTestId('reviews-round-4').getByRole('link', { name: 'run:52' }).click()

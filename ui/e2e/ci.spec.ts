@@ -86,8 +86,9 @@ test('the window switches to 30 days, and the cooldown points to Health', async 
     await settled(page)
     await page.getByTestId('ci-window-30').click()
     await expect(page).toHaveURL(/\/reports\/ci\?days=30$/u)
+    // Eight days back, PR 61's push answered its feedback round green first time (canopy/serve/mock/feedback_plans.py).
     await expect(page.locator('main header p')).toHaveText(
-        '40% of PR heads green first time · no flaky kicks over 30 days',
+        '45% of PR heads green first time · no flaky kicks over 30 days',
     )
     await expect(page.getByTestId('ci-table').locator('tbody tr')).toHaveCount(30)
     await page.getByTestId('ci-cooldown-line').getByRole('link', { name: 'Health' }).click()

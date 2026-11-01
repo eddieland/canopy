@@ -7,8 +7,9 @@ with it as the planner's own run records it, so the harness computes that in cod
 
 Every other state is on a mobile PR of its own, each its ticket's one unit (`STATES`): a plan that waits and is not
 stale, one the operator approved with an item left out, one its planner approved since it changes no code, one a
-`resume` spent, one that covers no review item, one whose file is gone, and one of ten items from four reviewers, a
-bot among them and one with a long name. They are eight days old, so the spend pages' default week, and the counts of
+`resume` spent, whose push the `vcs` source saw as checks on a new head, so the Reviews page times canopy's turnaround
+on it, one that covers no review item, one whose file is gone, and one of ten items from four reviewers, a bot among
+them and one with a long name. They are eight days old, so the spend pages' default week, and the counts of
 what happened since a time, leave them out; the lists that show every ticket, PR, and run show them last.
 """
 
@@ -19,7 +20,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from canopy.core import plans, records
-from canopy.core.vocab import Phase, PlanStatus, Proposal, ReviewItem, ReviewState, RunKind, RunStatus
+from canopy.core.vocab import CheckConclusion, Phase, PlanStatus, Proposal, ReviewItem, ReviewState, RunKind, RunStatus
 from canopy.runs import feedback_items, feedback_plans
 from canopy.serve.mock.reviews import PR_88
 
@@ -78,6 +79,10 @@ _DAY = 24 * 60
 _PLANNING = 6
 #: How long the `resume` that spent a state's plan ran, in minutes.
 _RESUMING = 22
+#: How long after that `resume` ended its push's checks were observed, in minutes.
+_CHECKING = 4
+#: The checks a spent state's push ran, each passing.
+_PUSH_CHECKS = ("lint", "ios-unit")
 #: The reviewer with the longest name GitHub allows but one, for the stress case's rows.
 LONG_AUTHOR = "maximiliana-vanderberghe-okonkwo-smith"
 
@@ -1009,7 +1014,11 @@ def _spend(
     *,
     slot: str,
 ) -> None:
-    """The `resume` that went ahead on the state's approved plan, the run after its plan's, which spent it."""
+    """The `resume` that went ahead on the state's approved plan, the run after its plan's, which spent it.
+
+    Its push is the checks a `vcs` source observed passing on the PR's next head, soon after it ended: the push that
+    answered the round.
+    """
     run = state.run + 1
     _run(
         conn,
@@ -1023,6 +1032,24 @@ def _spend(
     )
     records.insert(records.RunReason, run_id=run, reason="review").run(conn)
     records.update(records.FeedbackPlan).set(spent_run_id=run).where("id = ?", plan_id).run(conn)
+    pushed = f"{state.number:02d}a" * 13 + "a"
+    records.insert_rows(
+        records.ObservedCheckRun,
+        ("pr_url", "run_id", "name", "head_sha", "conclusion", "observed_at"),
+    ).many(
+        conn,
+        [
+            (
+                state.url,
+                9_300_000 + 10 * state.number + i,
+                name,
+                pushed,
+                CheckConclusion.SUCCESS,
+                at(state.ended + _CHECKING),
+            )
+            for i, name in enumerate(_PUSH_CHECKS)
+        ],
+    )
 
 
 def _run(
