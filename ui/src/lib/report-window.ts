@@ -33,3 +33,8 @@ export function pickWindow(
 function names(value: unknown, n: number): boolean {
     return n === value || String(n) === value
 }
+
+/** The window before a window, as a tile's delta says it: `the 7 days before`, `the 24 hours before`. */
+export function windowBefore(range: { days?: number | null; hours?: number | null }): string {
+    return `the ${windowName(range)} before`
+}

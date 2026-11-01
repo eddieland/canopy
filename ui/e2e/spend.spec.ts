@@ -137,6 +137,17 @@ test('a window the page does not offer reads as the week', async ({ page }) => {
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
 })
 
+test('each total says how it moved since the window before, which a line under them names once', async ({ page }) => {
+    await page.goto('reports/spend')
+    await settled(page)
+    // The mock's week cost more than the week before it, whose history spent less and landed three tickets.
+    await expect(page.getByTestId('spend-total-total-delta')).toHaveText(/^\+\$/u)
+    await expect(page.getByTestId('spend-done-delta')).toHaveText('−3')
+    await expect(page.getByTestId('spend-against')).toHaveText('Each change under a figure is on the 7 days before.')
+    await page.getByTestId('spend-window-24h').click()
+    await expect(page.getByTestId('spend-against')).toHaveText('Each change under a figure is on the 24 hours before.')
+})
+
 test("Reports opens the spend page on the week, Spend's item marked under it", async ({ page }) => {
     await page.goto('attention')
     await settled(page)

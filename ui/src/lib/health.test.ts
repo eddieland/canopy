@@ -3,7 +3,16 @@ import { describe, expect, it } from 'vitest'
 import type { HealthCounts, HealthDay, HealthOutcome } from '@/api/types'
 import type { Clock } from '@/lib/clock'
 
-import { countSum, HEALTH_SERIES, healthBars, healthDayHint, healthFigures, healthLine, healthWindow } from './health'
+import {
+    countSum,
+    HEALTH_SERIES,
+    healthBars,
+    healthDayHint,
+    healthFigures,
+    healthLine,
+    healthWindow,
+    previousHealthFigures,
+} from './health'
 
 const H24: Clock = { hours: '24', zone: false }
 const NONE: HealthCounts = { overseer: 0, workers: 0, plans: 0, chores: 0, reviews: 0, tasks: 0 }
@@ -44,6 +53,17 @@ describe('health', () => {
             rate: null,
             failedUsd: null,
         })
+    })
+
+    it("reads the window before's figures as the window's, a rate only over ended runs", () => {
+        const before = { since: '2026-09-25T00:00:00Z', until: '2026-10-02T00:00:00Z' }
+        expect(previousHealthFigures({ ...before, runs_ended: 8, failed: 2, failed_cost_usd: 0.5 })).toEqual({
+            runs: 8,
+            failed: 2,
+            rate: 0.25,
+            failedUsd: 0.5,
+        })
+        expect(previousHealthFigures({ ...before, runs_ended: 0, failed: 0, failed_cost_usd: null }).rate).toBeNull()
     })
 
     it('says a day on hover with each kind that failed, by the legend', () => {

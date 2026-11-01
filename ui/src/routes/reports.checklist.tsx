@@ -2,8 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { checklistCountsQuery } from '@/api/queries'
+import type { ChecklistCounts } from '@/api/types'
 import { Code } from '@/components/code'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
+import { ReadoutTiles } from '@/components/readout-tiles'
+import type { ReadoutTile } from '@/components/readout-tiles'
 import { RepoFilter } from '@/components/repo-picker'
 import { Clipped, Hinted } from '@/components/tip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
@@ -11,14 +14,16 @@ import {
     ANSWER_COLUMNS,
     CHECKLIST_WINDOWS,
     checklistDays,
+    checklistFigures,
     checklistLine,
     DEFAULT_CHECKLIST_DAYS,
     itemsByRepo,
 } from '@/lib/checklist'
 import type { RepoItems } from '@/lib/checklist'
 import { reposOf } from '@/lib/pull-request-filter'
+import { readoutDelta, wholeChange } from '@/lib/readout-delta'
 import { repoListFrom, repoListOf, reposIn, reposWords } from '@/lib/repo-filter'
-import { windowName } from '@/lib/report-window'
+import { windowBefore, windowName } from '@/lib/report-window'
 import { cn } from '@/lib/utils'
 
 interface ChecklistSearch {
@@ -65,6 +70,8 @@ function ChecklistPage() {
     const { data } = query
     // What the empty panels say they looked over: `these 7 days`.
     const span = windowName({ days })
+    // A read that failed with nothing on screen says so once, in the panel, with Read again: no tiles held for it.
+    const failed = data === undefined && query.error !== null
     return (
         <>
             <PageHeader
@@ -96,6 +103,15 @@ function ChecklistPage() {
                         ))}
                     </ToggleGroup>
                 }
+                links={
+                    !failed && (
+                        <ReadoutTiles
+                            tiles={checklistTiles(data)}
+                            against={windowBefore({ days })}
+                            testId="checklist"
+                        />
+                    )
+                }
             >
                 {data === undefined
                     ? query.isPending
@@ -120,6 +136,38 @@ function ChecklistPage() {
             </Panel>
         </>
     )
+}
+
+/**
+ * The window's headline figures over every repository's list, each held in its place while the counts are read, and
+ * each against the window before's: fewer items held, or left unanswered, is better.
+ */
+function checklistTiles(found: ChecklistCounts | undefined): ReadoutTile[] {
+    const figures = found === undefined ? undefined : checklistFigures(found.items)
+    const before = found?.previous
+    return [
+        {
+            key: 'reminded',
+            label: 'items given',
+            hint: "How many times a run was given an item of its repositories' lists",
+            value: figures?.reminded,
+            delta: readoutDelta(figures?.reminded, before?.reminded, wholeChange),
+        },
+        {
+            key: 'held',
+            label: 'held',
+            hint: 'Of those, the ones a run left failing, for a reason it gave',
+            value: figures?.held,
+            delta: readoutDelta(figures?.held, before?.held, wholeChange, 'down'),
+        },
+        {
+            key: 'unanswered',
+            label: 'unanswered',
+            hint: "Of those, the ones a run's result said nothing of",
+            value: figures?.unanswered,
+            delta: readoutDelta(figures?.unanswered, before?.unanswered, wholeChange, 'down'),
+        },
+    ]
 }
 
 /** The repository picker, kept in `?repo=`, while the lists counted are more than one repository's (`RepoFilter`). */

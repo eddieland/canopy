@@ -1,7 +1,7 @@
 // The CI page: which checks fail, what fixing them cost, and whether flaky kicks worked, on the PRs canopy observed.
 // The numbers are the server's; this lays them out.
 
-import type { CiCheck, CiDay, CiFix, CiKick, CiReport, CiVerdict } from '@/api/types'
+import type { CiCheck, CiDay, CiFix, CiKick, CiPrevious, CiReport, CiVerdict } from '@/api/types'
 import type { DayBar, DayChartSeries } from '@/lib/chart'
 import type { Clock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
@@ -67,6 +67,16 @@ export function ciFigures(found: Pick<CiReport, 'heads' | 'green_first' | 'per_d
         greenFirst: found.heads === 0 ? null : found.green_first / found.heads,
         red: found.per_day.reduce((sum, day) => sum + redSum(day), 0),
         fixes: found.fixes.length,
+    }
+}
+
+/** The window before's headline figures, as `ciFigures` reads the window's. */
+export function previousCiFigures(previous: CiPrevious): CiFigures {
+    return {
+        heads: previous.heads,
+        greenFirst: previous.heads === 0 ? null : previous.green_first / previous.heads,
+        red: previous.red,
+        fixes: previous.fixes,
     }
 }
 

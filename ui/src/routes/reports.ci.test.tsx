@@ -23,11 +23,11 @@ const REPORT: CiReport = {
     previous: {
         since: '2026-09-25T00:00:00Z',
         until: '2026-10-02T00:00:00Z',
-        heads: 0,
-        green_first: 0,
-        red: 0,
-        fixes: 0,
-        fixes_green: 0,
+        heads: 5,
+        green_first: 3,
+        red: 4,
+        fixes: 1,
+        fixes_green: 1,
     },
     heads: 4,
     green_first: 3,
@@ -105,11 +105,15 @@ describe('the CI page', () => {
                 .getAllByRole('term')
                 .map((t) => t.textContent),
         ).toEqual(['PR heads', 'green first time', 'red runs', 'fix-CI resumes'])
-        expect(
-            within(tiles)
-                .getAllByRole('definition')
-                .map((d) => d.textContent),
-        ).toEqual(['4', '75%', '2', '1'])
+        const shown = ['heads', 'green-first', 'red', 'fixes']
+        expect(shown.map((key) => within(tiles).getByTestId(`ci-${key}`).textContent)).toEqual(['4', '75%', '2', '1'])
+        // Each against the week before's: 5 heads, 3 of them green first, 4 red runs, and a fix.
+        expect(shown.map((key) => within(tiles).getByTestId(`ci-${key}-delta`).textContent)).toEqual([
+            '−1 on the 7 days before',
+            '+15 pts on the 7 days before',
+            '−2 on the 7 days before',
+            'same as the 7 days before',
+        ])
         const header = screen.getByRole('banner')
         expect(within(header).getByRole('radiogroup', { name: 'Window' })).toBeTruthy()
     })

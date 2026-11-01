@@ -1,5 +1,8 @@
 // A report's headline figure against the same figure over the window before (ui/DESIGN.md, "Readout tiles").
 
+import { costText } from '@/lib/cost-total'
+import { hoursText } from '@/lib/reports'
+
 /** Which way a figure is better, where the page says: a failure rate is better `down`, green first time `up`. */
 export type Better = 'up' | 'down'
 
@@ -41,4 +44,24 @@ export function readoutDelta(
         direction,
         worse: better !== undefined && better !== direction,
     }
+}
+
+/** A count's change, whole: `3`. */
+export function wholeChange(size: number): string {
+    return String(Math.round(size))
+}
+
+/** A share's change, 0 to 1, in whole percentage points: `5 pts`. */
+export function pointsChange(size: number): string {
+    return `${Math.round(size * 100)} pts`
+}
+
+/** A cost's change, as every cost is written: `$1.20`. */
+export function usdChange(size: number): string {
+    return costText(size)
+}
+
+/** A span's change in hours, as the reports write a span: `45m`, `5.2h`. */
+export function hoursChange(size: number): string {
+    return hoursText(size)
 }

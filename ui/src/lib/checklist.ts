@@ -84,6 +84,25 @@ export function checklistLine(items: readonly ChecklistItemCounts[], days: numbe
     return `${counted(items.length, 'item')} in ${where} over ${span} · ${held} held`
 }
 
+/** The window's headline figures, over every item of every repository, as the page's tiles show them. */
+export interface ChecklistFigures {
+    /** How many times its runs were given an item. */
+    reminded: number
+    /** Of those, how many answered `held`. */
+    held: number
+    /** Of those, how many said nothing of it. */
+    unanswered: number
+}
+
+/** The window's items given, held, and unanswered, summed over every item, as the window before's figures are. */
+export function checklistFigures(items: readonly ChecklistItemCounts[]): ChecklistFigures {
+    return {
+        reminded: items.reduce((sum, i) => sum + i.reminded, 0),
+        held: items.reduce((sum, i) => sum + i.held, 0),
+        unanswered: items.reduce((sum, i) => sum + i.unanswered, 0),
+    }
+}
+
 /** What each answer means, in a run's answer's tip. */
 export const ANSWER_MEANING: Readonly<Record<ItemAnswer, string>> = {
     pass: 'The diff held to the item as it was',

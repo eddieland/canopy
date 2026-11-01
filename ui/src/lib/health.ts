@@ -1,7 +1,7 @@
 // The health page (canopy health): how the last days' runs ended, the newest failures, and what the guards refused.
 // The numbers are the server's; this lays them out.
 
-import type { HealthCounts, HealthDay, HealthReport, SpendKind } from '@/api/types'
+import type { HealthCounts, HealthDay, HealthPrevious, HealthReport, SpendKind } from '@/api/types'
 import type { DayBar, DayChartSeries } from '@/lib/chart'
 import type { Clock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
@@ -75,6 +75,16 @@ export function healthFigures(found: Pick<HealthReport, 'per_day' | 'outcomes'>)
         failed,
         rate: runs === 0 ? null : failed / runs,
         failedUsd: priced.length === 0 ? null : priced.reduce((sum, usd) => sum + usd, 0),
+    }
+}
+
+/** The window before's headline figures, as `healthFigures` reads the window's. */
+export function previousHealthFigures(previous: HealthPrevious): HealthFigures {
+    return {
+        runs: previous.runs_ended,
+        failed: previous.failed,
+        rate: previous.runs_ended === 0 ? null : previous.failed / previous.runs_ended,
+        failedUsd: previous.failed_cost_usd,
     }
 }
 
