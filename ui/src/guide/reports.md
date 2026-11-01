@@ -354,9 +354,9 @@ commented on it, or sent an earlier plan back; **sent back**, replaced by a newe
 - **Approvals by level**: the approved plans, by the level of `policy.planner_may_approve` their plan run was offered
   and how each went ahead, with the median time from written to approved, the median length and words, how many of the
   PRs that followed needed at least one resume, every resume after them, and how many of their tickets are done. A
-  planner's approval takes no time, so it shows a dash. The level is the one the planner was actually asked at: a plan that
-  replaced one you had a word on was asked nothing, so it counts as `off` whatever the key said. Under the table, the
-  level the key is at now, and how many plans were sent back or wait on you.
+  planner's approval takes no time, so it shows a dash. The level is the one the planner was actually asked at: a plan
+  that replaced one you had a word on was asked nothing, so it counts as `off` whatever the key said. Under the table,
+  the level the key is at now, and how many plans were sent back or wait on you.
 - **Time to approve by length**: the plans you approved, by length (under a page, one to two, two to four, and four
   and up), with the median time you took and how many went as written. If the long ones go through as fast as the
   short ones, either the long ones are easy or you're skimming.
