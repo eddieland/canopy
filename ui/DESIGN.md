@@ -784,7 +784,8 @@ side.
   figure in a `dl`, what it counts in the name's tip, and, when the page has the window before's figure, a muted line
   under it saying how it moved (`+3 on the 7 days before`, `same as ...`), in `status-failed` only where the page says
   which way is better and it moved the other (a rising failure rate; never rising spend). A row of them sits under a
-  report's description (Health, CI, Reviews, Checklist); the Spend page's Totals are a grid of them in their panel. A
+  report's description (Health, CI, Reviews, Checklist); the Spend page's Totals are a grid of them in their panel,
+  whose cells are too narrow to name the window before under each figure, so a line under the grid names it once. A
   figure still being read holds its place. A `Counter` stays the attention and worktrees pages' count of the present,
   with its state's color.
 - **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest

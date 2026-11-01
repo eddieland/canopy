@@ -473,12 +473,12 @@ function Budget({ month }: { month: SpendMonth | null }) {
 
 /**
  * The window's total, each kind's, and what it got done: the tickets marked done, and the whole spend over them, each
- * against the window before's, where more tickets done is better and spend is never colored. Then idle ticks' share of
- * the overseer's, when the overseer spent something, and the runs that reported no cost, when a run ended.
+ * against the window before's, where more tickets done is better and spend is never colored. The grid's cells are too
+ * narrow to name that window under each figure, so a line under them names it once. Then idle ticks' share of the
+ * overseer's, when the overseer spent something, and the runs that reported no cost, when a run ended.
  */
 function Totals({ found }: { found: SpendBreakdown }) {
     const { totals, previous } = found
-    const against = windowBefore(found)
     // Each series by the name the legend and the table give it, the overseer's whole before idle ticks' part of it.
     const cells: ReadoutTile[] = [
         {
@@ -495,6 +495,23 @@ function Totals({ found }: { found: SpendBreakdown }) {
             delta: readoutDelta(totals[series.key], previous.totals[series.key], usdChange),
         })),
     ]
+    const done: ReadoutTile[] = [
+        {
+            key: 'done',
+            label: 'tickets done',
+            hint: 'Merged, or closed in the tracker, which may close it as its PR merges',
+            value: found.done,
+            delta: readoutDelta(found.done, previous.done, wholeChange, 'up'),
+        },
+        {
+            key: 'per-done',
+            label: 'per ticket done',
+            hint: PER_DONE_HINT,
+            value: <Cost usd={found.per_done} />,
+            delta: readoutDelta(found.per_done, previous.per_done, usdChange),
+        },
+    ]
+    const compared = [...cells, ...done].some((tile) => tile.delta !== null && tile.delta !== undefined)
     const unpriced = unpricedText(found.unpriced)
     // In a window where nothing was spent, neither sentence has anything behind it: the share is of the live
     // overseer's spend, and the cost clause speaks for the runs that ended.
@@ -502,28 +519,13 @@ function Totals({ found }: { found: SpendBreakdown }) {
     const ended = found.unpriced.some((u) => u.runs > 0)
     return (
         <div className="flex flex-col gap-3 p-3">
-            <ReadoutTiles tiles={cells} against={against} testId="spend-total" className={TOTALS_GRID} />
-            <ReadoutTiles
-                tiles={[
-                    {
-                        key: 'done',
-                        label: 'tickets done',
-                        hint: 'Merged, or closed in the tracker, which may close it as its PR merges',
-                        value: found.done,
-                        delta: readoutDelta(found.done, previous.done, wholeChange, 'up'),
-                    },
-                    {
-                        key: 'per-done',
-                        label: 'per ticket done',
-                        hint: PER_DONE_HINT,
-                        value: <Cost usd={found.per_done} />,
-                        delta: readoutDelta(found.per_done, previous.per_done, usdChange),
-                    },
-                ]}
-                against={against}
-                testId="spend"
-                className={cn(TOTALS_GRID, 'border-t pt-3')}
-            />
+            <ReadoutTiles tiles={cells} testId="spend-total" className={TOTALS_GRID} />
+            <ReadoutTiles tiles={done} testId="spend" className={cn(TOTALS_GRID, 'border-t pt-3')} />
+            {compared && (
+                <p className="text-xs text-muted-foreground" data-testid="spend-against">
+                    Each change under a figure is on {windowBefore(found)}.
+                </p>
+            )}
             {(spent || ended) && (
                 <p className="max-w-3xl text-xs text-muted-foreground" data-testid="spend-idle-share">
                     {spent && (
