@@ -177,6 +177,10 @@ export type ChecklistCounts = Schemas['ChecklistCounts']
 export type ChecklistItemCounts = Schemas['ChecklistItemCounts']
 /** The window before the checklist's counts: the items given, held, and unanswered, over every item. */
 export type ChecklistPrevious = Schemas['ChecklistPrevious']
+/** A run behind an item's held or fixed answers: a worker's or a task's, with the reason it held the item. */
+export type ChecklistRun = Schemas['ChecklistRun']
+/** One item's answers in one ISO week of the window. */
+export type ChecklistWeek = Schemas['ChecklistWeek']
 /** What a run answered of one item of its repository's checklist, with a held item's reason, on the run's page. */
 export type ChecklistAnswer = Schemas['ChecklistAnswer']
 /** A worker's answer to a checklist item: pass, fixed, held, n/a, or unanswered. */

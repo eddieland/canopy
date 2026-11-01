@@ -47,6 +47,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
 | `wait-1` to `wait-4` | How long something took, the quickest first: Reviews' first reviews, Health's run lengths. |
+| `answer-pass`, `-fixed`, `-held`, `-na`, `-unanswered` | The checklist page's answers: an item's bar, and by week. |
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `code-chip`, `code-size` | Inline code's chip, a tint of its own ink, and code's size against its line (Rich text). |
@@ -108,6 +109,11 @@ Rules:
   never reads as a failure. The Health page's run lengths take the same ramp by their share of the timeout
   (`DURATION_BANDS` in `src/lib/health.ts`), with a run at the limit in `status-failed`, since it was stopped. Fills,
   never text; each reaches 3:1 on `surface`, which `tokens.test.ts` measures.
+- **Answer fills** (`answer-pass`, `-fixed`, `-held`, `-na`, `-unanswered`; `src/lib/checklist.ts`) color a checklist
+  answer on the checklist page and nowhere else. Unlike the other fills, green and red here mean what they say: a
+  pass reads as passing and a held item as the failure a run left it. Fixed is a blue apart from both, unanswered an
+  amber, n/a the dry run's neutral, so set again in each palette's rule. Fills, never text; each reaches 3:1 on
+  `surface`, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
   with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
   legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
@@ -1066,6 +1072,16 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **The first reviews chart** (the Reviews page) is the same `DayChart`: a bar per local day of the first reviews that
   arrived, stacked by wait in the wait fills, the quickest at the bottom, the day's median on hover, the legend and a
   table of the same numbers under it. Its window is the health page's.
+- **The answer bar** (the checklist page's By item) is an item's answers as one 8px rounded bar, 128px long, each
+  answer its share of the runs reminded in its answer fill, in `canopy checklist`'s order, so an item all n/a is one
+  grey bar and one often held has a red band. Every bar is the same length, since the share is the point, not the
+  count; the counts stay in the row's columns, and in words in the bar's tip and for a screen reader. The legend is
+  once, under the table. A held or fixed count of some opens a `Popover` of the runs behind it, a held one's reason
+  under its run. An item's name picks it for By week (`?item=`), marked as the home's picked month is; the table's
+  order is a segmented control in its header (`?sort=`), each repository's items sorted within it.
+- **The answers by week chart** (the checklist page) is the same `DayChart`: a bar per ISO week of the window, the
+  picked item's answers or the whole list's, stacked in the answer fills, the legend and a table of the same numbers
+  under it. Its window, 7, 14, or 30 days, opens on 14.
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
   with its unit's phase, its ticket, then the page's own figures. The spend page's By pull request, the CI page's
   time to green and flaky kicks, and the Reviews page's By pull request use it.
