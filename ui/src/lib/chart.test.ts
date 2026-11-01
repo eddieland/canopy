@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
-import { axisNames, axisStep, peakIndex } from './chart'
+import { axisNames, axisStep, barPercent, peakIndex } from './chart'
 
 function named(count: number, step: number): number[] {
     return Array.from({ length: count }, (_, i) => i).filter((i) => axisNames(i, count, step))
 }
 
 describe('chart', () => {
+    it("draws a cell's bar as its share of the column's largest, nothing reported as nothing", () => {
+        const column = [null, 1, 4]
+        expect(column.map((v) => barPercent(v, column))).toEqual([0, 25, 100])
+        expect(barPercent(null, [null])).toBe(0)
+        expect(barPercent(0, [0, 0])).toBe(0)
+        expect(barPercent(-1, [2])).toBe(0)
+    })
+
     it('finds the peak, the latest of equals, so its value is said over its bar; none where all are 0', () => {
         expect(peakIndex([2, 4.5, 1])).toBe(1)
         expect(peakIndex([3, 3])).toBe(1)

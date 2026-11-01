@@ -6,7 +6,6 @@ import { stamp } from '@/lib/time'
 
 import {
     clockShare,
-    costPercent,
     hoursText,
     medianText,
     monthLabel,
@@ -145,14 +144,6 @@ describe('medianText', () => {
         expect(medianText(null)).toBe('–')
         expect(medianText(3)).toBe('3')
         expect(medianText(2.5)).toBe('2.5')
-    })
-})
-
-describe('costPercent', () => {
-    it("is a month's cost against the dearest month's", () => {
-        const months = [month('2026-08', null), month('2026-09', 1), month('2026-10', 4)]
-        expect(months.map((m) => costPercent(m, months))).toEqual([0, 25, 100])
-        expect(costPercent(month('2026-08', null), [month('2026-08', null)])).toBe(0)
     })
 })
 

@@ -5,7 +5,7 @@ import { checklistCountsQuery } from '@/api/queries'
 import { Code } from '@/components/code'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
 import { RepoFilter } from '@/components/repo-picker'
-import { Clipped } from '@/components/tip'
+import { Clipped, Hinted } from '@/components/tip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
     ANSWER_COLUMNS,
@@ -33,7 +33,7 @@ const HELP =
     'reword or drop; one often held is one to argue. Why a run held an item is on its run. As canopy checklist ' +
     '--days N prints it.'
 
-// What the runs reminded count, on hover.
+// What the runs reminded count, in its name's tip.
 const REMINDED_HINT =
     'The runs given the item, by when they started: each answered it, or is counted unanswered. A run still ' +
     'running has answered nothing yet'
@@ -67,7 +67,36 @@ function ChecklistPage() {
     const span = windowName({ days })
     return (
         <>
-            <PageHeader title="Checklist" help={HELP}>
+            <PageHeader
+                title="Checklist"
+                help={HELP}
+                controls={
+                    <ToggleGroup
+                        type="single"
+                        value={String(days)}
+                        aria-label="Window"
+                        onValueChange={(value) => {
+                            const n = CHECKLIST_WINDOWS.find((w) => String(w) === value)
+                            // Pressing the window shown turns it off: keep it. A week, the default, needs no
+                            // search; the repository filter stays as it is.
+                            if (n !== undefined) {
+                                void navigate({
+                                    search: (prev) => ({
+                                        ...prev,
+                                        days: n === DEFAULT_CHECKLIST_DAYS ? undefined : n,
+                                    }),
+                                })
+                            }
+                        }}
+                    >
+                        {CHECKLIST_WINDOWS.map((n) => (
+                            <ToggleGroupItem key={n} value={String(n)} data-testid={`checklist-window-${n}`}>
+                                {windowName({ days: n })}
+                            </ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
+                }
+            >
                 {data === undefined
                     ? query.isPending
                         ? 'reading the answers'
@@ -76,33 +105,7 @@ function ChecklistPage() {
             </PageHeader>
             <Panel data-testid="checklist-items">
                 <PanelHeader label="By item">
-                    <span className="flex flex-wrap items-center gap-x-3">
-                        {data !== undefined && <Filter repos={reposOf(data.items, search.repo)} />}
-                        <ToggleGroup
-                            type="single"
-                            value={String(days)}
-                            aria-label="Window"
-                            onValueChange={(value) => {
-                                const n = CHECKLIST_WINDOWS.find((w) => String(w) === value)
-                                // Pressing the window shown turns it off: keep it. A week, the default, needs no
-                                // search; the repository filter stays as it is.
-                                if (n !== undefined) {
-                                    void navigate({
-                                        search: (prev) => ({
-                                            ...prev,
-                                            days: n === DEFAULT_CHECKLIST_DAYS ? undefined : n,
-                                        }),
-                                    })
-                                }
-                            }}
-                        >
-                            {CHECKLIST_WINDOWS.map((n) => (
-                                <ToggleGroupItem key={n} value={String(n)} data-testid={`checklist-window-${n}`}>
-                                    {windowName({ days: n })}
-                                </ToggleGroupItem>
-                            ))}
-                        </ToggleGroup>
-                    </span>
+                    {data !== undefined && <Filter repos={reposOf(data.items, search.repo)} />}
                 </PanelHeader>
                 {data === undefined ? (
                     <PanelLoading query={query} rows={6} className="min-h-40" />
@@ -151,16 +154,16 @@ function Items({ groups, repo, span }: { groups: RepoItems[]; repo: string | und
     }
     return (
         <PanelScroll label="Checklist answers by item" className="px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="checklist-table">
+            <table className="border-collapse text-sm" data-testid="checklist-table">
                 <thead className={PADDED_HEAD}>
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">item</th>
-                        <th className={HEAD} title={REMINDED_HINT}>
-                            reminded
+                        <th className={HEAD}>
+                            <Hinted hint={REMINDED_HINT}>reminded</Hinted>
                         </th>
                         {ANSWER_COLUMNS.map((c) => (
-                            <th key={c.key} className={HEAD} title={c.hint}>
-                                {c.label}
+                            <th key={c.key} className={HEAD}>
+                                <Hinted hint={c.hint}>{c.label}</Hinted>
                             </th>
                         ))}
                     </tr>
@@ -178,9 +181,9 @@ function Items({ groups, repo, span }: { groups: RepoItems[]; repo: string | und
                         </tr>
                         {group.items.map((item) => (
                             <tr key={item.item} className="text-right" data-testid="checklist-item">
-                                <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
+                                <th scope="row" className="py-0.5 text-left font-normal">
                                     {/* The row's name, as the spend page's tools read: medium weight, cut to fit. */}
-                                    <Clipped text={item.item} className="block font-sans font-medium" />
+                                    <Clipped text={item.item} className="block max-w-lg font-sans font-medium" />
                                 </th>
                                 <td className="readout pl-3">{item.reminded}</td>
                                 {ANSWER_COLUMNS.map((c) => (

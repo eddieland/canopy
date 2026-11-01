@@ -6,6 +6,7 @@ import type { Clock } from '@/lib/clock'
 import {
     ciBars,
     ciDayHint,
+    ciFigures,
     ciLine,
     ciSeries,
     ciWindow,
@@ -29,6 +30,18 @@ describe('ci', () => {
         expect(ciWindow({ days: 7 })).toEqual({ days: 7 })
         expect(ciWindow({ days: '14' })).toBeUndefined()
         expect(ciWindow({})).toBeUndefined()
+    })
+
+    it("sums the window's headline figures: heads, their share green first time, red runs, and fixes", () => {
+        expect(
+            ciFigures({
+                heads: 4,
+                green_first: 3,
+                per_day: [day('2026-10-07', [2, 1]), day('2026-10-08', [1])],
+                fixes: [],
+            }),
+        ).toEqual({ heads: 4, greenFirst: 0.75, red: 4, fixes: 0 })
+        expect(ciFigures({ heads: 0, green_first: 0, per_day: [], fixes: [] }).greenFirst).toBeNull()
     })
 
     it("says the window's state: the heads green first time and the kicks", () => {

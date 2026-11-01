@@ -88,6 +88,29 @@ describe('the CI page', () => {
         expect(await screen.findByText('75% of PR heads green first time · 1 flaky kick over 7 days')).toBeTruthy()
     })
 
+    it("heads the page with the window's figures, its window in the header beside the title", async () => {
+        await renderPage(REPORT)
+        const tiles = await screen.findByTestId('ci-tiles')
+        expect(
+            within(tiles)
+                .getAllByRole('term')
+                .map((t) => t.textContent),
+        ).toEqual(['PR heads', 'green first time', 'red runs', 'fix-CI resumes'])
+        expect(
+            within(tiles)
+                .getAllByRole('definition')
+                .map((d) => d.textContent),
+        ).toEqual(['4', '75%', '2', '1'])
+        const header = screen.getByRole('banner')
+        expect(within(header).getByRole('radiogroup', { name: 'Window' })).toBeTruthy()
+    })
+
+    it('folds the red checks by day into a table a screen reader reads, opened from its row count', async () => {
+        await renderPage(REPORT)
+        expect(await screen.findByRole('button', { name: 'Show 2 days as a table' })).toBeTruthy()
+        expect(screen.getAllByTestId(/^ci-day-/u)).toHaveLength(2)
+    })
+
     it('lists the checks the worst first, and says what counts as red and what it cannot see', async () => {
         await renderPage(REPORT)
         const rows = within(await screen.findByTestId('ci-check-table')).getAllByTestId('ci-check')

@@ -48,6 +48,28 @@ export function ciLine(found: Pick<CiReport, 'days' | 'heads' | 'green_first' | 
     return `${heads} · ${counted(found.kicks.length, 'flaky kick')} over ${windowName(found)}`
 }
 
+/** The window's headline figures, as the page's tiles show them. */
+export interface CiFigures {
+    /** The PR heads first checked in the window. */
+    heads: number
+    /** Their share whose first run of every check was not red; null with none checked. */
+    greenFirst: number | null
+    /** The red check runs, over every day. */
+    red: number
+    /** The resumes for CI that started in the window. */
+    fixes: number
+}
+
+/** The window's heads, their share green first time, its red runs, and its fix-CI resumes. */
+export function ciFigures(found: Pick<CiReport, 'heads' | 'green_first' | 'per_day' | 'fixes'>): CiFigures {
+    return {
+        heads: found.heads,
+        greenFirst: found.heads === 0 ? null : found.green_first / found.heads,
+        red: found.per_day.reduce((sum, day) => sum + redSum(day), 0),
+        fixes: found.fixes.length,
+    }
+}
+
 /**
  * The chart's series, from the server's names: each check it names apart, by rank, in its fill, then the rest as
  * `other` in the neutral. A series' key is its place, `check-0`, since a check's name may hold any character.
@@ -99,8 +121,13 @@ export function ciBars(days: readonly CiDay[], series: readonly DayChartSeries[]
 
 /** A check's share of red among its red and green runs, `60%`, or `–` with neither. */
 export function failureRate(check: Pick<CiCheck, 'red' | 'green'>): string {
+    return shareText(failureShare(check))
+}
+
+/** A check's red runs' share of its red and green ones, 0 to 1; null when it had neither. */
+export function failureShare(check: Pick<CiCheck, 'red' | 'green'>): number | null {
     const judged = check.red + check.green
-    return shareText(judged === 0 ? null : check.red / judged)
+    return judged === 0 ? null : check.red / judged
 }
 
 /** How often a check's next run on a new head passed after a red one: `2 of 3`, or `–` when none followed. */

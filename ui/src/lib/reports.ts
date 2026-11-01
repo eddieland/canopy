@@ -139,9 +139,3 @@ export function clockShare(month: ReportMonth, figure: 'to land' | 'review wait'
     }
     return `${github} of ${known.length} from GitHub's times, the rest from proxies`
 }
-
-/** A month's cost as a share of the dearest month's, 0 to 100, for its bar; 0 when nothing cost anything. */
-export function costPercent(month: ReportMonth, months: readonly ReportMonth[]): number {
-    const top = Math.max(0, ...months.map((m) => m.cost_usd ?? 0))
-    return top === 0 ? 0 : ((month.cost_usd ?? 0) / top) * 100
-}
