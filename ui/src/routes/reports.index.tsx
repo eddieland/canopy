@@ -14,6 +14,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { UnnamedModel } from '@/components/unnamed-model'
 import { barPercent } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
+import { unnamedHint } from '@/lib/models'
 import {
     clockShare,
     DEFAULT_MONTHS,
@@ -31,7 +32,6 @@ import {
     toLandHint,
     wroteTokens,
 } from '@/lib/reports'
-import { unnamedHint } from '@/lib/models'
 import { modelKey, shareText } from '@/lib/spend'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'

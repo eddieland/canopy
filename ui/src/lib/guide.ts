@@ -3,8 +3,6 @@
 // `GuideText` renders as React elements, never HTML. It is canopy's own text, not the journal's, so unlike agent text
 // it reads labelled links too: to another page of the guide, to a section of the app, or to the web.
 
-import exampleWorkspace from '../../../examples/canopy-workspace.toml?raw'
-import exampleConfig from '../../../examples/config.toml?raw'
 import attention from '@/guide/attention.md?raw'
 import checklists from '@/guide/checklists.md?raw'
 import chores from '@/guide/chores.md?raw'
@@ -33,6 +31,9 @@ import type { Block, Inline, InlineMatch, Line } from '@/lib/rich-text'
 import { SECTIONS } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
 import type { FileRoutesById } from '@/routeTree.gen'
+
+import exampleWorkspace from '../../../examples/canopy-workspace.toml?raw'
+import exampleConfig from '../../../examples/config.toml?raw'
 
 /** Where a link in the guide goes: a page of it (at a heading, with `hash`), a section of the app, or the web. */
 export type GuideTarget =
@@ -159,6 +160,7 @@ export const PAGE_GUIDES = {
     '/reports/health': 'reports#the-health-page',
     '/reports/ci': 'reports#the-ci-page',
     '/reports/reviews': 'reports#the-reviews-page',
+    '/reports/plans': 'reports#the-plans-page',
     '/memory': 'memory',
     '/search': 'overview#search',
     '/system': 'overview#system-resources',

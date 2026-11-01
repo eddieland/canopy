@@ -20,6 +20,7 @@ import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
 import { Clipped, Hinted } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
+import { barPercent } from '@/lib/chart'
 import {
     CI_WINDOWS,
     ciBars,
@@ -38,7 +39,6 @@ import {
     redSum,
     VERDICTS_TEXT,
 } from '@/lib/ci'
-import { barPercent } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
 import { windowName } from '@/lib/report-window'

@@ -7,7 +7,6 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from
 import { RepoFilter } from '@/components/repo-picker'
 import { Clipped, Hinted } from '@/components/tip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { reposOf } from '@/lib/pull-request-filter'
 import {
     ANSWER_COLUMNS,
     CHECKLIST_WINDOWS,
@@ -17,6 +16,7 @@ import {
     itemsByRepo,
 } from '@/lib/checklist'
 import type { RepoItems } from '@/lib/checklist'
+import { reposOf } from '@/lib/pull-request-filter'
 import { repoListFrom, repoListOf, reposIn, reposWords } from '@/lib/repo-filter'
 import { windowName } from '@/lib/report-window'
 import { cn } from '@/lib/utils'

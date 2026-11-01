@@ -1,14 +1,14 @@
 """The reports, as the API sends them (DESIGN §11), by the backend's clock.
 
 What each local calendar month cost and got done, how the last days' runs ended, as `canopy health` reads them, what
-CI did on the PRs canopy observed, and where their review feedback came from.
+CI did on the PRs canopy observed, where their review feedback came from, and how plans were approved.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 
-from canopy.core import ci, db, health, review_report, runtime_sessions, spend
+from canopy.core import ci, db, health, plan_report, review_report, runtime_sessions, spend
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.serve import monthly
 from canopy.serve.schema.ci import (
@@ -18,6 +18,7 @@ from canopy.serve.schema.ci import (
     CiFixedCheck,
     CiKick,
     CiKickedPullRequest,
+    CiPullRequest,
     CiReport,
 )
 from canopy.serve.schema.health import (
@@ -28,6 +29,7 @@ from canopy.serve.schema.health import (
     HealthRefusal,
     HealthReport,
 )
+from canopy.serve.schema.plan_report import PlanLevel, PlanOutcome, PlansGroup, PlansLength, PlansReport, PlansRow
 from canopy.serve.schema.reports import (
     MonthlyReport,
     ReportKind,
@@ -55,6 +57,7 @@ if TYPE_CHECKING:
     from datetime import datetime, timedelta
 
     from canopy.core.context import Context
+    from canopy.core.vocab import PlannerApproval
     from canopy.serve.backend import Backend
 
 
@@ -131,11 +134,29 @@ def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
         heads=found.heads,
         green_first=found.green_first,
         checks=[
-            CiCheck(name=c.name, runs=c.runs, red=c.red, green=c.green, followed=c.followed, passed=c.passed)
+            CiCheck(
+                name=c.name,
+                runs=c.runs,
+                red=c.red,
+                green=c.green,
+                followed=c.followed,
+                passed=c.passed,
+                reruns=c.reruns,
+                reruns_green=c.reruns_green,
+            )
             for c in found.checks
         ],
         series=list(found.series),
-        per_day=[CiDay(day=d.day, start=db.parse_time(d.start), red=list(d.red)) for d in found.per_day],
+        per_day=[
+            CiDay(
+                day=d.day,
+                start=db.parse_time(d.start),
+                red=list(d.red),
+                heads=d.heads,
+                green_first=d.green_first,
+            )
+            for d in found.per_day
+        ],
         fixes=[_fix(f) for f in found.fixes],
         kicks=[_kick(k) for k in found.kicks],
         kicked_pull_requests=[
@@ -149,6 +170,18 @@ def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
             )
             for p in found.kicked_prs
         ],
+        pull_requests=[
+            CiPullRequest(
+                url=p.url,
+                ticket_key=p.ticket,
+                phase=p.phase,
+                red_at=_time(p.red_at),
+                green_at=_time(p.green_at),
+                hours_to_green=_hours(p.to_green),
+            )
+            for p in found.pull_requests
+        ],
+        median_hours_to_green=_hours(found.median_to_green),
         max_flaky_kicks=ctx.config.trust.max_flaky_kicks,
         cooldown=None
         if cooldown is None
@@ -212,6 +245,47 @@ def reviews_report(backend: Backend, ctx: Context, days: int) -> ReviewsReport:
         dismissals=[ReviewsDismissals(reason=d.reason, findings=d.findings) for d in found.dismissals],
         drafts=[ReviewsDrafts(status=d.status, drafts=d.drafts) for d in found.drafts],
         canopy_trusted=CANOPY_REVIEWER in trusted,
+    )
+
+
+def plans_report(backend: Backend, ctx: Context, days: int) -> PlansReport:
+    """How the plans written over the last `days` local days were approved, by the backend's clock, and what followed.
+
+    Returns:
+        The report, with the level `policy.planner_may_approve` is at now.
+    """
+    found = plan_report.report(ctx.conn, backend.clock(), days)
+    return PlansReport(
+        days=found.days,
+        since=db.parse_time(found.since),
+        until=db.parse_time(found.until),
+        level=cast("PlanLevel", str(ctx.config.policy.planner_may_approve)),
+        plans=[_plan(p) for p in found.plans],
+        groups=[
+            PlansGroup(
+                level=_level(g.level),
+                outcome=_approved(g.outcome),
+                plans=g.plans,
+                median_hours_to_approve=_hours(g.median_to_approve),
+                median_size=g.median_size,
+                implemented=g.implemented,
+                with_resume=g.with_resume,
+                resumes=g.resumes,
+                done=g.done,
+            )
+            for g in found.groups
+        ],
+        lengths=[
+            PlansLength(
+                low=n.low,
+                high=n.high,
+                plans=n.plans,
+                median_hours_to_approve=_hours(n.median_to_approve),
+                as_written=n.as_written,
+            )
+            for n in found.lengths
+        ],
+        outcomes={o: found.count(o) for o in plan_report.Outcome},
     )
 
 
@@ -319,6 +393,7 @@ def _fix(found: ci.Fix) -> CiFix:
         started_at=db.parse_time(found.started_at),
         cost_usd=found.cost_usd,
         checks=[CiFixedCheck(pr_url=c.pr_url, name=c.name, next=c.next) for c in found.checks],
+        hours_to_green=_hours(found.to_green),
     )
 
 
@@ -369,6 +444,43 @@ def _round(found: review_report.Round) -> ReviewsRound:
         resumes=found.resumes,
         resume_cost_usd=found.resume_cost_usd,
     )
+
+
+def _plan(found: plan_report.PlanRow) -> PlansRow:
+    return PlansRow(
+        plan_id=found.plan_id,
+        ticket_key=found.ticket,
+        run_id=found.run_id,
+        created_at=db.parse_time(found.created_at),
+        size=found.size,
+        effort=found.effort,
+        level=_level(found.level),
+        outcome=_outcome(found.outcome),
+        approved_at=_time(found.approved_at),
+        hours_to_approve=_hours(found.to_approve),
+        edited=found.edited,
+        comments=found.comments,
+        earlier=found.earlier,
+        implemented=found.implemented,
+        resumes=found.resumes,
+        reasons={str(reason): n for reason, n in found.reasons.items()},
+        done=found.done,
+        cost_usd=found.cost_usd,
+    )
+
+
+# The vocabularies' values are the schema's literals, which `test_web_plan_report` holds them to.
+def _level(level: PlannerApproval | None) -> PlanLevel | None:
+    return cast("PlanLevel | None", None if level is None else str(level))
+
+
+def _outcome(outcome: plan_report.Outcome) -> PlanOutcome:
+    return cast("PlanOutcome", str(outcome))
+
+
+# A group's outcome, one of `plan_report.APPROVED` by how the report builds its groups.
+def _approved(outcome: plan_report.Outcome) -> Literal["planner", "as_written", "revised"]:
+    return cast("Literal['planner', 'as_written', 'revised']", str(outcome))
 
 
 def _time(stamp: str | None) -> datetime | None:

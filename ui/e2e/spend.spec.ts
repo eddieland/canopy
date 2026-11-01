@@ -316,8 +316,9 @@ test("a model's row opens the runs page on the runs of its kind it served", asyn
     await settled(page)
     await page.getByTestId('spend-model-table').getByRole('link', { name: 'anthropic/claude-opus-4-1' }).click()
     await expect(page).toHaveURL(/\/workspace\/runs\?model=anthropic(%2F|\/)claude-opus-4-1&kind=worker$/u)
-    // Run 39, which switched from opus to sonnet partway, and the seven opus served in the spring (history.py).
-    await expect(page.getByTestId('runs-count')).toHaveText('8')
+    // Run 39, which switched from opus to sonnet partway, and the one opus run of the spring (history.py) still among
+    // the 50 that ended last, which is all the runs page lists: September's plan runs (plan_approvals.py) came after.
+    await expect(page.getByTestId('runs-count')).toHaveText('2')
     await expect(page.getByTestId('run-39')).toBeVisible()
     // The model's picker, as the repository's, offers every model the runs listed name, and takes it off.
     await page.getByRole('button', { name: 'Filter by model: anthropic/claude-opus-4-1' }).click()

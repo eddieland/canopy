@@ -1,8 +1,8 @@
 """The reports (DESIGN §11, §42): what each local calendar month cost, in dollars and tokens, and what it got done.
 
 And how worker runs answered each repository's checklist over the last days, how the last days' runs ended, as
-`canopy health` reads them, what CI did on the PRs canopy observed, and where their review feedback came from. Reads
-only.
+`canopy health` reads them, what CI did on the PRs canopy observed, where their review feedback came from, and how
+plans were approved. Reads only.
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.checklist import ChecklistCounts
 from canopy.serve.schema.ci import CiReport
 from canopy.serve.schema.health import HealthReport
+from canopy.serve.schema.plan_report import PlansReport
 from canopy.serve.schema.reports import MonthlyReport
 from canopy.serve.schema.review_report import ReviewsReport
 
@@ -66,8 +67,9 @@ def checklist_counts(
 ) -> ChecklistCounts:
     """How the worker runs that started in the window answered each item of their repositories' lists.
 
-    As `canopy checklist` counts them: per repository and item, the runs reminded, then each answer. A held item's
-    reason is the worker's text, and stays on its run.
+    As `canopy checklist` counts them: per repository and item, the runs reminded, then each answer, with the newest
+    runs behind its `held` and `fixed` answers, each held one's reason the worker's text on a line. Then the same
+    counts per item and local ISO week of the window.
     """
     with backend.open() as ctx:
         return checklist_views.checklist_counts(backend, ctx, days, repo=repo)
@@ -122,3 +124,23 @@ def reviews_report(
     """Who reviewed the PRs canopy tracked, how soon first reviews came, the feedback rounds, and canopy's reviewer."""
     with backend.open() as ctx:
         return report_views.reviews_report(backend, ctx, days)
+
+
+@router.get("/reports/plans", operation_id="getPlansReport", summary="Get how the last days' plans were approved")
+def plans_report(
+    backend: BackendDep,
+    days: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=spending.MAX_DAYS,
+            description=f"How many local days to read, today's so far included: 1 to {spending.MAX_DAYS}.",
+        ),
+    ] = spending.DEFAULT_DAYS,
+) -> PlansReport:
+    """Each plan written in the window, how it was approved and how long that took, and the resumes its ticket needed.
+
+    Split by the level of `policy.planner_may_approve` each plan's run was offered, and by who approved it.
+    """
+    with backend.open() as ctx:
+        return report_views.plans_report(backend, ctx, days)

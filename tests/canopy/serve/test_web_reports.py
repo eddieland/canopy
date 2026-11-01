@@ -7,15 +7,27 @@ from datetime import UTC, datetime
 
 import pytest
 
-from canopy.core import db, health, records, runtime_sessions, spend
+from canopy.core import checklist_answers, db, health, pools, records, runtime_sessions, spend
+from canopy.core.checklist_answers import Answer, Checked
 from canopy.core.context import Context
-from canopy.core.vocab import CheckConclusion, ResumeReason, RunKind
+from canopy.core.vocab import CheckConclusion, ItemAnswer, PoolKind, ResumeReason, RunKind
 from canopy.infra import resources
+from canopy.runs import tasks
 from canopy.runtime.report import SessionPage, SessionSpend
 from canopy.serve import monthly
 from canopy.serve.backend import Backend
 from canopy.serve.mock import T0, history
-from tests.canopy.helpers import check_ran, context, earlier, journal_of_answers, kicked, worker_ran
+from tests.canopy.helpers import (
+    answered,
+    check_ran,
+    context,
+    earlier,
+    in_zone,
+    journal_of_answers,
+    kicked,
+    present,
+    worker_ran,
+)
 from tests.canopy.web_helpers import client, signed_in_client
 from tests.conftest import CanopyEnv
 
@@ -74,7 +86,7 @@ def test_each_month_counts_the_sessions_outside_canopy_as_the_budget_does(backen
 
 
 def test_the_checklist_counts_each_repositorys_items_as_the_cli_does(ctx: Context) -> None:
-    """Per repository and item over the last local days, `repo` narrowing it; a held item's reason is never sent."""
+    """Per repository and item over the last local days, `repo` narrowing it."""
     journal_of_answers(ctx.conn, datetime.now(UTC))
     c, _ = signed_in_client(ctx)
     found = c.get("/api/reports/checklist").json()
@@ -87,7 +99,9 @@ def test_the_checklist_counts_each_repositorys_items_as_the_cli_does(ctx: Contex
         ("api", "doc-comments", 3, 1, 0, 0, 0, 2),
         ("web", "no-any", 1, 0, 0, 1, 0, 0),
     ]
-    assert "Its reason." not in c.get("/api/reports/checklist", params={"days": 30}).text
+    # A held item's reason is sent beside the run that gave it, never counted.
+    month = c.get("/api/reports/checklist", params={"days": 30}).json()
+    assert [r["reason"] for r in month["items"][0]["held_runs"]] == ["Its reason."]
     today = c.get("/api/reports/checklist", params={"days": 1}).json()
     assert [(row["item"], row["reminded"]) for row in today["items"]] == [
         ("general-types", 1),
@@ -100,6 +114,76 @@ def test_the_checklist_counts_each_repositorys_items_as_the_cli_does(ctx: Contex
     assert c.get("/api/reports/checklist", params={"repo": "docs"}).json()["items"] == []
     for bad in ({"days": 0}, {"days": spend.MAX_DAYS + 1}, {"repo": "Not a repo"}):
         assert c.get("/api/reports/checklist", params=bad).status_code == 422
+
+
+def test_the_checklist_names_the_runs_behind_each_held_and_fixed_answer_and_counts_each_week(ctx: Context) -> None:
+    """The newest runs first, a worker's or a task's, a held one's reason on a line; every week of the window."""
+    now = datetime(2026, 10, 8, 12, tzinfo=UTC)  # a Thursday, in 2026-W41
+    a = ItemAnswer
+    answered(ctx.conn, earlier(now, 20), "api", general_types=a.HELD)  # before the window
+    before = answered(ctx.conn, earlier(now, 8), "api", general_types=a.HELD, newspaper=a.PASSED)  # 2026-W40
+    held_with(ctx, before, "general-types", "Typed by hand\n\tin ABC-112.")
+    last = answered(ctx.conn, earlier(now, 1), "api", general_types=a.FIXED, newspaper=a.HELD)  # 2026-W41
+    held_with(ctx, last, "newspaper", "Long. " * 100)
+    task = tasks.submit(ctx.conn, ctx.workspace, "Tidy the export.", repo="repo", project=None, channel="cli")
+    task_run = task_ran(ctx, task, earlier(now, 0, hours=2))
+    given = (Answer("api", "general-types", a.HELD, "The task's reason."), Answer("api", "newspaper", a.NOT_APPLICABLE))
+    checklist_answers.record(ctx.conn, task_run, Checked(answers=given), table="task_runs")
+    with in_zone("UTC"):
+        c, _ = signed_in_client(ctx, now=now)
+        found = c.get("/api/reports/checklist", params={"days": 14}).json()
+    general, newspaper = found["items"]
+    assert (general["item"], general["held"], general["fixed"]) == ("general-types", 2, 1)
+    assert [(r["kind"], r["id"], r["task_id"], r["reason"]) for r in general["held_runs"]] == [
+        ("task", task_run, task.id, "The task's reason."),
+        ("run", before, None, "Typed by hand in ABC-112."),
+    ]
+    assert general["held_runs"][0]["started_at"] == "2026-10-08T10:00:00Z"
+    assert [(r["kind"], r["id"], r["reason"]) for r in general["fixed_runs"]] == [("run", last, None)]
+    [cut] = newspaper["held_runs"]
+    assert (cut["id"], len(cut["reason"]), cut["reason"][-3:]) == (last, health.NOTE_LIMIT, "...")
+    assert newspaper["fixed_runs"] == []
+    # From the Friday the 14 days start on: three weeks, each item's every one, none skipped.
+    columns = ("item", "week", "reminded", "passed", "fixed", "held", "not_applicable", "unanswered")
+    assert [tuple(w[k] for k in columns) for w in found["weeks"]] == [
+        ("general-types", "2026-W39", 0, 0, 0, 0, 0, 0),
+        ("general-types", "2026-W40", 1, 0, 0, 1, 0, 0),
+        ("general-types", "2026-W41", 2, 0, 1, 1, 0, 0),
+        ("newspaper", "2026-W39", 0, 0, 0, 0, 0, 0),
+        ("newspaper", "2026-W40", 1, 1, 0, 0, 0, 0),
+        ("newspaper", "2026-W41", 2, 0, 0, 1, 1, 0),
+    ]
+    assert sum(w["held"] for w in found["weeks"]) == sum(i["held"] for i in found["items"])
+    narrowed = c.get("/api/reports/checklist", params={"days": 14, "repo": "web"}).json()
+    assert (narrowed["items"], narrowed["weeks"]) == ([], [])
+
+
+def held_with(ctx: Context, run_id: int, item: str, reason: str) -> None:
+    """The reason run `run_id` gave for holding `item`, in place of `answered`'s own."""
+    query = records.update(records.ChecklistAnswer).set(reason=reason)
+    query.where("run_id = ? AND item = ?", run_id, item).run(ctx.conn)
+
+
+def task_ran(ctx: Context, task: records.Task, started: str) -> int:
+    """A run of `task` that started at `started`, as a tick starts one; its id."""
+    lease = pools.Lease(
+        path=ctx.workspace.root / "slot",
+        lease_id=f"lease-{task.id}",
+        lease_holder=tasks.holder(task.id),
+        leased_at=db.now(),
+        base_branch="main",
+    )
+    run_id = tasks.insert_run(
+        ctx.conn,
+        task=task,
+        tick_id=db.start_tick(ctx.conn, dry_run=False),
+        branch_name=tasks.branch(ctx.config.trust.branch_prefix, task.id),
+        lease=lease,
+        pool=PoolKind.TREEHOUSE,
+        logs_dir=ctx.state_dir / "task-runs",
+    )
+    records.update(records.TaskRun).set(started_at=started).where("id = ?", run_id).run(ctx.conn)
+    return present(run_id)
 
 
 def test_the_mock_counts_its_two_lists(backend: Backend) -> None:
@@ -234,3 +318,52 @@ def test_the_ci_report_reads_kicks_fixes_and_the_cooldown_from_the_journal(canop
     ]
     assert found["max_flaky_kicks"] == 2
     assert found["cooldown"] == {"guard": "cooldown", "decisions": 2, "ticks": 1, "last_tick": tick}
+
+
+def test_the_ci_report_reads_reruns_heads_by_day_and_time_to_green(canopy_env: CanopyEnv) -> None:
+    """A rerun that passed on one head, two heads first checked on one day, and a PR green two heads after its red."""
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    conn, now = ctx.conn, datetime.now(UTC)
+    flaky, fixed = "https://github.com/acme/web/pull/7", "https://github.com/acme/web/pull/8"
+    worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 4), prs={"web": flaky})
+    worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 4), key="PROJ-2", prs={"web": fixed})
+    # PR 7's `e2e` failed and passed on a rerun at the same head an hour later.
+    check_ran(conn, flaky, "h1", "e2e", CheckConclusion.FAILURE, earlier(now, 3))
+    check_ran(conn, flaky, "h1", "unit", CheckConclusion.SUCCESS, earlier(now, 3))
+    check_ran(conn, flaky, "h1", "e2e", CheckConclusion.SUCCESS, earlier(now, 3, -1))
+    # PR 8 went red on two heads first checked together, and green on the head after them, a day later.
+    check_ran(conn, fixed, "g1", "unit", CheckConclusion.FAILURE, earlier(now, 2))
+    check_ran(conn, fixed, "g2", "unit", CheckConclusion.FAILURE, earlier(now, 2))
+    fix = worker_ran(
+        conn,
+        RunKind.RESUME,
+        earlier(now, 2, -1),
+        key="PROJ-2",
+        prs={"web": fixed},
+        reasons=(ResumeReason.CI,),
+    )
+    check_ran(conn, fixed, "g3", "unit", CheckConclusion.SUCCESS, earlier(now, 1))
+    c, _ = signed_in_client(ctx)
+    found = c.get("/api/reports/ci").json()
+    assert [(k["name"], k["runs"], k["red"], k["reruns"], k["reruns_green"]) for k in found["checks"]] == [
+        ("unit", 4, 2, 0, 0),
+        ("e2e", 2, 1, 1, 1),
+    ]
+    by_day = {d["day"]: (d["heads"], d["green_first"]) for d in found["per_day"] if d["heads"]}
+    assert by_day == {
+        spend.local_day(earlier(now, 3)): (1, 0),
+        spend.local_day(earlier(now, 2)): (2, 0),
+        spend.local_day(earlier(now, 1)): (1, 1),
+    }
+    assert [(p["url"], p["ticket_key"], p["hours_to_green"]) for p in found["pull_requests"]] == [
+        (fixed, "PROJ-2", pytest.approx(24)),
+        (flaky, "PROJ-1", pytest.approx(1)),
+    ]
+    [pr] = [p for p in found["pull_requests"] if p["url"] == fixed]
+    assert (db.parse_time(pr["red_at"]), db.parse_time(pr["green_at"])) == (
+        db.parse_time(earlier(now, 2)),
+        db.parse_time(earlier(now, 1)),
+    )
+    assert found["median_hours_to_green"] == pytest.approx(12.5)
+    assert [(f["run_id"], f["hours_to_green"]) for f in found["fixes"]] == [(fix, pytest.approx(24))]

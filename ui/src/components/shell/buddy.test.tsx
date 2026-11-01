@@ -1,4 +1,3 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import {
     createMemoryHistory,
     createRootRoute,
@@ -7,11 +6,13 @@ import {
     Outlet,
     RouterProvider,
 } from '@tanstack/react-router'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ANYWHERE, nextTip, RAVE, setCompanion, STORAGE_KEY, TIPS, tipsFor, VOICES } from '@/lib/buddy'
 import { GHOST_ANYWHERE, GHOST_RAVE, GHOST_TIPS } from '@/lib/ghost'
 import { setRave } from '@/lib/rave'
+import { setSeasons } from '@/lib/seasons'
 
 import { Buddy } from './buddy'
 
@@ -134,6 +135,14 @@ describe('Buddy', () => {
         vi.setSystemTime(new Date(2026, 9, 30, 12))
         await renderBuddy('/attention')
         expect(screen.getByTestId('buddy-season').dataset['season']).toBe('halloween')
+    })
+
+    it('stands no season beside Sprig once Settings turns the seasons off', async () => {
+        vi.setSystemTime(new Date(2026, 9, 30, 12))
+        act(() => setSeasons('off'))
+        await renderBuddy('/attention')
+        expect(screen.queryByTestId('buddy-season')).toBeNull()
+        act(() => setSeasons('on'))
     })
 
     describe("with the Ghost in Sprig's place", () => {

@@ -1,11 +1,11 @@
 import { QueryClient } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import type { AnyRouter } from '@tanstack/react-router'
+import { act, cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { keys } from '@/api/queries'
 import { mockTickets } from '@/api/mocks'
+import { keys } from '@/api/queries'
 import type { TicketSummary } from '@/api/types'
 import { parseRecent, STORAGE_KEY } from '@/lib/recent-tickets'
 import { renderRouted } from '@/test-utils'

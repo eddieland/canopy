@@ -14,16 +14,17 @@ import type { LucideIcon } from 'lucide-react'
 import { Fragment } from 'react'
 import type { CSSProperties } from 'react'
 
-import { attentionQuery, loopQuery, reviewsQuery } from '@/api/queries'
+import { loopQuery, reviewsQuery } from '@/api/queries'
 import type { ReviewSummary } from '@/api/types'
+import { useAttention } from '@/hooks/use-attention'
 import { useSection } from '@/hooks/use-section'
 import { breakdown, breakdownText, countBySeverity } from '@/lib/attention'
 import type { BreakdownPart, Severity } from '@/lib/attention'
 import { counted } from '@/lib/descriptions'
 import { verdictTone } from '@/lib/reviews'
-import { unseenOf, unseenText, worstOf } from '@/lib/seen-reviews'
 import { SECTION_FILL, SECTION_LABEL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
+import { unseenOf, unseenText, worstOf } from '@/lib/seen-reviews'
 import { cn } from '@/lib/utils'
 
 // Each part of the attention count's color: broken in the failure color, waiting on the operator's answer in theirs.
@@ -45,6 +46,7 @@ interface SubPage {
         | '/reports/health'
         | '/reports/ci'
         | '/reports/reviews'
+        | '/reports/plans'
     label: string
     hint: string
 }
@@ -106,7 +108,7 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
         icon: ChartColumn,
         hint:
             'What canopy cost and got done month by month, what agent runs cost each day and how they ended, ' +
-            'how workers answered your checklists, which checks fail, and who reviews',
+            'how workers answered your checklists, which checks fail, who reviews, and how plans were approved',
         pages: [
             {
                 to: '/reports/spend',
@@ -132,6 +134,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
                 to: '/reports/reviews',
                 label: 'Reviews',
                 hint: "Who reviews, how soon first reviews come, the feedback rounds, and canopy's reviewer",
+            },
+            {
+                to: '/reports/plans',
+                label: 'Plans',
+                hint: 'How plans were approved, by the planner or by you, and whether their PRs needed a resume',
             },
         ],
     },
@@ -177,7 +184,7 @@ const SECTION_ACTIVE_INK: Record<Section, string> = {
  * under a section, so the section stays active on them.
  */
 export function Nav({ compact = false }: { compact?: boolean }) {
-    const attention = useQuery(attentionQuery)
+    const attention = useAttention()
     const counts = attention.data === undefined ? undefined : countBySeverity(attention.data)
     const waiting = useQuery(loopQuery).data?.memory?.proposals_waiting ?? 0
     const unseen = unseenOf(useQuery(reviewsQuery).data)

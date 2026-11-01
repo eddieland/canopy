@@ -954,8 +954,9 @@ export type paths = {
          * Get the checklist's counts
          * @description How the worker runs that started in the window answered each item of their repositories' lists.
          *
-         *     As `canopy checklist` counts them: per repository and item, the runs reminded, then each answer. A held item's
-         *     reason is the worker's text, and stays on its run.
+         *     As `canopy checklist` counts them: per repository and item, the runs reminded, then each answer, with the newest
+         *     runs behind its `held` and `fixed` answers, each held one's reason the worker's text on a line. Then the same
+         *     counts per item and local ISO week of the window.
          */
         get: operations["getChecklistCounts"];
         put?: never;
@@ -1018,6 +1019,28 @@ export type paths = {
          * @description What each month cost by kind and by model, its tokens, and the tickets it landed with what each took.
          */
         get: operations["getMonthlyReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reports/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get how the last days' plans were approved
+         * @description Each plan written in the window, how it was approved and how long that took, and the resumes its ticket needed.
+         *
+         *     Split by the level of `policy.planner_may_approve` each plan's run was offered, and by who approved it.
+         */
+        get: operations["getPlansReport"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2529,6 +2552,11 @@ export type components = {
             option: string;
         };
         /**
+         * @description Whose run gave a checklist answer: a worker's, or a one-off task's (DESIGN §36).
+         * @enum {string}
+         */
+        AnsweringRun: "run" | "task";
+        /**
          * AnswerRequest
          * @description The operator's answer to a running run's question, as `canopy reply run:ID LETTER` takes it.
          */
@@ -2798,12 +2826,18 @@ export type components = {
              * @description When it ends: local midnight after today.
              */
             until: string;
+            /**
+             * Weeks
+             * @description A row per item of `items` and ISO week the window touches, none skipped: the items in `items`' order, each
+             *     one's weeks oldest first.
+             */
+            weeks: components["schemas"]["ChecklistWeek"][];
         };
         /**
          * ChecklistItemCounts
          * @description How the worker runs of a window answered one item of one repository's checklist, by answer.
          *
-         *     Counts only: a `held` answer's reason is the worker's text, which stays on its run.
+         *     With the newest runs behind its `held` and `fixed` answers, and the reason each one held it.
          */
         ChecklistItemCounts: {
             /**
@@ -2812,10 +2846,20 @@ export type components = {
              */
             fixed: number;
             /**
+             * Fixed Runs
+             * @description The runs that answered `fixed`, the newest first, at most twenty: `fixed` counts them all.
+             */
+            fixed_runs: components["schemas"]["ChecklistRun"][];
+            /**
              * Held
              * @description How many answered `held`: the diff does not, and the run left it so, for a reason it gave.
              */
             held: number;
+            /**
+             * Held Runs
+             * @description The runs that answered `held`, the newest first, at most twenty: `held` counts them all.
+             */
+            held_runs: components["schemas"]["ChecklistRun"][];
             /**
              * Item
              * @description The item's id, as the operator's list names it: untrusted text, as every journal string is.
@@ -2846,6 +2890,87 @@ export type components = {
              * @description How many said nothing of it in their result.
              */
             unanswered: number;
+        };
+        /**
+         * ChecklistRun
+         * @description A run of the window that gave an item an answer: a worker's or a task's, with the reason it held it.
+         */
+        ChecklistRun: {
+            /**
+             * Id
+             * @description The run's id: a worker run's, or the task's run's.
+             */
+            id: number;
+            /** @description Whose run it is. */
+            kind: components["schemas"]["AnsweringRun"];
+            /**
+             * Reason
+             * @description Why it left the item failing, for a `held` answer: the worker's words, untrusted, on one line and cut as the
+             *     health report cuts a note; its run's page has them whole. None for a `fixed` one.
+             */
+            reason: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             * @description When it started, by which the window holds it.
+             */
+            started_at: string;
+            /**
+             * Task Id
+             * @description The task a task's run is of; None for a worker's.
+             */
+            task_id: number | null;
+        };
+        /**
+         * ChecklistWeek
+         * @description How the runs that started in one local ISO week of the window answered one item, by answer.
+         */
+        ChecklistWeek: {
+            /**
+             * Fixed
+             * @description How many answered `fixed`.
+             */
+            fixed: number;
+            /**
+             * Held
+             * @description How many answered `held`.
+             */
+            held: number;
+            /**
+             * Item
+             * @description The item's id, as the operator's list names it: untrusted text.
+             */
+            item: string;
+            /**
+             * Not Applicable
+             * @description How many answered `n/a`.
+             */
+            not_applicable: number;
+            /**
+             * Passed
+             * @description How many answered `pass`.
+             */
+            passed: number;
+            /**
+             * Reminded
+             * @description How many runs of the week were given the item; 0 for a week none was.
+             */
+            reminded: number;
+            /**
+             * Repo
+             * @description The repository whose list holds the item.
+             */
+            repo: string;
+            /**
+             * Unanswered
+             * @description How many said nothing of it.
+             */
+            unanswered: number;
+            /**
+             * Week
+             * @description The ISO week, `2026-W41`, of canopy's clock: Monday to Sunday. The window's first and last may be part weeks.
+             */
+            week: string;
         };
         /**
          * ChoreDetail
@@ -3279,6 +3404,16 @@ export type components = {
              */
             red: number;
             /**
+             * Reruns
+             * @description Its runs in the window on a head of a PR where a run of it was red before: reruns with no change to the code.
+             */
+            reruns: number;
+            /**
+             * Reruns Green
+             * @description Of those, the green ones: a check that passed on a head it had failed on, flaky without anyone's say-so.
+             */
+            reruns_green: number;
+            /**
              * Runs
              * @description Its runs a source observed completed in the window.
              */
@@ -3286,7 +3421,7 @@ export type components = {
         };
         /**
          * CiDay
-         * @description One local day of the window: its red check runs, by the chart's series.
+         * @description One local day of the window: its red check runs, by the chart's series, and the PR heads first checked on it.
          */
         CiDay: {
             /**
@@ -3294,6 +3429,16 @@ export type components = {
              * @description The day, `YYYY-MM-DD`, in the local time of the machine canopy runs on.
              */
             day: string;
+            /**
+             * Green First
+             * @description Of those, the heads whose first run of every check was not red.
+             */
+            green_first: number;
+            /**
+             * Heads
+             * @description The PR heads whose first check run was observed on the day, counted as `CiReport.heads` counts them.
+             */
+            heads: number;
             /**
              * Red
              * @description Each series' red runs, in `CiReport.series` order.
@@ -3321,6 +3466,12 @@ export type components = {
              * @description What it cost, in US dollars; None when it reported none.
              */
             cost_usd: number | null;
+            /**
+             * Hours To Green
+             * @description The longest time to green of the spells of red its PRs were in when it started, as `CiPullRequest` measures
+             *     one; None while one of them is still red, or when none was red.
+             */
+            hours_to_green: number | null;
             /**
              * Kind
              * @description Its kind: `resume`, or `fix-ci` for a run from before a `resume` fixed CI.
@@ -3455,6 +3606,46 @@ export type components = {
             url: string;
         };
         /**
+         * CiPullRequest
+         * @description A PR with a check run observed in the window, and how long it stayed red.
+         */
+        CiPullRequest: {
+            /**
+             * Green At
+             * @description When that spell ended: its first head from the red one on with no check's last red or green run red and one
+             *     green, at the observation of the last of those; None while it lasts, or when none was red.
+             */
+            green_at: string | null;
+            /**
+             * Hours To Green
+             * @description From `red_at` to `green_at`, in hours; None without both. Approximate: each time is when a source saw a run
+             *     completed, not when it finished, and a head whose other checks still run reads green until one is seen red.
+             */
+            hours_to_green: number | null;
+            /**
+             * Phase
+             * @description Its unit's phase (DESIGN §7); None for a PR no unit of the loop's has.
+             */
+            phase: string | null;
+            /**
+             * Red At
+             * @description When its latest spell of red began: the first red run a source observed on it after the spell before ended;
+             *     None when none was red.
+             */
+            red_at: string | null;
+            /**
+             * Ticket Key
+             * @description The ticket that owns it: its unit's, else the ticket of the first run that named it; None for a PR no run
+             *     named.
+             */
+            ticket_key: string | null;
+            /**
+             * Url
+             * @description The PR.
+             */
+            url: string;
+        };
+        /**
          * CiReport
          * @description Which checks failed in the window, what fixing them cost, and whether the flaky kicks worked.
          */
@@ -3502,10 +3693,20 @@ export type components = {
              */
             max_flaky_kicks: number;
             /**
+             * Median Hours To Green
+             * @description The median of `pull_requests`' hours to green, over those that went green; None with none.
+             */
+            median_hours_to_green: number | null;
+            /**
              * Per Day
              * @description Every day of the window, oldest first.
              */
             per_day: components["schemas"]["CiDay"][];
+            /**
+             * Pull Requests
+             * @description Still red first, the oldest red first; then the longest time to green first; then those never red.
+             */
+            pull_requests: components["schemas"]["CiPullRequest"][];
             /**
              * Series
              * @description The check names the red-by-day chart names apart, the most often red first, then None for every other check
@@ -6312,6 +6513,16 @@ export type components = {
             text: string | null;
         };
         /**
+         * @description A level of `policy.planner_may_approve` (DESIGN §25): `off` where the planner was asked nothing.
+         * @enum {string}
+         */
+        PlanLevel: "off" | "strict" | "normal" | "lenient";
+        /**
+         * @description How a plan went: approved by its `planner`, by the operator `as_written` or `revised` (edited, commented on, or after an earlier plan was sent back), `replaced` by a newer plan, `dropped` with none after, or `waiting` on the operator.
+         * @enum {string}
+         */
+        PlanOutcome: "planner" | "as_written" | "revised" | "replaced" | "dropped" | "waiting";
+        /**
          * PlanReplyRequest
          * @description A reply in a comment thread on a plan.
          */
@@ -6375,6 +6586,227 @@ export type components = {
              * @description Its size in bytes.
              */
             size: number;
+        };
+        /**
+         * PlansGroup
+         * @description The window's approved plans of one level and one outcome, and what their tickets needed after.
+         */
+        PlansGroup: {
+            /**
+             * Done
+             * @description Those whose ticket the loop marked done, so their count is final.
+             */
+            done: number;
+            /**
+             * Implemented
+             * @description Those an `implement` followed.
+             */
+            implemented: number;
+            /** @description The level their plan runs were offered; None for the runs that kept none. */
+            level: components["schemas"]["PlanLevel"] | null;
+            /**
+             * Median Hours To Approve
+             * @description The median of their times to approval, in hours; None with none.
+             */
+            median_hours_to_approve: number | null;
+            /**
+             * Median Size
+             * @description The median of their sizes, in bytes.
+             */
+            median_size: number;
+            /**
+             * Outcome
+             * @description How they were approved.
+             * @enum {string}
+             */
+            outcome: "planner" | "as_written" | "revised";
+            /**
+             * Plans
+             * @description How many.
+             */
+            plans: number;
+            /**
+             * Resumes
+             * @description The `resume` runs their tickets started once they were approved.
+             */
+            resumes: number;
+            /**
+             * With Resume
+             * @description Of those, the ones whose ticket needed at least one `resume`.
+             */
+            with_resume: number;
+        };
+        /**
+         * PlansLength
+         * @description The window's plans the operator approved, of one size, and how long approving them took.
+         */
+        PlansLength: {
+            /**
+             * As Written
+             * @description Of those, the ones approved as written.
+             */
+            as_written: number;
+            /**
+             * High
+             * @description The size it holds up to, not included, in bytes; None for the largest.
+             */
+            high: number | null;
+            /**
+             * Low
+             * @description The smallest size it holds, in bytes.
+             */
+            low: number;
+            /**
+             * Median Hours To Approve
+             * @description The median of their times to approval, in hours.
+             */
+            median_hours_to_approve: number | null;
+            /**
+             * Plans
+             * @description How many.
+             */
+            plans: number;
+        };
+        /**
+         * PlansReport
+         * @description How the window's plans were approved, by the level their planners were offered, and what their PRs needed.
+         */
+        PlansReport: {
+            /**
+             * Days
+             * @description How many local days the window holds, today's so far included.
+             */
+            days: number;
+            /**
+             * Groups
+             * @description By level, `off` to `lenient`, then none kept; within each, the planner's, as written, then revised.
+             */
+            groups: components["schemas"]["PlansGroup"][];
+            /**
+             * Lengths
+             * @description The smallest first; only those with a plan.
+             */
+            lengths: components["schemas"]["PlansLength"][];
+            /** @description The level `policy.planner_may_approve` is at now, for the page to say beside the levels the plans were at. */
+            level: components["schemas"]["PlanLevel"];
+            /**
+             * Outcomes
+             * @description How many of the window's plans went each way, every outcome named, 0 for none.
+             */
+            outcomes: {
+                [key: string]: number;
+            };
+            /**
+             * Plans
+             * @description The newest first.
+             */
+            plans: components["schemas"]["PlansRow"][];
+            /**
+             * Since
+             * Format: date-time
+             * @description When the window starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: local midnight after today.
+             */
+            until: string;
+        };
+        /**
+         * PlansRow
+         * @description A ticket plan written in the window: how it went, how long approving it took, and what its ticket needed.
+         */
+        PlansRow: {
+            /**
+             * Approved At
+             * @description When it was approved; None when it was not.
+             */
+            approved_at: string | null;
+            /**
+             * Comments
+             * @description The operator's comments and replies on its ticket's plan while it was the ticket's plan.
+             */
+            comments: number;
+            /**
+             * Cost Usd
+             * @description What its own run cost, in US dollars; None when it reported none.
+             */
+            cost_usd: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When it was written.
+             */
+            created_at: string;
+            /**
+             * Done
+             * @description Whether the loop has marked its ticket done, so its resumes are all in.
+             */
+            done: boolean;
+            /**
+             * Earlier
+             * @description Its ticket's plans before it, which it replaced.
+             */
+            earlier: number;
+            /**
+             * Edited
+             * @description Whether its file was edited before its approval.
+             */
+            edited: boolean;
+            /**
+             * Effort
+             * @description How much work its planner judged it, `small`, `medium`, or `large`; None when it gave no estimate.
+             */
+            effort: string | null;
+            /**
+             * Hours To Approve
+             * @description From when it was written to its approval, in hours; None when it was not approved.
+             */
+            hours_to_approve: number | null;
+            /**
+             * Implemented
+             * @description Whether an `implement` followed it.
+             */
+            implemented: boolean;
+            /** @description The level its plan run's prompt offered its planner; None for a run from before canopy kept it. */
+            level: components["schemas"]["PlanLevel"] | null;
+            /** @description How it went. */
+            outcome: components["schemas"]["PlanOutcome"];
+            /**
+             * Plan Id
+             * @description The plan.
+             */
+            plan_id: number;
+            /**
+             * Reasons
+             * @description How many of those named each reason, `ci`, `review`, `reply`, `conflict`, `no_pr`, or `retarget`; a resume may
+             *     name several.
+             */
+            reasons: {
+                [key: string]: number;
+            };
+            /**
+             * Resumes
+             * @description The `resume` runs its ticket started once it was approved.
+             */
+            resumes: number;
+            /**
+             * Run Id
+             * @description The plan run that wrote it.
+             */
+            run_id: number;
+            /**
+             * Size
+             * @description Its file's size as its planner wrote it, in bytes.
+             */
+            size: number;
+            /**
+             * Ticket Key
+             * @description Its ticket.
+             */
+            ticket_key: string;
         };
         /**
          * PlanSummary
@@ -15009,6 +15441,83 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonthlyReport"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getPlansReport: {
+        parameters: {
+            query?: {
+                /** @description How many local days to read, today's so far included: 1 to 366. */
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlansReport"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

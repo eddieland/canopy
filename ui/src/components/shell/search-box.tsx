@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from 'react'
 
 import { SearchField } from '@/components/input'
 import { Kbd } from '@/components/ui/kbd'
-import { JumpButton } from './jump-palette'
 import { parseTaskRef } from '@/lib/refs'
 import { isSearchShortcut, SEARCH_DEBOUNCE_MS, SEARCH_MAX, searchQueryOf } from '@/lib/search'
+
+import { JumpButton } from './jump-palette'
 
 /**
  * The search box atop the nav, on every page (DESIGN §22, Search). `/` focuses it from anywhere but a text field, and

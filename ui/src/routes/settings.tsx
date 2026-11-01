@@ -24,6 +24,7 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { setFindingsHidden, useFindingsHidden } from '@/lib/attention-findings'
 import { NAMES, setBuddy, setCompanion, useBuddy, useCompanion } from '@/lib/buddy'
 import type { Companion } from '@/lib/buddy'
 import { setClock, useClock } from '@/lib/clock'
@@ -35,16 +36,17 @@ import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
 import { setRave, useRave } from '@/lib/rave'
 import { dropDrafts } from '@/lib/reply-draft'
+import { setReviewPersonas, usablePersonas, useReviewPersonas } from '@/lib/review-personas'
 import { dropReviewRequestDraft } from '@/lib/review-request-draft'
 import { setQuips, useQuips } from '@/lib/run-phase'
-import { setReviewPersonas, usablePersonas, useReviewPersonas } from '@/lib/review-personas'
+import { setSeasons, useSeasons } from '@/lib/seasons'
 import { setSendKey, useSendKey } from '@/lib/send-key'
+import type { SendKey } from '@/lib/send-key'
 import { buy as buyShell, SHELLS, setVault, shellsCents, useVault } from '@/lib/shells'
 import type { Shell } from '@/lib/shells'
-import type { SendKey } from '@/lib/send-key'
-import { stamp, useNow } from '@/lib/time'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
 import type { TickerSpeed } from '@/lib/ticker-settings'
+import { stamp, useNow } from '@/lib/time'
 import { balanceCents } from '@/lib/wallet'
 import { usePalettes } from '@/theme/palette'
 import type { Palette } from '@/theme/palette'
@@ -53,7 +55,8 @@ import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
 /**
- * What this browser keeps (the theme, the clock, the send key, the review personas, the fun, the session), the limits
+ * What this browser keeps (the theme, the clock, the send key, chores' findings on the attention list, the review
+ * personas, the fun, the session), the limits
  * and trust settings of the workspace's config, and reloading the loop's config.
  */
 export const Route = createFileRoute('/settings')({
@@ -116,12 +119,14 @@ function SettingsPage() {
     return (
         <>
             <PageHeader title="Settings">
-                The theme, the clock, the send key, your review personas, and the fun are kept in this browser.
-                Everything else canopy reads from its config files, whose limits and trust settings can be changed here.
+                The theme, the clock, the send key, chores&apos; findings on the attention list, your review personas,
+                and the fun are kept in this browser. Everything else canopy reads from its config files, whose limits
+                and trust settings can be changed here.
             </PageHeader>
             <ThemePanel />
             <ClockPanel />
             <SendKeyPanel />
+            <AttentionPanel />
             <ReviewsPanel />
             <NoticePanel />
             <LimitsPanel />
@@ -205,15 +210,17 @@ function PaletteRow<T extends ResolvedTheme>({
 }
 
 /**
- * The fun, in one place: an on/off for the ticker, for Sprig (named for whoever sits in its place), and for the rail's
- * quips, then who sits at the foot of the rail, picked whether it is on or not, since picking one turns it on, then the
- * ticker's pace, the pause between its headlines, and the topics they are drawn from. Its header hides a light switch.
+ * The fun, in one place: an on/off for the ticker, for Sprig (named for whoever sits in its place), for the seasons'
+ * decorations, and for the rail's quips, then who sits at the foot of the rail, picked whether it is on or not, since
+ * picking one turns it on, then the ticker's pace, the pause between its headlines, and the topics they are drawn
+ * from. Its header hides a light switch.
  */
 function FunPanel() {
     const { on, speed, gap, hidden } = useTickerSettings()
     const buddy = useBuddy()
     const companion = useCompanion()
     const quips = useQuips()
+    const seasons = useSeasons()
     return (
         <Panel>
             <PanelHeader label="Fun">
@@ -223,7 +230,8 @@ function FunPanel() {
                 <p id="fun-items" className="max-w-3xl text-sm text-muted-foreground">
                     The ticker crawls joke headlines across the header. Sprig, at the foot of the side rail, or a Ghost
                     in its place, has a tip for every page; none of them help. Each sits out a window with no room for
-                    it. Quips say what each run in the rail is doing, in words of their own.
+                    it. Seasons dress the rail and the logo for the holidays, Sprig or no Sprig. Quips say what each run
+                    in the rail is doing, in words of their own.
                 </p>
                 <fieldset aria-labelledby="fun-items" className="flex shrink-0 items-center gap-4">
                     <label htmlFor="fun-ticker" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
@@ -243,6 +251,15 @@ function FunPanel() {
                             onCheckedChange={(checked) => setBuddy(checked === true ? 'on' : 'off')}
                         />
                         {NAMES[companion]}
+                    </label>
+                    <label htmlFor="fun-seasons" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
+                        <Checkbox
+                            id="fun-seasons"
+                            checked={seasons === 'on'}
+                            data-testid="fun-seasons"
+                            onCheckedChange={(checked) => setSeasons(checked === true ? 'on' : 'off')}
+                        />
+                        Seasons
                     </label>
                     <label htmlFor="fun-quips" className="inline-flex items-center gap-2 text-xs whitespace-nowrap">
                         <Checkbox
@@ -691,6 +708,40 @@ function SendKeyPanel() {
                         </ToggleGroupItem>
                     ))}
                 </ToggleGroup>
+            </div>
+        </Panel>
+    )
+}
+
+/**
+ * Whether the attention list shows chores' findings: its page, its counter, and the nav's badge. This browser's alone;
+ * `canopy status` and the loop never read it, and each chore's page lists its findings either way.
+ */
+function AttentionPanel() {
+    const hidden = useFindingsHidden()
+    return (
+        <Panel id="attention">
+            <PanelHeader label="Attention" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p id="attention-findings-about" className="max-w-3xl text-sm text-muted-foreground">
+                    Leave what your chores find off the attention list, its count, and the nav&apos;s badge, so the list
+                    holds only what needs you. Each chore&apos;s page still lists its findings, and the attention page
+                    says how many it leaves out. Only this browser hides them: <Code>canopy status</Code> lists them
+                    all.
+                </p>
+                <label
+                    htmlFor="attention-findings"
+                    className="inline-flex shrink-0 items-center gap-2 text-xs whitespace-nowrap"
+                >
+                    <Checkbox
+                        id="attention-findings"
+                        checked={hidden}
+                        aria-describedby="attention-findings-about"
+                        data-testid="attention-findings"
+                        onCheckedChange={(checked) => setFindingsHidden(checked === true)}
+                    />
+                    Hide chore findings
+                </label>
             </div>
         </Panel>
     )

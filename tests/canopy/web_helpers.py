@@ -1,6 +1,8 @@
 """Helpers the web UI's tests share: a browser of the server, signed in or not (DESIGN §22)."""
 
+import dataclasses
 import socket  # noqa: TID251  (a test asks the OS for a free port; canopy itself opens no socket)
+from datetime import datetime
 from pathlib import Path
 
 import httpx2
@@ -55,14 +57,18 @@ def signed_in_client(
     asked: tick_now.TickNow | None = None,
     *,
     every: int | None = None,
+    now: datetime | None = None,
 ) -> tuple[TestClient, dict[str, str]]:
     """A browser signed in to a server over `ctx`'s journal, as the loop builds it, and the headers a write needs.
 
-    `every` is `canopy loop --every`'s minutes, as the loop hands them to the server.
+    `every` is `canopy loop --every`'s minutes, as the loop hands them to the server; `now`, when given, is the
+    server's clock, stopped there.
     """
     options = ServeOptions(port=8765)
     sessions = Sessions(SECRET, port=options.port, base_path="", hosts=options.hosts)
     backend = web.backend(ctx, reload or reread.Reload(), asked or tick_now.TickNow(), every)
+    if now is not None:
+        backend = dataclasses.replace(backend, clock=lambda: now)
     c = TestClient(create_app(options, backend, sessions), base_url=ORIGIN)
     return c, signed_in(c)
 

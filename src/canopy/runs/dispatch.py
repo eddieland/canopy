@@ -38,9 +38,8 @@ from canopy.core import (
     sandboxing,
     ticket_models,
 )
-from canopy.core.config import PlannerApproval
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import PoolKind, RecordedKind, ResumeReason, RunKind, RunStatus, StartStatus
+from canopy.core.vocab import PlannerApproval, PoolKind, RecordedKind, ResumeReason, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.infra.text import quoted
@@ -1095,6 +1094,12 @@ def _spawn(
     desk = desk_path(ctx, key) if in_desk(kind, plan.repos) else None
     # A plan and a feedback plan each write a plan, with one prompt for public and private tickets.
     planning = kind in (policy.PLAN, policy.FEEDBACK_PLAN)
+    # The level the planner is asked at, kept on its run so a report can split plans by it (DESIGN §25).
+    offered = (
+        cfg.policy.planner_may_approve
+        if planning and cfg.policy.planner_approves() and plan_guards.planner_may_approve(ctx, key, kind)
+        else PlannerApproval.OFF
+    )
     prs = _unit_prs(ctx, key)
     bases = {s.base_branch for s in slots}
     repliers = ", ".join(f"`{r}`" for r in cfg.trust.authorized_repliers)
@@ -1132,12 +1137,7 @@ def _spawn(
         "MAX_PLAN_CHARS": f"{plans.MAX_CHARS:,}",
         "REASONS": prompts.reasons_note(tuple(reasons), private=plan.private),
         "FOLLOW_UPS": _follow_ups_note(ctx, key, private=plan.private),
-        "PLAN_REVIEW": prompts.plan_review(
-            cfg.policy.planner_may_approve
-            if planning and cfg.policy.planner_approves() and plan_guards.planner_may_approve(ctx, key, kind)
-            else PlannerApproval.OFF,
-            feedback=kind == policy.FEEDBACK_PLAN,
-        ),
+        "PLAN_REVIEW": prompts.plan_review(offered, feedback=kind == policy.FEEDBACK_PLAN),
     }
     if kind == policy.FEEDBACK_PLAN:
         values |= {
@@ -1223,6 +1223,7 @@ def _spawn(
         persona_digest=persona.digest if persona is not None else None,
         persona_text=persona.text if persona is not None else None,
         model=model,
+        plan_review=offered if planning else None,
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
