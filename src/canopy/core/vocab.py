@@ -213,8 +213,10 @@ class FlakyCause(StrEnum):
 
     #: A test in the repository that fails now and then whatever the change: a race, an order dependence, a timeout.
     TEST = "test"
-    #: CI's own machinery: a lost runner, a download or registry that timed out, a service the job calls that was down.
-    INFRA = "infra"
+    #: The machine the job ran on: a lost runner, one out of memory or disk, a job past its time limit.
+    RUNNER = "runner"
+    #: Something the job reached over the network: a package registry, a third-party API, a rate limit.
+    SERVICE = "service"
 
 
 class Proposal(StrEnum):

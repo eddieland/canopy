@@ -104,9 +104,9 @@ class CiFlaky(TypedDict):
     prs: list[str]
     #: The repositories whose branch canopy pushed again to rerun the check; empty when the operator reruns it.
     kicked: list[str]
-    #: The worker's estimate of why the check is flaky, with its evidence: model text, cut to one line.
+    #: The worker's estimate of why the check is flaky, its `flaky_detail` or else its summary: model text, one line.
     estimate: str
-    #: Where the worker judged the check failed, `test` or `infra`, or None when it was not sure.
+    #: Where the worker judged the check failed, `test`, `runner`, or `service`, or None when it was not sure.
     cause: str | None
     #: Why a repository was not kicked, in the harness's words, or None.
     note: str | None

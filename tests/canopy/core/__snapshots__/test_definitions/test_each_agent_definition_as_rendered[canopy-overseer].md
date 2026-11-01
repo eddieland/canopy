@@ -349,8 +349,8 @@ item the harness raises, as `wait (needs_reviewer)` does, record `wait`.
   the new head's. With `flaky` true, the unit not in `kicked`, and the same check run still failing, the worker judged
   it a failure a rerun would pass and changed nothing for it, so no newer run will come: record attention `flaky_rerun`
   with `repo` the unit and a detail naming the check, its run link, and the run's id, and dispatch no `resume` for it.
-  With `flaky_cause` in `last_run`, the detail also says the worker judged it likely a flaky test (`test`) or CI's
-  infrastructure (`infra`); without it, the detail names no cause, and you guess none.
+  With `flaky_cause` in `last_run`, the detail also says the worker judged it likely a flaky test (`test`), the CI
+  runner (`runner`), or a service the job calls (`service`); without it, the detail names no cause, and you guess none.
   Otherwise, if it ended `done` and the same check run still fails, its fix has not reached CI or did not help: `wait`
   until a newer check run exists. If it ended `blocked`, the ticket is `needs_human`.
 - A `resume` for `ci` alone refused `handled` had no failure a worker had not: each failed at that head at or behind

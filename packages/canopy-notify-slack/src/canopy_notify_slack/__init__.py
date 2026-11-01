@@ -588,7 +588,11 @@ def _follow_ups_filed(e: Mapping[str, object]) -> _Shown:
 
 
 #: How a `ci.flaky` event's `cause`, the worker's estimate of where the check failed, reads.
-_FLAKY_CAUSES = {"test": "likely a flaky test", "infra": "likely CI's infrastructure"}
+_FLAKY_CAUSES = {
+    "test": "likely a flaky test",
+    "runner": "likely the CI runner",
+    "service": "likely a service the job calls",
+}
 
 
 def _ci_flaky(e: Mapping[str, object]) -> _Shown:

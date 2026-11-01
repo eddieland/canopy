@@ -127,8 +127,8 @@ class RunState(TypedDict):
     #: Present, and true, only when the worker left a failed check as not the change's (DESIGN §23): one bit of its
     #: result, never its text (TRUST_MODEL T1).
     flaky: NotRequired[bool]
-    #: Present only with `flaky`, when the worker named where the check failed (DESIGN §23): `test` or `infra`, a word
-    #: of a closed vocabulary, never its text.
+    #: Present only with `flaky`, when the worker named where the check failed (DESIGN §23): `test`, `runner`, or
+    #: `service`, a word of a closed vocabulary, never its text or its `flaky_detail`.
     flaky_cause: NotRequired[FlakyCause]
     #: Present only when the harness pushed the branch again to rerun the checks the worker left as flaky (DESIGN §23):
     #: the repositories it pushed, whose checks run again on the new head. A unit not named was not kicked.

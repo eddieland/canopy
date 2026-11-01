@@ -442,7 +442,7 @@ def test_slack_blocks_for_a_flaky_check_kicked_or_left_to_the_operator() -> None
     events: list[dict[str, Any]] = [
         flaky | {"kicked": ["api"], "estimate": "The runner was lost <before> any test ran.", "note": None},
         flaky | {"run": 3, "kicked": [], "estimate": "Same again.", "note": "api: not kicked: out of kicks"},
-        flaky | {"run": 4, "kicked": [], "estimate": "Lost.", "cause": "infra", "note": None},
+        flaky | {"run": 4, "kicked": [], "estimate": "Lost.", "cause": "runner", "note": None},
         flaky | {"run": 5, "kicked": [], "estimate": "Hm.", "cause": "<guess>", "note": None},
     ]
     assert _texts(slack.blocks({"repo": "/r/api", "events": events}))[1:] == [
@@ -456,7 +456,7 @@ def test_slack_blocks_for_a_flaky_check_kicked_or_left_to_the_operator() -> None
         ),
         "rerun it, or `canopy reply` that it is real · api: not kicked: out of kicks",
         (
-            ":grey_question: *P-1* Fix the build · run 4 left a failed check as flaky, likely CI's infrastructure\n"
+            ":grey_question: *P-1* Fix the build · run 4 left a failed check as flaky, likely the CI runner\n"
             f"<{pr}|acme/api#7>\n> *Why:* Lost."
         ),
         "rerun it, or `canopy reply` that it is real",

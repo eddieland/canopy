@@ -35,7 +35,11 @@ _CHORE = "chore:"
 _PR = "pr:"
 _TASK = "task:"
 #: How a `ci.flaky` event's `cause` reads in its line: the worker's estimate, so hedged.
-_CAUSES = {FlakyCause.TEST: "likely a flaky test", FlakyCause.INFRA: "likely CI's infrastructure"}
+_CAUSES = {
+    FlakyCause.TEST: "likely a flaky test",
+    FlakyCause.RUNNER: "likely the CI runner",
+    FlakyCause.SERVICE: "likely a service the job calls",
+}
 
 
 def _line(text: object) -> str:

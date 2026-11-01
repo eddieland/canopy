@@ -86,6 +86,8 @@ MAX_TEXT = 2000
 #: A planner's reason for saying its plan needs no review: a sentence, as a sink's line carries it.
 MAX_REVIEW_REASON = 300
 MAX_PR_URL = 500
+#: A worker's line on why a check it left flaky failed: a sentence, as a sink's line carries it.
+MAX_FLAKY_DETAIL = 300
 # The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
 # checked out detached (DESIGN §8).
 SETUP_REPO_ENV = "CANOPY_REPO"
@@ -118,6 +120,19 @@ Flaky = Annotated[bool, BeforeValidator(lambda value: value is True)]
 Cause = Annotated[FlakyCause | None, BeforeValidator(lambda value: value if value in FlakyCause else None)]
 
 
+def _flaky_detail(value: object) -> str | None:
+    """Return `value` on one line, cut to `MAX_FLAKY_DETAIL`, or None: a wrong type drops, never the result with it."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    line = " ".join(value.split())
+    return line if len(line) <= MAX_FLAKY_DETAIL else line[: MAX_FLAKY_DETAIL - 3] + "..."
+
+
+#: A worker's one line on why a check it left flaky failed (DESIGN §23): model text, kept with the run, never shown to
+#: the overseer.
+FlakyDetail = Annotated[str | None, BeforeValidator(_flaky_detail)]
+
+
 class WorkerResult(BaseModel):
     """The worker result contract (DESIGN §8, §18): the last line of the worker's stdout. Untrusted, so bounded.
 
@@ -139,6 +154,8 @@ class WorkerResult(BaseModel):
     flaky: Flaky = False
     #: With `flaky`, where the worker judged the check failed, given only when its evidence says so (DESIGN §23).
     flaky_cause: Cause = None
+    #: With `flaky`, one line on why the check failed, such as the error it ended with; None when the worker gave none.
+    flaky_detail: FlakyDetail = None
 
     def for_repos(self, repos: Sequence[str]) -> Self:
         """Return this result with `prs` and `pr_titles` kept to `repos`, the repositories the run worked in.
@@ -365,7 +382,7 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
             run_id=run_id,
             prs=[pr for pr in (outcome.result.prs or {}).values() if pr],
             kicked=outcome.kicks.kicked,
-            estimate=outcome.result.summary,
+            estimate=outcome.result.flaky_detail or outcome.result.summary,
             cause=outcome.result.flaky_cause,
             note="; ".join(outcome.kicks.notes),
         )

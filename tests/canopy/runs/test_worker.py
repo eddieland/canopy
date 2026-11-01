@@ -63,6 +63,7 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
         "question": None,
         "flaky": False,
         "flaky_cause": None,
+        "flaky_detail": None,
     }
     [w] = agent_runs(scenario.agent_log)
     assert w["cwd"] == slot_of(scenario.conn, run.id).slot_path
@@ -544,6 +545,18 @@ def test_a_flaky_cause_outside_the_vocabulary_is_no_estimate_and_costs_nothing()
         assert parsed.flaky
         assert parsed.flaky_cause is None
     assert present(worker.parse_result('{"status": "done", "flaky": true}')).flaky_cause is None
+
+
+def test_a_flaky_detail_is_one_line_and_cut_and_anything_but_text_is_none() -> None:
+    def detail(said: str) -> str | None:
+        return present(worker.parse_result(f'{{"status": "done", "flaky": true, "flaky_detail": {said}}}')).flaky_detail
+
+    assert detail('"registry.npmjs.org\\nreturned 503"') == "registry.npmjs.org returned 503"
+    long = present(detail(json.dumps("x" * 400)))
+    assert len(long) == worker.MAX_FLAKY_DETAIL
+    assert long.endswith("...")
+    for said in ('"  "', "1", "null", "[]"):
+        assert detail(said) is None
 
 
 def test_parse_result_takes_the_last_json_object_line() -> None:

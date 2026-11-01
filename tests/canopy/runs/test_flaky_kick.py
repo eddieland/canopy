@@ -250,7 +250,7 @@ def test_the_sinks_hear_the_workers_estimate_of_why_a_check_is_flaky(scenario: S
     assert "has had 1 kick(s) since its work was pushed" in str(spent["note"])
 
 
-def test_the_cause_a_worker_names_reaches_the_overseer_and_the_sinks_as_a_word(
+def test_the_cause_a_worker_names_reaches_the_overseer_as_a_word_and_its_line_on_why_only_the_sinks(
     scenario: Scenario,
     git_pool: GitPool,
     github_state: Path,
@@ -273,12 +273,16 @@ def test_the_cause_a_worker_names_reaches_the_overseer_and_the_sinks_as_a_word(
         scenario.tick(*waits(KEY, rationale="the operator reruns it"))
         return ran, scenario.ticket_state()["last_run"]
 
-    left, seen = last_run({"flaky_cause": "infra"})
-    assert seen["flaky_cause"] == "infra"
+    left, seen = last_run({"flaky_cause": "service", "flaky_detail": "registry.npmjs.org returned 503"})
+    assert seen["flaky_cause"] == "service"
+    # Its line on why is kept with the run, and told to the sinks, never to the overseer.
+    assert contract.stored_object(left.row["result_json"])["flaky_detail"] == "registry.npmjs.org returned 503"
+    assert "registry" not in json.dumps(seen)
     [fields] = told(scenario)
-    assert fields["cause"] == "infra"
-    assert message.event_line("ci.flaky", fields).startswith(
-        f"? {KEY} run {left.id} left a failed check as flaky, likely CI's infrastructure; rerun it, ",
+    assert fields["cause"] == "service"
+    assert message.event_line("ci.flaky", fields) == (
+        f"? {KEY} run {left.id} left a failed check as flaky, likely a service the job calls; rerun it, or "
+        f"`canopy reply` that it is real: {READ_PR} why: registry.npmjs.org returned 503"
     )
 
     # Unsure, or a word outside the vocabulary: no cause anywhere, and no guess.

@@ -12,7 +12,7 @@
 "personas/explainer.md" = 1106
 "personas/minimalist.md" = 2877
 "personas/skeptic.md" = 1292
-"prompts/overseer.md" = 54684
+"prompts/overseer.md" = 54717
 "prompts/reviewer.md" = 11701
 "prompts/reviser.md" = 5811
 "prompts/task.md" = 8735
@@ -20,8 +20,8 @@
 "prompts/worker-implement-private.md" = 9773
 "prompts/worker-implement.md" = 10084
 "prompts/worker-plan.md" = 13910
-"prompts/worker-resume-private.md" = 13366
-"prompts/worker-resume.md" = 13858
+"prompts/worker-resume-private.md" = 13532
+"prompts/worker-resume.md" = 14024
 "skills/canopy-artifacts/SKILL.md" = 3076
 "skills/tracker-github/SKILL.md" = 3883
 "skills/tracker-jira/SKILL.md" = 3245
