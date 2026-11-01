@@ -287,6 +287,8 @@ class Decision(Row):
     kept: bool
     #: The journal number (§35) of what a kept item names; None for one about its ticket alone, and any other decision.
     item: int | None
+    #: The kind of run a refused dispatch asked for; None on any other decision, and on a refusal recorded before 0118.
+    kind: RunKind | None
 
 
 @dataclass(frozen=True)

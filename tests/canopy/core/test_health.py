@@ -9,6 +9,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import health
+from canopy.core.vocab import RunKind
 from tests.canopy.helpers import earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
 
@@ -77,18 +78,18 @@ def journal_of_failures(conn: sqlite3.Connection, now: datetime) -> None:
         "VALUES (?, 'https://e.test/pr/7', 'abc', ?, 'crashed', ?, 'l')",
         (before, earlier(now, 0, 4), json.dumps({"summary": "y " * 400})),
     )
-    for tick_id, action, created in (
-        (failed, "refused:capacity", earlier(now, 1)),
-        (failed, "refused:capacity", earlier(now, 1)),
-        (failed + 1, "refused:capacity", earlier(now, 1, 1)),
-        (failed, "refused:cooldown", earlier(now, 1)),
-        (before, "refused:cooldown", earlier(now, 9)),  # before the window
-        (failed, "dispatch:implement", earlier(now, 1)),
+    for tick_id, action, kind, created in (
+        (failed, "refused:capacity", "implement", earlier(now, 1)),
+        (failed, "refused:capacity", "implement", earlier(now, 1)),
+        (failed + 1, "refused:capacity", "resume", earlier(now, 1, 1)),
+        (failed, "refused:cooldown", None, earlier(now, 1)),
+        (before, "refused:cooldown", None, earlier(now, 9)),  # before the window
+        (failed, "dispatch:implement", None, earlier(now, 1)),
     ):
         conn.execute(
-            "INSERT INTO decisions (tick_id, ticket_key, action, rationale, created_at) "
-            "VALUES (?, 'PROJ-1', ?, 'r', ?)",
-            (tick_id, action, created),
+            "INSERT INTO decisions (tick_id, ticket_key, action, rationale, kind, created_at) "
+            "VALUES (?, 'PROJ-1', ?, 'r', ?, ?)",
+            (tick_id, action, kind, created),
         )
 
 
@@ -170,17 +171,88 @@ def test_refusals_are_by_guard_the_most_first(tmp_path: Path, journals: Journals
     journal_of_failures(conn, NOW)
     found = health.report(conn, NOW, 7)
     first = found.failures[-1].id
+    # Each with what it refused: by the ticket, chore, or PR named and the kind asked for, the most often first.
+    implement = health.Ask("PROJ-1", None, None, RunKind.IMPLEMENT, decisions=2, last_tick=first)
+    resume = health.Ask("PROJ-1", None, None, RunKind.RESUME, decisions=1, last_tick=first + 1)
     assert found.refusals == [
-        health.Refusal("capacity", decisions=3, ticks=2, last_tick=first + 1),
-        health.Refusal("cooldown", decisions=1, ticks=1, last_tick=first),
+        health.Refusal("capacity", decisions=3, ticks=2, last_tick=first + 1, asks=[implement, resume]),
+        health.Refusal(
+            "cooldown",
+            decisions=1,
+            ticks=1,
+            last_tick=first,
+            asks=[health.Ask("PROJ-1", None, None, None, decisions=1, last_tick=first)],
+        ),
     ]
+
+
+def test_a_refusals_asks_are_the_few_most_often_refused_the_latest_first_among_ties(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """A chore, a ticket, and a PR are each an ask of their own; past `ASKS`, the least refused are left out."""
+    conn = journals.open(tmp_path / "canopy.db")
+    named = [("PROJ-1", None, None)] * 3 + [(None, "deps", None)] * 2 + [(None, None, "https://e.test/pr/7")]
+    named += [(f"PROJ-{n}", None, None) for n in range(2, 2 + health.ASKS)]
+    for key, chore, pr in named:
+        conn.execute(
+            "INSERT INTO decisions (tick_id, ticket_key, chore, pr, action, rationale, created_at) "
+            "VALUES (?, ?, ?, ?, 'refused:capacity', 'r', ?)",
+            (tick(conn, earlier(NOW, 1), "ok"), key, chore, pr, earlier(NOW, 1)),
+        )
+    [refusal] = health.report(conn, NOW, 7).refusals
+    assert refusal.decisions == len(named)
+    asks = [(a.ticket, a.chore, a.pr, a.decisions) for a in refusal.asks]
+    # Of those refused once, the latest first: the PR and the first tickets, asked before the last three, are left out.
+    assert asks == [
+        ("PROJ-1", None, None, 3),
+        (None, "deps", None, 2),
+        (f"PROJ-{1 + health.ASKS}", None, None, 1),
+        (f"PROJ-{health.ASKS}", None, None, 1),
+        (f"PROJ-{health.ASKS - 1}", None, None, 1),
+    ]
+
+
+def test_failures_are_grouped_by_the_harness_note_and_the_agents_words_as_other(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """The harness's notes repeat, so they group, the most first; what an agent wrote never does, so it is `other`."""
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_failures(conn, NOW)
+    found = health.report(conn, NOW, 7)
+    # The tick's summary is canopy's; the timeout has no note, the chore's is not JSON, the review's is the agent's.
+    assert [(c.note, c.runs, list(c.kinds), c.latest.kind, c.latest.what) for c in found.causes] == [
+        ("nothing pushed", 1, ["workers"], "workers", "fix-ci"),
+        ("overseer exited 1: no done line", 1, ["overseer"], "overseer", "live"),
+        (None, 3, ["workers", "chores", "reviews"], "chores", "deps"),
+    ]
+    # Every failure of the window has a cause, past the newest few the report lists.
+    assert sum(c.runs for c in found.causes) == len(found.failures)
+
+
+def test_causes_count_every_failure_of_the_window_the_most_first(tmp_path: Path, journals: Journals) -> None:
+    """More failures than the report lists are all counted, by note, the newest first among causes of as many runs."""
+    conn = journals.open(tmp_path / "canopy.db")
+    for n in range(health.FAILURES + 5):
+        tick(conn, earlier(NOW, 0, n / 10), "abandoned", summary="the tick was abandoned")
+    tick(conn, earlier(NOW, 0, 4), "error", summary="ValueError: x")
+    tick(conn, earlier(NOW, 0, 5), "error", summary="KeyError: y")
+    found = health.report(conn, NOW, 1)
+    assert len(found.failures) == health.FAILURES
+    assert [(c.note, c.runs) for c in found.causes] == [
+        ("the tick was abandoned", health.FAILURES + 5),
+        ("ValueError: x", 1),
+        ("KeyError: y", 1),
+    ]
+    assert found.causes[0].latest == found.failures[0]
 
 
 def test_an_empty_window_has_nothing(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     journal_of_failures(conn, NOW)
     found = health.report(conn, NOW - timedelta(days=30), 1)
-    assert (found.outcomes, found.failures, found.refusals) == ([], [], [])
+    assert (found.outcomes, found.failures, found.refusals, found.causes) == ([], [], [], [])
 
 
 def test_canopy_health_prints_the_report(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
@@ -197,6 +269,11 @@ def test_canopy_health_prints_the_report(canopy_env: CanopyEnv, capsys: pytest.C
     assert "    nothing pushed" in out
     assert any("chore:deps run " in line for line in out)
     assert any("review " in line and "of https://e.test/pr/7  crashed" in line for line in out)
+    causes = out.index("Failures by cause:")
+    assert out[causes + 1].split() == ["1", "nothing", "pushed"]
+    assert out[causes + 2].startswith("    workers; latest run:")
+    assert out[causes + 5].split() == ["3", "other:", "an", "agent's", "summary,", "or", "no", "note"]
+    assert out[causes + 6].startswith("    workers, chores, reviews; latest chore:deps run ")
     assert out[-3] == "Refused by a guard:"
     assert out[-2].startswith("  capacity: 3 times in 2 ticks, last in tick ")
 
@@ -218,11 +295,13 @@ def test_canopy_health_json_is_the_report(canopy_env: CanopyEnv, capsys: pytest.
     timeout = {"kind": "workers", "what": "implement", "status": "timeout", "failed": True, "runs": 1, "cost_usd": 3.0}
     assert timeout in data["outcomes"]
     assert data["failures"][0]["note"] == "nothing pushed"
-    assert {k: v for k, v in data["refusals"][0].items() if k != "last_tick"} == {
+    assert {k: v for k, v in data["refusals"][0].items() if k not in {"last_tick", "asks"}} == {
         "guard": "capacity",
         "decisions": 3,
         "ticks": 2,
     }
+    assert [(a["kind"], a["decisions"]) for a in data["refusals"][0]["asks"]] == [("implement", 2), ("resume", 1)]
+    assert [(c["note"], c["runs"]) for c in data["causes"]][-1] == (None, 3)
 
 
 def test_canopy_health_reads_at_most_a_year(canopy_env: CanopyEnv) -> None:

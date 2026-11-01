@@ -1,9 +1,10 @@
 """How the loop's agent runs ended, and what its guards refused (DESIGN §11), read by `canopy health`.
 
 Reads only. Over the same window as `canopy spend` (whole local days, today's so far included, by start): how many of
-each kind's runs ended each way and what they cost, the newest of those that ended other than as they should, the
-overseer's asks a guard refused, by guard, and, for the web UI's health page, how many ended and failed each day. It is
-what a chore that looks at canopy itself reads, beside `canopy spend`, to say which failures recur and what they cost.
+each kind's runs ended each way and what they cost, the newest of those that ended other than as they should, those
+failures grouped by the harness's note, the overseer's asks a guard refused, by guard and by what each asked for, and,
+for the web UI's health page, how many ended and failed each day. It is what a chore that looks at canopy itself reads,
+beside `canopy spend`, to say which failures recur and what they cost.
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ FAILURES = 20
 # What a failure's note is cut to: enough to tell one cause from another, which `canopy show` and the web UI give whole.
 NOTE_LIMIT = 300
 REFUSED = "refused:"
+#: The asks a refusal lists of what its guard refused, the most often refused first.
+ASKS = 5
 
 
 # The statuses each kind of run ends in when it did not do what it was started for. A worker that asked a question
@@ -107,6 +110,42 @@ class Failure:
 
 
 @dataclass(frozen=True)
+class Cause:
+    """The window's failures that the harness explained alike: one of its notes, or `other` for the agents' own words.
+
+    A failure's note is the harness's when canopy wrote it, a tick's summary or a result's harness note, and those
+    repeat, a template filled the same way; one an agent wrote, its summary, never does, so those are counted together.
+    """
+
+    #: The harness's note, on one line and cut as `Failure.note`; None for `other`: an agent's summary, or no note.
+    note: str | None
+    #: How many failed so.
+    runs: int
+    #: The kinds of run among them, in `spend.KINDS` order.
+    kinds: Sequence[Kind]
+    #: The newest of them, to open.
+    latest: Failure
+
+
+@dataclass(frozen=True)
+class Ask:
+    """One thing the overseer, or the harness, asked for that a guard refused in the window, and how often."""
+
+    #: The ticket it named; None for a chore's run, or a review of a PR no ticket of the loop's holds.
+    ticket: str | None
+    #: The chore it would have run; None for the rest.
+    chore: str | None
+    #: The PR it named, for a review; None for the rest.
+    pr: str | None
+    #: The kind of run a dispatch asked for; None for any other ask, and for a refusal recorded before it was kept.
+    kind: RunKind | None
+    #: How many of the guard's decisions refused it.
+    decisions: int
+    #: The latest tick that asked for it.
+    last_tick: int
+
+
+@dataclass(frozen=True)
 class Refusal:
     """How often a guard refused what a tick asked for in the window (DESIGN §4): its decisions and their ticks."""
 
@@ -114,6 +153,8 @@ class Refusal:
     decisions: int
     ticks: int
     last_tick: int
+    #: What it refused most often, at most `ASKS`, the most often first, then the latest.
+    asks: Sequence[Ask] = ()
 
 
 @dataclass(frozen=True)
@@ -130,6 +171,9 @@ class Health:
     outcomes: Sequence[Outcome] = ()
     failures: Sequence[Failure] = ()
     refusals: Sequence[Refusal] = ()
+    #: Every failure of the window by its cause: the harness's notes the most runs first, then the newest, and `other`
+    #: last.
+    causes: Sequence[Cause] = ()
 
 
 @dataclass(frozen=True)
@@ -160,16 +204,17 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:
     until = db.format_time(end)
     with db.read_snapshot(conn):
         outcomes = [o for kind in spend.KINDS for o in _outcomes(conn, kind, since, until)]
-        failures = [f for kind in spend.KINDS for f in _failures(conn, kind, since, until)]
+        failed = [f for kind in spend.KINDS for f in _failures(conn, kind, since, until)]
         refused = refusals(conn, since, until)
-    failures.sort(key=lambda f: (f.started_at, spend.KINDS.index(f.kind), f.id), reverse=True)
+    failed.sort(key=lambda f: (f[0].started_at, spend.KINDS.index(f[0].kind), f[0].id), reverse=True)
     return Health(
         since=since,
         until=until,
         days=days,
         outcomes=outcomes,
-        failures=failures[:FAILURES],
+        failures=[f for f, _ in failed[:FAILURES]],
         refusals=refused,
+        causes=_causes(failed),
     )
 
 
@@ -207,18 +252,48 @@ def refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
     """What each guard refused the overseer in `[since, until)`, each a journal time, by when the decision was made.
 
     Returns:
-        A row per guard, the most frequent first.
+        A row per guard, the most frequent first, each with what it refused most often.
     """
+    window = ("action LIKE ? AND created_at >= ? AND created_at < ?", f"{REFUSED}%", since, until)
     refused = (
         sql.select("substr(action, ?), count(*), count(DISTINCT tick_id), max(tick_id)", len(REFUSED) + 1)
         .from_("decisions")
-        .where("action LIKE ? AND created_at >= ? AND created_at < ?", f"{REFUSED}%", since, until)
+        .where(*window)
         .group_by("action")
         .order_by("count(*) DESC, action")
     )
-    rows = sql.execute(conn, refused)
+    # What each guard refused, by what the decision named, the most often first; a guard's first `ASKS` are its asks.
+    named = (
+        sql.select("substr(action, ?), ticket_key, chore, pr, kind, count(*), max(tick_id)", len(REFUSED) + 1)
+        .from_("decisions")
+        .where(*window)
+        .group_by("action, ticket_key, chore, pr, kind")
+        .order_by("count(*) DESC, max(tick_id) DESC")
+    )
+    with db.read_snapshot(conn):
+        rows = list(sql.execute(conn, refused))
+        asks: dict[str, list[Ask]] = {}
+        for guard, ticket, chore, pr, kind, n, last in sql.execute(conn, named):
+            found = asks.setdefault(str(guard), [])
+            if len(found) < ASKS:
+                found.append(
+                    Ask(
+                        ticket=_text(ticket),
+                        chore=_text(chore),
+                        pr=_text(pr),
+                        kind=None if kind is None else RunKind(str(kind)),
+                        decisions=int(n),
+                        last_tick=int(last),
+                    ),
+                )
     return [
-        Refusal(guard=str(guard), decisions=int(n), ticks=int(ticks), last_tick=int(last))
+        Refusal(
+            guard=str(guard),
+            decisions=int(n),
+            ticks=int(ticks),
+            last_tick=int(last),
+            asks=asks.get(str(guard), []),
+        )
         for guard, n, ticks, last in rows
     ]
 
@@ -246,34 +321,58 @@ def _outcomes(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> l
     ]
 
 
-def _failures(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> Iterable[Failure]:
+# Every failure of one kind in the window, the newest first, each with its cause: the harness's note, or None.
+def _failures(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> Iterable[tuple[Failure, str | None]]:
     failed = (
         sql.select("*")
         .from_("({})", _ROWS[kind])
         .where("started_at >= ? AND started_at < ?", since, until)
         .where_in("status", sorted(_FAILED[kind]))
         .order_by("started_at DESC, id DESC")
-        .limit(FAILURES)
     )
     rows = sql.execute(conn, failed)
-    for run_id, what, status, started, subject, note, cost in rows:
-        yield Failure(
+    for run_id, what, status, started, subject, stored, cost in rows:
+        note, harness = _note(kind, stored)
+        failure = Failure(
             kind=kind,
             id=int(run_id),
             what=str(what),
             status=str(status),
             started_at=str(started),
             subject=None if subject is None else str(subject),
-            note=_note(kind, note),
+            note=note,
             cost_usd=cost,
         )
+        yield failure, note if harness and note else None
 
 
 # A tick's note is its summary, canopy's, which quotes the overseer's reason for a skip; a run's is in its stored
-# result, the harness's note or else the agent's summary.
-def _note(kind: Kind, stored: object) -> str:
-    text = str(stored or "") if kind == "overseer" else contract.stored_note(contract.stored_object(_text(stored)))
-    return _one_line(text)
+# result, the harness's note or else the agent's summary. The note on one line, and whether the harness wrote it.
+def _note(kind: Kind, stored: object) -> tuple[str, bool]:
+    if kind == "overseer":
+        return _one_line(str(stored or "")), True
+    result = contract.stored_object(_text(stored))
+    return _one_line(contract.stored_note(result)), bool(result.get("harness"))
+
+
+# The failures, the newest first, by their cause: the harness's notes the most runs first, then the newest, then the
+# rest as `other`.
+def _causes(failed: Sequence[tuple[Failure, str | None]]) -> list[Cause]:
+    grouped: dict[str | None, list[Failure]] = {}
+    for failure, cause in failed:
+        grouped.setdefault(cause, []).append(failure)
+    causes = [
+        Cause(
+            note=note,
+            runs=len(runs),
+            kinds=[k for k in spend.KINDS if any(f.kind == k for f in runs)],
+            latest=runs[0],
+        )
+        for note, runs in grouped.items()
+    ]
+    # `grouped` is in the order each cause's newest failure came, so a stable sort keeps the newest first among ties.
+    causes.sort(key=lambda c: (c.note is None, -c.runs))
+    return causes
 
 
 def _text(value: object) -> str | None:

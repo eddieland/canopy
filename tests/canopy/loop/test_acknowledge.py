@@ -126,6 +126,7 @@ def decision(action: str, rationale: str) -> records.Decision:
         decider=Decider.OVERSEER,
         kept=False,
         item=None,
+        kind=None,
     )
 
 

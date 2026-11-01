@@ -142,7 +142,10 @@ def test_capacity_guard(scenario: Scenario, git_pool: GitPool, treehouse_state: 
 
 def test_one_worker_per_ticket(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.starts()
-    assert scenario.refuses(dispatches()) == [("refused:running", "run 1 is already working PROJ-1")]
+    refused = scenario.refuses(dispatches())
+    assert refused == [("refused:running", "run 1 is already working PROJ-1")]
+    # The refusal keeps the kind it asked for, for the health report (DESIGN §11).
+    assert [d.kind for d in refused.decisions] == [RunKind.IMPLEMENT]
 
 
 @pytest.mark.parametrize("slug", ["Add", "a_b", "-a", "a-", "a--b", "a" * 41, "a/b", "a\n"])

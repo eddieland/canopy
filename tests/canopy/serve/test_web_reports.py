@@ -3,6 +3,7 @@
 Reads only.
 """
 
+import json
 from datetime import UTC, datetime
 
 import pytest
@@ -10,7 +11,7 @@ import pytest
 from canopy.core import checklist_answers, db, health, pools, records, runtime_sessions, spend
 from canopy.core.checklist_answers import Answer, Checked
 from canopy.core.context import Context
-from canopy.core.vocab import CheckConclusion, ItemAnswer, PoolKind, ResumeReason, RunKind
+from canopy.core.vocab import CheckConclusion, ItemAnswer, PoolKind, ResumeReason, RunKind, RunStatus
 from canopy.infra import resources
 from canopy.runs import tasks
 from canopy.runtime.report import SessionPage, SessionSpend
@@ -228,6 +229,49 @@ def test_the_health_report_is_canopy_healths_with_each_days_failures(backend: Ba
     assert c.get("/api/reports/health", params={"days": spend.MAX_DAYS + 1}).status_code == 422
 
 
+def test_the_health_report_groups_failures_by_cause_and_refusals_by_ask(canopy_env: CanopyEnv) -> None:
+    """Two failures of one harness note are one cause, an agent's summary is `other`, and a guard's ask is counted."""
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    conn, now = ctx.conn, datetime.now(UTC)
+    note = "the worker exited 1 without a result line"
+    stored = [
+        (RunKind.IMPLEMENT, RunStatus.CRASHED, {"harness": note}, earlier(now, 1, 3)),
+        (RunKind.RESUME, RunStatus.CRASHED, {"harness": note}, earlier(now, 1, 2)),
+        (
+            RunKind.IMPLEMENT,
+            RunStatus.FAILED,
+            {"status": "failed", "summary": "the tests would not pass"},
+            earlier(now, 1),
+        ),
+    ]
+    runs = []
+    for kind, status, result, started in stored:
+        run = worker_ran(conn, kind, started, status=status)
+        records.update(records.Run).set(result_json=json.dumps(result)).where("id = ?", run).run(conn)
+        runs.append(run)
+    # The running guard refused the same resume of PROJ-1 in two ticks.
+    ticks = [
+        present(records.insert(records.Tick, started_at=earlier(now, 0, h), dry_run=0).run(conn).lastrowid)
+        for h in (2, 1)
+    ]
+    for tick in ticks:
+        db.record_decision(conn, tick, "PROJ-1", "refused:running", "run 3 is working PROJ-1", kind=RunKind.RESUME)
+    c, _ = signed_in_client(ctx)
+    found = c.get("/api/reports/health").json()
+    causes = [(k["note"], k["runs"], k["kinds"], k["latest"]["id"], k["latest"]["what"]) for k in found["causes"]]
+    assert causes == [
+        (note, 2, ["workers"], runs[1], "resume"),
+        (None, 1, ["workers"], runs[2], "implement"),
+    ]
+    assert found["causes"][0]["latest"]["ticket"] == "PROJ-1"
+    [refused] = found["refusals"]
+    assert (refused["guard"], refused["decisions"], refused["ticks"]) == ("running", 2, 2)
+    assert refused["asks"] == [
+        {"ticket": "PROJ-1", "chore": None, "pr": None, "kind": "resume", "decisions": 2, "last_tick": ticks[1]},
+    ]
+
+
 def test_a_health_failure_names_what_it_was_about_by_its_kind(backend: Backend) -> None:
     """A failure carries its ticket, PR, chore, or task apart, rather than one subject to parse."""
     c = client(None, backend)
@@ -317,7 +361,8 @@ def test_the_ci_report_reads_kicks_fixes_and_the_cooldown_from_the_journal(canop
         {"url": pr, "ticket_key": "PROJ-1", "phase": None, "kicks": 1, "most": 1, "still_red": 1},
     ]
     assert found["max_flaky_kicks"] == 2
-    assert found["cooldown"] == {"guard": "cooldown", "decisions": 2, "ticks": 1, "last_tick": tick}
+    asked = {"ticket": "PROJ-1", "chore": None, "pr": None, "kind": None, "decisions": 2, "last_tick": tick}
+    assert found["cooldown"] == {"guard": "cooldown", "decisions": 2, "ticks": 1, "last_tick": tick, "asks": [asked]}
 
 
 def test_the_ci_report_reads_reruns_heads_by_day_and_time_to_green(canopy_env: CanopyEnv) -> None:

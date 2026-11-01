@@ -32,7 +32,7 @@ AFFINITY: dict[str, frozenset[object]] = {
     "BLOB": frozenset({bytes}),
 }
 PR = "https://github.com/acme/api/pull/7"
-DECISION_COLUMNS = "id, tick_id, ticket_key, action, rationale, created_at, repo, chore, pr, decider, kept, item"
+DECISION_COLUMNS = "id, tick_id, ticket_key, action, rationale, created_at, repo, chore, pr, decider, kept, item, kind"
 
 
 def row_types() -> list[type[records.Row]]:
@@ -103,6 +103,7 @@ def test_a_query_builds_its_rows_as_the_row_type(conn: sqlite3.Connection) -> No
         decider=Decider.OVERSEER,
         kept=False,
         item=None,
+        kind=None,
     )
     assert (second.ticket_key, second.chore) == (None, "deps")
 
@@ -184,7 +185,7 @@ def test_fetch_one_is_none_when_the_query_returns_nothing(conn: sqlite3.Connecti
     [
         (
             "SELECT id, tick_id FROM decisions",
-            "missing action, chore, created_at, decider, item, kept, pr, rationale, repo, ticket_key",
+            "missing action, chore, created_at, decider, item, kept, kind, pr, rationale, repo, ticket_key",
         ),
         (f"SELECT {DECISION_COLUMNS}, 1 AS extra FROM decisions", "no field for extra"),  # noqa: S608
         (f"SELECT {DECISION_COLUMNS}, id FROM decisions", "a column is repeated"),  # noqa: S608

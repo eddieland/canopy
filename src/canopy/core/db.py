@@ -26,6 +26,7 @@ from canopy.core.vocab import (
     PlanStatus,
     PoolKind,
     ResumeReason,
+    RunKind,
     SeenKind,
     StartStatus,
     TickStatus,
@@ -1248,6 +1249,7 @@ def record_decision(
     decider: Decider = Decider.OVERSEER,
     kept: bool = False,
     item: int | None = None,
+    kind: RunKind | None = None,
 ) -> int:
     """Insert a decision for `tick_id` and return its id.
 
@@ -1255,7 +1257,7 @@ def record_decision(
     `pr` for a decision about a PR the loop reviews, which has a ticket key only for one of the loop's own PRs.
     `decider` says who made it: the overseer, through one of its verbs, or the harness on its own (DESIGN §37). `kept`
     marks an attention item the overseer keeps, held until what it names ends it, and `item` is the journal number of
-    what it names, if it names one (`core.kept_items`).
+    what it names, if it names one (`core.kept_items`). `kind` is the kind of run a refused dispatch asked for.
 
     Returns:
         The new decision's id.
@@ -1272,6 +1274,7 @@ def record_decision(
         decider=decider,
         kept=kept,
         item=item,
+        kind=kind,
     )
     return rowid(decision.run(conn))
 

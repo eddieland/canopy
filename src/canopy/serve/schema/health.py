@@ -1,6 +1,7 @@
 """The API's types for the health report (DESIGN §11): how the last days' runs ended, and what the guards refused.
 
-What `canopy health` prints, with each day's ended and failed runs beside it for the page's chart. Built on
+What `canopy health` prints, with each day's ended and failed runs beside it for the page's chart, the failures by
+their cause, and each guard's refusals by what was asked. Built on
 `schema.Model`, as every API type is (schema/__init__.py).
 """
 
@@ -58,6 +59,38 @@ class HealthFailure(Model):
     """What it cost, in US dollars; None when it reported none."""
 
 
+class HealthCause(Model):
+    """The window's failures the harness explained alike, or `other`: those an agent's own words explained."""
+
+    note: str | None
+    """The harness's note, as `HealthFailure.note`; None for `other`, the failures whose note is an agent's summary,
+    which never repeats, or that have none."""
+    runs: int
+    """How many failed so."""
+    kinds: list[SpendKind]
+    """The kinds of run among them, in the report's order of kinds."""
+    latest: HealthFailure
+    """The newest of them, to open."""
+
+
+class HealthAsk(Model):
+    """One thing a guard refused in the window, and how often: the ticket, chore, or PR it named, and the run's kind."""
+
+    ticket: str | None = None
+    """The ticket it named; None for a chore's run, or a review of a PR no ticket of the loop's holds."""
+    chore: str | None = None
+    """The chore it would have run; None for the rest."""
+    pr: str | None = None
+    """The PR it named, for a review; None for the rest."""
+    kind: str | None = None
+    """The kind of run a dispatch asked for: `implement`, `resume`, `plan`, `feedback-plan`; None for any other ask,
+    and for a refusal recorded before the journal kept it."""
+    decisions: int
+    """How many of the guard's decisions refused it."""
+    last_tick: int
+    """The latest tick that asked for it."""
+
+
 class HealthRefusal(Model):
     """How often a guard refused what a tick asked for in the window."""
 
@@ -69,6 +102,9 @@ class HealthRefusal(Model):
     """In how many ticks."""
     last_tick: int
     """The latest of them."""
+    asks: list[HealthAsk]
+    """What it refused most often, at most five, the most often first, then the latest: one ask refused tick after
+    tick is the overseer stuck on it."""
 
 
 class HealthCounts(Model):
@@ -116,6 +152,9 @@ class HealthReport(Model):
     """The newest first, at most twenty."""
     refusals: list[HealthRefusal]
     """The most frequent first."""
+    causes: list[HealthCause]
+    """Every failure of the window by its cause: the harness's notes, the most runs first, then the newest, and
+    `other` last."""
     per_day: list[HealthDay]
     """Every day of the window, oldest first."""
     unpriced: list[SpendUnpriced]
