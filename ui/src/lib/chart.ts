@@ -34,7 +34,7 @@ export function axisNames(index: number, count: number, step: number): boolean {
 /** Where a chart's peak is among its bars' totals, the latest of any equal, so its value sits over it; -1 for none. */
 export function peakIndex(totals: readonly number[]): number {
     const top = Math.max(0, ...totals)
-    return top === 0 ? -1 : totals.findLastIndex((total) => total === top)
+    return top === 0 ? -1 : totals.lastIndexOf(top)
 }
 
 /** One series of a day chart: what it counts, its name in the legend, what that means on hover, and its fill. */

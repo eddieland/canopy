@@ -169,7 +169,7 @@ export function diffPlans(before: Outline, after: Outline, cap = MAX_EDITS): Pla
         removed.push({
             at: index === undefined ? after.text.length : (after.sections[index]?.start ?? after.text.length),
             heading: section.heading,
-            body: line < 0 ? '' : text.slice(line + 1).trim(),
+            body: line === -1 ? '' : text.slice(line + 1).trim(),
         })
     })
     return { changes, moved, removed }

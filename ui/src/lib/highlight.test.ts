@@ -5,7 +5,9 @@ import { highlightHunks, highlightLines, kindOf } from '@/lib/highlight'
 import type { CodeToken } from '@/lib/highlight'
 
 // These tests read colors, which Shiki stops giving a line it has read for too long: a busy runner's (`untimedShiki`).
-vi.mock('shiki/core', async (importOriginal) => (await import('@/test-utils')).untimedShiki(await importOriginal()))
+vi.mock(import('shiki/core'), async (importOriginal) =>
+    (await import('@/test-utils')).untimedShiki(await importOriginal()),
+)
 
 // Lines without their numbers, which the highlighter never reads.
 const ctx = (text: string): DiffLine => ({ kind: 'ctx', old: null, new: null, text })

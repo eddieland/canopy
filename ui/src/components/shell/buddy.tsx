@@ -614,8 +614,8 @@ function Keyboard() {
                                 width={key.width}
                                 height={KEY.height}
                                 rx="0.4"
-                                className={cn('fill-buddy-key', typed >= 0 && 'animate-buddy-key')}
-                                style={typed >= 0 ? ({ '--key': typed } as CSSProperties) : undefined}
+                                className={cn('fill-buddy-key', typed !== -1 && 'animate-buddy-key')}
+                                style={typed === -1 ? undefined : ({ '--key': typed } as CSSProperties)}
                             />
                         )
                     }),

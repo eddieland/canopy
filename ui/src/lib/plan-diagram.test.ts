@@ -7,8 +7,8 @@ import type { Drawn, NotDrawn } from '@/lib/diagram'
 import { planExtensions } from '@/lib/plan-schema'
 
 // Mermaid draws in a real browser alone (e2e/plan-diagrams.spec.ts): here a diagram is drawn as its source says.
-vi.mock('@/lib/diagram', () => ({
-    DIAGRAM_LANGUAGE: 'mermaid',
+vi.mock(import('@/lib/diagram'), () => ({
+    DIAGRAM_LANGUAGE: 'mermaid' as const,
     drawDiagram: vi.fn<(source: string) => Promise<Drawn | NotDrawn>>((source) =>
         Promise.resolve(
             source.startsWith('pie')
