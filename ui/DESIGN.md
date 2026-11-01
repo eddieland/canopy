@@ -46,7 +46,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `spend-overseer`, `-idle`, `-workers`, `-plans`, `-chores`, `-reviews`, `-tasks`, `-dry-run` | Spend series fills. |
 | `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
-| `wait-1` to `wait-4` | The Reviews page's first reviews by how long each waited, the quickest first. |
+| `wait-1` to `wait-4` | How long something took, the quickest first: Reviews' first reviews, Health's run lengths. |
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `code-chip`, `code-size` | Inline code's chip, a tint of its own ink, and code's size against its line (Rich text). |
@@ -105,7 +105,9 @@ Rules:
   run or as a verdict. Fills, never text; each reaches 3:1 on `surface`, which `tokens.test.ts` measures.
 - **Wait fills** (`wait-1` to `wait-4`; `src/lib/review-report.ts`) color the Reviews page's first reviews by day: a
   ramp of cool hues by how long a first review waited, the quickest lightest, never a status color, so a slow review
-  never reads as a failure. Fills, never text; each reaches 3:1 on `surface`, which `tokens.test.ts` measures.
+  never reads as a failure. The Health page's run lengths take the same ramp by their share of the timeout
+  (`DURATION_BANDS` in `src/lib/health.ts`), with a run at the limit in `status-failed`, since it was stopped. Fills,
+  never text; each reaches 3:1 on `surface`, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
   with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
   legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
@@ -777,8 +779,9 @@ side.
   are in `panel-label` type, its figures right-aligned readouts. A row head that names something (a ticket, a tool) is
   its name in medium weight at the table's size, as `TicketTitle` sets a ticket's title, after its reference (a ticket's
   key, a PR) in its monospace link; a day or a group of ticks is in the table's own type. Its panel's header repeats
-  none of its rows. Rows in groups (the checklist page's items, by repository) stay one table, so their columns line
-  up: a `tbody` per group, headed by a row whose `rowgroup` cell names it in the table's own type, medium weight.
+  none of its rows. Rows in groups (the checklist page's items, by repository; Health's sorts, by kind) stay one table,
+  so their columns line up: a `tbody` per group, headed by a row whose `rowgroup` cell names it in the table's own
+  type, medium weight, with the group's own figures in its columns where it has them (a kind's runs and spend).
 - **Readout tiles** (`ReadoutTiles`, `src/components/readout-tiles.tsx`) are a report window's headline figures: its
   sums, not a count of what is now, so they are not `Counter`s. Each is a `panel-label` name over a `readout text-xl`
   figure in a `dl`, what it counts in the name's tip, and, when the page has the window before's figure, a muted line
@@ -792,7 +795,8 @@ side.
   (`barPercent`), where comparing the rows is the point: spent by month, by ticket, and by model, the bytes a tool
   returned, a check's failure rate. The figure, at a fixed width so the bars start at one edge, then a 6px rounded bar,
   64px long at least so a narrow column's still compares, on `surface-raised` filled in `muted-foreground`, or the
-  series' own fill; never a state's color. It is the eye's, `aria-hidden`.
+  series' own fill; never a state's color, but for the Health page's failed share of a kind's runs, in `status-failed`,
+  a share of the whole rather than of the column's largest: it says what is broken. It is the eye's, `aria-hidden`.
 
 ## Charts
 
