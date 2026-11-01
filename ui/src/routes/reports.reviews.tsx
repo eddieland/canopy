@@ -17,6 +17,8 @@ import { DayChart, DayChartLegend } from '@/components/day-chart'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { PullRequestTable } from '@/components/pull-request-table'
 import type { PullRequestColumn } from '@/components/pull-request-table'
+import { ReadoutTiles } from '@/components/readout-tiles'
+import type { ReadoutTile } from '@/components/readout-tiles'
 import { RunLink } from '@/components/run-link'
 import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
@@ -24,7 +26,8 @@ import { Clipped, Hinted } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
 import { useClock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
-import { windowName } from '@/lib/report-window'
+import { hoursChange, readoutDelta, wholeChange } from '@/lib/readout-delta'
+import { windowBefore, windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
 import { hoursText } from '@/lib/reports'
 import {
@@ -34,9 +37,11 @@ import {
     dismissalText,
     firstReviewSum,
     LIMITS_TEXT,
+    previousReviewsFigures,
     PURPOSE_HINT,
     REVIEWS_WINDOWS,
     reviewsBars,
+    reviewsFigures,
     reviewsLine,
     reviewsWindow,
     WAIT_SERIES,
@@ -102,6 +107,11 @@ function ReviewsPage() {
                         }}
                     />
                 }
+                links={
+                    !failed && (
+                        <ReadoutTiles tiles={reviewsTiles(data)} against={windowBefore(shown)} testId="reviews" />
+                    )
+                }
             >
                 {data === undefined ? (query.isPending ? 'reading the reviews' : null) : reviewsLine(data)}
             </PageHeader>
@@ -158,6 +168,52 @@ function ReviewsPage() {
             )}
         </>
     )
+}
+
+/**
+ * The window's headline figures, each held in its place while the report is read, and each against the window
+ * before's: a quicker first review is better.
+ */
+function reviewsTiles(found: ReviewsReport | undefined): ReadoutTile[] {
+    const figures = found === undefined ? undefined : reviewsFigures(found)
+    const before = found === undefined ? undefined : previousReviewsFigures(found.previous)
+    return [
+        {
+            key: 'reviews',
+            label: 'reviews',
+            hint: 'The reviews people left on these PRs, bots and their authors apart',
+            value: figures?.reviews,
+            delta: readoutDelta(figures?.reviews, before?.reviews, wholeChange),
+        },
+        {
+            key: 'prs',
+            label: 'PRs',
+            hint: 'The PRs a run named, or that saw feedback, a review asked for, or a merge',
+            value: figures?.prs,
+            delta: readoutDelta(figures?.prs, before?.prs, wholeChange),
+        },
+        {
+            key: 'first-reviews',
+            label: 'first reviews',
+            hint: "The first reviews that came, timed on GitHub's clock",
+            value: figures?.firstReviews,
+            delta: readoutDelta(figures?.firstReviews, before?.firstReviews, wholeChange),
+        },
+        {
+            key: 'median-wait',
+            label: 'median first review',
+            hint: WAIT_HINT,
+            value: figures === undefined ? undefined : hoursText(figures.medianHours),
+            delta: readoutDelta(figures?.medianHours, before?.medianHours, hoursChange, 'down'),
+        },
+        {
+            key: 'rounds',
+            label: 'feedback rounds',
+            hint: 'The feedback plans written',
+            value: figures?.rounds,
+            delta: readoutDelta(figures?.rounds, before?.rounds, wholeChange),
+        },
+    ]
 }
 
 /**

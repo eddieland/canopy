@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { pickWindow, windowId, windowName } from './report-window'
+import { pickWindow, windowBefore, windowId, windowName } from './report-window'
 
 describe('report windows', () => {
     it('names a window and gives it an id, in hours or in days', () => {
@@ -19,5 +19,13 @@ describe('report windows', () => {
         expect(pickWindow([{ days: 7 }, { days: 30 }], { hours: 24 })).toBeUndefined()
         expect(pickWindow(offered, { days: '8' })).toBeUndefined()
         expect(pickWindow(offered, {})).toBeUndefined()
+    })
+})
+
+describe('windowBefore', () => {
+    it('names the window before as a delta says it, days or hours', () => {
+        expect(windowBefore({ days: 7 })).toBe('the 7 days before')
+        expect(windowBefore({ days: 1 })).toBe('the 1 day before')
+        expect(windowBefore({ days: null, hours: 24 })).toBe('the 24 hours before')
     })
 })

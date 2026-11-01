@@ -11,6 +11,10 @@ a long page is one scroll up rather than a hunt. A column name with a dotted und
 counts: hover it, tab to it, or tap it. A chart's numbers are under it too, folded: **Show 7 days as a table** opens
 them, and a screen reader reads them whether or not you do.
 
+A report's headline figures each say how they moved since the window before it, as many days or hours ending where
+this one starts: `+3 on the 7 days before`. A move the wrong way, more failures or a slower first review, is in red.
+Spend never is: whether more of it bought enough is your call, not the page's.
+
 ## The reports page
 
 [Reports](/reports) puts the calendar months side by side, a year of them by default; **6 months** and **24 months**
@@ -165,7 +169,8 @@ A [checklist](checklists) is your list of rules for a repository that no linter 
 `paths.checklists`. Before a worker's first push, canopy holds it and asks the worker to check its diff against each
 item and answer it. The checklist page, which **Checklist** on [Reports](/reports) opens, counts those answers so you
 can tell which items earn their place. It's what `canopy checklist` prints; [Tuning the
-list](checklists#tuning-the-list) says what to do with the numbers.
+list](checklists#tuning-the-list) says what to do with the numbers. The figures under the title are the window's
+headline over every repository: how many times runs were given an item, and how many of those were held or unanswered.
 
 **By item** is one table, a group of rows per repository under its name, each item in its list's order. **reminded**
 is how many worker runs were given the item, a task's among them, by when they started; then how many answered
@@ -248,8 +253,9 @@ alone, this page will look suspiciously calm.
 The Reviews page, **Reviews** under [Reports](/reports) in the nav, says where feedback on canopy's PRs comes from, how
 long it takes to arrive, what answering it cost, and how canopy's own reviewer did, over the last **7 days** or
 **30 days**. The line under the title is the window at a glance, `38 reviews on 15 PRs · median first review 4.0h over
-30 days`. A PR is in the window when anything happened to it there: a run named it, someone reviewed or commented, it
-became ready, a review was asked for, or it merged.
+30 days`. The figures under it are its headline: the reviews, the PRs, the first reviews and their median wait, and
+the feedback rounds. A PR is in the window when anything happened to it there: a run named it, someone reviewed or
+commented, it became ready, a review was asked for, or it merged.
 
 Feedback is counted the way the [reports page](#the-reports-page) counts it: reviews and comments from people other
 than the PR's author, bots left out. canopy posts as you, so its own replies never count as feedback it received.

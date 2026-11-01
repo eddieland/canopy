@@ -36,7 +36,8 @@ import { useClock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
 import { firstKind, KIND_SERIES, seriesOf, seriesWeeks } from '@/lib/first-calls'
 import { unnamedHint, UNREAD, UNREAD_RUNS_HINT } from '@/lib/models'
-import { windowName } from '@/lib/report-window'
+import { readoutDelta, usdChange, wholeChange } from '@/lib/readout-delta'
+import { windowBefore, windowName } from '@/lib/report-window'
 import {
     alertMarks,
     alertsText,
@@ -471,20 +472,27 @@ function Budget({ month }: { month: SpendMonth | null }) {
 }
 
 /**
- * The window's total, each kind's, and what it got done: the tickets marked done, and the whole spend over them. Then
- * idle ticks' share of the overseer's, when the overseer spent something, and the runs that reported no cost, when a
- * run ended.
+ * The window's total, each kind's, and what it got done: the tickets marked done, and the whole spend over them, each
+ * against the window before's, where more tickets done is better and spend is never colored. Then idle ticks' share of
+ * the overseer's, when the overseer spent something, and the runs that reported no cost, when a run ended.
  */
 function Totals({ found }: { found: SpendBreakdown }) {
-    const { totals } = found
+    const { totals, previous } = found
+    const against = windowBefore(found)
     // Each series by the name the legend and the table give it, the overseer's whole before idle ticks' part of it.
     const cells: ReadoutTile[] = [
-        { key: 'total', label: 'total', value: <Cost usd={totals.total} /> },
+        {
+            key: 'total',
+            label: 'total',
+            value: <Cost usd={totals.total} />,
+            delta: readoutDelta(totals.total, previous.totals.total, usdChange),
+        },
         ...TOTALS_ORDER.flatMap((key) => SERIES.filter((series) => series.key === key)).map((series) => ({
             key: series.key.replace('_', '-'),
             label: series.label,
             hint: series.hint,
             value: <Cost usd={totals[series.key]} />,
+            delta: readoutDelta(totals[series.key], previous.totals[series.key], usdChange),
         })),
     ]
     const unpriced = unpricedText(found.unpriced)
@@ -494,7 +502,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
     const ended = found.unpriced.some((u) => u.runs > 0)
     return (
         <div className="flex flex-col gap-3 p-3">
-            <ReadoutTiles tiles={cells} testId="spend-total" className={TOTALS_GRID} />
+            <ReadoutTiles tiles={cells} against={against} testId="spend-total" className={TOTALS_GRID} />
             <ReadoutTiles
                 tiles={[
                     {
@@ -502,14 +510,17 @@ function Totals({ found }: { found: SpendBreakdown }) {
                         label: 'tickets done',
                         hint: 'Merged, or closed in the tracker, which may close it as its PR merges',
                         value: found.done,
+                        delta: readoutDelta(found.done, previous.done, wholeChange, 'up'),
                     },
                     {
                         key: 'per-done',
                         label: 'per ticket done',
                         hint: PER_DONE_HINT,
                         value: <Cost usd={found.per_done} />,
+                        delta: readoutDelta(found.per_done, previous.per_done, usdChange),
                     },
                 ]}
+                against={against}
                 testId="spend"
                 className={cn(TOTALS_GRID, 'border-t pt-3')}
             />

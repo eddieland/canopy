@@ -173,6 +173,8 @@ export type ReportTokens = Schemas['ReportTokens']
 export type ChecklistCounts = Schemas['ChecklistCounts']
 /** One item of one repository's checklist: the runs reminded of it, and how many gave each answer. */
 export type ChecklistItemCounts = Schemas['ChecklistItemCounts']
+/** The window before the checklist's counts: the items given, held, and unanswered, over every item. */
+export type ChecklistPrevious = Schemas['ChecklistPrevious']
 /** What a run answered of one item of its repository's checklist, with a held item's reason, on the run's page. */
 export type ChecklistAnswer = Schemas['ChecklistAnswer']
 /** A worker's answer to a checklist item: pass, fixed, held, n/a, or unanswered. */
@@ -189,6 +191,8 @@ export type HealthRefusal = Schemas['HealthRefusal']
 export type HealthDay = Schemas['HealthDay']
 /** A count of runs by kind. */
 export type HealthCounts = Schemas['HealthCounts']
+/** The window before a health report's: its runs, failures, and what they cost. */
+export type HealthPrevious = Schemas['HealthPrevious']
 /** How many of a kind's ended runs reported no cost, of how many. */
 export type SpendUnpriced = Schemas['SpendUnpriced']
 /** Which checks failed in a window, what fixing them cost, and whether the flaky kicks worked. */
@@ -209,6 +213,8 @@ export type CiKickedPullRequest = Schemas['CiKickedPullRequest']
 export type CiPullRequest = Schemas['CiPullRequest']
 /** How a check run counts: red, green, or neither. */
 export type CiVerdict = Schemas['CiVerdict']
+/** The window before a CI report's: its heads, green first, red runs, and fixes. */
+export type CiPrevious = Schemas['CiPrevious']
 /** Where a window's review feedback came from, how long it took, and what answering it cost. */
 export type ReviewsReport = Schemas['ReviewsReport']
 /** A PR in a window: its feedback, how soon its first review came, and what answering cost. */
@@ -223,6 +229,8 @@ export type ReviewsRound = Schemas['ReviewsRound']
 export type ReviewsEffort = Schemas['ReviewsEffort']
 /** canopy's review runs of one purpose and status in a window. */
 export type ReviewsRunCount = Schemas['ReviewsRunCount']
+/** The window before a Reviews report's: its reviews, PRs, first reviews and their median, and rounds. */
+export type ReviewsPrevious = Schemas['ReviewsPrevious']
 /** How a window's plans were approved, by the level their planners were offered, and what their PRs needed. */
 export type PlansReport = Schemas['PlansReport']
 /** A ticket plan written in a window: how it went, how long approving it took, and the resumes its ticket needed. */

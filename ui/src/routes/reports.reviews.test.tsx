@@ -24,11 +24,11 @@ const REPORT: ReviewsReport = {
     previous: {
         since: '2026-09-25T00:00:00Z',
         until: '2026-10-02T00:00:00Z',
-        reviews: 0,
-        pull_requests: 0,
-        first_reviews: 0,
-        median_first_review_hours: null,
-        rounds: 0,
+        reviews: 6,
+        pull_requests: 1,
+        first_reviews: 1,
+        median_first_review_hours: 1.5,
+        rounds: 2,
     },
     reviews: 4,
     first_reviews: 1,
@@ -160,6 +160,26 @@ async function renderPage(report: ReviewsReport) {
 }
 
 describe('the Reviews page', () => {
+    it("heads the page with the window's figures, each against the week before's", async () => {
+        await renderPage(REPORT)
+        const tiles = await screen.findByTestId('reviews-tiles')
+        const tileKeys = ['reviews', 'prs', 'first-reviews', 'median-wait', 'rounds']
+        expect(tileKeys.map((key) => within(tiles).getByTestId(`reviews-${key}`).textContent)).toEqual([
+            '4',
+            '1',
+            '1',
+            '3.0h',
+            '2',
+        ])
+        expect(tileKeys.map((key) => within(tiles).getByTestId(`reviews-${key}-delta`).textContent)).toEqual([
+            '−2 on the 7 days before',
+            'same as the 7 days before',
+            'same as the 7 days before',
+            '+1.5h on the 7 days before',
+            'same as the 7 days before',
+        ])
+    })
+
     it("says the window's state under its title, and what the median leaves out", async () => {
         await renderPage(REPORT)
         expect(await screen.findByText('4 reviews on 1 PR · median first review 3.0h over 7 days')).toBeTruthy()

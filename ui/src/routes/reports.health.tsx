@@ -33,8 +33,10 @@ import {
     healthFigures,
     healthLine,
     healthWindow,
+    previousHealthFigures,
 } from '@/lib/health'
-import { windowName } from '@/lib/report-window'
+import { pointsChange, readoutDelta, usdChange, wholeChange } from '@/lib/readout-delta'
+import { windowBefore, windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
 import { dayName, shareText, unpricedText } from '@/lib/spend'
 import { cn } from '@/lib/utils'
@@ -97,7 +99,9 @@ function HealthPage() {
                         }}
                     />
                 }
-                links={!failed && <ReadoutTiles tiles={healthTiles(data)} testId="health" />}
+                links={
+                    !failed && <ReadoutTiles tiles={healthTiles(data)} against={windowBefore(shown)} testId="health" />
+                }
             >
                 {data === undefined ? (query.isPending ? 'reading how the runs ended' : null) : healthLine(data)}
             </PageHeader>
@@ -143,23 +147,41 @@ function HealthPage() {
     )
 }
 
-/** The window's headline figures, each held in its place while the report is read. */
+/**
+ * The window's headline figures, each held in its place while the report is read, and each against the window
+ * before's: fewer failures, and a lower rate, are better; what they cost is spend, never colored.
+ */
 function healthTiles(found: HealthReport | undefined): ReadoutTile[] {
     const figures = found === undefined ? undefined : healthFigures(found)
+    const before = found === undefined ? undefined : previousHealthFigures(found.previous)
     return [
-        { key: 'runs', label: 'runs', hint: 'The runs that ended, of every kind', value: figures?.runs },
-        { key: 'failed', label: 'failed', hint: FAILED_HINT, value: figures?.failed },
+        {
+            key: 'runs',
+            label: 'runs',
+            hint: 'The runs that ended, of every kind',
+            value: figures?.runs,
+            delta: readoutDelta(figures?.runs, before?.runs, wholeChange),
+        },
+        {
+            key: 'failed',
+            label: 'failed',
+            hint: FAILED_HINT,
+            value: figures?.failed,
+            delta: readoutDelta(figures?.failed, before?.failed, wholeChange, 'down'),
+        },
         {
             key: 'rate',
             label: 'failure rate',
             hint: "The failed runs' share of the ended ones",
             value: figures === undefined ? undefined : shareText(figures.rate),
+            delta: readoutDelta(figures?.rate, before?.rate, pointsChange, 'down'),
         },
         {
             key: 'failed-cost',
             label: 'failures cost',
             hint: 'What the failed runs cost, of those that reported a cost',
             value: figures === undefined ? undefined : <Cost usd={figures.failedUsd} />,
+            delta: readoutDelta(figures?.failedUsd, before?.failedUsd, usdChange),
         },
     ]
 }

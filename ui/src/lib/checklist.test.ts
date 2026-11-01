@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest'
 
 import type { ChecklistAnswer, ChecklistItemCounts } from '@/api/types'
 
-import { ANSWER_COLUMNS, answersByRepo, answersLine, checklistDays, checklistLine, itemsByRepo } from './checklist'
+import {
+    ANSWER_COLUMNS,
+    answersByRepo,
+    answersLine,
+    checklistDays,
+    checklistFigures,
+    checklistLine,
+    itemsByRepo,
+} from './checklist'
 
 function item(repo: string, id: string, extra: Partial<ChecklistItemCounts> = {}): ChecklistItemCounts {
     return {
@@ -97,5 +105,16 @@ describe('answersLine', () => {
     it("names one list's repository, or counts several, then each answer given, in canopy checklist's order", () => {
         expect(answersLine(ANSWERS.slice(0, 3))).toBe('api · 2 pass · 1 held')
         expect(answersLine(ANSWERS)).toBe('2 repositories · 2 pass · 1 fixed · 1 held · 1 unanswered')
+    })
+})
+
+describe('checklistFigures', () => {
+    it('sums the items given, held, and unanswered over every repository', () => {
+        const items = [
+            item('api', 'a', { reminded: 3, held: 1, unanswered: 0 }),
+            item('web', 'b', { reminded: 2, held: 0, unanswered: 2 }),
+        ]
+        expect(checklistFigures(items)).toEqual({ reminded: 5, held: 1, unanswered: 2 })
+        expect(checklistFigures([])).toEqual({ reminded: 0, held: 0, unanswered: 0 })
     })
 })

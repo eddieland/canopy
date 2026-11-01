@@ -1,7 +1,7 @@
 // The Reviews page: where review feedback on canopy's PRs came from, how long it took, and what answering it cost.
 // The numbers are the server's (`canopy.core.review_report`); this lays them out.
 
-import type { ReviewsDay, ReviewsReport, ReviewsRound } from '@/api/types'
+import type { ReviewsDay, ReviewsPrevious, ReviewsReport, ReviewsRound } from '@/api/types'
 import type { DayBar, DayChartSeries } from '@/lib/chart'
 import type { Clock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
@@ -74,6 +74,44 @@ export function reviewsLine(
             : `median first review ${hoursText(found.median_first_review_hours)}`
     const reviews = `${counted(found.reviews, 'review')} on ${counted(found.pull_requests.length, 'PR')}`
     return `${reviews} · ${median} over ${windowName(found)}`
+}
+
+/** The window's headline figures, as the page's tiles show them. */
+export interface ReviewsFigures {
+    /** The reviews made in it. */
+    reviews: number
+    /** The PRs with something in it. */
+    prs: number
+    /** The first reviews that arrived in it on a PR with a start. */
+    firstReviews: number
+    /** Their median wait, in hours; null with none. */
+    medianHours: number | null
+    /** The feedback plans made in it. */
+    rounds: number
+}
+
+/** The window's reviews, PRs, first reviews with their median wait, and feedback rounds. */
+export function reviewsFigures(
+    found: Pick<ReviewsReport, 'reviews' | 'pull_requests' | 'first_reviews' | 'median_first_review_hours' | 'rounds'>,
+): ReviewsFigures {
+    return {
+        reviews: found.reviews,
+        prs: found.pull_requests.length,
+        firstReviews: found.first_reviews,
+        medianHours: found.median_first_review_hours,
+        rounds: found.rounds.length,
+    }
+}
+
+/** The window before's headline figures, as `reviewsFigures` reads the window's. */
+export function previousReviewsFigures(previous: ReviewsPrevious): ReviewsFigures {
+    return {
+        reviews: previous.reviews,
+        prs: previous.pull_requests,
+        firstReviews: previous.first_reviews,
+        medianHours: previous.median_first_review_hours,
+        rounds: previous.rounds,
+    }
 }
 
 /**
