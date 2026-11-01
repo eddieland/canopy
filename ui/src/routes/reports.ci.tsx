@@ -2,7 +2,16 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 
 import { ciReportQuery } from '@/api/queries'
-import type { CiCheck, CiDay, CiFix, CiFixedCheck, CiKick, CiKickedPullRequest, CiReport } from '@/api/types'
+import type {
+    CiCheck,
+    CiDay,
+    CiFix,
+    CiFixedCheck,
+    CiKick,
+    CiKickedPullRequest,
+    CiPullRequest,
+    CiReport,
+} from '@/api/types'
 import { Age } from '@/components/age'
 import { CellBar } from '@/components/cell-bar'
 import { ChartTable } from '@/components/chart-table'
@@ -15,12 +24,11 @@ import type { PullRequestColumn } from '@/components/pull-request-table'
 import { ReadoutTiles } from '@/components/readout-tiles'
 import type { ReadoutTile } from '@/components/readout-tiles'
 import { RunLink } from '@/components/run-link'
-import { Word } from '@/components/status'
+import { Chip, Word } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
 import { Clipped, Hinted } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
-import { barPercent } from '@/lib/chart'
 import {
     CI_WINDOWS,
     ciBars,
@@ -32,12 +40,22 @@ import {
     failureRate,
     failureShare,
     fixRateText,
+    fixToGreenText,
+    GREEN_FIRST_SERIES,
+    greenFirstBars,
+    greenFirstRateText,
+    isFlaky,
     kickText,
     LIMITS_TEXT,
+    FLAKY_RERUNS,
+    nextHeadShare,
     nextHeadText,
     nextText,
     previousCiFigures,
     redSum,
+    rerunsText,
+    TO_GREEN_TEXT,
+    toGreenText,
     VERDICTS_TEXT,
 } from '@/lib/ci'
 import { useClock } from '@/lib/clock'
@@ -45,6 +63,7 @@ import { counted } from '@/lib/descriptions'
 import { pointsChange, readoutDelta, wholeChange } from '@/lib/readout-delta'
 import { windowBefore, windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
+import { hoursText } from '@/lib/reports'
 import { dayName, shareText } from '@/lib/spend'
 import { cn } from '@/lib/utils'
 
@@ -54,8 +73,9 @@ interface CiSearch {
 
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP = [
-    'What CI did on the PRs canopy observed: each check by how often it went red and how often the next head fixed',
-    'it, the red checks by day, the resumes that fixed CI and what they cost, the flaky kicks, and the cooldown.',
+    'What CI did on the PRs canopy observed: each check by how often it went red, how often the next head fixed it,',
+    'and how often a rerun on the same head passed; the heads green first time and the red checks by day; the resumes',
+    'that fixed CI and what they cost; how long each PR stayed red; and the reruns canopy made or held.',
     LIMITS_TEXT,
 ].join(' ')
 
@@ -63,6 +83,13 @@ const HELP = [
 const RATE_HINT = "Its red runs' share of its red and green ones"
 const NEXT_HEAD_HINT = 'Of its red runs a run on a new head of the same PR followed, how many passed'
 const FIXED_HINT = "The checks red on its PR's head when it started, and how each ran on the next head"
+const RERUNS_HINT =
+    'Its runs on a head it had been red on, with no new commit, and how many passed: ' +
+    `flaky at ${FLAKY_RERUNS} that did`
+// What the reruns panel says with kicks off and none made.
+const KICKS_OFF =
+    'Kicks are off: trust.max_flaky_kicks is 0, so a check a worker calls flaky waits for you to rerun it.'
+const TO_GREEN_HINT = 'From the first red check on its PR to the first head with every check green'
 
 // A fixed check's next run, in its state's color: green passed, red failed again, the rest muted.
 const NEXT_TONE: Record<string, string> = {
@@ -120,6 +147,14 @@ function CiPage() {
             </Panel>
             {!failed && (
                 <>
+                    <Panel data-testid="ci-green-first">
+                        <PanelHeader label="Green first time by day" />
+                        {data === undefined ? (
+                            <PanelSkeleton rows={6} className="min-h-72" />
+                        ) : (
+                            <GreenFirst found={data} span={span} />
+                        )}
+                    </Panel>
                     <Panel data-testid="ci-by-day">
                         <PanelHeader label="Red checks by day" />
                         {data === undefined ? (
@@ -140,8 +175,22 @@ function CiPage() {
                             <Fixes fixes={data.fixes} span={span} />
                         )}
                     </Panel>
-                    <Panel data-testid="ci-kicks">
-                        <PanelHeader label="Flaky kicks">
+                    <Panel data-testid="ci-to-green">
+                        <PanelHeader label="Time to green">
+                            <span className="readout text-xs text-muted-foreground" data-testid="ci-to-green-median">
+                                {data === undefined || data.median_hours_to_green === null
+                                    ? ''
+                                    : `median ${hoursText(data.median_hours_to_green)}`}
+                            </span>
+                        </PanelHeader>
+                        {data === undefined ? (
+                            <PanelSkeleton rows={4} className="min-h-32" />
+                        ) : (
+                            <ToGreen pullRequests={data.pull_requests} span={span} />
+                        )}
+                    </Panel>
+                    <Panel data-testid="ci-reruns">
+                        <PanelHeader label="Reruns">
                             <span className="readout text-xs text-muted-foreground" data-testid="ci-kick-limit">
                                 {data === undefined ? '' : `trust.max_flaky_kicks = ${data.max_flaky_kicks}`}
                             </span>
@@ -149,15 +198,7 @@ function CiPage() {
                         {data === undefined ? (
                             <PanelSkeleton rows={3} className="min-h-24" />
                         ) : (
-                            <Kicks found={data} span={span} />
-                        )}
-                    </Panel>
-                    <Panel data-testid="ci-cooldown">
-                        <PanelHeader label="Cooldown refusals" />
-                        {data === undefined ? (
-                            <PanelSkeleton rows={1} className="min-h-12" />
-                        ) : (
-                            <Cooldown found={data} span={span} />
+                            <Reruns found={data} span={span} />
                         )}
                     </Panel>
                 </>
@@ -168,7 +209,8 @@ function CiPage() {
 
 /**
  * The window's headline figures, each held in its place while the report is read, and each against the window
- * before's: more heads green first time, and fewer red runs, are better.
+ * before's: more heads green first time, fewer red runs, and more fixes gone green are better. The median time to
+ * green has no window before's to say against.
  */
 function ciTiles(found: CiReport | undefined): ReadoutTile[] {
     const figures = found === undefined ? undefined : ciFigures(found)
@@ -202,54 +244,85 @@ function ciTiles(found: CiReport | undefined): ReadoutTile[] {
             value: figures?.fixes,
             delta: readoutDelta(figures?.fixes, before?.fixes, wholeChange),
         },
+        {
+            key: 'fixes-green',
+            label: 'went green',
+            hint: 'Of those resumes, the ones whose every red check was green on the head after them',
+            value: figures?.fixesGreen,
+            delta: readoutDelta(figures?.fixesGreen, before?.fixesGreen, wholeChange, 'up'),
+        },
+        {
+            key: 'red-spell',
+            label: 'time to green',
+            hint: "The median PR's time from its first red check to a head with every check green",
+            value: found === undefined ? undefined : hoursText(found.median_hours_to_green),
+        },
     ]
 }
 
 /**
- * Each check by name, the worst first: its runs, its red runs, its share of red among red and green, and how often
- * its next run on a new head passed after a red one. Under it, what counts as red, and what the page cannot see.
+ * Each check by name, the worst first: its failure rate as a bar in the failed state's color, since red is a state
+ * here, its red runs and its runs beside it, how often its next run on a new head passed after a red one, and how
+ * often a rerun on a head it had been red on passed, flaky past `FLAKY_RERUNS` without anyone's say-so. The table
+ * sizes to its content. Under it, what counts as red, and what the page cannot see.
  */
 function Checks({ checks, span }: { checks: CiCheck[]; span: string }) {
     return (
-        <div className="flex flex-col gap-3 p-3">
+        <div className="flex flex-col gap-3 px-3 pb-3">
             {checks.length === 0 ? (
                 <Empty size="panel">no check run was observed in these {span}</Empty>
             ) : (
                 <PanelScroll label="Checks by name" className="max-h-96 overflow-x-auto">
-                    <table className="w-full border-collapse text-sm" data-testid="ci-check-table">
-                        <thead className="sticky top-0 bg-surface">
+                    <table className="border-collapse text-sm" data-testid="ci-check-table">
+                        <thead className="sticky top-0 bg-surface [&_th]:pt-3">
                             <tr className="text-right">
                                 <th className="panel-label pb-1.5 text-left font-normal">check</th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">red</th>
                                 <th className="panel-label pb-1.5 pl-3 text-left font-normal">
                                     <Hinted hint={RATE_HINT}>failure rate</Hinted>
                                 </th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">
+                                <th className="panel-label pb-1.5 pl-3 font-normal">red</th>
+                                <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
+                                <th className="panel-label pb-1.5 pl-3 text-left font-normal">
                                     <Hinted hint={NEXT_HEAD_HINT}>next head green</Hinted>
+                                </th>
+                                <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                                    <Hinted hint={RERUNS_HINT}>same-head reruns</Hinted>
                                 </th>
                             </tr>
                         </thead>
                         <tbody className="font-mono text-xs">
                             {checks.map((c) => (
                                 <tr key={c.name} className="text-right" data-testid="ci-check">
-                                    <th scope="row" className="max-w-0 py-0.5 text-left font-normal">
-                                        <Clipped text={c.name} className="block" />
+                                    <th scope="row" className="py-0.5 text-left font-normal">
+                                        <Clipped text={c.name} className="block max-w-64" />
                                     </th>
-                                    <td className="readout pl-3 text-muted-foreground">{c.runs}</td>
-                                    <td className={cn('readout pl-3', c.red > 0 && 'text-status-failed')}>{c.red}</td>
-                                    <td className="pl-3">
+                                    <td className="pl-3 text-left">
                                         <CellBar
-                                            percent={barPercent(
-                                                failureShare(c),
-                                                checks.map((check) => failureShare(check)),
-                                            )}
+                                            percent={(failureShare(c) ?? 0) * 100}
+                                            fill="bg-status-failed"
                                             valueClassName="readout w-10 text-right"
                                         >
                                             {failureRate(c)}
                                         </CellBar>
                                     </td>
-                                    <td className="readout pl-3 text-muted-foreground">{nextHeadText(c)}</td>
+                                    <td className={cn('readout pl-3', c.red > 0 && 'text-status-failed')}>{c.red}</td>
+                                    <td className="readout pl-3 text-muted-foreground">{c.runs}</td>
+                                    <td className="pl-3 text-left text-muted-foreground">
+                                        <CellBar
+                                            percent={(nextHeadShare(c) ?? 0) * 100}
+                                            valueClassName="readout w-12 text-right"
+                                        >
+                                            {nextHeadText(c)}
+                                        </CellBar>
+                                    </td>
+                                    <td className="pl-3 text-left">
+                                        <span className="flex items-center gap-2">
+                                            <span className="readout w-12 text-right text-muted-foreground">
+                                                {rerunsText(c)}
+                                            </span>
+                                            {isFlaky(c) && <Chip tone="blocked">flaky</Chip>}
+                                        </span>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -259,6 +332,53 @@ function Checks({ checks, span }: { checks: CiCheck[]; span: string }) {
             <p className="text-xs text-muted-foreground" data-testid="ci-limits">
                 {VERDICTS_TEXT} {LIMITS_TEXT}
             </p>
+        </div>
+    )
+}
+
+/**
+ * Each day's PR heads first checked as a stacked bar, the ones green first time at the bottom, so a bad week shows
+ * as a dip; the day's rate on hover, the legend under it, then the same numbers as a table. A window with no head
+ * checked says so, in place of all three.
+ */
+function GreenFirst({ found, span }: { found: CiReport; span: string }) {
+    const clock = useClock()
+    if (found.per_day.every((day) => day.heads === 0)) {
+        return <Empty size="panel">no PR head was checked in these {span}</Empty>
+    }
+    return (
+        <div className="flex flex-col gap-4 p-3">
+            {/* Measured afresh for each window: another count of bars is another pitch. */}
+            <DayChart key={found.per_day.length} bars={greenFirstBars(found.per_day, clock)} testId="ci-green-first" />
+            <DayChartLegend series={GREEN_FIRST_SERIES} testId="ci-green-first" />
+            <ChartTable
+                what={counted(found.per_day.length, 'day')}
+                label="Green first time by day"
+                className="max-h-60 overflow-x-auto"
+            >
+                <table className="border-collapse text-sm" data-testid="ci-green-first-table">
+                    <thead className="sticky top-0 bg-surface">
+                        <tr className="text-right">
+                            <th className="panel-label pb-1.5 text-left font-normal">day</th>
+                            <th className="panel-label pb-1.5 pl-3 font-normal">heads</th>
+                            <th className="panel-label pb-1.5 pl-3 font-normal">green first time</th>
+                            <th className="panel-label pb-1.5 pl-3 font-normal">rate</th>
+                        </tr>
+                    </thead>
+                    <tbody className="font-mono text-xs">
+                        {found.per_day.toReversed().map((day: CiDay) => (
+                            <tr key={day.day} className="text-right" data-testid={`ci-green-day-${day.day}`}>
+                                <th scope="row" className="readout py-0.5 text-left font-normal">
+                                    {dayName(day, clock)}
+                                </th>
+                                <td className="readout pl-3 text-muted-foreground">{day.heads}</td>
+                                <td className="readout pl-3">{day.green_first}</td>
+                                <td className="readout pl-3 text-muted-foreground">{greenFirstRateText(day)}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </ChartTable>
         </div>
     )
 }
@@ -322,7 +442,7 @@ function ByDay({ found, span }: { found: CiReport; span: string }) {
 /**
  * Each `resume` for `ci` that started in the window, the newest first, a retired `fix-ci` among them: the run, its
  * ticket, how it ended, the checks red on its PR's head when it started with how each one's first run on the next
- * head ended, what it cost, and when it started.
+ * head ended, how long its PR took to go green, what it cost, and when it started.
  */
 function Fixes({ fixes, span }: { fixes: CiFix[]; span: string }) {
     if (fixes.length === 0) {
@@ -338,6 +458,9 @@ function Fixes({ fixes, span }: { fixes: CiFix[]; span: string }) {
                         <th className="panel-label pb-1.5 pl-3 font-normal">ended</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">
                             <Hinted hint={FIXED_HINT}>checks, then the next head</Hinted>
+                        </th>
+                        <th className="panel-label pb-1.5 pl-3 text-right font-normal whitespace-nowrap">
+                            <Hinted hint={TO_GREEN_HINT}>to green</Hinted>
                         </th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">spent</th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">started</th>
@@ -360,6 +483,14 @@ function Fixes({ fixes, span }: { fixes: CiFix[]; span: string }) {
                             </td>
                             <td className="w-full pl-3">
                                 <FixedChecks checks={f.checks} />
+                            </td>
+                            <td
+                                className={cn(
+                                    'readout pl-3 text-right whitespace-nowrap',
+                                    fixToGreenText(f) === 'still red' && 'text-status-failed',
+                                )}
+                            >
+                                {fixToGreenText(f)}
                             </td>
                             <td className="readout pl-3 text-right text-muted-foreground">
                                 <Cost usd={f.cost_usd} />
@@ -416,23 +547,74 @@ function kickColumns(limit: number): PullRequestColumn<CiKickedPullRequest>[] {
     ]
 }
 
+// What the time-to-green table counts of each PR: when its spell of red began, and how long it lasted.
+const TO_GREEN_COLUMNS: PullRequestColumn<CiPullRequest>[] = [
+    {
+        key: 'red-at',
+        label: 'red since',
+        hint: 'When its latest spell of red began: the first red check run canopy saw on it',
+        cell: (pr) => (pr.red_at === null ? '–' : <Age at={pr.red_at} variant="ago" />),
+        muted: true,
+    },
+    {
+        key: 'took',
+        label: 'to green',
+        hint: TO_GREEN_HINT,
+        cell: (pr) => {
+            const text = toGreenText(pr)
+            return <span className={cn('whitespace-nowrap', text === 'still red' && 'text-status-failed')}>{text}</span>
+        },
+    },
+]
+
 /**
- * The window's flaky kicks: by PR, against `trust.max_flaky_kicks`, then each kick whose check came back red. With
- * kicks off and none made, it says they are off, and where that is set.
+ * Each PR with a check run in the window and how long it stayed red: those still red first, the oldest first, then the
+ * slowest to go green, then those never red. Under it, how roughly it measures.
  */
+function ToGreen({ pullRequests, span }: { pullRequests: CiPullRequest[]; span: string }) {
+    if (pullRequests.length === 0) {
+        return <Empty size="panel">no PR had a check run in these {span}</Empty>
+    }
+    return (
+        <div className="flex flex-col">
+            <PullRequestTable
+                rows={pullRequests}
+                columns={TO_GREEN_COLUMNS}
+                label="Time to green by pull request"
+                testId="ci-to-green"
+            />
+            <p className="px-3 pb-3 text-xs text-muted-foreground" data-testid="ci-to-green-caveat">
+                {TO_GREEN_TEXT}
+            </p>
+        </div>
+    )
+}
+
+/**
+ * The window's reruns: the flaky kicks by PR against `trust.max_flaky_kicks`, then each kick whose check came back red;
+ * with none made, one line saying so, or that kicks are off. Its foot is what the cooldown held while checks ran again.
+ */
+function Reruns({ found, span }: { found: CiReport; span: string }) {
+    return (
+        <div className="flex flex-col">
+            <Kicks found={found} span={span} />
+            <Cooldown found={found} span={span} />
+        </div>
+    )
+}
+
+/** The window's flaky kicks: by PR, then each kick whose check came back red; or one line when none was made. */
 function Kicks({ found, span }: { found: CiReport; span: string }) {
     if (found.kicks.length === 0) {
-        return found.max_flaky_kicks === 0 ? (
-            <Empty size="panel">
-                kicks are off: trust.max_flaky_kicks is 0, so a check a worker calls flaky waits for you to rerun it
-            </Empty>
-        ) : (
-            <Empty size="panel">no flaky kick in these {span}</Empty>
+        return (
+            <p className="p-3 text-sm text-muted-foreground" data-testid="ci-kicks">
+                {found.max_flaky_kicks === 0 ? KICKS_OFF : `No flaky kick in these ${span}.`}
+            </p>
         )
     }
     const red = found.kicks.filter((k) => k.still_red.length > 0)
     return (
-        <div className="flex flex-col">
+        <div className="flex flex-col" data-testid="ci-kicks">
             <PullRequestTable
                 rows={found.kicked_pull_requests}
                 columns={kickColumns(found.max_flaky_kicks)}
@@ -470,7 +652,10 @@ function RedKick({ kick, limit }: { kick: CiKick; limit: number }) {
     )
 }
 
-/** What the cooldown guard refused in the window, as the health page counts it, linking there rather than repeating. */
+/**
+ * What the cooldown guard refused in the window, as the health page counts it, the reruns' foot under a hairline,
+ * linking there rather than repeating.
+ */
 function Cooldown({ found, span }: { found: CiReport; span: string }) {
     const health = (
         <Link
@@ -483,17 +668,17 @@ function Cooldown({ found, span }: { found: CiReport; span: string }) {
     )
     if (found.cooldown === null) {
         return (
-            <p className="p-3 text-sm text-muted-foreground" data-testid="ci-cooldown-line">
+            <p className="border-t p-3 text-xs text-muted-foreground" data-testid="ci-cooldown-line">
                 The cooldown held no resume in these {span}. {health} has every guard&apos;s refusals.
             </p>
         )
     }
     const { decisions, ticks, last_tick: last } = found.cooldown
     return (
-        <p className="p-3 text-sm" data-testid="ci-cooldown-line">
+        <p className="border-t p-3 text-xs text-muted-foreground" data-testid="ci-cooldown-line">
             The cooldown held {decisions === 1 ? '1 resume' : `${decisions} resumes`} in{' '}
-            {ticks === 1 ? '1 tick' : `${ticks} ticks`}, the latest <TickLink id={last} />. {health} has every
-            guard&apos;s refusals.
+            {ticks === 1 ? '1 tick' : `${ticks} ticks`} while checks ran again, the latest <TickLink id={last} />.{' '}
+            {health} has every guard&apos;s refusals.
         </p>
     )
 }
