@@ -10,6 +10,9 @@ import type {
     FeedbackPlanItem,
     HostResources,
     PullRequestThreads,
+    ReportMonth,
+    ReportTicket,
+    ReportTokens,
     ReviewDraft,
     ReviewSummary,
     ReviewThread,
@@ -572,6 +575,72 @@ export function mockHost(fields: Partial<HostResources> = {}): HostResources {
             open_files: 61,
             max_open_files: 65536,
         },
+        ...fields,
+    }
+}
+
+/** What a month's model calls were sent and wrote, four fifths of it read from the cache. */
+export const mockReportTokens: ReportTokens = {
+    input: 1000,
+    output: 200,
+    reasoning: 50,
+    cache_read: 8000,
+    cache_write: 1000,
+    cache_hit: 0.8,
+}
+
+/** A month of the monthly report, `name` as `YYYY-MM`, that cost `cost` and did nothing else unless `fields` say so. */
+export function mockReportMonth(name: string, cost: number | null, fields: Partial<ReportMonth> = {}): ReportMonth {
+    return {
+        month: name,
+        since: `${name}-01T00:00:00Z`,
+        until: `${name}-28T00:00:00Z`,
+        runs: 0,
+        cost_usd: cost,
+        tokens: mockReportTokens,
+        kinds: [],
+        outside: {
+            sessions: 0,
+            cost_usd: null,
+            tokens: { input: 0, output: 0, reasoning: 0, cache_read: 0, cache_write: 0, cache_hit: null },
+        },
+        models: [],
+        landed: [],
+        closed: 0,
+        pull_requests: 0,
+        per_landed_usd: null,
+        median_iterations: null,
+        median_pr_comments: null,
+        median_hours_to_land: null,
+        median_review_wait_hours: null,
+        runs_ended: 0,
+        failed: 0,
+        failed_cost_usd: null,
+        heads: 0,
+        green_first: 0,
+        first_reviews: 0,
+        median_first_review_hours: null,
+        ...fields,
+    }
+}
+
+/** A ticket October 2026 landed, a worker run and five days after it started, with a review three hours in. */
+export function mockReportTicket(key: string, fields: Partial<ReportTicket> = {}): ReportTicket {
+    return {
+        key,
+        title: null,
+        landed_at: '2026-10-04T11:00:00Z',
+        started_at: '2026-09-28T10:00:00Z',
+        iterations: 1,
+        pr_comments: 0,
+        reviews: 1,
+        changes_requested: 0,
+        cost_usd: null,
+        hours_to_land: 125,
+        review_wait_hours: 3,
+        merged_at: null,
+        awaiting_review_at: null,
+        pull_requests: [],
         ...fields,
     }
 }
