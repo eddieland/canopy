@@ -58,11 +58,22 @@ describe('plan report', () => {
         const buckets = [
             { low: 0, high: 50 },
             { low: 50, high: 100 },
-            { low: 200, high: null },
+            { low: 200, high: 300 },
+            { low: 300, high: null },
         ]
-        expect(buckets.map((b) => lengthText(b, 50))).toEqual(['under 1 page', '1–2 pages', '4 pages and up'])
+        expect(buckets.map((b) => lengthText(b, 50))).toEqual([
+            'under 1 page',
+            '1–2 pages',
+            '4–6 pages',
+            '6 pages and up',
+        ])
         expect(lengthText({ low: 50, high: null }, 50)).toBe('1 page and up')
-        expect(buckets.map((b) => lengthLinesText(b))).toEqual(['under 50 lines', '50–100 lines', '200 lines and up'])
+        expect(buckets.map((b) => lengthLinesText(b))).toEqual([
+            'under 50 lines',
+            '50–100 lines',
+            '200–300 lines',
+            '300 lines and up',
+        ])
     })
 
     it('reads a length as pages to the nearest half, never under a half', () => {

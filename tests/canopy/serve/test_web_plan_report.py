@@ -52,8 +52,8 @@ def test_the_plans_report_reads_the_mocks_week_and_months(backend: Backend) -> N
     # Each plan measured from its original; the operator's approvals by length, cut at whole pages.
     assert all(p["metrics"]["lines"] > 0 for p in month["plans"])
     assert month["page_lines"] == plan_report.PAGE_LINES
-    # ABC-079's and ABC-085's two to four pages; ABC-091's second, four and up.
-    assert [(n["low"], n["high"], n["plans"]) for n in month["lengths"]] == [(100, 200, 2), (200, None, 1)]
+    # ABC-079's and ABC-085's two to four pages; ABC-091's second, four to six.
+    assert [(n["low"], n["high"], n["plans"]) for n in month["lengths"]] == [(100, 200, 2), (200, 300, 1)]
     second = next(p for p in month["plans"] if p["ticket_key"] == "ABC-091" and p["outcome"] == "revised")
     assert (second["earlier"], second["hours_to_approve"], second["resumes"], second["done"]) == (1, 4.0, 1, True)
 

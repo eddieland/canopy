@@ -17,8 +17,8 @@ if TYPE_CHECKING:
 
     from tests.conftest import CanopyEnv
 
-# A plan of under a page, one of one to two pages in the plan editor, and one of four pages up with every kind of block
-# that is not prose (`plan_metrics`).
+# A plan of under a page, one of one to two pages in the plan editor, and one of four to six pages with every kind of
+# block that is not prose (`plan_metrics`).
 SHORT = "# Plan\n\nOne step.\n"
 MEDIUM = "# Plan\n\n" + "\n".join(f"- step {i}" for i in range(60)) + "\n"
 LONG = (
@@ -114,7 +114,7 @@ def test_each_plan_goes_one_way_and_its_ticket_counts_the_resumes_after_its_appr
     # The planner's approvals take no time, so the lengths are the operator's alone.
     assert [(n.low, n.high, n.plans, n.median_to_approve, n.as_written) for n in found.lengths] == [
         (50, 100, 1, timedelta(hours=1), 1),
-        (200, None, 1, timedelta(hours=3), 0),
+        (200, 300, 1, timedelta(hours=3), 0),
     ]
     assert (found.count(Outcome.REPLACED), found.count(Outcome.WAITING)) == (1, 1)
 
