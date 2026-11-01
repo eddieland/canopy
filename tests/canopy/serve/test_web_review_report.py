@@ -47,8 +47,11 @@ def test_the_reviews_report_reads_the_mocks_week_and_month(backend: Backend) -> 
         "ABC-099",
         2,
         3,
-        1,
+        2,
     )
+    # Run 47's plan of alice's review, which run 45 went ahead on, answered by its push's checks at 11:51; run 46's
+    # plan, later, has no feedback of its own before it.
+    assert (week["turnarounds"], week["median_turnaround_hours"]) == (1, pytest.approx(0.65))
     # Asked for at 10:45, alice's first review at 11:12.
     assert (week["first_reviews"], week["median_first_review_hours"], week["untimed"]) == (1, 0.45, 0)
     assert week["per_day"][-1]["first_reviews"] == [1, 0, 0, 0]
@@ -58,7 +61,7 @@ def test_the_reviews_report_reads_the_mocks_week_and_month(backend: Backend) -> 
     month = c.get("/api/reports/reviews", params={"days": 30}).json()
     assert (month["first_reviews"], month["untimed"]) == (5, 2)
     assert [(e["effort"], e["plans"], e["resumes"]) for e in month["efforts"]] == [
-        ("small", 2, 1),
+        ("small", 3, 2),
         ("medium", 1, 0),
         (None, 5, 0),
     ]

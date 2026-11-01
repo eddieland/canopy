@@ -20,6 +20,14 @@ test("the nav opens Reviews under Reports, the week's first review timed on GitH
     await expect(reviewers).toHaveCount(3)
     await expect(page.getByTestId('reviews-pull-request-table').getByTestId('reviews-pull-request')).toHaveCount(1)
     await expect(page.getByTestId('reviews-canopy-trust')).toContainText('canopy:review is in trust.trusted_reviewers')
+    // Run 45 answered alice's review of 11:12 with run 47's plan, and its push's checks came back at 11:51.
+    await expect(page.getByTestId('reviews-turnaround')).toHaveText('39m')
+    await page.getByTestId('reviews-tiles').getByText('median turnaround').hover()
+    await expect(page.getByRole('tooltip')).toContainText(
+        "over 1 answered round. Each part's own median: review to plan 6m, plan to approval 1m, " +
+            'approval to resume 1m, resume to push 31m',
+    )
+    await expect(page.getByTestId('reviews-round-9').getByTestId('reviews-round-turnaround')).toHaveText('39m')
 })
 
 test("the month counts the PRs read before GitHub's times apart, and the planner's estimates", async ({ page }) => {
@@ -41,14 +49,10 @@ test("the month counts the PRs read before GitHub's times apart, and the planner
     const approved = page.getByTestId('reviews-pull-request').filter({ hasText: 'web#78' })
     await expect(approved.getByRole('cell').nth(4)).toHaveText('1')
     await expect(approved.getByRole('cell').nth(7)).toHaveText('0')
-    // PR 61's round is the month's one answered: dana's review, the plan, its approval, the resume, and its push's
-    // checks, 1.65 hours end to end, each part in the tile's tip.
-    await expect(page.getByTestId('reviews-turnaround')).toHaveText('1.6h')
+    // The month answered two rounds: PR 88's in 39 minutes, and PR 61's, eight days back, in 1.65 hours.
+    await expect(page.getByTestId('reviews-turnaround')).toHaveText('1.1h')
     await page.getByTestId('reviews-tiles').getByText('median turnaround').hover()
-    await expect(page.getByRole('tooltip')).toContainText(
-        "over 1 answered round. Each part's own median: review to plan 56m, plan to approval 12m, " +
-            'approval to resume 5m, resume to push 26m',
-    )
+    await expect(page.getByRole('tooltip')).toContainText('over 2 answered rounds.')
     await expect(page.getByTestId('reviews-round-5').getByTestId('reviews-round-turnaround')).toHaveText('1.6h')
     await expect(page.getByTestId('reviews-efforts').getByTestId('reviews-effort')).toHaveCount(3)
     await expect(page.getByTestId('reviews-round-4')).toContainText('the planner')

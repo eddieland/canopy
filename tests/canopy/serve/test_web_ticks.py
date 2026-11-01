@@ -231,8 +231,8 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
     assert today["plans"] == pytest.approx(1.28)
     # What each ticket's and PR's own runs cost, the costliest first; the mock marked no ticket done.
     assert [(t["key"], t["runs"], t["reviews"], t["cost_usd"]) for t in found["tickets"]][:2] == [
-        # ABC-099's feedback plan run among its three, which recorded no cost.
-        ("ABC-099", 3, 2, pytest.approx(3.5)),
+        # ABC-099's two feedback plan runs among its four, which recorded no cost.
+        ("ABC-099", 4, 2, pytest.approx(3.5)),
         ("ABC-103", 1, 1, pytest.approx(1.86)),
     ]
     assert (found["done"], found["per_done"], found["tickets"][0]["done"]) == (0, None, None)
@@ -255,7 +255,7 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
         ("workers", "anthropic/claude-sonnet-4-5", False, 3, 186),
         ("workers", "anthropic/claude-opus-4-1", False, 1, 23),
         ("workers", None, True, 5, 0),
-        ("workers", None, False, 1, 0),  # ABC-099's feedback plan run, which reported no session
+        ("workers", None, False, 2, 0),  # ABC-099's feedback plan runs, which reported no session
     ]
     assert found["models"][2]["cost_usd"] == pytest.approx(1.65)
 
@@ -274,7 +274,7 @@ def test_a_tickets_spend_by_model_is_its_own_runs_beside_the_workspaces(backend:
         ("workers", "anthropic/claude-opus-4-1", False, 1, 1),
         ("workers", "anthropic/claude-sonnet-4-5", False, 1, 10),
         ("workers", None, True, 1, 5),
-        ("workers", None, False, 1, 9),
+        ("workers", None, False, 2, 10),
         ("reviews", "openai/gpt-5", False, 2, 4),
     ]
     assert (found["models"][1]["cost_usd"], found["models"][1]["workspace_cost_usd"]) == (0.66, pytest.approx(15.39))
