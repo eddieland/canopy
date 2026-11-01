@@ -2,9 +2,10 @@
 
 import json
 import os
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 from canopy.core import contract
@@ -28,10 +29,18 @@ def resumes(*reasons: ResumeReason) -> Called:
     return dispatches(kind=RunKind.RESUME, reasons=reasons)
 
 
-def leaves_flaky(scenario: Scenario, reason: ResumeReason = ResumeReason.CI) -> Ran:
-    """A `resume` for `reason`, past the CI cooldown, whose worker leaves a failed check as flaky and pushes nothing."""
+def leaves_flaky(
+    scenario: Scenario,
+    reason: ResumeReason = ResumeReason.CI,
+    adds: Mapping[str, object] | None = None,
+) -> Ran:
+    """A `resume` for `reason`, past the CI cooldown, whose worker leaves a failed check as flaky and pushes nothing.
+
+    `adds` adds to the worker's result, such as the `flaky_cause` it names.
+    """
     scenario.time_passes(minutes=31)
-    return scenario.run(resumes(reason), worker=worker_does(result=LEAVES_FLAKY))
+    said = json.dumps(json.loads(LEAVES_FLAKY) | dict(adds or {}))
+    return scenario.run(resumes(reason), worker=worker_does(result=said))
 
 
 @contextmanager
@@ -218,6 +227,8 @@ def test_the_sinks_hear_the_workers_estimate_of_why_a_check_is_flaky(scenario: S
         "prs": ["https://example.test/pr/1"],
         "kicked": [],
         "estimate": "unit-tests lost its runner",
+        "cause": None,
+        "other_cause": None,
         "note": None,
     }
     assert message.event_line("ci.flaky", fields) == (
@@ -238,6 +249,62 @@ def test_the_sinks_hear_the_workers_estimate_of_why_a_check_is_flaky(scenario: S
     spent = told(scenario)[-1]
     assert spent["kicked"] == []
     assert "has had 1 kick(s) since its work was pushed" in str(spent["note"])
+
+
+def test_the_cause_a_worker_names_reaches_the_overseer_as_a_word_and_its_line_on_why_only_the_sinks(
+    scenario: Scenario,
+    git_pool: GitPool,
+    github_state: Path,
+) -> None:
+    takes_runs(scenario)
+    # A PR the `vcs` source reads, so the overseer is listed the ticket (DESIGN §39), read within the hour.
+    scenario.configures("private", connect={"max_age_minutes": 60})
+    scenario.run(worker=pushes(prs={"repo": READ_PR}))
+    run_ids = iter(range(77, 80))
+
+    def last_run(said: Mapping[str, object]) -> tuple[Ran, dict[str, Any]]:
+        """A check fails on a new head, and a `resume` leaves it flaky, saying `said`; and `last_run` after it."""
+        run_id = next(run_ids)
+        failed = {"name": "unit-tests", "status": "completed", "conclusion": "failure", "run_id": run_id}
+        github_state.write_text(
+            json.dumps({"prs": {READ_PR: {"pr": {"head_sha": f"abc{run_id:04d}"}, "checks": [failed]}}}),
+        )
+        scenario.tick(*waits(KEY, rationale="its check failed"))
+        ran = leaves_flaky(scenario, adds={"pr": READ_PR, **said})
+        scenario.tick(*waits(KEY, rationale="the operator reruns it"))
+        return ran, scenario.ticket_state()["last_run"]
+
+    left, seen = last_run({"flaky_cause": "service", "flaky_detail": "registry.npmjs.org returned 503"})
+    assert seen["flaky_cause"] == "service"
+    # Its line on why is kept with the run, and told to the sinks, never to the overseer.
+    assert contract.stored_object(left.row["result_json"])["flaky_detail"] == "registry.npmjs.org returned 503"
+    assert "registry" not in json.dumps(seen)
+    [fields] = told(scenario)
+    assert fields["cause"] == "service"
+    assert message.event_line("ci.flaky", fields) == (
+        f"? {KEY} run {left.id} left a failed check as flaky, likely a service the job calls; rerun it, or "
+        f"`canopy reply` that it is real: {READ_PR} why: registry.npmjs.org returned 503"
+    )
+
+    # Unsure: no cause anywhere, and no guess.
+    unsure, seen = last_run({})
+    assert seen["flaky"] is True
+    assert "flaky_cause" not in seen
+    assert told(scenario)[-1]["cause"] is None
+    assert message.event_line("ci.flaky", told(scenario)[-1]).startswith(
+        f"? {KEY} run {unsure.id} left a failed check as flaky; rerun it, ",
+    )
+
+    # A word outside the vocabulary is no cause, but is kept with the run and told to the sinks, not the overseer.
+    other, seen = last_run({"flaky_cause": "the network"})
+    assert "flaky_cause" not in seen
+    assert "network" not in json.dumps(seen)
+    assert contract.stored_object(other.row["result_json"])["flaky_cause_other"] == "the network"
+    assert told(scenario)[-1]["cause"] is None
+    assert told(scenario)[-1]["other_cause"] == "the network"
+    assert message.event_line("ci.flaky", told(scenario)[-1]).startswith(
+        f'? {KEY} run {other.id} left a failed check as flaky, cause given as "the network", not one canopy knows; ',
+    )
 
 
 def test_a_flaky_bit_from_a_run_not_sent_for_ci_tells_the_sinks_nothing(scenario: Scenario, git_pool: GitPool) -> None:

@@ -205,6 +205,20 @@ class PlanEffort(StrEnum):
     LARGE = "large"
 
 
+class FlakyCause(StrEnum):
+    """Where a failed check a `resume` worker left as flaky failed, as it judged from evidence (DESIGN §23).
+
+    Kept in the run's result; absent when the worker was not sure, since a guess would send the operator the wrong way.
+    """
+
+    #: A test in the repository that fails now and then whatever the change: a race, an order dependence, a timeout.
+    TEST = "test"
+    #: The machine the job ran on: a lost runner, one out of memory or disk, a job past its time limit.
+    RUNNER = "runner"
+    #: Something the job reached over the network: a package registry, a third-party API, a rate limit.
+    SERVICE = "service"
+
+
 class Proposal(StrEnum):
     """What a feedback plan proposes for one of its items, `feedback_plan_items.proposal` (DESIGN §32)."""
 

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict, cast
 
 from canopy.core import contract, conversation, db, item_numbers, plans, pools
-from canopy.core.vocab import ResumeReason
+from canopy.core.vocab import FlakyCause, ResumeReason
 from canopy.loop.observations import rendered as rendered_observations
 from canopy.reviews import view as review_view
 from canopy.runs import feedback_plans, policy, tasks
@@ -127,6 +127,9 @@ class RunState(TypedDict):
     #: Present, and true, only when the worker left a failed check as not the change's (DESIGN §23): one bit of its
     #: result, never its text (TRUST_MODEL T1).
     flaky: NotRequired[bool]
+    #: Present only with `flaky`, when the worker named where the check failed (DESIGN §23): `test`, `runner`, or
+    #: `service`, a word of a closed vocabulary, never its text or its `flaky_detail`.
+    flaky_cause: NotRequired[FlakyCause]
     #: Present only when the harness pushed the branch again to rerun the checks the worker left as flaky (DESIGN §23):
     #: the repositories it pushed, whose checks run again on the new head. A unit not named was not kicked.
     kicked: NotRequired[list[str]]
@@ -521,6 +524,9 @@ def _run_summary(
     stored = contract.stored_object(run.result_json)
     if ResumeReason.CI in summary.get("reasons", ()) and stored.get("flaky") is True:
         summary["flaky"] = True
+        cause = stored.get("flaky_cause")
+        if isinstance(cause, str) and cause in FlakyCause:
+            summary["flaky_cause"] = FlakyCause(cause)
         # Written by the harness alone: a worker's result keeps only the contract's fields.
         kicked = stored.get("kicked")
         if isinstance(kicked, list) and kicked:

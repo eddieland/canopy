@@ -18,7 +18,7 @@ from urllib.parse import quote
 
 from canopy.core import contract, db, records, spend, sql
 from canopy.core.items import Item, age
-from canopy.core.vocab import RunStatus, SessionsRead
+from canopy.core.vocab import FlakyCause, RunStatus, SessionsRead
 
 if TYPE_CHECKING:
     from canopy.notify.journal import Diff
@@ -34,6 +34,12 @@ _DONE_LISTED = 10
 _CHORE = "chore:"
 _PR = "pr:"
 _TASK = "task:"
+#: How a `ci.flaky` event's `cause` reads in its line: the worker's estimate, so hedged.
+_CAUSES = {
+    FlakyCause.TEST: "likely a flaky test",
+    FlakyCause.RUNNER: "likely the CI runner",
+    FlakyCause.SERVICE: "likely a service the job calls",
+}
 
 
 def _line(text: object) -> str:
@@ -138,6 +144,11 @@ def _flaky_line(f: Mapping[str, object]) -> str:
     given = f.get("prs")
     prs = [str(u) for u in cast("list[object]", given)] if isinstance(given, list) else []
     head = f"{f.get('ticket')} run {f.get('run')} left a failed check as flaky"
+    cause = f.get("cause")
+    if isinstance(cause, str) and cause in FlakyCause:
+        head = f"{head}, {_CAUSES[FlakyCause(cause)]}"
+    elif f.get("other_cause"):
+        head = f"{head}, cause given as {json.dumps(str(f.get('other_cause')))}, not one canopy knows"
     if kicked:
         text = f"+ {head}; canopy pushed {', '.join(kicked)} again to rerun it"
     else:
