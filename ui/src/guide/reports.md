@@ -302,9 +302,10 @@ alone, this page will look suspiciously calm.
 The Reviews page, **Reviews** under [Reports](/reports) in the nav, says where feedback on canopy's PRs comes from, how
 long it takes to arrive, what answering it cost, and how canopy's own reviewer did, over the last **7 days** or
 **30 days**. The line under the title is the window at a glance, `38 reviews on 15 PRs · median first review 4.0h over
-30 days`. The figures under it are its headline: the reviews, the PRs, the first reviews and their median wait, and
-the feedback rounds. A PR is in the window when anything happened to it there: a run named it, someone reviewed or
-commented, it became ready, a review was asked for, or it merged.
+30 days`. The figures under it are its headline: the reviews, the PRs, the first reviews and their median wait, the
+feedback rounds, and canopy's **median turnaround**, how long it takes to answer a round of feedback (below). A PR is
+in the window when anything happened to it there: a run named it, someone reviewed or commented, it became ready, a
+review was asked for, or it merged.
 
 Feedback is counted the way the [reports page](#the-reports-page) counts it: reviews and comments from people other
 than the PR's author, bots left out. canopy posts as you, so its own replies never count as feedback it received.
@@ -315,24 +316,35 @@ than the PR's author, bots left out. canopy posts as you, so its own replies nev
   median, and the table folded under it holds the same numbers. The median for the whole window is the **median first
   review** tile above. A PR canopy read before it kept GitHub's times, or one still a draft, has no start, so its
   reviews are counted apart rather than drag the median somewhere imaginary; the tile's tip says how many.
-- **Who reviews**: each reviewer with their reviews, the ones that asked for changes, comments, the PRs they reviewed,
-  and their median wait from a PR's start to their own first review of it. Their reviews have a bar against the
-  busiest reviewer's and their wait one against the slowest's, so you can tell the reviewer who carries the load from
-  the one who answers fast without doing arithmetic. A reviewer in `trust.trusted_reviewers` is marked **trusted**: a
-  worker acts on their feedback without asking you.
+- **Who reviews**: each reviewer with their reviews, the ones that asked for changes and the ones that **approved**,
+  comments, the PRs they reviewed, and their median wait from a PR's start to their own first review of it. Their
+  reviews have a bar against the busiest reviewer's and their wait one against the slowest's, so you can tell the
+  reviewer who carries the load from the one who answers fast without doing arithmetic. A reviewer in
+  `trust.trusted_reviewers` is marked **trusted**: a worker acts on their feedback without asking you.
 - **Estimates**: the planner's estimates beside what followed them. For each effort, its plans, the resumes that went
   ahead on them, the resumes **per plan** with a bar against the most, and what those resumes cost. If `small` plans
   keep needing three resumes, the planner is an optimist, and now you have the receipts.
 - **Feedback rounds**: each feedback plan written in the window, with its ticket, who approved it (you on the web, you
-  from the CLI, or the planner when it judged the plan needs no review), its effort, and the resumes that went ahead
-  on it with what the round spent.
+  from the CLI, or the planner when it judged the plan needs no review), its effort, the resumes that went ahead on it
+  with what the round spent, and its **turnaround**. Hover a turnaround for its parts, or a dash for the step its clock
+  still waits on.
 - **canopy's reviewer**: its review **runs**, what they **cost**, the **findings dismissed**, and the **drafts
   published** as figures across the top; hover the last for where every draft stands. Under them, its runs by purpose
   (`own` for a ticket's PR, `request` for one you asked for) and how they ended, with what they cost, and the findings
   you dismissed by reason, each with a bar. The last line says whether `canopy:review` is in
   `trust.trusted_reviewers`, which decides whether workers act on its findings without you.
-- **By pull request**: each PR with its ticket, time to first review, reviews, changes requested, comments, feedback
-  rounds, what those rounds cost, and the time from ready to merge.
+- **By pull request**: each PR with its ticket, time to first review with a bar against the slowest PR's, reviews,
+  changes requested, **approved**, comments, feedback rounds, the **rounds to approval**, what those rounds cost, and
+  the time from ready to merge. Rounds to approval counts the feedback plans approved before its first approval: `0`
+  means a reviewer approved it before canopy had to answer anything, and a dash that nobody has approved it yet.
+
+The rest of the page times your reviewers; **turnaround** times canopy. It runs from the review that started a round
+to the push that answered it, in four parts: review to plan, plan to your approval (or the planner's), approval to
+the resume starting, and the resume to its push. A push is seen as the first check run on a new head, so a PR whose
+checks no source watches never stops the clock, and its round goes untimed rather than guessed at. The tile is the
+median of the rounds answered in the window, and its tip has each part's own median, which is where you learn
+whether a round takes four hours because the planner is slow or because the plan sat waiting on you over lunch. Each
+part's median is its own, so they need not add up to the whole.
 
 The page sees only the PRs canopy's runs named and a source observed. canopy keeps no history of a ticket's phases, so
 time a PR spent red in CI or conflicted with its base isn't here; the [CI page](#the-ci-page) has the red part.

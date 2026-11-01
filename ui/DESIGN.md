@@ -801,11 +801,11 @@ side.
   count of the present, with its state's color.
 - **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest
   (`barPercent`), where comparing the rows is the point: spent by month, by ticket, and by model, the bytes a tool
-  returned, a check's failure rate, a reviewer's reviews and wait, resumes per plan by estimate. The figure, at a fixed
-  width so the bars start at one edge, then a 6px rounded bar, 64px long at least so a narrow column's still compares,
-  on `surface-raised` filled in `muted-foreground`, or the series' own fill; never a state's color, but for a failure
-  rate (Health's failed share of a kind's runs, CI's checks), in `status-failed`, a share of the whole rather than of
-  the column's largest: it says what is broken. It is the eye's, `aria-hidden`.
+  returned, a check's failure rate, a reviewer's reviews and wait, a PR's first review, resumes per plan by estimate.
+  The figure, at a fixed width so the bars start at one edge, then a 6px rounded bar, 64px long at least so a narrow
+  column's still compares, on `surface-raised` filled in `muted-foreground`, or the series' own fill; never a state's
+  color, but for a failure rate (Health's failed share of a kind's runs, CI's checks), in `status-failed`, a share of
+  the whole rather than of the column's largest: it says what is broken. It is the eye's, `aria-hidden`.
 
 ## Charts
 

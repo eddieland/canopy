@@ -35,6 +35,16 @@ test("the month counts the PRs read before GitHub's times apart, and the planner
     await expect(page.getByRole('tooltip')).toContainText(
         '2 reviewed PRs had no ready time from GitHub and are left out.',
     )
+    // alice approved one PR of the month's, web#78, approved before any feedback round read it.
+    const alice = page.getByTestId('reviews-reviewer').filter({ hasText: 'alice' })
+    await expect(alice.getByRole('cell').nth(2)).toHaveText('1')
+    const approved = page.getByTestId('reviews-pull-request').filter({ hasText: 'web#78' })
+    await expect(approved.getByRole('cell').nth(4)).toHaveText('1')
+    await expect(approved.getByRole('cell').nth(7)).toHaveText('0')
+    // No round of the mock's was answered by a push it saw, so canopy's turnaround is a dash, its tip saying so.
+    await expect(page.getByTestId('reviews-turnaround')).toHaveText('–')
+    await page.getByTestId('reviews-tiles').getByText('median turnaround').hover()
+    await expect(page.getByRole('tooltip')).toContainText('no round was answered in the window')
     await expect(page.getByTestId('reviews-efforts').getByTestId('reviews-effort')).toHaveCount(3)
     await expect(page.getByTestId('reviews-round-4')).toContainText('the planner')
     await page.getByTestId('reviews-round-4').getByRole('link', { name: 'run:52' }).click()
