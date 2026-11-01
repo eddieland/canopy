@@ -24,7 +24,7 @@ from canopy.core.vocab import (
     RunKind,
 )
 from canopy.infra import resources
-from tests.canopy.helpers import context, earlier, present, worker_ran
+from tests.canopy.helpers import check_ran, context, earlier, present, worker_ran
 from tests.canopy.web_helpers import client, signed_in_client
 
 if TYPE_CHECKING:
@@ -178,7 +178,7 @@ def test_the_reviews_report_times_a_round_from_the_feedback_to_the_push_and_coun
     conn, now = ctx.conn, datetime.now(UTC)
     worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 4), prs={"web": TIMED})
     observed(conn, TIMED, ready_at=earlier(now, 4), merged_at=earlier(now, 1))
-    checked(conn, TIMED, "aaa", earlier(now, 3, 20))
+    check_ran(conn, TIMED, "aaa", "test", CheckConclusion.SUCCESS, earlier(now, 3, 20))
     # A comment before the plan an earlier round went ahead on, which this round does not answer.
     said(conn, TIMED, "dana", earlier(now, 3, 18))
     plan(conn, earlier(now, 3, 14), cost=None, effort=None, channel="cli")
@@ -197,8 +197,9 @@ def test_the_reviews_report_times_a_round_from_the_feedback_to_the_push_and_coun
         "id = ?",
         resume,
     ).run(conn)
-    checked(conn, TIMED, "aaa", earlier(now, 3, 7))  # a rerun on the head the plan read: not the push
-    checked(conn, TIMED, "bbb", earlier(now, 3, 5))
+    # A rerun on the head the plan read, which is not the push.
+    check_ran(conn, TIMED, "aaa", "test", CheckConclusion.SUCCESS, earlier(now, 3, 7))
+    check_ran(conn, TIMED, "bbb", "test", CheckConclusion.SUCCESS, earlier(now, 3, 5))
     said(conn, TIMED, "dana", earlier(now, 2), ReviewState.APPROVED)
     said(conn, TIMED, "erin", earlier(now, 1, 12), ReviewState.APPROVED)
 
@@ -365,20 +366,6 @@ def reviewed_by(
         .run(conn)
         .lastrowid,
     )
-
-
-def checked(conn: sqlite3.Connection, url: str, head: str, at: str) -> None:
-    """A check run on `url`'s `head` that passed, which a source first observed completed at `at`."""
-    [(count,)] = sql.execute(conn, sql.select("count(*)").from_("observed_check_runs")).fetchall()
-    records.insert(
-        records.ObservedCheckRun,
-        pr_url=url,
-        run_id=500 + int(count),
-        name="test",
-        head_sha=head,
-        conclusion=CheckConclusion.SUCCESS,
-        observed_at=at,
-    ).run(conn)
 
 
 def _iso(stamp: str) -> str:
