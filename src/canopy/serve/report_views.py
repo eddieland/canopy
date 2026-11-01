@@ -325,6 +325,7 @@ def plans_report(backend: Backend, ctx: Context, days: int) -> PlansReport:
             )
             for n in found.lengths
         ],
+        page_bytes=plan_report.PAGE_BYTES,
         outcomes={o: found.count(o) for o in plan_report.Outcome},
     )
 

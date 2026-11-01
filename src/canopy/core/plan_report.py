@@ -31,8 +31,10 @@ if TYPE_CHECKING:
 
 #: The kinds that count as a `resume`: the retired `fix-ci` counts as one with the reason `ci` (DESIGN §8).
 RESUMES = (RunKind.RESUME, RunKind.FIX_CI)
-#: Where the length table cuts a plan's size, in bytes: under 4 KB, under 8, under 16, and the rest.
-SIZE_BOUNDS = (4_096, 8_192, 16_384)
+#: A page of a plan, in bytes, for the length table: about 500 words of Markdown, as a printed page holds.
+PAGE_BYTES = 3_000
+#: Where the length table cuts a plan's size, in bytes: under a page, under 2, under 4, and the rest.
+SIZE_BOUNDS = (PAGE_BYTES, 2 * PAGE_BYTES, 4 * PAGE_BYTES)
 
 
 class Outcome(StrEnum):

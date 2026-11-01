@@ -126,5 +126,7 @@ class PlansReport(Model):
     """By level, `off` to `lenient`, then none kept; within each, the planner's, as written, then revised."""
     lengths: list[PlansLength]
     """The smallest first; only those with a plan."""
+    page_bytes: int
+    """How many bytes the page counts as a page of a plan, which the lengths are cut at whole multiples of."""
     outcomes: dict[str, int]
     """How many of the window's plans went each way, every outcome named, 0 for none."""

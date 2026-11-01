@@ -75,8 +75,8 @@ def test_each_plan_goes_one_way_and_its_ticket_counts_the_resumes_after_its_appr
     ]
     # The planner's approvals take no time, so the lengths are the operator's alone.
     assert [(n.low, n.high, n.plans, n.median_to_approve, n.as_written) for n in found.lengths] == [
-        (4_096, 8_192, 1, timedelta(hours=1), 1),
-        (16_384, None, 1, timedelta(hours=3), 0),
+        (3_000, 6_000, 1, timedelta(hours=1), 1),
+        (12_000, None, 1, timedelta(hours=3), 0),
     ]
     assert (found.count(Outcome.REPLACED), found.count(Outcome.WAITING)) == (1, 1)
 

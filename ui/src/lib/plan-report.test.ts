@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 
 import type { PlansGroup } from '@/api/types'
 
-import { changesText, lengthText, levelText, plansLine, plansWindow, reasonsText, resumedText } from './plan-report'
+import {
+    changesText,
+    lengthBytesText,
+    lengthText,
+    levelText,
+    pagesText,
+    plansLine,
+    plansWindow,
+    reasonsText,
+    resumedText,
+} from './plan-report'
 
 const OUTCOMES = { planner: 2, as_written: 1, revised: 2, replaced: 2, dropped: 0, waiting: 1 }
 
@@ -39,14 +49,30 @@ describe('plan report', () => {
         expect(plansLine({ days: 7, plans: [], outcomes: {}, groups: [] })).toBe('no plans over 7 days')
     })
 
-    it('names a level, a share of PRs resumed, and a size bucket', () => {
+    it('names a level, a share of PRs resumed, and a size bucket in pages, its bytes for the hover', () => {
         expect([levelText('strict'), levelText(null)]).toEqual(['strict', 'not recorded'])
         expect([resumedText(group(2, 1)), resumedText(group(0, 0))]).toEqual(['1 of 2', '–'])
-        expect([
-            lengthText({ low: 0, high: 4096 }),
-            lengthText({ low: 4096, high: 8192 }),
-            lengthText({ low: 16_384, high: null }),
-        ]).toEqual(['under 4 KiB', '4–8 KiB', '16 KiB and up'])
+        const buckets = [
+            { low: 0, high: 3_000 },
+            { low: 3_000, high: 6_000 },
+            { low: 12_000, high: null },
+        ]
+        expect(buckets.map((b) => lengthText(b, 3_000))).toEqual(['under 1 page', '1–2 pages', '4 pages and up'])
+        expect(lengthText({ low: 3_000, high: null }, 3_000)).toBe('1 page and up')
+        expect(buckets.map((b) => lengthBytesText(b))).toEqual(['under 2.9 KiB', '2.9–5.9 KiB', '11.7 KiB and up'])
+    })
+
+    it('reads a size as pages to the nearest half, never under a half', () => {
+        expect([0, 1_400, 1_600, 3_000, 4_400, 4_600, 6_000, 20_000].map((s) => pagesText(s, 3_000))).toEqual([
+            '≈ ½ page',
+            '≈ ½ page',
+            '≈ ½ page',
+            '≈ 1 page',
+            '≈ 1½ pages',
+            '≈ 1½ pages',
+            '≈ 2 pages',
+            '≈ 6½ pages',
+        ])
     })
 
     it('says what changed before an approval, and why the resumes after ran', () => {

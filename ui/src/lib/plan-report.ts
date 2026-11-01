@@ -89,8 +89,32 @@ export function resumedText(group: Pick<PlansGroup, 'implemented' | 'with_resume
     return group.implemented === 0 ? '–' : `${group.with_resume} of ${group.implemented}`
 }
 
-/** A size bucket in words: `under 4 KiB`, `4–8 KiB`, `16 KiB and up`. */
-export function lengthText(length: Pick<PlansLength, 'low' | 'high'>): string {
+/**
+ * A plan's size in pages, to the nearest half and never under one: `≈ ½ page`, `≈ 1 page`, `≈ 2½ pages`. A page is
+ * the server's `page_bytes`, about 500 words, so it is a reading of how long the plan looks, not a count.
+ */
+export function pagesText(size: number, pageBytes: number): string {
+    const halves = Math.max(1, Math.round((2 * size) / pageBytes))
+    const whole = Math.floor(halves / 2)
+    const pages = `${whole === 0 ? '' : String(whole)}${halves % 2 === 1 ? '½' : ''}`
+    return `≈ ${pages} ${halves <= 2 ? 'page' : 'pages'}`
+}
+
+/** A size bucket in pages: `under 1 page`, `2–4 pages`, `4 pages and up`. The server cuts them at whole pages. */
+export function lengthText(length: Pick<PlansLength, 'low' | 'high'>, pageBytes: number): string {
+    const low = length.low / pageBytes
+    if (length.high === null) {
+        return `${String(low)} ${low === 1 ? 'page' : 'pages'} and up`
+    }
+    const high = length.high / pageBytes
+    if (length.low === 0) {
+        return `under ${String(high)} ${high === 1 ? 'page' : 'pages'}`
+    }
+    return `${String(low)}–${String(high)} pages`
+}
+
+/** A size bucket in bytes, on its hover: `under 2.9 KiB`, `5.9–11.7 KiB`, `11.7 KiB and up`. */
+export function lengthBytesText(length: Pick<PlansLength, 'low' | 'high'>): string {
     if (length.high === null) {
         return `${sizeText(length.low)} and up`
     }

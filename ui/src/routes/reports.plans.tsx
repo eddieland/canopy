@@ -17,10 +17,12 @@ import {
     DEFAULT_PLANS_WINDOW,
     LEVEL_HINT,
     LIMITS_TEXT,
+    lengthBytesText,
     lengthText,
     levelText,
     OUTCOME_HINT,
     OUTCOME_WORD,
+    pagesText,
     PLANS_WINDOWS,
     plansLine,
     plansWindow,
@@ -46,6 +48,9 @@ const HELP = [
 
 // What the needed-a-resume column counts, on its hover.
 const RESUMED_HINT = 'Of the plans an implement followed, those whose PR needed at least one resume'
+
+// What a length column measures, ending its hover: a page is the server's `page_bytes`.
+const PAGE_HINT = 'in pages of about 500 words; the bytes on hover'
 
 // The column names of a table in a padded scrolling region: the head's cells take the padding.
 const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
@@ -105,7 +110,7 @@ function PlansPage() {
                         {data === undefined ? (
                             <PanelSkeleton rows={3} className="min-h-24" />
                         ) : (
-                            <Lengths lengths={data.lengths} span={span} />
+                            <Lengths lengths={data.lengths} pageBytes={data.page_bytes} span={span} />
                         )}
                     </Panel>
                     <Panel data-testid="plans-plans">
@@ -113,7 +118,7 @@ function PlansPage() {
                         {data === undefined ? (
                             <PanelSkeleton rows={4} className="min-h-32" />
                         ) : (
-                            <Plans plans={data.plans} span={span} />
+                            <Plans plans={data.plans} pageBytes={data.page_bytes} span={span} />
                         )}
                     </Panel>
                 </>
@@ -146,7 +151,7 @@ function Levels({ found, span }: { found: PlansReport; span: string }) {
                                     </Hinted>
                                 </th>
                                 <th className="panel-label pb-1.5 pl-3 font-normal">
-                                    <Hinted hint="Their sizes, the median">length</Hinted>
+                                    <Hinted hint={`The median of their lengths, ${PAGE_HINT}`}>length</Hinted>
                                 </th>
                                 <th className="panel-label pb-1.5 pl-3 font-normal">
                                     <Hinted hint={RESUMED_HINT}>needed a resume</Hinted>
@@ -161,7 +166,7 @@ function Levels({ found, span }: { found: PlansReport; span: string }) {
                         </thead>
                         <tbody className="text-xs">
                             {found.groups.map((g) => (
-                                <Group key={`${g.level ?? ''}:${g.outcome}`} group={g} />
+                                <Group key={`${g.level ?? ''}:${g.outcome}`} group={g} pageBytes={found.page_bytes} />
                             ))}
                         </tbody>
                     </table>
@@ -183,7 +188,7 @@ function Levels({ found, span }: { found: PlansReport; span: string }) {
 }
 
 /** One level's plans that went ahead one way: how many, how quickly, how long, and what their PRs needed after. */
-function Group({ group }: { group: PlansGroup }) {
+function Group({ group, pageBytes }: { group: PlansGroup; pageBytes: number }) {
     return (
         <tr className="text-right" data-testid="plans-group">
             <th scope="row" className="py-0.5 text-left font-mono font-normal">
@@ -196,7 +201,11 @@ function Group({ group }: { group: PlansGroup }) {
             <td className="readout pl-3">
                 {group.outcome === 'planner' ? '–' : hoursText(group.median_hours_to_approve)}
             </td>
-            <td className="readout pl-3 text-muted-foreground">{sizeText(group.median_size)}</td>
+            <td className="readout pl-3 whitespace-nowrap text-muted-foreground">
+                <Tipped fact={sizeText(group.median_size)} mono>
+                    {pagesText(group.median_size, pageBytes)}
+                </Tipped>
+            </td>
             <td className={cn('readout pl-3', group.with_resume > 0 && 'text-status-blocked')}>{resumedText(group)}</td>
             <td className="readout pl-3 text-muted-foreground">{group.resumes}</td>
             <td className="readout pl-3 text-muted-foreground">{group.done}</td>
@@ -208,7 +217,7 @@ function Group({ group }: { group: PlansGroup }) {
  * The plans you approved, by length: how many, the median time to approve them, and how many went as written. The
  * planner's approvals take no time, so they are left out.
  */
-function Lengths({ lengths, span }: { lengths: PlansLength[]; span: string }) {
+function Lengths({ lengths, pageBytes, span }: { lengths: PlansLength[]; pageBytes: number; span: string }) {
     if (lengths.length === 0) {
         return <Empty size="panel">you approved no plan in these {span}</Empty>
     }
@@ -217,7 +226,9 @@ function Lengths({ lengths, span }: { lengths: PlansLength[]; span: string }) {
             <table className="w-full border-collapse text-sm" data-testid="plans-length-table">
                 <thead>
                     <tr className="text-right [&_th]:pt-3">
-                        <th className="panel-label pb-1.5 text-left font-normal">length</th>
+                        <th className="panel-label pb-1.5 text-left font-normal">
+                            <Hinted hint={`Their lengths, ${PAGE_HINT}`}>length</Hinted>
+                        </th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">plans</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">median to approve</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">as written</th>
@@ -227,7 +238,9 @@ function Lengths({ lengths, span }: { lengths: PlansLength[]; span: string }) {
                     {lengths.map((n) => (
                         <tr key={n.low} className="text-right" data-testid="plans-length">
                             <th scope="row" className="py-0.5 text-left font-normal">
-                                {lengthText(n)}
+                                <Tipped fact={lengthBytesText(n)} mono>
+                                    {lengthText(n, pageBytes)}
+                                </Tipped>
                             </th>
                             <td className="readout pl-3">{n.plans}</td>
                             <td className="readout pl-3">{hoursText(n.median_hours_to_approve)}</td>
@@ -241,7 +254,7 @@ function Lengths({ lengths, span }: { lengths: PlansLength[]; span: string }) {
 }
 
 /** Each plan written in the window, the newest first. */
-function Plans({ plans, span }: { plans: PlansRow[]; span: string }) {
+function Plans({ plans, pageBytes, span }: { plans: PlansRow[]; pageBytes: number; span: string }) {
     if (plans.length === 0) {
         return <Empty size="panel">no plan was written in these {span}</Empty>
     }
@@ -255,7 +268,9 @@ function Plans({ plans, span }: { plans: PlansRow[]; span: string }) {
                         <th className="panel-label pb-1.5 pl-3 font-normal">ticket</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">level</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">how it went</th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">length</th>
+                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">
+                            <Hinted hint={`Its length, ${PAGE_HINT}`}>length</Hinted>
+                        </th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">to approve</th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">resumes</th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">written</th>
@@ -263,7 +278,7 @@ function Plans({ plans, span }: { plans: PlansRow[]; span: string }) {
                 </thead>
                 <tbody className="text-xs">
                     {plans.map((p) => (
-                        <Plan key={p.plan_id} plan={p} />
+                        <Plan key={p.plan_id} plan={p} pageBytes={pageBytes} />
                     ))}
                 </tbody>
             </table>
@@ -275,7 +290,7 @@ function Plans({ plans, span }: { plans: PlansRow[]; span: string }) {
  * A plan's row: its run, its ticket, the level it was offered, how it went and what changed first, its length, how
  * long approving it took, and the resumes its ticket needed after, with their reasons on hover.
  */
-function Plan({ plan }: { plan: PlansRow }) {
+function Plan({ plan, pageBytes }: { plan: PlansRow; pageBytes: number }) {
     const changes = changesText(plan)
     const reasons = reasonsText(plan.reasons)
     return (
@@ -293,7 +308,11 @@ function Plan({ plan }: { plan: PlansRow }) {
                 <Hinted hint={OUTCOME_HINT[plan.outcome]}>{OUTCOME_WORD[plan.outcome]}</Hinted>
                 {changes !== '' && <span>: {changes}</span>}
             </td>
-            <td className="readout pl-3 text-right whitespace-nowrap text-muted-foreground">{sizeText(plan.size)}</td>
+            <td className="readout pl-3 text-right whitespace-nowrap text-muted-foreground">
+                <Tipped fact={sizeText(plan.size)} mono>
+                    {pagesText(plan.size, pageBytes)}
+                </Tipped>
+            </td>
             <td className="readout pl-3 text-right whitespace-nowrap">
                 {plan.outcome === 'planner' ? '–' : hoursText(plan.hours_to_approve)}
             </td>

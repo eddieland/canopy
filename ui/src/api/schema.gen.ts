@@ -6971,6 +6971,11 @@ export type components = {
                 [key: string]: number;
             };
             /**
+             * Page Bytes
+             * @description How many bytes the page counts as a page of a plan, which the lengths are cut at whole multiples of.
+             */
+            page_bytes: number;
+            /**
              * Plans
              * @description The newest first.
              */
