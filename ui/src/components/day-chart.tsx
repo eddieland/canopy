@@ -25,9 +25,21 @@ const PEAK_JUSTIFY: Record<PeakAlign, string> = {
  * bar where it must be; where names that often would touch, it names fewer days (`axisStep`). The peak's total sits
  * over its bar. It is for the eye, so it is hidden from a screen reader: the page puts a table of the same numbers
  * under it. `testId` prefixes each part's test id, `spend` giving `spend-chart`, `spend-bar-2026-10-07`, and so on.
- * Give it a `key` of its bars' count, so another window, another pitch, is measured afresh.
+ * Give it a `key` of its bars' count, so another window, another pitch, is measured afresh. A chart whose bars pick
+ * something below it, as the reports page's months do, marks the one `marked` in the accent's tint and calls `onPick`
+ * with a bar's key on its click; the page keeps a link for each in the table, for the keyboard.
  */
-export function DayChart({ bars, testId }: { bars: readonly DayBar[]; testId: string }) {
+export function DayChart({
+    bars,
+    testId,
+    marked,
+    onPick,
+}: {
+    bars: readonly DayBar[]
+    testId: string
+    marked?: string | undefined
+    onPick?: ((key: string) => void) | undefined
+}) {
     const widest = Math.max(AXIS_NAME_CHARS, ...bars.map((bar) => bar.label.length))
     // The same room is the same state: a new object each time would render again for nothing.
     const [measure, room] = useMeasure((chart: HTMLElement) => axisRoom(chart, widest), undefined, { same: sameRoom })
@@ -43,6 +55,8 @@ export function DayChart({ bars, testId }: { bars: readonly DayBar[]; testId: st
                         bar={bar}
                         top={top}
                         peak={i === peak ? peakAlign(i, bars.length) : undefined}
+                        marked={bar.key === marked}
+                        onPick={onPick}
                         testId={testId}
                     />
                 ))}
@@ -128,17 +142,38 @@ function peakAlign(i: number, count: number): PeakAlign {
  * tall as its total's share of the chart's top; the peak's total sits over its bar. A bar of nothing is a stub on the
  * baseline, so it reads as nothing rather than a column gone missing.
  */
-function Bar({ bar, top, peak, testId }: { bar: DayBar; top: number; peak: PeakAlign | undefined; testId: string }) {
+function Bar({
+    bar,
+    top,
+    peak,
+    marked,
+    onPick,
+    testId,
+}: {
+    bar: DayBar
+    top: number
+    peak: PeakAlign | undefined
+    marked: boolean
+    onPick: ((key: string) => void) | undefined
+    testId: string
+}) {
     const segments = bar.segments.filter(({ value }) => value > 0)
     const sum = segments.reduce((total, { value }) => total + value, 0)
     const height = top === 0 ? 0 : (bar.total / top) * 100
     return (
+        // The chart is the eye's, hidden from a screen reader: a click picks what the page's table links for the
+        // keyboard, so the bar needs no key of its own.
+        // oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
         <div
             className={cn(
                 'relative flex h-full max-w-12 min-w-0 flex-1 flex-col justify-end',
                 'rounded-t-xs hover:bg-surface-raised',
+                marked && 'bg-accent/16 hover:bg-accent/16',
+                onPick !== undefined && 'cursor-pointer',
             )}
             title={bar.hint}
+            data-marked={marked || undefined}
+            onClick={onPick === undefined ? undefined : () => onPick(bar.key)}
             data-testid={`${testId}-bar-${bar.key}`}
         >
             {sum === 0 ? (

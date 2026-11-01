@@ -216,6 +216,7 @@ def test_a_landed_ticket_counts_its_iterations_reviews_and_waits(tmp_path: Path,
     assert landed.review_wait == timedelta(hours=4)
     assert (landed.merged_at, landed.awaiting_review_at) == (None, None), "no time of GitHub's read: the proxies"
     assert landed.cost_usd == 4.0  # the plan and three worker runs
+    assert landed.pull_requests == (PR,)
     assert october.closed == 1
     assert october.pull_requests == 0  # first named in September
     assert september.pull_requests == 1
