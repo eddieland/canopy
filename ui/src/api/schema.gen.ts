@@ -2352,7 +2352,7 @@ export type paths = {
         };
         /**
          * List the ticks
-         * @description The latest 50 ticks, newest first.
+         * @description The latest 50 ticks, newest first, or the latest 50 the loop found idle.
          */
         get: operations["listTicks"];
         put?: never;
@@ -21543,7 +21543,10 @@ export interface operations {
     };
     listTicks: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only the live ticks `canopy loop` found idle. */
+                idle?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -21593,6 +21596,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
