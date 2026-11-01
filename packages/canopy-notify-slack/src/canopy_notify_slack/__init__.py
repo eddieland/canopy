@@ -601,6 +601,8 @@ def _ci_flaky(e: Mapping[str, object]) -> _Shown:
     cause = e.get("cause")
     if isinstance(cause, str) and cause in _FLAKY_CAUSES:
         what = f"{what}, {_FLAKY_CAUSES[cause]}"
+    elif e.get("other_cause"):
+        what = f"{what}, cause given as '{escape(e.get('other_cause'))}', not one canopy knows"
     if kicked:
         first = f":repeat: {what}; canopy pushed {', '.join(f'`{escape(r)}`' for r in kicked)} again to rerun it"
         aside = [_linked(e.get("note")) if e.get("note") else ""]

@@ -147,6 +147,8 @@ def _flaky_line(f: Mapping[str, object]) -> str:
     cause = f.get("cause")
     if isinstance(cause, str) and cause in FlakyCause:
         head = f"{head}, {_CAUSES[FlakyCause(cause)]}"
+    elif f.get("other_cause"):
+        head = f"{head}, cause given as {json.dumps(str(f.get('other_cause')))}, not one canopy knows"
     if kicked:
         text = f"+ {head}; canopy pushed {', '.join(kicked)} again to rerun it"
     else:

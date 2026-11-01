@@ -108,6 +108,8 @@ class CiFlaky(TypedDict):
     estimate: str
     #: Where the worker judged the check failed, `test`, `runner`, or `service`, or None when it was not sure.
     cause: str | None
+    #: A cause the worker named outside that vocabulary, as it said it, cut to one line; else None.
+    other_cause: str | None
     #: Why a repository was not kicked, in the harness's words, or None.
     note: str | None
 
@@ -392,6 +394,7 @@ def ci_flaky(
     kicked: Sequence[str],
     estimate: str,
     cause: str | None,
+    other_cause: str | None,
     note: str,
 ) -> Event | None:
     """Return the `ci.flaky` event for run `run_id` of `key`, which left a failed check as flaky, for the run's close.
@@ -411,6 +414,7 @@ def ci_flaky(
         "kicked": list(kicked),
         "estimate": cut(estimate, DETAIL_LIMIT),
         "cause": cause,
+        "other_cause": cut(other_cause, DETAIL_LIMIT) if other_cause else None,
         "note": cut(note, DETAIL_LIMIT) if note else None,
     }
     return Event(RUNS, "ci.flaky", fields)

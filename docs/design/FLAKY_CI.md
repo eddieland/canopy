@@ -15,7 +15,8 @@ blocker's changes, is still `blocked`.
 With evidence of where the check failed, the worker also names its cause: `test`, a test of the repository that fails
 now and then; `runner`, the machine the job ran on; or `service`, something the job reached over the network. Unsure,
 it names none: a wrong cause sends the operator the wrong way, where none sends them to the log. It may add a line on
-why, kept with the run's result.
+why, kept with the run's result. A cause outside the three is no cause, but is kept with the run as the worker said it
+and told to the sinks, so a word the list lacks shows up rather than vanishing.
 
 The worker's word reaches the overseer as one bit on the ticket's `last_run`, and its cause as a word of that closed
 vocabulary, never its text or its line on why (TRUST_MODEL T1). The `flaky_rerun` item names the cause when the worker

@@ -228,6 +228,7 @@ def test_the_sinks_hear_the_workers_estimate_of_why_a_check_is_flaky(scenario: S
         "kicked": [],
         "estimate": "unit-tests lost its runner",
         "cause": None,
+        "other_cause": None,
         "note": None,
     }
     assert message.event_line("ci.flaky", fields) == (
@@ -285,16 +286,25 @@ def test_the_cause_a_worker_names_reaches_the_overseer_as_a_word_and_its_line_on
         f"`canopy reply` that it is real: {READ_PR} why: registry.npmjs.org returned 503"
     )
 
-    # Unsure, or a word outside the vocabulary: no cause anywhere, and no guess.
-    unsure_said: list[Mapping[str, object]] = [{}, {"flaky_cause": "the network"}]
-    for said in unsure_said:
-        unsure, seen = last_run(said)
-        assert seen["flaky"] is True
-        assert "flaky_cause" not in seen
-        assert told(scenario)[-1]["cause"] is None
-        assert message.event_line("ci.flaky", told(scenario)[-1]).startswith(
-            f"? {KEY} run {unsure.id} left a failed check as flaky; rerun it, ",
-        )
+    # Unsure: no cause anywhere, and no guess.
+    unsure, seen = last_run({})
+    assert seen["flaky"] is True
+    assert "flaky_cause" not in seen
+    assert told(scenario)[-1]["cause"] is None
+    assert message.event_line("ci.flaky", told(scenario)[-1]).startswith(
+        f"? {KEY} run {unsure.id} left a failed check as flaky; rerun it, ",
+    )
+
+    # A word outside the vocabulary is no cause, but is kept with the run and told to the sinks, not the overseer.
+    other, seen = last_run({"flaky_cause": "the network"})
+    assert "flaky_cause" not in seen
+    assert "network" not in json.dumps(seen)
+    assert contract.stored_object(other.row["result_json"])["flaky_cause_other"] == "the network"
+    assert told(scenario)[-1]["cause"] is None
+    assert told(scenario)[-1]["other_cause"] == "the network"
+    assert message.event_line("ci.flaky", told(scenario)[-1]).startswith(
+        f'? {KEY} run {other.id} left a failed check as flaky, cause given as "the network", not one canopy knows; ',
+    )
 
 
 def test_a_flaky_bit_from_a_run_not_sent_for_ci_tells_the_sinks_nothing(scenario: Scenario, git_pool: GitPool) -> None:

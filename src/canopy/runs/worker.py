@@ -26,9 +26,9 @@ import sqlite3
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never
+from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never, cast
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, StrictStr
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, StrictInt, StrictStr, model_validator
 
 from canopy.core import (
     agent_models,
@@ -88,6 +88,8 @@ MAX_REVIEW_REASON = 300
 MAX_PR_URL = 500
 #: A worker's line on why a check it left flaky failed: a sentence, as a sink's line carries it.
 MAX_FLAKY_DETAIL = 300
+#: A cause a worker named outside `FlakyCause`: a word or two, as a sink's line carries it.
+MAX_OTHER_CAUSE = 60
 # The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
 # checked out detached (DESIGN §8).
 SETUP_REPO_ENV = "CANOPY_REPO"
@@ -115,22 +117,33 @@ Effort = Annotated[PlanEffort | None, BeforeValidator(_known_effort)]
 #: Whether a worker said a failed check was not its change's (DESIGN §23): only `true` says so, and anything else is
 #: false, never a reason to drop the result with it.
 Flaky = Annotated[bool, BeforeValidator(lambda value: value is True)]
-#: Where a worker judged a flaky check failed (DESIGN §23): a value outside `FlakyCause` is no estimate, never a reason
-#: to drop the result with it.
+#: Where a worker judged a flaky check failed (DESIGN §23): a value outside `FlakyCause` is no estimate, kept as
+#: `flaky_cause_other` if it is text, never a reason to drop the result with it.
 Cause = Annotated[FlakyCause | None, BeforeValidator(lambda value: value if value in FlakyCause else None)]
 
 
-def _flaky_detail(value: object) -> str | None:
-    """Return `value` on one line, cut to `MAX_FLAKY_DETAIL`, or None: a wrong type drops, never the result with it."""
-    if not isinstance(value, str) or not value.strip():
-        return None
-    line = " ".join(value.split())
-    return line if len(line) <= MAX_FLAKY_DETAIL else line[: MAX_FLAKY_DETAIL - 3] + "..."
+def _line_within(limit: int) -> BeforeValidator:
+    """Take a string to one line of at most `limit` characters, and anything else, or only whitespace, to None.
+
+    Returns:
+        A validator that never fails, so a wrong type drops the field, never the result with it.
+    """
+
+    def take(value: object) -> str | None:
+        if not isinstance(value, str) or not value.strip():
+            return None
+        line = " ".join(value.split())
+        return line if len(line) <= limit else line[: limit - 3] + "..."
+
+    return BeforeValidator(take)
 
 
 #: A worker's one line on why a check it left flaky failed (DESIGN §23): model text, kept with the run, never shown to
 #: the overseer.
-FlakyDetail = Annotated[str | None, BeforeValidator(_flaky_detail)]
+FlakyDetail = Annotated[str | None, _line_within(MAX_FLAKY_DETAIL)]
+#: A cause a worker named that `FlakyCause` does not hold (DESIGN §23): model text, kept with the run so the word is
+#: not lost, told to the sinks, never shown to the overseer.
+OtherCause = Annotated[str | None, _line_within(MAX_OTHER_CAUSE)]
 
 
 class WorkerResult(BaseModel):
@@ -156,6 +169,23 @@ class WorkerResult(BaseModel):
     flaky_cause: Cause = None
     #: With `flaky`, one line on why the check failed, such as the error it ended with; None when the worker gave none.
     flaky_detail: FlakyDetail = None
+    #: The worker's `flaky_cause` when it was not one of `FlakyCause`'s, as it said it; set from that field alone.
+    flaky_cause_other: OtherCause = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _keep_other_cause(cls, data: object) -> object:
+        """Keep a `flaky_cause` outside the vocabulary as `flaky_cause_other`, so the worker's word is not dropped.
+
+        Returns:
+            The result's fields, with `flaky_cause_other` set from `flaky_cause` alone, whatever the worker sent for it.
+        """
+        if not isinstance(data, dict):
+            return data
+        given = cast("dict[str, object]", data)
+        cause = given.get("flaky_cause")
+        other = cause if isinstance(cause, str) and cause not in FlakyCause else None
+        return given | {"flaky_cause_other": other}
 
     def for_repos(self, repos: Sequence[str]) -> Self:
         """Return this result with `prs` and `pr_titles` kept to `repos`, the repositories the run worked in.
@@ -384,6 +414,7 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
             kicked=outcome.kicks.kicked,
             estimate=outcome.result.flaky_detail or outcome.result.summary,
             cause=outcome.result.flaky_cause,
+            other_cause=outcome.result.flaky_cause_other,
             note="; ".join(outcome.kicks.notes),
         )
         if flaky is not None:
