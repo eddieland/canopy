@@ -2,16 +2,26 @@
 // The counts are the server's (`canopy checklist`'s, `canopy.core.checklist_answers.counts`); this lays them out. And
 // one run's answers, on its page, as `canopy show run:ID` prints them.
 
-import type { ChecklistAnswer, ChecklistItemCounts, ItemAnswer } from '@/api/types'
+import type { ChecklistAnswer, ChecklistItemCounts, ChecklistWeek, ItemAnswer } from '@/api/types'
+import type { DayBar } from '@/lib/chart'
 import { counted } from '@/lib/descriptions'
 import { inRepos } from '@/lib/repo-filter'
 import { windowName } from '@/lib/report-window'
 
-/** How many days the page opens on: a week, as `canopy checklist` counts by default. */
-export const DEFAULT_CHECKLIST_DAYS = 7
+/**
+ * How many days the page opens on: the two weeks M66's measurement reads. `canopy checklist` keeps the week every
+ * report command opens on, and the guide says so.
+ */
+export const DEFAULT_CHECKLIST_DAYS = 14
 
-/** The windows the page offers, in days, shortest first: a week, the two weeks M66's measurement reads, a month. */
-export const CHECKLIST_WINDOWS: readonly number[] = [DEFAULT_CHECKLIST_DAYS, 14, 30]
+/** The windows the page offers, in days, shortest first: a week, the two weeks the page opens on, a month. */
+export const CHECKLIST_WINDOWS: readonly number[] = [7, DEFAULT_CHECKLIST_DAYS, 30]
+
+// The fewest runs given an item before the page says it may be one to drop: under ten, a rule that never failed may
+// only not have met the diff that fails it yet. Not config: it is the guide's advice applied, not a setting.
+const VERDICT_MIN_REMINDED = 10
+// The fewest `held` answers that make an item one to argue: once is a run's judgment, twice is a pattern.
+const ARGUE_MIN_HELD = 2
 
 /** An answer's count, as the table's columns and `canopy checklist` name it, after the runs reminded. */
 export interface AnswerColumn {
@@ -19,21 +29,34 @@ export interface AnswerColumn {
     key: 'passed' | 'fixed' | 'held' | 'not_applicable' | 'unanswered'
     /** Its head, the worker's word for the answer, as the CLI prints it. */
     label: string
-    /** What it counts, on its head's hover. */
+    /** What it counts, on its head's hover, and in the legend's tip. */
     hint: string
+    /** Its fill in the answer bar and the chart by week, written out so Tailwind finds it. */
+    fill: string
 }
 
 /** The answers' columns, in `canopy checklist`'s order. */
 export const ANSWER_COLUMNS: readonly AnswerColumn[] = [
-    { key: 'passed', label: 'pass', hint: 'The diff held to the item as it was' },
-    { key: 'fixed', label: 'fixed', hint: 'The diff did not, and the run committed the fix' },
+    { key: 'passed', label: 'pass', hint: 'The diff held to the item as it was', fill: 'bg-answer-pass' },
+    {
+        key: 'fixed',
+        label: 'fixed',
+        hint: 'The diff did not, and the run committed the fix',
+        fill: 'bg-answer-fixed',
+    },
     {
         key: 'held',
         label: 'held',
-        hint: 'The diff does not, and the run left it so, for a reason it gave: the reason stays on its run',
+        hint: 'The diff does not, and the run left it so, for a reason it gave',
+        fill: 'bg-answer-held',
     },
-    { key: 'not_applicable', label: 'n/a', hint: 'The item is about nothing the diff changed' },
-    { key: 'unanswered', label: 'unanswered', hint: 'The run was given the item and its result said nothing of it' },
+    { key: 'not_applicable', label: 'n/a', hint: 'The item is about nothing the diff changed', fill: 'bg-answer-na' },
+    {
+        key: 'unanswered',
+        label: 'unanswered',
+        hint: 'The run was given the item and its result said nothing of it',
+        fill: 'bg-answer-unanswered',
+    },
 ]
 
 /** One repository's items, in its list's order. */
@@ -101,6 +124,161 @@ export function checklistFigures(items: readonly ChecklistItemCounts[]): Checkli
         held: items.reduce((sum, i) => sum + i.held, 0),
         unanswered: items.reduce((sum, i) => sum + i.unanswered, 0),
     }
+}
+
+/** What the page makes of an item's answers, after its bar: the guide's advice on reading them, applied. */
+export interface Verdict {
+    /** The word: `drop?` for an item that may not earn its place, `argue` for one runs keep holding. */
+    word: 'drop?' | 'argue'
+    /** Why, in its tip: what the answers were. */
+    why: string
+}
+
+/**
+ * What the guide would say of an item, or null for nothing to say. Held at least twice: `argue`, with whoever wrote
+ * it. Given at least ten times and mostly n/a, or never failing (no fixed and no held): `drop?`, or reword it.
+ */
+export function checklistVerdict(item: ChecklistItemCounts): Verdict | null {
+    if (item.held >= ARGUE_MIN_HELD) {
+        return { word: 'argue', why: `Held ${item.held} times: runs keep finding the rule wrong for the diff` }
+    }
+    if (item.reminded < VERDICT_MIN_REMINDED) {
+        return null
+    }
+    const answered = item.reminded - item.unanswered
+    if (answered > 0 && item.not_applicable * 2 > answered) {
+        return {
+            word: 'drop?',
+            why: `n/a ${item.not_applicable} of ${answered} answers: it is about diffs the runs rarely make`,
+        }
+    }
+    if (answered > 0 && item.fixed + item.held === 0) {
+        return { word: 'drop?', why: `Never failed in ${answered} answers: the runs pay tokens to agree with it` }
+    }
+    return null
+}
+
+/** How the By item table orders each repository's items. */
+export type ChecklistSort = 'list' | 'held' | 'na' | 'unanswered'
+
+/** The table's orders, as its sort control offers them, the list's own first. */
+export const CHECKLIST_SORTS: readonly { key: ChecklistSort; label: string }[] = [
+    { key: 'list', label: 'list order' },
+    { key: 'held', label: 'held' },
+    { key: 'na', label: 'n/a share' },
+    { key: 'unanswered', label: 'unanswered' },
+]
+
+/** The order the search's `sort` names, if the page offers it; undefined for the list's own, the default. */
+export function checklistSort(value: unknown): ChecklistSort | undefined {
+    return CHECKLIST_SORTS.find((s) => s.key !== 'list' && s.key === value)?.key
+}
+
+/**
+ * Each repository's items in `sort`'s order, the most first, ties in the list's order: by how many held it, by the
+ * share of its runs that answered n/a, or by how many said nothing of it. The repositories keep theirs.
+ */
+export function sortGroups(groups: readonly RepoItems[], sort: ChecklistSort): RepoItems[] {
+    if (sort === 'list') {
+        return [...groups]
+    }
+    const by = (item: ChecklistItemCounts): number => {
+        switch (sort) {
+            case 'held': {
+                return item.held
+            }
+            case 'na': {
+                return item.reminded === 0 ? 0 : item.not_applicable / item.reminded
+            }
+            case 'unanswered': {
+                return item.unanswered
+            }
+        }
+    }
+    return groups.map((g) => ({ ...g, items: g.items.toSorted((a, b) => by(b) - by(a)) }))
+}
+
+/** An item's key in the search's `item`, `api:newspaper-order`: a repository's name holds no colon. */
+export function itemKey(item: Pick<ChecklistItemCounts, 'repo' | 'item'>): string {
+    return `${item.repo}:${item.item}`
+}
+
+/** The item `key` names among those the filter keeps, or undefined for none: the whole list. */
+export function pickedItem(groups: readonly RepoItems[], key: string | undefined): ChecklistItemCounts | undefined {
+    return key === undefined ? undefined : groups.flatMap((g) => g.items).find((i) => itemKey(i) === key)
+}
+
+/** An item's answers in words, on its bar's hover: each answer given, in the table's order, `2 pass · 1 held`. */
+export function answersWords(counts: Pick<ChecklistItemCounts, AnswerColumn['key']>): string {
+    const said = ANSWER_COLUMNS.filter((c) => counts[c.key] > 0).map((c) => `${counts[c.key]} ${c.label}`)
+    return said.length === 0 ? 'no answers' : said.join(' · ')
+}
+
+/** One week's answers, of one item or of the whole list. */
+export interface WeekAnswers {
+    /** The ISO week, `2026-W41`. */
+    week: string
+    /** How many runs of it were given the item, or an item of the list. */
+    reminded: number
+    /** How many answered `pass`. */
+    passed: number
+    /** How many answered `fixed`. */
+    fixed: number
+    /** How many answered `held`. */
+    held: number
+    /** How many answered `n/a`. */
+    not_applicable: number
+    /** How many said nothing. */
+    unanswered: number
+}
+
+/**
+ * The window's weeks, oldest first, each one's answers: `picked`'s alone, or with none picked, every item's the filter
+ * keeps, summed.
+ */
+export function answersByWeek(
+    weeks: readonly ChecklistWeek[],
+    picked: Pick<ChecklistItemCounts, 'repo' | 'item'> | undefined,
+    repo: string | undefined,
+): WeekAnswers[] {
+    const found = new Map<string, WeekAnswers>()
+    for (const w of weeks) {
+        const kept = picked === undefined ? inRepos(w.repo, repo) : itemKey(w) === itemKey(picked)
+        const sum = found.get(w.week) ?? {
+            week: w.week,
+            reminded: 0,
+            passed: 0,
+            fixed: 0,
+            held: 0,
+            not_applicable: 0,
+            unanswered: 0,
+        }
+        if (kept) {
+            sum.reminded += w.reminded
+            for (const c of ANSWER_COLUMNS) {
+                sum[c.key] += w[c.key]
+            }
+        }
+        found.set(w.week, sum)
+    }
+    return [...found.values()].toSorted((a, b) => a.week.localeCompare(b.week))
+}
+
+/** A week's name on the chart's axis: `W41`. */
+export function weekLabel(week: string): string {
+    return week.slice(week.indexOf('-') + 1)
+}
+
+/** The weeks as the chart by week draws them: a bar each, its answers stacked in the table's order, pass lowest. */
+export function weekBars(weeks: readonly WeekAnswers[]): DayBar[] {
+    return weeks.map((w) => ({
+        key: w.week,
+        label: weekLabel(w.week),
+        hint: `${w.week}: ${counted(w.reminded, 'item')} given · ${answersWords(w)}`,
+        total: w.reminded,
+        totalText: String(w.reminded),
+        segments: ANSWER_COLUMNS.map((c) => ({ key: c.key, fill: c.fill, value: w[c.key] })),
+    }))
 }
 
 /** What each answer means, in a run's answer's tip. */

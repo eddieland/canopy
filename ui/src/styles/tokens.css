@@ -109,6 +109,15 @@
     --wait-3: oklch(0.5 0.12 230);
     --wait-4: oklch(0.44 0.14 260);
 
+    /* The checklist page's answers (src/lib/checklist.ts): an item's answers as a bar, and by week. Here green and red
+     * are meant: a pass reads as passing and a held item as the failure it was left. Fixed is a cool blue apart from
+     * both, unanswered an amber, n/a the dry run's neutral, set again in each palette. Fills, never text. */
+    --answer-pass: oklch(0.55 0.13 150);
+    --answer-fixed: oklch(0.52 0.11 235);
+    --answer-held: oklch(0.53 0.19 28);
+    --answer-na: oklch(0.6 0.02 275);
+    --answer-unanswered: oklch(0.62 0.13 75);
+
     /* A transcript's context chart (src/components/context-chart.tsx), as fills: what a model call carried from the
      * one before it, or the runtime's own overhead, in a neutral; what it added, canopy's prompt first, in a hue. */
     --context-carried: oklch(0.6 0.03 275);
@@ -258,6 +267,12 @@
     --wait-3: oklch(0.72 0.12 230);
     --wait-4: oklch(0.65 0.14 260);
 
+    --answer-pass: oklch(0.74 0.15 150);
+    --answer-fixed: oklch(0.72 0.11 235);
+    --answer-held: oklch(0.68 0.18 28);
+    --answer-na: oklch(0.6 0.02 270);
+    --answer-unanswered: oklch(0.8 0.13 80);
+
     --context-carried: oklch(0.58 0.035 270);
     --context-added: oklch(0.78 0.12 195);
 
@@ -319,6 +334,7 @@
     --status-stopped: oklch(0.47 0.02 70);
     --spend-dry-run: oklch(0.6 0.015 80);
     --check-other: oklch(0.6 0.015 80);
+    --answer-na: oklch(0.6 0.015 80);
     --context-carried: oklch(0.6 0.015 80);
 
     /* Paper: each panel a sheet lying on the desk, its lift a little deeper than the default's, its corners a touch
@@ -344,6 +360,7 @@
     --status-stopped: oklch(0.45 0.028 219);
     --spend-dry-run: oklch(0.6 0.02 205);
     --check-other: oklch(0.6 0.02 205);
+    --answer-na: oklch(0.6 0.02 205);
     --context-carried: oklch(0.6 0.02 205);
 
     /* An editor's scheme: crisp corners, and panels flat on the canvas. */
@@ -366,6 +383,7 @@
     --status-stopped: oklch(0.43 0.035 264);
     --spend-dry-run: oklch(0.6 0.02 262);
     --check-other: oklch(0.6 0.02 262);
+    --answer-na: oklch(0.6 0.02 262);
     --context-carried: oklch(0.6 0.02 262);
 
     /* Snow and frost: soft corners, and the aurora a calm fade through Frost's blues rather than every section's
@@ -396,6 +414,7 @@
     --status-stopped: oklch(0.47 0.023 63);
     --spend-dry-run: oklch(0.59 0.02 70);
     --check-other: oklch(0.59 0.02 70);
+    --answer-na: oklch(0.59 0.02 70);
     --context-carried: oklch(0.59 0.02 70);
 
     /* As its dark side: crisp corners, a hard shadow with no blur, every line in its mono, the stepped aurora, the
@@ -443,6 +462,7 @@
     --status-stopped: oklch(0.46 0.03 160);
     --spend-dry-run: oklch(0.6 0.02 155);
     --check-other: oklch(0.6 0.02 155);
+    --answer-na: oklch(0.6 0.02 155);
     --context-carried: oklch(0.6 0.02 155);
 
     /* A garden: soft, rounded corners. */
@@ -465,6 +485,7 @@
     --status-stopped: oklch(0.47 0.046 291);
     --spend-dry-run: oklch(0.6 0.025 291);
     --check-other: oklch(0.6 0.025 291);
+    --answer-na: oklch(0.6 0.025 291);
     --context-carried: oklch(0.6 0.025 291);
 
     /* Dawn: soft, rounded corners, and the nav's highlight a tint with no hairline. */
@@ -488,6 +509,7 @@
     --status-stopped: oklch(0.72 0.015 286);
     --spend-dry-run: oklch(0.6 0.01 286);
     --check-other: oklch(0.6 0.01 286);
+    --answer-na: oklch(0.6 0.01 286);
     --context-carried: oklch(0.58 0.01 286);
 
     /* The mailroom: tight corners, and the aurora one rule in its steel blue, quiet as the rest of it. */
@@ -510,6 +532,7 @@
     --status-stopped: oklch(0.72 0 0);
     --spend-dry-run: oklch(0.55 0 0);
     --check-other: oklch(0.55 0 0);
+    --answer-na: oklch(0.55 0 0);
     --context-carried: oklch(0.55 0 0);
 
     /* A shadow does nothing on black, so its depth is light: panels draw no edge and stand apart by a step of
@@ -554,6 +577,7 @@
     --status-stopped: oklch(0.76 0.02 205);
     --spend-dry-run: oklch(0.63 0.03 215);
     --check-other: oklch(0.63 0.03 215);
+    --answer-na: oklch(0.63 0.03 215);
     --context-carried: oklch(0.63 0.03 215);
 
     /* An editor's scheme: crisp corners, and panels flat on the canvas. */
@@ -578,6 +602,7 @@
     --status-stopped: oklch(0.74 0.035 76);
     --spend-dry-run: oklch(0.62 0.02 70);
     --check-other: oklch(0.62 0.02 70);
+    --answer-na: oklch(0.62 0.02 70);
     --context-carried: oklch(0.62 0.02 70);
 
     /* A code editor of the nineties: crisp corners, and a hard shadow with no blur under what floats and the primary
@@ -639,6 +664,7 @@
     --status-stopped: oklch(0.74 0.03 155);
     --spend-dry-run: oklch(0.6 0.02 160);
     --check-other: oklch(0.6 0.02 160);
+    --answer-na: oklch(0.6 0.02 160);
     --context-carried: oklch(0.6 0.02 160);
 
     /* Under the trees: soft, rounded corners. */
@@ -660,6 +686,7 @@
     --status-stopped: oklch(0.75 0.035 340);
     --spend-dry-run: oklch(0.6 0.025 340);
     --check-other: oklch(0.6 0.025 340);
+    --answer-na: oklch(0.6 0.025 340);
     --context-carried: oklch(0.6 0.025 340);
 
     /* Velvet: the softest corners, the nav's highlight a tint with no hairline, and the name glowing faintly orchid. */
@@ -686,6 +713,7 @@
     --status-stopped: oklch(0.76 0.029 97);
     --spend-dry-run: oklch(0.62 0.02 100);
     --check-other: oklch(0.62 0.02 100);
+    --answer-na: oklch(0.62 0.02 100);
     --context-carried: oklch(0.62 0.02 100);
 
     /* A neon editor: crisp corners, every line in its mono, the aurora blooming and the name glowing pink, and the
@@ -759,6 +787,11 @@
     --color-wait-2: var(--wait-2);
     --color-wait-3: var(--wait-3);
     --color-wait-4: var(--wait-4);
+    --color-answer-pass: var(--answer-pass);
+    --color-answer-fixed: var(--answer-fixed);
+    --color-answer-held: var(--answer-held);
+    --color-answer-na: var(--answer-na);
+    --color-answer-unanswered: var(--answer-unanswered);
     --color-context-carried: var(--context-carried);
     --color-context-added: var(--context-added);
 
