@@ -184,6 +184,22 @@ class Health:
     #: last.
     causes: Sequence[Cause] = ()
 
+    @property
+    def ended(self) -> int:
+        """The window's runs that ended, of every kind."""
+        return sum(o.runs for o in self.outcomes)
+
+    @property
+    def failed(self) -> int:
+        """Of those, the ones that ended in a failed status."""
+        return sum(o.runs for o in self.outcomes if o.failed)
+
+    @property
+    def failed_cost_usd(self) -> float | None:
+        """What the failed ones cost; None when none of them reported a cost."""
+        costs = [o.cost_usd for o in self.outcomes if o.failed and o.cost_usd is not None]
+        return sum(costs) if costs else None
+
 
 @dataclass(frozen=True)
 class Bins:
@@ -248,9 +264,18 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Health:
     Returns:
         The report; a window with nothing in it has empty lists.
     """
-    start, end = spend.window(now, days)
+    return between(conn, *spend.window(now, days))
+
+
+def between(conn: sqlite3.Connection, start: datetime, end: datetime) -> Health:
+    """How the runs that started from one local midnight, `start`, to another, `end`, ended, and what guards refused.
+
+    Returns:
+        The report, as `report` gives it for any such window: a calendar month's, or the one before a page's.
+    """
     since = db.format_time(start)
     until = db.format_time(end)
+    days = spend.days_between(start, end)
     with db.read_snapshot(conn):
         outcomes = [o for kind in spend.KINDS for o in _outcomes(conn, kind, since, until)]
         failed = [f for kind in spend.KINDS for f in _failures(conn, kind, since, until)]

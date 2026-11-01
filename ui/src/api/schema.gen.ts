@@ -7518,6 +7518,32 @@ export type components = {
              */
             cost_usd: number | null;
             /**
+             * Failed
+             * @description Of those, the ones that ended in a failed status.
+             */
+            failed: number;
+            /**
+             * Failed Cost Usd
+             * @description What the failed ones cost, in US dollars; None when none of them reported a cost.
+             */
+            failed_cost_usd: number | null;
+            /**
+             * First Reviews
+             * @description The first reviews that arrived in it on a PR with a start, timed on GitHub's clock, as the Reviews page counts
+             *     them.
+             */
+            first_reviews: number;
+            /**
+             * Green First
+             * @description Of those, the heads whose first run of every check was not red.
+             */
+            green_first: number;
+            /**
+             * Heads
+             * @description The PR heads first checked in it, as the CI page counts them.
+             */
+            heads: number;
+            /**
              * Kinds
              * @description A row per kind of run, in a fixed order: overseer, workers, plans, chores, reviews, tasks.
              */
@@ -7527,6 +7553,11 @@ export type components = {
              * @description The tickets the loop marked done as merged in it, the latest first.
              */
             landed: components["schemas"]["ReportTicket"][];
+            /**
+             * Median First Review Hours
+             * @description Their median wait, in hours; None with none.
+             */
+            median_first_review_hours: number | null;
             /**
              * Median Hours To Land
              * @description The median of its landed tickets' hours to land; None with none known.
@@ -7575,6 +7606,11 @@ export type components = {
              * @description How many runs of every kind started in it, a tick each for the overseer.
              */
             runs: number;
+            /**
+             * Runs Ended
+             * @description How many runs of every kind that started in it ended, as `canopy health` and the Health page count them.
+             */
+            runs_ended: number;
             /**
              * Since
              * Format: date-time

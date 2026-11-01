@@ -6,6 +6,7 @@ CI did on the PRs canopy observed, where their review feedback came from, and ho
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, cast
 
 from canopy.core import ci, db, health, plan_report, review_report, runtime_sessions, spend
@@ -81,8 +82,10 @@ def monthly_report(backend: Backend, ctx: Context, months: int) -> MonthlyReport
     with db.read_snapshot(ctx.conn):
         found = monthly.months(ctx.conn, backend.clock(), months, state_dir=ctx.state_dir)
         read = runtime_sessions.last_read(ctx.conn)
+        # Each month over the day pages' own reads, so a month and its days agree by construction.
+        rows = [_month(m, _figures(ctx, m)) for m in found]
     return MonthlyReport(
-        months=[_month(m) for m in found],
+        months=rows,
         sessions_read_at=db.parse_time(read.read_at) if read is not None else None,
     )
 
@@ -293,7 +296,25 @@ def plans_report(backend: Backend, ctx: Context, days: int) -> PlansReport:
     )
 
 
-def _month(found: monthly.Month) -> ReportMonth:
+@dataclass(frozen=True)
+class _Figures:
+    """A month's headline figures as the Health, CI, and Reviews pages read them."""
+
+    health: health.Health
+    ci: ci.Ci
+    reviews: review_report.Reviews
+
+
+def _figures(ctx: Context, found: monthly.Month) -> _Figures:
+    start, end = db.parse_time(found.since), db.parse_time(found.until)
+    return _Figures(
+        health=health.between(ctx.conn, start, end),
+        ci=ci.between(ctx.conn, start, end),
+        reviews=review_report.between(ctx.conn, start, end),
+    )
+
+
+def _month(found: monthly.Month, figures: _Figures) -> ReportMonth:
     return ReportMonth(
         month=found.month,
         since=db.parse_time(found.since),
@@ -321,6 +342,13 @@ def _month(found: monthly.Month) -> ReportMonth:
         median_pr_comments=monthly.median(t.pr_comments for t in found.landed),
         median_hours_to_land=monthly.median(_hours(t.to_land) for t in found.landed),
         median_review_wait_hours=monthly.median(_hours(t.review_wait) for t in found.landed),
+        runs_ended=figures.health.ended,
+        failed=figures.health.failed,
+        failed_cost_usd=figures.health.failed_cost_usd,
+        heads=figures.ci.heads,
+        green_first=figures.ci.green_first,
+        first_reviews=len(figures.reviews.waits),
+        median_first_review_hours=_hours(figures.reviews.median_wait),
     )
 
 

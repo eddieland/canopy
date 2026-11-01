@@ -303,8 +303,17 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Reviews:
     Returns:
         The report; a window with nothing in it has no PRs, reviewers, rounds, or runs, and each day at nothing.
     """
-    start, end = spend.window(now, days)
+    return between(conn, *spend.window(now, days))
+
+
+def between(conn: sqlite3.Connection, start: datetime, end: datetime) -> Reviews:
+    """Where review feedback came from, from one local midnight, `start`, to another, `end`.
+
+    Returns:
+        The report, as `report` gives it for any such window: a calendar month's, or the one before a page's.
+    """
     since, until = db.format_time(start), db.format_time(end)
+    days = spend.days_between(start, end)
     starts = spend.day_starts(start, days)
     with db.read_snapshot(conn):
         tracked = tracked_prs.tracked(conn, "", until)
