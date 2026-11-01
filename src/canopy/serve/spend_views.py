@@ -21,6 +21,7 @@ from canopy.serve.schema.spend import (
     SpendDirectory,
     SpendFirstCallWeek,
     SpendMonth,
+    SpendPrevious,
     SpendPullRequest,
     SpendSessions,
     SpendShare,
@@ -101,6 +102,13 @@ def spend_breakdown_hours(
 
 def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> SpendBreakdown:
     month = spending.budget_month(ctx.conn, now, ctx.config.spend, state_dir=ctx.state_dir)
+    # The window before, as many days or hours, ending where this one starts.
+    if found.hours is not None:
+        start = db.parse_time(found.since)
+        earlier = start - timedelta(hours=found.hours)
+    else:
+        earlier, start = spending.window_before(found.since, found.days or 0)
+    before = spending.headline(ctx.conn, db.format_time(earlier), found.since, state_dir=ctx.state_dir)
     return SpendBreakdown(
         since=db.parse_time(found.since),
         days=found.days,
@@ -175,6 +183,13 @@ def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> 
             )
             for w in found.first_call_weeks
         ],
+        previous=SpendPrevious(
+            since=earlier,
+            until=start,
+            totals=_spend_costs(before.totals),
+            done=before.done,
+            per_done=before.per_done,
+        ),
     )
 
 
