@@ -228,7 +228,8 @@ def _answer(conn: sqlite3.Connection, entry: object, *, key: str, found: dict[in
         raise ValueError("`review` is not a review run's id")
     if not isinstance(finding, int) or isinstance(finding, bool) or finding < 1:
         raise ValueError("`finding` is not a finding's number")
-    if answer not in FindingAnswer:
+    # The `str` test first: `in` on an enum raises for an unhashable value, such as a list, before Python 3.13.
+    if not isinstance(answer, str) or answer not in FindingAnswer:
         raise ValueError(f"`answer` is not {' or '.join(FindingAnswer)}")
     if reason is not None and not isinstance(reason, str):
         raise ValueError("`reason` is not text")
