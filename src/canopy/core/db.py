@@ -484,7 +484,7 @@ def abandon_unfinished_ticks(conn: sqlite3.Connection) -> list[int]:
         .set(ended_at=sql.ROW, status=TickStatus.ABANDONED, summary="the tick process exited without finishing")
         .where("id = ?", sql.ROW)
     )
-    sql.execute_many(conn, abandon.statement, [(now(), i) for i in ids])
+    sql.execute_many(conn, abandon, [(now(), i) for i in ids])
     return ids
 
 

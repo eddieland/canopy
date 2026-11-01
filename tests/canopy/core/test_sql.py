@@ -195,7 +195,7 @@ def test_an_insert_takes_a_selects_rows(conn: sqlite3.Connection) -> None:
     found = sql.select("pr_url, updated_at").from_("pr_titles").order_by("pr_url")
     assert [tuple(r) for r in sql.execute(conn, found)] == [("a", "t"), ("a/2", "t2")]
     with pytest.raises(ValueError, match="names no column"):
-        sql.insert_from("pr_titles", (), copied)
+        sql.insert_from("pr_titles", (), copied).fragment()
 
 
 def test_not_in_keeps_the_rows_outside_the_list_and_every_row_for_none(conn: sqlite3.Connection) -> None:
@@ -260,3 +260,23 @@ def test_records_read_a_built_statement_as_typed_rows(conn: sqlite3.Connection) 
     q = sql.select("*").from_("ticks").where("id = ?", tick)
     assert [t.id for t in records.fetch_all(conn, records.Tick, q)] == [tick]
     assert records.fetch_one(conn, records.Tick, q.where("dry_run = ?", 0)) is None
+
+
+class Lookalike:
+    """An object with a `fragment` method of its own, which does not make it a piece of SQL."""
+
+    def fragment(self) -> sql.Fragment:
+        return sql.frag("1; DROP TABLE ticks")
+
+
+def test_only_sqls_own_classes_are_pieces_of_sql() -> None:
+    with pytest.raises(TypeError, match="takes a piece of SQL"):
+        sql.frag("id IN ({})", Lookalike())  # pyrefly: ignore[bad-argument-type]  # a lookalike, to test it is refused
+
+
+def test_a_clause_read_once_is_filled_anew_each_time() -> None:
+    def ticks_of(status: TickStatus) -> sql.Select:
+        return sql.select("id").from_("ticks").where("status = ? AND summary != '?'", status)
+
+    assert rendered(ticks_of(TickStatus.OK)) == ("SELECT id FROM ticks WHERE status = ? AND summary != '?'", ("ok",))
+    assert rendered(ticks_of(TickStatus.RUNNING))[1] == (TickStatus.RUNNING,)
