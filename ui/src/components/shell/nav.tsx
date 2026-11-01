@@ -21,6 +21,7 @@ import { useSection } from '@/hooks/use-section'
 import { breakdown, breakdownText, countBySeverity } from '@/lib/attention'
 import type { BreakdownPart, Severity } from '@/lib/attention'
 import { counted } from '@/lib/descriptions'
+import { REPORT_PAGES } from '@/lib/report-pages'
 import { verdictTone } from '@/lib/reviews'
 import { SECTION_FILL, SECTION_LABEL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
@@ -109,38 +110,7 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
         hint:
             'What canopy cost and got done month by month, what agent runs cost each day and how they ended, ' +
             'how workers answered your checklists, which checks fail, who reviews, and how plans were approved',
-        pages: [
-            {
-                to: '/reports/spend',
-                label: 'Spend',
-                hint: 'What agent runs cost over the last 24 hours, 7 days, or 30 days',
-            },
-            {
-                to: '/reports/checklist',
-                label: 'Checklist',
-                hint: "How workers answered each repository's checklist, item by item, over the last days",
-            },
-            {
-                to: '/reports/health',
-                label: 'Health',
-                hint: "How the last days' runs ended, the newest failures, and what the guards refused",
-            },
-            {
-                to: '/reports/ci',
-                label: 'CI',
-                hint: 'Which checks fail, what fixing them cost, and whether flaky kicks worked',
-            },
-            {
-                to: '/reports/reviews',
-                label: 'Reviews',
-                hint: "Who reviews, how soon first reviews come, the feedback rounds, and canopy's reviewer",
-            },
-            {
-                to: '/reports/plans',
-                label: 'Plans',
-                hint: 'How plans were approved, by the planner or by you, and whether their PRs needed a resume',
-            },
-        ],
+        pages: [...REPORT_PAGES],
     },
     {
         to: '/memory',

@@ -800,12 +800,24 @@ side.
   canopy's reviewer). A figure still being read holds its place. A `Counter` stays the attention and worktrees pages'
   count of the present, with its state's color.
 - **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest
-  (`barPercent`), where comparing the rows is the point: spent by month, by ticket, and by model, the bytes a tool
-  returned, a check's failure rate, a reviewer's reviews and wait, a PR's first review, resumes per plan by estimate.
-  The figure, at a fixed width so the bars start at one edge, then a 6px rounded bar, 64px long at least so a narrow
-  column's still compares, on `surface-raised` filled in `muted-foreground`, or the series' own fill; never a state's
-  color, but for a failure rate (Health's failed share of a kind's runs, CI's checks), in `status-failed`, a share of
-  the whole rather than of the column's largest: it says what is broken. It is the eye's, `aria-hidden`.
+  (`barPercent`), where comparing the rows is the point: spent by ticket, by model, and by landed ticket, the bytes a
+  tool returned, a check's failure rate, a reviewer's reviews and wait, a PR's first review, resumes per plan by
+  estimate. The figure, at a fixed width so the bars start at one edge, then a 6px rounded bar, 64px long at least so a
+  narrow column's still compares, on `surface-raised` filled in `muted-foreground`, or the series' own fill; never a
+  state's color, but for a failure rate (Health's failed share of a kind's runs, CI's checks), in `status-failed`, a
+  share of the whole rather than of the column's largest: it says what is broken. It is the eye's, `aria-hidden`. Where
+  a table's rows sum to a whole, the reports page's By kind and By model, a bar is its row's share of the whole too, the
+  percent on the cell's hover.
+- **A sparkline** (`Sparkline`, `src/components/sparkline.tsx`) is a series drawn as a small `accent` line, 2rem tall,
+  where its trend is the point and a chart would be too much: a report card's days, Delivery's medians across the
+  months. Its scale is a chart's, 0 to `HEADROOM` over its largest; a point with no value breaks the line, and a lone
+  one is a dot. With dots, each point says its value on hover. It is `aria-hidden`: the words or the table beside it
+  say what it draws.
+- **Report cards** head the reports page: a card per page under Reports, in the nav's order, each a link to its page
+  over 30 days, the longest window every page offers. A card is a panel's surface and edge with the page's name in
+  `panel-label` type, its description line as the page gives it, and a sparkline of its by-day series where it has one;
+  the nav's hint for the page is its hover. Each reads its own report, so one slow read holds its own line's place
+  alone.
 
 ## Charts
 
@@ -1077,6 +1089,12 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **The first reviews chart** (the Reviews page) is the same `DayChart`: a bar per local day of the first reviews that
   arrived, stacked by wait in the wait fills, the quickest at the bottom, the day's median on hover, the legend and a
   table of the same numbers under it. Its window is the health page's.
+- **The month chart** (the reports page) is the spend chart at a month's pitch: the same `DayChart`, a bar per
+  calendar month of the span, stacked by kind in the spend series' fills with the sessions outside canopy on top
+  (`MONTH_SERIES`), the peak's total over its bar. The month shown in detail is marked in the accent's tint, and a
+  click on a bar picks its month; Delivery's table links each month for the keyboard. The table of every month's
+  figures folds under it. With no span picked the page fits the journal: the months from the first that holds
+  anything, `since April 2026` in the panel's header.
 - **The answer bar** (the checklist page's By item) is an item's answers as one 8px rounded bar, 128px long, each
   answer its share of the runs reminded in its answer fill, in `canopy checklist`'s order, so an item all n/a is one
   grey bar and one often held has a red band. Every bar is the same length, since the share is the point, not the
