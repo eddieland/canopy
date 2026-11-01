@@ -109,7 +109,7 @@ export function slotsRoot(worktrees: Worktree[]): string | null {
     const roots = new Set(
         worktrees.map((w) => {
             const at = w.path.lastIndexOf(`/${w.name}/`)
-            return at < 0 ? null : w.path.slice(0, at)
+            return at === -1 ? null : w.path.slice(0, at)
         }),
     )
     const [root] = roots
