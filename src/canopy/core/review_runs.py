@@ -163,8 +163,7 @@ def release_holds(conn: sqlite3.Connection, run_id: int, findings: Iterable[int]
         conn,
         records.update(records.ReviewHold)
         .set(released_at=db.now(), released_channel=channel)
-        .where("review_run_id = ? AND finding = ? AND released_at IS NULL", run_id, sql.ROW)
-        .statement,
+        .where("review_run_id = ? AND finding = ? AND released_at IS NULL", run_id, sql.ROW),
         [(f,) for f in findings],
     )
 

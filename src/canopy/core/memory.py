@@ -481,7 +481,7 @@ def _mark_cited(conn: sqlite3.Connection, run_id: int, cited: MemoryCited, memor
     marked = (
         records.update(records.MemoryRead).set(cited=cited).where("run_id = ?", run_id).where("memory_id = ?", sql.ROW)
     )
-    sql.execute_many(conn, marked.statement, [(m.id,) for m in memories])
+    sql.execute_many(conn, marked, [(m.id,) for m in memories])
 
 
 def _drop_notes(conn: sqlite3.Connection, writing: _Writing, value: JsonValue, shown: Iterable[records.Memory]) -> None:

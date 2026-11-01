@@ -125,7 +125,7 @@ def test_a_select_names_its_own_columns_so_a_joined_tables_cannot_shadow_them(co
     db.record_decision(conn, real, "PROJ-1", "wait", "checks running")
     db.record_decision(conn, dry, "PROJ-2", "wait", "checks running")
     query = records.select(records.Decision, "d").join("ticks t ON t.id = d.tick_id").where("t.dry_run = ?", 1)
-    assert query.statement.fragment().text.startswith("SELECT d.id, d.tick_id, d.ticket_key, ")
+    assert query.fragment().text.startswith("SELECT d.id, d.tick_id, d.ticket_key, ")
     [decision] = query.all(conn)
     assert (decision.ticket_key, decision.tick_id) == ("PROJ-2", dry)
 
@@ -135,8 +135,32 @@ def test_a_select_goes_in_a_slot_as_any_piece_of_sql(conn: sqlite3.Connection) -
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks running")
     db.record_decision(conn, tick, "PROJ-2", "skip", "no tracker")
     waits = records.select(records.Decision).where("action = ?", "wait")
-    counted = sql.execute(conn, sql.select("count(*)").from_("({}) AS w", waits.statement)).fetchone()
+    counted = sql.execute(conn, sql.select("count(*)").from_("({}) AS w", waits)).fetchone()
     assert counted[0] == 1
+
+
+def test_a_row_types_query_is_a_select_that_keeps_its_row_type_through_each_clause(conn: sqlite3.Connection) -> None:
+    tick = db.start_tick(conn, dry_run=True)
+    for key in ("PROJ-1", "PROJ-1", "PROJ-2"):
+        db.record_decision(conn, tick, key, "wait", "checks running")
+    query = records.select(records.Decision).where("ticket_key = ?", "PROJ-1").order_by("id").limit(1)
+    assert isinstance(query, sql.Select)
+    assert query.row_type is records.Decision
+    assert [d.ticket_key for d in query.all(conn)] == ["PROJ-1"]
+
+
+@dataclass(frozen=True)
+class Checked(records.View):
+    ticket_key: str
+
+    def __post_init__(self) -> None:
+        assert self.ticket_key
+
+
+def test_a_record_type_that_needs_its_init_run_is_refused(conn: sqlite3.Connection) -> None:
+    # A record is read without its __init__, so a __post_init__ would be skipped.
+    with pytest.raises(records.RowError, match="read without its __init__"):
+        records.fetch_all(conn, Checked, sql.select("ticket_key").from_("decisions"))
 
 
 @dataclass(frozen=True)
@@ -354,7 +378,7 @@ def test_an_update_and_a_delete_read_back_the_rows_they_changed(conn: sqlite3.Co
 
 def test_a_write_runs_its_sql_statement(conn: sqlite3.Connection) -> None:
     write = records.update(records.Tick).set(summary="done").where("id = ?", 7)
-    assert write.statement == sql.update("ticks").set(summary="done").where("id = ?", 7)  # noqa: TID251
+    assert write.fragment() == sql.update("ticks").set(summary="done").where("id = ?", 7).fragment()  # noqa: TID251
     tick = db.start_tick(conn, dry_run=True)
     assert records.update(records.Tick).set(summary="done").where("id = ?", tick).run(conn).rowcount == 1
 
@@ -397,7 +421,7 @@ def test_a_write_leaves_a_piece_of_sql_or_a_row_for_sqlite_to_judge(conn: sqlite
     computed = records.update(records.Tick).set(summary=sql.frag("'tick ' || id")).where("id = ?", tick)
     assert present(computed.returned(conn)[0].summary) == f"tick {tick}"
     per_row = records.update(records.Tick).set(summary=sql.ROW).where("id = ?", sql.ROW)
-    sql.execute_many(conn, per_row.statement, [("again", tick)])
+    sql.execute_many(conn, per_row, [("again", tick)])
     assert present(db.get_tick(conn, tick)).summary == "again"
 
 
