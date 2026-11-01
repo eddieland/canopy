@@ -1,12 +1,13 @@
 // The CI page: which checks fail, what fixing them cost, and whether flaky kicks worked, on the PRs canopy observed.
 // The numbers are the server's; this lays them out.
 
-import type { CiCheck, CiDay, CiFix, CiKick, CiPrevious, CiReport, CiVerdict } from '@/api/types'
+import type { CiCheck, CiDay, CiFix, CiKick, CiPrevious, CiPullRequest, CiReport, CiVerdict } from '@/api/types'
 import type { DayBar, DayChartSeries } from '@/lib/chart'
 import type { Clock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
 import { pickWindow, windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
+import { hoursText } from '@/lib/reports'
 import { dayLabel, dayName, shareText } from '@/lib/spend'
 
 /** The window the page opens on: the week, as the health page does. */
@@ -58,15 +59,18 @@ export interface CiFigures {
     red: number
     /** The resumes for CI that started in the window. */
     fixes: number
+    /** Of those, the ones whose every check red when they started was green on the head after them. */
+    fixesGreen: number
 }
 
-/** The window's heads, their share green first time, its red runs, and its fix-CI resumes. */
+/** The window's heads, their share green first time, its red runs, and its fix-CI resumes and how many went green. */
 export function ciFigures(found: Pick<CiReport, 'heads' | 'green_first' | 'per_day' | 'fixes'>): CiFigures {
     return {
         heads: found.heads,
         greenFirst: found.heads === 0 ? null : found.green_first / found.heads,
         red: found.per_day.reduce((sum, day) => sum + redSum(day), 0),
         fixes: found.fixes.length,
+        fixesGreen: found.fixes.filter((f) => wentGreen(f)).length,
     }
 }
 
@@ -77,7 +81,16 @@ export function previousCiFigures(previous: CiPrevious): CiFigures {
         greenFirst: previous.heads === 0 ? null : previous.green_first / previous.heads,
         red: previous.red,
         fixes: previous.fixes,
+        fixesGreen: previous.fixes_green,
     }
+}
+
+/**
+ * Whether a fix went green: it found a check red when it started, and every one it found was green on the head after
+ * it, as the server counts the window before's.
+ */
+export function wentGreen(fix: Pick<CiFix, 'checks'>): boolean {
+    return fix.checks.length > 0 && fix.checks.every((c) => c.next === 'green')
 }
 
 /**
@@ -167,3 +180,89 @@ export function fixRateText(fixes: readonly Pick<CiFix, 'checks'>[]): string {
 export function kickText(kick: Pick<CiKick, 'kick'>, limit: number): string {
     return limit === 0 ? `kick ${kick.kick}` : `kick ${kick.kick} of ${limit}`
 }
+
+/** How many green reruns on an unchanged head make a check flaky, as its chip says: one could be the fix landing. */
+export const FLAKY_RERUNS = 2
+
+/** A check's reruns on a head it was red on that went green: `1 of 2`, or `–` with no rerun. */
+export function rerunsText(check: Pick<CiCheck, 'reruns' | 'reruns_green'>): string {
+    return check.reruns === 0 ? '–' : `${check.reruns_green} of ${check.reruns}`
+}
+
+/** Whether a check passed on a head it had failed on often enough to call flaky, without anyone's say-so. */
+export function isFlaky(check: Pick<CiCheck, 'reruns_green'>): boolean {
+    return check.reruns_green >= FLAKY_RERUNS
+}
+
+/** Of a check's red runs a new head followed, the share whose next run passed, 0 to 1; null when none followed. */
+export function nextHeadShare(check: Pick<CiCheck, 'followed' | 'passed'>): number | null {
+    return check.followed === 0 ? null : check.passed / check.followed
+}
+
+/** The green-first chart's series, bottom up: the heads green first time, then the rest. */
+export const GREEN_FIRST_SERIES: readonly DayChartSeries[] = [
+    {
+        key: 'green-first',
+        label: 'green first time',
+        hint: 'PR heads whose first run of every check was not red',
+        fill: 'bg-accent',
+    },
+    {
+        key: 'red-first',
+        label: 'red first',
+        hint: 'PR heads with a check whose first run was red',
+        fill: 'bg-check-other',
+    },
+]
+
+/** A day's heads' share green first time as a readout: `50%`, or a dash with no head first checked. */
+export function greenFirstRateText(day: Pick<CiDay, 'heads' | 'green_first'>): string {
+    return shareText(day.heads === 0 ? null : day.green_first / day.heads)
+}
+
+/** A day's bar on hover: `Oct 8: 3 of 6 heads green first time, 50%`, or `Oct 5: no head checked`. */
+export function greenFirstHint(day: CiDay, clock: Clock): string {
+    const name = dayName(day, clock)
+    return day.heads === 0
+        ? `${name}: no head checked`
+        : `${name}: ${day.green_first} of ${counted(day.heads, 'head')} green first time, ${greenFirstRateText(day)}`
+}
+
+/** Each day as the green-first chart draws it: its heads first checked, the green-first ones at the bottom. */
+export function greenFirstBars(days: readonly CiDay[], clock: Clock): DayBar[] {
+    return days.map((day) => ({
+        key: day.day,
+        label: dayLabel(day, clock),
+        hint: greenFirstHint(day, clock),
+        total: day.heads,
+        totalText: String(day.heads),
+        segments: [
+            { key: 'green-first', fill: 'bg-accent', value: day.green_first },
+            { key: 'red-first', fill: 'bg-check-other', value: day.heads - day.green_first },
+        ],
+    }))
+}
+
+/** What the time to green says of a PR: its hours, `still red` while its spell lasts, or a dash when it never was. */
+export function toGreenText(pr: Pick<CiPullRequest, 'red_at' | 'hours_to_green'>): string {
+    if (pr.red_at === null) {
+        return '–'
+    }
+    return pr.hours_to_green === null ? 'still red' : hoursText(pr.hours_to_green)
+}
+
+/**
+ * How long a fix's PRs took to go green from the red they were in when it started: its hours, `still red` while one
+ * is, or a dash when no check was red.
+ */
+export function fixToGreenText(fix: Pick<CiFix, 'checks' | 'hours_to_green'>): string {
+    if (fix.checks.length === 0) {
+        return '–'
+    }
+    return fix.hours_to_green === null ? 'still red' : hoursText(fix.hours_to_green)
+}
+
+/** What the page says of its time to green, under the per-PR table: when it measures, and how roughly. */
+export const TO_GREEN_TEXT =
+    "From a PR's first red check run to its first head with every check green, on when canopy saw each run finish, " +
+    'not when it did: a head whose other checks are still running reads green until one is seen red.'

@@ -106,6 +106,12 @@ const SERIES = [
     'wait-2',
     'wait-3',
     'wait-4',
+    // The checklist page's answers, the same kind of fill.
+    'answer-pass',
+    'answer-fixed',
+    'answer-held',
+    'answer-na',
+    'answer-unanswered',
 ]
 // A transcript's context chart: fills on a panel's surface, and on the raised one behind the call picked.
 const CONTEXT = ['context-carried', 'context-added']

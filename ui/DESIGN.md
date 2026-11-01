@@ -47,6 +47,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `spend-outside` | The spend series of the sessions outside canopy: no run of canopy's. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
 | `wait-1` to `wait-4` | How long something took, the quickest first: Reviews' first reviews, Health's run lengths. |
+| `answer-pass`, `-fixed`, `-held`, `-na`, `-unanswered` | The checklist page's answers: an item's bar, and by week. |
 | `proposal-change`, `-decline`, `-ask` | A feedback plan's proposal chip: what it does with an item, never a state. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; code. |
 | `code-chip`, `code-size` | Inline code's chip, a tint of its own ink, and code's size against its line (Rich text). |
@@ -108,6 +109,11 @@ Rules:
   never reads as a failure. The Health page's run lengths take the same ramp by their share of the timeout
   (`DURATION_BANDS` in `src/lib/health.ts`), with a run at the limit in `status-failed`, since it was stopped. Fills,
   never text; each reaches 3:1 on `surface`, which `tokens.test.ts` measures.
+- **Answer fills** (`answer-pass`, `-fixed`, `-held`, `-na`, `-unanswered`; `src/lib/checklist.ts`) color a checklist
+  answer on the checklist page and nowhere else. Unlike the other fills, green and red here mean what they say: a
+  pass reads as passing and a held item as the failure a run left it. Fixed is a blue apart from both, unanswered an
+  amber, n/a the dry run's neutral, so set again in each palette's rule. Fills, never text; each reaches 3:1 on
+  `surface`, which `tokens.test.ts` measures.
 - **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
   with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
   legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
@@ -796,10 +802,10 @@ side.
   (`barPercent`), where comparing the rows is the point: spent by ticket, by model, and by landed ticket, the bytes a
   tool returned, a check's failure rate. The figure, at a fixed width so the bars start at one edge, then a 6px rounded
   bar, 64px long at least so a narrow column's still compares, on `surface-raised` filled in `muted-foreground`, or the
-  series' own fill; never a state's color, but for the Health page's failed share of a kind's runs, in `status-failed`,
-  a share of the whole rather than of the column's largest: it says what is broken. It is the eye's, `aria-hidden`.
-  Where a table's rows sum to a whole, the reports page's By kind and By model, a bar is its row's share of the whole
-  too, the percent on the cell's hover.
+  series' own fill; never a state's color, but for a failure rate (Health's failed share of a kind's runs, CI's
+  checks), in `status-failed`, a share of the whole rather than of the column's largest: it says what is broken. It is
+  the eye's, `aria-hidden`. Where a table's rows sum to a whole, the reports page's By kind and By model, a bar is its
+  row's share of the whole too, the percent on the cell's hover.
 - **A sparkline** (`Sparkline`, `src/components/sparkline.tsx`) is a series drawn as a small `accent` line, 2rem tall,
   where its trend is the point and a chart would be too much: a report card's days, Delivery's medians across the
   months. Its scale is a chart's, 0 to `HEADROOM` over its largest; a point with no value breaks the line, and a lone
@@ -1071,6 +1077,9 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **The red checks chart** (the CI page) is the same `DayChart`: a bar per local day of the red check runs, a series
   per check the server names apart, by rank in the check fills, and the rest summed as `other` in `check-other`, the
   legend and a table of the same numbers under it. Its window is the health page's.
+- **The green-first chart** (the CI page) is the same `DayChart` over it: a bar per local day of the PR heads first
+  checked, those green first time at the bottom in the accent and the rest in `check-other`, so a bad day is a short
+  accent; the day's rate on hover, the legend and a table of the same numbers under it.
 - **The first reviews chart** (the Reviews page) is the same `DayChart`: a bar per local day of the first reviews that
   arrived, stacked by wait in the wait fills, the quickest at the bottom, the day's median on hover, the legend and a
   table of the same numbers under it. Its window is the health page's.
@@ -1080,9 +1089,19 @@ sliver beside four others; and its axis names short call numbers without measuri
   click on a bar picks its month; Delivery's table links each month for the keyboard. The table of every month's
   figures folds under it. With no span picked the page fits the journal: the months from the first that holds
   anything, `since April 2026` in the panel's header.
+- **The answer bar** (the checklist page's By item) is an item's answers as one 8px rounded bar, 128px long, each
+  answer its share of the runs reminded in its answer fill, in `canopy checklist`'s order, so an item all n/a is one
+  grey bar and one often held has a red band. Every bar is the same length, since the share is the point, not the
+  count; the counts stay in the row's columns, and in words in the bar's tip and for a screen reader. The legend is
+  once, under the table. A held or fixed count of some opens a `Popover` of the runs behind it, a held one's reason
+  under its run. An item's name picks it for By week (`?item=`), marked as the home's picked month is; the table's
+  order is a segmented control in its header (`?sort=`), each repository's items sorted within it.
+- **The answers by week chart** (the checklist page) is the same `DayChart`: a bar per ISO week of the window, the
+  picked item's answers or the whole list's, stacked in the answer fills, the legend and a table of the same numbers
+  under it. Its window, 7, 14, or 30 days, opens on 14.
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
   with its unit's phase, its ticket, then the page's own figures. The spend page's By pull request, the CI page's
-  flaky kicks, and the Reviews page's By pull request use it.
+  time to green and flaky kicks, and the Reviews page's By pull request use it.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
