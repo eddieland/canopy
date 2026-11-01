@@ -36,6 +36,9 @@ const PR: ReviewsPullRequest = {
     ready_at: null,
     merged_at: null,
     hours_to_merge: null,
+    approved: 0,
+    approved_at: null,
+    rounds_to_approval: null,
 }
 
 describe('review-report', () => {

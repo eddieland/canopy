@@ -8612,6 +8612,16 @@ export type components = {
          */
         ReviewsPullRequest: {
             /**
+             * Approved
+             * @description Its reviews made in the window that approved it.
+             */
+            approved: number;
+            /**
+             * Approved At
+             * @description When its first approval came, in the window or before it; None with none.
+             */
+            approved_at: string | null;
+            /**
              * Changes Requested
              * @description Of those, the ones that asked for changes.
              */
@@ -8667,6 +8677,12 @@ export type components = {
              * @description The feedback plans made in the window that read it.
              */
             rounds: number;
+            /**
+             * Rounds To Approval
+             * @description The feedback plans that read it and were approved before its first approval, in the window or before it; a
+             *     plan written before it and approved after does not count. None without an approval.
+             */
+            rounds_to_approval: number | null;
             /**
              * Ticket Key
              * @description The ticket that owns it: its unit's, else the ticket of the first run that named it.
@@ -8725,6 +8741,16 @@ export type components = {
              */
             median_first_review_hours: number | null;
             /**
+             * @description The median of each part over the same rounds, to say where the time went; None with none. Each part's median
+             *     is its own, so they need not sum to `median_turnaround_hours`.
+             */
+            median_turnaround: components["schemas"]["ReviewsTurnaround"] | null;
+            /**
+             * Median Turnaround Hours
+             * @description Their median `turnaround_hours`; None with none.
+             */
+            median_turnaround_hours: number | null;
+            /**
              * Per Day
              * @description Every day of the window, oldest first.
              */
@@ -8761,6 +8787,12 @@ export type components = {
              */
             since: string;
             /**
+             * Turnarounds
+             * @description The window's feedback rounds that were answered, with the feedback that started them: those that have a
+             *     `turnaround_hours`.
+             */
+            turnarounds: number;
+            /**
              * Until
              * Format: date-time
              * @description When it ends: local midnight after today.
@@ -8783,6 +8815,11 @@ export type components = {
          * @description Someone who left feedback in the window on its PRs, by login.
          */
         ReviewsReviewer: {
+            /**
+             * Approved
+             * @description Of those, the ones that approved.
+             */
+            approved: number;
             /**
              * Author
              * @description Their login on the host.
@@ -8826,6 +8863,17 @@ export type components = {
          */
         ReviewsRound: {
             /**
+             * Answered At
+             * @description When a source first observed a check run on one of its PRs, after that resume started, on a head other than
+             *     the one the plan read: the push that answered it. None while none, or for a PR whose checks no source observed.
+             */
+            answered_at: string | null;
+            /**
+             * Approved At
+             * @description When it was approved; None while not.
+             */
+            approved_at: string | null;
+            /**
              * Approved Channel
              * @description How it was approved: by the operator through `web` or `cli`, or by the `planner` that judged it needs no
              *     review; None while not approved.
@@ -8863,10 +8911,27 @@ export type components = {
              */
             resume_cost_usd: number | null;
             /**
+             * Resume Ended At
+             * @description When that resume ended; None without one, or while it runs.
+             */
+            resume_ended_at: string | null;
+            /**
+             * Resume Started At
+             * @description When the resume that went ahead on it started: the one that spent its approval, else the first; None without
+             *     one.
+             */
+            resume_started_at: string | null;
+            /**
              * Resumes
              * @description The `resume` runs that went ahead on it.
              */
             resumes: number;
+            /**
+             * Review At
+             * @description When the feedback that started the round was made: the earliest, not an approval, on its PRs before the plan
+             *     and after the last plan before it that went ahead; None when they had none.
+             */
+            review_at: string | null;
             /**
              * Run Id
              * @description The feedback plan run that wrote it.
@@ -8882,6 +8947,13 @@ export type components = {
              * @description Its ticket.
              */
             ticket_key: string;
+            /** @description `turnaround_hours` in its parts, which sum to it; None where it is. */
+            turnaround: components["schemas"]["ReviewsTurnaround"] | null;
+            /**
+             * Turnaround Hours
+             * @description From `review_at` to `answered_at`, in hours; None without both, or without an approval or a resume.
+             */
+            turnaround_hours: number | null;
         };
         /**
          * ReviewsRunCount
@@ -8908,6 +8980,32 @@ export type components = {
              * @description How they ended, or `running`.
              */
             status: string;
+        };
+        /**
+         * ReviewsTurnaround
+         * @description How long canopy took to answer feedback, in four parts, from the feedback to the push that answered it.
+         */
+        ReviewsTurnaround: {
+            /**
+             * To Approval Hours
+             * @description From the plan to its approval, in hours.
+             */
+            to_approval_hours: number;
+            /**
+             * To Plan Hours
+             * @description From the feedback that started the round to its feedback plan, in hours.
+             */
+            to_plan_hours: number;
+            /**
+             * To Push Hours
+             * @description From the resume's start to the push that answered the feedback, in hours.
+             */
+            to_push_hours: number;
+            /**
+             * To Resume Hours
+             * @description From the approval to the start of the resume that went ahead on it, in hours.
+             */
+            to_resume_hours: number;
         };
         /**
          * ReviewSummary

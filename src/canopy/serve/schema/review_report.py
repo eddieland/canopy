@@ -44,6 +44,13 @@ class ReviewsPullRequest(Model):
     """When it merged, as GitHub says; None while open, or where the reader kept none."""
     hours_to_merge: float | None = None
     """From `ready_at` to `merged_at`, in hours; None without both."""
+    approved: int
+    """Its reviews made in the window that approved it."""
+    approved_at: datetime | None = None
+    """When its first approval came, in the window or before it; None with none."""
+    rounds_to_approval: int | None = None
+    """The feedback plans that read it and were approved before its first approval, in the window or before it; a
+    plan written before it and approved after does not count. None without an approval."""
 
 
 class ReviewsReviewer(Model):
@@ -57,6 +64,8 @@ class ReviewsReviewer(Model):
     """Their reviews made in the window."""
     changes_requested: int
     """Of those, the ones that asked for changes."""
+    approved: int
+    """Of those, the ones that approved."""
     comments: int
     """Their comments made in the window."""
     pull_requests: int
@@ -77,6 +86,19 @@ class ReviewsDay(Model):
     """Its first reviews by wait: under an hour, one to four hours, four hours to a day, and a day or more."""
     median_wait_hours: float | None = None
     """Their median wait, in hours; None with none."""
+
+
+class ReviewsTurnaround(Model):
+    """How long canopy took to answer feedback, in four parts, from the feedback to the push that answered it."""
+
+    to_plan_hours: float
+    """From the feedback that started the round to its feedback plan, in hours."""
+    to_approval_hours: float
+    """From the plan to its approval, in hours."""
+    to_resume_hours: float
+    """From the approval to the start of the resume that went ahead on it, in hours."""
+    to_push_hours: float
+    """From the resume's start to the push that answered the feedback, in hours."""
 
 
 class ReviewsRound(Model):
@@ -105,6 +127,23 @@ class ReviewsRound(Model):
     """The `resume` runs that went ahead on it."""
     resume_cost_usd: float | None = None
     """What they cost, in US dollars; None when none reported a cost."""
+    review_at: datetime | None = None
+    """When the feedback that started the round was made: the earliest, not an approval, on its PRs before the plan
+    and after the last plan before it that went ahead; None when they had none."""
+    approved_at: datetime | None = None
+    """When it was approved; None while not."""
+    resume_started_at: datetime | None = None
+    """When the resume that went ahead on it started: the one that spent its approval, else the first; None without
+    one."""
+    resume_ended_at: datetime | None = None
+    """When that resume ended; None without one, or while it runs."""
+    answered_at: datetime | None = None
+    """When a source first observed a check run on one of its PRs, after that resume started, on a head other than
+    the one the plan read: the push that answered it. None while none, or for a PR whose checks no source observed."""
+    turnaround_hours: float | None = None
+    """From `review_at` to `answered_at`, in hours; None without both, or without an approval or a resume."""
+    turnaround: ReviewsTurnaround | None = None
+    """`turnaround_hours` in its parts, which sum to it; None where it is."""
 
 
 class ReviewsEffort(Model):
@@ -171,6 +210,14 @@ class ReviewsReport(Model):
     apart, never in a median."""
     waiting: int
     """The window's open PRs that began waiting on a review and have none yet."""
+    turnarounds: int
+    """The window's feedback rounds that were answered, with the feedback that started them: those that have a
+    `turnaround_hours`."""
+    median_turnaround_hours: float | None = None
+    """Their median `turnaround_hours`; None with none."""
+    median_turnaround: ReviewsTurnaround | None = None
+    """The median of each part over the same rounds, to say where the time went; None with none. Each part's median
+    is its own, so they need not sum to `median_turnaround_hours`."""
     per_day: list[ReviewsDay]
     """Every day of the window, oldest first."""
     reviewers: list[ReviewsReviewer]
