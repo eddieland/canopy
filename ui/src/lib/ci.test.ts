@@ -16,6 +16,7 @@ import {
     nextHeadText,
     nextText,
     OTHER,
+    previousCiFigures,
 } from './ci'
 
 const H24: Clock = { hours: '24', zone: false }
@@ -97,5 +98,18 @@ describe('ci', () => {
     it('holds a kick against the limit, or not with kicks now off', () => {
         expect(kickText({ kick: 2 }, 3)).toBe('kick 2 of 3')
         expect(kickText({ kick: 2 }, 0)).toBe('kick 2')
+    })
+})
+
+describe('previousCiFigures', () => {
+    it("reads the window before's figures as the window's, its green share only over heads checked", () => {
+        const before = { since: '2026-09-25T00:00:00Z', until: '2026-10-02T00:00:00Z', fixes_green: 1 }
+        expect(previousCiFigures({ ...before, heads: 4, green_first: 3, red: 2, fixes: 1 })).toEqual({
+            heads: 4,
+            greenFirst: 0.75,
+            red: 2,
+            fixes: 1,
+        })
+        expect(previousCiFigures({ ...before, heads: 0, green_first: 0, red: 0, fixes: 0 }).greenFirst).toBeNull()
     })
 })

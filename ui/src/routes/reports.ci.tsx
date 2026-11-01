@@ -36,12 +36,14 @@ import {
     LIMITS_TEXT,
     nextHeadText,
     nextText,
+    previousCiFigures,
     redSum,
     VERDICTS_TEXT,
 } from '@/lib/ci'
 import { useClock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
-import { windowName } from '@/lib/report-window'
+import { pointsChange, readoutDelta, wholeChange } from '@/lib/readout-delta'
+import { windowBefore, windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
 import { dayName, shareText } from '@/lib/spend'
 import { cn } from '@/lib/utils'
@@ -104,7 +106,7 @@ function CiPage() {
                         }}
                     />
                 }
-                links={!failed && <ReadoutTiles tiles={ciTiles(data)} testId="ci" />}
+                links={!failed && <ReadoutTiles tiles={ciTiles(data)} against={windowBefore(shown)} testId="ci" />}
             >
                 {data === undefined ? (query.isPending ? 'reading the check runs' : null) : ciLine(data)}
             </PageHeader>
@@ -164,19 +166,42 @@ function CiPage() {
     )
 }
 
-/** The window's headline figures, each held in its place while the report is read. */
+/**
+ * The window's headline figures, each held in its place while the report is read, and each against the window
+ * before's: more heads green first time, and fewer red runs, are better.
+ */
 function ciTiles(found: CiReport | undefined): ReadoutTile[] {
     const figures = found === undefined ? undefined : ciFigures(found)
+    const before = found === undefined ? undefined : previousCiFigures(found.previous)
     return [
-        { key: 'heads', label: 'PR heads', hint: 'The PR heads first checked in the window', value: figures?.heads },
+        {
+            key: 'heads',
+            label: 'PR heads',
+            hint: 'The PR heads first checked in the window',
+            value: figures?.heads,
+            delta: readoutDelta(figures?.heads, before?.heads, wholeChange),
+        },
         {
             key: 'green-first',
             label: 'green first time',
             hint: 'Of those heads, the share whose first run of every check was not red',
             value: figures === undefined ? undefined : shareText(figures.greenFirst),
+            delta: readoutDelta(figures?.greenFirst, before?.greenFirst, pointsChange, 'up'),
         },
-        { key: 'red', label: 'red runs', hint: 'The check runs that went red, every check', value: figures?.red },
-        { key: 'fixes', label: 'fix-CI resumes', hint: 'The resumes for CI that started', value: figures?.fixes },
+        {
+            key: 'red',
+            label: 'red runs',
+            hint: 'The check runs that went red, every check',
+            value: figures?.red,
+            delta: readoutDelta(figures?.red, before?.red, wholeChange, 'down'),
+        },
+        {
+            key: 'fixes',
+            label: 'fix-CI resumes',
+            hint: 'The resumes for CI that started',
+            value: figures?.fixes,
+            delta: readoutDelta(figures?.fixes, before?.fixes, wholeChange),
+        },
     ]
 }
 
