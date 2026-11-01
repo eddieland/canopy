@@ -2810,6 +2810,11 @@ export type components = {
              */
             items: components["schemas"]["ChecklistItemCounts"][];
             /**
+             * @description The window before this one, as many days, `repo`'s alone when it is named, for a page to say how this one
+             *     compares.
+             */
+            previous: components["schemas"]["ChecklistPrevious"];
+            /**
              * Repo
              * @description The one repository counted; None for every one.
              */
@@ -2890,6 +2895,39 @@ export type components = {
              * @description How many said nothing of it in their result.
              */
             unanswered: number;
+        };
+        /**
+         * ChecklistPrevious
+         * @description The window before the counts', as many days and ending where it starts: its totals over every item alone.
+         */
+        ChecklistPrevious: {
+            /**
+             * Held
+             * @description Of those, how many answered `held`.
+             */
+            held: number;
+            /**
+             * Reminded
+             * @description How many times its runs were given an item, over every item counted.
+             */
+            reminded: number;
+            /**
+             * Since
+             * Format: date-time
+             * @description When it starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Unanswered
+             * @description Of those, how many said nothing of it.
+             */
+            unanswered: number;
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: where the counts' window starts.
+             */
+            until: string;
         };
         /**
          * ChecklistRun
@@ -3606,6 +3644,49 @@ export type components = {
             url: string;
         };
         /**
+         * CiPrevious
+         * @description The window before a report's, as many days and ending where it starts: its headline figures alone.
+         */
+        CiPrevious: {
+            /**
+             * Fixes
+             * @description The `resume` runs for `ci`, a retired `fix-ci` among them, that started in it.
+             */
+            fixes: number;
+            /**
+             * Fixes Green
+             * @description Of those, the ones whose every check red when they started was green on the head after them.
+             */
+            fixes_green: number;
+            /**
+             * Green First
+             * @description Of those, the heads whose first run of every check was not red.
+             */
+            green_first: number;
+            /**
+             * Heads
+             * @description The PR heads first checked in it, counted as the report's `heads` are.
+             */
+            heads: number;
+            /**
+             * Red
+             * @description The red check runs observed in it.
+             */
+            red: number;
+            /**
+             * Since
+             * Format: date-time
+             * @description When it starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: where the report's window starts.
+             */
+            until: string;
+        };
+        /**
          * CiPullRequest
          * @description A PR with a check run observed in the window, and how long it stayed red.
          */
@@ -3702,6 +3783,8 @@ export type components = {
              * @description Every day of the window, oldest first.
              */
             per_day: components["schemas"]["CiDay"][];
+            /** @description The window before this one, as many days, for a page to say how this one compares. */
+            previous: components["schemas"]["CiPrevious"];
             /**
              * Pull Requests
              * @description Still red first, the oldest red first; then the longest time to green first; then those never red.
@@ -5188,6 +5271,39 @@ export type components = {
             what: string;
         };
         /**
+         * HealthPrevious
+         * @description The window before a report's, as many days and ending where it starts: its headline figures alone.
+         */
+        HealthPrevious: {
+            /**
+             * Failed
+             * @description Of those, the ones that ended in a failed status.
+             */
+            failed: number;
+            /**
+             * Failed Cost Usd
+             * @description What the failed ones cost, in US dollars; None when none of them reported a cost.
+             */
+            failed_cost_usd: number | null;
+            /**
+             * Runs Ended
+             * @description How many runs of every kind that started in it ended.
+             */
+            runs_ended: number;
+            /**
+             * Since
+             * Format: date-time
+             * @description When it starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: where the report's window starts.
+             */
+            until: string;
+        };
+        /**
          * HealthRefusal
          * @description How often a guard refused what a tick asked for in the window.
          */
@@ -5255,6 +5371,8 @@ export type components = {
              * @description Every day of the window, oldest first.
              */
             per_day: components["schemas"]["HealthDay"][];
+            /** @description The window before this one, as many days, for a page to say how this one compares. */
+            previous: components["schemas"]["HealthPrevious"];
             /**
              * Refusals
              * @description The most frequent first.
@@ -8643,6 +8761,49 @@ export type components = {
             ticket_key: string;
         };
         /**
+         * ReviewsPrevious
+         * @description The window before a report's, as many days and ending where it starts: its headline figures alone.
+         */
+        ReviewsPrevious: {
+            /**
+             * First Reviews
+             * @description The first reviews that arrived in it on a PR with a start.
+             */
+            first_reviews: number;
+            /**
+             * Median First Review Hours
+             * @description Their median wait, in hours; None with none.
+             */
+            median_first_review_hours: number | null;
+            /**
+             * Pull Requests
+             * @description Its PRs, counted as the report's `pull_requests` are.
+             */
+            pull_requests: number;
+            /**
+             * Reviews
+             * @description The reviews made in it on its PRs.
+             */
+            reviews: number;
+            /**
+             * Rounds
+             * @description The feedback plans made in it.
+             */
+            rounds: number;
+            /**
+             * Since
+             * Format: date-time
+             * @description When it starts: local midnight on its first day.
+             */
+            since: string;
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: where the report's window starts.
+             */
+            until: string;
+        };
+        /**
          * ReviewsPullRequest
          * @description A PR in the window: its feedback in it, how soon its first review came, and what answering cost.
          */
@@ -8791,6 +8952,8 @@ export type components = {
              * @description Every day of the window, oldest first.
              */
             per_day: components["schemas"]["ReviewsDay"][];
+            /** @description The window before this one, as many days, for a page to say how this one compares. */
+            previous: components["schemas"]["ReviewsPrevious"];
             /**
              * Pull Requests
              * @description The window's PRs, the one a run named last first.
@@ -9906,6 +10069,8 @@ export type components = {
              *     dollars; None when none was, or nothing reported a cost.
              */
             per_done: number | null;
+            /** @description The window before this one, as many days or hours, for a page to say how this one compares. */
+            previous: components["schemas"]["SpendPrevious"];
             /**
              * Pull Requests
              * @description Each PR a run that started in the window pushed to, or a review run of it started in it, the costliest first.
@@ -10237,6 +10402,37 @@ export type components = {
              * Until
              * Format: date-time
              * @description When it ends: local midnight on the next month's first day.
+             */
+            until: string;
+        };
+        /**
+         * SpendPrevious
+         * @description The window before a breakdown's, of the same length and ending where it starts: its headline figures alone.
+         */
+        SpendPrevious: {
+            /**
+             * Done
+             * @description How many tickets the loop marked done in it, merged or closed.
+             */
+            done: number;
+            /**
+             * Per Done
+             * @description Its whole spend over the tickets marked done in it, in US dollars; None when none was, or nothing reported a
+             *     cost.
+             */
+            per_done: number | null;
+            /**
+             * Since
+             * Format: date-time
+             * @description When it starts.
+             */
+            since: string;
+            /** @description Its costs, summed as the breakdown's `totals` are. */
+            totals: components["schemas"]["SpendCosts"];
+            /**
+             * Until
+             * Format: date-time
+             * @description When it ends: where the breakdown's window starts.
              */
             until: string;
         };

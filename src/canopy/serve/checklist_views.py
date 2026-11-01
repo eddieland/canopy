@@ -9,11 +9,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import checklist_answers, conversation, db, health
+from canopy.core import checklist_answers, conversation, db, health, spend
 from canopy.core.vocab import ItemAnswer
 from canopy.serve.schema import ChecklistAnswer
 from canopy.serve.schema import ItemAnswer as AnswerWord
-from canopy.serve.schema.checklist import ChecklistCounts, ChecklistItemCounts, ChecklistRun, ChecklistWeek
+from canopy.serve.schema.checklist import (
+    ChecklistCounts,
+    ChecklistItemCounts,
+    ChecklistPrevious,
+    ChecklistRun,
+    ChecklistWeek,
+)
 
 if TYPE_CHECKING:
     import sqlite3
@@ -36,6 +42,7 @@ def checklist_counts(backend: Backend, ctx: Context, days: int, *, repo: str | N
     with db.read_snapshot(ctx.conn):
         found = checklist_answers.counts(ctx.conn, now, days, repo=repo)
         grouped = checklist_answers.details(ctx.conn, now, days, repo=repo)
+        before = checklist_answers.between(ctx.conn, *spend.window_before(found.since, days), repo=repo)
     runs = {(r.repo, r.item): r for r in grouped.items}
     return ChecklistCounts(
         since=db.parse_time(found.since),
@@ -71,6 +78,13 @@ def checklist_counts(backend: Backend, ctx: Context, days: int, *, repo: str | N
             )
             for w in grouped.weeks
         ],
+        previous=ChecklistPrevious(
+            since=db.parse_time(before.since),
+            until=db.parse_time(before.until),
+            reminded=before.reminded,
+            held=before.held,
+            unanswered=before.unanswered,
+        ),
     )
 
 

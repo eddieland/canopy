@@ -127,6 +127,21 @@ class Counts:
     #: By repository, then each item in its list's order, as the window's first run given it was.
     items: Sequence[ItemCounts] = ()
 
+    @property
+    def reminded(self) -> int:
+        """How many times the window's runs were given an item, over every item counted."""
+        return sum(c.reminded for c in self.items)
+
+    @property
+    def held(self) -> int:
+        """Of those, the ones a run answered `held`."""
+        return sum(c.held for c in self.items)
+
+    @property
+    def unanswered(self) -> int:
+        """Of those, the ones a run's result said nothing of."""
+        return sum(c.unanswered for c in self.items)
+
     def as_json(self) -> dict[str, object]:
         """Return the counts as one JSON object.
 
@@ -306,8 +321,17 @@ def counts(conn: sqlite3.Connection, now: datetime, days: int, *, repo: str | No
     Returns:
         A count per repository and item a run of the window was given; `repo`'s alone when it is named.
     """
-    start, end = spend.window(now, days)
+    return between(conn, *spend.window(now, days), repo=repo)
+
+
+def between(conn: sqlite3.Connection, start: datetime, end: datetime, *, repo: str | None = None) -> Counts:
+    """Count the answers of the runs that started from one local midnight, `start`, to another, `end`.
+
+    Returns:
+        The counts, as `counts` gives them for any such window: the one before a page's.
+    """
     since, until = db.format_time(start), db.format_time(end)
+    days = spend.days_between(start, end)
     query = _in_window(
         sql.select(
             "a.repo, a.item, count(*) AS reminded, sum(a.answer = ?) AS passed, sum(a.answer = ?) AS fixed, "

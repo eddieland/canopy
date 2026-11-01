@@ -86,6 +86,21 @@ class ChecklistWeek(Model):
     """How many said nothing of it."""
 
 
+class ChecklistPrevious(Model):
+    """The window before the counts', as many days and ending where it starts: its totals over every item alone."""
+
+    since: datetime
+    """When it starts: local midnight on its first day."""
+    until: datetime
+    """When it ends: where the counts' window starts."""
+    reminded: int
+    """How many times its runs were given an item, over every item counted."""
+    held: int
+    """Of those, how many answered `held`."""
+    unanswered: int
+    """Of those, how many said nothing of it."""
+
+
 class ChecklistCounts(Model):
     """The answers of the worker runs that started in a window of whole local days, as `canopy checklist` counts them.
 
@@ -106,3 +121,6 @@ class ChecklistCounts(Model):
     weeks: list[ChecklistWeek]
     """A row per item of `items` and ISO week the window touches, none skipped: the items in `items`' order, each
     one's weeks oldest first."""
+    previous: ChecklistPrevious
+    """The window before this one, as many days, `repo`'s alone when it is named, for a page to say how this one
+    compares."""

@@ -124,6 +124,61 @@ def test_each_month_carries_the_health_ci_and_reviews_pages_headline_figures(can
     assert (this["heads"], this["first_reviews"], this["median_first_review_hours"]) == (0, 0, None)
 
 
+def test_the_health_ci_and_checklist_reports_carry_the_window_before_theirs(ctx: Context) -> None:
+    """The last week's headline figures and the week's before, each from a journal with runs in both and before them."""
+    conn, now = ctx.conn, datetime.now(UTC)
+    start, _ = spend.window(now, spend.DEFAULT_DAYS)
+
+    def at(days: float, hours: float = 0) -> str:
+        return db.format_time(start + timedelta(days=days, hours=hours))
+
+    pr = "https://github.com/acme/web/pull/7"
+    # Two weeks back, before either window: counted in neither.
+    worker_ran(conn, RunKind.IMPLEMENT, at(-10), status=RunStatus.FAILED, cost=9.0)
+    # The week before: a failed implement and a fix for CI that turned its red check green; a run given a checklist.
+    worker_ran(conn, RunKind.IMPLEMENT, at(-3), prs={"web": pr}, status=RunStatus.FAILED, cost=0.5)
+    check_ran(conn, pr, "h1", "unit", CheckConclusion.FAILURE, at(-3, 1))
+    worker_ran(conn, RunKind.RESUME, at(-3, 2), prs={"web": pr}, reasons=(ResumeReason.CI,), cost=0.25)
+    check_ran(conn, pr, "h2", "unit", CheckConclusion.SUCCESS, at(-3, 3))
+    a = ItemAnswer
+    answered(conn, at(-2), "api", general_types=a.HELD, newspaper=a.UNANSWERED)
+    # This week: one run that ended done, and a red head no fix followed.
+    worker_ran(conn, RunKind.RESUME, at(1), prs={"web": pr}, cost=1.0)
+    check_ran(conn, pr, "h3", "unit", CheckConclusion.FAILURE, at(1, 1))
+    c, _ = signed_in_client(ctx)
+
+    health = c.get("/api/reports/health").json()
+    previous = health["previous"]
+    assert (previous["since"], previous["until"]) == (_iso(spend.window_before(health["since"], 7)[0]), health["since"])
+    # The checklist's run, which `answered` leaves running, ended no way yet.
+    assert (previous["runs_ended"], previous["failed"], previous["failed_cost_usd"]) == (2, 1, 0.5)
+
+    found = c.get("/api/reports/ci").json()
+    assert (found["heads"], found["green_first"], found["fixes"]) == (1, 0, [])
+    assert found["previous"]["until"] == found["since"]
+    assert {k: found["previous"][k] for k in ("heads", "green_first", "red", "fixes", "fixes_green")} == {
+        "heads": 2,
+        "green_first": 1,
+        "red": 1,
+        "fixes": 1,
+        "fixes_green": 1,
+    }
+
+    checklist = c.get("/api/reports/checklist").json()
+    assert checklist["items"] == []
+    assert {k: checklist["previous"][k] for k in ("reminded", "held", "unanswered")} == {
+        "reminded": 2,
+        "held": 1,
+        "unanswered": 1,
+    }
+    today = c.get("/api/reports/checklist", params={"days": 1}).json()
+    assert (today["previous"]["until"], today["previous"]["reminded"]) == (today["since"], 0)
+
+
+def _iso(at: datetime) -> str:
+    return at.isoformat().replace("+00:00", "Z")
+
+
 def test_the_checklist_counts_each_repositorys_items_as_the_cli_does(ctx: Context) -> None:
     """Per repository and item over the last local days, `repo` narrowing it."""
     journal_of_answers(ctx.conn, datetime.now(UTC))
