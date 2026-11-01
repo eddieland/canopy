@@ -105,6 +105,8 @@ class ReportTicket(Model):
     """When its PR began waiting on a review, as GitHub says: the first review asked for once it was ready, or when it
     was ready; None where the reader kept neither, and its review wait starts at its first worker run that ended
     `done` instead."""
+    pull_requests: list[str]
+    """Its PRs, by URL, in order: those its units hold and those its runs named."""
 
 
 class ReportMonth(Model):

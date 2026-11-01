@@ -4,9 +4,9 @@ import { cn } from '@/lib/utils'
 
 /**
  * A figure in a table's cell with a bar of its share of the column's largest after it (ui/DESIGN.md, "A bar in a
- * cell"): spent by month, by ticket, by model. `percent` is that share, 0 to 100 (`barPercent`); `fill` the bar's,
- * `muted-foreground` unless the figure is a series' with a fill of its own. The figure keeps `valueClassName`'s width,
- * so the bars of a column start at one edge. The bar is the eye's: a screen reader reads the figure.
+ * cell"): spent by ticket, by model, by landed ticket. `percent` is that share, 0 to 100 (`barPercent`); `fill` the
+ * bar's, `muted-foreground` unless the figure is a series' with a fill of its own. The figure keeps `valueClassName`'s
+ * width, so the bars of a column start at one edge. The bar is the eye's: a screen reader reads the figure.
  */
 export function CellBar({
     percent,

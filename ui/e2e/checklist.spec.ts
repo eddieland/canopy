@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => {
 test("Reports opens the checklist's counts, each repository's items in its list's order", async ({ page }) => {
     await page.goto('reports')
     await settled(page)
-    await page.getByTestId('reports-checklist-link').click()
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Checklist' }).click()
     await expect(page).toHaveURL(/\/reports\/checklist$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Checklist')
     await expect(

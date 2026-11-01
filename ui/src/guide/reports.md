@@ -17,20 +17,32 @@ Spend never is: whether more of it bought enough is your call, not the page's.
 
 ## The reports page
 
-[Reports](/reports) puts the calendar months side by side, a year of them by default; **6 months** and **24 months**
-in the header narrow or widen it. A month runs midnight to midnight on the clock of the machine canopy runs on, like
-the spend page's days. The line under the title is the month so far: what it cost, the tickets it landed, and its PRs.
+[Reports](/reports) opens on a card for each report under it: **Spend**, **Checklist**, **Health**, **CI**,
+**Reviews**, and **Plans**, each with that page's own line for the last 30 days (`3 of 46 runs failed over 30 days`)
+and, where the page draws one, a small line of its days, so a bad week shows before you open anything. Click a card for
+its page on those 30 days; hover it for what the page holds.
+
+Under the cards, the calendar months sit side by side. The page opens on the months since the first one with anything
+in it, a year at most, and the panel says from when (`since April 2026`), so a workspace that's a few months old isn't
+padded out with a year of zeros. **6 months**, **12 months**, and **24 months** in the header draw that many whole,
+empty ones included, and pressing the one that's on goes back to fitting. A month runs midnight to midnight on the
+clock of the machine canopy runs on, like the spend page's days. The line under the title is the month so far: what it
+cost, the tickets it landed, its PRs, and what the month before cost, for the comparison you were about to make anyway.
 
 **Month by month** is the bill, the whole of it: canopy's runs and the sessions outside canopy alike, so a month you
-spent pairing with an agent by hand doesn't pass for a cheap one. For each month: what it **spent**, with a bar against
-the dearest month so the trend reads at a glance; its **runs**, a tick each for the overseer; the tokens the models were
-**sent** and **wrote**; the **cache hit**, the share of what was sent that came from the cache; the tickets **landed**
-and **closed**; the **PRs** a run first named in it; and the cost **per landed** ticket, the overseer and chores
-included, but not your own sessions, which landed nothing canopy knows of. A cache hit that drops from one month to the
-next is the first place to look when the bill grows and the work didn't: a changed prompt or a new tool list can turn
-every run cold.
+spent pairing with an agent by hand doesn't pass for a cheap one. It's the spend page's chart a month to a bar: each
+month stacked by kind in the same colors, the sessions outside canopy on top, the dearest month's total over its bar,
+and the month you're looking at shaded. Click a bar to look at that month. The table folded under it has, for each
+month: what it **spent**, with how that moved on the month before on hover; its **runs**, a tick each for the overseer;
+the tokens the models were **sent** and **wrote**; the **cache hit**, the share of what was sent that came from the
+cache; the tickets **landed** and **closed**; the **PRs** a run first named in it; and the cost **per landed** ticket,
+the overseer and chores included, but not your own sessions, which landed nothing canopy knows of, against the month
+before on hover too. A cache hit that drops from one month to the next is the first place to look when the bill grows
+and the work didn't: a changed prompt or a new tool list can turn every run cold.
 
-**Delivery** is what the months got done, as a median per landed ticket:
+**Delivery** is what the months got done, as a median per landed ticket. Each median is drawn across the months over
+the table, the latest month's figure beside its name, so a review wait creeping up reads as a line going the wrong way
+rather than a column of numbers you have to remember. Hover a point for its month:
 
 - **iterations**: the worker runs, implement and resume, a ticket took before it landed. One means the first attempt
   shipped; five means somebody had opinions.
@@ -49,17 +61,20 @@ canopy kept them, is never filled in after the fact. Hover or tap a median for h
 clock, and a ticket's figure under **Landed** for which clock it ran on. A month of mostly proxies reads a little slow,
 by a tick here and a worker's wrap-up there.
 
-Click a month to see it in detail below; the page opens on the latest.
+Click a month in the table, or its bar in the chart, to see it in detail below; the page opens on the latest.
 
 **By kind** splits the month by who spent it, the same kinds as the spend page: the overseer, dry runs included, then
-workers, plans, chores, reviews, and your tasks, each with its runs, cost, tokens, and cache hit. Under them, **outside
-canopy** is the runtime's sessions none of canopy's runs started, counted in sessions, not runs: yours, and another
-workspace's canopy, as of when `canopy loop` last read them (hover it for when). **By model** is what each model's
-replies cost over every kind of run, the dearest first, with the runs no session named a model for last: **unread**
-for those whose sessions canopy hasn't read yet, then **none** for those it read and found no model in.
+workers, plans, chores, reviews, and your tasks, each with its runs, cost, tokens, and cache hit. A bar beside each
+cost, in its kind's color, is its share of the month; hover it for the percent, and spare yourself the division. Under
+them, **outside canopy** is the runtime's sessions none of canopy's runs started, counted in sessions, not runs: yours,
+and another workspace's canopy, as of when `canopy loop` last read them (hover it for when). **By model** is what each
+model's replies cost over every kind of run, the dearest first, with the runs no session named a model for last:
+**unread** for those whose sessions canopy hasn't read yet, then **none** for those it read and found no model in. Its
+bars are each model's share of what the runs spent, which is the number to read before you change the workspace's model.
 
 **Landed** lists the month's tickets the loop marked done as merged, the latest first, with each one's iterations, PR
-comments, reviews (the ones that asked for changes in brackets), time to land, review wait, and what its own runs cost.
+comments, reviews (the ones that asked for changes in brackets), time to land, review wait, what its own runs cost with
+a bar against the dearest, and its PRs, each opening its page here.
 Hover a time to land or a review wait to see whether it's GitHub's or a proxy's. A ticket still counts in the month the
 loop marked it done, whenever GitHub says it merged. A ticket closed without a merge is counted in **closed** above, not
 here.

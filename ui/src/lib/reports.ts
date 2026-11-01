@@ -2,20 +2,158 @@
 // the server's (`canopy.serve.monthly`); this lays them out.
 
 import type { ReportMonth, ReportTicket, ReportTokens } from '@/api/types'
+import type { DayBar, DayChartSeries } from '@/lib/chart'
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
+import { SERIES } from '@/lib/spend'
 import { stamp } from '@/lib/time'
 
-/** How many months the page opens on: a year. */
+/**
+ * How many months the page reads with no span picked: a year, of which it opens on those from the first that holds
+ * anything (`fittedMonths`).
+ */
 export const DEFAULT_MONTHS = 12
 
-/** The spans the page offers, in months, shortest first. */
+/** The spans the page offers, in months, shortest first: each draws every month of it, the empty ones too. */
 export const REPORT_SPANS: readonly number[] = [6, DEFAULT_MONTHS, 24]
 
-/** The span the search's `months` names, if the page offers it; undefined for the default. */
+/** The span the search's `months` names, if the page offers it; undefined for none, which fits the journal. */
 export function reportSpan(value: unknown): number | undefined {
-    return REPORT_SPANS.find((n) => n !== DEFAULT_MONTHS && (n === value || String(n) === value))
+    return REPORT_SPANS.find((n) => n === value || String(n) === value)
+}
+
+/**
+ * The months the page opens on with no span picked: those from the first that holds anything, so a young workspace
+ * draws no year of empty months before it; the latest alone when none holds anything, so the page names the month it
+ * is in.
+ */
+export function fittedMonths(months: readonly ReportMonth[]): readonly ReportMonth[] {
+    const first = months.findIndex((month) => holdsAnything(month))
+    return first === -1 ? months.slice(-1) : months.slice(first)
+}
+
+/** Where a fitted span starts, in the month chart's header: `since April 2026`. Empty with no month read. */
+export function sinceText(months: readonly ReportMonth[]): string {
+    const [first] = months
+    return first === undefined ? '' : `since ${monthLabel(first.month, 'long')}`
+}
+
+// Whether a month holds anything to report: a run, a cost, a ticket landed or closed, a PR, a session outside canopy.
+function holdsAnything(month: ReportMonth): boolean {
+    return (
+        month.runs > 0 ||
+        month.cost_usd !== null ||
+        month.landed.length > 0 ||
+        month.closed > 0 ||
+        month.pull_requests > 0 ||
+        month.outside.sessions > 0
+    )
+}
+
+/**
+ * The month chart's series bottom up, as the spend chart names them: each kind of canopy's runs, in the spend series'
+ * fills, then the sessions outside canopy on top, as no part of canopy's work. Idle ticks and dry runs are no kind of
+ * the month's, which counts them in the overseer's.
+ */
+export const MONTH_SERIES: readonly DayChartSeries[] = SERIES.filter((s) => s.key !== 'idle' && s.key !== 'dry_run')
+
+/**
+ * Each month as the month chart draws it: the spend chart at a month's pitch, a bar of what it cost stacked by kind,
+ * the sessions outside canopy on top, named on the axis `Oct 2026` and on hover with each series it has.
+ */
+export function monthBars(months: readonly ReportMonth[]): DayBar[] {
+    return months.map((m) => {
+        const segments = MONTH_SERIES.map((series) => ({
+            key: series.key,
+            fill: series.fill,
+            value: series.key === 'outside' ? (m.outside.cost_usd ?? 0) : kindCost(m, series.key),
+        }))
+        const parts = segments
+            .filter((segment) => segment.value > 0)
+            .map((segment) => `${MONTH_SERIES.find((s) => s.key === segment.key)?.label} ${costText(segment.value)}`)
+        const name = monthLabel(m.month, 'long')
+        const total = m.cost_usd === null ? 'nothing reported' : costText(m.cost_usd)
+        return {
+            key: m.month,
+            label: monthLabel(m.month),
+            hint: parts.length === 0 ? `${name}: ${total}` : `${name}: ${total}, ${parts.join(', ')}`,
+            total: m.cost_usd ?? 0,
+            totalText: costText(m.cost_usd),
+            segments,
+        }
+    })
+}
+
+// What one kind of the month's runs cost; 0 when it has none or reported none.
+function kindCost(month: ReportMonth, kind: string): number {
+    return month.kinds.find((k) => k.kind === kind)?.cost_usd ?? 0
+}
+
+/**
+ * How a month's cost moved on the month before's, on its cell's hover: `+$1.77 on September 2026`. Undefined for the
+ * first month of the span, or when either reported no cost.
+ */
+export function monthChange(
+    now: number | null,
+    before: ReportMonth | undefined,
+    of: (month: ReportMonth) => number | null,
+): string | undefined {
+    const was = before === undefined ? null : of(before)
+    if (before === undefined || now === null || was === null) {
+        return undefined
+    }
+    // Written as a cost is (readout-delta's `usdChange`, which imports this module): a cent's float noise is no move.
+    const name = monthLabel(before.month, 'long')
+    const change = now - was
+    const size = costText(Math.abs(change))
+    return size === costText(0) ? `same as ${name}` : `${change > 0 ? '+' : '−'}${size} on ${name}`
+}
+
+/**
+ * A row's share of the month, as its bar on the reports page draws it and its hover says it, 0 to 100: `cost` over
+ * `whole`, the month's; 0 when either is nothing.
+ */
+export function monthShare(cost: number | null, whole: number | null): number {
+    return cost === null || whole === null || whole <= 0 ? 0 : Math.min(100, (cost / whole) * 100)
+}
+
+/** One of Delivery's medians drawn across the months: what it is, how to read a month's, and its figure in words. */
+export interface DeliveryTrend {
+    /** Its test ids' end. */
+    key: string
+    /** Its name, as the table's column names it. */
+    label: string
+    /** A month's median of it; null with none. */
+    value: (month: ReportMonth) => number | null
+    /** A median in words, as its column writes it: `2.5`, `20.8h`. */
+    text: (value: number | null) => string
+    /** Which of the month's figures ran on GitHub's clock, for a time (`clockShare`); undefined for a count. */
+    clock?: 'to land' | 'review wait'
+}
+
+/** Delivery's four medians, in the table's order, each drawn across the months over it. */
+export const DELIVERY_TRENDS: readonly DeliveryTrend[] = [
+    { key: 'iterations', label: 'iterations', value: (m) => m.median_iterations, text: medianText },
+    { key: 'comments', label: 'PR comments', value: (m) => m.median_pr_comments, text: medianText },
+    { key: 'to-land', label: 'to land', value: (m) => m.median_hours_to_land, text: hoursText, clock: 'to land' },
+    {
+        key: 'review-wait',
+        label: 'review wait',
+        value: (m) => m.median_review_wait_hours,
+        text: hoursText,
+        clock: 'review wait',
+    },
+]
+
+/**
+ * A month's point on a Delivery trend, on hover: `Oct 2026: 20.8h`, then, for a time, how many of its figures ran on
+ * GitHub's clock (`clockShare`): `Oct 2026: 20.8h · 2 of 3 from GitHub's times, the rest from proxies`.
+ */
+export function trendPointHint(month: ReportMonth, trend: DeliveryTrend): string {
+    const said = `${monthLabel(month.month)}: ${trend.text(trend.value(month))}`
+    const clock = trend.clock === undefined ? undefined : clockShare(month, trend.clock)
+    return clock === undefined ? said : `${said} · ${clock}`
 }
 
 /** The month the search's `month` names, `YYYY-MM`, if it is one; undefined otherwise. */
@@ -35,8 +173,9 @@ export function monthLabel(month: string, length: 'short' | 'long' = 'short'): s
 }
 
 /**
- * The page's description, the latest month at a glance: `$412.30 in October 2026 · 7 tickets landed · 9 PRs`. Empty
- * with no month read.
+ * The page's description, the latest month at a glance, beside what the month before cost:
+ * `$412.30 in October 2026 · 7 tickets landed · 9 PRs · $380.12 in September`, the month before named with its year
+ * only when that is another. Empty with no month read.
  */
 export function reportLine(months: readonly ReportMonth[]): string {
     const latest = months.at(-1)
@@ -44,7 +183,14 @@ export function reportLine(months: readonly ReportMonth[]): string {
         return ''
     }
     const spent = `${costText(latest.cost_usd)} in ${monthLabel(latest.month, 'long')}`
-    return `${spent} · ${counted(latest.landed.length, 'ticket')} landed · ${counted(latest.pull_requests, 'PR')}`
+    const line = `${spent} · ${counted(latest.landed.length, 'ticket')} landed · ${counted(latest.pull_requests, 'PR')}`
+    const before = months.at(-2)
+    if (before === undefined) {
+        return line
+    }
+    const sameYear = before.month.slice(0, 4) === latest.month.slice(0, 4)
+    const name = sameYear ? monthLabel(before.month, 'long').replace(/ \d{4}$/u, '') : monthLabel(before.month, 'long')
+    return `${line} · ${costText(before.cost_usd)} in ${name}`
 }
 
 /**
