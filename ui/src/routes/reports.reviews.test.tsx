@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import type { AnyRouter } from '@tanstack/react-router'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { keys } from '@/api/queries'
@@ -159,6 +159,13 @@ async function renderPage(report: ReviewsReport) {
     )
 }
 
+/** The widths of a row's in-cell bars, in its columns' order. */
+function bars(row: HTMLElement | undefined): string[] {
+    return within(row ?? document.body)
+        .getAllByTestId('cell-bar')
+        .map((bar) => (bar.firstElementChild as HTMLElement).style.width)
+}
+
 describe('the Reviews page', () => {
     it("heads the page with the window's figures, each against the week before's", async () => {
         await renderPage(REPORT)
@@ -180,13 +187,17 @@ describe('the Reviews page', () => {
         ])
     })
 
-    it("says the window's state under its title, and what the median leaves out", async () => {
+    it("says the window's state under its title, and what the median leaves out in its tile's tip", async () => {
         await renderPage(REPORT)
         expect(await screen.findByText('4 reviews on 1 PR · median first review 3.0h over 7 days')).toBeTruthy()
-        expect(screen.getByTestId('reviews-median').textContent).toContain(
-            '1 reviewed PR had no ready time from GitHub and is left out.',
-        )
-        expect(screen.getByTestId('reviews-limits').textContent).toContain('time spent red in CI or conflicted')
+        // The first panel holds the chart alone: no sentence over it, and no footnote under it.
+        const waits = screen.getByTestId('reviews-waits')
+        expect(waits.textContent).not.toContain('median wait')
+        expect(waits.textContent).not.toContain('time spent red in CI')
+        fireEvent.focus(within(screen.getByTestId('reviews-tiles')).getByText('median first review'))
+        expect(
+            (await screen.findAllByText(/1 reviewed PR had no ready time from GitHub and is left out\./u)).length,
+        ).toBeGreaterThan(0)
     })
 
     it('tables each day of first reviews by wait, the newest first', async () => {
@@ -195,7 +206,7 @@ describe('the Reviews page', () => {
         expect([...row.children].map((cell) => cell.textContent)).toEqual(['Oct 7', '0', '1', '0', '0', '1', '3.0h'])
     })
 
-    it('lists who reviews, a trusted reviewer marked', async () => {
+    it('lists who reviews, a trusted reviewer marked, reviews and wait each with a bar against the most', async () => {
         await renderPage(REPORT)
         const rows = within(await screen.findByTestId('reviews-reviewer-table')).getAllByTestId('reviews-reviewer')
         expect(rows.map((row) => [...row.children].slice(1).map((cell) => cell.textContent))).toEqual([
@@ -204,23 +215,45 @@ describe('the Reviews page', () => {
         ])
         expect(rows.map((row) => within(row).queryByText('dana') !== null)).toEqual([true, false])
         expect(rows.map((row) => within(row).queryByText('trusted') !== null)).toEqual([true, false])
+        // dana is the busiest and the slowest; carol left half as many and has no wait timed.
+        expect(bars(rows[0])).toEqual(['100%', '100%'])
+        expect(bars(rows[1])).toEqual(['50%', '0%'])
     })
 
-    it("sets the planner's estimates beside the resumes, and says how each plan went ahead", async () => {
+    it("sets the planner's estimates in a panel apart from the plans, each plan's approval said", async () => {
         await renderPage(REPORT)
-        const efforts = within(await screen.findByTestId('reviews-effort-table')).getAllByTestId('reviews-effort')
-        expect([...(efforts[0]?.children ?? [])].map((cell) => cell.textContent)).toEqual(['small', '1', '2', '$2.00'])
+        const estimates = await screen.findByTestId('reviews-efforts')
+        expect(within(estimates).getByRole('heading', { level: 2 }).textContent).toBe('Estimates')
+        const efforts = within(estimates).getAllByTestId('reviews-effort')
+        expect(efforts.map((row) => [...row.children].map((cell) => cell.textContent))).toEqual([
+            ['small', '1', '2', '2.0', '$2.00'],
+            ['medium', '1', '0', '0.0', '–'],
+        ])
+        const rounds = screen.getByTestId('reviews-round-panel')
+        expect(within(rounds).getByRole('heading', { level: 2 }).textContent).toBe('Feedback rounds')
+        expect(within(rounds).queryByTestId('reviews-effort-table')).toBeNull()
         const planned = screen.getByTestId('reviews-round-1')
         expect(planned.textContent).toContain('the planner')
         expect(within(planned).getByRole('link', { name: 'run:20' })).toBeTruthy()
         expect(screen.getByTestId('reviews-round-2').textContent).toContain('you, on the web')
     })
 
-    it("counts canopy's reviewer: its runs, the dismissals, the drafts, and whether workers trust it", async () => {
+    it("heads canopy's reviewer with tiles, then its runs, dismissals by reason, and the trust line", async () => {
         await renderPage(REPORT)
-        expect(await screen.findAllByTestId('reviews-run')).toHaveLength(2)
-        expect(screen.getByTestId('reviews-dismissals').textContent).toBe('You dismissed 1 finding: wrong 1')
-        expect(screen.getByTestId('reviews-drafts').textContent).toBe('1 draft: published 1')
+        const tiles = await screen.findByTestId('reviews-canopy-tiles')
+        expect(
+            within(tiles)
+                .getAllByRole('term')
+                .map((t) => t.textContent),
+        ).toEqual(['runs', 'cost', 'findings dismissed', 'drafts published'])
+        expect(
+            ['runs', 'cost', 'dismissed', 'published'].map(
+                (key) => within(tiles).getByTestId(`reviews-canopy-${key}`).textContent,
+            ),
+        ).toEqual(['3', '$0.50', '1', '1'])
+        expect(screen.getAllByTestId('reviews-run')).toHaveLength(2)
+        const dismissals = screen.getAllByTestId('reviews-dismissal')
+        expect(dismissals.map((row) => [...row.children].map((cell) => cell.textContent))).toEqual([['wrong', '1']])
         expect(screen.getByTestId('reviews-canopy-trust').textContent).toContain('without asking you')
     })
 
@@ -259,7 +292,9 @@ describe('the Reviews page', () => {
         expect(await screen.findByText('no reviews on no PRs · no first review timed over 7 days')).toBeTruthy()
         expect(screen.getByText("no first review on GitHub's clock came in these 7 days")).toBeTruthy()
         expect(screen.getByText("nobody left feedback on canopy's PRs in these 7 days")).toBeTruthy()
-        expect(screen.getByText('no feedback plan was written in these 7 days')).toBeTruthy()
+        // Estimates and Feedback rounds each say so.
+        expect(screen.getAllByText('no feedback plan was written in these 7 days')).toHaveLength(2)
         expect(screen.getByText('canopy reviewed nothing in these 7 days')).toBeTruthy()
+        expect(screen.queryByTestId('reviews-dismissal-table')).toBeNull()
     })
 })
