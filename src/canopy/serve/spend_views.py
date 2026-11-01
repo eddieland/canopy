@@ -79,8 +79,10 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int, *, ticket: str | 
         The breakdown, with the newest idle ticks in the window, and the month against its budget.
     """
     now = backend.clock()
-    found = spending.breakdown(ctx.conn, now, days, state_dir=ctx.state_dir, ticket=ticket)
-    return _spend_breakdown(ctx, found, now)
+    # One snapshot, so a run ending between the window's reads and the window before's is in one of them, never both.
+    with db.read_snapshot(ctx.conn):
+        found = spending.breakdown(ctx.conn, now, days, state_dir=ctx.state_dir, ticket=ticket)
+        return _spend_breakdown(ctx, found, now)
 
 
 def spend_breakdown_hours(
@@ -96,8 +98,10 @@ def spend_breakdown_hours(
         The breakdown, with the newest idle ticks in the window, and the month against its budget.
     """
     now = backend.clock()
-    found = spending.breakdown_hours(ctx.conn, now, hours, state_dir=ctx.state_dir, ticket=ticket)
-    return _spend_breakdown(ctx, found, now)
+    # One snapshot, as `spend_breakdown` reads it.
+    with db.read_snapshot(ctx.conn):
+        found = spending.breakdown_hours(ctx.conn, now, hours, state_dir=ctx.state_dir, ticket=ticket)
+        return _spend_breakdown(ctx, found, now)
 
 
 def _spend_breakdown(ctx: Context, found: spending.Breakdown, now: datetime) -> SpendBreakdown:
