@@ -52,6 +52,13 @@ function month(name: string, cost: number | null, extra: Partial<ReportMonth> = 
         median_pr_comments: null,
         median_hours_to_land: null,
         median_review_wait_hours: null,
+        runs_ended: 0,
+        failed: 0,
+        failed_cost_usd: null,
+        heads: 0,
+        green_first: 0,
+        first_reviews: 0,
+        median_first_review_hours: null,
         ...extra,
     }
 }

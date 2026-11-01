@@ -507,6 +507,15 @@ def window(now: datetime, days: int) -> tuple[datetime, datetime]:
     return _midnight(today - timedelta(days=days - 1)), _midnight(today + timedelta(days=1))
 
 
+def days_between(start: datetime, end: datetime) -> int:
+    """How many local days a window from one local midnight, `start`, to another, `end`, holds.
+
+    Returns:
+        The count, by the local calendar, so a day that a clock change shortens or lengthens is still one day.
+    """
+    return (end.astimezone().date() - start.astimezone().date()).days
+
+
 def day_starts(start: datetime, days: int) -> dict[str, str]:
     """Each local day of a window that `window` began at `start`, by its name, with when it starts.
 

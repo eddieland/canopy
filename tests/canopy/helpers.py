@@ -44,7 +44,10 @@ from canopy.core.vocab import (
     CheckConclusion,
     ConnectorRunStatus,
     ItemAnswer,
+    PrState,
     ResumeReason,
+    ReviewItem,
+    ReviewState,
     RunKind,
     RunStatus,
     SourceKind,
@@ -377,6 +380,57 @@ def check_ran(conn: sqlite3.Connection, pr: str, head: str, name: str, conclusio
         name=name,
         head_sha=head,
         conclusion=conclusion,
+        observed_at=at,
+    ).run(conn)
+
+
+def observed_pr(
+    conn: sqlite3.Connection,
+    url: str,
+    *,
+    ready_at: str | None = None,
+    review_requested_at: str | None = None,
+    merged_at: str | None = None,
+) -> None:
+    """The reader's read of `url`, authored by `op`, with GitHub's times where given: none, as one read before."""
+    records.insert(
+        records.ObservedPr,
+        url=url,
+        repository="acme/web",
+        number=int(url.rsplit("/", 1)[-1]),
+        state=PrState.OPEN if merged_at is None else PrState.MERGED,
+        draft=False,
+        author="op",
+        observed_at=db.format_time(datetime.now(UTC)),
+        created_at=ready_at,
+        ready_at=ready_at,
+        review_requested_at=review_requested_at,
+        merged_at=merged_at,
+    ).run(conn)
+
+
+def feedback_left(
+    conn: sqlite3.Connection,
+    url: str,
+    author: str,
+    at: str,
+    state: ReviewState | None = None,
+    *,
+    bot: bool = False,
+) -> None:
+    """A review of `url` in `state` by `author` at `at`, or a comment without a state."""
+    [(count,)] = sql.execute(conn, sql.select("count(*)").from_("observed_reviews")).fetchall()
+    records.insert(
+        records.ObservedReview,
+        pr_url=url,
+        item=ReviewItem.COMMENT if state is None else ReviewItem.REVIEW,
+        id=100 + int(count),
+        author=author,
+        bot=bot,
+        state=state,
+        created_at=at,
+        body="b",
+        thread_id=None if state is not None else f"t{count}",
         observed_at=at,
     ).run(conn)
 

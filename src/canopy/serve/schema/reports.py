@@ -146,6 +146,21 @@ class ReportMonth(Model):
     """The median of its landed tickets' hours to land; None with none known."""
     median_review_wait_hours: float | None = None
     """The median of its landed tickets' waits for a first review, in hours; None with none known."""
+    runs_ended: int
+    """How many runs of every kind that started in it ended, as `canopy health` and the Health page count them."""
+    failed: int
+    """Of those, the ones that ended in a failed status."""
+    failed_cost_usd: float | None = None
+    """What the failed ones cost, in US dollars; None when none of them reported a cost."""
+    heads: int
+    """The PR heads first checked in it, as the CI page counts them."""
+    green_first: int
+    """Of those, the heads whose first run of every check was not red."""
+    first_reviews: int
+    """The first reviews that arrived in it on a PR with a start, timed on GitHub's clock, as the Reviews page counts
+    them."""
+    median_first_review_hours: float | None = None
+    """Their median wait, in hours; None with none."""
 
 
 class MonthlyReport(Model):

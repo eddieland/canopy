@@ -203,8 +203,17 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Ci:
     Returns:
         The report; a window with no check run in it has no heads, checks, or series, and each day at nothing.
     """
-    start, end = spend.window(now, days)
+    return between(conn, *spend.window(now, days))
+
+
+def between(conn: sqlite3.Connection, start: datetime, end: datetime) -> Ci:
+    """What CI did from one local midnight, `start`, to another, `end`, on the PRs canopy observed.
+
+    Returns:
+        The report, as `report` gives it for any such window: a calendar month's, or the one before a page's.
+    """
     since, until = db.format_time(start), db.format_time(end)
+    days = spend.days_between(start, end)
     starts = spend.day_starts(start, days)
     with db.read_snapshot(conn):
         named = tracked_prs.tracked(conn, "", until)
