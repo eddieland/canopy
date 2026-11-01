@@ -361,6 +361,42 @@ test.describe('turned on', () => {
         await expect(tip).toBeHidden()
     })
 
+    for (const companion of ['sprig', 'ghost'] as const) {
+        test(`the ${companion} standing over the working runs takes none of their clicks`, async ({ page }) => {
+            await page.addInitScript((picked) => {
+                globalThis.localStorage.setItem('canopy-companion', picked)
+            }, companion)
+            await page.setViewportSize({ width: 1280, height: 880 })
+            await page.goto('attention')
+            await settled(page)
+            await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'tight')
+            // A tip asked for and closed keeps its room, hidden, over the rows above.
+            await askSprig(page)
+            await page.getByTestId('buddy-close').click()
+            await expect(page.getByTestId('buddy-tip')).toBeHidden()
+
+            const rows = page.getByTestId('rail-working').getByRole('link')
+            await expect(rows).not.toHaveCount(0)
+            for (const row of await rows.all()) {
+                // Each row takes its clicks across its width, under Sprig's head as well as beside it.
+                const missed = await row.evaluate((link) => {
+                    const box = link.getBoundingClientRect()
+                    const y = box.bottom - 4
+                    return [6, 16, 30, 44, box.width / 2, box.width - 6]
+                        .map((x) => box.left + x)
+                        .filter((x) => !link.contains(document.elementFromPoint(x, y)))
+                })
+                expect(missed).toEqual([])
+            }
+            // Sprig itself, within its slot, is still clicked, and so is a row once its tip closes.
+            await page.getByTestId('buddy-sprig').click()
+            await expect(page.getByTestId('buddy-tip')).toBeVisible()
+            await page.getByTestId('buddy-close').click()
+            await rows.last().click()
+            await expect(page).toHaveURL(/workspace\/runs/u)
+        })
+    }
+
     test('a tight rail lets the tips Sprig would offer unasked pass, and a roomy one shows them', async ({ page }) => {
         await page.clock.install()
         await page.setViewportSize({ width: 1280, height: 980 })

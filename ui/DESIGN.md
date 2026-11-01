@@ -573,9 +573,10 @@ the rules it all keeps; what each one does is written in its code. None of it is
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
   something; its room stays, so nothing beside it moves. The fit is measured as the layout changes (`useFits` in
   `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in. Three exceptions, all the
-  operator's call: Sprig may stand over the foot of the rail's working runs by 40px rather than step out, offering tips
-  there only when clicked; the rave covers the whole page, taking no pointer, hidden from a screen reader, not printed;
-  and 2048 opens over the page as a dialog, only when typed, and Escape puts it away.
+  operator's call: Sprig may stand over the foot of the rail's working runs by 40px rather than step out, taking none
+  of their clicks and offering tips there only when clicked; the rave covers the whole page, taking no pointer, hidden
+  from a screen reader, not printed; and 2048 opens over the page as a dialog, only when typed, and Escape puts it
+  away.
 - **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`, `rave-dark`) or the accent,
   never a status color, so nothing in it reads as a run's state.
 - **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and counters.
