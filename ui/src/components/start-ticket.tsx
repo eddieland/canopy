@@ -72,13 +72,14 @@ export function StartTicket({
                     aria-label="Ticket key"
                     // oxlint-disable-next-line jsx-a11y/no-autofocus -- the dialog opens on a key, to type in.
                     autoFocus={focus}
-                    className="max-w-56 font-mono"
+                    className="max-w-56 min-w-0 font-mono"
                 />
                 <Button type="submit" variant="outline" disabled={mutation.isPending}>
                     <Play />
                     Start privately
                 </Button>
-                <span className="flex items-center gap-1.5">
+                {/* Kept whole: when the row is tight the key field gives, never the label's words. */}
+                <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
                     <Checkbox
                         id={`${id}-plan`}
                         checked={plan}
