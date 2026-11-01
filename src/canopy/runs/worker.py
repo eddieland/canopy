@@ -110,7 +110,8 @@ ReviewReason = Annotated[StrictStr, contract.one_line, contract.bounded(MAX_REVI
 
 def _known_effort(value: object) -> object:
     """Return `value` if it is one of `PlanEffort`'s, else None: a misspelled estimate drops, never the plan with it."""
-    return value if value in PlanEffort else None
+    # The `str` test first: `in` on an enum raises for an unhashable value, such as a list, before Python 3.13.
+    return value if isinstance(value, str) and value in PlanEffort else None
 
 
 #: A planner's estimate of how much work its plan is (DESIGN §25).

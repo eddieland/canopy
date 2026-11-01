@@ -1293,6 +1293,7 @@ def answers_to(review_id: int) -> list[dict[str, object]]:
         {"review": review_id, "finding": 3, "answer": "fixed"},
         {"review": 99, "finding": 1, "answer": "fixed"},
         {"review": review_id, "finding": 1, "answer": "declined"},
+        {"review": review_id, "finding": 1, "answer": ["fixed"]},
     ]
 
 
@@ -1319,7 +1320,7 @@ def test_a_declined_finding_reaches_the_next_review_and_its_rebuttal_waits_on_th
     note = json.loads(ran.row["result_json"])["harness"]
     assert note == (
         f"review answers not recorded: entry 3: review run {first} has no finding 3; entry 4: review run 99 is not a "
-        "done review of PROJ-1; entry 5: a decline gives no reason"
+        "done review of PROJ-1; entry 5: a decline gives no reason; entry 6: `answer` is not fixed or declined"
     )
 
     # The next review reads them: it rebuts the decline, and repeats the fix's finding, which it may not rebut.
