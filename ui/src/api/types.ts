@@ -155,6 +155,8 @@ export type SpendFirstCallWeek = Schemas['SpendFirstCallWeek']
 export type SpendMonth = Schemas['SpendMonth']
 /** What every session the runtime keeps that started in a spend window cost, canopy's apart from the rest. */
 export type SpendSessions = Schemas['SpendSessions']
+/** What a set of the runtime's sessions cost: how many there were, and their cost. */
+export type SpendShare = Schemas['SpendShare']
 /** A kind of agent run, as the spend breakdown counts it: the overseer, workers, plans, chores, reviews, or tasks. */
 export type SpendKind = Schemas['SpendKind']
 /** The last months, oldest first, as the reports page shows them. */

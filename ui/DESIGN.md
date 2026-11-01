@@ -785,9 +785,10 @@ side.
   under it saying how it moved (`+3 on the 7 days before`, `same as ...`), in `status-failed` only where the page says
   which way is better and it moved the other (a rising failure rate; never rising spend). A row of them sits under a
   report's description (Health, CI, Reviews, Checklist); the Spend page's Totals are a grid of them in their panel,
-  whose cells are too narrow to name the window before under each figure, so a line under the grid names it once. A
-  figure still being read holds its place. A `Counter` stays the attention and worktrees pages' count of the present,
-  with its state's color.
+  whose cells are too narrow to name the window before under each figure, so a line under the grid names it once. A kind
+  that spent nothing is no tile of a dash but a muted line under the grid (`No dry runs.`), so the tiles hold what was
+  spent. A figure still being read holds its place. A `Counter` stays the attention and worktrees pages' count of the
+  present, with its state's color.
 - **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest
   (`barPercent`), where comparing the rows is the point: spent by month, by ticket, and by model, the bytes a tool
   returned, a check's failure rate. The figure, at a fixed width so the bars start at one edge, then a 6px rounded bar,
@@ -1033,10 +1034,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   every visit is its title's help. The chart is `aria-hidden`: the table folded under it (`ChartTable`), newest day
   first, holds the same numbers for a screen reader, each a `Cost`, every cell after the first `pl-3` from the one
   before, and, opened, scrolls past a week, sideways when the pane is too narrow for its columns. A week names every
-  day on the axis; 30 days every fifth, back from today. A window where no run reported a cost is one `Empty` line in
-  place of the chart, its legend, and its table; the totals then leave out idle ticks' share while the overseer spent
-  nothing, and what reported no cost while no run ended. The window is a segmented control (`WindowToggle`) in the
-  page header's controls, as on every report, so it is in one place whatever the page and however long it is; kept in
+  day on the axis; 30 days every fifth, back from today, or, picked from the `by day` / `by week` control beside the
+  panel's label (`?pitch=week`), a bar per local ISO week, named by its Monday as the first-call chart's are, a part
+  week at either end. A window where no run reported a cost is one `Empty` line in place of the chart, its legend,
+  and its table; the totals then leave out what reported no cost while no run ended, and the Ticks panel idle ticks'
+  share while the overseer spent nothing. The window is a segmented control (`WindowToggle`) in the page header's
+  controls, as on every report, so it is in one place whatever the page and however long it is; kept in
   `?days=`. By model and By tool sum each model's or tool's rows over every kind under `all`; the
   runs page's kind filter in each one's header keeps one kind's (`?model_kind=`, `?tool_kind=`), and offers only the
   kinds the window has rows of. A window switch keeps both filters. By model's ids link the runs page's runs on the
