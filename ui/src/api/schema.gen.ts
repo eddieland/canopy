@@ -7866,6 +7866,11 @@ export type components = {
              */
             pr_comments: number;
             /**
+             * Pull Requests
+             * @description Its PRs, by URL, in order: those its units hold and those its runs named.
+             */
+            pull_requests: string[];
+            /**
              * Review Wait Hours
              * @description From when its PR began waiting on a review, `awaiting_review_at`, or without it the end of its first worker run
              *     that ended `done`, to the first review after it, in hours; None with no start or no such review.

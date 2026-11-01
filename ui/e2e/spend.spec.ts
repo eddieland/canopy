@@ -189,7 +189,7 @@ test("Reports opens the spend page on the week, Spend's item marked under it", a
     await settled(page)
     const nav = page.getByRole('navigation', { name: 'Main' })
     await nav.getByRole('link', { name: 'Reports' }).click()
-    await page.getByTestId('reports-spend-link').click()
+    await nav.getByRole('link', { name: 'Spend' }).click()
     await expect(page).toHaveURL(/\/reports\/spend$/u)
     await expect(page.getByTestId('spend-window-7')).toHaveAttribute('data-state', 'on')
     await expect(nav.getByRole('link', { name: 'Spend' })).toHaveAttribute('data-status', 'active')

@@ -421,6 +421,7 @@ def _ticket(found: monthly.Landed) -> ReportTicket:
         review_wait_hours=_hours(found.review_wait),
         merged_at=None if found.merged_at is None else db.parse_time(found.merged_at),
         awaiting_review_at=None if found.awaiting_review_at is None else db.parse_time(found.awaiting_review_at),
+        pull_requests=list(found.pull_requests),
     )
 
 

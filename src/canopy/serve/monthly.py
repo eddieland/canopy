@@ -149,6 +149,8 @@ class Landed:
     #: was ready, the earliest of them, where `review_wait` starts; None when none has either time read, and it starts
     #: at the end of its first worker run that ended `done` instead.
     awaiting_review_at: str | None = None
+    #: Its PRs, by URL, in order: those its units hold and those its runs named.
+    pull_requests: Sequence[str] = ()
 
 
 @dataclass(frozen=True)
@@ -436,6 +438,7 @@ def _landed(conn: sqlite3.Connection, landed: Mapping[str, str]) -> list[Landed]
             runs.get(key, []),
             said=[r for url in sorted(prs.get(key, ())) for r in reviews.get(url, [])],
             prs=[observed[url] for url in sorted(prs.get(key, ())) if url in observed],
+            urls=sorted(prs.get(key, ())),
         )
         for key, at in landed.items()
     ]
@@ -449,6 +452,7 @@ def _ticket(
     *,
     said: Sequence[pr_feedback.Feedback],
     prs: Sequence[records.ObservedPr],
+    urls: Sequence[str],
 ) -> Landed:
     landed = db.parse_time(landed_at)
     before = sorted((r for r in runs if r.started_at <= landed), key=lambda r: r.started_at)
@@ -479,6 +483,7 @@ def _ticket(
         review_wait=first_review - waited_from if first_review is not None and waited_from is not None else None,
         merged_at=None if merged is None else db.format_time(merged),
         awaiting_review_at=None if awaiting is None else db.format_time(awaiting),
+        pull_requests=tuple(urls),
     )
 
 

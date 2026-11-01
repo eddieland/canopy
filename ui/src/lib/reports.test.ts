@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ReportMonth, ReportTicket, ReportTokens } from '@/api/types'
+import { mockReportMonth, mockReportTicket, mockReportTokens } from '@/api/mocks'
+import type { ReportMonth } from '@/api/types'
 import { DEFAULT_CLOCK } from '@/lib/clock'
 import { stamp } from '@/lib/time'
 
@@ -11,8 +12,15 @@ import {
     monthLabel,
     outsideHint,
     pickedMonth,
+    DELIVERY_TRENDS,
+    fittedMonths,
+    monthBars,
+    monthChange,
+    monthShare,
     reportLine,
     reportMonth,
+    sinceText,
+    trendPointHint,
     reportSpan,
     reviewWaitHint,
     sentTokens,
@@ -20,73 +28,15 @@ import {
     wroteTokens,
 } from './reports'
 
-const TOKENS: ReportTokens = {
-    input: 1000,
-    output: 200,
-    reasoning: 50,
-    cache_read: 8000,
-    cache_write: 1000,
-    cache_hit: 0.8,
-}
-
-function month(name: string, cost: number | null, extra: Partial<ReportMonth> = {}): ReportMonth {
-    return {
-        month: name,
-        since: `${name}-01T00:00:00Z`,
-        until: `${name}-28T00:00:00Z`,
-        runs: 0,
-        cost_usd: cost,
-        tokens: TOKENS,
-        kinds: [],
-        outside: {
-            sessions: 0,
-            cost_usd: null,
-            tokens: { ...TOKENS, input: 0, output: 0, reasoning: 0, cache_read: 0, cache_write: 0, cache_hit: null },
-        },
-        models: [],
-        landed: [],
-        closed: 0,
-        pull_requests: 0,
-        per_landed_usd: null,
-        median_iterations: null,
-        median_pr_comments: null,
-        median_hours_to_land: null,
-        median_review_wait_hours: null,
-        runs_ended: 0,
-        failed: 0,
-        failed_cost_usd: null,
-        heads: 0,
-        green_first: 0,
-        first_reviews: 0,
-        median_first_review_hours: null,
-        ...extra,
-    }
-}
-
-function ticket(key: string, extra: Partial<ReportTicket> = {}): ReportTicket {
-    return {
-        key,
-        title: null,
-        landed_at: '2026-10-04T11:00:00Z',
-        started_at: '2026-09-28T10:00:00Z',
-        iterations: 1,
-        pr_comments: 0,
-        reviews: 1,
-        changes_requested: 0,
-        cost_usd: null,
-        hours_to_land: 125,
-        review_wait_hours: 3,
-        merged_at: null,
-        awaiting_review_at: null,
-        ...extra,
-    }
-}
+const TOKENS = mockReportTokens
+const month = mockReportMonth
+const ticket = mockReportTicket
 
 describe('reportSpan', () => {
-    it('keeps a span the page offers but the default, as a number or its digits', () => {
+    it('keeps a span the page offers, as a number or its digits', () => {
         expect(reportSpan(6)).toBe(6)
         expect(reportSpan('24')).toBe(24)
-        expect(reportSpan(12)).toBeUndefined()
+        expect(reportSpan(12)).toBe(12)
         expect(reportSpan(7)).toBeUndefined()
         expect(reportSpan('six')).toBeUndefined()
     })
@@ -123,7 +73,11 @@ describe('reportLine', () => {
     it('says what the latest month cost and landed', () => {
         const landed = [{ key: 'ABC-1' }, { key: 'ABC-2' }] as ReportMonth['landed']
         expect(reportLine([month('2026-09', 1), month('2026-10', 12.5, { landed, pull_requests: 1 })])).toBe(
-            '$12.50 in October 2026 · 2 tickets landed · 1 PR',
+            '$12.50 in October 2026 · 2 tickets landed · 1 PR · $1.00 in September',
+        )
+        // The month before, in another year, says its year.
+        expect(reportLine([month('2025-12', 3), month('2026-01', 1)])).toBe(
+            '$1.00 in January 2026 · no tickets landed · no PRs · $3.00 in December 2025',
         )
         expect(reportLine([month('2026-10', null)])).toBe('– in October 2026 · no tickets landed · no PRs')
         expect(reportLine([])).toBe('')
@@ -189,5 +143,78 @@ describe('which clock a figure ran on', () => {
             'From a proxy: canopy kept no time from GitHub',
         )
         expect(clockShare(month('2026-10', 1, { landed: [unknown] }), 'to land')).toBeUndefined()
+    })
+})
+
+describe('fittedMonths', () => {
+    it('opens on the months from the first that holds anything, gaps after it kept', () => {
+        const months = [
+            month('2026-05', null),
+            month('2026-06', null),
+            month('2026-07', 2),
+            month('2026-08', null),
+            month('2026-09', null, { landed: [ticket('ABC-1')] }),
+        ]
+        expect(fittedMonths(months).map((m) => m.month)).toEqual(['2026-07', '2026-08', '2026-09'])
+        expect(sinceText(fittedMonths(months))).toBe('since July 2026')
+    })
+
+    it('keeps the latest month alone when none holds anything', () => {
+        expect(fittedMonths([month('2026-09', null), month('2026-10', null)]).map((m) => m.month)).toEqual(['2026-10'])
+        expect(sinceText([])).toBe('')
+    })
+})
+
+describe('monthBars', () => {
+    it("stacks each month's kinds in the spend fills, the sessions outside canopy on top, named on hover", () => {
+        const october = month('2026-10', 10, {
+            kinds: [
+                { kind: 'overseer', runs: 2, cost_usd: 1, tokens: TOKENS },
+                { kind: 'workers', runs: 3, cost_usd: 7, tokens: TOKENS },
+            ],
+            outside: { sessions: 1, cost_usd: 2, tokens: TOKENS },
+        })
+        const [bar] = monthBars([october])
+        expect(bar?.label).toBe('Oct 2026')
+        expect(bar?.total).toBe(10)
+        expect(bar?.segments.filter((s) => s.value > 0).map((s) => [s.key, s.fill, s.value])).toEqual([
+            ['overseer', 'bg-spend-overseer', 1],
+            ['workers', 'bg-spend-workers', 7],
+            ['outside', 'bg-spend-outside', 2],
+        ])
+        expect(bar?.hint).toBe('October 2026: $10.00, overseer $1.00, workers $7.00, outside canopy $2.00')
+        expect(monthBars([month('2026-09', null)])[0]?.hint).toBe('September 2026: nothing reported')
+    })
+})
+
+describe('month over month', () => {
+    it("says how a month's cost moved on the month before's, on its cell's hover", () => {
+        const before = month('2026-09', 13.99)
+        expect(monthChange(15.76, before, (m) => m.cost_usd)).toBe('+$1.77 on September 2026')
+        expect(monthChange(13.99, before, (m) => m.cost_usd)).toBe('same as September 2026')
+        expect(monthChange(10, before, (m) => m.cost_usd)).toBe('−$3.99 on September 2026')
+        expect(monthChange(10, undefined, (m) => m.cost_usd)).toBeUndefined()
+        expect(monthChange(10, month('2026-09', null), (m) => m.cost_usd)).toBeUndefined()
+    })
+
+    it("draws a row's share of the month's whole", () => {
+        expect(monthShare(4, 8)).toBe(50)
+        expect(monthShare(null, 8)).toBe(0)
+        expect(monthShare(4, null)).toBe(0)
+    })
+})
+
+describe('Delivery trends', () => {
+    it("says a month's point, and for a time which clock its figures ran on", () => {
+        const [iterations, , toLand] = DELIVERY_TRENDS
+        const october = month('2026-10', 1, {
+            median_iterations: 2.5,
+            median_hours_to_land: 20.8,
+            landed: [ticket('ABC-1', { merged_at: '2026-10-04T10:00:00Z' }), ticket('ABC-2')],
+        })
+        expect(iterations === undefined ? '' : trendPointHint(october, iterations)).toBe('Oct 2026: 2.5')
+        expect(toLand === undefined ? '' : trendPointHint(october, toLand)).toBe(
+            "Oct 2026: 20.8h · 1 of 2 from GitHub's times, the rest from proxies",
+        )
     })
 })
