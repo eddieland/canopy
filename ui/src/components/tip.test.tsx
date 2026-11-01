@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { tipOf } from '@/test-utils'
 
-import { Clipped, Tip } from './tip'
+import { Clipped, Hinted, Tip } from './tip'
 
 afterEach(() => {
     cleanup()
@@ -107,5 +107,20 @@ describe('Clipped', () => {
         expect(whole.hasAttribute('tabindex')).toBe(false)
         act(() => whole.focus())
         expect(screen.queryByRole('tooltip')).toBeNull()
+    })
+})
+
+describe('Hinted', () => {
+    it('makes a name with a hint a stop for the keyboard, with the hint its tip', () => {
+        render(<Hinted hint="Its red runs' share of its red and green ones">failure rate</Hinted>)
+        const name = screen.getByText('failure rate')
+        expect(name.tabIndex).toBe(0)
+        expect(tipOf(name)).toBe("Its red runs' share of its red and green ones")
+        expect(name.title).toBe('')
+    })
+
+    it('is the name alone without one', () => {
+        render(<Hinted hint={undefined}>runs</Hinted>)
+        expect(screen.getByText('runs').tabIndex).toBe(-1)
     })
 })

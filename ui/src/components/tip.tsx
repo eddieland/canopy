@@ -98,6 +98,44 @@ export function Tip({
 }
 
 /**
+ * Text with a fact in its tip, such as a table's figure with what it sums (`Tip`): the text in a span of its own, so a
+ * figure or a word needs no element to wrap it. With no fact it is the text alone.
+ */
+export function Tipped({
+    fact,
+    mono,
+    children,
+}: {
+    fact: string | null | undefined
+    mono?: boolean
+    children: ReactNode
+}) {
+    return (
+        <Tip fact={fact} mono={mono}>
+            <span>{children}</span>
+        </Tip>
+    )
+}
+
+/**
+ * A name with more to say than it has room for, such as what a report's column counts (ui/DESIGN.md, "A fact on hover
+ * is a tip"): the hint is its `Tip`, so the keyboard and a touch screen reach it, and a muted dotted underline says it
+ * has one. With no hint it is the name alone, underlined by nothing.
+ */
+export function Hinted({ hint, children }: { hint: string | null | undefined; children: ReactNode }) {
+    if (hint === null || hint === undefined || hint === '') {
+        return <span>{children}</span>
+    }
+    return (
+        <Tip fact={hint}>
+            <span className="underline decoration-muted-foreground/60 decoration-dotted underline-offset-4">
+                {children}
+            </span>
+        </Tip>
+    )
+}
+
+/**
  * Text cut to fit its place on one line, whole in a `Tip` while it is cut, and only then: a whole title needs no tip,
  * and is no stop for the keyboard. `text` is the whole; `children`, what shows, when it is more than the text (its
  * links).

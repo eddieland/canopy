@@ -151,9 +151,14 @@ test("Reports opens the spend page on the week, Spend's item marked under it", a
     await expect(page.getByTestId('nav-highlight')).toHaveClass(/\bbg-section-reports\/24\b/u)
 })
 
-test("30 days' table scrolls in its panel under its column names, and a week's shows whole", async ({ page }) => {
+test("30 days' table opens to scroll in its panel under its column names, and a week's shows whole", async ({
+    page,
+}) => {
     await page.goto('reports/spend?days=30')
     await settled(page)
+    // The table arrives folded under the chart, its row count on its button.
+    await expect(page.getByTestId('spend-table-scroll')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Show 30 days as a table' }).click()
     const region = page.getByTestId('spend-table-scroll')
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(30)
     const scrolls = () => region.evaluate((el) => el.scrollHeight > el.clientHeight)
@@ -170,7 +175,9 @@ test("30 days' table scrolls in its panel under its column names, and a week's s
         })
         .toBeLessThanOrEqual(1)
 
+    // Another window keeps the table open, its count on its button.
     await page.getByTestId('spend-window-7').click()
+    await expect(page.getByRole('button', { name: 'Hide 7 days as a table' })).toBeVisible()
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
     expect(await scrolls()).toBe(false)
 })
@@ -365,7 +372,8 @@ test("the overseer's models are not linked, as the runs page lists no tick by mo
     await page.goto('reports/spend?model_kind=overseer')
     await settled(page)
     const table = page.getByTestId('spend-model-table')
-    await expect(table.getByTestId('spend-model-unlisted').first()).toHaveAttribute('title', /lists no overseer tick/u)
+    await table.getByTestId('spend-model-unlisted').first().hover()
+    await expect(page.getByRole('tooltip')).toContainText(/lists no overseer tick/u)
     await expect(table.getByRole('link')).toHaveCount(0)
 })
 

@@ -37,6 +37,15 @@ export function peakIndex(totals: readonly number[]): number {
     return top === 0 ? -1 : totals.lastIndexOf(top)
 }
 
+/**
+ * A value's bar in a table's cell (`CellBar`), as a percent of the column's largest: 0 for nothing, or when the column
+ * has nothing in it, and 100 for the largest. A value nothing reported, null, reads as nothing.
+ */
+export function barPercent(value: number | null | undefined, column: Iterable<number | null | undefined>): number {
+    const top = Math.max(0, ...[...column].map((v) => v ?? 0))
+    return top === 0 ? 0 : (Math.max(0, value ?? 0) / top) * 100
+}
+
 /** One series of a day chart: what it counts, its name in the legend, what that means on hover, and its fill. */
 export interface DayChartSeries {
     /** What it counts, its segments' key. */

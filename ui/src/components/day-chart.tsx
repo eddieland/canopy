@@ -1,3 +1,4 @@
+import { Hinted } from '@/components/tip'
 import { useMeasure } from '@/hooks/use-measure'
 import { axisNames, axisStep, HEADROOM, peakIndex } from '@/lib/chart'
 import type { AxisRoom, DayBar, DayChartSeries } from '@/lib/chart'
@@ -67,14 +68,18 @@ export function DayChart({ bars, testId }: { bars: readonly DayBar[]; testId: st
     )
 }
 
-/** A day chart's legend: each series' name, `muted-foreground`, beside a swatch of its fill, its meaning on hover. */
+/**
+ * A day chart's legend: each series' name, `muted-foreground`, beside a swatch of its fill, what it counts in the
+ * name's tip (`Hinted`), so the keyboard and a touch screen reach it. The table under the chart names its columns
+ * plainly, since the legend says what each counts.
+ */
 export function DayChartLegend({ series, testId }: { series: readonly DayChartSeries[]; testId: string }) {
     return (
         <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground" data-testid={`${testId}-legend`}>
             {series.map((s) => (
-                <li key={s.key} className="flex items-center gap-1.5" title={s.hint}>
+                <li key={s.key} className="flex items-center gap-1.5">
                     <span aria-hidden className={cn('size-2.5 rounded-xs', s.fill)} />
-                    {s.label}
+                    <Hinted hint={s.hint}>{s.label}</Hinted>
                 </li>
             ))}
         </ul>

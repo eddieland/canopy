@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { keys } from '@/api/queries'
 import type { PlansReport, PlansRow } from '@/api/types'
+import { tipOf } from '@/test-utils'
 
 import { Route } from './reports.plans'
 
@@ -188,14 +189,16 @@ describe('the Plans page', () => {
         const planned = await screen.findByTestId('plans-plan-4')
         expect(within(planned).getByRole('link', { name: 'run:24' })).toBeTruthy()
         expect(cells(planned).slice(0, 6)).toEqual(['PROJ-4', 'strict', 'by the planner', '2 KiB', '–', '2'])
-        expect(within(planned).getByTitle('ci 1, review 1').textContent).toBe('2')
+        expect(tipOf(within(planned).getByText('2'))).toBe('ci 1, review 1')
         expect(cells(screen.getByTestId('plans-plan-3')).slice(1, 3)).toEqual([
             'off',
             'revised: edited, after 1 sent back',
         ])
         expect(cells(screen.getByTestId('plans-plan-2')).slice(2, 3)).toEqual(['sent back: 2 comments'])
         // Nothing implemented it: no resumes to count.
-        expect(within(screen.getByTestId('plans-plan-5')).getByTitle('No implement followed it').textContent).toBe('–')
+        expect(tipOf(within(screen.getByTestId('plans-plan-5')).getByText('–', { selector: 'td span' }))).toBe(
+            'No implement followed it',
+        )
     })
 
     it('says so when no plan was written', async () => {

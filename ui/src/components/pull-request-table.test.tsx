@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { cleanup, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { renderRouted } from '@/test-utils'
+import { renderRouted, tipOf } from '@/test-utils'
 
 import { PullRequestTable } from './pull-request-table'
 import type { PullRequestColumn, PullRequestRow } from './pull-request-table'
@@ -36,11 +36,7 @@ describe('PullRequestTable', () => {
         const [first, second] = within(table).getAllByTestId('x-pull-request')
         expect(first?.textContent).toContain('ci red')
         expect(within(first as HTMLElement).getByRole('link', { name: 'ABC-099' })).toBeTruthy()
-        expect(
-            within(second as HTMLElement)
-                .getByText('1')
-                .getAttribute('title'),
-        ).toBe('1 runs')
+        expect(tipOf(within(second as HTMLElement).getByText('1'))).toBe('1 runs')
         expect(within(second as HTMLElement).queryByRole('link', { name: /ABC/u })).toBeNull()
     })
 })

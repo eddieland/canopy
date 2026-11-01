@@ -15,19 +15,25 @@ import type {
     SpendSessions,
     SpendTicket,
 } from '@/api/types'
+import { CellBar } from '@/components/cell-bar'
+import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
 import { FirstCallChart } from '@/components/first-call-chart'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { PullRequestTable } from '@/components/pull-request-table'
 import type { PullRequestColumn } from '@/components/pull-request-table'
+import { ReadoutTiles } from '@/components/readout-tiles'
+import type { ReadoutTile } from '@/components/readout-tiles'
 import { TickRow } from '@/components/tick-row'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { Clipped, Tip } from '@/components/tip'
+import { Clipped, Hinted, Tip, Tipped } from '@/components/tip'
 import { UnnamedModel } from '@/components/unnamed-model'
 import { WindowToggle } from '@/components/window-toggle'
+import { barPercent } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
+import { counted } from '@/lib/descriptions'
 import { firstKind, KIND_SERIES, seriesOf, seriesWeeks } from '@/lib/first-calls'
 import { unnamedHint, UNREAD, UNREAD_RUNS_HINT } from '@/lib/models'
 import { windowName } from '@/lib/report-window'
@@ -116,6 +122,9 @@ const WORKSPACE_HINT =
     "ticket's too"
 const UNLISTED_HINT = 'The runs page lists no overseer tick by model: Ticks, under Workspace, lists them by tick'
 
+// The Totals panel's tiles: two to a row on a phone, three on a tablet, every one in a row on a wide pane.
+const TOTALS_GRID = 'grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-3 @4xl:grid-cols-10'
+
 // The column names of a table in a padded scrolling region. A sticky head sticks inside the region's padding, so the
 // rows scrolling under it would show in a strip above it: the region's top padding is the head's cells' instead.
 const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
@@ -198,21 +207,10 @@ function SpendPage() {
     const failed = data === undefined && query.error !== null
     return (
         <>
-            <PageHeader title="Spend" help={HELP}>
-                {data === undefined ? (query.isPending ? 'reading the spend' : null) : spendLine(data)}
-            </PageHeader>
-            {!failed && (
-                <Panel data-testid="spend-budget">
-                    <PanelHeader label="This month">
-                        <span className="readout text-xs text-muted-foreground">
-                            {month === null ? '' : monthName(month)}
-                        </span>
-                    </PanelHeader>
-                    {data === undefined ? <PanelSkeleton rows={1} className="min-h-16" /> : <Budget month={month} />}
-                </Panel>
-            )}
-            <Panel data-testid="spend-totals">
-                <PanelHeader label="Totals">
+            <PageHeader
+                title="Spend"
+                help={HELP}
+                controls={
                     <WindowToggle
                         windows={SPEND_WINDOWS}
                         shown={shown}
@@ -229,7 +227,22 @@ function SpendPage() {
                             })
                         }}
                     />
-                </PanelHeader>
+                }
+            >
+                {data === undefined ? (query.isPending ? 'reading the spend' : null) : spendLine(data)}
+            </PageHeader>
+            {!failed && (
+                <Panel data-testid="spend-budget">
+                    <PanelHeader label="This month">
+                        <span className="readout text-xs text-muted-foreground">
+                            {month === null ? '' : monthName(month)}
+                        </span>
+                    </PanelHeader>
+                    {data === undefined ? <PanelSkeleton rows={1} className="min-h-16" /> : <Budget month={month} />}
+                </Panel>
+            )}
+            <Panel data-testid="spend-totals">
+                <PanelHeader label="Totals" />
                 {data === undefined ? <PanelLoading query={query} className="min-h-20" /> : <Totals found={data} />}
             </Panel>
             {!failed && (
@@ -465,13 +478,13 @@ function Budget({ month }: { month: SpendMonth | null }) {
 function Totals({ found }: { found: SpendBreakdown }) {
     const { totals } = found
     // Each series by the name the legend and the table give it, the overseer's whole before idle ticks' part of it.
-    const cells = [
-        { label: 'total', hint: undefined, usd: totals.total, testId: 'total' },
+    const cells: ReadoutTile[] = [
+        { key: 'total', label: 'total', value: <Cost usd={totals.total} /> },
         ...TOTALS_ORDER.flatMap((key) => SERIES.filter((series) => series.key === key)).map((series) => ({
+            key: series.key.replace('_', '-'),
             label: series.label,
             hint: series.hint,
-            usd: totals[series.key],
-            testId: series.key.replace('_', '-'),
+            value: <Cost usd={totals[series.key]} />,
         })),
     ]
     const unpriced = unpricedText(found.unpriced)
@@ -481,39 +494,25 @@ function Totals({ found }: { found: SpendBreakdown }) {
     const ended = found.unpriced.some((u) => u.runs > 0)
     return (
         <div className="flex flex-col gap-3 p-3">
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-3 @4xl:grid-cols-10">
-                {cells.map(({ label, hint, usd, testId }) => (
-                    <div key={testId} className="flex flex-col gap-0.5">
-                        <dt className="panel-label" title={hint}>
-                            {label}
-                        </dt>
-                        <dd className="readout text-xl text-foreground" data-testid={`spend-total-${testId}`}>
-                            <Cost usd={usd} />
-                        </dd>
-                    </div>
-                ))}
-            </dl>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-3 @md:grid-cols-3 @4xl:grid-cols-10">
-                <div className="flex flex-col gap-0.5">
-                    <dt
-                        className="panel-label"
-                        title="Merged, or closed in the tracker, which may close it as its PR merges"
-                    >
-                        tickets done
-                    </dt>
-                    <dd className="readout text-xl text-foreground" data-testid="spend-done">
-                        {found.done}
-                    </dd>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                    <dt className="panel-label" title={PER_DONE_HINT}>
-                        per ticket done
-                    </dt>
-                    <dd className="readout text-xl text-foreground" data-testid="spend-per-done">
-                        <Cost usd={found.per_done} />
-                    </dd>
-                </div>
-            </dl>
+            <ReadoutTiles tiles={cells} testId="spend-total" className={TOTALS_GRID} />
+            <ReadoutTiles
+                tiles={[
+                    {
+                        key: 'done',
+                        label: 'tickets done',
+                        hint: 'Merged, or closed in the tracker, which may close it as its PR merges',
+                        value: found.done,
+                    },
+                    {
+                        key: 'per-done',
+                        label: 'per ticket done',
+                        hint: PER_DONE_HINT,
+                        value: <Cost usd={found.per_done} />,
+                    },
+                ]}
+                testId="spend"
+                className={cn(TOTALS_GRID, 'border-t pt-3')}
+            />
             {(spent || ended) && (
                 <p className="max-w-3xl text-xs text-muted-foreground" data-testid="spend-idle-share">
                     {spent && (
@@ -547,21 +546,18 @@ function ByDay({ days, span, unit }: { days: SpendDay[]; span: string; unit: 'da
             {/* Measured afresh for each window: another count of bars is another pitch. */}
             <DayChart key={days.length} bars={spendBars(days, clock)} testId="spend" />
             <DayChartLegend series={SERIES} testId="spend" />
-            <PanelScroll
+            <ChartTable
+                what={counted(days.length, unit)}
                 label={`Spend by ${unit}`}
                 className="max-h-60 overflow-x-auto"
-                data-testid="spend-table-scroll"
+                testId="spend-table-scroll"
             >
                 <table className="w-full border-collapse text-sm" data-testid="spend-table">
                     <thead className="sticky top-0 bg-surface">
                         <tr className="text-right">
                             <th className="panel-label pb-1.5 text-left font-normal">{unit}</th>
                             {SERIES.map((series) => (
-                                <th
-                                    key={series.key}
-                                    className="panel-label pb-1.5 pl-3 font-normal"
-                                    title={series.hint}
-                                >
+                                <th key={series.key} className="panel-label pb-1.5 pl-3 font-normal">
                                     {series.label}
                                 </th>
                             ))}
@@ -590,7 +586,7 @@ function ByDay({ days, span, unit }: { days: SpendDay[]; span: string; unit: 'da
                         ))}
                     </tbody>
                 </table>
-            </PanelScroll>
+            </ChartTable>
         </div>
     )
 }
@@ -624,11 +620,21 @@ function Tickets({ tickets, span }: { tickets: SpendTicket[]; span: string }) {
                                     <TicketTitle title={ticket.title} className="text-xs" />
                                 </span>
                             </th>
-                            <td className="readout pl-3" title={`${ticket.runs} runs, ${ticket.reviews} reviews`}>
-                                {ticket.runs + ticket.reviews}
-                            </td>
                             <td className="readout pl-3">
-                                <Cost usd={ticket.cost_usd} />
+                                <Tipped fact={`${ticket.runs} runs, ${ticket.reviews} reviews`}>
+                                    {ticket.runs + ticket.reviews}
+                                </Tipped>
+                            </td>
+                            <td className="pl-3">
+                                <CellBar
+                                    percent={barPercent(
+                                        ticket.cost_usd,
+                                        tickets.map((t) => t.cost_usd),
+                                    )}
+                                    valueClassName="w-16 text-right"
+                                >
+                                    <Cost usd={ticket.cost_usd} />
+                                </CellBar>
                             </td>
                             <td className="readout pl-3 text-left whitespace-nowrap text-muted-foreground">
                                 {doneText(ticket)}
@@ -888,20 +894,17 @@ function Models({
                 <thead className={PADDED_HEAD}>
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">model</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal" title={MODEL_RUNS_HINT}>
-                            runs
+                        <th className="panel-label pb-1.5 pl-3 font-normal">
+                            <Hinted hint={MODEL_RUNS_HINT}>runs</Hinted>
                         </th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">replies</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">spent</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap" title={PER_RUN_HINT}>
-                            per run
+                        <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
+                            <Hinted hint={PER_RUN_HINT}>per run</Hinted>
                         </th>
                         {ticket !== undefined && (
-                            <th
-                                className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap"
-                                title={WORKSPACE_HINT}
-                            >
-                                workspace per run
+                            <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
+                                <Hinted hint={WORKSPACE_HINT}>workspace per run</Hinted>
                             </th>
                         )}
                     </tr>
@@ -909,17 +912,19 @@ function Models({
                 <tbody className="font-mono text-xs">
                     {models.map((m) => (
                         <tr key={modelKey(m)} className="text-right" data-testid="spend-model">
-                            <th
-                                scope="row"
-                                className="w-full max-w-0 py-0.5 text-left font-normal"
-                                title={m.model === null ? unnamedHint(m.unread) : undefined}
-                            >
+                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
                                 {m.model === null ? (
-                                    <UnnamedModel unread={m.unread} className="block truncate" />
+                                    <Tip fact={unnamedHint(m.unread)}>
+                                        <span className="block truncate">
+                                            <UnnamedModel unread={m.unread} />
+                                        </span>
+                                    </Tip>
                                 ) : of === null || !listed.has(m.model) ? (
-                                    <span title={UNLISTED_HINT} className="block" data-testid="spend-model-unlisted">
-                                        <Clipped text={m.model} className="block readout" />
-                                    </span>
+                                    <Tip fact={m.model} mono detail={UNLISTED_HINT}>
+                                        <span className="block truncate readout" data-testid="spend-model-unlisted">
+                                            {m.model}
+                                        </span>
+                                    </Tip>
                                 ) : (
                                     <Link
                                         to="/workspace/runs"
@@ -934,8 +939,16 @@ function Models({
                             <td className={cn('readout pl-3', m.model === null && 'text-muted-foreground')}>
                                 {m.model === null ? '–' : m.replies}
                             </td>
-                            <td className="readout pl-3">
-                                <Cost usd={m.cost_usd} />
+                            <td className="pl-3">
+                                <CellBar
+                                    percent={barPercent(
+                                        m.cost_usd,
+                                        models.map((n) => n.cost_usd),
+                                    )}
+                                    valueClassName="w-16 text-right"
+                                >
+                                    <Cost usd={m.cost_usd} />
+                                </CellBar>
                             </td>
                             <td className="readout pl-3">
                                 <Cost usd={perRun(m)} />
@@ -997,11 +1010,11 @@ function Tools({ tools, kind, span }: { tools: ToolRow[]; kind: SpendKind | unde
                         <th className="panel-label pb-1.5 text-left font-normal">tool</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">calls</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">errors</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal" title={RETURNED_HINT}>
-                            returned
+                        <th className="panel-label pb-1.5 pl-3 font-normal">
+                            <Hinted hint={RETURNED_HINT}>returned</Hinted>
                         </th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal" title={EST_TOKENS_HINT}>
-                            ~tokens
+                        <th className="panel-label pb-1.5 pl-3 font-normal">
+                            <Hinted hint={EST_TOKENS_HINT}>~tokens</Hinted>
                         </th>
                     </tr>
                 </thead>
@@ -1012,13 +1025,23 @@ function Tools({ tools, kind, span }: { tools: ToolRow[]; kind: SpendKind | unde
                                 {/* The row's name, as the ticket table's title reads: medium weight, cut to fit. */}
                                 <Clipped text={tool.tool} className="block font-sans font-medium" />
                             </th>
-                            <td className="readout pl-3" title={`in ${tool.runs} runs`}>
-                                {tool.calls}
+                            <td className="readout pl-3">
+                                <Tipped fact={`in ${tool.runs} runs`}>{tool.calls}</Tipped>
                             </td>
                             <td className={cn('readout pl-3', tool.errors === 0 && 'text-muted-foreground')}>
                                 {tool.errors}
                             </td>
-                            <td className="readout pl-3">{tokenCount(tool.result_chars)}</td>
+                            <td className="pl-3">
+                                <CellBar
+                                    percent={barPercent(
+                                        tool.result_chars,
+                                        tools.map((t) => t.result_chars),
+                                    )}
+                                    valueClassName="readout w-12 text-right"
+                                >
+                                    {tokenCount(tool.result_chars)}
+                                </CellBar>
+                            </td>
                             <td className="readout pl-3">{tokenCount(tool.est_tokens)}</td>
                         </tr>
                     ))}
@@ -1101,8 +1124,8 @@ function Sessions({ sessions, span }: { sessions: SpendSessions | null; span: st
                 <tbody className="font-mono text-xs">
                     {shares.map(({ key, label, hint, share }) => (
                         <tr key={key} className="text-right" data-testid={`spend-sessions-${key}`}>
-                            <th scope="row" className="py-0.5 text-left font-normal" title={hint}>
-                                {label}
+                            <th scope="row" className="py-0.5 text-left font-normal">
+                                <Hinted hint={hint}>{label}</Hinted>
                             </th>
                             <td className="readout">{share.sessions}</td>
                             <td className="readout">
@@ -1149,16 +1172,16 @@ function CountTable({
                         <th className="panel-label pb-1.5 text-left font-normal">ticks</th>
                         <th className="panel-label pb-1.5 font-normal">count</th>
                         <th className="panel-label pb-1.5 font-normal">spent</th>
-                        <th className="panel-label pb-1.5 font-normal" title={NO_OVERSEER_HINT}>
-                            no overseer
+                        <th className="panel-label pb-1.5 font-normal">
+                            <Hinted hint={NO_OVERSEER_HINT}>no overseer</Hinted>
                         </th>
                     </tr>
                 </thead>
                 <tbody className="font-mono text-xs">
                     {rows.map((row) => (
                         <tr key={row.key} className="text-right" data-testid={`${testId}-${row.key}`}>
-                            <th scope="row" className="py-0.5 text-left font-normal" title={row.hint}>
-                                {row.label}
+                            <th scope="row" className="py-0.5 text-left font-normal">
+                                <Hinted hint={row.hint}>{row.label}</Hinted>
                             </th>
                             <td className="readout">{row.ticks}</td>
                             <td className="readout">

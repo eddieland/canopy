@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest'
 
-import type { HealthCounts, HealthDay } from '@/api/types'
+import type { HealthCounts, HealthDay, HealthOutcome } from '@/api/types'
 import type { Clock } from '@/lib/clock'
 
-import { countSum, HEALTH_SERIES, healthBars, healthDayHint, healthLine, healthWindow } from './health'
+import { countSum, HEALTH_SERIES, healthBars, healthDayHint, healthFigures, healthLine, healthWindow } from './health'
 
 const H24: Clock = { hours: '24', zone: false }
 const NONE: HealthCounts = { overseer: 0, workers: 0, plans: 0, chores: 0, reviews: 0, tasks: 0 }
 
 function day(name: string, ended: Partial<HealthCounts>, failed: Partial<HealthCounts> = {}): HealthDay {
     return { day: name, start: `${name}T00:00:00Z`, ended: { ...NONE, ...ended }, failed: { ...NONE, ...failed } }
+}
+
+function outcome(failed: boolean, usd: number | null): HealthOutcome {
+    return { kind: 'workers', what: 'implement', status: failed ? 'failed' : 'done', failed, runs: 1, cost_usd: usd }
 }
 
 describe('health', () => {
@@ -27,6 +31,19 @@ describe('health', () => {
         expect(healthLine({ days: 7, per_day: [day('2026-10-08', { reviews: 1 })] })).toBe(
             '0 of 1 run failed over 7 days',
         )
+    })
+
+    it("sums the window's headline figures: its runs, failures, their share, and what the failures cost", () => {
+        const week = [day('2026-10-07', { workers: 8 }, { workers: 2 }), day('2026-10-08', { chores: 2 })]
+        expect(
+            healthFigures({ per_day: week, outcomes: [outcome(true, 1.5), outcome(true, null), outcome(false, 9)] }),
+        ).toEqual({ runs: 10, failed: 2, rate: 0.2, failedUsd: 1.5 })
+        expect(healthFigures({ per_day: [day('2026-10-08', {})], outcomes: [outcome(true, null)] })).toEqual({
+            runs: 0,
+            failed: 0,
+            rate: null,
+            failedUsd: null,
+        })
     })
 
     it('says a day on hover with each kind that failed, by the legend', () => {

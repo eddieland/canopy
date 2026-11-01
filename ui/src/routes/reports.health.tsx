@@ -4,12 +4,15 @@ import { createFileRoute } from '@tanstack/react-router'
 import { healthReportQuery } from '@/api/queries'
 import type { HealthDay, HealthFailure, HealthOutcome, HealthRefusal, HealthReport } from '@/api/types'
 import { Age } from '@/components/age'
+import { ChartTable } from '@/components/chart-table'
 import { ChoreRunLink } from '@/components/chore-link'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
 import { LinkedText } from '@/components/linked-text'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { ReadoutTiles } from '@/components/readout-tiles'
+import type { ReadoutTile } from '@/components/readout-tiles'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
@@ -17,20 +20,23 @@ import { Chip, RunDot, Word } from '@/components/status'
 import { TaskLink, TaskRunLink } from '@/components/task-link'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
+import { Clipped } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
 import { useClock } from '@/lib/clock'
+import { counted } from '@/lib/descriptions'
 import {
     countSum,
     DEFAULT_HEALTH_WINDOW,
     HEALTH_SERIES,
     HEALTH_WINDOWS,
     healthBars,
+    healthFigures,
     healthLine,
     healthWindow,
 } from '@/lib/health'
 import { windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
-import { dayName, unpricedText } from '@/lib/spend'
+import { dayName, shareText, unpricedText } from '@/lib/spend'
 import { cn } from '@/lib/utils'
 
 interface HealthSearch {
@@ -43,6 +49,10 @@ const HELP =
     "that cost, the failed runs by day, the newest of them to open, and the overseer's asks a guard refused. A " +
     'failure is a run that did not do what it was started for: a worker that asked you a question, or one you ' +
     'stopped, did.'
+
+// What the failed tile counts, on its name's tip.
+const FAILED_HINT =
+    'The runs that did not do what they were started for: a worker that asked you a question, or one you stopped, did'
 
 // Each kind as the outcomes table heads its rows: the series' names, so a kind reads alike in the table and the chart.
 const KIND_NAME = Object.fromEntries(HEALTH_SERIES.map((s) => [s.key, s.label])) as Record<
@@ -72,11 +82,10 @@ function HealthPage() {
     const failed = data === undefined && query.error !== null
     return (
         <>
-            <PageHeader title="Health" help={HELP}>
-                {data === undefined ? (query.isPending ? 'reading how the runs ended' : null) : healthLine(data)}
-            </PageHeader>
-            <Panel data-testid="health-outcomes">
-                <PanelHeader label="How runs ended">
+            <PageHeader
+                title="Health"
+                help={HELP}
+                controls={
                     <WindowToggle
                         windows={HEALTH_WINDOWS}
                         shown={shown}
@@ -87,7 +96,13 @@ function HealthPage() {
                             })
                         }}
                     />
-                </PanelHeader>
+                }
+                links={!failed && <ReadoutTiles tiles={healthTiles(data)} testId="health" />}
+            >
+                {data === undefined ? (query.isPending ? 'reading how the runs ended' : null) : healthLine(data)}
+            </PageHeader>
+            <Panel data-testid="health-outcomes">
+                <PanelHeader label="How runs ended" />
                 {data === undefined ? (
                     <PanelLoading query={query} className="min-h-40" />
                 ) : (
@@ -126,6 +141,27 @@ function HealthPage() {
             )}
         </>
     )
+}
+
+/** The window's headline figures, each held in its place while the report is read. */
+function healthTiles(found: HealthReport | undefined): ReadoutTile[] {
+    const figures = found === undefined ? undefined : healthFigures(found)
+    return [
+        { key: 'runs', label: 'runs', hint: 'The runs that ended, of every kind', value: figures?.runs },
+        { key: 'failed', label: 'failed', hint: FAILED_HINT, value: figures?.failed },
+        {
+            key: 'rate',
+            label: 'failure rate',
+            hint: "The failed runs' share of the ended ones",
+            value: figures === undefined ? undefined : shareText(figures.rate),
+        },
+        {
+            key: 'failed-cost',
+            label: 'failures cost',
+            hint: 'What the failed runs cost, of those that reported a cost',
+            value: figures === undefined ? undefined : <Cost usd={figures.failedUsd} />,
+        },
+    ]
 }
 
 /**
@@ -204,17 +240,13 @@ function ByDay({ days, span }: { days: HealthDay[]; span: string }) {
             {/* Measured afresh for each window: another count of bars is another pitch. */}
             <DayChart key={days.length} bars={healthBars(days, clock)} testId="health" />
             <DayChartLegend series={HEALTH_SERIES} testId="health" />
-            <PanelScroll label="Failures by day" className="max-h-60 overflow-x-auto">
-                <table className="w-full border-collapse text-sm" data-testid="health-table">
+            <ChartTable what={counted(days.length, 'day')} label="Failures by day" className="max-h-60 overflow-x-auto">
+                <table className="border-collapse text-sm" data-testid="health-table">
                     <thead className="sticky top-0 bg-surface">
                         <tr className="text-right">
                             <th className="panel-label pb-1.5 text-left font-normal">day</th>
                             {HEALTH_SERIES.map((series) => (
-                                <th
-                                    key={series.key}
-                                    className="panel-label pb-1.5 pl-3 font-normal"
-                                    title={series.hint}
-                                >
+                                <th key={series.key} className="panel-label pb-1.5 pl-3 font-normal">
                                     {series.label}
                                 </th>
                             ))}
@@ -244,7 +276,7 @@ function ByDay({ days, span }: { days: HealthDay[]; span: string }) {
                         })}
                     </tbody>
                 </table>
-            </PanelScroll>
+            </ChartTable>
         </div>
     )
 }
@@ -272,9 +304,9 @@ function Failures({ failures, span }: { failures: HealthFailure[]; span: string 
                         <span className="flex">
                             <Chip>{f.what}</Chip>
                         </span>
-                        <span className="min-w-0 truncate text-xs text-muted-foreground" title={f.note}>
+                        <Clipped text={f.note} className="min-w-0 text-xs text-muted-foreground">
                             <LinkedText text={f.note} />
-                        </span>
+                        </Clipped>
                         <Cost usd={f.cost_usd} className="text-right text-xs text-muted-foreground" />
                         <Age at={f.started_at} variant="ago" className="text-right" />
                     </ListRow>

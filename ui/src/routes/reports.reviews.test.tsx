@@ -151,7 +151,7 @@ describe('the Reviews page', () => {
             ['2', '1', '0', '1', '3.0h'],
             ['1', '0', '2', '1', '–'],
         ])
-        expect(rows.map((row) => within(row).queryByTitle('dana') !== null)).toEqual([true, false])
+        expect(rows.map((row) => within(row).queryByText('dana') !== null)).toEqual([true, false])
         expect(rows.map((row) => within(row).queryByText('trusted') !== null)).toEqual([true, false])
     })
 
