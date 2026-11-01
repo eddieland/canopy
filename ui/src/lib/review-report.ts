@@ -1,7 +1,15 @@
 // The Reviews page: where review feedback on canopy's PRs came from, how long it took, and what answering it cost.
 // The numbers are the server's (`canopy.core.review_report`); this lays them out.
 
-import type { ReviewsDay, ReviewsEffort, ReviewsPrevious, ReviewsReport, ReviewsRound } from '@/api/types'
+import type {
+    ReviewsDay,
+    ReviewsEffort,
+    ReviewsPrevious,
+    ReviewsPullRequest,
+    ReviewsReport,
+    ReviewsRound,
+    ReviewsTurnaround,
+} from '@/api/types'
 import type { DayBar, DayChartSeries } from '@/lib/chart'
 import type { Clock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
@@ -213,4 +221,65 @@ export function draftsHint(found: Pick<ReviewsReport, 'drafts'>): string {
         return 'The drafts of its reviews published to GitHub: none was made'
     }
     return `Of ${counted(drafted, 'draft')} made: ${found.drafts.map((d) => `${d.status} ${d.drafts}`).join(', ')}`
+}
+
+/** The parts of canopy's turnaround on feedback, in the order the clock runs through them, each in words. */
+export const TURNAROUND_PARTS: readonly { key: keyof ReviewsTurnaround; label: string }[] = [
+    { key: 'to_plan_hours', label: 'review to plan' },
+    { key: 'to_approval_hours', label: 'plan to approval' },
+    { key: 'to_resume_hours', label: 'approval to resume' },
+    { key: 'to_push_hours', label: 'resume to push' },
+]
+
+// What canopy's turnaround counts, in the tile's tip and the rounds' column's.
+const TURNAROUND_WHAT = 'From the review that started a feedback round to the push that answered it'
+
+/** What a round's turnaround counts, in its column's tip. */
+export const ROUND_TURNAROUND_HINT = `${TURNAROUND_WHAT}; hover a time for its parts`
+
+/**
+ * A turnaround's parts in words, in the clock's order: `review to plan 2.0h, plan to approval 1.0h, approval to resume
+ * 5m, resume to push 1.2h`.
+ */
+export function turnaroundParts(turnaround: ReviewsTurnaround): string {
+    return TURNAROUND_PARTS.map((p) => `${p.label} ${hoursText(turnaround[p.key])}`).join(', ')
+}
+
+/**
+ * The median turnaround tile's tip: what it counts, over how many rounds, and the median of each part, where the time
+ * went. Each part's median is its own, so the parts need not sum to the whole; with no round answered, it says so.
+ */
+export function turnaroundHint(found: Pick<ReviewsReport, 'turnarounds' | 'median_turnaround'>): string {
+    if (found.median_turnaround === null) {
+        return `${TURNAROUND_WHAT}: no round was answered in the window`
+    }
+    const over = counted(found.turnarounds, 'answered round')
+    const parts = turnaroundParts(found.median_turnaround)
+    return `${TURNAROUND_WHAT}, the median over ${over}. Each part's own median: ${parts}`
+}
+
+/**
+ * A round's turnaround in its cell's tip: its parts, or why it has none, the first step the clock is still waiting on.
+ */
+export function roundTurnaroundTitle(
+    round: Pick<ReviewsRound, 'turnaround' | 'review_at' | 'approved_at' | 'resume_started_at'>,
+): string {
+    if (round.turnaround !== null) {
+        return turnaroundParts(round.turnaround)
+    }
+    if (round.review_at === null) {
+        return 'No review before the plan to start the clock'
+    }
+    if (round.approved_at === null) {
+        return 'Not approved, so nothing went ahead on it'
+    }
+    if (round.resume_started_at === null) {
+        return 'No resume went ahead on it yet'
+    }
+    return 'No push seen yet: the clock stops at the first check run on a new head'
+}
+
+/** A PR's rounds to approval in its cell's tip: none for a PR approved, else that it has no approval yet. */
+export function roundsToApprovalTitle(pr: Pick<ReviewsPullRequest, 'approved_at'>): string {
+    return pr.approved_at === null ? 'No approval yet' : ''
 }

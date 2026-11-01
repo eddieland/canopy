@@ -14,6 +14,10 @@ import {
     reviewsDayHint,
     reviewsLine,
     reviewsWindow,
+    roundsToApprovalTitle,
+    roundTurnaroundTitle,
+    turnaroundHint,
+    turnaroundParts,
     WAIT_SERIES,
 } from './review-report'
 
@@ -118,5 +122,46 @@ describe('canopyReviewerFigures and draftsHint', () => {
     it('says where the drafts stand, or that none was made', () => {
         expect(draftsHint(found)).toBe('Of 3 drafts made: published 1, discarded 2')
         expect(draftsHint({ drafts: [] })).toBe('The drafts of its reviews published to GitHub: none was made')
+    })
+})
+
+describe("canopy's turnaround", () => {
+    const parts = { to_plan_hours: 0.5, to_approval_hours: 2, to_resume_hours: 0.1, to_push_hours: 1.25 }
+
+    it('names its parts in the order the clock runs through them', () => {
+        expect(turnaroundParts(parts)).toBe(
+            'review to plan 30m, plan to approval 2.0h, approval to resume 6m, resume to push 1.3h',
+        )
+    })
+
+    it("says over how many rounds the tile's median is, each part's own median, or that none was answered", () => {
+        expect(turnaroundHint({ turnarounds: 2, median_turnaround: parts })).toBe(
+            'From the review that started a feedback round to the push that answered it, the median over 2 answered ' +
+                "rounds. Each part's own median: review to plan 30m, plan to approval 2.0h, approval to resume 6m, " +
+                'resume to push 1.3h',
+        )
+        expect(turnaroundHint({ turnarounds: 0, median_turnaround: null })).toBe(
+            'From the review that started a feedback round to the push that answered it: no round was answered ' +
+                'in the window',
+        )
+    })
+
+    it("gives a round's parts, or the first step its clock still waits on", () => {
+        const round = { turnaround: null, review_at: null, approved_at: null, resume_started_at: null }
+        const at = '2026-10-07T10:00:00Z'
+        expect(roundTurnaroundTitle({ ...round, turnaround: parts })).toBe(turnaroundParts(parts))
+        expect(roundTurnaroundTitle(round)).toBe('No review before the plan to start the clock')
+        expect(roundTurnaroundTitle({ ...round, review_at: at })).toBe('Not approved, so nothing went ahead on it')
+        expect(roundTurnaroundTitle({ ...round, review_at: at, approved_at: at })).toBe(
+            'No resume went ahead on it yet',
+        )
+        expect(roundTurnaroundTitle({ ...round, review_at: at, approved_at: at, resume_started_at: at })).toBe(
+            'No push seen yet: the clock stops at the first check run on a new head',
+        )
+    })
+
+    it('says a PR with no rounds to approval has no approval yet', () => {
+        expect(roundsToApprovalTitle({ approved_at: null })).toBe('No approval yet')
+        expect(roundsToApprovalTitle({ approved_at: '2026-10-07T10:00:00Z' })).toBe('')
     })
 })

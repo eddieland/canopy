@@ -330,9 +330,9 @@ test("what the runs spent on each model, every kind's summed, or one kind's from
     // Run 40's failed read among them, and run 42, which no tick has read yet.
     await expect(models.nth(2).getByRole('rowheader')).toHaveText('unread')
     await expect(models.nth(2).getByRole('cell')).toHaveText(['5', '–', '$2.53', '$0.51'])
-    // ABC-099's feedback plan run, which reported no session, and no cost.
+    // ABC-099's two feedback plan runs, which reported no session, and no cost.
     await expect(models.last().getByRole('rowheader')).toHaveText('none: no session named one')
-    await expect(models.last().getByRole('cell')).toHaveText(['1', '–', '–', '–'])
+    await expect(models.last().getByRole('cell')).toHaveText(['2', '–', '–', '–'])
     // What the unread row holds is said in the header, since it sits near the end and shrinks as ticks read it.
     await expect(page.getByTestId('spend-model-unread')).toHaveText(/^\d+% unread$/u)
 })

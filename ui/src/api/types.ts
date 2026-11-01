@@ -239,6 +239,8 @@ export type ReviewsReviewer = Schemas['ReviewsReviewer']
 export type ReviewsDay = Schemas['ReviewsDay']
 /** A feedback plan made in a window, how it was approved, and the resumes after it. */
 export type ReviewsRound = Schemas['ReviewsRound']
+/** How long canopy took to answer a round of feedback, in four parts, from the review to the push that answered it. */
+export type ReviewsTurnaround = Schemas['ReviewsTurnaround']
 /** A window's feedback plans of one effort, beside the resumes that followed. */
 export type ReviewsEffort = Schemas['ReviewsEffort']
 /** canopy's review runs of one purpose and status in a window. */

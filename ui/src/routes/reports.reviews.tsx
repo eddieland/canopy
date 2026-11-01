@@ -23,7 +23,7 @@ import type { ReadoutTile } from '@/components/readout-tiles'
 import { RunLink } from '@/components/run-link'
 import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
-import { Clipped, Hinted } from '@/components/tip'
+import { Clipped, Hinted, Tipped } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
 import { barPercent } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
@@ -45,10 +45,14 @@ import {
     PURPOSE_HINT,
     resumesPerPlan,
     REVIEWS_WINDOWS,
+    ROUND_TURNAROUND_HINT,
+    roundsToApprovalTitle,
+    roundTurnaroundTitle,
     reviewsBars,
     reviewsFigures,
     reviewsLine,
     reviewsWindow,
+    turnaroundHint,
     WAIT_SERIES,
 } from '@/lib/review-report'
 import { dayName } from '@/lib/spend'
@@ -61,8 +65,8 @@ interface ReviewsSearch {
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP = [
     "Where review feedback on canopy's PRs came from: how soon each first review came after a PR was ready or asked",
-    'for one, who reviews and whether you trust them, the feedback rounds with what each resume cost beside the',
-    "planner's estimate, canopy's own reviewer, and each PR.",
+    'for one, who reviews and whether you trust them, the feedback rounds with how long canopy took to answer each and',
+    "what its resumes cost beside the planner's estimate, canopy's own reviewer, and each PR to its approval.",
     LIMITS_TEXT,
 ].join(' ')
 
@@ -75,6 +79,12 @@ const REVIEWER_WAIT_HINT = `${WAIT_HINT}; the bar against the slowest reviewer`
 
 // What the median first review counts, in its tile's tip, before what it leaves out.
 const MEDIAN_HINT = "From when each PR began waiting on a review to its first review, on GitHub's clock, the median"
+
+// What a PR's first review counts, in its column's tip, before its bar.
+const PR_FIRST_HINT = "From when it began waiting on a review to its first review, on GitHub's clock"
+
+// What the median turnaround counts, in its tile's tip while the report is read.
+const TURNAROUND_HINT = 'From the review that started a feedback round to the push that answered it, the median'
 
 // What a trusted reviewer's chip means, on its hover.
 const TRUSTED_MEANING = 'In trust.trusted_reviewers: a worker addresses their feedback unasked'
@@ -181,7 +191,7 @@ function ReviewsPage() {
                         ) : (
                             <PullRequestTable
                                 rows={data.pull_requests}
-                                columns={PR_COLUMNS}
+                                columns={prColumns(data.pull_requests)}
                                 label="Reviews by pull request"
                                 testId="reviews"
                             />
@@ -195,7 +205,8 @@ function ReviewsPage() {
 
 /**
  * The window's headline figures, each held in its place while the report is read, and each against the window
- * before's: a quicker first review is better.
+ * before's where the page has it: a quicker first review is better. canopy's median turnaround has its parts in its
+ * tip.
  */
 function reviewsTiles(found: ReviewsReport | undefined): ReadoutTile[] {
     const figures = found === undefined ? undefined : reviewsFigures(found)
@@ -236,6 +247,13 @@ function reviewsTiles(found: ReviewsReport | undefined): ReadoutTile[] {
             hint: 'The feedback plans written',
             value: figures?.rounds,
             delta: readoutDelta(figures?.rounds, before?.rounds, wholeChange),
+        },
+        {
+            // canopy's side of the clock; the window before has no figure of it, so it has no delta.
+            key: 'turnaround',
+            label: 'median turnaround',
+            hint: found === undefined ? TURNAROUND_HINT : turnaroundHint(found),
+            value: found === undefined ? undefined : hoursText(found.median_turnaround_hours),
         },
     ]
 }
@@ -302,9 +320,10 @@ function Waits({ found, span }: { found: ReviewsReport; span: string }) {
 
 /**
  * Who left feedback, the most reviews first: each login, trusted or not by `trust.trusted_reviewers`, with their
- * reviews, the ones that asked for changes, comments, the PRs they reviewed, and their median wait. Their reviews have
- * a bar against the busiest reviewer's and their wait one against the slowest's, so the busy reviewer and the quick
- * one read without arithmetic. Bots and each PR's own author are left out, as the monthly report leaves them.
+ * reviews, the ones that asked for changes and that approved, comments, the PRs they reviewed, and their median wait.
+ * Their reviews have a bar against the busiest reviewer's and their wait one against the slowest's, so the busy
+ * reviewer and the quick one read without arithmetic. Bots and each PR's own author are left out, as the monthly
+ * report leaves them.
  */
 function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: string }) {
     if (reviewers.length === 0) {
@@ -320,6 +339,7 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
                             <Hinted hint={REVIEWS_HINT}>reviews</Hinted>
                         </th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">changes</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">approved</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">comments</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">PRs</th>
                         <th className="panel-label pb-1.5 pl-3 text-left font-normal">
@@ -356,6 +376,7 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
                             <td className={cn('readout pl-3', r.changes_requested > 0 && 'text-status-blocked')}>
                                 {r.changes_requested}
                             </td>
+                            <td className={cn('readout pl-3', r.approved > 0 && 'text-status-done')}>{r.approved}</td>
                             <td className="readout pl-3 text-muted-foreground">{r.comments}</td>
                             <td className="readout pl-3 text-muted-foreground">{r.pull_requests}</td>
                             <td className="readout pl-3 text-left">
@@ -377,7 +398,10 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
     )
 }
 
-/** The window's feedback plans, the newest first: each with its ticket, how it was approved, and its run. */
+/**
+ * The window's feedback plans, the newest first: each with its ticket, how it was approved, and its run, and canopy's
+ * turnaround on it, from the review that started it to the push that answered it.
+ */
 function Rounds({ rounds, span }: { rounds: ReviewsRound[]; span: string }) {
     if (rounds.length === 0) {
         return <Empty size="panel">no feedback plan was written in these {span}</Empty>
@@ -393,6 +417,9 @@ function Rounds({ rounds, span }: { rounds: ReviewsRound[]; span: string }) {
                         <th className="panel-label pb-1.5 pl-3 font-normal">effort</th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">resumes</th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">spent</th>
+                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">
+                            <Hinted hint={ROUND_TURNAROUND_HINT}>turnaround</Hinted>
+                        </th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">written</th>
                     </tr>
                 </thead>
@@ -406,7 +433,10 @@ function Rounds({ rounds, span }: { rounds: ReviewsRound[]; span: string }) {
     )
 }
 
-/** A feedback plan's row: its run, its ticket, how it went ahead, its estimate, the resumes after it, what it cost. */
+/**
+ * A feedback plan's row: its run, its ticket, how it went ahead, its estimate, the resumes after it, what it cost, and
+ * its turnaround, with its parts or why it has none in the time's tip.
+ */
 function Round({ round }: { round: ReviewsRound }) {
     const spent = [round.plan_cost_usd, round.resume_cost_usd].filter((c) => c !== null)
     return (
@@ -422,6 +452,9 @@ function Round({ round }: { round: ReviewsRound }) {
             <td className="readout pl-3 text-right">{round.resumes}</td>
             <td className="readout pl-3 text-right text-muted-foreground">
                 <Cost usd={spent.length === 0 ? null : spent.reduce((sum, c) => sum + c, 0)} />
+            </td>
+            <td className="readout pl-3 text-right" data-testid="reviews-round-turnaround">
+                <Tipped fact={roundTurnaroundTitle(round)}>{hoursText(round.turnaround_hours)}</Tipped>
             </td>
             <td className="pl-3 text-right whitespace-nowrap">
                 <Age at={round.created_at} variant="ago" />
@@ -577,40 +610,61 @@ function CanopyReviewer({ found, span }: { found: ReviewsReport; span: string })
     )
 }
 
-// What the per-PR table counts of each PR: how soon its first review came, its feedback in the window, its rounds and
-// what they cost, and how long it took from ready to merge.
-const PR_COLUMNS: readonly PullRequestColumn<ReviewsPullRequest>[] = [
-    {
-        key: 'first',
-        label: 'first review',
-        hint: "From when it began waiting on a review to its first review, on GitHub's clock",
-        cell: (pr) => hoursText(pr.first_review_hours),
-        title: (pr) =>
-            pr.waiting_since === null ? 'No ready time from GitHub: read before canopy kept them, or a draft' : '',
-    },
-    { key: 'reviews', label: 'reviews', cell: (pr) => pr.reviews },
-    {
-        key: 'changes',
-        label: 'changes',
-        hint: 'Its reviews that asked for changes',
-        cell: (pr) => (
-            <span className={cn(pr.changes_requested > 0 && 'text-status-blocked')}>{pr.changes_requested}</span>
-        ),
-    },
-    { key: 'comments', label: 'comments', cell: (pr) => pr.comments, muted: true },
-    { key: 'rounds', label: 'rounds', hint: 'Feedback plans that read it', cell: (pr) => pr.rounds },
-    {
-        key: 'cost',
-        label: 'spent',
-        hint: 'What its feedback plans and the resumes after them cost',
-        cell: (pr) => <Cost usd={pr.cost_usd} />,
-        muted: true,
-    },
-    {
-        key: 'merge',
-        label: 'ready to merge',
-        hint: "From when it last became ready to its merge, on GitHub's clock",
-        cell: (pr) => hoursText(pr.hours_to_merge),
-        muted: true,
-    },
-]
+// What the per-PR table counts of each PR: how soon its first review came, with a bar against the slowest PR's, its
+// feedback in the window, its approvals, its rounds and how many came before its first approval, what they cost, and
+// how long it took from ready to merge.
+function prColumns(rows: readonly ReviewsPullRequest[]): PullRequestColumn<ReviewsPullRequest>[] {
+    const waits = rows.map((pr) => pr.first_review_hours)
+    return [
+        {
+            key: 'first',
+            label: 'first review',
+            hint: `${PR_FIRST_HINT}; the bar against the slowest PR's`,
+            cell: (pr) => (
+                <CellBar percent={barPercent(pr.first_review_hours, waits)} valueClassName="w-12 text-right">
+                    {hoursText(pr.first_review_hours)}
+                </CellBar>
+            ),
+            title: (pr) =>
+                pr.waiting_since === null ? 'No ready time from GitHub: read before canopy kept them, or a draft' : '',
+        },
+        { key: 'reviews', label: 'reviews', cell: (pr) => pr.reviews },
+        {
+            key: 'changes',
+            label: 'changes',
+            hint: 'Its reviews that asked for changes',
+            cell: (pr) => (
+                <span className={cn(pr.changes_requested > 0 && 'text-status-blocked')}>{pr.changes_requested}</span>
+            ),
+        },
+        {
+            key: 'approved',
+            label: 'approved',
+            hint: 'Its reviews that approved it',
+            cell: (pr) => <span className={cn(pr.approved > 0 && 'text-status-done')}>{pr.approved}</span>,
+        },
+        { key: 'comments', label: 'comments', cell: (pr) => pr.comments, muted: true },
+        { key: 'rounds', label: 'rounds', hint: 'Feedback plans that read it', cell: (pr) => pr.rounds },
+        {
+            key: 'to-approval',
+            label: 'rounds to approval',
+            hint: 'The feedback plans that read it and were approved before its first approval',
+            cell: (pr) => pr.rounds_to_approval ?? '–',
+            title: roundsToApprovalTitle,
+        },
+        {
+            key: 'cost',
+            label: 'spent',
+            hint: 'What its feedback plans and the resumes after them cost',
+            cell: (pr) => <Cost usd={pr.cost_usd} />,
+            muted: true,
+        },
+        {
+            key: 'merge',
+            label: 'ready to merge',
+            hint: "From when it last became ready to its merge, on GitHub's clock",
+            cell: (pr) => hoursText(pr.hours_to_merge),
+            muted: true,
+        },
+    ]
+}

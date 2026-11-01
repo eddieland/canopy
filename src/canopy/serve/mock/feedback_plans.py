@@ -5,10 +5,15 @@ run 45's drafts answer them, and bob's to change, the debounce made a shared con
 The plan waits on the operator, and is stale: carol reviewed the PR after it was written. What it saw is recorded
 with it as the planner's own run records it, so the harness computes that in code, as it would for a real plan.
 
+The round before it is the one run 45 answered (`seed_answered`): run 47 planned alice's review and bob's question, its
+planner approved the plan, run 45 went ahead on it, and its push's checks came back (`ci`). Run 46's plan superseded
+it, so it is in PR 88's history but not on its page; it times canopy's turnaround in the week's Reviews report.
+
 Every other state is on a mobile PR of its own, each its ticket's one unit (`STATES`): a plan that waits and is not
 stale, one the operator approved with an item left out, one its planner approved since it changes no code, one a
-`resume` spent, one that covers no review item, one whose file is gone, and one of ten items from four reviewers, a
-bot among them and one with a long name. They are eight days old, so the spend pages' default week, and the counts of
+`resume` spent, whose push the `vcs` source saw as checks on a new head, so the Reviews page times canopy's turnaround
+on it, one that covers no review item, one whose file is gone, and one of ten items from four reviewers, a bot among
+them and one with a long name. They are eight days old, so the spend pages' default week, and the counts of
 what happened since a time, leave them out; the lists that show every ticket, PR, and run show them last.
 """
 
@@ -19,9 +24,20 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from canopy.core import plans, records
-from canopy.core.vocab import Phase, PlanStatus, Proposal, ReviewItem, ReviewState, RunKind, RunStatus
+from canopy.core.vocab import (
+    CheckConclusion,
+    Phase,
+    PlanEffort,
+    PlanStatus,
+    Proposal,
+    ReviewItem,
+    ReviewState,
+    RunKind,
+    RunStatus,
+)
 from canopy.runs import feedback_items, feedback_plans
-from canopy.serve.mock.reviews import PR_88
+from canopy.serve.mock import drafts
+from canopy.serve.mock.reviews import PR_88, SHA_88
 
 if TYPE_CHECKING:
     import sqlite3
@@ -73,11 +89,54 @@ _ITEMS = (
         "Kept 250 ms, which ABC-099 asks for, and moved it into `SEARCH_DEBOUNCE_MS` so the inputs stop drifting.",
     ),
 )
+#: The run that planned the round run 45 answered, and when it ran, in minutes after T0: after alice's and bob's
+#: feedback, before run 45 started.
+ANSWERED_RUN = 47
+_ANSWERED_STARTED, _ANSWERED_ENDED = -45, -42
+#: When its planner's approval was recorded, in minutes after T0.
+_ANSWERED_APPROVED = -41
+_ANSWERED_TEXT = """# Feedback plan: ABC-099
+
+alice's review of acme/web#88, her two threads, and bob's question.
+
+## Items
+
+### Item 4102337001: leave
+
+alice's review asks for changes; its threads are the work, below.
+
+### Item 2468013579: change
+
+Move `setLoading(false)` into a `finally`, skipped for an aborted request, so a failed search clears the spinner.
+
+### Item 2468013601: decline
+
+Keep 250 ms, which the ticket asks for, and say why on the thread.
+
+### Item 2468013644: change
+
+Import `Result` as a type.
+
+## Checks
+
+Every check passed at the head.
+"""
+_ANSWERED_ITEMS = (
+    # item, id, proposal, reply
+    (ReviewItem.REVIEW, _REVIEW, Proposal.LEAVE, None),
+    (ReviewItem.COMMENT, _ALICE, Proposal.CHANGE, "Moved `setLoading(false)` into a `finally`."),
+    (ReviewItem.COMMENT, _BOB, Proposal.DECLINE, "250 ms is what the ticket asks for."),
+    (ReviewItem.COMMENT, 2_468_013_644, Proposal.CHANGE, None),
+)
 _DAY = 24 * 60
 #: How long a state's plan run ran, in minutes.
 _PLANNING = 6
 #: How long the `resume` that spent a state's plan ran, in minutes.
 _RESUMING = 22
+#: How long after that `resume` ended its push's checks were observed, in minutes.
+_CHECKING = 4
+#: The checks a spent state's push ran, each passing.
+_PUSH_CHECKS = ("lint", "ios-unit")
 #: The reviewer with the longest name GitHub allows but one, for the stress case's rows.
 LONG_AUTHOR = "maximiliana-vanderberghe-okonkwo-smith"
 
@@ -786,6 +845,67 @@ def seed_states(
         _plan(conn, state_dir, at, trust, state, slot=slot)
 
 
+def seed_answered(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str], slot: str) -> None:
+    """Insert run 47, in web's `slot`, and its plan of PR 88's feedback, which run 45 went ahead on and answered.
+
+    Its planner approved it, so no message of the operator's says so. Run 46's plan replaced it, so it is recorded
+    superseded, after every state's plan so their ids stay as they were. It read PR 88 at the head before run 45's push.
+    """
+    result = {
+        "status": "done",
+        "summary": "Planned PR 88's round: the spinner and the nit to change, bob's to decline.",
+    }
+    records.insert(
+        records.Run,
+        id=ANSWERED_RUN,
+        tick_id=1,
+        ticket_key=_KEY,
+        kind=RunKind.FEEDBACK_PLAN,
+        branch="agent/ABC-099-search",
+        started_at=at(_ANSWERED_STARTED),
+        ended_at=at(_ANSWERED_ENDED),
+        status=RunStatus.DONE,
+        result_json=json.dumps(result),
+        log_path=str(state_dir / "runs" / f"{ANSWERED_RUN}.log"),
+        private=0,
+    ).run(conn)
+    records.insert(
+        records.RunSlot,
+        run_id=ANSWERED_RUN,
+        repo="web",
+        slot_path=slot,
+        lease_id=f"lease-{ANSWERED_RUN}",
+        lease_holder="canopy:ABC-099",
+        base_branch="main",
+    ).run(conn)
+    written = plans.write(state_dir, _KEY, ANSWERED_RUN, _ANSWERED_TEXT)
+    [plan_id] = (
+        records.insert(
+            records.FeedbackPlan,
+            ticket_key=_KEY,
+            run_id=ANSWERED_RUN,
+            created_at=at(_ANSWERED_ENDED),
+            status=PlanStatus.SUPERSEDED,
+            sha256=written.sha256,
+            size=written.size,
+            approved_sha256=written.sha256,
+            approved_at=at(_ANSWERED_APPROVED),
+            effort=PlanEffort.SMALL,
+            approved_channel=plans.PLANNER,
+            approved_reason="a small fix, a nit, and a decline with its reason; nothing touches security or the API",
+            spent_run_id=drafts.RUN,
+        )
+        .returning("id")
+        .run(conn)
+        .fetchone()
+    )
+    records.insert_rows(
+        records.FeedbackPlanItem,
+        ("plan_id", "number", "pr_url", "item", "item_id", "proposal", "reply"),
+    ).many(conn, [(plan_id, n, PR_88, *item) for n, item in enumerate(_ANSWERED_ITEMS, start=1)])
+    records.insert(records.FeedbackPlanPr, plan_id=plan_id, pr_url=PR_88, head_sha=SHA_88).run(conn)
+
+
 def _review(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
     """The review carol left, as the reader's next whole read of PR 88 holds it, with all else it read again."""
     read_at = at(-5)
@@ -1009,7 +1129,11 @@ def _spend(
     *,
     slot: str,
 ) -> None:
-    """The `resume` that went ahead on the state's approved plan, the run after its plan's, which spent it."""
+    """The `resume` that went ahead on the state's approved plan, the run after its plan's, which spent it.
+
+    Its push is the checks a `vcs` source observed passing on the PR's next head, soon after it ended: the push that
+    answered the round.
+    """
     run = state.run + 1
     _run(
         conn,
@@ -1023,6 +1147,24 @@ def _spend(
     )
     records.insert(records.RunReason, run_id=run, reason="review").run(conn)
     records.update(records.FeedbackPlan).set(spent_run_id=run).where("id = ?", plan_id).run(conn)
+    pushed = f"{state.number:02d}a" * 13 + "a"
+    records.insert_rows(
+        records.ObservedCheckRun,
+        ("pr_url", "run_id", "name", "head_sha", "conclusion", "observed_at"),
+    ).many(
+        conn,
+        [
+            (
+                state.url,
+                9_300_000 + 10 * state.number + i,
+                name,
+                pushed,
+                CheckConclusion.SUCCESS,
+                at(state.ended + _CHECKING),
+            )
+            for i, name in enumerate(_PUSH_CHECKS)
+        ],
+    )
 
 
 def _run(

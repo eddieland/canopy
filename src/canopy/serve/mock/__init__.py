@@ -372,6 +372,8 @@ def seed(directory: Path) -> Backend:
                 repo=str(root),
                 slot=slot_path(root, "mobile", 1),
             )
+            # After the states, so their plans keep their ids; it writes no message.
+            feedback_plans.seed_answered(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
             _every_kind(ctx.conn)
             review_waits.seed(ctx.conn, at)
             # Last, so its runs take ids after every other fixture's.
