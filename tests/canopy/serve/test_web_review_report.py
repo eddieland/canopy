@@ -12,6 +12,7 @@ import pytest
 
 from canopy.core import db, records, spend, sql
 from canopy.core.vocab import (
+    CheckConclusion,
     DismissalReason,
     PlanEffort,
     PlanStatus,
@@ -23,7 +24,7 @@ from canopy.core.vocab import (
     RunKind,
 )
 from canopy.infra import resources
-from tests.canopy.helpers import context, earlier, present, worker_ran
+from tests.canopy.helpers import check_ran, context, earlier, present, worker_ran
 from tests.canopy.web_helpers import client, signed_in_client
 
 if TYPE_CHECKING:
@@ -168,6 +169,93 @@ def test_the_reviews_report_reads_feedback_rounds_and_canopys_reviewer_from_the_
     assert found["canopy_trusted"] is True
 
 
+def test_the_reviews_report_times_a_round_from_the_feedback_to_the_push_and_counts_approvals(
+    canopy_env: CanopyEnv,
+) -> None:
+    """A review, a plan approved on the web, a resume, and a new head; then the PR approved after that one round."""
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    conn, now = ctx.conn, datetime.now(UTC)
+    worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 4), prs={"web": TIMED})
+    observed(conn, TIMED, ready_at=earlier(now, 4), merged_at=earlier(now, 1))
+    check_ran(conn, TIMED, "aaa", "test", CheckConclusion.SUCCESS, earlier(now, 3, 20))
+    # A comment before the plan an earlier round went ahead on, which this round does not answer.
+    said(conn, TIMED, "dana", earlier(now, 3, 18))
+    plan(conn, earlier(now, 3, 14), cost=None, effort=None, channel="cli")
+    said(conn, TIMED, "dana", earlier(now, 3, 12), ReviewState.CHANGES_REQUESTED)
+    said(conn, TIMED, "erin", earlier(now, 3, 10))
+    # Written two hours after the review, approved on the web an hour later, and a resume an hour after that, whose
+    # push a source saw three hours into it.
+    plan_id = plan(conn, earlier(now, 3, 10), cost=None, effort=PlanEffort.SMALL, channel="web", current=True)
+    records.update(records.FeedbackPlan).set(approved_at=earlier(now, 3, 9)).where(
+        "id = ?",
+        plan_id,
+    ).run(conn)
+    records.update(records.FeedbackPlanPr).set(head_sha="aaa").where("plan_id = ?", plan_id).run(conn)
+    resume = worker_ran(conn, RunKind.RESUME, earlier(now, 3, 8), prs={"web": TIMED})
+    records.update(records.Run).set(feedback_plan_id=plan_id, ended_at=earlier(now, 3, 6)).where(
+        "id = ?",
+        resume,
+    ).run(conn)
+    # A rerun on the head the plan read, which is not the push.
+    check_ran(conn, TIMED, "aaa", "test", CheckConclusion.SUCCESS, earlier(now, 3, 7))
+    check_ran(conn, TIMED, "bbb", "test", CheckConclusion.SUCCESS, earlier(now, 3, 5))
+    # A plan written before the PR's approval and approved after it: not a round before the approval.
+    late = plan(conn, earlier(now, 2, 2), cost=None, effort=None, channel="cli")
+    records.update(records.FeedbackPlan).set(approved_at=earlier(now, 1)).where("id = ?", late).run(conn)
+    said(conn, TIMED, "dana", earlier(now, 2), ReviewState.APPROVED)
+    said(conn, TIMED, "erin", earlier(now, 1, 12), ReviewState.APPROVED)
+
+    c, _ = signed_in_client(ctx)
+    found = c.get("/api/reports/reviews").json()
+    [answered] = [r for r in found["rounds"] if r["plan_id"] == plan_id]
+    assert (answered["review_at"], answered["approved_at"], answered["approved_channel"]) == (
+        _iso(earlier(now, 3, 12)),
+        _iso(earlier(now, 3, 9)),
+        "web",
+    )
+    assert (answered["resume_started_at"], answered["resume_ended_at"], answered["answered_at"]) == (
+        _iso(earlier(now, 3, 8)),
+        _iso(earlier(now, 3, 6)),
+        _iso(earlier(now, 3, 5)),
+    )
+    assert answered["turnaround_hours"] == pytest.approx(7.0)
+    parts = {
+        "to_plan_hours": 2.0,
+        "to_approval_hours": 1.0,
+        "to_resume_hours": 1.0,
+        "to_push_hours": 3.0,
+    }
+    assert answered["turnaround"] == pytest.approx(parts)
+    assert (found["turnarounds"], found["median_turnaround_hours"]) == (1, pytest.approx(7.0))
+    assert found["median_turnaround"] == pytest.approx(parts)
+    [pr] = found["pull_requests"]
+    assert (pr["approved"], pr["approved_at"], pr["rounds_to_approval"]) == (2, _iso(earlier(now, 2)), 2)
+    assert {r["author"]: r["approved"] for r in found["reviewers"]} == {"dana": 1, "erin": 1}
+
+
+def test_a_round_without_a_push_or_feedback_is_not_timed(canopy_env: CanopyEnv) -> None:
+    """A plan whose resume pushed nothing a source saw, and a PR not yet approved, leave their fields at None."""
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    conn, now = ctx.conn, datetime.now(UTC)
+    worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 2), prs={"web": TIMED})
+    observed(conn, TIMED, ready_at=earlier(now, 2))
+    said(conn, TIMED, "dana", earlier(now, 1, 12), ReviewState.CHANGES_REQUESTED)
+    plan_id = plan(conn, earlier(now, 1, 10), cost=None, effort=None, channel="planner", current=True)
+    resume = worker_ran(conn, RunKind.RESUME, earlier(now, 1, 9), prs={"web": TIMED})
+    records.update(records.Run).set(feedback_plan_id=plan_id).where("id = ?", resume).run(conn)
+
+    c, _ = signed_in_client(ctx)
+    found = c.get("/api/reports/reviews").json()
+    [only] = found["rounds"]
+    assert only["review_at"] == _iso(earlier(now, 1, 12))
+    assert (only["answered_at"], only["turnaround_hours"], only["turnaround"]) == (None, None, None)
+    assert (found["turnarounds"], found["median_turnaround_hours"], found["median_turnaround"]) == (0, None, None)
+    [pr] = found["pull_requests"]
+    assert (pr["approved"], pr["approved_at"], pr["rounds_to_approval"]) == (0, None, None)
+
+
 def observed(
     conn: sqlite3.Connection,
     url: str,
@@ -281,3 +369,7 @@ def reviewed_by(
         .run(conn)
         .lastrowid,
     )
+
+
+def _iso(stamp: str) -> str:
+    return db.parse_time(stamp).isoformat().replace("+00:00", "Z")

@@ -53,6 +53,7 @@ from canopy.serve.schema.review_report import (
     ReviewsReviewer,
     ReviewsRound,
     ReviewsRunCount,
+    ReviewsTurnaround,
 )
 from canopy.serve.schema.spend import SpendUnpriced
 
@@ -210,6 +211,9 @@ def reviews_report(backend: Backend, ctx: Context, days: int) -> ReviewsReport:
         median_first_review_hours=_hours(found.median_wait),
         untimed=found.untimed,
         waiting=found.waiting,
+        turnarounds=len(found.turnarounds),
+        median_turnaround_hours=_hours(found.median_turnaround_whole),
+        median_turnaround=_turnaround(found.median_turnaround),
         per_day=[
             ReviewsDay(
                 day=d.day,
@@ -225,6 +229,7 @@ def reviews_report(backend: Backend, ctx: Context, days: int) -> ReviewsReport:
                 trusted=r.author in trusted,
                 reviews=r.reviews,
                 changes_requested=r.changes_requested,
+                approved=r.approved,
                 comments=r.comments,
                 pull_requests=r.prs,
                 median_wait_hours=_hours(r.median_wait),
@@ -469,10 +474,14 @@ def _reviewed(found: review_report.ReviewedPr) -> ReviewsPullRequest:
         ready_at=_time(found.ready_at),
         merged_at=_time(found.merged_at),
         hours_to_merge=_hours(found.to_merge),
+        approved=found.approved,
+        approved_at=_time(found.approved_at),
+        rounds_to_approval=found.rounds_to_approval,
     )
 
 
 def _round(found: review_report.Round) -> ReviewsRound:
+    turnaround = found.turnaround
     return ReviewsRound(
         plan_id=found.plan_id,
         ticket_key=found.ticket,
@@ -485,6 +494,24 @@ def _round(found: review_report.Round) -> ReviewsRound:
         plan_cost_usd=found.plan_cost_usd,
         resumes=found.resumes,
         resume_cost_usd=found.resume_cost_usd,
+        review_at=_time(found.review_at),
+        approved_at=_time(found.approved_at),
+        resume_started_at=_time(found.resume_started_at),
+        resume_ended_at=_time(found.resume_ended_at),
+        answered_at=_time(found.answered_at),
+        turnaround_hours=None if turnaround is None else _hours(turnaround.whole),
+        turnaround=_turnaround(turnaround),
+    )
+
+
+def _turnaround(found: review_report.Turnaround | None) -> ReviewsTurnaround | None:
+    if found is None:
+        return None
+    return ReviewsTurnaround(
+        to_plan_hours=found.to_plan.total_seconds() / 3600,
+        to_approval_hours=found.to_approval.total_seconds() / 3600,
+        to_resume_hours=found.to_resume.total_seconds() / 3600,
+        to_push_hours=found.to_push.total_seconds() / 3600,
     )
 
 
