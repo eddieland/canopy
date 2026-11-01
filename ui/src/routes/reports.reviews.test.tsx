@@ -15,8 +15,9 @@ afterEach(() => {
 
 const PR = 'https://github.com/acme/web/pull/7'
 
-// A week: a PR timed on GitHub's clock and reviewed in three hours, one without its times, a trusted reviewer, two
-// feedback plans, and canopy's reviewer's runs, a dismissal, and a draft.
+// A week: a PR timed on GitHub's clock, reviewed in three hours and approved after one round, one without its times, a
+// trusted reviewer, two feedback plans, the older answered in 5.5 hours, and canopy's reviewer's runs, a dismissal, and
+// a draft.
 const REPORT: ReviewsReport = {
     days: 7,
     since: '2026-10-02T00:00:00Z',
@@ -35,9 +36,9 @@ const REPORT: ReviewsReport = {
     median_first_review_hours: 3,
     untimed: 1,
     waiting: 0,
-    turnarounds: 0,
-    median_turnaround_hours: null,
-    median_turnaround: null,
+    turnarounds: 1,
+    median_turnaround_hours: 5.5,
+    median_turnaround: { to_plan_hours: 3, to_approval_hours: 0, to_resume_hours: 1, to_push_hours: 1.5 },
     per_day: [
         { day: '2026-10-07', start: '2026-10-07T00:00:00Z', first_reviews: [0, 1, 0, 0], median_wait_hours: 3 },
         { day: '2026-10-08', start: '2026-10-08T00:00:00Z', first_reviews: [0, 0, 0, 0], median_wait_hours: null },
@@ -118,13 +119,13 @@ const REPORT: ReviewsReport = {
             plan_cost_usd: 0.5,
             resumes: 2,
             resume_cost_usd: 2,
-            review_at: null,
+            review_at: '2026-10-07T10:00:00Z',
             approved_at: '2026-10-07T13:00:00Z',
             resume_started_at: '2026-10-07T14:00:00Z',
             resume_ended_at: '2026-10-07T15:00:00Z',
-            answered_at: null,
-            turnaround_hours: null,
-            turnaround: null,
+            answered_at: '2026-10-07T15:30:00Z',
+            turnaround_hours: 5.5,
+            turnaround: { to_plan_hours: 3, to_approval_hours: 0, to_resume_hours: 1, to_push_hours: 1.5 },
         },
     ],
     efforts: [
@@ -166,18 +167,19 @@ function bars(row: HTMLElement | undefined): string[] {
         .map((bar) => (bar.firstElementChild as HTMLElement).style.width)
 }
 
+/** A feedback plan's turnaround cell, in its row of the Feedback rounds table. */
+function turnaround(id: number): HTMLElement {
+    return within(screen.getByTestId(`reviews-round-${id}`)).getByTestId('reviews-round-turnaround')
+}
+
 describe('the Reviews page', () => {
     it("heads the page with the window's figures, each against the week before's", async () => {
         await renderPage(REPORT)
         const tiles = await screen.findByTestId('reviews-tiles')
         const tileKeys = ['reviews', 'prs', 'first-reviews', 'median-wait', 'rounds']
-        expect(tileKeys.map((key) => within(tiles).getByTestId(`reviews-${key}`).textContent)).toEqual([
-            '4',
-            '1',
-            '1',
-            '3.0h',
-            '2',
-        ])
+        expect(
+            [...tileKeys, 'turnaround'].map((key) => within(tiles).getByTestId(`reviews-${key}`).textContent),
+        ).toEqual(['4', '1', '1', '3.0h', '2', '5.5h'])
         expect(tileKeys.map((key) => within(tiles).getByTestId(`reviews-${key}-delta`).textContent)).toEqual([
             '−2 on the 7 days before',
             'same as the 7 days before',
@@ -185,6 +187,17 @@ describe('the Reviews page', () => {
             '+1.5h on the 7 days before',
             'same as the 7 days before',
         ])
+        // The window before has no turnaround of its own, so canopy's has nothing to move against.
+        expect(within(tiles).queryByTestId('reviews-turnaround-delta')).toBeNull()
+    })
+
+    it("says where canopy's turnaround went in its tile's tip, part by part", async () => {
+        await renderPage(REPORT)
+        fireEvent.focus(within(await screen.findByTestId('reviews-tiles')).getByText('median turnaround'))
+        const parts = 'review to plan 3.0h, plan to approval 0m, approval to resume 1.0h, resume to push 1.5h'
+        expect(
+            (await screen.findAllByText(new RegExp(`over 1 answered round\\. .*${parts}`, 'u'))).length,
+        ).toBeGreaterThan(0)
     })
 
     it("says the window's state under its title, and what the median leaves out in its tile's tip", async () => {
@@ -210,8 +223,8 @@ describe('the Reviews page', () => {
         await renderPage(REPORT)
         const rows = within(await screen.findByTestId('reviews-reviewer-table')).getAllByTestId('reviews-reviewer')
         expect(rows.map((row) => [...row.children].slice(1).map((cell) => cell.textContent))).toEqual([
-            ['2', '1', '0', '1', '3.0h'],
-            ['1', '0', '2', '1', '–'],
+            ['2', '1', '1', '0', '1', '3.0h'],
+            ['1', '0', '0', '2', '1', '–'],
         ])
         expect(rows.map((row) => within(row).queryByText('dana') !== null)).toEqual([true, false])
         expect(rows.map((row) => within(row).queryByText('trusted') !== null)).toEqual([true, false])
@@ -238,6 +251,14 @@ describe('the Reviews page', () => {
         expect(screen.getByTestId('reviews-round-2').textContent).toContain('you, on the web')
     })
 
+    it("times canopy's turnaround on each round, and says why one has none", async () => {
+        await renderPage(REPORT)
+        expect(within(await screen.findByTestId('reviews-round-table')).getByText('turnaround')).toBeTruthy()
+        expect([turnaround(1).textContent, turnaround(2).textContent]).toEqual(['5.5h', '–'])
+        fireEvent.focus(within(turnaround(2)).getByText('–'))
+        expect((await screen.findAllByText('No resume went ahead on it yet')).length).toBeGreaterThan(0)
+    })
+
     it("heads canopy's reviewer with tiles, then its runs, dismissals by reason, and the trust line", async () => {
         await renderPage(REPORT)
         const tiles = await screen.findByTestId('reviews-canopy-tiles')
@@ -257,7 +278,7 @@ describe('the Reviews page', () => {
         expect(screen.getByTestId('reviews-canopy-trust').textContent).toContain('without asking you')
     })
 
-    it('lists each PR with its first review, rounds, and what they cost', async () => {
+    it('lists each PR with its first review against the slowest, approvals, rounds, and what they cost', async () => {
         await renderPage(REPORT)
         const [row] = within(await screen.findByTestId('reviews-pull-request-table')).getAllByTestId(
             'reviews-pull-request',
@@ -268,10 +289,13 @@ describe('the Reviews page', () => {
             '3',
             '1',
             '1',
+            '1',
             '2',
+            '1',
             '$2.50',
             '–',
         ])
+        expect(bars(row)).toEqual(['100%'])
     })
 
     it('says so when nothing happened', async () => {
@@ -281,6 +305,9 @@ describe('the Reviews page', () => {
             first_reviews: 0,
             median_first_review_hours: null,
             untimed: 0,
+            turnarounds: 0,
+            median_turnaround_hours: null,
+            median_turnaround: null,
             reviewers: [],
             pull_requests: [],
             rounds: [],
@@ -296,5 +323,6 @@ describe('the Reviews page', () => {
         expect(screen.getAllByText('no feedback plan was written in these 7 days')).toHaveLength(2)
         expect(screen.getByText('canopy reviewed nothing in these 7 days')).toBeTruthy()
         expect(screen.queryByTestId('reviews-dismissal-table')).toBeNull()
+        expect(screen.getByTestId('reviews-turnaround').textContent).toBe('–')
     })
 })

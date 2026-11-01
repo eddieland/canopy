@@ -421,7 +421,8 @@ def test_the_ci_report_counts_the_mocks_week_of_check_runs(backend: Backend) -> 
     c = client(None, backend)
     found = c.get("/api/reports/ci").json()
     assert (found["days"], found["since"], found["until"]) == (7, "2026-10-02T00:00:00Z", "2026-10-09T00:00:00Z")
-    assert (found["heads"], found["green_first"]) == (10, 4)
+    # PR 88's third head, run 45's push, among them, green first time.
+    assert (found["heads"], found["green_first"]) == (11, 5)
     assert [(k["name"], k["red"], k["followed"], k["passed"]) for k in found["checks"]][:3] == [
         ("e2e", 3, 1, 1),
         ("unit", 2, 2, 2),

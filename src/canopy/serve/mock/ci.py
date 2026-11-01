@@ -2,7 +2,8 @@
 
 The week's PRs as the `vcs` source observed their checks complete. `api` PR 12 went red on `unit` and then on `build`,
 each fixed by the next head; Carol's PR 14 timed out on `unit`, and its head now fails `integration` and `typecheck`.
-In `web`, PR 88's first head failed `e2e` and its next passed, PR 91 went green first time, and PR 86, ABC-100's, fails
+In `web`, PR 88's first head failed `e2e` and its next passed, as did the head run 45 pushed to answer its review, which
+the Reviews page times as canopy's turnaround, PR 91 went green first time, and PR 86, ABC-100's, fails
 `e2e` on its one head, rerun once (cancelled) and again (red), which run 40, a `fix-ci`, failed to fix. Nothing kicks a
 flaky check: the mock leaves `trust.max_flaky_kicks` at 0. A skipped and a cancelled run count as neither.
 """
@@ -13,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import records
 from canopy.core.vocab import CheckConclusion
+from canopy.serve.mock import drafts
 from canopy.serve.mock.reviews import PR_12, PR_14, PR_88, PR_91, SHA_12, SHA_14, SHA_88, SHA_88_FIRST, SHA_91
 
 if TYPE_CHECKING:
@@ -75,6 +77,10 @@ _RUNS: tuple[tuple[str, str, str, CheckConclusion, int], ...] = (
     (PR_14, SHA_14, "build", _S, -44),
     (PR_14, SHA_14, "typecheck", _F, -43),
     (PR_14, SHA_14, "integration", _F, -41),
+    # Run 45's push, after run 46 planned again: its plan says no check had run at the head yet.
+    (PR_88, drafts.SHA, "lint", _S, -9),
+    (PR_88, drafts.SHA, "unit", _S, -8),
+    (PR_88, drafts.SHA, "e2e", _S, -7),
 )
 
 
