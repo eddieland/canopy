@@ -177,6 +177,21 @@ class HealthDay(Model):
     """The runs that ended in a failed status, by kind."""
 
 
+class HealthPrevious(Model):
+    """The window before a report's, as many days and ending where it starts: its headline figures alone."""
+
+    since: datetime
+    """When it starts: local midnight on its first day."""
+    until: datetime
+    """When it ends: where the report's window starts."""
+    runs_ended: int
+    """How many runs of every kind that started in it ended."""
+    failed: int
+    """Of those, the ones that ended in a failed status."""
+    failed_cost_usd: float | None = None
+    """What the failed ones cost, in US dollars; None when none of them reported a cost."""
+
+
 class HealthReport(Model):
     """How the last days' runs ended, the newest failures, what the guards refused, and each day's counts."""
 
@@ -202,3 +217,5 @@ class HealthReport(Model):
     unpriced: list[SpendUnpriced]
     """How many of each kind's ended runs reported no cost, as the spend page counts them: a tick that ran no overseer
     cost nothing, and is never among them."""
+    previous: HealthPrevious
+    """The window before this one, as many days, for a page to say how this one compares."""

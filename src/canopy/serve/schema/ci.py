@@ -153,6 +153,25 @@ class CiKickedPullRequest(Model):
     """Its kicks whose check came back red."""
 
 
+class CiPrevious(Model):
+    """The window before a report's, as many days and ending where it starts: its headline figures alone."""
+
+    since: datetime
+    """When it starts: local midnight on its first day."""
+    until: datetime
+    """When it ends: where the report's window starts."""
+    heads: int
+    """The PR heads first checked in it, counted as the report's `heads` are."""
+    green_first: int
+    """Of those, the heads whose first run of every check was not red."""
+    red: int
+    """The red check runs observed in it."""
+    fixes: int
+    """The `resume` runs for `ci`, a retired `fix-ci` among them, that started in it."""
+    fixes_green: int
+    """Of those, the ones whose every check red when they started was green on the head after them."""
+
+
 class CiReport(Model):
     """Which checks failed in the window, what fixing them cost, and whether the flaky kicks worked."""
 
@@ -187,3 +206,5 @@ class CiReport(Model):
     """`trust.max_flaky_kicks`: how many kicks a head of work gets; 0 when canopy kicks none."""
     cooldown: HealthRefusal | None = None
     """What the `cooldown` guard refused in the window, as the health report counts it; None when it refused nothing."""
+    previous: CiPrevious
+    """The window before this one, as many days, for a page to say how this one compares."""

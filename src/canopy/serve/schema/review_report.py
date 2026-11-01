@@ -190,6 +190,25 @@ class ReviewsDrafts(Model):
     """How many."""
 
 
+class ReviewsPrevious(Model):
+    """The window before a report's, as many days and ending where it starts: its headline figures alone."""
+
+    since: datetime
+    """When it starts: local midnight on its first day."""
+    until: datetime
+    """When it ends: where the report's window starts."""
+    reviews: int
+    """The reviews made in it on its PRs."""
+    pull_requests: int
+    """Its PRs, counted as the report's `pull_requests` are."""
+    first_reviews: int
+    """The first reviews that arrived in it on a PR with a start."""
+    median_first_review_hours: float | None = None
+    """Their median wait, in hours; None with none."""
+    rounds: int
+    """The feedback plans made in it."""
+
+
 class ReviewsReport(Model):
     """Where the window's review feedback came from, how long it took, and what answering it cost."""
 
@@ -236,3 +255,5 @@ class ReviewsReport(Model):
     """The most first."""
     canopy_trusted: bool
     """Whether `trust.trusted_reviewers` names `canopy:review`, so a worker addresses canopy's own findings unasked."""
+    previous: ReviewsPrevious
+    """The window before this one, as many days, for a page to say how this one compares."""

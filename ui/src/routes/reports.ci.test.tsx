@@ -20,6 +20,15 @@ const REPORT: CiReport = {
     days: 7,
     since: '2026-10-02T00:00:00Z',
     until: '2026-10-09T00:00:00Z',
+    previous: {
+        since: '2026-09-25T00:00:00Z',
+        until: '2026-10-02T00:00:00Z',
+        heads: 0,
+        green_first: 0,
+        red: 0,
+        fixes: 0,
+        fixes_green: 0,
+    },
     heads: 4,
     green_first: 3,
     checks: [

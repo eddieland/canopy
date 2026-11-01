@@ -19,6 +19,7 @@ from canopy.serve.schema.ci import (
     CiFixedCheck,
     CiKick,
     CiKickedPullRequest,
+    CiPrevious,
     CiPullRequest,
     CiReport,
 )
@@ -31,6 +32,7 @@ from canopy.serve.schema.health import (
     HealthDuration,
     HealthFailure,
     HealthOutcome,
+    HealthPrevious,
     HealthRefusal,
     HealthReport,
 )
@@ -49,6 +51,7 @@ from canopy.serve.schema.review_report import (
     ReviewsDismissals,
     ReviewsDrafts,
     ReviewsEffort,
+    ReviewsPrevious,
     ReviewsPullRequest,
     ReviewsReport,
     ReviewsReviewer,
@@ -103,6 +106,7 @@ def health_report(backend: Backend, ctx: Context, days: int) -> HealthReport:
         per_day = health.by_day(ctx.conn, now, days)
         durations = health.durations(ctx.conn, now, days, ctx.config)
         unpriced = spend.unpriced(ctx.conn, found.since, found.until)
+        before = health.between(ctx.conn, *spend.window_before(found.since, days))
     return HealthReport(
         days=found.days,
         since=db.parse_time(found.since),
@@ -122,6 +126,13 @@ def health_report(backend: Backend, ctx: Context, days: int) -> HealthReport:
         ],
         unpriced=[SpendUnpriced(kind=u.kind, runs=u.runs, unpriced=u.unpriced) for u in unpriced],
         durations=[_duration(d) for d in durations],
+        previous=HealthPrevious(
+            since=db.parse_time(before.since),
+            until=db.parse_time(before.until),
+            runs_ended=before.ended,
+            failed=before.failed,
+            failed_cost_usd=before.failed_cost_usd,
+        ),
     )
 
 
@@ -136,6 +147,7 @@ def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
     with db.read_snapshot(ctx.conn):
         found = ci.report(ctx.conn, now, days)
         refused = health.refusals(ctx.conn, found.since, found.until)
+        before = ci.between(ctx.conn, *spend.window_before(found.since, days))
     cooldown = next((r for r in refused if r.guard == _COOLDOWN), None)
     return CiReport(
         days=found.days,
@@ -194,6 +206,15 @@ def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
         median_hours_to_green=_hours(found.median_to_green),
         max_flaky_kicks=ctx.config.trust.max_flaky_kicks,
         cooldown=None if cooldown is None else _refusal(cooldown),
+        previous=CiPrevious(
+            since=db.parse_time(before.since),
+            until=db.parse_time(before.until),
+            heads=before.heads,
+            green_first=before.green_first,
+            red=before.red,
+            fixes=len(before.fixes),
+            fixes_green=before.fixes_green,
+        ),
     )
 
 
@@ -203,7 +224,10 @@ def reviews_report(backend: Backend, ctx: Context, days: int) -> ReviewsReport:
     Returns:
         The report, each reviewer marked trusted or not by `trust.trusted_reviewers`.
     """
-    found = review_report.report(ctx.conn, backend.clock(), days)
+    # One snapshot, so a review observed between the two reads is in the window or the one before, never both.
+    with db.read_snapshot(ctx.conn):
+        found = review_report.report(ctx.conn, backend.clock(), days)
+        before = review_report.between(ctx.conn, *spend.window_before(found.since, days))
     trusted = set(ctx.config.trust.trusted_reviewers)
     return ReviewsReport(
         days=found.days,
@@ -252,6 +276,15 @@ def reviews_report(backend: Backend, ctx: Context, days: int) -> ReviewsReport:
         dismissals=[ReviewsDismissals(reason=d.reason, findings=d.findings) for d in found.dismissals],
         drafts=[ReviewsDrafts(status=d.status, drafts=d.drafts) for d in found.drafts],
         canopy_trusted=CANOPY_REVIEWER in trusted,
+        previous=ReviewsPrevious(
+            since=db.parse_time(before.since),
+            until=db.parse_time(before.until),
+            reviews=before.reviews,
+            pull_requests=len(before.prs),
+            first_reviews=len(before.waits),
+            median_first_review_hours=_hours(before.median_wait),
+            rounds=len(before.rounds),
+        ),
     )
 
 

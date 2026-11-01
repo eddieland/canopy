@@ -5,7 +5,7 @@ Reads only.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -252,6 +252,38 @@ def test_a_round_without_a_push_or_feedback_is_not_timed(canopy_env: CanopyEnv) 
     assert (found["turnarounds"], found["median_turnaround_hours"], found["median_turnaround"]) == (0, None, None)
     [pr] = found["pull_requests"]
     assert (pr["approved"], pr["approved_at"], pr["rounds_to_approval"]) == (0, None, None)
+
+
+def test_the_reviews_report_carries_the_window_before_its_own(canopy_env: CanopyEnv) -> None:
+    """A review and a plan in the week, and in the week before two reviews, one of them a first review, and a plan."""
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    conn, now = ctx.conn, datetime.now(UTC)
+    start, _ = spend.window(now, spend.DEFAULT_DAYS)
+
+    def at(days: float, hours: float = 0) -> str:
+        return db.format_time(start + timedelta(days=days, hours=hours))
+
+    worker_ran(conn, RunKind.IMPLEMENT, at(-4), prs={"web": TIMED})
+    observed_pr(conn, TIMED, ready_at=at(-4), review_requested_at=at(-4, 1))
+    feedback_left(conn, TIMED, "dana", at(-4, 3), ReviewState.CHANGES_REQUESTED)
+    feedback_left(conn, TIMED, "erin", at(-3), ReviewState.COMMENTED)
+    plan(conn, at(-3, 2), cost=None, effort=None, channel="web")
+    feedback_left(conn, TIMED, "dana", at(1), ReviewState.APPROVED)
+    plan(conn, at(1, 1), cost=None, effort=None, channel="cli", current=True)
+
+    c, _ = signed_in_client(ctx)
+    found = c.get("/api/reports/reviews").json()
+    assert (found["reviews"], found["first_reviews"], len(found["rounds"])) == (1, 0, 1)
+    previous = found["previous"]
+    assert previous["until"] == found["since"]
+    assert {k: previous[k] for k in ("reviews", "pull_requests", "first_reviews", "rounds")} == {
+        "reviews": 2,
+        "pull_requests": 1,
+        "first_reviews": 1,
+        "rounds": 1,
+    }
+    assert previous["median_first_review_hours"] == pytest.approx(2.0)
 
 
 def plan(

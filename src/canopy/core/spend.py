@@ -516,6 +516,18 @@ def days_between(start: datetime, end: datetime) -> int:
     return (end.astimezone().date() - start.astimezone().date()).days
 
 
+def window_before(since: str, days: int) -> tuple[datetime, datetime]:
+    """The window of `days` local days that ends where one starting at `since`, a journal time, starts.
+
+    A report's window before, to compare it with: as many days, so a day a clock change shortens is still one day.
+
+    Returns:
+        Its start and its end, each an aware UTC datetime.
+    """
+    start = db.parse_time(since)
+    return _midnight(start.astimezone().date() - timedelta(days=days)), start
+
+
 def day_starts(start: datetime, days: int) -> dict[str, str]:
     """Each local day of a window that `window` began at `start`, by its name, with when it starts.
 
@@ -587,6 +599,30 @@ def breakdown_hours(
         starts.setdefault(_local_hour(at), db.format_time(at))
     buckets = _Buckets(expression=_HOUR, starts=starts, name_of=lambda stamp: _local_hour(db.parse_time(stamp)))
     return _breakdown(conn, start, end, buckets, state_dir=state_dir, hours=hours, ticket=ticket)
+
+
+@dataclass(frozen=True)
+class Headline:
+    """A span's headline figures, as a breakdown's: what it cost, and what it got done for that."""
+
+    totals: Costs
+    #: The tickets marked done in it, merged or closed.
+    done: int
+    #: Its runs' spend over them; None when none was, or none reported a cost.
+    per_done: float | None
+
+
+def headline(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) -> Headline:
+    """What `[since, until)`, each a journal time, cost and got done, summed as a breakdown's are: a window before.
+
+    Returns:
+        The figures; a span with nothing in it has every cost None and nothing done.
+    """
+    with db.read_snapshot(conn):
+        totals = costs(conn, since, until, state_dir=state_dir)
+        done = done_in(conn, since, until)
+    runs = totals.runs
+    return Headline(totals=totals, done=len(done), per_done=runs / len(done) if done and runs is not None else None)
 
 
 def costs(conn: sqlite3.Connection, since: str, until: str, *, state_dir: Path) -> Costs:

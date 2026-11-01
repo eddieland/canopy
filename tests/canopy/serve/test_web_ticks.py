@@ -4,19 +4,21 @@ What `canopy decisions` prints, a tick's page, and each ticket's decisions acros
 """
 
 import re
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from canopy.core import db, runtime_sessions
 from canopy.core import spend as spending
 from canopy.core.context import Context
+from canopy.core.vocab import RunKind
 from canopy.loop import attention
 from canopy.runtime.report import SessionPage, SessionSpend
 from canopy.serve import tick_views
 from canopy.serve.backend import Backend
 from canopy.serve.mock import T0, history
-from tests.canopy.helpers import present
-from tests.canopy.web_helpers import client
+from tests.canopy.helpers import present, worker_ran
+from tests.canopy.web_helpers import client, signed_in_client
 
 
 def test_the_ticks_list_is_the_latest_newest_first_with_how_many_decisions_each(backend: Backend) -> None:
@@ -133,6 +135,29 @@ def test_the_spend_breakdown_reads_the_last_24_hours_by_the_hour(backend: Backen
     assert by_days["hours"] is None
     assert c.get("/api/spend/breakdown", params={"hours": 24, "days": 7}).status_code == 422
     assert c.get("/api/spend/breakdown", params={"hours": spending.MAX_HOURS + 1}).status_code == 422
+
+
+def test_the_spend_breakdown_carries_the_window_before_its_own_in_days_or_hours(ctx: Context) -> None:
+    """A run in the week, two in the week before, and one before both; the hours' window compares the same way."""
+    conn, now = ctx.conn, datetime.now(UTC)
+    start, _ = spending.window(now, 7)
+    worker_ran(conn, RunKind.IMPLEMENT, db.format_time(start + timedelta(days=1)), cost=1.0)
+    worker_ran(conn, RunKind.IMPLEMENT, db.format_time(start - timedelta(days=2)), cost=0.5)
+    worker_ran(conn, RunKind.RESUME, db.format_time(start - timedelta(days=6)), cost=0.25)
+    worker_ran(conn, RunKind.IMPLEMENT, db.format_time(start - timedelta(days=10)), cost=9.0)
+    c, _ = signed_in_client(ctx)
+    week = c.get("/api/spend/breakdown", params={"days": 7}).json()
+    assert week["totals"]["workers"] == 1.0
+    previous = week["previous"]
+    assert (previous["until"], previous["totals"]["workers"], previous["totals"]["total"]) == (
+        week["since"],
+        0.75,
+        0.75,
+    )
+    assert (previous["done"], previous["per_done"]) == (0, None)
+    hours = c.get("/api/spend/breakdown", params={"hours": 24}).json()
+    assert hours["previous"]["until"] == hours["since"]
+    assert db.parse_time(hours["since"]) - db.parse_time(hours["previous"]["since"]) == timedelta(hours=24)
 
 
 def test_the_spend_breakdown_carries_the_month_against_its_budget_whatever_the_window(backend: Backend) -> None:

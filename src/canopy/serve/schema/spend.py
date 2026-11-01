@@ -327,6 +327,22 @@ class SpendMonth(Model):
     """When `canopy loop` last read the runtime's sessions; None when it never did, and `outside_usd` counts none."""
 
 
+class SpendPrevious(Model):
+    """The window before a breakdown's, of the same length and ending where it starts: its headline figures alone."""
+
+    since: datetime
+    """When it starts."""
+    until: datetime
+    """When it ends: where the breakdown's window starts."""
+    totals: SpendCosts
+    """Its costs, summed as the breakdown's `totals` are."""
+    done: int
+    """How many tickets the loop marked done in it, merged or closed."""
+    per_done: float | None = None
+    """Its whole spend over the tickets marked done in it, in US dollars; None when none was, or nothing reported a
+    cost."""
+
+
 class SpendBreakdown(Model):
     """What a window of whole local days cost, today's so far included, as `canopy spend` prints it (ROADMAP M33).
 
@@ -379,3 +395,5 @@ class SpendBreakdown(Model):
     """Each kind's first model calls by local ISO week: the kinds in a fixed order, overseer, workers, plans, chores,
     reviews, tasks, each kind's series its own first, then its chores' and its models' by name, the runs no single
     model served last, and each series' weeks oldest first."""
+    previous: SpendPrevious
+    """The window before this one, as many days or hours, for a page to say how this one compares."""

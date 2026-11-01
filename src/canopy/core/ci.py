@@ -191,6 +191,16 @@ class Ci:
     pull_requests: Sequence[PullRequest]
 
     @property
+    def red(self) -> int:
+        """The red check runs observed in the window, over every day."""
+        return sum(sum(d.red) for d in self.per_day)
+
+    @property
+    def fixes_green(self) -> int:
+        """The fixes whose every check red when they started was green on the head after them."""
+        return sum(1 for f in self.fixes if f.checks and all(c.next == "green" for c in f.checks))
+
+    @property
     def median_to_green(self) -> timedelta | None:
         """The median time to green of the PRs that went green; None with none."""
         spans = [span for pr in self.pull_requests if (span := pr.to_green) is not None]
