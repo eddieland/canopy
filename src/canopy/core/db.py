@@ -1354,10 +1354,18 @@ def last_decision_of(conn: sqlite3.Connection, key: str) -> str | None:
     return None if row is None else str(row[0])
 
 
-def recent_ticks(conn: sqlite3.Connection, limit: int) -> list[tuple[records.Tick, int]]:
-    """Return the latest `limit` ticks, newest first, each with how many decisions it recorded."""
-    query = records.select(records.Tick).order_by("id DESC").limit(limit)
-    return with_decision_counts(conn, query.all(conn))
+def recent_ticks(conn: sqlite3.Connection, limit: int, *, idle: bool = False) -> list[tuple[records.Tick, int]]:
+    """Return the latest `limit` ticks, newest first, each with how many decisions it recorded.
+
+    Args:
+        conn: The journal.
+        limit: How many ticks at most.
+        idle: Whether to keep only the live ticks `canopy loop` found idle (DESIGN §6, Idle pacing).
+    """
+    query = records.select(records.Tick)
+    if idle:
+        query = query.where("dry_run = 0 AND idle = 1")
+    return with_decision_counts(conn, query.order_by("id DESC").limit(limit).all(conn))
 
 
 def with_decision_counts(conn: sqlite3.Connection, ticks: Iterable[records.Tick]) -> list[tuple[records.Tick, int]]:

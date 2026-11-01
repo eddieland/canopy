@@ -72,37 +72,41 @@ the window at a glance, `$10.51 over 7 days · 2 tickets done`; hover the title 
 
 **This month** sits on top whatever the window, and tracks the calendar month so far against the monthly budget you set
 under [Limits and trust](settings#limits-and-trust): what it spent of the budget, and what the month will cost if the
-rest of it spends like the start did. Spent means every agent session on this machine, not just canopy's: the line
-under it splits the month into canopy's runs and the sessions outside canopy, the ones you ran by hand, as of when
-`canopy loop` last read the runtime's record. It reads it between ticks, so with the loop stopped your own sessions
-wait to be counted, and the month can look thriftier than it is. The bar fills with the budget spent, and the mark
-across it is how far through the month you are, so a bar past its mark is spending faster than the budget allows. It
-reads **On budget**, then **Headed over** once the pace passes the budget, then **Over budget**, and the wallet in the
-[header](overview#the-header) wears the same in its color on every page, so you needn't come here to check. The pace
-waits for the month's first day to end, since one morning's runs would otherwise forecast something dramatic. Nothing
-stops at the budget: it's a number to watch, not a brake. A [sink](slack#choosing-what-it-hears) that takes `loop`
-events hears once when the month reaches it, and again only if you raise the budget and the month reaches that too. The
-message splits the month the same way, canopy's runs and outside canopy, and says when your own sessions were last
-read.
+rest of it spends like the start did. Spent means every agent session on this machine, not just canopy's: the line under
+it splits the month into canopy's runs and the sessions outside canopy, the ones you ran by hand, as of when `canopy
+loop` last read the runtime's record. It reads it between ticks, so with the loop stopped your own sessions wait to be
+counted, and the month can look thriftier than it is. The bar fills with the budget spent, and the mark across it,
+labelled with the day (`day 8 of 31`), is how far through the month you are, so a bar past its mark is spending faster
+than the budget allows. The line under the bar says where that pace ends up, `On pace to spend $65.14 of $40`, and the
+title's hover keeps the long version for when you forget. It reads **On budget**, then **Headed over** once the pace
+passes the budget, then **Over budget**, and the wallet in the [header](overview#the-header) wears the same in its color
+on every page, so you needn't come here to check. The pace waits for the month's first day to end, since one morning's
+runs would otherwise forecast something dramatic. Nothing stops at the budget: it's a number to watch, not a brake. A
+[sink](slack#choosing-what-it-hears) that takes `loop` events hears once when the month reaches it, and again only if
+you raise the budget and the month reaches that too. The message splits the month the same way, canopy's runs and
+outside canopy, and says when your own sessions were last read.
 
 Want a heads-up before the bill, not after? Add alerts at other percentages of the budget, `50, 80` say, or `150` for
 when the month really gets away from you. Each is sent once a month, as the spend reaches it, and the ones short of the
-budget show as ticks under the bar. A month that jumps past several at once hears about the highest one, because one
-message saying 80% beats two saying 50% and then 80%. The 100% alert always goes out. With no budget set, the panel says
-where to set one.
+budget show as ticks over the bar, each labelled with its percent. A month that jumps past several at once hears about
+the highest one, because one message saying 80% beats two saying 50% and then 80%. The 100% alert always goes out. With
+no budget set, the panel says where to set one.
 
 The **Totals** split it by who spent it: the overseer, then the part of that its idle ticks spent, then the workers,
 plans, chores, reviews, your one-off tasks, and dry runs, and last **outside canopy**, the sessions none of canopy's
-runs started. The total counts them all. Beside them are the tickets the loop marked done in that window, and what each
-cost on average, the overseer and chores included and your own sessions not, since they landed nothing canopy knows
-of.
+runs started. The total counts them all. A kind that spent nothing in the window gets no tile, just a mention in the
+line under them (`No dry runs.`), and the sessions outside canopy read `not read yet` there until `canopy loop` has
+read them, since none counted is not the same as none run. Beside them are the tickets the loop marked done in that
+window, and what each cost on average, the overseer and chores included and your own sessions not, since they landed
+nothing canopy knows of.
 
 Each split has one name everywhere on the page, in the totals, the chart's legend, and the table: **overseer** is all
 the overseer spent, idle ticks included, as `canopy spend` counts it, and **idle ticks** is the part of it that went
 on deciding there was nothing to do. Hover a name for what it counts.
 
 **By day** stacks each day's spend by the same split, with a table folded under it that also counts the tickets done
-that day.
+that day. Over **30 days**, **by week** beside its label redraws it a bar per week, Monday to Sunday, so the month's
+trend is five bars instead of thirty; the weeks at either end hold only the days the window does.
 A day runs midnight to midnight on the clock of the machine canopy runs on, so your evening's work lands on today and
 not on a UTC tomorrow. The dearest day has its total printed over its bar, so you can read the scale without hovering;
 hover any bar for that day's figures. A day that cost nothing is a flat line on the baseline, not a gap. Idle ticks sit
@@ -116,7 +120,8 @@ goes. That's the window the rail's **24h** counter opens, for when you want to k
 what the week did. The hour that started 24 hours ago is just outside it, so the total can read a little under the
 rail's. Then:
 
-- **By ticket** and **By pull request**: what each one's own runs cost. The overseer isn't shared out among them.
+- **By ticket** and **By pull request**: what each one's own runs cost, with a bar of its share of the dearest one's.
+  The overseer isn't shared out among them.
 - **By model**: what the runs spent on each model, as their own sessions say, the dearest first. It opens on **all**,
   each model summed over every kind of run; the **kind** filter in its header narrows it to the overseer's, the
   workers', or any other kind the window has runs of. A run that switched models counts under both, with its share
@@ -150,16 +155,17 @@ rail's. Then:
   model under it; runs that more than one model served stay in **all runs**. The table holds each week's runs and
   median first call. The 7 days hold one or two weeks, which is not much of a trend, so pick **30 days**; it's what
   `canopy spend --days 30` prints, by week.
-- **Every session**: every session the runtime keeps that started in the window, in any directory: **canopy's
-  runs**, a subagent's counted with the session it ran for, and **outside canopy**, then where those ran, the
-  costliest directory first. Another workspace's canopy counts as outside, since its runs are in another journal. The
-  header says when `canopy loop` last read the runtime's record; it reads it between ticks, so with the loop stopped,
-  the list waits.
-- **Ticks by what they bought** and **Ticks by what woke them**: the ticks counted and costed by whether they were idle,
-  and by their cause. The **no overseer** column counts the ones that ran no overseer, because nothing was left for it
-  or the tick halted first. They cost nothing and count as nothing, never as a run that forgot to report its cost, so
-  what idle ticks spent is only the overseer runs that bought nothing.
-- **Idle ticks**: the newest of them, to open.
+- **Every session**: every session the runtime keeps that started in the window, in any directory, as two figures,
+  **canopy's runs**, a subagent's counted with the session it ran for, and **outside canopy**, each with how many
+  sessions it was, then where the outside ones ran, the costliest directory first. Another workspace's canopy counts as
+  outside, since its runs are in another journal. The header says when `canopy loop` last read the runtime's record; it
+  reads it between ticks, so with the loop stopped, the list waits.
+- **Ticks**: the ticks counted and costed two ways side by side, by what they **bought**, idle or not, and by what
+  **woke** them. The header says what share of the overseer's spend went on idle ticks, the number to watch if the
+  loop spends its quiet days thinking about nothing. The **no overseer** column counts the ones that ran no overseer,
+  because nothing was left for it or the tick halted first. They cost nothing and count as nothing, never as a run
+  that forgot to report its cost, so what idle ticks spent is only the overseer runs that bought nothing. **Open the
+  idle ticks** under the tables takes you to [the ticks page](ticks#the-ticks-page) with only those showing.
 
 If a run reported no cost, the totals say how many, so a gap in the figures never passes for a quiet week.
 

@@ -5,7 +5,9 @@ Reads only; a rationale, a transcript, and an output are untrusted text.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query
 
 from canopy.serve import tick_views
 from canopy.serve.api.deps import BackendDep
@@ -25,10 +27,14 @@ def last_tick(backend: BackendDep) -> LastTick:
 
 
 @router.get("/ticks", operation_id="listTicks", summary="List the ticks")
-def ticks(backend: BackendDep) -> list[Tick]:
-    """The latest 50 ticks, newest first."""
+def ticks(
+    backend: BackendDep,
+    *,
+    idle: Annotated[bool, Query(description="Only the live ticks `canopy loop` found idle.")] = False,
+) -> list[Tick]:
+    """The latest 50 ticks, newest first, or the latest 50 the loop found idle."""
     with backend.open() as ctx:
-        return tick_views.ticks(ctx)
+        return tick_views.ticks(ctx, idle=idle)
 
 
 @router.get("/ticks/{tick_id}", operation_id="getTick", summary="Get a tick", responses=not_found("tick"))

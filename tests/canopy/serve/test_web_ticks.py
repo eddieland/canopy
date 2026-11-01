@@ -224,6 +224,8 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
         (2, True, "timer"),
         (1, False, "start"),
     ]
+    # The ticks page's idle filter: the loop's idle ticks alone, as the spend page's Ticks panel links them.
+    assert [t["id"] for t in c.get("/api/ticks", params={"idle": True}).json()] == [2]
     assert [u["kind"] for u in found["unpriced"]] == ["overseer", "workers", "plans", "chores", "reviews", "tasks"]
     # The mock's plan runs are a kind of their own, not workers'.
     assert today["plans"] == pytest.approx(1.28)

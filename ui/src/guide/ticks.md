@@ -8,7 +8,8 @@ you find out what it was thinking. What the ticks cost is on [the spend page](re
 **Ticks**, under [Workspace](/workspace), lists the latest 50 ticks, newest first: each one's status, how many decisions
 it recorded, what its overseer cost in dollars, tokens, and peak context, and its summary. A `dry run` chip marks a tick
 from `canopy tick --dry-run`, which plans and dispatches nothing. Before the first tick, the page says when one comes:
-after `loop.interval_minutes`, or now, with **Tick now** right there in the sentence.
+after `loop.interval_minutes`, or now, with **Tick now** right there in the sentence. **idle**, in the panel's header,
+keeps the latest 50 [idle ticks](#idle-ticks) instead, the ones the loop ran and found nothing to start.
 
 A tick reads `running` while it works, and ends:
 
@@ -64,5 +65,5 @@ A tick is idle when it started no work: it closed ok, dispatched no worker, revi
 journal since the tick before: no run ending, no poll finding something new, and nothing from you. Waits, refusals,
 a ticket marked done, or a new attention item don't count. The loop waits longer after each idle tick, so a quiet day
 costs little, but a tick that starts nothing still pays for the overseer to read everything. The share of the
-overseer's spend that went on idle ticks is the line under the totals. If it's high, a longer `loop.idle_max_minutes`
-is the knob.
+overseer's spend that went on idle ticks heads the spend page's **Ticks** panel, whose link opens them here. If it's
+high, a longer `loop.idle_max_minutes` is the knob.

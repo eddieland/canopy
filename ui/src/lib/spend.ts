@@ -65,6 +65,8 @@ export interface Series {
     hint: string
     /** Its fill: a spend token, never a state's color. */
     fill: string
+    /** What the line under the totals says of it at a dash, where `no` and its name would not read: `no dry runs`. */
+    none?: string
 }
 
 /**
@@ -108,6 +110,7 @@ export const SERIES: readonly Series[] = [
         label: 'outside canopy',
         hint: "The runtime's sessions none of canopy's runs started: yours, and other workspaces' canopy",
         fill: 'bg-spend-outside',
+        none: 'no sessions outside canopy',
     },
 ]
 
@@ -180,15 +183,94 @@ export function spendBars(days: readonly SpendDay[], clock: Clock): DayBar[] {
  * says its whole, as the totals do, with idle ticks' part of it after it: `overseer $1.00 (idle ticks $0.25)`.
  */
 export function dayHint(day: SpendDay, clock: Clock): string {
-    const said = (series: Series) => `${series.label} ${costText(day.costs[series.key])}`
+    return costsHint(dayName(day, clock), day.costs)
+}
+
+// What a bar's costs say on hover, after its `name`: its total, then each series it has, idle ticks' within the
+// overseer's.
+function costsHint(name: string, costs: SpendCosts): string {
+    const said = (series: Series) => `${series.label} ${costText(costs[series.key])}`
     const idle = SERIES.find((series) => series.key === 'idle')
-    const ofIt = idle !== undefined && (day.costs.idle ?? 0) > 0 ? ` (${said(idle)})` : ''
-    const parts = SERIES.filter((series) => series.key !== 'idle' && (day.costs[series.key] ?? 0) > 0).map((series) =>
+    const ofIt = idle !== undefined && (costs.idle ?? 0) > 0 ? ` (${said(idle)})` : ''
+    const parts = SERIES.filter((series) => series.key !== 'idle' && (costs[series.key] ?? 0) > 0).map((series) =>
         series.key === 'overseer' ? `${said(series)}${ofIt}` : said(series),
     )
-    const total = day.costs.total === null ? 'nothing reported' : costText(day.costs.total)
-    const name = dayName(day, clock)
+    const total = costs.total === null ? 'nothing reported' : costText(costs.total)
     return parts.length === 0 ? `${name}: ${total}` : `${name}: ${total}, ${parts.join(', ')}`
+}
+
+/** The windows By day offers a week's pitch in: 30 days, which reads as four or five bars rather than thirty. */
+export function weeksOffered(range: SpendBreakdownRange): boolean {
+    return range.days === 30
+}
+
+/** A week of By day at the week's pitch: the window's days in one local ISO week, Monday to Sunday, summed. */
+export interface SpendWeek {
+    /** Its Monday, `2026-10-05`, as the first-call chart names a week: its key, which may fall before the window. */
+    week: string
+    /** How many of the window's days it holds: 7, or fewer at the window's ends. */
+    days: number
+    /** What the runs that started on those days cost, each series summed, null where none reported a cost. */
+    costs: SpendCosts
+    /** How many tickets the loop marked done on them. */
+    done: number
+}
+
+/** The window's days by local ISO week, oldest first, each week's costs and tickets done summed. */
+export function spendWeeks(days: readonly SpendDay[]): SpendWeek[] {
+    const weeks = new Map<string, SpendWeek>()
+    for (const day of days) {
+        const monday = mondayOf(day.day)
+        const seen = weeks.get(monday)
+        if (seen === undefined) {
+            weeks.set(monday, { week: monday, days: 1, costs: { ...day.costs }, done: day.done })
+        } else {
+            seen.days += 1
+            seen.done += day.done
+            for (const key of COST_KEYS) {
+                seen.costs[key] = addCost(seen.costs[key], day.costs[key])
+            }
+        }
+    }
+    return [...weeks.values()]
+}
+
+/** A week as its row and its bar's hover name it: `week of Oct 5`. */
+export function weekName(week: Pick<SpendWeek, 'week'>): string {
+    return `week of ${dateLabel(week.week)}`
+}
+
+/**
+ * Each week as By day draws it at the week's pitch: named on the axis by its Monday, `Oct 5`, as the first-call chart
+ * names one, and on hover in full, with how many of the window's days a week at its ends holds.
+ */
+export function weekBars(weeks: readonly SpendWeek[]): DayBar[] {
+    return weeks.map((week) => ({
+        key: week.week,
+        label: dateLabel(week.week),
+        hint: costsHint(
+            week.days === 7 ? weekName(week) : `${weekName(week)}, ${counted(week.days, 'day')}`,
+            week.costs,
+        ),
+        total: week.costs.total ?? 0,
+        totalText: costText(week.costs.total),
+        segments: SERIES.map((series) => ({
+            key: series.key,
+            fill: series.fill,
+            value: seriesCost(week.costs, series.key),
+        })),
+    }))
+}
+
+// Every cost a day carries, each series' and the total, which a week sums.
+const COST_KEYS = [...SERIES.map((series) => series.key), 'total'] as const
+
+// The Monday of a day's ISO week, `YYYY-MM-DD`, counted on the calendar alone, whatever the browser's zone.
+function mondayOf(day: string): string {
+    const [year, month, date] = day.split('-').map(Number)
+    const at = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, date ?? 1))
+    at.setUTCDate(at.getUTCDate() - ((at.getUTCDay() + 6) % 7))
+    return at.toISOString().slice(0, 10)
 }
 
 /**
@@ -462,9 +544,49 @@ export function monthName(month: SpendMonth): string {
  * What the month spent against its budget, and where its pace takes it: `$15.76 of $40 (39%), on pace for $65.14.`
  */
 export function budgetText(month: SpendMonth): string {
-    const spent = `${costText(month.spent_usd ?? 0)} of $${month.budget_usd} (${budgetPercent(month)}%)`
     const pace = month.projected_usd === null ? '' : `, on pace for ${costText(month.projected_usd)}`
-    return `${spent}${pace}.`
+    return `${budgetSpentText(month)}${pace}.`
+}
+
+/** What the month spent against its budget: `$15.76 of $40 (39%)`. */
+export function budgetSpentText(month: SpendMonth): string {
+    return `${costText(month.spent_usd ?? 0)} of $${month.budget_usd} (${budgetPercent(month)}%)`
+}
+
+/**
+ * Where the month's pace takes it, the line under the budget's bar: `On pace to spend $65.14 of $40.` Null before the
+ * pace has anything to go on, in the month's first day or while nothing reported a cost.
+ */
+export function paceText(month: SpendMonth): string | null {
+    return month.projected_usd === null
+        ? null
+        : `On pace to spend ${costText(month.projected_usd)} of $${month.budget_usd}.`
+}
+
+/**
+ * Which day of the month it is, from how much of it has gone by, and how many it has: the label under the budget bar's
+ * mark, `day 8 of 31`.
+ */
+export function budgetDayText(month: SpendMonth): string {
+    const [year, number] = month.month.split('-').map(Number)
+    // Day 0 of the next month is this one's last.
+    const days = new Date(Date.UTC(year ?? 1970, number ?? 1, 0)).getUTCDate()
+    const day = Math.min(days, Math.max(1, Math.floor(month.elapsed * days) + 1))
+    return `day ${day} of ${days}`
+}
+
+/**
+ * The line under the totals for the series they fold, those at a dash: `No dry runs, no sessions outside canopy.`, the
+ * sessions outside canopy `not read yet` until `canopy loop` reads them (`read`). Empty when none is folded.
+ */
+export function foldedText(folded: readonly Series[], read: boolean): string {
+    const words = folded.map((series) =>
+        series.key === 'outside' && !read
+            ? 'sessions outside canopy not read yet'
+            : (series.none ?? `no ${series.label}`),
+    )
+    const line = words.join(', ')
+    return line === '' ? '' : `${line.charAt(0).toUpperCase()}${line.slice(1)}.`
 }
 
 /**
