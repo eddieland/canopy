@@ -21,6 +21,36 @@ export const PALETTES = {
 /** A set of neutrals `T` can wear. */
 export type Palette<T extends ResolvedTheme = ResolvedTheme> = (typeof PALETTES)[T][number]
 
+/** What each palette is called where the operator picks one: Settings, and the theme toggle's card. */
+export const PALETTE_LABELS: { readonly [T in ResolvedTheme]: Readonly<Record<Palette<T>, string>> } = {
+    light: {
+        lavender: 'Lavender',
+        'off-white': 'Off-white',
+        sage: 'Sage',
+        solarized: 'Solarized',
+        nord: 'Nord',
+        gruvbox: 'Gruvbox',
+        'rose-pine': 'Rosé Pine',
+    },
+    dark: {
+        indigo: 'Indigo',
+        grey: 'Grey',
+        black: 'Black',
+        forest: 'Forest',
+        plum: 'Plum',
+        solarized: 'Solarized',
+        gruvbox: 'Gruvbox',
+        monokai: 'Monokai',
+    },
+}
+
+/** `theme`'s palettes in order, the default first, each with its label. */
+export function paletteOptions<T extends ResolvedTheme>(theme: T): { value: Palette<T>; label: string }[] {
+    const labels: Readonly<Record<Palette<T>, string>> = PALETTE_LABELS[theme]
+    const values: readonly Palette<T>[] = PALETTES[theme]
+    return values.map((value) => ({ value, label: labels[value] }))
+}
+
 /** The palette picked for each theme. */
 export interface Palettes {
     /** The light theme's. */

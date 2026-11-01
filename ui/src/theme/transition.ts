@@ -16,20 +16,27 @@ const DURATION_MS = 420
  * when the user prefers reduced motion or the browser has no View Transitions API.
  */
 export function switchTheme(preference: ThemePreference, origin?: HTMLElement | null): void {
-    reveal(() => setPreference(preference), origin)
+    void reveal(() => setPreference(preference), origin)
 }
 
-/** Picks `palette` for `theme`, with the same reveal as a theme's when the page shows that theme, else at once. */
+/**
+ * Picks `palette` for `theme`, with the same reveal as a theme's when the page shows that theme, else at once.
+ * Settles when the reveal is over: while it runs, the page under it takes no pointer, so what follows the pointer, as
+ * the theme toggle's card does, waits for it.
+ */
 export function switchPalette<T extends ResolvedTheme>(
     theme: T,
     palette: Palette<T>,
     origin?: HTMLElement | null,
-): void {
-    reveal(() => setPalette(theme, palette), getSnapshot().resolved === theme ? origin : null)
+): Promise<void> {
+    return reveal(() => setPalette(theme, palette), getSnapshot().resolved === theme ? origin : null)
 }
 
-/** Runs `change` and lets React commit it, inside a view transition that grows from `origin` when there is one. */
-function reveal(change: () => void, origin?: HTMLElement | null): void {
+/**
+ * Runs `change` and lets React commit it, inside a view transition that grows from `origin` when there is one.
+ * Settles when the transition is over, or at once without one.
+ */
+async function reveal(change: () => void, origin?: HTMLElement | null): Promise<void> {
     const commit = (): void => {
         flushSync(change)
     }
@@ -62,4 +69,7 @@ function reveal(change: () => void, origin?: HTMLElement | null): void {
         .catch(() => {
             // Skipped (another transition started, or the tab is hidden): the theme is already applied.
         })
+    await transition.finished.catch(() => {
+        // Skipped as above: it is over all the same.
+    })
 }
