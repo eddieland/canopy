@@ -363,9 +363,13 @@ commented on it, or sent an earlier plan back; **sent back**, replaced by a newe
 - **Each plan**: every plan written in the window, with its run, its ticket, its level, how it went and what changed
   first, its length, how long approving it took, and the resumes its ticket started after, their reasons on hover.
 
-A length is in pages, about 500 words each, counted from the file's size as its planner wrote it: 3,000 bytes to the
-page, rounded to the nearest half. A plan heavy on code blocks or tables reads longer or shorter than its pages say, so
-the exact size is on each length's hover.
+A length is in pages of about 500 words, worked out from the file's size as its planner wrote it: 3,000 bytes to the
+page, rounded to the nearest half. canopy keeps a plan's size, not its text, so this is an estimate, but a good one.
+Markdown runs close to six bytes a word, so as a word count it is within a few percent. How far you scroll varies more.
+Long paragraphs fill the width and make a plan look shorter than its pages say. Code blocks and tables are mostly short
+lines, so a plan full of them scrolls about a fifth longer. Either way a long plan still ranks as longer than a short
+one, which is what the length table needs. A plan near a cut may land one bucket off; each bucket is twice the last,
+so missing by two would take an estimate off by double. The exact size is on each length's hover.
 
 A ticket's resumes after its plan's approval are its PR's, since canopy never plans a ticket that has a branch. They
 keep coming until the ticket is done, so an open ticket's count can still grow; the **done** column says how many are
