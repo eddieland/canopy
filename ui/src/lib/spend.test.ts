@@ -10,7 +10,15 @@ import {
     budgetPercent,
     budgetState,
     budgetPartsText,
+    budgetDayText,
+    budgetSpentText,
     budgetText,
+    foldedText,
+    paceText,
+    spendWeeks,
+    weekBars,
+    weekName,
+    weeksOffered,
     sessionsReadText,
     chartTop,
     dayHint,
@@ -367,6 +375,74 @@ describe('monthly budget', () => {
 
     it('names the month as a calendar does', () => {
         expect(monthName(month(1, null))).toBe('October 2026')
+    })
+
+    it("splits what it spent from where its pace takes it, the bar's line, which waits for a pace", () => {
+        expect(budgetSpentText(month(15.76, 65.14))).toBe('$15.76 of $40 (39%)')
+        expect(paceText(month(15.76, 65.14))).toBe('On pace to spend $65.14 of $40.')
+        expect(paceText(month(1, null))).toBeNull()
+    })
+
+    it("labels the bar's mark with the day of the month, from how much of it has gone by", () => {
+        // A quarter of October's 31 days is the middle of its 8th.
+        expect(budgetDayText(month(1, null))).toBe('day 8 of 31')
+        expect(budgetDayText({ ...month(1, null), elapsed: 0 })).toBe('day 1 of 31')
+        expect(budgetDayText({ ...month(1, null), elapsed: 1 })).toBe('day 31 of 31')
+        expect(budgetDayText({ ...month(1, null), month: '2026-02', elapsed: 0.5 })).toBe('day 15 of 28')
+    })
+})
+
+// The series of `keys`, in the order the page names them.
+function named(...keys: string[]) {
+    return SERIES.filter((series) => keys.includes(series.key))
+}
+
+describe('the totals at a dash', () => {
+    it('fold into one line, the sessions outside canopy by their own name', () => {
+        expect(foldedText(named('dry_run', 'outside'), true)).toBe('No dry runs, no sessions outside canopy.')
+        expect(foldedText(named('idle'), true)).toBe('No idle ticks.')
+    })
+
+    it("say the sessions outside canopy wait on the loop's read, rather than that there were none", () => {
+        expect(foldedText(named('outside'), false)).toBe('Sessions outside canopy not read yet.')
+    })
+
+    it('say nothing when no total is folded', () => {
+        expect(foldedText([], false)).toBe('')
+    })
+})
+
+describe('By day by week', () => {
+    it('is offered over 30 days alone', () => {
+        expect(weeksOffered({ days: 30 })).toBe(true)
+        expect(weeksOffered({ days: 7 })).toBe(false)
+        expect(weeksOffered({ hours: 24 })).toBe(false)
+    })
+
+    it("sums the window's days by ISO week, each named by its Monday, a part week at either end", () => {
+        // Saturday 3 October to Tuesday 13 October 2026: the end of one week, a whole one, and the start of another.
+        const days = ['03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13'].map((d) =>
+            day(`2026-10-${d}`, { workers: 1, total: 1 }),
+        )
+        const [first] = days
+        if (first !== undefined) {
+            first.costs = { ...NONE, overseer: 0.5, idle: 0.25, total: 0.5 }
+            first.done = 2
+        }
+        const weeks = spendWeeks(days)
+        expect(weeks.map((w) => [w.week, w.days, w.costs.total, w.done])).toEqual([
+            ['2026-09-28', 2, 1.5, 2],
+            ['2026-10-05', 7, 7, 0],
+            ['2026-10-12', 2, 2, 0],
+        ])
+        // A series no day of the week reported stays unreported.
+        expect(weeks[1]?.costs.overseer).toBeNull()
+        expect(weekName({ week: '2026-10-05' })).toBe('week of Oct 5')
+
+        const bars = weekBars(weeks)
+        expect(bars.map((bar) => bar.label)).toEqual(['Sep 28', 'Oct 5', 'Oct 12'])
+        expect(bars[0]?.hint).toBe('week of Sep 28, 2 days: $1.50, overseer $0.50 (idle ticks $0.25), workers $1.00')
+        expect(bars[1]?.hint).toBe('week of Oct 5: $7.00, workers $7.00')
     })
 })
 

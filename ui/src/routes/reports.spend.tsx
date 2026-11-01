@@ -7,12 +7,14 @@ import type { SpendBreakdownRange } from '@/api/queries'
 import { SPEND_KINDS } from '@/api/types'
 import type {
     SpendBreakdown,
+    SpendCosts,
     SpendDay,
     SpendFirstCallWeek,
     SpendKind,
     SpendMonth,
     SpendPullRequest,
     SpendSessions,
+    SpendShare,
     SpendTicket,
 } from '@/api/types'
 import { CellBar } from '@/components/cell-bar'
@@ -25,10 +27,10 @@ import { PullRequestTable } from '@/components/pull-request-table'
 import type { PullRequestColumn } from '@/components/pull-request-table'
 import { ReadoutTiles } from '@/components/readout-tiles'
 import type { ReadoutTile } from '@/components/readout-tiles'
-import { TickRow } from '@/components/tick-row'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Clipped, Hinted, Tip, Tipped } from '@/components/tip'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { UnnamedModel } from '@/components/unnamed-model'
 import { WindowToggle } from '@/components/window-toggle'
 import { barPercent } from '@/lib/chart'
@@ -45,7 +47,14 @@ import {
     budgetPartsText,
     budgetPercent,
     budgetState,
-    budgetText,
+    budgetDayText,
+    budgetSpentText,
+    foldedText,
+    paceText,
+    spendWeeks,
+    weekBars,
+    weekName,
+    weeksOffered,
     sessionsReadText,
     chartTop,
     dayName,
@@ -86,10 +95,23 @@ interface SpendSearch {
     first_kind?: SpendKind | undefined
     first_series?: string | undefined
     ticket?: string | undefined
+    // By day's pitch over 30 days: a bar per week rather than per day.
+    pitch?: 'week' | undefined
 }
 
 // The search keys of the kind filters: By model's, By tool's, and First calls by week's.
 type KindKey = 'model_kind' | 'tool_kind' | 'first_kind'
+
+// What a bar of By day stands for: an hour in a window of hours, else a day, or a week when picked over 30 days.
+type Pitch = 'hour' | 'day' | 'week'
+
+// A row of By day's table: its test id's end, its name, and its figures.
+interface PitchRow {
+    key: string
+    name: string
+    costs: SpendCosts
+    done: number
+}
 
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP =
@@ -97,7 +119,10 @@ const HELP =
     "ticks' part of it apart, the workers, plans, chores, and reviews it started, and your tasks' runs; beside it, " +
     "the tickets the loop marked done, and what each ticket's and PR's own runs cost; what each kind spent on each " +
     "model; which tools put the most into the runs' context; and how much of each kind's first model call the cache " +
-    'served, week by week. As canopy spend --days N prints it.'
+    "served, week by week. As canopy spend --days N prints it. This month's bar fills with the budget spent; " +
+    'the mark across it is how far through the month you are, so a bar past its mark is spending faster than the ' +
+    'budget allows, and the ticks over it are your alerts short of the budget, each heard once by a sink that takes ' +
+    'loop events.'
 
 // What each share of the sessions panel counts, said when the operator hovers its name.
 const SESSIONS_CANOPY_HINT =
@@ -157,6 +182,11 @@ const TOTALS_ORDER = [
     'outside',
 ] as const
 
+// What the Ticks panel's two tables group the ticks by, said on the hover of each one's first column's name.
+const BOUGHT_HINT = 'What the tick bought: whether the loop found it idle, ran it by hand, or it ended other than ok'
+const WOKEN_HINT =
+    "What ended the loop's wait before the tick: its start, its timer, a run ending, your message, and so on"
+
 // What the ticks' tables' last column counts, said when the operator hovers its name.
 const NO_OVERSEER_HINT =
     'ticks that ran no overseer: the harness left it nothing to judge, or the tick halted before it; each cost nothing'
@@ -185,6 +215,7 @@ export const Route = createFileRoute('/reports/spend')({
             // Any series is kept: one the window's weeks do not have reads as the kind's own.
             first_series: typeof search['first_series'] === 'string' ? search['first_series'] : undefined,
             ticket: typeof search['ticket'] === 'string' && search['ticket'] !== '' ? search['ticket'] : undefined,
+            pitch: search['pitch'] === 'week' ? 'week' : undefined,
         }
     },
     component: SpendPage,
@@ -200,6 +231,8 @@ function SpendPage() {
     const clock = useClock()
     // What the empty panels say they looked over: `these 24 hours`, `these 7 days`.
     const span = windowName(shown)
+    // By day's pitch: the hour in a window of hours, the week when picked over 30 days, else the day.
+    const pitch = pitchOf(shown, search.pitch)
     const { data } = query
     // The month against its budget, whatever the window; null with no budget set, and while nothing is read.
     const month = data?.month ?? null
@@ -249,11 +282,26 @@ function SpendPage() {
             {!failed && (
                 <>
                     <Panel data-testid="spend-by-day">
-                        <PanelHeader label={shown.hours === undefined ? 'By day' : 'By hour'} />
+                        <PanelHeader label={`By ${pitch}`}>
+                            {weeksOffered(shown) && (
+                                <PitchToggle
+                                    pitch={pitch}
+                                    onPick={(picked) => {
+                                        void navigate({
+                                            search: (prev) => ({
+                                                ...prev,
+                                                pitch: picked === 'week' ? 'week' : undefined,
+                                            }),
+                                            resetScroll: false,
+                                        })
+                                    }}
+                                />
+                            )}
+                        </PanelHeader>
                         {data === undefined ? (
                             <PanelSkeleton rows={6} className="min-h-72" />
                         ) : (
-                            <ByDay days={data.per_day} span={span} unit={shown.hours === undefined ? 'day' : 'hour'} />
+                            <ByDay days={data.per_day} span={span} pitch={pitch} />
                         )}
                     </Panel>
                     <div className="grid gap-6 xl:grid-cols-2">
@@ -362,42 +410,14 @@ function SpendPage() {
                             <Sessions sessions={data.sessions ?? null} span={span} />
                         )}
                     </Panel>
-                    <div className="grid gap-6 xl:grid-cols-2">
-                        <Panel data-testid="spend-ticks">
-                            <PanelHeader label="Ticks by what they bought" />
-                            {data === undefined ? (
-                                <PanelSkeleton rows={5} className="min-h-40" />
-                            ) : (
-                                <TickGroups found={data} span={span} />
-                            )}
-                        </Panel>
-                        <Panel data-testid="spend-woken">
-                            <PanelHeader label="Ticks by what woke them" />
-                            {data === undefined ? (
-                                <PanelSkeleton rows={4} className="min-h-40" />
-                            ) : (
-                                <Woken found={data} span={span} />
-                            )}
-                        </Panel>
-                    </div>
-                    <Panel data-testid="spend-idle-ticks">
-                        <PanelHeader label="Idle ticks">
-                            <span className="readout text-xs text-muted-foreground">
-                                {data?.idle_ticks.length ?? ''}
-                            </span>
+                    <Panel data-testid="spend-ticks">
+                        <PanelHeader label="Ticks">
+                            {data !== undefined && <IdleShare share={data.idle_share} />}
                         </PanelHeader>
                         {data === undefined ? (
-                            <PanelSkeleton className="min-h-24" />
-                        ) : data.idle_ticks.length === 0 ? (
-                            <Empty size="panel">no idle ticks in these {span}</Empty>
+                            <PanelSkeleton rows={5} className="min-h-40" />
                         ) : (
-                            <PanelScroll label="Idle ticks" className="max-h-96">
-                                <ul className="divide-y" data-testid="spend-idle-tick-list">
-                                    {data.idle_ticks.map((tick) => (
-                                        <TickRow key={tick.id} tick={tick} />
-                                    ))}
-                                </ul>
-                            </PanelScroll>
+                            <Ticks found={data} span={span} />
                         )}
                     </Panel>
                 </>
@@ -414,11 +434,49 @@ function rangeOf(search: SpendSearch): SpendBreakdownRange {
     return search.days === undefined ? DEFAULT_WINDOW : { days: search.days }
 }
 
+// By day's pitch in the window shown: a week picked in a window that offers none reads as the day.
+function pitchOf(shown: SpendBreakdownRange, picked: 'week' | undefined): Pitch {
+    if (shown.hours !== undefined) {
+        return 'hour'
+    }
+    return picked === 'week' && weeksOffered(shown) ? 'week' : 'day'
+}
+
 /**
- * The local month so far against the monthly budget, whatever the window: a sentence with the numbers, what they are
- * made of, canopy's runs and the sessions outside canopy, and a bar of the budget spent, its fill the state's, beside a
- * mark at how much of the month has gone by. The bar is for the eye, so it is hidden from a screen reader, which reads
- * the sentences. With no budget set, where to set one.
+ * By day's pitch, beside its label over 30 days: `day` or `week`, a segmented control as the window is, so a month's
+ * trend can read as four or five bars rather than thirty.
+ */
+function PitchToggle({ pitch, onPick }: { pitch: Pitch; onPick: (picked: Pitch) => void }) {
+    return (
+        <ToggleGroup
+            type="single"
+            value={pitch}
+            aria-label="Pitch"
+            onValueChange={(value) => {
+                // Pressing the pitch shown turns it off, which reads as no value: keep it.
+                if (value === 'day' || value === 'week') {
+                    onPick(value)
+                }
+            }}
+        >
+            <ToggleGroupItem value="day" data-testid="spend-pitch-day">
+                by day
+            </ToggleGroupItem>
+            <ToggleGroupItem value="week" data-testid="spend-pitch-week">
+                by week
+            </ToggleGroupItem>
+        </ToggleGroup>
+    )
+}
+
+/**
+ * The local month so far against the monthly budget, whatever the window: what it spent, what that is made of,
+ * canopy's runs and the sessions outside canopy, a bar of the budget spent, its fill the state's, and a line on where
+ * its pace takes it. The bar labels itself: the mark across it, how much of the month has gone by, is the day under it
+ * (`day 8 of 31`), and each alert short of the budget a tick over it with its percent; each label's offset follows its
+ * place on the bar, so one at an end sits flush with it. The bar is for the eye, so it is hidden from a screen reader,
+ * which reads the day and the alerts in a sentence of its own. What the bar means is the title's help. With no budget
+ * set, where to set one.
  */
 function Budget({ month }: { month: SpendMonth | null }) {
     const clock = useClock()
@@ -435,51 +493,97 @@ function Budget({ month }: { month: SpendMonth | null }) {
         )
     }
     const state = budgetState(month)
+    const elapsed = Math.round(month.elapsed * 1000) / 10
+    const day = budgetDayText(month)
+    const pace = paceText(month)
     return (
         <div className="flex flex-col gap-2 p-3">
             <p className="text-sm text-foreground" data-testid="spend-budget-text">
                 <span className={cn('font-medium', BUDGET_TEXT[state])}>{BUDGET_WORD[state]}</span>:{' '}
-                <span className="readout">{budgetText(month)}</span>
+                <span className="readout">{budgetSpentText(month)}</span>
             </p>
             <p className="text-xs text-muted-foreground" data-testid="spend-budget-parts">
                 {budgetPartsText(month, clock)}
             </p>
-            <div aria-hidden className="relative h-2 rounded-full bg-surface-raised" data-testid="spend-budget-meter">
-                <div
-                    className={cn('h-full rounded-full', BUDGET_FILL[state])}
-                    style={{ width: `${Math.min(100, budgetPercent(month))}%` }}
-                />
+            <div aria-hidden className="relative pt-5 pb-5" data-testid="spend-budget-meter">
                 {alertMarks(month).map((percent) => (
-                    <div
-                        key={percent}
-                        className="absolute top-full mt-0.5 h-1.5 w-px bg-muted-foreground"
-                        style={{ left: `${percent}%` }}
-                        data-testid={`spend-budget-alert-${percent}`}
-                    />
+                    <BarLabel key={percent} at={percent} className="top-0" testId={`spend-budget-alert-${percent}`}>
+                        {percent}%
+                    </BarLabel>
                 ))}
-                <div
-                    className="absolute -inset-y-1 w-0.5 rounded-full bg-foreground"
-                    style={{ left: `${Math.round(month.elapsed * 1000) / 10}%` }}
-                />
+                <div className="relative h-2 rounded-full bg-surface-raised">
+                    <div
+                        className={cn('h-full rounded-full', BUDGET_FILL[state])}
+                        style={{ width: `${Math.min(100, budgetPercent(month))}%` }}
+                    />
+                    {alertMarks(month).map((percent) => (
+                        <div
+                            key={percent}
+                            className="absolute bottom-full mb-0.5 h-1.5 w-px bg-muted-foreground"
+                            style={{ left: `${percent}%` }}
+                        />
+                    ))}
+                    <div
+                        className="absolute -inset-y-1 w-0.5 rounded-full bg-foreground"
+                        style={{ left: `${elapsed}%` }}
+                    />
+                </div>
+                <BarLabel at={elapsed} className="bottom-0" testId="spend-budget-day">
+                    {day}
+                </BarLabel>
             </div>
-            <p className="mt-1 text-xs text-muted-foreground" data-testid="spend-budget-alerts">
-                The mark is how much of the month has gone by: a bar past it is spending faster than the budget allows.
-                {alertMarks(month).length > 0 && ' The ticks under it are your alerts short of the budget.'}{' '}
-                {alertsText(month)}
+            <p className="sr-only" data-testid="spend-budget-alerts">
+                {`It is ${day} of the month. ${alertsText(month)}`}
             </p>
+            {pace !== null && (
+                <p className="text-xs text-muted-foreground" data-testid="spend-budget-pace">
+                    {pace}
+                </p>
+            )}
         </div>
     )
 }
 
 /**
+ * A label on the budget's bar at `at` percent along it, over or under it by `className`: its offset is its own width
+ * times the same percent, so one at either end sits flush with the bar's, and one in the middle centers on its mark.
+ */
+function BarLabel({
+    at,
+    className,
+    testId,
+    children,
+}: {
+    at: number
+    className: string
+    testId: string
+    children: ReactNode
+}) {
+    return (
+        <span
+            className={cn('readout absolute text-2xs leading-none whitespace-nowrap text-muted-foreground', className)}
+            style={{ left: `${at}%`, transform: `translateX(-${at}%)` }}
+            data-testid={testId}
+        >
+            {children}
+        </span>
+    )
+}
+
+/**
  * The window's total, each kind's, and what it got done: the tickets marked done, and the whole spend over them, each
- * against the window before's, where more tickets done is better and spend is never colored. The grid's cells are too
- * narrow to name that window under each figure, so a line under them names it once. Then idle ticks' share of the
- * overseer's, when the overseer spent something, and the runs that reported no cost, when a run ended.
+ * against the window before's, where more tickets done is better and spend is never colored. A kind that reported no
+ * cost is no tile, a dash in a figure's room, but a muted line under them (`No dry runs.`), so the tiles hold what was
+ * spent; when every kind is so, the total's dash says it alone. The grid's cells are too narrow to name the window
+ * before under each figure, so a line under them names it once. Then the runs that reported no cost, when a run ended.
  */
 function Totals({ found }: { found: SpendBreakdown }) {
     const { totals, previous } = found
     // Each series by the name the legend and the table give it, the overseer's whole before idle ticks' part of it.
+    const ordered = TOTALS_ORDER.flatMap((key) => SERIES.filter((series) => series.key === key))
+    const spent = ordered.filter((series) => totals[series.key] !== null)
+    const unspent = spent.length === 0 ? [] : ordered.filter((series) => !spent.includes(series))
+    const folded = foldedText(unspent, typeof found.sessions?.read_at === 'string')
     const cells: ReadoutTile[] = [
         {
             key: 'total',
@@ -487,7 +591,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
             value: <Cost usd={totals.total} />,
             delta: readoutDelta(totals.total, previous.totals.total, usdChange),
         },
-        ...TOTALS_ORDER.flatMap((key) => SERIES.filter((series) => series.key === key)).map((series) => ({
+        ...spent.map((series) => ({
             key: series.key.replace('_', '-'),
             label: series.label,
             hint: series.hint,
@@ -512,31 +616,25 @@ function Totals({ found }: { found: SpendBreakdown }) {
         },
     ]
     const compared = [...cells, ...done].some((tile) => tile.delta !== null && tile.delta !== undefined)
-    const unpriced = unpricedText(found.unpriced)
-    // In a window where nothing was spent, neither sentence has anything behind it: the share is of the live
-    // overseer's spend, and the cost clause speaks for the runs that ended.
-    const spent = found.idle_share !== null
+    // In a window where no run ended, the cost clause has nothing to speak for.
     const ended = found.unpriced.some((u) => u.runs > 0)
     return (
         <div className="flex flex-col gap-3 p-3">
             <ReadoutTiles tiles={cells} testId="spend-total" className={TOTALS_GRID} />
+            {folded !== '' && (
+                <p className="-mt-1 text-xs text-muted-foreground" data-testid="spend-total-folded">
+                    {folded}
+                </p>
+            )}
             <ReadoutTiles tiles={done} testId="spend" className={cn(TOTALS_GRID, 'border-t pt-3')} />
             {compared && (
                 <p className="text-xs text-muted-foreground" data-testid="spend-against">
                     Each change under a figure is on {windowBefore(found)}.
                 </p>
             )}
-            {(spent || ended) && (
-                <p className="max-w-3xl text-xs text-muted-foreground" data-testid="spend-idle-share">
-                    {spent && (
-                        <>
-                            Idle ticks were{' '}
-                            <span className="readout text-foreground">{shareText(found.idle_share)}</span> of the live
-                            overseer&apos;s spend.
-                        </>
-                    )}
-                    {spent && ended && ' '}
-                    {ended && unpriced}
+            {ended && (
+                <p className="max-w-3xl text-xs text-muted-foreground" data-testid="spend-unpriced">
+                    {unpricedText(found.unpriced)}
                 </p>
             )}
         </div>
@@ -544,31 +642,37 @@ function Totals({ found }: { found: SpendBreakdown }) {
 }
 
 /**
- * Each day, or hour, as a stacked bar, the series bottom up, with the legend under it, then the same numbers as a
- * table: the chart is for the eye, so a screen reader reads the table. A window where no run reported a cost says so,
- * in place of all three. A week's table shows whole; a longer one scrolls under its column names, so the panels below
- * stay in reach.
+ * Each day, hour, or week, by `pitch`, as a stacked bar, the series bottom up, with the legend under it, then the same
+ * numbers as a table: the chart is for the eye, so a screen reader reads the table. A window where no run reported a
+ * cost says so, in place of all three. A week's table shows whole; a longer one scrolls under its column names, so the
+ * panels below stay in reach.
  */
-function ByDay({ days, span, unit }: { days: SpendDay[]; span: string; unit: 'day' | 'hour' }) {
+function ByDay({ days, span, pitch }: { days: SpendDay[]; span: string; pitch: Pitch }) {
     const clock = useClock()
     if (chartTop(days) === 0) {
         return <Empty size="panel">no run reported a cost in these {span}</Empty>
     }
+    // Only days sum into weeks: an hour's name is no date.
+    const weeks = pitch === 'week' ? spendWeeks(days) : []
+    const weekRows = weeks.map((week) => ({ key: `week-${week.week}`, name: weekName(week), ...week }))
+    const dayRows = days.map((day) => ({ key: `day-${day.day}`, name: dayName(day, clock), ...day }))
+    const rows: PitchRow[] = pitch === 'week' ? weekRows : dayRows
+    const bars = pitch === 'week' ? weekBars(weeks) : spendBars(days, clock)
     return (
         <div className="flex flex-col gap-4 p-3">
-            {/* Measured afresh for each window: another count of bars is another pitch. */}
-            <DayChart key={days.length} bars={spendBars(days, clock)} testId="spend" />
+            {/* Measured afresh for each window and pitch: another count of bars is another pitch. */}
+            <DayChart key={bars.length} bars={bars} testId="spend" />
             <DayChartLegend series={SERIES} testId="spend" />
             <ChartTable
-                what={counted(days.length, unit)}
-                label={`Spend by ${unit}`}
+                what={counted(rows.length, pitch)}
+                label={`Spend by ${pitch}`}
                 className="max-h-60 overflow-x-auto"
                 testId="spend-table-scroll"
             >
                 <table className="w-full border-collapse text-sm" data-testid="spend-table">
                     <thead className="sticky top-0 bg-surface">
                         <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">{unit}</th>
+                            <th className="panel-label pb-1.5 text-left font-normal">{pitch}</th>
                             {SERIES.map((series) => (
                                 <th key={series.key} className="panel-label pb-1.5 pl-3 font-normal">
                                     {series.label}
@@ -579,21 +683,21 @@ function ByDay({ days, span, unit }: { days: SpendDay[]; span: string; unit: 'da
                         </tr>
                     </thead>
                     <tbody className="font-mono text-xs">
-                        {days.toReversed().map((day) => (
-                            <tr key={day.day} className="text-right" data-testid={`spend-day-${day.day}`}>
+                        {rows.toReversed().map((row) => (
+                            <tr key={row.key} className="text-right" data-testid={`spend-${row.key}`}>
                                 <th scope="row" className="readout py-0.5 text-left font-normal whitespace-nowrap">
-                                    {dayName(day, clock)}
+                                    {row.name}
                                 </th>
                                 {SERIES.map((series) => (
                                     <td key={series.key} className="readout pl-3 text-muted-foreground">
-                                        <Cost usd={day.costs[series.key]} />
+                                        <Cost usd={row.costs[series.key] ?? null} />
                                     </td>
                                 ))}
                                 <td className="readout pl-3 text-foreground">
-                                    <Cost usd={day.costs.total} />
+                                    <Cost usd={row.costs.total ?? null} />
                                 </td>
-                                <td className={cn('readout pl-3', day.done === 0 && 'text-muted-foreground')}>
-                                    {day.done}
+                                <td className={cn('readout pl-3', row.done === 0 && 'text-muted-foreground')}>
+                                    {row.done}
                                 </td>
                             </tr>
                         ))}
@@ -671,23 +775,34 @@ function PullRequests({ pullRequests, span }: { pullRequests: SpendPullRequest[]
     return (
         <PullRequestTable
             rows={pullRequests}
-            columns={PULL_REQUEST_COLUMNS}
+            columns={pullRequestColumns(pullRequests)}
             label="Spend by pull request"
             testId="spend"
         />
     )
 }
 
-// What the spend page counts of each PR: its runs and reviews, and what they cost.
-const PULL_REQUEST_COLUMNS: readonly PullRequestColumn<SpendPullRequest>[] = [
-    {
-        key: 'runs',
-        label: 'runs',
-        cell: (pr) => pr.runs + pr.reviews,
-        title: (pr) => `${pr.runs} runs, ${pr.reviews} reviews`,
-    },
-    { key: 'spent', label: 'spent', cell: (pr) => <Cost usd={pr.cost_usd} /> },
-]
+// What the spend page counts of each PR: its runs and reviews, and what they cost, a bar of its share of the dearest's.
+function pullRequestColumns(rows: readonly SpendPullRequest[]): PullRequestColumn<SpendPullRequest>[] {
+    const spent = rows.map((pr) => pr.cost_usd)
+    return [
+        {
+            key: 'runs',
+            label: 'runs',
+            cell: (pr) => pr.runs + pr.reviews,
+            title: (pr) => `${pr.runs} runs, ${pr.reviews} reviews`,
+        },
+        {
+            key: 'spent',
+            label: 'spent',
+            cell: (pr) => (
+                <CellBar percent={barPercent(pr.cost_usd, spent)} valueClassName="w-16 text-right">
+                    <Cost usd={pr.cost_usd} />
+                </CellBar>
+            ),
+        },
+    ]
+}
 
 /**
  * A panel's kind filter, in its header as the runs page's is: `all`, which sums every kind's rows, unless `every` is
@@ -1064,42 +1179,77 @@ function Tools({ tools, kind, span }: { tools: ToolRow[]; kind: SpendKind | unde
     )
 }
 
-/** The ticks that ended in the window, a row per group, with idle ticks' share; a line saying so when none did. */
-function TickGroups({ found, span }: { found: SpendBreakdown; span: string }) {
+/**
+ * The ticks that ended in the window, side by side: by what they bought, a row per group, and the loop's live ticks by
+ * what ended the wait before each, the most common first; a line saying so when none ended. Under them, a link to the
+ * ticks page's idle ticks, what idle spend bought.
+ */
+function Ticks({ found, span }: { found: SpendBreakdown; span: string }) {
     if (found.ticks.every((g) => g.ticks === 0)) {
         return <Empty size="panel">no tick ended in these {span}</Empty>
     }
     return (
-        <CountTable
-            rows={found.ticks.map((g) => ({
-                key: g.group,
-                label: GROUP_LABEL[g.group],
-                hint: GROUP_HINT[g.group],
-                ticks: g.ticks,
-                usd: g.cost_usd,
-                without: g.without_overseer,
-            }))}
-            testId="spend-groups"
-        />
+        <div className="flex flex-col">
+            <div className="grid xl:grid-cols-2">
+                <CountTable
+                    name="bought"
+                    hint={BOUGHT_HINT}
+                    rows={found.ticks.map((g) => ({
+                        key: g.group,
+                        label: GROUP_LABEL[g.group],
+                        hint: GROUP_HINT[g.group],
+                        ticks: g.ticks,
+                        usd: g.cost_usd,
+                        without: g.without_overseer,
+                    }))}
+                    testId="spend-groups"
+                />
+                {found.woken.length === 0 ? (
+                    <Empty size="panel">no tick canopy loop ran in these {span}</Empty>
+                ) : (
+                    <CountTable
+                        name="woken by"
+                        hint={WOKEN_HINT}
+                        rows={found.woken.map((w) => ({
+                            key: w.by,
+                            label: w.by,
+                            ticks: w.ticks,
+                            usd: w.cost_usd,
+                            without: w.without_overseer,
+                        }))}
+                        testId="spend-woken-table"
+                    />
+                )}
+            </div>
+            <p className="border-t px-3 py-2 text-xs text-muted-foreground">
+                <Link
+                    to="/workspace/ticks"
+                    search={{ idle: true }}
+                    className="text-accent hover:underline"
+                    data-testid="spend-idle-link"
+                >
+                    Open the idle ticks
+                </Link>
+                , newest first, to see what idle spend bought.
+            </p>
+        </div>
     )
 }
 
-/** The loop's live ticks by what ended the wait before each, the most common first. */
-function Woken({ found, span }: { found: SpendBreakdown; span: string }) {
-    if (found.woken.length === 0) {
-        return <Empty size="panel">no tick canopy loop ran in these {span}</Empty>
+/**
+ * Idle ticks' share of the live overseer's spend, the Ticks panel's readout, what it counts on hover. Nothing when the
+ * overseer spent nothing, so there is nothing to share.
+ */
+function IdleShare({ share }: { share: number | null }) {
+    if (share === null) {
+        return null
     }
     return (
-        <CountTable
-            rows={found.woken.map((w) => ({
-                key: w.by,
-                label: w.by,
-                ticks: w.ticks,
-                usd: w.cost_usd,
-                without: w.without_overseer,
-            }))}
-            testId="spend-woken-table"
-        />
+        <Tip fact="Idle ticks' share of the live overseer's spend: what went on deciding there was nothing to do">
+            <span className="readout text-xs text-muted-foreground" data-testid="spend-idle-share">
+                {shareText(share)} idle
+            </span>
+        </Tip>
     )
 }
 
@@ -1120,45 +1270,50 @@ function Sessions({ sessions, span }: { sessions: SpendSessions | null; span: st
     if (sessions.canopy.sessions === 0 && sessions.outside.sessions === 0) {
         return <Empty size="panel">no session started in these {span}</Empty>
     }
-    const shares = [
-        { key: 'canopy', label: "canopy's runs", hint: SESSIONS_CANOPY_HINT, share: sessions.canopy },
-        { key: 'outside', label: 'outside canopy', hint: SESSIONS_OUTSIDE_HINT, share: sessions.outside },
+    const tiles: ReadoutTile[] = [
+        {
+            key: 'canopy',
+            label: "canopy's runs",
+            hint: SESSIONS_CANOPY_HINT,
+            value: <SessionsShare share={sessions.canopy} />,
+        },
+        {
+            key: 'outside',
+            label: 'outside canopy',
+            hint: SESSIONS_OUTSIDE_HINT,
+            value: <SessionsShare share={sessions.outside} />,
+        },
     ]
+    const spent = sessions.directories.map((d) => d.cost_usd)
     return (
-        <div className="flex flex-col gap-2 p-3">
-            <table className="w-full border-collapse text-sm" data-testid="spend-sessions-table">
-                <thead>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">sessions</th>
-                        <th className="panel-label pb-1.5 font-normal">count</th>
-                        <th className="panel-label pb-1.5 font-normal">spent</th>
-                    </tr>
-                </thead>
-                <tbody className="font-mono text-xs">
-                    {shares.map(({ key, label, hint, share }) => (
-                        <tr key={key} className="text-right" data-testid={`spend-sessions-${key}`}>
-                            <th scope="row" className="py-0.5 text-left font-normal">
-                                <Hinted hint={hint}>{label}</Hinted>
-                            </th>
-                            <td className="readout">{share.sessions}</td>
-                            <td className="readout">
-                                <Cost usd={share.cost_usd} />
-                            </td>
+        <div className="flex flex-col gap-3 p-3">
+            <ReadoutTiles tiles={tiles} testId="spend-sessions" />
+            {sessions.directories.length > 0 && (
+                <table className="w-full border-collapse text-sm" data-testid="spend-sessions-table">
+                    <thead>
+                        <tr className="text-right">
+                            <th className="panel-label pb-1.5 text-left font-normal">outside canopy, by directory</th>
+                            <th className="panel-label pb-1.5 pl-3 font-normal">sessions</th>
+                            <th className="panel-label pb-1.5 pl-3 font-normal">spent</th>
                         </tr>
-                    ))}
-                    {sessions.directories.map((d) => (
-                        <tr key={d.directory} className="text-right" data-testid="spend-sessions-directory">
-                            <th scope="row" className="min-w-0 py-0.5 pl-4 text-left font-normal text-muted-foreground">
-                                <Clipped text={d.directory} mono className="block" />
-                            </th>
-                            <td className="readout">{d.sessions}</td>
-                            <td className="readout">
-                                <Cost usd={d.cost_usd} />
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="font-mono text-xs">
+                        {sessions.directories.map((d) => (
+                            <tr key={d.directory} className="text-right" data-testid="spend-sessions-directory">
+                                <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
+                                    <Clipped text={d.directory} mono className="block" />
+                                </th>
+                                <td className="readout pl-3">{d.sessions}</td>
+                                <td className="pl-3">
+                                    <CellBar percent={barPercent(d.cost_usd, spent)} valueClassName="w-16 text-right">
+                                        <Cost usd={d.cost_usd} />
+                                    </CellBar>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
             <p className="text-xs text-muted-foreground">
                 A subagent&apos;s session counts with the session it ran for; another workspace&apos;s runs are outside.
             </p>
@@ -1166,26 +1321,42 @@ function Sessions({ sessions, span }: { sessions: SpendSessions | null; span: st
     )
 }
 
+/** A share of the sessions as its tile says it: what they cost, then how many there were, muted. */
+function SessionsShare({ share }: { share: SpendShare }) {
+    return (
+        <>
+            <Cost usd={share.cost_usd} />{' '}
+            <span className="text-xs text-muted-foreground">in {counted(share.sessions, 'session')}</span>
+        </>
+    )
+}
+
 /**
- * Rows of a label, a tick count, what those ticks' overseers cost, and how many ran no overseer: the harness left it
- * nothing to judge, or the tick halted before it, so each cost nothing.
+ * Rows of a label, under `name`, what `hint` says on hover, a tick count, what those ticks' overseers cost, and how
+ * many ran no overseer: the harness left it nothing to judge, or the tick halted before it, so each cost nothing.
  */
 function CountTable({
+    name,
+    hint,
     rows,
     testId,
 }: {
+    name: string
+    hint: string
     rows: { key: string; label: string; hint?: string; ticks: number; usd: number | null; without: number }[]
     testId: string
 }) {
     return (
         <div className="p-3">
-            <table className="w-full border-collapse text-sm" data-testid={testId}>
+            <table className="border-collapse text-sm" data-testid={testId}>
                 <thead>
                     <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">ticks</th>
-                        <th className="panel-label pb-1.5 font-normal">count</th>
-                        <th className="panel-label pb-1.5 font-normal">spent</th>
-                        <th className="panel-label pb-1.5 font-normal">
+                        <th className="panel-label pb-1.5 text-left font-normal">
+                            <Hinted hint={hint}>{name}</Hinted>
+                        </th>
+                        <th className="panel-label pb-1.5 pl-6 font-normal">ticks</th>
+                        <th className="panel-label pb-1.5 pl-6 font-normal">spent</th>
+                        <th className="panel-label pb-1.5 pl-6 font-normal whitespace-nowrap">
                             <Hinted hint={NO_OVERSEER_HINT}>no overseer</Hinted>
                         </th>
                     </tr>
@@ -1196,11 +1367,11 @@ function CountTable({
                             <th scope="row" className="py-0.5 text-left font-normal">
                                 <Hinted hint={row.hint}>{row.label}</Hinted>
                             </th>
-                            <td className="readout">{row.ticks}</td>
-                            <td className="readout">
+                            <td className="readout pl-6">{row.ticks}</td>
+                            <td className="readout pl-6">
                                 <Cost usd={row.usd} />
                             </td>
-                            <td className="readout">{row.without}</td>
+                            <td className="readout pl-6">{row.without}</td>
                         </tr>
                     ))}
                 </tbody>
