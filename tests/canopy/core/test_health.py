@@ -437,11 +437,11 @@ def test_durations_of_an_empty_window_are_none(canopy_env: CanopyEnv) -> None:
 
 
 def test_canopy_health_prints_the_durations(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    """Each sort's lengths and its limit, a median past three quarters of it flagged."""
+    """Each sort's lengths and its limit, a median at three quarters of it or more flagged."""
     journal_of_lengths(canopy_env.journal(), datetime.now(UTC))
     assert main(["health"]) == 0
     out = capsys.readouterr().out.splitlines()
-    lengths = out.index("How long they took, in minutes (! a median past three quarters of the timeout):")
+    lengths = out.index("How long they took, in minutes (! a median at three quarters of the timeout or more):")
     words = [line.split() for line in out[lengths + 1 : lengths + 7]]
     assert words == [
         ["kind", "what", "median", "p90", "longest", "timeouts", "limit"],

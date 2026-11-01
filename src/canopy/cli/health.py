@@ -9,7 +9,7 @@ import click
 
 from canopy.cli.common import open_context
 from canopy.cli.spend import cost_text, since_text
-from canopy.core import health, reports, spend
+from canopy.core import db, health, reports, spend
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -52,7 +52,11 @@ def cmd_health(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
         click.echo(reports.read_health(ctx, reports.Health(days=days)))
         return 0
     now = datetime.now(UTC)
-    for line in render(health.report(ctx.conn, now, days), health.durations(ctx.conn, now, days, ctx.config)):
+    # One snapshot, so a run ending between the two reads is in both tables or neither.
+    with db.read_snapshot(ctx.conn):
+        found = health.report(ctx.conn, now, days)
+        durations = health.durations(ctx.conn, now, days, ctx.config)
+    for line in render(found, durations):
         click.echo(line)
     return 0
 
@@ -86,10 +90,10 @@ def _line(kind: str, what: str, status: str, runs: str, spent: str) -> str:
     return f"{left}{runs:>{_COUNT_WIDTH}}{spent:>{_COST_WIDTH}}"
 
 
-# Each sort's lengths in minutes against its timeout, `-` for none; a median past three quarters of it is flagged.
+# Each sort's lengths in minutes against its timeout, `-` for none; a median at three quarters of it or more is flagged.
 def _durations(durations: Sequence[Duration]) -> list[str]:
     lines = [
-        "How long they took, in minutes (! a median past three quarters of the timeout):",
+        "How long they took, in minutes (! a median at three quarters of the timeout or more):",
         _length_line("kind", "what", "median", "p90", "longest", "timeouts", "limit"),
     ]
     for d in durations:
