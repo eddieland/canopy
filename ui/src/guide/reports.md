@@ -35,14 +35,17 @@ month stacked by kind in the same colors, the sessions outside canopy on top, th
 and the month you're looking at shaded. Click a bar to look at that month. The table folded under it has, for each
 month: what it **spent**, with how that moved on the month before on hover; its **runs**, a tick each for the overseer;
 the tokens the models were **sent** and **wrote**; the **cache hit**, the share of what was sent that came from the
-cache; the tickets **landed** and **closed**; the **PRs** a run first named in it; and the cost **per landed** ticket,
-the overseer and chores included, but not your own sessions, which landed nothing canopy knows of, against the month
+cache; the runs that **failed**, counted as the health page counts them, with how many ended and what the failures cost
+on hover; **green first**, the share of PR heads whose first run of every check wasn't red, as the CI page counts it;
+the tickets **landed** and **closed**; the **PRs** a run first named in it; and the cost **per landed** ticket, the
+overseer and chores included, but not your own sessions, which landed nothing canopy knows of, against the month
 before on hover too. A cache hit that drops from one month to the next is the first place to look when the bill grows
-and the work didn't: a changed prompt or a new tool list can turn every run cold.
+and the work didn't: a changed prompt or a new tool list can turn every run cold. A month that landed more while
+failing more and going green first less often may have been bought, not earned.
 
-**Delivery** is what the months got done, as a median per landed ticket. Each median is drawn across the months over
-the table, the latest month's figure beside its name, so a review wait creeping up reads as a line going the wrong way
-rather than a column of numbers you have to remember. Hover a point for its month:
+**Delivery** is what the months got done, as medians: four per landed ticket, then the first reviews'. Each median is
+drawn across the months over the table, the latest month's figure beside its name, so a review wait creeping up reads
+as a line going the wrong way rather than a column of numbers you have to remember. Hover a point for its month:
 
 - **iterations**: the worker runs, implement and resume, a ticket took before it landed. One means the first attempt
   shipped; five means somebody had opinions.
@@ -55,11 +58,15 @@ rather than a column of numbers you have to remember. Hover a point for its mont
   the first review asked for once the PR was ready, or the moment it was ready if nobody was asked. A PR opened ready
   was ready when it was opened; a draft, when it was last marked ready. Without GitHub's times, the end of the
   ticket's first worker run that ended done stands in for ready. A ticket nobody reviewed has none, and isn't counted.
+- **first review**: the median wait of every first review that came in the month, landed ticket or not, timed as the
+  reviews page times it, on GitHub's clock alone. Hover it for how many first reviews it's of. Where review wait asks
+  how long the work that shipped waited, this asks how long anything did, so a PR still sitting in review counts the
+  moment somebody looks at it.
 
-Both are GitHub's own times wherever canopy has them, and a proxy only where it doesn't: an older PR, read before
-canopy kept them, is never filled in after the fact. Hover or tap a median for how many of its tickets ran on GitHub's
-clock, and a ticket's figure under **Landed** for which clock it ran on. A month of mostly proxies reads a little slow,
-by a tick here and a worker's wrap-up there.
+To land and review wait are GitHub's own times wherever canopy has them, and a proxy only where it doesn't: an older
+PR, read before canopy kept them, is never filled in after the fact. Hover or tap either median for how many of its
+tickets ran on GitHub's clock, and a ticket's figure under **Landed** for which clock it ran on. A month of mostly
+proxies reads a little slow, by a tick here and a worker's wrap-up there.
 
 Click a month in the table, or its bar in the chart, to see it in detail below; the page opens on the latest.
 
