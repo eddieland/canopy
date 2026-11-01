@@ -119,7 +119,11 @@ Effort = Annotated[PlanEffort | None, BeforeValidator(_known_effort)]
 Flaky = Annotated[bool, BeforeValidator(lambda value: value is True)]
 #: Where a worker judged a flaky check failed (DESIGN §23): a value outside `FlakyCause` is no estimate, kept as
 #: `flaky_cause_other` if it is text, never a reason to drop the result with it.
-Cause = Annotated[FlakyCause | None, BeforeValidator(lambda value: value if value in FlakyCause else None)]
+Cause = Annotated[
+    FlakyCause | None,
+    # The `str` test first: `in` on an enum raises for an unhashable value, such as a list, before Python 3.13.
+    BeforeValidator(lambda value: value if isinstance(value, str) and value in FlakyCause else None),
+]
 
 
 def _line_within(limit: int) -> BeforeValidator:
