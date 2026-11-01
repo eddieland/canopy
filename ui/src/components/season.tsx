@@ -27,7 +27,7 @@ export function SeasonDecoration({ id, aloft }: { id: SeasonId; aloft: boolean }
             aria-hidden
             data-testid="buddy-season"
             data-season={id}
-            className="relative flex items-end gap-0.5 self-stretch"
+            className="relative flex items-end gap-2 self-stretch"
         >
             <Piece width={28} className="w-10">
                 {DRAWINGS[id]}

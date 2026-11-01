@@ -140,11 +140,11 @@ export function Butterfly({
 
 /**
  * A rainbow coming out of a cloud and down into the pot of gold: its feet on the pot, which stands one piece in from
- * the shamrock, 58 pixels from the scene's left, its coins 26 pixels over the scene's floor.
+ * the shamrock, 64 pixels from the scene's left, its coins 26 pixels over the scene's floor.
  */
 export function Rainbow() {
     return (
-        <svg viewBox="0 0 64 64" className="absolute bottom-6.5 left-0 size-16">
+        <svg viewBox="0 0 64 64" className="absolute bottom-6.5 left-1.5 size-16">
             <g fill="none" strokeWidth="2.1" className="opacity-85">
                 {/* Each band starts inside the cloud, 10 across, and comes down to the pot along its circle. */}
                 {RAINBOW.map(({ color, radius }) => {
