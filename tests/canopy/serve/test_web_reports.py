@@ -4,14 +4,22 @@ Reads only.
 """
 
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 
 import pytest
 
 from canopy.core import checklist_answers, db, health, pools, records, runtime_sessions, spend
 from canopy.core.checklist_answers import Answer, Checked
 from canopy.core.context import Context
-from canopy.core.vocab import CheckConclusion, ItemAnswer, PoolKind, ResumeReason, RunKind, RunStatus
+from canopy.core.vocab import (
+    CheckConclusion,
+    ItemAnswer,
+    PoolKind,
+    ResumeReason,
+    ReviewState,
+    RunKind,
+    RunStatus,
+)
 from canopy.infra import resources
 from canopy.runs import tasks
 from canopy.runtime.report import SessionPage, SessionSpend
@@ -23,9 +31,11 @@ from tests.canopy.helpers import (
     check_ran,
     context,
     earlier,
+    feedback_left,
     in_zone,
     journal_of_answers,
     kicked,
+    observed_pr,
     present,
     worker_ran,
 )
@@ -84,6 +94,34 @@ def test_each_month_counts_the_sessions_outside_canopy_as_the_budget_does(backen
     assert after["sessions_read_at"] == "2026-10-08T12:00:00Z"
     spent = c.get("/api/spend/breakdown", params={"days": 30}).json()["month"]["spent_usd"]
     assert october["cost_usd"] == pytest.approx(spent)
+
+
+def test_each_month_carries_the_health_ci_and_reviews_pages_headline_figures(canopy_env: CanopyEnv) -> None:
+    """Last month: a failed run and a done one, a red head and a green one, and a first review three hours in."""
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    conn = ctx.conn
+    first = datetime.now(UTC).astimezone().date().replace(day=1)
+    noon = datetime.combine(first - timedelta(days=15), time(12)).astimezone()
+
+    def at(hours: float) -> str:
+        return db.format_time(noon + timedelta(hours=hours))
+
+    pr = "https://github.com/acme/web/pull/7"
+    worker_ran(conn, RunKind.IMPLEMENT, at(0), prs={"web": pr}, cost=1.0)
+    worker_ran(conn, RunKind.RESUME, at(4), prs={"web": pr}, status=RunStatus.FAILED, cost=0.25)
+    check_ran(conn, pr, "h1", "unit", CheckConclusion.FAILURE, at(1))
+    check_ran(conn, pr, "h2", "unit", CheckConclusion.SUCCESS, at(5))
+    observed_pr(conn, pr, ready_at=at(1), review_requested_at=at(2))
+    feedback_left(conn, pr, "dana", at(5), ReviewState.CHANGES_REQUESTED)
+    c, _ = signed_in_client(ctx)
+    last, this = c.get("/api/reports/monthly", params={"months": 2}).json()["months"]
+    assert last["month"] == noon.strftime("%Y-%m")
+    assert (last["runs_ended"], last["failed"], last["failed_cost_usd"]) == (2, 1, 0.25)
+    assert (last["heads"], last["green_first"]) == (2, 1)
+    assert (last["first_reviews"], last["median_first_review_hours"]) == (1, pytest.approx(3.0))
+    assert (this["runs_ended"], this["failed"], this["failed_cost_usd"]) == (0, 0, None)
+    assert (this["heads"], this["first_reviews"], this["median_first_review_hours"]) == (0, 0, None)
 
 
 def test_the_checklist_counts_each_repositorys_items_as_the_cli_does(ctx: Context) -> None:

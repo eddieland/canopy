@@ -10,21 +10,19 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.core import db, records, spend, sql
+from canopy.core import db, records, spend
 from canopy.core.vocab import (
     CheckConclusion,
     DismissalReason,
     PlanEffort,
     PlanStatus,
-    PrState,
     ReviewDraftStatus,
-    ReviewItem,
     ReviewRunStatus,
     ReviewState,
     RunKind,
 )
 from canopy.infra import resources
-from tests.canopy.helpers import check_ran, context, earlier, present, worker_ran
+from tests.canopy.helpers import check_ran, context, earlier, feedback_left, observed_pr, present, worker_ran
 from tests.canopy.web_helpers import client, signed_in_client
 
 if TYPE_CHECKING:
@@ -79,24 +77,24 @@ def test_the_reviews_report_reads_feedback_rounds_and_canopys_reviewer_from_the_
     worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 3), key="PROJ-2", prs={"web": UNTIMED})
     worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 40), key="PROJ-3", prs={"web": OLD})
     # Ready two and a half days ago, a review asked for two hours later, merged a day ago.
-    observed(
+    observed_pr(
         conn,
         TIMED,
         ready_at=earlier(now, 2, 12),
         review_requested_at=earlier(now, 2, 10),
         merged_at=earlier(now, 1),
     )
-    observed(conn, UNTIMED)
-    observed(conn, OLD)
-    said(conn, TIMED, "erin", earlier(now, 2, 11), ReviewState.COMMENTED)  # before a review was asked for
-    said(conn, TIMED, "dana", earlier(now, 2, 7), ReviewState.CHANGES_REQUESTED)  # three hours after
-    said(conn, TIMED, "erin", earlier(now, 2, 5))
-    said(conn, TIMED, "dana", earlier(now, 1, 2), ReviewState.APPROVED)
-    said(conn, TIMED, "op", earlier(now, 1, 3), ReviewState.COMMENTED)  # the PR's author: not feedback
-    said(conn, TIMED, "ci-bot", earlier(now, 1, 3), ReviewState.CHANGES_REQUESTED, bot=True)
-    said(conn, TIMED, "dana", earlier(now, 1, 3), ReviewState.PENDING)  # not yet submitted
-    said(conn, UNTIMED, "carol", earlier(now, 1), ReviewState.APPROVED)
-    said(conn, OLD, "carol", earlier(now, 39), ReviewState.APPROVED)
+    observed_pr(conn, UNTIMED)
+    observed_pr(conn, OLD)
+    feedback_left(conn, TIMED, "erin", earlier(now, 2, 11), ReviewState.COMMENTED)  # before a review was asked for
+    feedback_left(conn, TIMED, "dana", earlier(now, 2, 7), ReviewState.CHANGES_REQUESTED)  # three hours after
+    feedback_left(conn, TIMED, "erin", earlier(now, 2, 5))
+    feedback_left(conn, TIMED, "dana", earlier(now, 1, 2), ReviewState.APPROVED)
+    feedback_left(conn, TIMED, "op", earlier(now, 1, 3), ReviewState.COMMENTED)  # the PR's author: not feedback
+    feedback_left(conn, TIMED, "ci-bot", earlier(now, 1, 3), ReviewState.CHANGES_REQUESTED, bot=True)
+    feedback_left(conn, TIMED, "dana", earlier(now, 1, 3), ReviewState.PENDING)  # not yet submitted
+    feedback_left(conn, UNTIMED, "carol", earlier(now, 1), ReviewState.APPROVED)
+    feedback_left(conn, OLD, "carol", earlier(now, 39), ReviewState.APPROVED)
     # Each plan but the newest superseded by the next, as a ticket holds one current plan.
     first = plan(conn, earlier(now, 2, 4), cost=0.5, effort=PlanEffort.SMALL, channel="planner")
     for cost in (1.5, 0.5):
@@ -177,13 +175,13 @@ def test_the_reviews_report_times_a_round_from_the_feedback_to_the_push_and_coun
     db.migrate(ctx.conn, resources.migrations_dir())
     conn, now = ctx.conn, datetime.now(UTC)
     worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 4), prs={"web": TIMED})
-    observed(conn, TIMED, ready_at=earlier(now, 4), merged_at=earlier(now, 1))
+    observed_pr(conn, TIMED, ready_at=earlier(now, 4), merged_at=earlier(now, 1))
     check_ran(conn, TIMED, "aaa", "test", CheckConclusion.SUCCESS, earlier(now, 3, 20))
     # A comment before the plan an earlier round went ahead on, which this round does not answer.
-    said(conn, TIMED, "dana", earlier(now, 3, 18))
+    feedback_left(conn, TIMED, "dana", earlier(now, 3, 18))
     plan(conn, earlier(now, 3, 14), cost=None, effort=None, channel="cli")
-    said(conn, TIMED, "dana", earlier(now, 3, 12), ReviewState.CHANGES_REQUESTED)
-    said(conn, TIMED, "erin", earlier(now, 3, 10))
+    feedback_left(conn, TIMED, "dana", earlier(now, 3, 12), ReviewState.CHANGES_REQUESTED)
+    feedback_left(conn, TIMED, "erin", earlier(now, 3, 10))
     # Written two hours after the review, approved on the web an hour later, and a resume an hour after that, whose
     # push a source saw three hours into it.
     plan_id = plan(conn, earlier(now, 3, 10), cost=None, effort=PlanEffort.SMALL, channel="web", current=True)
@@ -203,8 +201,8 @@ def test_the_reviews_report_times_a_round_from_the_feedback_to_the_push_and_coun
     # A plan written before the PR's approval and approved after it: not a round before the approval.
     late = plan(conn, earlier(now, 2, 2), cost=None, effort=None, channel="cli")
     records.update(records.FeedbackPlan).set(approved_at=earlier(now, 1)).where("id = ?", late).run(conn)
-    said(conn, TIMED, "dana", earlier(now, 2), ReviewState.APPROVED)
-    said(conn, TIMED, "erin", earlier(now, 1, 12), ReviewState.APPROVED)
+    feedback_left(conn, TIMED, "dana", earlier(now, 2), ReviewState.APPROVED)
+    feedback_left(conn, TIMED, "erin", earlier(now, 1, 12), ReviewState.APPROVED)
 
     c, _ = signed_in_client(ctx)
     found = c.get("/api/reports/reviews").json()
@@ -240,8 +238,8 @@ def test_a_round_without_a_push_or_feedback_is_not_timed(canopy_env: CanopyEnv) 
     db.migrate(ctx.conn, resources.migrations_dir())
     conn, now = ctx.conn, datetime.now(UTC)
     worker_ran(conn, RunKind.IMPLEMENT, earlier(now, 2), prs={"web": TIMED})
-    observed(conn, TIMED, ready_at=earlier(now, 2))
-    said(conn, TIMED, "dana", earlier(now, 1, 12), ReviewState.CHANGES_REQUESTED)
+    observed_pr(conn, TIMED, ready_at=earlier(now, 2))
+    feedback_left(conn, TIMED, "dana", earlier(now, 1, 12), ReviewState.CHANGES_REQUESTED)
     plan_id = plan(conn, earlier(now, 1, 10), cost=None, effort=None, channel="planner", current=True)
     resume = worker_ran(conn, RunKind.RESUME, earlier(now, 1, 9), prs={"web": TIMED})
     records.update(records.Run).set(feedback_plan_id=plan_id).where("id = ?", resume).run(conn)
@@ -254,57 +252,6 @@ def test_a_round_without_a_push_or_feedback_is_not_timed(canopy_env: CanopyEnv) 
     assert (found["turnarounds"], found["median_turnaround_hours"], found["median_turnaround"]) == (0, None, None)
     [pr] = found["pull_requests"]
     assert (pr["approved"], pr["approved_at"], pr["rounds_to_approval"]) == (0, None, None)
-
-
-def observed(
-    conn: sqlite3.Connection,
-    url: str,
-    *,
-    ready_at: str | None = None,
-    review_requested_at: str | None = None,
-    merged_at: str | None = None,
-) -> None:
-    """The reader's read of `url`, authored by `op`, with GitHub's times where given: none, as one read before."""
-    records.insert(
-        records.ObservedPr,
-        url=url,
-        repository="acme/web",
-        number=int(url.rsplit("/", 1)[-1]),
-        state=PrState.OPEN if merged_at is None else PrState.MERGED,
-        draft=False,
-        author="op",
-        observed_at=db.format_time(datetime.now(UTC)),
-        created_at=ready_at,
-        ready_at=ready_at,
-        review_requested_at=review_requested_at,
-        merged_at=merged_at,
-    ).run(conn)
-
-
-def said(
-    conn: sqlite3.Connection,
-    url: str,
-    author: str,
-    at: str,
-    state: ReviewState | None = None,
-    *,
-    bot: bool = False,
-) -> None:
-    """A review of `url` in `state` by `author` at `at`, or a comment without a state."""
-    [(count,)] = sql.execute(conn, sql.select("count(*)").from_("observed_reviews")).fetchall()
-    records.insert(
-        records.ObservedReview,
-        pr_url=url,
-        item=ReviewItem.COMMENT if state is None else ReviewItem.REVIEW,
-        id=100 + int(count),
-        author=author,
-        bot=bot,
-        state=state,
-        created_at=at,
-        body="b",
-        thread_id=None if state is not None else f"t{count}",
-        observed_at=at,
-    ).run(conn)
 
 
 def plan(
