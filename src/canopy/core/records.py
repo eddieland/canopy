@@ -647,6 +647,28 @@ class Plan(Row):
 
 
 @dataclass(frozen=True)
+class PlanMetric(Row):
+    """How long a ticket plan is, measured once from its file as its planner wrote it (DESIGN §25): a cache."""
+
+    TABLE: ClassVar[LiteralString] = "plan_metrics"
+
+    plan_id: int
+    #: The measuring model's version (`plan_metrics.VERSION`) when it was measured; a row of an older one is not read.
+    version: int
+    measured_at: str
+    #: Why it could not be measured: its original's problem, or `changed` when that is not the file written. Its
+    #: measurements are then None.
+    problem: str | None
+    #: Its words outside code blocks and diagrams.
+    words: int | None
+    #: How many of the plan editor's lines it fills, estimated.
+    lines: int | None
+    code_blocks: int | None
+    tables: int | None
+    diagrams: int | None
+
+
+@dataclass(frozen=True)
 class FeedbackPlan(Row):
     """A plan a feedback plan run wrote for a ticket's PRs (DESIGN §32): its status, hashes, and approval. No text."""
 

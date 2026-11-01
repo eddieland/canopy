@@ -379,17 +379,44 @@ commented on it, or sent an earlier plan back; **sent back**, replaced by a newe
 **dropped**, superseded with nothing after it (a skip, or a forget); or still **waiting on you**.
 
 - **Approvals by level**: the approved plans, by the level of `policy.planner_may_approve` their plan run was offered
-  and how each went ahead, with the median time from written to approved, the median length, how many of the PRs that
-  followed needed at least one resume, every resume after them, and how many of their tickets are done. A planner's
-  approval takes no time, so it shows a dash. The level is the one the planner was actually asked at: a plan that
-  replaced one you had a word on was asked nothing, so it counts as `off` whatever the key said. Under the table, the
-  level the key is at now, and how many plans were sent back or wait on you.
-- **Time to approve by length**: the plans you approved, by size, with the median time you took and how many went as
-  written. If the long ones go through as fast as the short ones, either the long ones are easy or you're skimming.
+  and how each went ahead, with the median time from written to approved, the median length and words, how many of the
+  PRs that followed needed at least one resume, every resume after them, and how many of their tickets are done. A
+  planner's approval takes no time, so it shows a dash. The level is the one the planner was actually asked at: a plan
+  that replaced one you had a word on was asked nothing, so it counts as `off` whatever the key said. Under the table,
+  the level the key is at now, and how many plans were sent back or wait on you.
+- **Time to approve by length**: the plans you approved, by length (under a page, one to two, two to four, and four
+  and up), with the median time you took and how many went as written. If the long ones go through as fast as the
+  short ones, either the long ones are easy or you're skimming.
 - **Each plan**: every plan written in the window, with its run, its ticket, its level, how it went and what changed
-  first, its length, how long approving it took, and the resumes its ticket started after, their reasons on hover.
+  first, its length, its words, what of it is **not prose** (code blocks, tables, and diagrams), how long approving it
+  took, and the resumes its ticket started after, their reasons on hover.
 
 A ticket's resumes after its plan's approval are its PR's, since canopy never plans a ticket that has a branch. They
 keep coming until the ticket is done, so an open ticket's count can still grow; the **done** column says how many are
 final. A plan run from before canopy kept the level it was offered shows as **not recorded**. Feedback plans are on
 the [Reviews page](#the-reviews-page), which says who approved each.
+
+### How a plan is measured
+
+canopy measures each plan from its file as its planner wrote it, the copy it keeps beside the one you edit, so your
+edits never make a plan look longer or shorter than it was when you were asked to read it.
+
+- **Words** are the words you read: headings, paragraphs, list items, quotes, and table cells. Code blocks and diagrams
+  aren't words, so they're left out; they show under **not prose** instead.
+- **Length** is how far you scroll through the plan on its page, in the plan editor at its full width. A page is 50 of
+  the editor's lines, about a screen on a display 1440 pixels tall, and a length is rounded to the nearest half page.
+  The hover has the lines, the words, and the file's size.
+
+Length is an estimate, not a reading of your screen: canopy wraps each block of the plan's Markdown at the editor's
+width and weighs it by how tall the editor draws it, a heading taller than a line of prose, a line of code shorter.
+The weights were fitted to the heights the editor actually drew for 110 Markdown files, and checked on files they
+weren't fitted to: nine in ten came within 6%, and the worst within about a fifth, a short plan a few lines off. Two
+things it can't know. A diagram counts as 15 lines whatever it draws, so a plan built around a big one scrolls longer
+than it says. And it assumes the editor at its widest: in a narrow window prose wraps sooner and every plan scrolls
+longer, the wordy ones most.
+
+canopy measures a plan once, when its run records it, and keeps the figures, so the page doesn't read every plan again
+each time you open it. Plans from before canopy kept them are measured by the loop, a few each tick, and the page
+measures any it hasn't reached yet itself, so the report is complete from your first plan either way. When the way
+canopy measures changes, every plan is measured again the same way. A plan whose original file is gone or no longer
+matches what its planner wrote shows a dash, and stays out of the length table.

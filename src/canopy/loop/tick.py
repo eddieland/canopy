@@ -31,6 +31,7 @@ from canopy.core import (
     item_numbers,
     notice,
     overseer_runs,
+    plan_lengths,
     plans,
     pools,
     progress,
@@ -432,6 +433,7 @@ def _steps(
     if not dry_run:
         # First, so a tick whose reconcile fails, as one on a full disk may, still frees what retention lets go.
         gc_pass.run(ctx, tick_id, log)
+        _measure_plans(ctx, log)
     try:
         # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
         review_reconcile.run(ctx, log)
@@ -500,6 +502,18 @@ def _steps(
         if not dry_run:
             acknowledge.note(ctx.conn, tick_id)
         return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
+
+
+# The plans the journal has no current measurements of, a few a tick (`plan_lengths`). A failure is logged, and the
+# tick goes on: the Plans report measures what is missing itself.
+def _measure_plans(ctx: Context, log: logs.TickAdapter) -> None:
+    try:
+        measured = plan_lengths.fill(ctx.conn, ctx.state_dir)
+    except Exception as e:
+        log.exception("plans not measured", extra={"error": str(e)})
+        return
+    if measured:
+        log.info("plans measured", extra={"plans": measured})
 
 
 def _overseer(

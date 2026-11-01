@@ -1,9 +1,10 @@
 // The Plans page: how plans were approved, by the level of `policy.planner_may_approve` their planners were offered,
 // and what their PRs needed after. The numbers are the server's (`canopy.core.plan_report`); this lays them out.
 
-import type { PlanLevel, PlanOutcome, PlansGroup, PlansLength, PlansReport, PlansRow } from '@/api/types'
+import type { PlanLevel, PlanMetrics, PlanOutcome, PlansGroup, PlansLength, PlansReport, PlansRow } from '@/api/types'
 import { sizeText } from '@/lib/attachments'
 import { counted } from '@/lib/descriptions'
+import { grouped } from '@/lib/fold'
 import { pickWindow, windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
 
@@ -89,15 +90,54 @@ export function resumedText(group: Pick<PlansGroup, 'implemented' | 'with_resume
     return group.implemented === 0 ? '–' : `${group.with_resume} of ${group.implemented}`
 }
 
-/** A size bucket in words: `under 4 KiB`, `4–8 KiB`, `16 KiB and up`. */
-export function lengthText(length: Pick<PlansLength, 'low' | 'high'>): string {
+/**
+ * A plan's length in pages, to the nearest half and never under one: `≈ ½ page`, `≈ 1 page`, `≈ 2½ pages`. `lines` is
+ * the server's estimate of the plan editor's lines it fills, and a page is `pageLines` of them, about a screen.
+ */
+export function pagesText(lines: number, pageLines: number): string {
+    const halves = Math.max(1, Math.round((2 * lines) / pageLines))
+    const whole = Math.floor(halves / 2)
+    const pages = `${whole === 0 ? '' : String(whole)}${halves % 2 === 1 ? '½' : ''}`
+    return `≈ ${pages} ${halves <= 2 ? 'page' : 'pages'}`
+}
+
+/** A length bucket in pages: `under 1 page`, `2–4 pages`, `4 pages and up`. The server cuts them at whole pages. */
+export function lengthText(length: Pick<PlansLength, 'low' | 'high'>, pageLines: number): string {
+    const low = length.low / pageLines
     if (length.high === null) {
-        return `${sizeText(length.low)} and up`
+        return `${String(low)} ${low === 1 ? 'page' : 'pages'} and up`
+    }
+    const high = length.high / pageLines
+    if (length.low === 0) {
+        return `under ${String(high)} ${high === 1 ? 'page' : 'pages'}`
+    }
+    return `${String(low)}–${String(high)} pages`
+}
+
+/** A length bucket in the editor's lines, on its hover: `under 50 lines`, `100–200 lines`, `200 lines and up`. */
+export function lengthLinesText(length: Pick<PlansLength, 'low' | 'high'>): string {
+    if (length.high === null) {
+        return `${String(length.low)} lines and up`
     }
     if (length.low === 0) {
-        return `under ${sizeText(length.high)}`
+        return `under ${String(length.high)} lines`
     }
-    return `${sizeText(length.low).replace(' KiB', '')}–${sizeText(length.high)}`
+    return `${String(length.low)}–${String(length.high)} lines`
+}
+
+/** What a plan's length is made of, on its hover: `161 lines · 1,622 words · 9.1 KiB`. */
+export function measuredText(metrics: Pick<PlanMetrics, 'lines' | 'words'>, size: number): string {
+    return `${counted(metrics.lines, 'line')} · ${grouped(metrics.words)} words · ${sizeText(size)}`
+}
+
+/** What of a plan is not prose: `2 code · 1 table · 1 diagram`; empty for none. */
+export function notProseText(metrics: Pick<PlanMetrics, 'code_blocks' | 'tables' | 'diagrams'>): string {
+    const parts = [
+        metrics.code_blocks === 0 ? '' : `${String(metrics.code_blocks)} code`,
+        metrics.tables === 0 ? '' : counted(metrics.tables, 'table'),
+        metrics.diagrams === 0 ? '' : counted(metrics.diagrams, 'diagram'),
+    ]
+    return parts.filter((p) => p !== '').join(' · ')
 }
 
 /**
