@@ -85,11 +85,22 @@ export function weekStart(week: string): Date | undefined {
 }
 
 /**
- * What a week's runs used first, in `canopy spend`'s words: each runtime version, then each definitions snapshot, the
- * series' week before did not, `runtime 1.0.104`, `snapshot a81d2c4e9f306b17`. Empty for a week that changed nothing.
+ * What a week's runs used first, in `canopy spend`'s words: each runtime version, then the definitions snapshots, that
+ * none of the series' earlier weeks did, `runtime 1.0.104`, `snapshot a81d2c4e9f306b17`. A kind renders a snapshot for
+ * each prompt, persona, and model its runs use, so one change to canopy or its config makes several at once: more than
+ * one is a count, `7 snapshots`, which `snapshotsOf` names. Empty for a week that changed nothing.
  */
 export function weekChanges(week: Pick<SpendFirstCallWeek, 'new_runtime_versions' | 'new_digests'>): string[] {
-    return [...week.new_runtime_versions.map((v) => `runtime ${v}`), ...week.new_digests.map((d) => `snapshot ${d}`)]
+    const digests = week.new_digests
+    const [only] = digests
+    const snapshots =
+        only === undefined ? [] : digests.length === 1 ? [`snapshot ${only}`] : [`${digests.length} snapshots`]
+    return [...week.new_runtime_versions.map((v) => `runtime ${v}`), ...snapshots]
+}
+
+/** The snapshots a week's count of them stands for, one to a line; undefined when `weekChanges` names them itself. */
+export function snapshotsOf(week: Pick<SpendFirstCallWeek, 'new_digests'>): string | undefined {
+    return week.new_digests.length > 1 ? week.new_digests.join('\n') : undefined
 }
 
 /**
