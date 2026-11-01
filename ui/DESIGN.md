@@ -792,7 +792,8 @@ side.
   (`barPercent`), where comparing the rows is the point: spent by month, by ticket, and by model, the bytes a tool
   returned, a check's failure rate. The figure, at a fixed width so the bars start at one edge, then a 6px rounded bar,
   64px long at least so a narrow column's still compares, on `surface-raised` filled in `muted-foreground`, or the
-  series' own fill; never a state's color. It is the eye's, `aria-hidden`.
+  series' own fill; never a state's color, but for a failure rate (CI's checks), in `status-failed`, a share of the
+  whole rather than of the column's largest: it says what is broken. It is the eye's, `aria-hidden`.
 
 ## Charts
 
@@ -1052,12 +1053,15 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **The red checks chart** (the CI page) is the same `DayChart`: a bar per local day of the red check runs, a series
   per check the server names apart, by rank in the check fills, and the rest summed as `other` in `check-other`, the
   legend and a table of the same numbers under it. Its window is the health page's.
+- **The green-first chart** (the CI page) is the same `DayChart` over it: a bar per local day of the PR heads first
+  checked, those green first time at the bottom in the accent and the rest in `check-other`, so a bad day is a short
+  accent; the day's rate on hover, the legend and a table of the same numbers under it.
 - **The first reviews chart** (the Reviews page) is the same `DayChart`: a bar per local day of the first reviews that
   arrived, stacked by wait in the wait fills, the quickest at the bottom, the day's median on hover, the legend and a
   table of the same numbers under it. Its window is the health page's.
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
   with its unit's phase, its ticket, then the page's own figures. The spend page's By pull request, the CI page's
-  flaky kicks, and the Reviews page's By pull request use it.
+  time to green and flaky kicks, and the Reviews page's By pull request use it.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every

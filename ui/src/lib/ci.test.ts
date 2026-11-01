@@ -12,11 +12,19 @@ import {
     ciWindow,
     failureRate,
     fixRateText,
+    fixToGreenText,
+    greenFirstBars,
+    greenFirstHint,
+    greenFirstRateText,
+    isFlaky,
     kickText,
     nextHeadText,
     nextText,
     OTHER,
     previousCiFigures,
+    rerunsText,
+    toGreenText,
+    wentGreen,
 } from './ci'
 
 const H24: Clock = { hours: '24', zone: false }
@@ -41,7 +49,7 @@ describe('ci', () => {
                 per_day: [day('2026-10-07', [2, 1]), day('2026-10-08', [1])],
                 fixes: [],
             }),
-        ).toEqual({ heads: 4, greenFirst: 0.75, red: 4, fixes: 0 })
+        ).toEqual({ heads: 4, greenFirst: 0.75, red: 4, fixes: 0, fixesGreen: 0 })
         expect(ciFigures({ heads: 0, green_first: 0, per_day: [], fixes: [] }).greenFirst).toBeNull()
     })
 
@@ -109,7 +117,57 @@ describe('previousCiFigures', () => {
             greenFirst: 0.75,
             red: 2,
             fixes: 1,
+            fixesGreen: 1,
         })
         expect(previousCiFigures({ ...before, heads: 0, green_first: 0, red: 0, fixes: 0 }).greenFirst).toBeNull()
+    })
+})
+
+describe('what the CI page adds of its own', () => {
+    const PR = 'https://github.com/acme/web/pull/7'
+
+    it('counts a fix as gone green only when every check it found red passed on the next head', () => {
+        expect(wentGreen({ checks: [{ pr_url: PR, name: 'e2e', next: 'green' }] })).toBe(true)
+        expect(
+            wentGreen({
+                checks: [
+                    { pr_url: PR, name: 'e2e', next: 'green' },
+                    { pr_url: PR, name: 'unit', next: null },
+                ],
+            }),
+        ).toBe(false)
+        expect(wentGreen({ checks: [] })).toBe(false)
+    })
+
+    it('says same-head reruns, and calls a check flaky once two of them passed', () => {
+        expect(rerunsText({ reruns: 3, reruns_green: 2 })).toBe('2 of 3')
+        expect(rerunsText({ reruns: 0, reruns_green: 0 })).toBe('–')
+        expect(isFlaky({ reruns_green: 2 })).toBe(true)
+        expect(isFlaky({ reruns_green: 1 })).toBe(false)
+    })
+
+    it("draws each day's heads, the green-first ones at the bottom, the rate on hover", () => {
+        const heads: CiDay = { ...day('2026-10-08', []), heads: 6, green_first: 3 }
+        expect(greenFirstHint(heads, H24)).toBe('Oct 8: 3 of 6 heads green first time, 50%')
+        expect(greenFirstHint(day('2026-10-05', []), H24)).toBe('Oct 5: no head checked')
+        expect(greenFirstRateText(day('2026-10-05', []))).toBe('–')
+        const [bar] = greenFirstBars([heads], H24)
+        expect([bar?.total, bar?.segments.map((s) => [s.key, s.value])]).toEqual([
+            6,
+            [
+                ['green-first', 3],
+                ['red-first', 3],
+            ],
+        ])
+    })
+
+    it("says a PR's time to green, still red while it is, and a fix's the same way", () => {
+        expect(toGreenText({ red_at: '2026-10-08T09:00:00Z', hours_to_green: 0.5 })).toBe('30m')
+        expect(toGreenText({ red_at: '2026-10-08T09:00:00Z', hours_to_green: null })).toBe('still red')
+        expect(toGreenText({ red_at: null, hours_to_green: null })).toBe('–')
+        const red = [{ pr_url: PR, name: 'e2e', next: null }]
+        expect(fixToGreenText({ checks: red, hours_to_green: 4 })).toBe('4.0h')
+        expect(fixToGreenText({ checks: red, hours_to_green: null })).toBe('still red')
+        expect(fixToGreenText({ checks: [], hours_to_green: null })).toBe('–')
     })
 })
