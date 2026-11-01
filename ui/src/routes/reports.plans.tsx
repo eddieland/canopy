@@ -8,6 +8,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, Panel
 import { RunLink } from '@/components/run-link'
 import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { Hinted, Tipped } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
 import { sizeText } from '@/lib/attachments'
 import { counted } from '@/lib/descriptions'
@@ -71,11 +72,10 @@ function PlansPage() {
     const failed = data === undefined && query.error !== null
     return (
         <>
-            <PageHeader title="Plans" help={HELP}>
-                {data === undefined ? (query.isPending ? 'reading the plans' : null) : plansLine(data)}
-            </PageHeader>
-            <Panel data-testid="plans-levels">
-                <PanelHeader label="Approvals by level">
+            <PageHeader
+                title="Plans"
+                help={HELP}
+                controls={
                     <WindowToggle
                         windows={PLANS_WINDOWS}
                         shown={shown}
@@ -86,7 +86,12 @@ function PlansPage() {
                             })
                         }}
                     />
-                </PanelHeader>
+                }
+            >
+                {data === undefined ? (query.isPending ? 'reading the plans' : null) : plansLine(data)}
+            </PageHeader>
+            <Panel data-testid="plans-levels">
+                <PanelHeader label="Approvals by level" />
                 {data === undefined ? (
                     <PanelLoading query={query} className="min-h-48" />
                 ) : (
@@ -135,26 +140,22 @@ function Levels({ found, span }: { found: PlansReport; span: string }) {
                                 <th className="panel-label pb-1.5 text-left font-normal">level</th>
                                 <th className="panel-label pb-1.5 pl-3 text-left font-normal">approved</th>
                                 <th className="panel-label pb-1.5 pl-3 font-normal">plans</th>
-                                <th
-                                    className="panel-label pb-1.5 pl-3 font-normal"
-                                    title="From when each was written to its approval, the median"
-                                >
-                                    to approve
+                                <th className="panel-label pb-1.5 pl-3 font-normal">
+                                    <Hinted hint="From when each was written to its approval, the median">
+                                        to approve
+                                    </Hinted>
                                 </th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal" title="Their sizes, the median">
-                                    length
+                                <th className="panel-label pb-1.5 pl-3 font-normal">
+                                    <Hinted hint="Their sizes, the median">length</Hinted>
                                 </th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal" title={RESUMED_HINT}>
-                                    needed a resume
+                                <th className="panel-label pb-1.5 pl-3 font-normal">
+                                    <Hinted hint={RESUMED_HINT}>needed a resume</Hinted>
                                 </th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal" title="Every resume after them">
-                                    resumes
+                                <th className="panel-label pb-1.5 pl-3 font-normal">
+                                    <Hinted hint="Every resume after them">resumes</Hinted>
                                 </th>
-                                <th
-                                    className="panel-label pb-1.5 pl-3 font-normal"
-                                    title="Those whose ticket is done, so their resumes are all in"
-                                >
-                                    done
+                                <th className="panel-label pb-1.5 pl-3 font-normal">
+                                    <Hinted hint="Those whose ticket is done, so their resumes are all in">done</Hinted>
                                 </th>
                             </tr>
                         </thead>
@@ -186,10 +187,10 @@ function Group({ group }: { group: PlansGroup }) {
     return (
         <tr className="text-right" data-testid="plans-group">
             <th scope="row" className="py-0.5 text-left font-mono font-normal">
-                <span title={LEVEL_HINT[group.level ?? '']}>{levelText(group.level)}</span>
+                <Hinted hint={LEVEL_HINT[group.level ?? '']}>{levelText(group.level)}</Hinted>
             </th>
             <td className="pl-3 text-left text-muted-foreground">
-                <span title={OUTCOME_HINT[group.outcome]}>{OUTCOME_WORD[group.outcome]}</span>
+                <Hinted hint={OUTCOME_HINT[group.outcome]}>{OUTCOME_WORD[group.outcome]}</Hinted>
             </td>
             <td className="readout pl-3">{group.plans}</td>
             <td className="readout pl-3">
@@ -286,21 +287,20 @@ function Plan({ plan }: { plan: PlansRow }) {
                 <TicketLink ticketKey={plan.ticket_key} />
             </td>
             <td className="pl-3 font-mono whitespace-nowrap text-muted-foreground">
-                <span title={LEVEL_HINT[plan.level ?? '']}>{levelText(plan.level)}</span>
+                <Hinted hint={LEVEL_HINT[plan.level ?? '']}>{levelText(plan.level)}</Hinted>
             </td>
             <td className="w-full pl-3 text-muted-foreground">
-                <span title={OUTCOME_HINT[plan.outcome]}>{OUTCOME_WORD[plan.outcome]}</span>
+                <Hinted hint={OUTCOME_HINT[plan.outcome]}>{OUTCOME_WORD[plan.outcome]}</Hinted>
                 {changes !== '' && <span>: {changes}</span>}
             </td>
             <td className="readout pl-3 text-right whitespace-nowrap text-muted-foreground">{sizeText(plan.size)}</td>
             <td className="readout pl-3 text-right whitespace-nowrap">
                 {plan.outcome === 'planner' ? '–' : hoursText(plan.hours_to_approve)}
             </td>
-            <td
-                className={cn('readout pl-3 text-right whitespace-nowrap', plan.resumes > 0 && 'text-status-blocked')}
-                title={plan.implemented ? reasons : 'No implement followed it'}
-            >
-                {plan.implemented ? plan.resumes : '–'}
+            <td className={cn('readout pl-3 text-right whitespace-nowrap', plan.resumes > 0 && 'text-status-blocked')}>
+                <Tipped fact={plan.implemented ? reasons : 'No implement followed it'}>
+                    {plan.implemented ? plan.resumes : '–'}
+                </Tipped>
             </td>
             <td className="pl-3 text-right whitespace-nowrap">
                 <Age at={plan.created_at} variant="ago" />
