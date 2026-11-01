@@ -41,7 +41,11 @@ import {
     clockShare,
     DEFAULT_MONTHS,
     DELIVERY_TRENDS,
+    failedHint,
+    failedText,
     fittedMonths,
+    greenFirstHint,
+    greenFirstText,
     hoursText,
     medianText,
     monthBars,
@@ -88,6 +92,15 @@ const WROTE_HINT = 'What the models wrote, their reasoning included'
 const CACHE_HINT = 'The share of what was sent that was read from the cache, which costs a fraction of new input'
 const PER_LANDED_HINT = "The month's whole cost, the overseer's and chores' included, over the tickets it landed"
 const PRS_HINT = 'The PRs a run first named in the month'
+const FAILED_HINT =
+    'Runs of every kind that started in the month and ended failed, as the Health page counts them. Hover a figure ' +
+    'for how many ended, and what the failures cost'
+const GREEN_FIRST_HINT =
+    'The share of PR heads first checked in the month whose first run of every check was not red, as the CI page ' +
+    'counts them. Hover a figure for how many'
+const FIRST_REVIEW_HINT =
+    "From when a PR began waiting on a review to its first review, on GitHub's clock, the median of every first " +
+    'review that came in the month, landed or not, as the Reviews page times them'
 const ITERATIONS_HINT = 'Worker runs, implement and resume, that started before the ticket landed'
 const COMMENTS_HINT = "Comments on its PRs from people other than the PR's author; canopy posts as the author"
 const REVIEWS_HINT = "Reviews of its PRs from people other than the PR's author, then how many asked for changes"
@@ -104,6 +117,7 @@ const TREND_HINT: Record<string, string> = {
     comments: COMMENTS_HINT,
     'to-land': TO_LAND_HINT,
     'review-wait': WAIT_HINT,
+    'first-review': FIRST_REVIEW_HINT,
 }
 
 // The column names of a table in a padded scrolling region, as the spend page's: the region's top padding is the
@@ -183,7 +197,7 @@ function ReportsPage() {
                 <>
                     <Panel data-testid="reports-delivery">
                         <PanelHeader label="Delivery">
-                            <span className="readout text-xs text-muted-foreground">median per landed ticket</span>
+                            <span className="readout text-xs text-muted-foreground">medians by month</span>
                         </PanelHeader>
                         {months === undefined ? (
                             <PanelSkeleton rows={6} className="min-h-40" />
@@ -377,7 +391,8 @@ function MonthCell({ month, picked }: { month: string; picked: string | undefine
  * Every month as the month chart: the spend chart at a month's pitch (`monthBars`), a bar of what each cost stacked
  * by kind, the sessions outside canopy on top, the picked month marked and a click on another picking it, the legend
  * under it, then the same months as a table, folded: what each cost, against the month before on hover, its runs,
- * tokens, and output. A span where nothing reported a cost says so in place of the chart and its legend.
+ * tokens, failed runs, share of PR heads green first time, and output. A span where nothing reported a cost says so
+ * in place of the chart and its legend.
  */
 function Months({
     months,
@@ -422,6 +437,12 @@ function Months({
                             <th className={HEAD}>
                                 <Hinted hint={CACHE_HINT}>cache hit</Hinted>
                             </th>
+                            <th className={HEAD}>
+                                <Hinted hint={FAILED_HINT}>failed</Hinted>
+                            </th>
+                            <th className={HEAD}>
+                                <Hinted hint={GREEN_FIRST_HINT}>green first</Hinted>
+                            </th>
                             <th className={HEAD}>landed</th>
                             <th className={HEAD}>closed</th>
                             <th className={HEAD}>
@@ -448,6 +469,8 @@ function Months({
                                     <Readout>{tokenCount(sentTokens(m.tokens))}</Readout>
                                     <Readout>{tokenCount(wroteTokens(m.tokens))}</Readout>
                                     <Readout>{shareText(m.tokens.cache_hit)}</Readout>
+                                    <Readout hint={failedHint(m)}>{failedText(m)}</Readout>
+                                    <Readout hint={greenFirstHint(m)}>{greenFirstText(m)}</Readout>
                                     <Readout>{m.landed.length}</Readout>
                                     <Readout>{m.closed}</Readout>
                                     <Readout>{m.pull_requests}</Readout>
@@ -474,16 +497,20 @@ function Readout({ children, hint }: { children: ReactNode; hint?: string | unde
 }
 
 /**
- * Every month: the medians of what each landed ticket took drawn across the months, a sparkline each over the table,
- * a month's figure on its point's hover with, for a time, how many ran on GitHub's clock; then the table, the newest
- * month first, which a screen reader reads, each month a link that picks it.
+ * Every month: the medians of what each landed ticket took, and of its first reviews' waits, drawn across the months,
+ * a sparkline each over the table, a month's figure on its point's hover with, for a time, how many ran on GitHub's
+ * clock, or how many first reviews; then the table, the newest month first, which a screen reader reads, each month a
+ * link that picks it.
  */
 function Delivery({ months, picked }: { months: readonly ReportMonth[]; picked: string | undefined }) {
     // Each trend's figure beside its name is the latest month's, as the line ends on it.
     const latest = months.at(-1)
     return (
         <div className="flex flex-col">
-            <ul className="grid grid-cols-2 gap-x-6 gap-y-3 p-3 @3xl:grid-cols-4" data-testid="reports-trends">
+            <ul
+                className="grid grid-cols-2 gap-x-6 gap-y-3 p-3 @xl:grid-cols-3 @3xl:grid-cols-5"
+                data-testid="reports-trends"
+            >
                 {DELIVERY_TRENDS.map((trend) => (
                     <li
                         key={trend.key}
@@ -515,7 +542,10 @@ function Delivery({ months, picked }: { months: readonly ReportMonth[]; picked: 
     )
 }
 
-/** Every month, the newest first: the tickets it landed and the medians of what each took. */
+/**
+ * Every month, the newest first: the tickets it landed, the medians of what each took, and the median wait of the
+ * first reviews that came in it, with how many on hover.
+ */
 function DeliveryTable({ months, picked }: { months: readonly ReportMonth[]; picked: string | undefined }) {
     return (
         <PanelScroll label="Delivery" className="px-3 pb-3">
@@ -536,6 +566,9 @@ function DeliveryTable({ months, picked }: { months: readonly ReportMonth[]; pic
                         <th className={HEAD}>
                             <Hinted hint={WAIT_HINT}>review wait</Hinted>
                         </th>
+                        <th className={HEAD}>
+                            <Hinted hint={FIRST_REVIEW_HINT}>first review</Hinted>
+                        </th>
                     </tr>
                 </thead>
                 <tbody className="font-mono text-xs">
@@ -550,6 +583,11 @@ function DeliveryTable({ months, picked }: { months: readonly ReportMonth[]; pic
                             </Readout>
                             <Readout hint={clockShare(m, 'review wait')}>
                                 {hoursText(m.median_review_wait_hours ?? null)}
+                            </Readout>
+                            <Readout
+                                hint={m.first_reviews === 0 ? undefined : counted(m.first_reviews, 'first review')}
+                            >
+                                {hoursText(m.median_first_review_hours ?? null)}
                             </Readout>
                         </tr>
                     ))}

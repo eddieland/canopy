@@ -17,7 +17,8 @@ afterEach(() => {
 const NO_RUNS: HealthCounts = { overseer: 0, workers: 0, plans: 0, chores: 0, reviews: 0, tasks: 0 }
 
 // A year read whole, its first five months empty: April's workers and October's, with October's overseer and the
-// sessions outside canopy, two tickets landed in September and October, and their medians.
+// sessions outside canopy, two tickets landed in September and October, and their medians; October's failed run, its
+// PR heads green first time, and its first reviews.
 const YEAR: MonthlyReport = {
     sessions_read_at: null,
     months: [
@@ -54,6 +55,12 @@ const YEAR: MonthlyReport = {
             pull_requests: 1,
             median_iterations: 1,
             median_hours_to_land: 20,
+            runs_ended: 5,
+            failed: 1,
+            heads: 4,
+            green_first: 3,
+            first_reviews: 2,
+            median_first_review_hours: 4,
         }),
     ],
 }
@@ -185,6 +192,43 @@ describe('the reports page', () => {
         expect(within(toLand).queryByTestId('reports-trend-to-land-line-point-2026-05')).toBeNull()
         // The table stays, for a screen reader and for picking a month.
         expect(screen.getAllByTestId('reports-delivery-month')).toHaveLength(7)
+    })
+
+    it("counts each month's failed runs and its share of PR heads green first time, beside landed", async () => {
+        await renderPage()
+        const table = await screen.findByTestId('reports-month-table')
+        const names = within(table)
+            .getAllByRole('columnheader')
+            .map((th) => th.textContent)
+        expect(names.slice(names.indexOf('failed'), names.indexOf('landed') + 1)).toEqual([
+            'failed',
+            'green first',
+            'landed',
+        ])
+        // Each row's cells after its month, the figures under those names.
+        const figures = (row: HTMLElement | undefined) =>
+            within(row ?? document.body)
+                .getAllByRole('cell')
+                .slice(names.indexOf('failed') - 1, names.indexOf('landed') - 1)
+                .map((td) => td.textContent)
+        const [october, september] = screen.getAllByTestId('reports-month')
+        expect(figures(october)).toEqual(['1', '75%'])
+        // A month with no run ended and no head checked has a dash for each.
+        expect(figures(september)).toEqual(['–', '–'])
+    })
+
+    it("draws each month's median first review in Delivery, as a trend and a column", async () => {
+        await renderPage()
+        const trends = await screen.findByTestId('reports-trends')
+        expect(within(trends).getByTestId('reports-trend-first-review').textContent).toContain('first review4.0h')
+        const line = within(trends).getByTestId('reports-trend-first-review-line')
+        expect(within(line).getByTestId('reports-trend-first-review-line-point-2026-10').getAttribute('title')).toBe(
+            'Oct 2026: 4.0h · 2 first reviews',
+        )
+        const table = screen.getByTestId('reports-delivery-table')
+        expect(within(table).getByRole('columnheader', { name: 'first review' })).toBeTruthy()
+        const [october] = screen.getAllByTestId('reports-delivery-month')
+        expect(within(october ?? document.body).getByText('4.0h')).toBeTruthy()
     })
 
     it("bars each kind's and model's share of the month, and links each landed ticket's PRs", async () => {

@@ -13,7 +13,11 @@ import {
     outsideHint,
     pickedMonth,
     DELIVERY_TRENDS,
+    failedHint,
+    failedText,
     fittedMonths,
+    greenFirstHint,
+    greenFirstText,
     monthBars,
     monthChange,
     monthShare,
@@ -159,6 +163,13 @@ describe('fittedMonths', () => {
         expect(sinceText(fittedMonths(months))).toBe('since July 2026')
     })
 
+    it('counts a month whose only news is a PR head checked or a first review', () => {
+        const months = [month('2026-06', null), month('2026-07', null, { heads: 1 }), month('2026-08', null)]
+        expect(fittedMonths(months).map((m) => m.month)).toEqual(['2026-07', '2026-08'])
+        const reviewed = [month('2026-06', null), month('2026-07', null, { first_reviews: 1 })]
+        expect(fittedMonths(reviewed).map((m) => m.month)).toEqual(['2026-07'])
+    })
+
     it('keeps the latest month alone when none holds anything', () => {
         expect(fittedMonths([month('2026-09', null), month('2026-10', null)]).map((m) => m.month)).toEqual(['2026-10'])
         expect(sinceText([])).toBe('')
@@ -204,6 +215,25 @@ describe('month over month', () => {
     })
 })
 
+describe("a month's failed and green-first cells", () => {
+    it('counts the failed runs, with how many ended and what they cost on hover, and a dash with none ended', () => {
+        const october = month('2026-10', 1, { runs_ended: 46, failed: 3, failed_cost_usd: 1.2 })
+        expect(failedText(october)).toBe('3')
+        expect(failedHint(october)).toBe('3 of 46 runs failed, 7%, costing $1.20')
+        expect(failedHint({ ...october, failed_cost_usd: null })).toBe('3 of 46 runs failed, 7%')
+        expect(failedText(month('2026-10', 1))).toBe('–')
+        expect(failedHint(month('2026-10', 1))).toBeUndefined()
+    })
+
+    it('shares the PR heads green first time, with how many on hover, and a dash with none checked', () => {
+        const october = month('2026-10', 1, { heads: 14, green_first: 10 })
+        expect(greenFirstText(october)).toBe('71%')
+        expect(greenFirstHint(october)).toBe('10 of 14 PR heads')
+        expect(greenFirstText(month('2026-10', 1))).toBe('–')
+        expect(greenFirstHint(month('2026-10', 1))).toBeUndefined()
+    })
+})
+
 describe('Delivery trends', () => {
     it("says a month's point, and for a time which clock its figures ran on", () => {
         const [iterations, , toLand] = DELIVERY_TRENDS
@@ -215,6 +245,15 @@ describe('Delivery trends', () => {
         expect(iterations === undefined ? '' : trendPointHint(october, iterations)).toBe('Oct 2026: 2.5')
         expect(toLand === undefined ? '' : trendPointHint(october, toLand)).toBe(
             "Oct 2026: 20.8h · 1 of 2 from GitHub's times, the rest from proxies",
+        )
+    })
+
+    it("says how many first reviews a month's median first review is of", () => {
+        const firstReview = DELIVERY_TRENDS.at(-1)
+        const october = month('2026-10', 1, { first_reviews: 3, median_first_review_hours: 4 })
+        expect(firstReview?.label).toBe('first review')
+        expect(firstReview === undefined ? '' : trendPointHint(october, firstReview)).toBe(
+            'Oct 2026: 4.0h · 3 first reviews',
         )
     })
 })
