@@ -16,8 +16,8 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import commit_hooks, config, db, definitions
-from canopy.core.vocab import Phase, TickStatus
+from canopy.core import commit_hooks, config, db, definitions, plans, records
+from canopy.core.vocab import Phase, RunKind, TickStatus
 from canopy.infra import lock, logs, procs
 from canopy.loop import attention, duties, mcp, tick
 from tests.canopy.helpers import (
@@ -26,6 +26,7 @@ from tests.canopy.helpers import (
     agent_runs,
     calls,
     canopy,
+    earlier,
     has_deadline,
     in_tick,
     listed,
@@ -40,6 +41,7 @@ from tests.canopy.helpers import (
     tracker_holds,
     waits,
     with_events,
+    worker_ran,
 )
 from tests.canopy.scenario_helpers import Scenario, sets_phase
 from tests.conftest import CanopyEnv, executable
@@ -785,3 +787,17 @@ def test_a_tick_names_a_git_too_old_for_the_commit_hooks_until_one_new_enough_is
     assert "older than 99.0, which canopy's commit hooks need" in item.detail
     scenario.tick(dry_run=True)
     assert not [i for i in attention.current(scenario.conn) if i.reason == attention.GIT_TOO_OLD]
+
+
+def test_a_live_tick_measures_the_plans_the_journal_has_not(scenario: Scenario) -> None:
+    """The Plans report's cache (`plan_lengths`): a dry tick leaves it; a live one fills it from each original."""
+    conn, state = scenario.conn, scenario.env.state_dir
+    run_id = worker_ran(conn, RunKind.PLAN, earlier(datetime.now(UTC), 1), key=KEY)
+    plan = plans.record(conn, KEY, run_id, plans.write(state, KEY, run_id, "# Plan\n\nOne step.\n"))
+
+    scenario.tick(*waits(KEY), dry_run=True)
+    assert records.select(records.PlanMetric).all(conn) == []
+
+    scenario.tick(*waits(KEY))
+    [kept] = records.select(records.PlanMetric).all(conn)
+    assert (kept.plan_id, kept.words, kept.problem) == (plan.id, 3, None)

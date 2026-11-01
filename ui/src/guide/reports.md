@@ -388,6 +388,8 @@ things it can't know. A diagram counts as 15 lines whatever it draws, so a plan 
 than it says. And it assumes the editor at its widest: in a narrow window prose wraps sooner and every plan scrolls
 longer, the wordy ones most.
 
-A plan whose original file is gone or no longer matches what its planner wrote shows a dash, and stays out of the
-length table. Measuring plans this way needed no new record of them, so it covers every plan canopy has kept, from the
-first.
+canopy measures a plan once, when its run records it, and keeps the figures, so the page doesn't read every plan again
+each time you open it. Plans from before canopy kept them are measured by the loop, a few each tick, and the page
+measures any it hasn't reached yet itself, so the report is complete from your first plan either way. When the way
+canopy measures changes, every plan is measured again the same way. A plan whose original file is gone or no longer
+matches what its planner wrote shows a dash, and stays out of the length table.

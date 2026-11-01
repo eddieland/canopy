@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from syrupy.assertion import SnapshotAssertion
 
-from canopy.core import conversation, db, plans
+from canopy.core import conversation, db, plan_metrics, plans, records
 from canopy.core.vocab import PlanEffort, PlanStatus, RunKind, RunStatus
 from canopy.notify import message
 from canopy.runs import policy
@@ -86,6 +86,9 @@ def test_a_plan_is_written_to_its_file_and_recorded_proposed(
     assert path.stat().st_mode & 0o777 == 0o600
     assert plan.sha256 == hashlib.sha256(TEXT.encode()).hexdigest()
     assert plan.size == len(TEXT.encode())
+    # Measured once, as its planner wrote it, for the Plans report.
+    kept = present(records.select(records.PlanMetric).where("plan_id = ?", plan.id).one(conn))
+    assert (kept.version, kept.problem, kept.words, kept.tables) == (plan_metrics.VERSION, None, 16, 0)
     # Its report is the planner's summary, as any run's.
     assert [(m.kind, m.body) for m in db.run_messages(conn, run.id)] == [("report", "planned it")]
 

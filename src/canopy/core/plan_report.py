@@ -22,7 +22,7 @@ from datetime import timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from canopy.core import db, plan_metrics, plans, records, spend, sql
+from canopy.core import db, plan_lengths, plan_metrics, plans, records, spend, sql
 from canopy.core.vocab import PlanEffort, PlannerApproval, PlanStatus, ResumeReason, RunKind
 
 if TYPE_CHECKING:
@@ -165,7 +165,8 @@ class Plans:
 def report(conn: sqlite3.Connection, state_dir: Path, now: datetime, days: int) -> Plans:
     """How the plans written over the last `days` local days were approved, today's so far included.
 
-    Each plan is measured from its original file under `state_dir`, as its planner wrote it.
+    Each plan's measurements are the journal's (`plan_lengths`), or measured from its original under `state_dir`,
+    as its planner wrote it, where the journal has none yet.
 
     Returns:
         The report; a window with no plan has no rows, groups, or lengths.
@@ -185,6 +186,7 @@ def report(conn: sqlite3.Connection, state_dir: Path, now: datetime, days: int) 
         runs = _runs(conn, keys)
         said = _comments(conn, keys)
         reasons = db.run_reasons(conn, [r.id for r in runs if r.kind is RunKind.RESUME])
+        measured = plan_lengths.read(conn, state_dir, written)
     by_ticket: dict[str, list[records.Plan]] = {}
     for p in every:
         by_ticket.setdefault(p.ticket_key, []).append(p)
@@ -195,7 +197,7 @@ def report(conn: sqlite3.Connection, state_dir: Path, now: datetime, days: int) 
             [r for r in runs if r.ticket_key == p.ticket_key],
             reasons,
             said.get(p.ticket_key, []),
-            metrics=_measured(state_dir, p),
+            metrics=measured.get(p.id),
             done=(t := tickets.get(p.ticket_key)) is not None and t.done,
         )
         for p in written
@@ -258,16 +260,6 @@ def _comments(conn: sqlite3.Connection, keys: Collection[str]) -> dict[str, list
     for said in [*records.fetch_all(conn, _Said, threads), *records.fetch_all(conn, _Said, replies)]:
         found.setdefault(said.ticket_key, []).append(said.created_at)
     return {key: sorted(times) for key, times in found.items()}
-
-
-# A plan measured from its original, the copy kept as its planner wrote it; None when that file is gone, is not a plan
-# any more, or is not the one written, by its hash.
-def _measured(state_dir: Path, plan: records.Plan) -> plan_metrics.Metrics | None:
-    path = plans.path_for(state_dir, plan.ticket_key, plan.run_id).with_name(plans.original_name(plan.run_id))
-    reading = plans.read(path)
-    if reading.text is None or reading.sha256 != plan.sha256:
-        return None
-    return plan_metrics.measure(reading.text)
 
 
 def _row(

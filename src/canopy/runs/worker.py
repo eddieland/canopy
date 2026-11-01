@@ -45,6 +45,7 @@ from canopy.core import (
     memory,
     observe,
     outbox,
+    plan_lengths,
     plans,
     pools,
     replies,
@@ -767,6 +768,8 @@ def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, 
         no_review=parsed.no_review() if ctx.config.policy.planner_approves() else None,
         effort=parsed.effort,
     )
+    # Measured once, here, from the text as its planner wrote it, for the Plans report (`plan_lengths`).
+    plan_lengths.keep(ctx.conn, plan.id, text)
     log.info(
         "plan recorded",
         extra={"run_id": run_id, "plan_id": plan.id, "size": written.size, "approved_by": plan.approved_channel},

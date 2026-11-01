@@ -69,7 +69,8 @@ the operator's as written or after a change, sent back) and by the level of `pol
 offered (§25), which the run keeps, with the time to approve against the plan's length and the `resume` runs its ticket
 needed after, so the key is loosened on what each level let through. A length is measured from the plan's file as its
 planner wrote it, never the operator's edit: its words, and the lines it fills in the plan editor, an estimate fitted
-to what the editor draws.
+to what the editor draws. It is measured once and kept in the journal, when its run records it or, for a plan without,
+by a live tick, a few a tick; the page measures what is not kept yet, so a read never writes.
 
 `spend.monthly_budget_usd` is what the operator means a local calendar month of agent spend to cost: canopy's runs and
 the runtime's sessions outside canopy (§13, Every session's spend), canopy's share shown beside the whole. `canopy
