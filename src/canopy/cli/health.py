@@ -1,4 +1,4 @@
-"""`canopy health`: how the agent runs of the last days ended, the newest failures, and what the guards refused."""
+"""`canopy health`: how the agent runs of the last days ended, the newest failures and their causes, and refusals."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from canopy.core import health, reports, spend
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from canopy.core.health import Failure, Health
+    from canopy.core.health import Cause, Failure, Health
 
 _KIND_WIDTH = 10
 _WHAT_WIDTH = 18
@@ -23,6 +23,8 @@ _COUNT_WIDTH = 7
 _COST_WIDTH = 9
 # The newest failures the text lists; `--json` lists `health.FAILURES`.
 _FAILURES = 10
+# What the failures an agent's own words explained are counted as.
+_OTHER = "other: an agent's summary, or no note"
 
 
 @click.command("health")
@@ -41,7 +43,7 @@ def cmd_health(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
 
     Each kind of run by how it ended and what that cost: the overseer's ticks, workers by kind, plan runs, chores by
     name, and reviews. Then the newest ticks and runs that failed, each with its id for `canopy decisions` or
-    `canopy show`, and the overseer's asks a guard refused, by guard.
+    `canopy show`, every failure by the harness's note on it, and the overseer's asks a guard refused, by guard.
     """
     ctx = open_context(click_ctx)
     if as_json:
@@ -67,7 +69,10 @@ def render(found: Health) -> list[str]:
         _line(o.kind, o.what, o.status + (" !" if o.failed else ""), str(o.runs), cost_text(o.cost_usd))
         for o in found.outcomes
     )
-    lines.extend(["", *_failures(found.failures), "", *_refusals(found)])
+    lines.extend(["", *_failures(found.failures)])
+    if found.causes:
+        lines.extend(["", *_causes(found.causes)])
+    lines.extend(["", *_refusals(found)])
     return lines
 
 
@@ -87,6 +92,15 @@ def _failures(failures: Sequence[Failure]) -> list[str]:
             lines.append(f"    {f.note}")
     if len(failures) > _FAILURES:
         lines.append(f"  and {len(failures) - _FAILURES} more; --json lists up to {health.FAILURES}")
+    return lines
+
+
+# Every failure by the harness's note, the most first, each with its newest to read whole; the agents' own words last.
+def _causes(causes: Sequence[Cause]) -> list[str]:
+    lines = ["Failures by cause:"]
+    for c in causes:
+        note = c.note if c.note is not None else _OTHER
+        lines.extend((f"  {c.runs:>{_COUNT_WIDTH - 2}}  {note}", f"    {', '.join(c.kinds)}; latest {_ref(c.latest)}"))
     return lines
 
 

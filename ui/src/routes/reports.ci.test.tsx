@@ -60,7 +60,7 @@ const REPORT: CiReport = {
     pull_requests: [],
     median_hours_to_green: null,
     max_flaky_kicks: 2,
-    cooldown: { guard: 'cooldown', decisions: 3, ticks: 2, last_tick: 9 },
+    cooldown: { guard: 'cooldown', decisions: 3, ticks: 2, last_tick: 9, asks: [] },
 }
 
 /** The CI page at `/reports/ci`, its week's report already read as `report`. */
