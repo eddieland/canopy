@@ -503,9 +503,11 @@ export const SCENES: Record<SeasonId, Scene> = {
         ),
     },
     halloween: {
+        // The jack-o'-lantern fills its piece edge to edge, so the tombstone and the cat stand a step apart from it and
+        // from each other, rather than shoulder to shoulder.
         floor: (
             <>
-                <Piece width={18} className="w-6">
+                <Piece width={18} className="ml-1.5 w-6">
                     {/* A tombstone, settled a little crooked, cracked at its shoulder. */}
                     <g transform="rotate(-5 9 25)">
                         <path
@@ -555,7 +557,7 @@ export const SCENES: Record<SeasonId, Scene> = {
                         <path d="M11.4 25 L12.4 23 L13.4 25 Z" />
                     </g>
                 </Piece>
-                <Piece width={21} className="w-[1.8rem]">
+                <Piece width={21} className="ml-1.5 w-[1.8rem]">
                     {/* A black cat sitting up, its tail curled round, its eyes catching the candlelight. */}
                     <path
                         d="M14 24.4 C19 24.6 19.8 18.4 17.6 15.4 C16.8 14.2 17.6 12.8 18.8 13.6"
