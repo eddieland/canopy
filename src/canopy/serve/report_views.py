@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, cast
 
-from canopy.core import ci, db, health, plan_report, review_report, runtime_sessions, spend
+from canopy.core import ci, db, health, plan_metrics, plan_report, review_report, runtime_sessions, spend
 from canopy.core.config import CANOPY_REVIEWER
 from canopy.serve import monthly
 from canopy.serve.schema.ci import (
@@ -36,7 +36,15 @@ from canopy.serve.schema.health import (
     HealthRefusal,
     HealthReport,
 )
-from canopy.serve.schema.plan_report import PlanLevel, PlanOutcome, PlansGroup, PlansLength, PlansReport, PlansRow
+from canopy.serve.schema.plan_report import (
+    PlanLevel,
+    PlanMetrics,
+    PlanOutcome,
+    PlansGroup,
+    PlansLength,
+    PlansReport,
+    PlansRow,
+)
 from canopy.serve.schema.reports import (
     MonthlyReport,
     ReportKind,
@@ -294,7 +302,7 @@ def plans_report(backend: Backend, ctx: Context, days: int) -> PlansReport:
     Returns:
         The report, with the level `policy.planner_may_approve` is at now.
     """
-    found = plan_report.report(ctx.conn, backend.clock(), days)
+    found = plan_report.report(ctx.conn, ctx.state_dir, backend.clock(), days)
     return PlansReport(
         days=found.days,
         since=db.parse_time(found.since),
@@ -307,7 +315,8 @@ def plans_report(backend: Backend, ctx: Context, days: int) -> PlansReport:
                 outcome=_approved(g.outcome),
                 plans=g.plans,
                 median_hours_to_approve=_hours(g.median_to_approve),
-                median_size=g.median_size,
+                median_lines=g.median_lines,
+                median_words=g.median_words,
                 implemented=g.implemented,
                 with_resume=g.with_resume,
                 resumes=g.resumes,
@@ -325,6 +334,7 @@ def plans_report(backend: Backend, ctx: Context, days: int) -> PlansReport:
             )
             for n in found.lengths
         ],
+        page_lines=plan_report.PAGE_LINES,
         outcomes={o: found.count(o) for o in plan_report.Outcome},
     )
 
@@ -584,6 +594,7 @@ def _plan(found: plan_report.PlanRow) -> PlansRow:
         run_id=found.run_id,
         created_at=db.parse_time(found.created_at),
         size=found.size,
+        metrics=_metrics(found.metrics),
         effort=found.effort,
         level=_level(found.level),
         outcome=_outcome(found.outcome),
@@ -597,6 +608,18 @@ def _plan(found: plan_report.PlanRow) -> PlansRow:
         reasons={str(reason): n for reason, n in found.reasons.items()},
         done=found.done,
         cost_usd=found.cost_usd,
+    )
+
+
+def _metrics(found: plan_metrics.Metrics | None) -> PlanMetrics | None:
+    if found is None:
+        return None
+    return PlanMetrics(
+        words=found.words,
+        lines=found.lines,
+        code_blocks=found.code_blocks,
+        tables=found.tables,
+        diagrams=found.diagrams,
     )
 
 

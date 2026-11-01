@@ -29,6 +29,21 @@ type PlanOutcome = Annotated[
 ]
 
 
+class PlanMetrics(Model):
+    """How long a plan is, measured from its file as its planner wrote it, and how much of it is not prose."""
+
+    words: int
+    """Its words outside code blocks and diagrams, tables' cells included."""
+    lines: int
+    """How many of the plan editor's lines it fills, estimated: what the operator scrolls through."""
+    code_blocks: int
+    """Its fenced code blocks, diagrams aside."""
+    tables: int
+    """Its tables."""
+    diagrams: int
+    """Its Mermaid diagrams."""
+
+
 class PlansRow(Model):
     """A ticket plan written in the window: how it went, how long approving it took, and what its ticket needed."""
 
@@ -42,6 +57,8 @@ class PlansRow(Model):
     """When it was written."""
     size: int
     """Its file's size as its planner wrote it, in bytes."""
+    metrics: PlanMetrics | None = None
+    """How long it is; None when its file as its planner wrote it could not be read."""
     effort: str | None = None
     """How much work its planner judged it, `small`, `medium`, or `large`; None when it gave no estimate."""
     level: PlanLevel | None = None
@@ -82,8 +99,10 @@ class PlansGroup(Model):
     """How many."""
     median_hours_to_approve: float | None = None
     """The median of their times to approval, in hours; None with none."""
-    median_size: int
-    """The median of their sizes, in bytes."""
+    median_lines: int | None = None
+    """The median of their lengths in the plan editor's lines, of those measured; None with none."""
+    median_words: int | None = None
+    """The median of their words, of those measured; None with none."""
     implemented: int
     """Those an `implement` followed."""
     with_resume: int
@@ -95,12 +114,12 @@ class PlansGroup(Model):
 
 
 class PlansLength(Model):
-    """The window's plans the operator approved, of one size, and how long approving them took."""
+    """The window's plans the operator approved, of one length, and how long approving them took."""
 
     low: int
-    """The smallest size it holds, in bytes."""
+    """The shortest length it holds, in the plan editor's lines."""
     high: int | None = None
-    """The size it holds up to, not included, in bytes; None for the largest."""
+    """The length it holds up to, not included, in the plan editor's lines; None for the longest."""
     plans: int
     """How many."""
     median_hours_to_approve: float | None = None
@@ -125,6 +144,8 @@ class PlansReport(Model):
     groups: list[PlansGroup]
     """By level, `off` to `lenient`, then none kept; within each, the planner's, as written, then revised."""
     lengths: list[PlansLength]
-    """The smallest first; only those with a plan."""
+    """The shortest first; only those with a plan. A plan that could not be measured is in none."""
+    page_lines: int
+    """How many of the plan editor's lines the page counts as a page, which the lengths are cut at multiples of."""
     outcomes: dict[str, int]
     """How many of the window's plans went each way, every outcome named, 0 for none."""
