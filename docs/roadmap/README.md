@@ -100,7 +100,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M61. One-off tasks](M61-one-off-tasks.md): in progress.
 - [M62. Artifacts, and comments on them back to the ticket](M62-artifacts.md): in progress.
 - [M63. Attachments on tickets and tasks](M63-attachments.md): in progress.
-- [M64. Slack replies](M64-slack-replies.md): in progress.
+- [M64. Slack replies](M64-slack-replies.md): deferred 2026-11-01.
 - [M65. Running agents say where they stand](M65-running-agents-say-where-they-stand.md): in progress.
 - [M66. The checklist, asked before the push](M66-the-checklist.md): in progress.
 
@@ -121,3 +121,5 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - Workers against OpenCode's server (M15's last bullets): when the operator wants to prompt a running worker rather than
   read its transcript and answer it after. The listener follows TRUST_MODEL T8, and OpenCode's server authentication on
   the pinned version is checked first.
+- Slack replies (M64): when the operator's Slack app can be granted read access to its channel's threads, so
+  Accept's live check can run. The sink's notifications (M10) do not need it.

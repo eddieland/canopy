@@ -67,9 +67,10 @@ records nothing; a reply in the previous day's thread reaches its ticket; `@cano
 thread reaches it and is acknowledged in a thread the sink starts for it, and one naming a key canopy does not know is
 answered under the message with why.
 
-Status: in progress. Stage 1 is built (2026-10-23): `canopy-connect-slack` prints the replies people wrote in the
-sink's ticket threads, and the sink keeps a week of each ticket's threads. Stage 2 is built (2026-10-23): the `slack`
-source kind and its `operators`, a listed id's reply recorded as the operator's message on the channel `slack`, on the
-tick's and the poll's runs alike, none in a dry run; a thread Slack no longer has reads as one with no replies. Stage 3
-is built (2026-10-23): a mention of canopy's bot answers any ticket canopy knows, and the `replies` events tell the
-operator in Slack what came of a mention or a refused reply. The live check in Accept is next.
+Status: deferred 2026-11-01. The operator cannot get their Slack app read access to its channel, so Accept's live
+check cannot run; the three stages stay built. Stage 1 is built (2026-10-23): `canopy-connect-slack` prints the
+replies people wrote in the sink's ticket threads, and the sink keeps a week of each ticket's threads. Stage 2 is built
+(2026-10-23): the `slack` source kind and its `operators`, a listed id's reply recorded as the operator's message on
+the channel `slack`, on the tick's and the poll's runs alike, none in a dry run; a thread Slack no longer has reads as
+one with no replies. Stage 3 is built (2026-10-23): a mention of canopy's bot answers any ticket canopy knows, and the
+`replies` events tell the operator in Slack what came of a mention or a refused reply.
