@@ -30,10 +30,12 @@ test("the month counts the PRs read before GitHub's times apart, and the planner
     await expect(page.locator('main header p')).toHaveText(
         '10 reviews on 7 PRs · median first review 18.3h over 30 days',
     )
-    await expect(page.getByTestId('reviews-median')).toContainText(
+    // What the median leaves out is in its tile's tip, so the chart's panel holds the chart alone.
+    await page.getByTestId('reviews-tiles').getByText('median first review').hover()
+    await expect(page.getByRole('tooltip')).toContainText(
         '2 reviewed PRs had no ready time from GitHub and are left out.',
     )
-    await expect(page.getByTestId('reviews-effort-table').getByTestId('reviews-effort')).toHaveCount(3)
+    await expect(page.getByTestId('reviews-efforts').getByTestId('reviews-effort')).toHaveCount(3)
     await expect(page.getByTestId('reviews-round-4')).toContainText('the planner')
     await page.getByTestId('reviews-round-4').getByRole('link', { name: 'run:52' }).click()
     await expect(page).toHaveURL(/\/runs\/52$/u)

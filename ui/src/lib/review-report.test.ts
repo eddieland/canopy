@@ -4,6 +4,9 @@ import type { ReviewsDay, ReviewsPullRequest } from '@/api/types'
 import type { Clock } from '@/lib/clock'
 
 import {
+    canopyReviewerFigures,
+    draftsHint,
+    resumesPerPlan,
     apartText,
     approvedText,
     dismissalText,
@@ -81,5 +84,39 @@ describe('review-report', () => {
         expect(approvedText({ approved_channel: null })).toBe('not approved')
         expect(dismissalText('not_worth_it')).toBe('not worth it')
         expect(dismissalText(null)).toBe('no reason given')
+    })
+})
+
+describe('resumesPerPlan', () => {
+    it('divides the resumes among the plans, and says 0 of an effort with none', () => {
+        expect(resumesPerPlan({ plans: 2, resumes: 3 })).toBe(1.5)
+        expect(resumesPerPlan({ plans: 0, resumes: 0 })).toBe(0)
+    })
+})
+
+describe('canopyReviewerFigures and draftsHint', () => {
+    const found = {
+        review_runs: [
+            { purpose: 'own', status: 'done', runs: 2, cost_usd: 0.5 },
+            { purpose: 'request', status: 'failed', runs: 1, cost_usd: null },
+        ],
+        dismissals: [
+            { reason: 'wrong', findings: 2 },
+            { reason: null, findings: 1 },
+        ],
+        drafts: [
+            { status: 'published', drafts: 1 },
+            { status: 'discarded', drafts: 2 },
+        ],
+    }
+
+    it('sums the runs, their cost where reported, the dismissals, and the drafts made and published', () => {
+        expect(canopyReviewerFigures(found)).toEqual({ runs: 3, costUsd: 0.5, dismissed: 3, published: 1, drafted: 3 })
+        expect(canopyReviewerFigures({ review_runs: [], dismissals: [], drafts: [] }).costUsd).toBeNull()
+    })
+
+    it('says where the drafts stand, or that none was made', () => {
+        expect(draftsHint(found)).toBe('Of 3 drafts made: published 1, discarded 2')
+        expect(draftsHint({ drafts: [] })).toBe('The drafts of its reviews published to GitHub: none was made')
     })
 })

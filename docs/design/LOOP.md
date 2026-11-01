@@ -319,7 +319,8 @@ that lacks either in the run's note, and never rewrites it (TRUST_MODEL T5).
 Worker result contract, one JSON line, the last of the worker's text (§13); `prs` maps each repository the run worked
 in to its PR, and `pr_titles` is optional and for display only. An `implement` or `resume` may add `"created"`, the
 follow-up tickets it filed, each with its repository or null, which authorize nothing (§18). `flaky` is a `resume`'s
-for `ci`, true when it left a failed check a rerun would pass (§23):
+for `ci`, true when it left a failed check a rerun would pass, and `flaky_cause` (`test`, `runner`, or `service`) is
+where it judged the check failed, left out when unsure, with `flaky_detail` one line on why (§23):
 
 ```json
 {"status":"done|blocked|failed","branch":"agent/KEY-slug","prs":{"api":"https://...|null"},

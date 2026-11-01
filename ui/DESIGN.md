@@ -796,16 +796,18 @@ side.
   report's description (Health, CI, Reviews, Checklist); the Spend page's Totals are a grid of them in their panel,
   whose cells are too narrow to name the window before under each figure, so a line under the grid names it once. A kind
   that spent nothing is no tile of a dash but a muted line under the grid (`No dry runs.`), so the tiles hold what was
-  spent. A figure still being read holds its place. A `Counter` stays the attention and worktrees pages' count of the
-  present, with its state's color.
+  spent. A panel with headline figures of its own has a row of them at its top, over its tables (the Reviews page's
+  canopy's reviewer). A figure still being read holds its place. A `Counter` stays the attention and worktrees pages'
+  count of the present, with its state's color.
 - **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest
   (`barPercent`), where comparing the rows is the point: spent by ticket, by model, and by landed ticket, the bytes a
-  tool returned, a check's failure rate. The figure, at a fixed width so the bars start at one edge, then a 6px rounded
-  bar, 64px long at least so a narrow column's still compares, on `surface-raised` filled in `muted-foreground`, or the
-  series' own fill; never a state's color, but for a failure rate (Health's failed share of a kind's runs, CI's
-  checks), in `status-failed`, a share of the whole rather than of the column's largest: it says what is broken. It is
-  the eye's, `aria-hidden`. Where a table's rows sum to a whole, the reports page's By kind and By model, a bar is its
-  row's share of the whole too, the percent on the cell's hover.
+  tool returned, a check's failure rate, a reviewer's reviews and wait, resumes per plan by estimate. The figure, at a
+  fixed width so the bars start at one edge, then a 6px rounded bar, 64px long at least so a narrow column's still
+  compares, on `surface-raised` filled in `muted-foreground`, or the series' own fill; never a state's color, but for a
+  failure rate (Health's failed share of a kind's runs, CI's checks), in `status-failed`, a share of the whole rather
+  than of the column's largest: it says what is broken. It is the eye's, `aria-hidden`. Where a table's rows sum to a
+  whole, the reports page's By kind and By model, a bar is its row's share of the whole too, the percent on the cell's
+  hover.
 - **A sparkline** (`Sparkline`, `src/components/sparkline.tsx`) is a series drawn as a small `accent` line, 2rem tall,
   where its trend is the point and a chart would be too much: a report card's days, Delivery's medians across the
   months. Its scale is a chart's, 0 to `HEADROOM` over its largest; a point with no value breaks the line, and a lone
@@ -1080,6 +1082,10 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **The green-first chart** (the CI page) is the same `DayChart` over it: a bar per local day of the PR heads first
   checked, those green first time at the bottom in the accent and the rest in `check-other`, so a bad day is a short
   accent; the day's rate on hover, the legend and a table of the same numbers under it.
+- **The Reviews page's panels** each hold one thing: the first reviews chart is alone in its panel, the window's
+  median a tile, what the median leaves out in that tile's tip, and what the page cannot see in its title's help; a
+  table that answers a different question from the one beside it gets its own panel (Estimates apart from Feedback
+  rounds).
 - **The first reviews chart** (the Reviews page) is the same `DayChart`: a bar per local day of the first reviews that
   arrived, stacked by wait in the wait fills, the quickest at the bottom, the day's median on hover, the legend and a
   table of the same numbers under it. Its window is the health page's.
