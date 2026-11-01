@@ -8679,8 +8679,8 @@ export type components = {
             rounds: number;
             /**
              * Rounds To Approval
-             * @description The feedback plans that read it and went ahead (were approved) before its first approval, in the window or
-             *     before it; None without an approval.
+             * @description The feedback plans that read it and were approved before its first approval, in the window or before it; a
+             *     plan written before it and approved after does not count. None without an approval.
              */
             rounds_to_approval: number | null;
             /**

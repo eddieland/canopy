@@ -77,7 +77,7 @@ class ReviewedPr:
     approved: int
     #: When its first approval came, in the window or before it; None with none.
     approved_at: str | None
-    #: The plans that read it and went ahead before its first approval, any time; None without an approval.
+    #: The plans that read it and were approved before its first approval, any time; None without an approval.
     rounds_to_approval: int | None
 
     @property
@@ -437,7 +437,7 @@ def _pr(
         approved_at=approved_at,
         rounds_to_approval=None
         if approved_at is None
-        else sum(1 for p in gone_ahead if db.parse_time(p.created_at) < db.parse_time(approved_at)),
+        else sum(1 for p in gone_ahead if p.approved_at and db.parse_time(p.approved_at) < db.parse_time(approved_at)),
     )
 
 

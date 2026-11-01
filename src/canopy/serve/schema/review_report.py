@@ -49,8 +49,8 @@ class ReviewsPullRequest(Model):
     approved_at: datetime | None = None
     """When its first approval came, in the window or before it; None with none."""
     rounds_to_approval: int | None = None
-    """The feedback plans that read it and went ahead (were approved) before its first approval, in the window or
-    before it; None without an approval."""
+    """The feedback plans that read it and were approved before its first approval, in the window or before it; a
+    plan written before it and approved after does not count. None without an approval."""
 
 
 class ReviewsReviewer(Model):

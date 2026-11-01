@@ -200,6 +200,9 @@ def test_the_reviews_report_times_a_round_from_the_feedback_to_the_push_and_coun
     # A rerun on the head the plan read, which is not the push.
     check_ran(conn, TIMED, "aaa", "test", CheckConclusion.SUCCESS, earlier(now, 3, 7))
     check_ran(conn, TIMED, "bbb", "test", CheckConclusion.SUCCESS, earlier(now, 3, 5))
+    # A plan written before the PR's approval and approved after it: not a round before the approval.
+    late = plan(conn, earlier(now, 2, 2), cost=None, effort=None, channel="cli")
+    records.update(records.FeedbackPlan).set(approved_at=earlier(now, 1)).where("id = ?", late).run(conn)
     said(conn, TIMED, "dana", earlier(now, 2), ReviewState.APPROVED)
     said(conn, TIMED, "erin", earlier(now, 1, 12), ReviewState.APPROVED)
 
