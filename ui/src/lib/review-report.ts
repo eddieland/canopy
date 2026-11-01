@@ -1,7 +1,7 @@
 // The Reviews page: where review feedback on canopy's PRs came from, how long it took, and what answering it cost.
 // The numbers are the server's (`canopy.core.review_report`); this lays them out.
 
-import type { ReviewsDay, ReviewsPrevious, ReviewsReport, ReviewsRound } from '@/api/types'
+import type { ReviewsDay, ReviewsEffort, ReviewsPrevious, ReviewsReport, ReviewsRound } from '@/api/types'
 import type { DayBar, DayChartSeries } from '@/lib/chart'
 import type { Clock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
@@ -171,4 +171,46 @@ export function approvedText(round: Pick<ReviewsRound, 'approved_channel'>): str
 /** A dismissal's reason in words; `no reason given` for one from before canopy asked. */
 export function dismissalText(reason: string | null): string {
     return DISMISSAL_WORD[reason ?? ''] ?? reason ?? ''
+}
+
+/** How many resumes went ahead on each plan of an effort, the planner's estimate against what followed; 0 for none. */
+export function resumesPerPlan(effort: Pick<ReviewsEffort, 'plans' | 'resumes'>): number {
+    return effort.plans === 0 ? 0 : effort.resumes / effort.plans
+}
+
+/** canopy's reviewer's figures over the window, as its panel's tiles show them. */
+export interface CanopyReviewerFigures {
+    /** Its review runs that started in the window, of every purpose and status. */
+    runs: number
+    /** What they cost, in US dollars; null when none reported a cost. */
+    costUsd: number | null
+    /** The findings of its reviews you dismissed. */
+    dismissed: number
+    /** Its drafts made in the window that were published. */
+    published: number
+    /** Its drafts made in the window, at every status. */
+    drafted: number
+}
+
+/** canopy's reviewer's runs, their cost, the findings dismissed, and the drafts made and published, over the window. */
+export function canopyReviewerFigures(
+    found: Pick<ReviewsReport, 'review_runs' | 'dismissals' | 'drafts'>,
+): CanopyReviewerFigures {
+    const costs = found.review_runs.map((r) => r.cost_usd).filter((c) => c !== null)
+    return {
+        runs: found.review_runs.reduce((sum, r) => sum + r.runs, 0),
+        costUsd: costs.length === 0 ? null : costs.reduce((sum, c) => sum + c, 0),
+        dismissed: found.dismissals.reduce((sum, d) => sum + d.findings, 0),
+        published: found.drafts.filter((d) => d.status === 'published').reduce((sum, d) => sum + d.drafts, 0),
+        drafted: found.drafts.reduce((sum, d) => sum + d.drafts, 0),
+    }
+}
+
+/** Where the window's drafts stand, in the published tile's tip: `Of 3 drafts made: published 1, discarded 2`. */
+export function draftsHint(found: Pick<ReviewsReport, 'drafts'>): string {
+    const drafted = found.drafts.reduce((sum, d) => sum + d.drafts, 0)
+    if (drafted === 0) {
+        return 'The drafts of its reviews published to GitHub: none was made'
+    }
+    return `Of ${counted(drafted, 'draft')} made: ${found.drafts.map((d) => `${d.status} ${d.drafts}`).join(', ')}`
 }

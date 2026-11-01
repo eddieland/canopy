@@ -786,13 +786,15 @@ side.
   which way is better and it moved the other (a rising failure rate; never rising spend). A row of them sits under a
   report's description (Health, CI, Reviews, Checklist); the Spend page's Totals are a grid of them in their panel,
   whose cells are too narrow to name the window before under each figure, so a line under the grid names it once. A
-  figure still being read holds its place. A `Counter` stays the attention and worktrees pages' count of the present,
-  with its state's color.
+  panel with headline figures of its own has a row of them at its top, over its tables (the Reviews page's canopy's
+  reviewer). A figure still being read holds its place. A `Counter` stays the attention and worktrees pages' count of
+  the present, with its state's color.
 - **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest
   (`barPercent`), where comparing the rows is the point: spent by month, by ticket, and by model, the bytes a tool
-  returned, a check's failure rate. The figure, at a fixed width so the bars start at one edge, then a 6px rounded bar,
-  64px long at least so a narrow column's still compares, on `surface-raised` filled in `muted-foreground`, or the
-  series' own fill; never a state's color. It is the eye's, `aria-hidden`.
+  returned, a check's failure rate, a reviewer's reviews and wait, resumes per plan by estimate. The figure, at a
+  fixed width so the bars start at one edge, then a 6px rounded bar, 64px long at least so a narrow column's still
+  compares, on `surface-raised` filled in `muted-foreground`, or the series' own fill; never a state's color. It is
+  the eye's, `aria-hidden`.
 
 ## Charts
 
@@ -1054,7 +1056,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   legend and a table of the same numbers under it. Its window is the health page's.
 - **The first reviews chart** (the Reviews page) is the same `DayChart`: a bar per local day of the first reviews that
   arrived, stacked by wait in the wait fills, the quickest at the bottom, the day's median on hover, the legend and a
-  table of the same numbers under it. Its window is the health page's.
+  table of the same numbers under it. Its window is the health page's. It is alone in its panel: the window's median
+  is a tile, what the median leaves out in that tile's tip, and what the page cannot see in its title's help. A table
+  that answers a different question from the one beside it gets its own panel (Estimates apart from Feedback rounds).
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
   with its unit's phase, its ticket, then the page's own figures. The spend page's By pull request, the CI page's
   flaky kicks, and the Reviews page's By pull request use it.

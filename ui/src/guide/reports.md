@@ -261,20 +261,27 @@ Feedback is counted the way the [reports page](#the-reports-page) counts it: rev
 than the PR's author, bots left out. canopy posts as you, so its own replies never count as feedback it received.
 
 - **First reviews by day**: how long each PR waited for its first review, on GitHub's clock: from the first review
-  asked for once the PR was ready, or from ready if nobody was asked, to the first review after that. Each bar is a day
-  of first reviews, stacked by wait (under an hour, up to four, up to a day, longer); hover it for the day's median,
-  and the table folded under it holds the same numbers. A PR canopy read before it kept GitHub's times, or one still a
-  draft, has no start, so its reviews are counted apart and say so, rather than drag the median somewhere imaginary.
-- **Who reviews**: each reviewer with their reviews, the ones that asked for changes, comments, the PRs they
-  reviewed, and their median wait from a PR's start to their own first review of it. A reviewer in
-  `trust.trusted_reviewers` is marked **trusted**: a worker acts on their feedback without asking you.
+  asked for once the PR was ready, or from ready if nobody was asked, to the first review after that. Each bar is a
+  day of first reviews, stacked by wait (under an hour, up to four, up to a day, longer); hover it for the day's
+  median, and the table folded under it holds the same numbers. The median for the whole window is the **median first
+  review** tile above. A PR canopy read before it kept GitHub's times, or one still a draft, has no start, so its
+  reviews are counted apart rather than drag the median somewhere imaginary; the tile's tip says how many.
+- **Who reviews**: each reviewer with their reviews, the ones that asked for changes, comments, the PRs they reviewed,
+  and their median wait from a PR's start to their own first review of it. Their reviews have a bar against the
+  busiest reviewer's and their wait one against the slowest's, so you can tell the reviewer who carries the load from
+  the one who answers fast without doing arithmetic. A reviewer in `trust.trusted_reviewers` is marked **trusted**: a
+  worker acts on their feedback without asking you.
+- **Estimates**: the planner's estimates beside what followed them. For each effort, its plans, the resumes that went
+  ahead on them, the resumes **per plan** with a bar against the most, and what those resumes cost. If `small` plans
+  keep needing three resumes, the planner is an optimist, and now you have the receipts.
 - **Feedback rounds**: each feedback plan written in the window, with its ticket, who approved it (you on the web, you
-  from the CLI, or the planner when it judged the plan needs no review), its effort, and the resumes that went ahead on
-  it with what the round spent. Above them, the planner's estimates beside what followed: if `small` plans keep
-  needing three resumes, the planner is an optimist, and now you have the receipts.
-- **canopy's reviewer**: its review runs by purpose (`own` for a ticket's PR, `request` for one you asked for) and how
-  they ended, with what they cost; the findings you dismissed, by reason; and its drafts, published or not. The last
-  line says whether `canopy:review` is in `trust.trusted_reviewers`.
+  from the CLI, or the planner when it judged the plan needs no review), its effort, and the resumes that went ahead
+  on it with what the round spent.
+- **canopy's reviewer**: its review **runs**, what they **cost**, the **findings dismissed**, and the **drafts
+  published** as figures across the top; hover the last for where every draft stands. Under them, its runs by purpose
+  (`own` for a ticket's PR, `request` for one you asked for) and how they ended, with what they cost, and the findings
+  you dismissed by reason, each with a bar. The last line says whether `canopy:review` is in
+  `trust.trusted_reviewers`, which decides whether workers act on its findings without you.
 - **By pull request**: each PR with its ticket, time to first review, reviews, changes requested, comments, feedback
   rounds, what those rounds cost, and the time from ready to merge.
 
