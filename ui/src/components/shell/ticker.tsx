@@ -63,7 +63,7 @@ export function Ticker() {
                 >
                     {/* Keyed on the settings too: a change restarts the crawl with the new settings, not a jump. */}
                     <Crawl
-                        key={`${pass.n}:${speed}:${gap}:${hidden.join()}`}
+                        key={`${pass.n}:${speed}:${gap}:${hidden.join(',')}`}
                         headline={headline}
                         rate={SPEED_REM[speed]}
                         gap={gap}

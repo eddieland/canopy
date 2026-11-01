@@ -9,11 +9,13 @@ import { renderRouted } from '@/test-utils'
 import { GuideLines, GuideText } from './guide-text'
 
 // A code block's colors, which Shiki stops giving a line it has read for too long: a busy runner's (`untimedShiki`).
-vi.mock('shiki/core', async (importOriginal) => (await import('@/test-utils')).untimedShiki(await importOriginal()))
+vi.mock(import('shiki/core'), async (importOriginal) =>
+    (await import('@/test-utils')).untimedShiki(await importOriginal()),
+)
 
 // mermaid lays a diagram out in the page, which happy-dom cannot: the guide's diagrams are read by `guide.test.ts`, and
 // drawn by Playwright.
-vi.mock('@/lib/diagram', () => ({ drawDiagram: vi.fn<typeof drawDiagram>() }))
+vi.mock(import('@/lib/diagram'), () => ({ drawDiagram: vi.fn<typeof drawDiagram>() }))
 
 afterEach(() => {
     cleanup()

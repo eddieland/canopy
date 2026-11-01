@@ -7,7 +7,8 @@
 //   the route tree's, which any layer may name a route by. A test is held to none of this: it may render what sits
 //   above the code it tests, to see what that code did.
 // - A library held to a few files (ui/AGENTS.md, "Stack") is imported nowhere else, a test of those files aside.
-//   Type imports do not count here: they load nothing, so they bring no library into a page's chunk.
+//   Type imports do not count here: they load nothing, so they bring no library into a page's chunk. Nor does the
+//   module a test mocks, `vi.mock(import('x'), ...)`: it names what to replace, in a test, which no page loads.
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 
@@ -88,6 +89,8 @@ const LIBRARIES = [
 const STATIC = /^[ \t]*(?:import|export)\b(?<type>[ \t]+type\b)?[^'"`;]*?\bfrom[ \t]*['"](?<spec>[^'"]+)['"]/gmu
 const BARE = /^[ \t]*import[ \t]*['"](?<spec>[^'"]+)['"]/gmu
 const DYNAMIC = /\bimport\(\s*['"](?<spec>[^'"]+)['"]\s*\)/gu
+// The text just before an `import('x')` that is the module `vi.mock` or `vi.doMock` replaces.
+const MOCKED = /\bvi\.(?:mock|doMock)\(\s*$/u
 
 function* files(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -111,13 +114,18 @@ function layerOf(path) {
     return found
 }
 
-/** Each import in `source`: its specifier, whether it imports types alone, and its line. */
+/** Each import in `source`: its specifier, whether it imports types alone, whether it names a mock, and its line. */
 function* importsOf(source) {
     const text = String(source)
     for (const pattern of [STATIC, BARE, DYNAMIC]) {
         for (const match of text.matchAll(pattern)) {
-            const line = text.slice(0, match.index).split('\n').length
-            yield { spec: match.groups?.['spec'] ?? '', typeOnly: match.groups?.['type'] !== undefined, line }
+            const before = text.slice(0, match.index)
+            yield {
+                spec: match.groups?.['spec'] ?? '',
+                typeOnly: match.groups?.['type'] !== undefined,
+                mocked: pattern === DYNAMIC && MOCKED.test(before),
+                line: before.split('\n').length,
+            }
         }
     }
 }
@@ -154,11 +162,11 @@ for (const file of files(join(ui, 'src'))) {
     }
     const layer = layerOf(name)
     const test = /\.test\.tsx?$/u.test(name)
-    for (const { spec, typeOnly, line } of importsOf(readFileSync(file, 'utf8'))) {
+    for (const { spec, typeOnly, mocked, line } of importsOf(readFileSync(file, 'utf8'))) {
         const path = target(spec, name)
         if (path === undefined) {
             const library = LIBRARIES.find((held) => held.pattern.test(spec))
-            if (library && !typeOnly && !library.files.test(name)) {
+            if (library && !typeOnly && !(test && mocked) && !library.files.test(name)) {
                 found.push(`${name}:${line}: imports ${spec}; ${library.name} is imported only by ${library.where}`)
             }
             continue
