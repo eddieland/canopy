@@ -178,24 +178,44 @@ can tell which items earn their place. It's what `canopy checklist` prints; [Tun
 list](checklists#tuning-the-list) says what to do with the numbers. The figures under the title are the window's
 headline over every repository: how many times runs were given an item, and how many of those were held or unanswered.
 
-**By item** is one table, a group of rows per repository under its name, each item in its list's order. **reminded**
-is how many worker runs were given the item, a task's among them, by when they started; then how many answered
-**pass** (the diff already held to it), **fixed** (it didn't, and the worker committed the fix), **held** (it doesn't,
-and the worker left it so for a reason it gave), or **n/a** (the diff touches nothing the item is about), and how many
-said nothing of it, **unanswered**. A run still running hasn't answered yet, so it isn't counted. A zero is dimmed, so
-the answers that happened stand out. Hover a column's name for what it counts.
+**By item** is one table, a group of rows per repository under its name and how many items it has. **reminded** is how
+many worker runs were given the item, a task's among them, by when they started. **answers** is the same runs as a
+bar, each answer its share in its own color: green for **pass** (the diff already held to it), blue for **fixed** (it
+didn't, and the worker committed the fix), red for **held** (it doesn't, and the worker left it so for a reason it
+gave), grey for **n/a** (the diff touches nothing the item is about), and amber for **unanswered** (the run said
+nothing of it). The legend is under the table, and the counts follow the bar, one column per answer, for when you want
+the numbers rather than the gist. A run still running hasn't answered yet, so it isn't counted. A zero is dimmed, so
+the answers that happened stand out. Hover a column's name for what it counts, or a bar for its answers in words.
 
-How to read it: an item that's mostly **n/a**, or never anything but **pass**, is one to reword or drop, because a
-rule that never fails is a rule the workers are paying tokens to agree with. One that's often **held** is one to argue
-about with whoever wrote it. A lot of **unanswered** usually means runs that never pushed, so were never asked: canopy
-counts every item of a run it gave a list to, pushed or not, and errs toward too many.
+You read the bars before the numbers: an item that's one grey bar is about diffs your workers don't make, one solid
+green bar is a rule they keep without being asked, and a red band is a rule they keep declining.
 
-Why a worker held an item is its own words, so it stays on the run rather than here: the [run's page](runs#a-runs-page)
-shows it, and `canopy show run:ID` prints it, or `task:N` for a task's. Pick **7 days**, **14 days**, or **30 days** in
-the header; a day runs midnight to midnight on canopy's clock, as the spend page's do. Two weeks is the measurement the
-checklist was built to take. With lists in more than one repository, the picker in **By item**'s header narrows the
-table to the ones you choose. With no list answered in the window, the page says so, and names `paths.checklists`,
-where the lists live.
+**verdict** does the judging the bars invite, by the advice in [Tuning the list](checklists#tuning-the-list). An item
+held twice or more says `argue`: take it up with whoever wrote the rule. An item given ten times or more that's mostly
+**n/a**, or never anything but a pass, says `drop?`: reword it or drop it, because a rule that never fails is a rule
+the workers are paying tokens to agree with. Under ten runs the page keeps quiet, since a rule that hasn't failed yet
+may just not have met the diff that fails it. The rest say nothing. A lot of **unanswered** usually means runs that
+never pushed, so were never asked: canopy counts every item of a run it gave a list to, pushed or not, and errs toward
+too many.
+
+A **held** count is a link: it opens the runs that held the item, newest first, each with the reason its worker gave,
+cut to a line. The [run's page](runs#a-runs-page) has the reason whole, and `canopy show run:ID` prints it, or
+`task:N` for a task's. **fixed** opens its runs the same way, which is the list earning its keep. Up to twenty runs
+each; the count says how many there were in all.
+
+The order buttons in **By item**'s header sort each repository's items: **list order**, the order of your file, or the
+most **held**, the largest **n/a share**, or the most **unanswered** first. With lists in more than one repository,
+the picker beside them narrows the table to the ones you choose.
+
+**By week** answers the question the page exists for: did the rewrite take? Click an item's name and it shows that
+item's answers in each week of the window, a bar a week stacked in the same colors, so the week you reworded it is the
+week its red band should shrink. With no item picked, it's the whole list's answers by week; **every item** in its
+header goes back to that. Its numbers fold under it, like every chart's.
+
+Pick **7 days**, **14 days**, or **30 days** in the header; a day runs midnight to midnight on canopy's clock, as the
+spend page's do. The page opens on two weeks, the measurement the checklist was built to take. `canopy checklist`
+opens on a week, as every report command does, so pass `--days 14` for the page's numbers. With no list answered in
+the window, the page says so, and names `paths.checklists`, where the lists live.
 
 ## The health page
 
@@ -244,24 +264,34 @@ cost, and whether rerunning the flaky ones worked, over the last **7 days** or *
 day a source first saw it finish, on the clock of the machine canopy runs on. The line under the title is the window
 at a glance, `71% of PR heads green first time · 4 flaky kicks over 7 days`: a head is green first time when the
 first run of every check on it passed, before anyone reran anything. The figures under it are the window's headline:
-the PR heads checked, the share green first time, the red runs, and the fix-CI resumes.
+the PR heads checked, the share green first time, the red runs, the fix-CI resumes and how many of them went green,
+and the median time to green.
 
 Red means `failure`, `error`, `timed_out`, or `startup_failure`; green means `success`. `cancelled`, `skipped`,
 `neutral`, `stale`, and `action_required` count as neither, so a check you cancelled never passes for one that broke.
 
-- **Checks by name**: each check, the worst first, with its runs, its red runs, its failure rate (red out of red and
-  green), and how often the next run on a new head of the same PR passed after a red one. A rerun on the same head is
-  not a new head, which is the point: it tells a fix from a retry.
+- **Checks by name**: each check, the worst first, with its failure rate (red out of red and green) as a red bar, its
+  red runs and its runs, and how often the next run on a new head of the same PR passed after a red one. **Same-head
+  reruns** counts its runs on a head it had already gone red on, with no new commit, and how many passed. That is
+  flakiness measured rather than alleged: two or more passes earn the check a `flaky` chip, whatever any worker said
+  about it. It's also the number to read before you turn on `trust.max_flaky_kicks`.
+- **Green first time by day**: a bar per day of the PR heads first checked, the ones green first time at the bottom,
+  so a bad week shows as a dip rather than as a number lower than you remember. Hover a bar for the day's rate; the
+  table folded under it holds the same numbers.
 - **Red checks by day**: a bar per day of the red runs, a color per check for the few most often red and the rest
   summed as `other`. Hover a bar for that day's checks; the table folded under it holds the same numbers.
-- **Fix-CI resumes**: each resume for `ci` (and each old `fix-ci`), with how it ended, what it cost, and the checks
-  red on its PR when it started, each with how its first run on the next head went: `green`, `red`, or `not yet`. That
-  is the only red-to-green rate the journal can give, and the panel's header sums it.
-- **Flaky kicks**: each PR canopy rebased and pushed to rerun a check a worker called flaky, with its kicks, the most
-  one head of work had against `trust.max_flaky_kicks`, and how many came back red anyway; under it, each kick that
-  did. With the limit at 0, kicks are off and the panel says so: a flaky check waits for you, as it always has.
-- **Cooldown refusals**: how often the `cooldown` guard held a resume for `ci` while the checks had time to run again,
-  with the latest tick. The [health page](#the-health-page) has every guard's refusals; this one just points there.
+- **Fix-CI resumes**: each resume for `ci` (and each old `fix-ci`), with how it ended, what it cost, the checks red on
+  its PR when it started, each with how its first run on the next head went (`green`, `red`, or `not yet`), and how
+  long its PR took to go green, or `still red`. The panel's header sums the red-to-green rate.
+- **Time to green**: each PR with a check run in the window, from the first red check canopy saw on it to its first
+  head with every check green, the ones still red first; the median is in the header. It runs on when canopy saw each
+  run finish, not when it did, and a head whose other checks are still running reads green until one is seen red, so
+  treat it as a good estimate, not a stopwatch.
+- **Reruns**: the flaky kicks, each PR canopy rebased and pushed to rerun a check a worker called flaky, with its kicks,
+  the most one head of work had against `trust.max_flaky_kicks`, and how many came back red anyway; under it, each
+  kick that did. With the limit at 0, kicks are off and the panel says so in a line: a flaky check waits for you, as it
+  always has. Its foot says how often the `cooldown` guard held a resume for `ci` while the checks ran again, with the
+  latest tick. The [health page](#the-health-page) has every guard's refusals; this one just points there.
 
 The page sees only the PRs canopy observed, and only their check runs from M36 on, when canopy started keeping every
 one. A commit status has no check run, so it has no history here and isn't counted. If your CI reports by status
