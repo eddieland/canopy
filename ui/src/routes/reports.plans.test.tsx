@@ -21,6 +21,7 @@ function row(over: Partial<PlansRow> & Pick<PlansRow, 'plan_id' | 'outcome'>): P
         run_id: 20 + over.plan_id,
         created_at: '2026-10-07T09:00:00Z',
         size: 6_144,
+        metrics: { words: 900, lines: 90, code_blocks: 0, tables: 0, diagrams: 0 },
         effort: 'small',
         level: 'strict',
         approved_at: null,
@@ -53,6 +54,7 @@ const REPORT: PlansReport = {
             approved_at: '2026-10-07T09:00:00Z',
             hours_to_approve: 0,
             size: 2_048,
+            metrics: { words: 300, lines: 20, code_blocks: 0, tables: 0, diagrams: 0 },
             implemented: true,
             resumes: 2,
             reasons: { ci: 1, review: 1 },
@@ -65,12 +67,13 @@ const REPORT: PlansReport = {
             approved_at: '2026-10-07T12:00:00Z',
             hours_to_approve: 3,
             size: 20_000,
+            metrics: { words: 2_900, lines: 340, code_blocks: 2, tables: 1, diagrams: 0 },
             edited: true,
             earlier: 1,
             implemented: true,
             done: true,
         }),
-        row({ plan_id: 2, ticket_key: 'PROJ-3', level: 'off', outcome: 'replaced', comments: 2 }),
+        row({ plan_id: 2, ticket_key: 'PROJ-3', level: 'off', outcome: 'replaced', comments: 2, metrics: null }),
         row({
             plan_id: 1,
             ticket_key: 'PROJ-2',
@@ -88,7 +91,8 @@ const REPORT: PlansReport = {
             outcome: 'revised',
             plans: 1,
             median_hours_to_approve: 3,
-            median_size: 20_000,
+            median_lines: 340,
+            median_words: 2_900,
             implemented: 1,
             with_resume: 0,
             resumes: 0,
@@ -99,7 +103,8 @@ const REPORT: PlansReport = {
             outcome: 'planner',
             plans: 1,
             median_hours_to_approve: 0,
-            median_size: 2_048,
+            median_lines: 20,
+            median_words: 300,
             implemented: 1,
             with_resume: 1,
             resumes: 2,
@@ -110,7 +115,8 @@ const REPORT: PlansReport = {
             outcome: 'as_written',
             plans: 1,
             median_hours_to_approve: 1,
-            median_size: 6_144,
+            median_lines: null,
+            median_words: null,
             implemented: 1,
             with_resume: 0,
             resumes: 0,
@@ -118,10 +124,10 @@ const REPORT: PlansReport = {
         },
     ],
     lengths: [
-        { low: 3_000, high: 6_000, plans: 1, median_hours_to_approve: 1, as_written: 1 },
-        { low: 12_000, high: null, plans: 1, median_hours_to_approve: 3, as_written: 0 },
+        { low: 50, high: 100, plans: 1, median_hours_to_approve: 1, as_written: 1 },
+        { low: 200, high: null, plans: 1, median_hours_to_approve: 3, as_written: 0 },
     ],
-    page_bytes: 3_000,
+    page_lines: 50,
     outcomes: { planner: 1, as_written: 1, revised: 1, replaced: 1, dropped: 0, waiting: 1 },
 }
 
@@ -170,12 +176,13 @@ describe('the Plans page', () => {
         await renderPage(REPORT)
         const groups = within(await screen.findByTestId('plans-group-table')).getAllByTestId('plans-group')
         expect(groups.map((g) => texts(g))).toEqual([
-            ['off', 'revised', '1', '3.0h', '≈ 6½ pages', '0 of 1', '0', '1'],
-            ['strict', 'by the planner', '1', '–', '≈ ½ page', '1 of 1', '2', '0'],
-            ['not recorded', 'as written', '1', '1.0h', '≈ 2 pages', '0 of 1', '0', '1'],
+            ['off', 'revised', '1', '3.0h', '≈ 7 pages', '2,900', '0 of 1', '0', '1'],
+            ['strict', 'by the planner', '1', '–', '≈ ½ page', '300', '1 of 1', '2', '0'],
+            // None of them could be measured.
+            ['not recorded', 'as written', '1', '1.0h', '–', '–', '0 of 1', '0', '1'],
         ])
-        // The bytes behind a length are on its hover.
-        expect(tipOf(within(groups[0] as HTMLElement).getByText('≈ 6½ pages'))).toBe('19.5 KiB')
+        // The lines behind a length are on its hover.
+        expect(tipOf(within(groups[0] as HTMLElement).getByText('≈ 7 pages'))).toBe('340 lines')
     })
 
     it('tables the time you took to approve by length', async () => {
@@ -185,14 +192,35 @@ describe('the Plans page', () => {
             ['1–2 pages', '1', '1.0h', '1'],
             ['4 pages and up', '1', '3.0h', '0'],
         ])
-        expect(tipOf(within(lengths[1] as HTMLElement).getByText('4 pages and up'))).toBe('11.7 KiB and up')
+        expect(tipOf(within(lengths[1] as HTMLElement).getByText('4 pages and up'))).toBe('200 lines and up')
     })
 
-    it('lists each plan with its level, how it went and what changed, and the resumes after it', async () => {
+    it('lists each plan with its level, how it went, its length, and the resumes after it', async () => {
         await renderPage(REPORT)
         const planned = await screen.findByTestId('plans-plan-4')
         expect(within(planned).getByRole('link', { name: 'run:24' })).toBeTruthy()
-        expect(cells(planned).slice(0, 6)).toEqual(['PROJ-4', 'strict', 'by the planner', '≈ ½ page', '–', '2'])
+        expect(cells(planned).slice(0, 8)).toEqual([
+            'PROJ-4',
+            'strict',
+            'by the planner',
+            '≈ ½ page',
+            '300',
+            '–',
+            '–',
+            '2',
+        ])
+        expect(tipOf(within(planned).getByText('≈ ½ page'))).toBe('20 lines · 300 words · 2 KiB')
+        expect(cells(screen.getByTestId('plans-plan-3')).slice(3, 6)).toEqual([
+            '≈ 7 pages',
+            '2,900',
+            '2 code · 1 table',
+        ])
+        // A plan whose file could not be read is not measured.
+        const unmeasured = screen.getByTestId('plans-plan-2')
+        expect(cells(unmeasured).slice(3, 6)).toEqual(['–', '–', '–'])
+        expect(tipOf(within(unmeasured).getAllByText('–', { selector: 'td span' })[0] as HTMLElement)).toBe(
+            'Its file as its planner wrote it could not be read',
+        )
         expect(tipOf(within(planned).getByText('2'))).toBe('ci 1, review 1')
         expect(cells(screen.getByTestId('plans-plan-3')).slice(1, 3)).toEqual([
             'off',

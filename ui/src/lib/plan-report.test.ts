@@ -4,9 +4,11 @@ import type { PlansGroup } from '@/api/types'
 
 import {
     changesText,
-    lengthBytesText,
+    lengthLinesText,
     lengthText,
     levelText,
+    measuredText,
+    notProseText,
     pagesText,
     plansLine,
     plansWindow,
@@ -22,7 +24,8 @@ function group(implemented: number, withResume: number): PlansGroup {
         outcome: 'planner',
         plans: implemented,
         median_hours_to_approve: 0,
-        median_size: 2000,
+        median_lines: 40,
+        median_words: 400,
         implemented,
         with_resume: withResume,
         resumes: withResume,
@@ -49,30 +52,36 @@ describe('plan report', () => {
         expect(plansLine({ days: 7, plans: [], outcomes: {}, groups: [] })).toBe('no plans over 7 days')
     })
 
-    it('names a level, a share of PRs resumed, and a size bucket in pages, its bytes for the hover', () => {
+    it('names a level, a share of PRs resumed, and a length bucket in pages, its lines for the hover', () => {
         expect([levelText('strict'), levelText(null)]).toEqual(['strict', 'not recorded'])
         expect([resumedText(group(2, 1)), resumedText(group(0, 0))]).toEqual(['1 of 2', '–'])
         const buckets = [
-            { low: 0, high: 3_000 },
-            { low: 3_000, high: 6_000 },
-            { low: 12_000, high: null },
+            { low: 0, high: 50 },
+            { low: 50, high: 100 },
+            { low: 200, high: null },
         ]
-        expect(buckets.map((b) => lengthText(b, 3_000))).toEqual(['under 1 page', '1–2 pages', '4 pages and up'])
-        expect(lengthText({ low: 3_000, high: null }, 3_000)).toBe('1 page and up')
-        expect(buckets.map((b) => lengthBytesText(b))).toEqual(['under 2.9 KiB', '2.9–5.9 KiB', '11.7 KiB and up'])
+        expect(buckets.map((b) => lengthText(b, 50))).toEqual(['under 1 page', '1–2 pages', '4 pages and up'])
+        expect(lengthText({ low: 50, high: null }, 50)).toBe('1 page and up')
+        expect(buckets.map((b) => lengthLinesText(b))).toEqual(['under 50 lines', '50–100 lines', '200 lines and up'])
     })
 
-    it('reads a size as pages to the nearest half, never under a half', () => {
-        expect([0, 1_400, 1_600, 3_000, 4_400, 4_600, 6_000, 20_000].map((s) => pagesText(s, 3_000))).toEqual([
+    it('reads a length as pages to the nearest half, never under a half', () => {
+        expect([0, 24, 38, 50, 74, 76, 100, 340].map((n) => pagesText(n, 50))).toEqual([
             '≈ ½ page',
             '≈ ½ page',
-            '≈ ½ page',
+            '≈ 1 page',
             '≈ 1 page',
             '≈ 1½ pages',
             '≈ 1½ pages',
             '≈ 2 pages',
-            '≈ 6½ pages',
+            '≈ 7 pages',
         ])
+    })
+
+    it("says what a plan's length is made of, and what of it is not prose", () => {
+        expect(measuredText({ lines: 161, words: 1622 }, 9_341)).toBe('161 lines · 1,622 words · 9.1 KiB')
+        expect(notProseText({ code_blocks: 2, tables: 1, diagrams: 1 })).toBe('2 code · 1 table · 1 diagram')
+        expect(notProseText({ code_blocks: 0, tables: 0, diagrams: 0 })).toBe('')
     })
 
     it('says what changed before an approval, and why the resumes after ran', () => {

@@ -3,8 +3,9 @@
 Reads only. Over the same window as `canopy spend` and `canopy health` (whole local days, today's so far included): the
 ticket plans written in it, each with how it went (approved by its planner, approved by the operator as written or
 after a change, replaced by a newer plan, dropped, or still waiting), how long its approval took against its length,
-and the `resume` runs its ticket needed once it was approved. Split by the level of `policy.planner_may_approve` its
-plan run's prompt offered, so a level is judged on what it let through before the key is loosened (#1872).
+measured from its file as its planner wrote it (`plan_metrics`), and the `resume` runs its ticket needed once it was
+approved. Split by the level of `policy.planner_may_approve` its plan run's prompt offered, so a level is judged on
+what it let through before the key is loosened (#1872).
 
 A plan the operator approved as written says little about the plan by itself: whether its PR then needed a `resume`
 says more. A ticket's resumes after its approval are its PR's, since a ticket is never planned once it has a branch.
@@ -21,20 +22,21 @@ from datetime import timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from canopy.core import db, plans, records, spend, sql
+from canopy.core import db, plan_metrics, plans, records, spend, sql
 from canopy.core.vocab import PlanEffort, PlannerApproval, PlanStatus, ResumeReason, RunKind
 
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Collection, Iterable, Mapping, Sequence
     from datetime import datetime
+    from pathlib import Path
 
 #: The kinds that count as a `resume`: the retired `fix-ci` counts as one with the reason `ci` (DESIGN §8).
 RESUMES = (RunKind.RESUME, RunKind.FIX_CI)
-#: A page of a plan, in bytes, for the length table: about 500 words of Markdown, as a printed page holds.
-PAGE_BYTES = 3_000
-#: Where the length table cuts a plan's size, in bytes: under a page, under 2, under 4, and the rest.
-SIZE_BOUNDS = (PAGE_BYTES, 2 * PAGE_BYTES, 4 * PAGE_BYTES)
+#: A page of a plan, in the plan editor's lines (`plan_metrics.Metrics.lines`): about a screen at 1440 pixels tall.
+PAGE_LINES = 50
+#: Where the length table cuts a plan's length, in lines: under a page, under 2, under 4, and the rest.
+LENGTH_BOUNDS = (PAGE_LINES, 2 * PAGE_LINES, 4 * PAGE_LINES)
 
 
 class Outcome(StrEnum):
@@ -70,6 +72,8 @@ class PlanRow:
     created_at: str
     #: Its file's size as its planner wrote it, in bytes.
     size: int
+    #: How long it is, measured from its file as its planner wrote it; None when that file could not be read.
+    metrics: plan_metrics.Metrics | None
     effort: PlanEffort | None
     #: The level its plan run's prompt offered its planner; None for a run from before canopy kept it.
     level: PlannerApproval | None
@@ -111,8 +115,9 @@ class Group:
     plans: int
     #: The median of their times to approval.
     median_to_approve: timedelta | None
-    #: The median of their sizes, in bytes.
-    median_size: int
+    #: The medians of their lengths in the plan editor's lines and of their words, of those measured; None with none.
+    median_lines: int | None
+    median_words: int | None
     #: Those an `implement` followed, and of those, the ones whose ticket needed at least one `resume`.
     implemented: int
     with_resume: int
@@ -125,7 +130,7 @@ class Group:
 class Length:
     """The window's plans the operator approved, of one size bucket, and how long approving them took."""
 
-    #: The bucket's bounds in bytes, `[low, high)`; `high` None for the last.
+    #: The bucket's bounds in the plan editor's lines, `[low, high)`; `high` None for the last.
     low: int
     high: int | None
     plans: int
@@ -157,8 +162,10 @@ class Plans:
         return sum(1 for p in self.plans if p.outcome is outcome)
 
 
-def report(conn: sqlite3.Connection, now: datetime, days: int) -> Plans:
+def report(conn: sqlite3.Connection, state_dir: Path, now: datetime, days: int) -> Plans:
     """How the plans written over the last `days` local days were approved, today's so far included.
+
+    Each plan is measured from its original file under `state_dir`, as its planner wrote it.
 
     Returns:
         The report; a window with no plan has no rows, groups, or lengths.
@@ -188,6 +195,7 @@ def report(conn: sqlite3.Connection, now: datetime, days: int) -> Plans:
             [r for r in runs if r.ticket_key == p.ticket_key],
             reasons,
             said.get(p.ticket_key, []),
+            metrics=_measured(state_dir, p),
             done=(t := tickets.get(p.ticket_key)) is not None and t.done,
         )
         for p in written
@@ -252,6 +260,16 @@ def _comments(conn: sqlite3.Connection, keys: Collection[str]) -> dict[str, list
     return {key: sorted(times) for key, times in found.items()}
 
 
+# A plan measured from its original, the copy kept as its planner wrote it; None when that file is gone, is not a plan
+# any more, or is not the one written, by its hash.
+def _measured(state_dir: Path, plan: records.Plan) -> plan_metrics.Metrics | None:
+    path = plans.path_for(state_dir, plan.ticket_key, plan.run_id).with_name(plans.original_name(plan.run_id))
+    reading = plans.read(path)
+    if reading.text is None or reading.sha256 != plan.sha256:
+        return None
+    return plan_metrics.measure(reading.text)
+
+
 def _row(
     plan: records.Plan,
     ticket_plans: Sequence[records.Plan],
@@ -259,6 +277,7 @@ def _row(
     reasons: Mapping[int, Sequence[ResumeReason]],
     said: Iterable[str],
     *,
+    metrics: plan_metrics.Metrics | None,
     done: bool,
 ) -> PlanRow:
     earlier = sum(1 for p in ticket_plans if p.id < plan.id)
@@ -283,6 +302,7 @@ def _row(
         run_id=plan.run_id,
         created_at=plan.created_at,
         size=plan.size,
+        metrics=metrics,
         effort=plan.effort,
         level=None if wrote is None else wrote.plan_review,
         outcome=_outcome(plan, after, edited=edited, comments=comments, earlier=earlier),
@@ -330,7 +350,8 @@ def _groups(rows: Sequence[PlanRow]) -> list[Group]:
                     outcome=outcome,
                     plans=len(theirs),
                     median_to_approve=_median([w for r in theirs if (w := r.to_approve) is not None]),
-                    median_size=round(statistics.median(r.size for r in theirs)),
+                    median_lines=_middle([m.lines for r in theirs if (m := r.metrics) is not None]),
+                    median_words=_middle([m.words for r in theirs if (m := r.metrics) is not None]),
                     implemented=len(implemented),
                     with_resume=sum(1 for r in implemented if r.resumes),
                     resumes=sum(r.resumes for r in theirs),
@@ -340,13 +361,18 @@ def _groups(rows: Sequence[PlanRow]) -> list[Group]:
     return found
 
 
-# The plans the operator approved, by size: the planner's approvals take no time, so they would only pull it down.
+# The plans the operator approved, by length: the planner's approvals take no time, so they would only pull it down.
+# A plan whose file could not be measured is left out.
 def _lengths(rows: Iterable[PlanRow]) -> list[Length]:
-    bounds = list(zip((0, *SIZE_BOUNDS), (*SIZE_BOUNDS, None), strict=True))
-    approved = [r for r in rows if r.outcome in (Outcome.AS_WRITTEN, Outcome.REVISED)]
+    bounds = list(zip((0, *LENGTH_BOUNDS), (*LENGTH_BOUNDS, None), strict=True))
+    approved = [
+        (r, m.lines)
+        for r in rows
+        if r.outcome in (Outcome.AS_WRITTEN, Outcome.REVISED) and (m := r.metrics) is not None
+    ]
     found: list[Length] = []
     for low, high in bounds:
-        theirs = [r for r in approved if low <= r.size and (high is None or r.size < high)]
+        theirs = [r for r, lines in approved if low <= lines and (high is None or lines < high)]
         if theirs:
             found.append(
                 Length(
@@ -363,6 +389,10 @@ def _lengths(rows: Iterable[PlanRow]) -> list[Length]:
 # A journal time as a datetime, so two compare by instant whatever their spelling.
 def _at(stamp: str) -> datetime:
     return db.parse_time(stamp)
+
+
+def _middle(values: Collection[int]) -> int | None:
+    return round(statistics.median(values)) if values else None
 
 
 def _median(waits: Collection[timedelta]) -> timedelta | None:

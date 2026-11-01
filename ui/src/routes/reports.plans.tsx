@@ -10,14 +10,16 @@ import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Hinted, Tipped } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
-import { sizeText } from '@/lib/attachments'
 import { counted } from '@/lib/descriptions'
+import { grouped } from '@/lib/fold'
 import {
     changesText,
     DEFAULT_PLANS_WINDOW,
     LEVEL_HINT,
     LIMITS_TEXT,
-    lengthBytesText,
+    measuredText,
+    notProseText,
+    lengthLinesText,
     lengthText,
     levelText,
     OUTCOME_HINT,
@@ -49,8 +51,11 @@ const HELP = [
 // What the needed-a-resume column counts, on its hover.
 const RESUMED_HINT = 'Of the plans an implement followed, those whose PR needed at least one resume'
 
-// What a length column measures, ending its hover: a page is the server's `page_bytes`.
-const PAGE_HINT = 'in pages of about 500 words; the bytes on hover'
+// What a length column measures, ending its hover: a page is the server's `page_lines`.
+const PAGE_HINT = 'in pages of the plan editor, about a screen each, as its planner wrote it'
+
+// What a plan whose file as its planner wrote it could not be read shows, on its dash's hover.
+const UNMEASURED = 'Its file as its planner wrote it could not be read'
 
 // The column names of a table in a padded scrolling region: the head's cells take the padding.
 const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
@@ -110,7 +115,7 @@ function PlansPage() {
                         {data === undefined ? (
                             <PanelSkeleton rows={3} className="min-h-24" />
                         ) : (
-                            <Lengths lengths={data.lengths} pageBytes={data.page_bytes} span={span} />
+                            <Lengths lengths={data.lengths} pageLines={data.page_lines} span={span} />
                         )}
                     </Panel>
                     <Panel data-testid="plans-plans">
@@ -118,7 +123,7 @@ function PlansPage() {
                         {data === undefined ? (
                             <PanelSkeleton rows={4} className="min-h-32" />
                         ) : (
-                            <Plans plans={data.plans} pageBytes={data.page_bytes} span={span} />
+                            <Plans plans={data.plans} pageLines={data.page_lines} span={span} />
                         )}
                     </Panel>
                 </>
@@ -154,6 +159,9 @@ function Levels({ found, span }: { found: PlansReport; span: string }) {
                                     <Hinted hint={`The median of their lengths, ${PAGE_HINT}`}>length</Hinted>
                                 </th>
                                 <th className="panel-label pb-1.5 pl-3 font-normal">
+                                    <Hinted hint="The median of their words, outside code and diagrams">words</Hinted>
+                                </th>
+                                <th className="panel-label pb-1.5 pl-3 font-normal">
                                     <Hinted hint={RESUMED_HINT}>needed a resume</Hinted>
                                 </th>
                                 <th className="panel-label pb-1.5 pl-3 font-normal">
@@ -166,7 +174,7 @@ function Levels({ found, span }: { found: PlansReport; span: string }) {
                         </thead>
                         <tbody className="text-xs">
                             {found.groups.map((g) => (
-                                <Group key={`${g.level ?? ''}:${g.outcome}`} group={g} pageBytes={found.page_bytes} />
+                                <Group key={`${g.level ?? ''}:${g.outcome}`} group={g} pageLines={found.page_lines} />
                             ))}
                         </tbody>
                     </table>
@@ -188,7 +196,7 @@ function Levels({ found, span }: { found: PlansReport; span: string }) {
 }
 
 /** One level's plans that went ahead one way: how many, how quickly, how long, and what their PRs needed after. */
-function Group({ group, pageBytes }: { group: PlansGroup; pageBytes: number }) {
+function Group({ group, pageLines }: { group: PlansGroup; pageLines: number }) {
     return (
         <tr className="text-right" data-testid="plans-group">
             <th scope="row" className="py-0.5 text-left font-mono font-normal">
@@ -202,9 +210,16 @@ function Group({ group, pageBytes }: { group: PlansGroup; pageBytes: number }) {
                 {group.outcome === 'planner' ? '–' : hoursText(group.median_hours_to_approve)}
             </td>
             <td className="readout pl-3 whitespace-nowrap text-muted-foreground">
-                <Tipped fact={sizeText(group.median_size)} mono>
-                    {pagesText(group.median_size, pageBytes)}
-                </Tipped>
+                {group.median_lines === null ? (
+                    '–'
+                ) : (
+                    <Tipped fact={counted(group.median_lines, 'line')} mono>
+                        {pagesText(group.median_lines, pageLines)}
+                    </Tipped>
+                )}
+            </td>
+            <td className="readout pl-3 text-muted-foreground">
+                {group.median_words === null ? '–' : grouped(group.median_words)}
             </td>
             <td className={cn('readout pl-3', group.with_resume > 0 && 'text-status-blocked')}>{resumedText(group)}</td>
             <td className="readout pl-3 text-muted-foreground">{group.resumes}</td>
@@ -217,7 +232,7 @@ function Group({ group, pageBytes }: { group: PlansGroup; pageBytes: number }) {
  * The plans you approved, by length: how many, the median time to approve them, and how many went as written. The
  * planner's approvals take no time, so they are left out.
  */
-function Lengths({ lengths, pageBytes, span }: { lengths: PlansLength[]; pageBytes: number; span: string }) {
+function Lengths({ lengths, pageLines, span }: { lengths: PlansLength[]; pageLines: number; span: string }) {
     if (lengths.length === 0) {
         return <Empty size="panel">you approved no plan in these {span}</Empty>
     }
@@ -238,8 +253,8 @@ function Lengths({ lengths, pageBytes, span }: { lengths: PlansLength[]; pageByt
                     {lengths.map((n) => (
                         <tr key={n.low} className="text-right" data-testid="plans-length">
                             <th scope="row" className="py-0.5 text-left font-normal">
-                                <Tipped fact={lengthBytesText(n)} mono>
-                                    {lengthText(n, pageBytes)}
+                                <Tipped fact={lengthLinesText(n)} mono>
+                                    {lengthText(n, pageLines)}
                                 </Tipped>
                             </th>
                             <td className="readout pl-3">{n.plans}</td>
@@ -254,7 +269,7 @@ function Lengths({ lengths, pageBytes, span }: { lengths: PlansLength[]; pageByt
 }
 
 /** Each plan written in the window, the newest first. */
-function Plans({ plans, pageBytes, span }: { plans: PlansRow[]; pageBytes: number; span: string }) {
+function Plans({ plans, pageLines, span }: { plans: PlansRow[]; pageLines: number; span: string }) {
     if (plans.length === 0) {
         return <Empty size="panel">no plan was written in these {span}</Empty>
     }
@@ -271,6 +286,12 @@ function Plans({ plans, pageBytes, span }: { plans: PlansRow[]; pageBytes: numbe
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">
                             <Hinted hint={`Its length, ${PAGE_HINT}`}>length</Hinted>
                         </th>
+                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">
+                            <Hinted hint="Its words, outside code and diagrams">words</Hinted>
+                        </th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">
+                            <Hinted hint="Its code blocks, tables, and diagrams">not prose</Hinted>
+                        </th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">to approve</th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">resumes</th>
                         <th className="panel-label pb-1.5 pl-3 text-right font-normal">written</th>
@@ -278,7 +299,7 @@ function Plans({ plans, pageBytes, span }: { plans: PlansRow[]; pageBytes: numbe
                 </thead>
                 <tbody className="text-xs">
                     {plans.map((p) => (
-                        <Plan key={p.plan_id} plan={p} pageBytes={pageBytes} />
+                        <Plan key={p.plan_id} plan={p} pageLines={pageLines} />
                     ))}
                 </tbody>
             </table>
@@ -287,10 +308,12 @@ function Plans({ plans, pageBytes, span }: { plans: PlansRow[]; pageBytes: numbe
 }
 
 /**
- * A plan's row: its run, its ticket, the level it was offered, how it went and what changed first, its length, how
- * long approving it took, and the resumes its ticket needed after, with their reasons on hover.
+ * A plan's row: its run, its ticket, the level it was offered, how it went and what changed first, its length, words,
+ * and what is not prose, how long approving it took, and the resumes its ticket needed after, with their reasons on
+ * hover.
  */
-function Plan({ plan, pageBytes }: { plan: PlansRow; pageBytes: number }) {
+function Plan({ plan, pageLines }: { plan: PlansRow; pageLines: number }) {
+    const { metrics } = plan
     const changes = changesText(plan)
     const reasons = reasonsText(plan.reasons)
     return (
@@ -309,9 +332,15 @@ function Plan({ plan, pageBytes }: { plan: PlansRow; pageBytes: number }) {
                 {changes !== '' && <span>: {changes}</span>}
             </td>
             <td className="readout pl-3 text-right whitespace-nowrap text-muted-foreground">
-                <Tipped fact={sizeText(plan.size)} mono>
-                    {pagesText(plan.size, pageBytes)}
+                <Tipped fact={metrics ? measuredText(metrics, plan.size) : UNMEASURED} mono={Boolean(metrics)}>
+                    {metrics ? pagesText(metrics.lines, pageLines) : '–'}
                 </Tipped>
+            </td>
+            <td className="readout pl-3 text-right whitespace-nowrap text-muted-foreground">
+                {metrics ? grouped(metrics.words) : '–'}
+            </td>
+            <td className="pl-3 whitespace-nowrap text-muted-foreground">
+                {metrics ? notProseText(metrics) || '–' : '–'}
             </td>
             <td className="readout pl-3 text-right whitespace-nowrap">
                 {plan.outcome === 'planner' ? '–' : hoursText(plan.hours_to_approve)}

@@ -6792,6 +6792,37 @@ export type components = {
          */
         PlanLevel: "off" | "strict" | "normal" | "lenient";
         /**
+         * PlanMetrics
+         * @description How long a plan is, measured from its file as its planner wrote it, and how much of it is not prose.
+         */
+        PlanMetrics: {
+            /**
+             * Code Blocks
+             * @description Its fenced code blocks, diagrams aside.
+             */
+            code_blocks: number;
+            /**
+             * Diagrams
+             * @description Its Mermaid diagrams.
+             */
+            diagrams: number;
+            /**
+             * Lines
+             * @description How many of the plan editor's lines it fills, estimated: what the operator scrolls through.
+             */
+            lines: number;
+            /**
+             * Tables
+             * @description Its tables.
+             */
+            tables: number;
+            /**
+             * Words
+             * @description Its words outside code blocks and diagrams, tables' cells included.
+             */
+            words: number;
+        };
+        /**
          * @description How a plan went: approved by its `planner`, by the operator `as_written` or `revised` (edited, commented on, or after an earlier plan was sent back), `replaced` by a newer plan, `dropped` with none after, or `waiting` on the operator.
          * @enum {string}
          */
@@ -6884,10 +6915,15 @@ export type components = {
              */
             median_hours_to_approve: number | null;
             /**
-             * Median Size
-             * @description The median of their sizes, in bytes.
+             * Median Lines
+             * @description The median of their lengths in the plan editor's lines, of those measured; None with none.
              */
-            median_size: number;
+            median_lines: number | null;
+            /**
+             * Median Words
+             * @description The median of their words, of those measured; None with none.
+             */
+            median_words: number | null;
             /**
              * Outcome
              * @description How they were approved.
@@ -6912,7 +6948,7 @@ export type components = {
         };
         /**
          * PlansLength
-         * @description The window's plans the operator approved, of one size, and how long approving them took.
+         * @description The window's plans the operator approved, of one length, and how long approving them took.
          */
         PlansLength: {
             /**
@@ -6922,12 +6958,12 @@ export type components = {
             as_written: number;
             /**
              * High
-             * @description The size it holds up to, not included, in bytes; None for the largest.
+             * @description The length it holds up to, not included, in the plan editor's lines; None for the longest.
              */
             high: number | null;
             /**
              * Low
-             * @description The smallest size it holds, in bytes.
+             * @description The shortest length it holds, in the plan editor's lines.
              */
             low: number;
             /**
@@ -6958,7 +6994,7 @@ export type components = {
             groups: components["schemas"]["PlansGroup"][];
             /**
              * Lengths
-             * @description The smallest first; only those with a plan.
+             * @description The shortest first; only those with a plan. A plan that could not be measured is in none.
              */
             lengths: components["schemas"]["PlansLength"][];
             /** @description The level `policy.planner_may_approve` is at now, for the page to say beside the levels the plans were at. */
@@ -6971,10 +7007,10 @@ export type components = {
                 [key: string]: number;
             };
             /**
-             * Page Bytes
-             * @description How many bytes the page counts as a page of a plan, which the lengths are cut at whole multiples of.
+             * Page Lines
+             * @description How many of the plan editor's lines the page counts as a page, which the lengths are cut at multiples of.
              */
-            page_bytes: number;
+            page_lines: number;
             /**
              * Plans
              * @description The newest first.
@@ -7051,6 +7087,8 @@ export type components = {
             implemented: boolean;
             /** @description The level its plan run's prompt offered its planner; None for a run from before canopy kept it. */
             level: components["schemas"]["PlanLevel"] | null;
+            /** @description How long it is; None when its file as its planner wrote it could not be read. */
+            metrics: components["schemas"]["PlanMetrics"] | null;
             /** @description How it went. */
             outcome: components["schemas"]["PlanOutcome"];
             /**

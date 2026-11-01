@@ -251,8 +251,10 @@ export type PlansReport = Schemas['PlansReport']
 export type PlansRow = Schemas['PlansRow']
 /** A window's approved plans of one level and one outcome, and what their tickets needed after. */
 export type PlansGroup = Schemas['PlansGroup']
-/** A window's plans the operator approved, of one size, and how long approving them took. */
+/** A window's plans the operator approved, of one length, and how long approving them took. */
 export type PlansLength = Schemas['PlansLength']
+/** How long a plan is, as its planner wrote it: words, the plan editor's lines, and what is not prose. */
+export type PlanMetrics = Schemas['PlanMetrics']
 /** A level of `policy.planner_may_approve`: `off` where the planner was asked nothing. */
 export type PlanLevel = Schemas['PlanLevel']
 /** How a plan went: approved by its planner or by you, as written or revised, replaced, dropped, or waiting. */
