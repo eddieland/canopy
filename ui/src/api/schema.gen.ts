@@ -4935,6 +4935,37 @@ export type components = {
             ticket: string | null;
         };
         /**
+         * HealthBins
+         * @description A sort's ended runs by their length's share of its timeout, a band each, for a small stacked bar.
+         */
+        HealthBins: {
+            /**
+             * Over Limit
+             * @description At the limit or past it.
+             */
+            over_limit: number;
+            /**
+             * Under Half
+             * @description From a quarter to under half.
+             */
+            under_half: number;
+            /**
+             * Under Limit
+             * @description From three quarters to under the limit.
+             */
+            under_limit: number;
+            /**
+             * Under Quarter
+             * @description Under a quarter of it.
+             */
+            under_quarter: number;
+            /**
+             * Under Three Quarters
+             * @description From half to under three quarters.
+             */
+            under_three_quarters: number;
+        };
+        /**
          * HealthCause
          * @description The window's failures the harness explained alike, or `other`: those an agent's own words explained.
          */
@@ -5014,6 +5045,53 @@ export type components = {
              * @description When it starts: its local midnight, so a page can write it in its own zone.
              */
             start: string;
+        };
+        /**
+         * HealthDuration
+         * @description How long one sort of run took, of those that started in the window and ended, against its kind's timeout.
+         */
+        HealthDuration: {
+            /** @description The runs by their share of the limit; None when there is none. */
+            bins: components["schemas"]["HealthBins"] | null;
+            /** @description The kind of run. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Limit Minutes
+             * @description The timeout the sort is held to, in minutes: the overseer's for a tick, the worker's for a worker's, a plan's,
+             *     or a task's run, the reviewer's, or the chore's own; None for a tick that ran no overseer, or a chore no longer
+             *     configured.
+             */
+            limit_minutes: number | null;
+            /**
+             * Longest Minutes
+             * @description The longest, in minutes.
+             */
+            longest_minutes: number;
+            /**
+             * Median Minutes
+             * @description Their median length, in minutes.
+             */
+            median_minutes: number;
+            /**
+             * P90 Minutes
+             * @description The length nine in ten came in at or under, in minutes.
+             */
+            p90_minutes: number;
+            /**
+             * Runs
+             * @description How many ended.
+             */
+            runs: number;
+            /**
+             * Timeouts
+             * @description How many ended `timeout`.
+             */
+            timeouts: number;
+            /**
+             * What
+             * @description Its sort, as `HealthOutcome.what`.
+             */
+            what: string;
         };
         /**
          * HealthFailure
@@ -5157,6 +5235,11 @@ export type components = {
              * @description How many local days the window holds, today's so far included.
              */
             days: number;
+            /**
+             * Durations
+             * @description A row per sort that ended a run, in the order of `outcomes`' kinds, then by sort.
+             */
+            durations: components["schemas"]["HealthDuration"][];
             /**
              * Failures
              * @description The newest first, at most twenty.

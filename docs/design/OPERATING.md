@@ -81,9 +81,10 @@ would be that).
 
 `canopy health` reads the same window for how runs ended: each kind's runs by status and cost, the newest failures,
 every failure grouped by the harness's note on it (an agent's own words never repeat, so they count as one `other`),
-and the overseer's asks a guard refused, by what each named. A failure is a run that did not do what it was started
-for: a tick not closed `ok`, or a run ended `failed`, `unknown`, `unpushed`, `crashed`, or `timeout`. With
-`canopy spend --json`, it is what a chore that looks at canopy itself reads (`examples/chores/`).
+the overseer's asks a guard refused, by what each named, and how long each sort of run took against its timeout. A
+failure is a run that did not do what it was started for: a tick not closed `ok`, or a run ended `failed`, `unknown`,
+`unpushed`, `crashed`, or `timeout`. With `canopy spend --json`, it is what a chore that looks at canopy itself reads
+(`examples/chores/`).
 
 Two more read-only commands serve those chores. `canopy config show` lists each number, switch, and choice in the
 merged config with its default, bounds, and the file that set it; text, commands, and paths are left out, since they

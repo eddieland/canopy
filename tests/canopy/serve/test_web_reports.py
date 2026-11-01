@@ -4,7 +4,7 @@ Reads only.
 """
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -270,6 +270,37 @@ def test_the_health_report_groups_failures_by_cause_and_refusals_by_ask(canopy_e
     assert refused["asks"] == [
         {"ticket": "PROJ-1", "chore": None, "pr": None, "kind": "resume", "decisions": 2, "last_tick": ticks[1]},
     ]
+
+
+def test_the_health_report_holds_each_sorts_durations_against_its_timeout(canopy_env: CanopyEnv) -> None:
+    """A worker run near `runtime.worker_timeout_minutes`, and one that timed out past it, held to it."""
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"worker_timeout_minutes": 60}})
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    conn, now = ctx.conn, datetime.now(UTC)
+    for minutes, status in ((55, RunStatus.DONE), (61, RunStatus.TIMEOUT)):
+        started = earlier(now, 1, minutes / 60)
+        run = worker_ran(conn, RunKind.IMPLEMENT, started, status=status)
+        ended = db.format_time(db.parse_time(started) + timedelta(minutes=minutes))
+        records.update(records.Run).set(ended_at=ended).where("id = ?", run).run(conn)
+    c, _ = signed_in_client(ctx)
+    [implement] = c.get("/api/reports/health").json()["durations"]
+    assert (implement["kind"], implement["what"], implement["runs"], implement["timeouts"]) == (
+        "workers",
+        "implement",
+        2,
+        1,
+    )
+    assert implement["limit_minutes"] == 60
+    assert implement["longest_minutes"] == pytest.approx(61)
+    assert implement["median_minutes"] == pytest.approx(58)
+    assert implement["bins"] == {
+        "under_quarter": 0,
+        "under_half": 0,
+        "under_three_quarters": 0,
+        "under_limit": 1,
+        "over_limit": 1,
+    }
 
 
 def test_a_health_failure_names_what_it_was_about_by_its_kind(backend: Backend) -> None:

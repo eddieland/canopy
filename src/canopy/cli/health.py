@@ -9,18 +9,19 @@ import click
 
 from canopy.cli.common import open_context
 from canopy.cli.spend import cost_text, since_text
-from canopy.core import health, reports, spend
+from canopy.core import db, health, reports, spend
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from canopy.core.health import Cause, Failure, Health
+    from canopy.core.health import Cause, Duration, Failure, Health
 
 _KIND_WIDTH = 10
 _WHAT_WIDTH = 18
 _STATUS_WIDTH = 20
 _COUNT_WIDTH = 7
 _COST_WIDTH = 9
+_LENGTH_WIDTH = 9
 # The newest failures the text lists; `--json` lists `health.FAILURES`.
 _FAILURES = 10
 # What the failures an agent's own words explained are counted as.
@@ -43,19 +44,25 @@ def cmd_health(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
 
     Each kind of run by how it ended and what that cost: the overseer's ticks, workers by kind, plan runs, chores by
     name, and reviews. Then the newest ticks and runs that failed, each with its id for `canopy decisions` or
-    `canopy show`, every failure by the harness's note on it, and the overseer's asks a guard refused, by guard.
+    `canopy show`, every failure by the harness's note on it, and the overseer's asks a guard refused, by guard. Between
+    them, how long each sort of run took against its timeout.
     """
     ctx = open_context(click_ctx)
     if as_json:
         click.echo(reports.read_health(ctx, reports.Health(days=days)))
         return 0
-    for line in render(health.report(ctx.conn, datetime.now(UTC), days)):
+    now = datetime.now(UTC)
+    # One snapshot, so a run ending between the two reads is in both tables or neither.
+    with db.read_snapshot(ctx.conn):
+        found = health.report(ctx.conn, now, days)
+        durations = health.durations(ctx.conn, now, days, ctx.config)
+    for line in render(found, durations):
         click.echo(line)
     return 0
 
 
-def render(found: Health) -> list[str]:
-    """The report as `canopy health` prints it.
+def render(found: Health, durations: Sequence[Duration] = ()) -> list[str]:
+    """The report as `canopy health` prints it, with how long each sort of run took if `durations` holds any.
 
     Returns:
         Its lines, without line ends.
@@ -69,6 +76,8 @@ def render(found: Health) -> list[str]:
         _line(o.kind, o.what, o.status + (" !" if o.failed else ""), str(o.runs), cost_text(o.cost_usd))
         for o in found.outcomes
     )
+    if durations:
+        lines.extend(["", *_durations(durations)])
     lines.extend(["", *_failures(found.failures)])
     if found.causes:
         lines.extend(["", *_causes(found.causes)])
@@ -79,6 +88,33 @@ def render(found: Health) -> list[str]:
 def _line(kind: str, what: str, status: str, runs: str, spent: str) -> str:
     left = f"{kind:<{_KIND_WIDTH}}{what:<{_WHAT_WIDTH}}{status:<{_STATUS_WIDTH}}"
     return f"{left}{runs:>{_COUNT_WIDTH}}{spent:>{_COST_WIDTH}}"
+
+
+# Each sort's lengths in minutes against its timeout, `-` for none; a median at three quarters of it or more is flagged.
+def _durations(durations: Sequence[Duration]) -> list[str]:
+    lines = [
+        "How long they took, in minutes (! a median at three quarters of the timeout or more):",
+        _length_line("kind", "what", "median", "p90", "longest", "timeouts", "limit"),
+    ]
+    for d in durations:
+        limit = d.limit_minutes
+        close = limit is not None and d.median_minutes >= health.BANDS[2] * limit
+        lines.append(
+            _length_line(
+                d.kind,
+                d.what,
+                f"{d.median_minutes:.1f}" + (" !" if close else ""),
+                f"{d.p90_minutes:.1f}",
+                f"{d.longest_minutes:.1f}",
+                str(d.timeouts),
+                "-" if limit is None else str(limit),
+            ),
+        )
+    return lines
+
+
+def _length_line(kind: str, what: str, *numbers: str) -> str:
+    return f"{kind:<{_KIND_WIDTH}}{what:<{_WHAT_WIDTH}}" + "".join(f"{n:>{_LENGTH_WIDTH}}" for n in numbers)
 
 
 # The newest failures, each with what `canopy decisions` or `canopy show` takes to read it whole.
