@@ -11,6 +11,7 @@ import type {
     ReviewsRound,
 } from '@/api/types'
 import { Age } from '@/components/age'
+import { CellBar } from '@/components/cell-bar'
 import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
@@ -24,6 +25,7 @@ import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Clipped, Hinted } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
+import { barPercent } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
 import { hoursChange, readoutDelta, wholeChange } from '@/lib/readout-delta'
@@ -33,12 +35,15 @@ import { hoursText } from '@/lib/reports'
 import {
     apartText,
     approvedText,
+    canopyReviewerFigures,
     DEFAULT_REVIEWS_WINDOW,
     dismissalText,
+    draftsHint,
     firstReviewSum,
     LIMITS_TEXT,
     previousReviewsFigures,
     PURPOSE_HINT,
+    resumesPerPlan,
     REVIEWS_WINDOWS,
     reviewsBars,
     reviewsFigures,
@@ -64,8 +69,18 @@ const HELP = [
 // What the reviewer table's median wait counts, in its name's tip.
 const WAIT_HINT = 'From when each PR began waiting on a review to their first review of it, the median'
 
+// What the reviewer table's columns with a bar count, in their names' tips.
+const REVIEWS_HINT = 'The reviews they left, bots and PR authors apart; the bar against the busiest reviewer'
+const REVIEWER_WAIT_HINT = `${WAIT_HINT}; the bar against the slowest reviewer`
+
+// What the median first review counts, in its tile's tip, before what it leaves out.
+const MEDIAN_HINT = "From when each PR began waiting on a review to its first review, on GitHub's clock, the median"
+
 // What a trusted reviewer's chip means, on its hover.
 const TRUSTED_MEANING = 'In trust.trusted_reviewers: a worker addresses their feedback unasked'
+
+// What the estimates' resumes per plan counts, in its name's tip.
+const PER_PLAN_HINT = 'The resumes that went ahead on each plan of the estimate; the bar against the most'
 
 // The column names of a table in a padded scrolling region, as the per-PR table's: the head's cells take the padding.
 const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
@@ -133,12 +148,20 @@ function ReviewsPage() {
                             <Reviewers reviewers={data.reviewers} span={span} />
                         )}
                     </Panel>
-                    <Panel data-testid="reviews-rounds">
+                    <Panel data-testid="reviews-efforts">
+                        <PanelHeader label="Estimates" />
+                        {data === undefined ? (
+                            <PanelSkeleton rows={3} className="min-h-24" />
+                        ) : (
+                            <Efforts efforts={data.efforts} span={span} />
+                        )}
+                    </Panel>
+                    <Panel data-testid="reviews-round-panel">
                         <PanelHeader label="Feedback rounds" />
                         {data === undefined ? (
                             <PanelSkeleton rows={4} className="min-h-32" />
                         ) : (
-                            <Rounds found={data} span={span} />
+                            <Rounds rounds={data.rounds} span={span} />
                         )}
                     </Panel>
                     <Panel data-testid="reviews-canopy">
@@ -202,7 +225,8 @@ function reviewsTiles(found: ReviewsReport | undefined): ReadoutTile[] {
         {
             key: 'median-wait',
             label: 'median first review',
-            hint: WAIT_HINT,
+            // What the median leaves out, said here rather than in a sentence over the chart.
+            hint: [`${MEDIAN_HINT}.`, found === undefined ? '' : apartText(found)].filter((p) => p !== '').join(' '),
             value: figures === undefined ? undefined : hoursText(figures.medianHours),
             delta: readoutDelta(figures?.medianHours, before?.medianHours, hoursChange, 'down'),
         },
@@ -217,23 +241,14 @@ function reviewsTiles(found: ReviewsReport | undefined): ReadoutTile[] {
 }
 
 /**
- * How soon first reviews came: the median and how many, what is left out of it, then each day's first reviews stacked
- * by wait, the legend, and a table of the same numbers, since the chart is for the eye. A window with no first review
- * timed says so in place of the chart. Under it, what the page cannot see.
+ * How soon first reviews came: each day's first reviews stacked by wait, the legend, and a table of the same numbers,
+ * since the chart is for the eye. The median is the page's tile, what it leaves out in the tile's tip, and what the
+ * page cannot see is in its title's help. A window with no first review timed says so in place of the chart.
  */
 function Waits({ found, span }: { found: ReviewsReport; span: string }) {
     const clock = useClock()
-    const apart = apartText(found)
     return (
         <div className="flex flex-col gap-4 p-3">
-            <p className="text-sm" data-testid="reviews-median">
-                <span className="readout">{hoursText(found.median_first_review_hours)}</span>{' '}
-                <span className="text-muted-foreground">
-                    median wait over{' '}
-                    {found.first_reviews === 1 ? '1 first review' : `${found.first_reviews} first reviews`} timed on
-                    GitHub&apos;s clock. {apart}
-                </span>
-            </p>
             {found.first_reviews === 0 ? (
                 <Empty size="panel">no first review on GitHub&apos;s clock came in these {span}</Empty>
             ) : (
@@ -281,17 +296,15 @@ function Waits({ found, span }: { found: ReviewsReport; span: string }) {
                     </ChartTable>
                 </>
             )}
-            <p className="text-xs text-muted-foreground" data-testid="reviews-limits">
-                {LIMITS_TEXT}
-            </p>
         </div>
     )
 }
 
 /**
  * Who left feedback, the most reviews first: each login, trusted or not by `trust.trusted_reviewers`, with their
- * reviews, the ones that asked for changes, comments, the PRs they reviewed, and their median wait. Bots and each PR's
- * own author are left out, as the monthly report leaves them.
+ * reviews, the ones that asked for changes, comments, the PRs they reviewed, and their median wait. Their reviews have
+ * a bar against the busiest reviewer's and their wait one against the slowest's, so the busy reviewer and the quick
+ * one read without arithmetic. Bots and each PR's own author are left out, as the monthly report leaves them.
  */
 function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: string }) {
     if (reviewers.length === 0) {
@@ -303,12 +316,14 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
                 <thead className={PADDED_HEAD}>
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">reviewer</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">reviews</th>
+                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                            <Hinted hint={REVIEWS_HINT}>reviews</Hinted>
+                        </th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">changes</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">comments</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">PRs</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">
-                            <Hinted hint={WAIT_HINT}>median wait</Hinted>
+                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                            <Hinted hint={REVIEWER_WAIT_HINT}>median wait</Hinted>
                         </th>
                     </tr>
                 </thead>
@@ -327,13 +342,33 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
                                     )}
                                 </span>
                             </th>
-                            <td className="readout pl-3">{r.reviews}</td>
+                            <td className="readout pl-3 text-left">
+                                <CellBar
+                                    percent={barPercent(
+                                        r.reviews,
+                                        reviewers.map((x) => x.reviews),
+                                    )}
+                                    valueClassName="w-6 text-right"
+                                >
+                                    {r.reviews}
+                                </CellBar>
+                            </td>
                             <td className={cn('readout pl-3', r.changes_requested > 0 && 'text-status-blocked')}>
                                 {r.changes_requested}
                             </td>
                             <td className="readout pl-3 text-muted-foreground">{r.comments}</td>
                             <td className="readout pl-3 text-muted-foreground">{r.pull_requests}</td>
-                            <td className="readout pl-3">{hoursText(r.median_wait_hours)}</td>
+                            <td className="readout pl-3 text-left">
+                                <CellBar
+                                    percent={barPercent(
+                                        r.median_wait_hours,
+                                        reviewers.map((x) => x.median_wait_hours),
+                                    )}
+                                    valueClassName="w-12 text-right"
+                                >
+                                    {hoursText(r.median_wait_hours)}
+                                </CellBar>
+                            </td>
                         </tr>
                     ))}
                 </tbody>
@@ -342,38 +377,32 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
     )
 }
 
-/**
- * The window's feedback plans: by the planner's estimate, with the resumes that followed and what they cost, then each
- * plan, the newest first, with its ticket, how it was approved, and its run.
- */
-function Rounds({ found, span }: { found: ReviewsReport; span: string }) {
-    if (found.rounds.length === 0) {
+/** The window's feedback plans, the newest first: each with its ticket, how it was approved, and its run. */
+function Rounds({ rounds, span }: { rounds: ReviewsRound[]; span: string }) {
+    if (rounds.length === 0) {
         return <Empty size="panel">no feedback plan was written in these {span}</Empty>
     }
     return (
-        <div className="flex flex-col">
-            <Efforts efforts={found.efforts} />
-            <PanelScroll label="Feedback plans" className="max-h-96 overflow-x-auto border-t px-3 pb-3">
-                <table className="w-full border-collapse text-sm" data-testid="reviews-round-table">
-                    <thead className={PADDED_HEAD}>
-                        <tr className="text-left">
-                            <th className="panel-label pb-1.5 font-normal">plan</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">ticket</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">approved by</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">effort</th>
-                            <th className="panel-label pb-1.5 pl-3 text-right font-normal">resumes</th>
-                            <th className="panel-label pb-1.5 pl-3 text-right font-normal">spent</th>
-                            <th className="panel-label pb-1.5 pl-3 text-right font-normal">written</th>
-                        </tr>
-                    </thead>
-                    <tbody className="text-xs">
-                        {found.rounds.map((r) => (
-                            <Round key={r.plan_id} round={r} />
-                        ))}
-                    </tbody>
-                </table>
-            </PanelScroll>
-        </div>
+        <PanelScroll label="Feedback plans" className="max-h-96 overflow-x-auto px-3 pb-3">
+            <table className="w-full border-collapse text-sm" data-testid="reviews-round-table">
+                <thead className={PADDED_HEAD}>
+                    <tr className="text-left">
+                        <th className="panel-label pb-1.5 font-normal">plan</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">ticket</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">approved by</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">effort</th>
+                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">resumes</th>
+                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">spent</th>
+                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">written</th>
+                    </tr>
+                </thead>
+                <tbody className="text-xs">
+                    {rounds.map((r) => (
+                        <Round key={r.plan_id} round={r} />
+                    ))}
+                </tbody>
+            </table>
+        </PanelScroll>
     )
 }
 
@@ -401,16 +430,25 @@ function Round({ round }: { round: ReviewsRound }) {
     )
 }
 
-/** The planner's estimates beside what followed them: plans, resumes, and what those resumes cost, per effort. */
-function Efforts({ efforts }: { efforts: ReviewsEffort[] }) {
+/**
+ * The planner's estimates beside what followed them: per effort, its plans, the resumes that went ahead on them, the
+ * resumes per plan with a bar against the most, and what the resumes cost. The receipts for trusting the planner.
+ */
+function Efforts({ efforts, span }: { efforts: ReviewsEffort[]; span: string }) {
+    if (efforts.length === 0) {
+        return <Empty size="panel">no feedback plan was written in these {span}</Empty>
+    }
     return (
         <div className="px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="reviews-effort-table">
+            <table className="border-collapse text-sm" data-testid="reviews-effort-table">
                 <thead>
                     <tr className="text-right [&_th]:pt-3">
                         <th className="panel-label pb-1.5 text-left font-normal">planner&apos;s estimate</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">plans</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">resumes</th>
+                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                            <Hinted hint={PER_PLAN_HINT}>per plan</Hinted>
+                        </th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">resumes cost</th>
                     </tr>
                 </thead>
@@ -422,6 +460,17 @@ function Efforts({ efforts }: { efforts: ReviewsEffort[] }) {
                             </th>
                             <td className="readout pl-3">{e.plans}</td>
                             <td className="readout pl-3">{e.resumes}</td>
+                            <td className="readout pl-3 text-left">
+                                <CellBar
+                                    percent={barPercent(
+                                        resumesPerPlan(e),
+                                        efforts.map((x) => resumesPerPlan(x)),
+                                    )}
+                                    valueClassName="w-8 text-right"
+                                >
+                                    {resumesPerPlan(e).toFixed(1)}
+                                </CellBar>
+                            </td>
                             <td className="readout pl-3 text-muted-foreground">
                                 <Cost usd={e.resume_cost_usd} />
                             </td>
@@ -434,18 +483,35 @@ function Efforts({ efforts }: { efforts: ReviewsEffort[] }) {
 }
 
 /**
- * canopy's own reviewer: its runs by purpose and how they ended, with what they cost; the findings you dismissed, by
- * reason; and its drafts, by where they stand. Then whether `trust.trusted_reviewers` lets workers act on it unasked.
+ * canopy's own reviewer: its runs, their cost, the findings you dismissed, and its drafts published, as tiles; under
+ * them its runs by purpose and how they ended, and the dismissals by reason, each with a bar against the most. Then
+ * whether `trust.trusted_reviewers` lets workers act on it unasked, the setting that changes what the panel means.
  */
 function CanopyReviewer({ found, span }: { found: ReviewsReport; span: string }) {
-    const dismissed = found.dismissals.reduce((sum, d) => sum + d.findings, 0)
-    const drafted = found.drafts.reduce((sum, d) => sum + d.drafts, 0)
+    const figures = canopyReviewerFigures(found)
+    const tiles: ReadoutTile[] = [
+        { key: 'runs', label: 'runs', hint: 'Its review runs that started in the window', value: figures.runs },
+        {
+            key: 'cost',
+            label: 'cost',
+            hint: 'What those runs cost',
+            value: <Cost usd={figures.costUsd} />,
+        },
+        {
+            key: 'dismissed',
+            label: 'findings dismissed',
+            hint: 'The findings of its reviews you dismissed, for a reason below',
+            value: figures.dismissed,
+        },
+        { key: 'published', label: 'drafts published', hint: draftsHint(found), value: figures.published },
+    ]
     return (
-        <div className="flex flex-col gap-3 p-3">
+        <div className="flex flex-col gap-4 p-3">
+            <ReadoutTiles tiles={tiles} testId="reviews-canopy" />
             {found.review_runs.length === 0 ? (
                 <Empty size="panel">canopy reviewed nothing in these {span}</Empty>
             ) : (
-                <table className="w-full border-collapse text-sm" data-testid="reviews-run-table">
+                <table className="self-start border-collapse text-sm" data-testid="reviews-run-table">
                     <thead>
                         <tr className="text-right">
                             <th className="panel-label pb-1.5 text-left font-normal">purpose</th>
@@ -472,30 +538,36 @@ function CanopyReviewer({ found, span }: { found: ReviewsReport; span: string })
                     </tbody>
                 </table>
             )}
-            <p className="text-sm" data-testid="reviews-dismissals">
-                {dismissed === 0 ? (
-                    <span className="text-muted-foreground">You dismissed no finding in these {span}.</span>
-                ) : (
-                    <>
-                        You dismissed {dismissed === 1 ? '1 finding' : `${dismissed} findings`}:{' '}
-                        <span className="text-muted-foreground">
-                            {found.dismissals.map((d) => `${dismissalText(d.reason)} ${d.findings}`).join(', ')}
-                        </span>
-                    </>
-                )}
-            </p>
-            <p className="text-sm" data-testid="reviews-drafts">
-                {drafted === 0 ? (
-                    <span className="text-muted-foreground">No review drafted in these {span}.</span>
-                ) : (
-                    <>
-                        {drafted === 1 ? '1 draft' : `${drafted} drafts`}:{' '}
-                        <span className="text-muted-foreground">
-                            {found.drafts.map((d) => `${d.status} ${d.drafts}`).join(', ')}
-                        </span>
-                    </>
-                )}
-            </p>
+            {found.dismissals.length > 0 && (
+                <table className="self-start border-collapse text-sm" data-testid="reviews-dismissal-table">
+                    <thead>
+                        <tr>
+                            <th className="panel-label pb-1.5 text-left font-normal">dismissed as</th>
+                            <th className="panel-label pb-1.5 pl-3 text-left font-normal">findings</th>
+                        </tr>
+                    </thead>
+                    <tbody className="text-xs">
+                        {found.dismissals.map((d) => (
+                            <tr key={d.reason ?? 'none'} data-testid="reviews-dismissal">
+                                <th scope="row" className="py-0.5 text-left font-normal text-muted-foreground">
+                                    {dismissalText(d.reason)}
+                                </th>
+                                <td className="readout w-40 pl-3">
+                                    <CellBar
+                                        percent={barPercent(
+                                            d.findings,
+                                            found.dismissals.map((x) => x.findings),
+                                        )}
+                                        valueClassName="w-6 text-right"
+                                    >
+                                        {d.findings}
+                                    </CellBar>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            )}
             <p className="text-xs text-muted-foreground" data-testid="reviews-canopy-trust">
                 {found.canopy_trusted
                     ? 'canopy:review is in trust.trusted_reviewers, so workers address its findings without asking you.'
