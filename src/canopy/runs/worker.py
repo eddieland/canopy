@@ -55,7 +55,7 @@ from canopy.core import (
     sandboxing,
 )
 from canopy.core.config import render_command, setup_words
-from canopy.core.vocab import PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
+from canopy.core.vocab import FlakyCause, PlanEffort, PoolKind, Proposal, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import (
@@ -113,6 +113,9 @@ Effort = Annotated[PlanEffort | None, BeforeValidator(_known_effort)]
 #: Whether a worker said a failed check was not its change's (DESIGN §23): only `true` says so, and anything else is
 #: false, never a reason to drop the result with it.
 Flaky = Annotated[bool, BeforeValidator(lambda value: value is True)]
+#: Where a worker judged a flaky check failed (DESIGN §23): a value outside `FlakyCause` is no estimate, never a reason
+#: to drop the result with it.
+Cause = Annotated[FlakyCause | None, BeforeValidator(lambda value: value if value in FlakyCause else None)]
 
 
 class WorkerResult(BaseModel):
@@ -134,6 +137,8 @@ class WorkerResult(BaseModel):
     #: Whether a `resume` for `ci` left a failed check as not the change's, such as a flaky test, for the operator to
     #: rerun (DESIGN §23). The checks and the evidence are in `summary`.
     flaky: Flaky = False
+    #: With `flaky`, where the worker judged the check failed, given only when its evidence says so (DESIGN §23).
+    flaky_cause: Cause = None
 
     def for_repos(self, repos: Sequence[str]) -> Self:
         """Return this result with `prs` and `pr_titles` kept to `repos`, the repositories the run worked in.
@@ -361,6 +366,7 @@ def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
             prs=[pr for pr in (outcome.result.prs or {}).values() if pr],
             kicked=outcome.kicks.kicked,
             estimate=outcome.result.summary,
+            cause=outcome.result.flaky_cause,
             note="; ".join(outcome.kicks.notes),
         )
         if flaky is not None:

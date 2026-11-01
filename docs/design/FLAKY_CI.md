@@ -12,7 +12,12 @@ evidence in its summary. It says so only with evidence, and fixes a failure it i
 finds nothing costs less than a rerun that hides a regression. A failure in the check itself, or from a stacked
 blocker's changes, is still `blocked`.
 
-The worker's word reaches the overseer as one bit on the ticket's `last_run`, never its text (TRUST_MODEL T1).
+With evidence of where the check failed, the worker also names its cause: `test`, a test of the repository that fails
+now and then, or `infra`, CI's own machinery. Unsure, it names none: a wrong cause sends the operator the wrong way,
+where none sends them to the log.
+
+The worker's word reaches the overseer as one bit on the ticket's `last_run`, and its cause as a word of that closed
+vocabulary, never its text (TRUST_MODEL T1). The `flaky_rerun` item names the cause when the worker gave one.
 
 **Kicks.** With `trust.max_flaky_kicks` above 0 (private, off by default), `_run` reruns the checks itself: in each
 repository where origin still has the branch where the run found it, it rebases the branch onto its base, making each
@@ -25,8 +30,8 @@ below. The harness kicks, never a worker: the worker's definition gains no force
 `resume` the attempt limit counts.
 
 Kicked or not, the run's close tells the sinks (`ci.flaky`, §20): the PR, what was kicked or why not, and the worker's
-estimate of why the check is flaky, its summary cut to one line, as `run.ended` carries a summary. Each kick pushed
-also tells them at once (`ci.kicked`, in the `loop` group sinks take by default): the branch, the heads it replaced
+estimate of why the check is flaky, its summary cut to one line, with its cause, as `run.ended` carries a summary. Each
+kick pushed also tells them at once (`ci.kicked`, in the `loop` group sinks take by default): the branch, the heads it replaced
 and pushed, and which of its kicks it was, so no forced push canopy makes goes unheard.
 
 Without a kick, while the same check run still fails, no newer than the `ci` cursor, the overseer records

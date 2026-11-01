@@ -20,7 +20,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import cards, config, db, definitions, prompts, run_models, workspace
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import FlakyCause, RunStatus
 from canopy.runs import worker
 from canopy.runtime import servers
 from canopy.runtime.implementation import Version
@@ -62,6 +62,7 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
         "summary": "did it",
         "question": None,
         "flaky": False,
+        "flaky_cause": None,
     }
     [w] = agent_runs(scenario.agent_log)
     assert w["cwd"] == slot_of(scenario.conn, run.id).slot_path
@@ -531,6 +532,18 @@ def test_only_true_says_a_check_was_flaky_and_nothing_else_costs_the_result() ->
     for said in ('"yes"', '"true"', "1", "null", "false"):
         assert not present(worker.parse_result(f'{{"status": "done", "flaky": {said}}}')).flaky
     assert not present(worker.parse_result('{"status": "done"}')).flaky
+
+
+def test_a_flaky_cause_outside_the_vocabulary_is_no_estimate_and_costs_nothing() -> None:
+    for cause in FlakyCause:
+        assert present(
+            worker.parse_result(f'{{"status": "done", "flaky": true, "flaky_cause": "{cause}"}}'),
+        ).flaky_cause
+    for said in ('"tests"', '"network"', "1", "null", "[]"):
+        parsed = present(worker.parse_result(f'{{"status": "done", "flaky": true, "flaky_cause": {said}}}'))
+        assert parsed.flaky
+        assert parsed.flaky_cause is None
+    assert present(worker.parse_result('{"status": "done", "flaky": true}')).flaky_cause is None
 
 
 def test_parse_result_takes_the_last_json_object_line() -> None:

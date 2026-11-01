@@ -587,9 +587,16 @@ def _follow_ups_filed(e: Mapping[str, object]) -> _Shown:
     )
 
 
+#: How a `ci.flaky` event's `cause`, the worker's estimate of where the check failed, reads.
+_FLAKY_CAUSES = {"test": "likely a flaky test", "infra": "likely CI's infrastructure"}
+
+
 def _ci_flaky(e: Mapping[str, object]) -> _Shown:
     kicked = _lines(e.get("kicked"))
     what = f"{_named(e.get('ticket'), e.get('title'))} · run {escape(e.get('run'))} left a failed check as flaky"
+    cause = e.get("cause")
+    if isinstance(cause, str) and cause in _FLAKY_CAUSES:
+        what = f"{what}, {_FLAKY_CAUSES[cause]}"
     if kicked:
         first = f":repeat: {what}; canopy pushed {', '.join(f'`{escape(r)}`' for r in kicked)} again to rerun it"
         aside = [_linked(e.get("note")) if e.get("note") else ""]
