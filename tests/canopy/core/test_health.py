@@ -8,9 +8,10 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import health
+from canopy.core import db, health
 from canopy.core.vocab import RunKind
-from tests.canopy.helpers import earlier, in_zone
+from canopy.infra import resources
+from tests.canopy.helpers import context, earlier, in_zone
 from tests.conftest import CanopyEnv, Journals
 
 NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
@@ -359,3 +360,97 @@ def test_by_day_counts_a_run_on_the_local_day_it_started(tmp_path: Path, journal
     with in_zone("America/New_York"):
         found = health.by_day(conn, NOW, 2)
     assert [(d.day, d.failed["overseer"]) for d in found] == [("2026-10-07", 1), ("2026-10-08", 0)]
+
+
+def journal_of_lengths(conn: sqlite3.Connection, now: datetime) -> None:
+    """A tick, worker runs near their limit and past it, and chores with a timeout of their own and without one."""
+    t = tick(conn, earlier(now, 1), "ok")
+    conn.execute("UPDATE ticks SET ended_at = ? WHERE id = ?", (later(earlier(now, 1), 3), t))
+    conn.execute(
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES ('PROJ-1', 'ws', ?, ?)",
+        (earlier(now, 9),) * 2,
+    )
+    for started, kind, status, minutes in (
+        (earlier(now, 9), "implement", "done", 1.0),  # before the window
+        (earlier(now, 2), "implement", "done", 10.0),
+        (earlier(now, 2, 1), "implement", "done", 40.0),
+        (earlier(now, 1, 1), "implement", "timeout", 46.0),
+        (earlier(now, 1, 2), "resume", "done", 5.0),
+        (earlier(now, 0), "resume", "running", None),
+    ):
+        conn.execute(
+            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, ended_at, status, log_path) "
+            "VALUES (?, 'PROJ-1', ?, 'agent/PROJ-1', ?, ?, ?, 'l')",
+            (t, kind, started, None if minutes is None else later(started, minutes), status),
+        )
+    for chore, minutes in (("deps", 9.0), ("gone", 2.0)):
+        started = earlier(now, 1, 3)
+        conn.execute(
+            "INSERT INTO chore_runs (tick_id, chore, started_at, ended_at, status, log_path) "
+            "VALUES (NULL, ?, ?, ?, 'ok', 'l')",
+            (chore, started, later(started, minutes)),
+        )
+
+
+def later(at: str, minutes: float) -> str:
+    """The journal time `minutes` after `at`."""
+    return db.format_time(db.parse_time(at) + timedelta(minutes=minutes))
+
+
+def test_durations_are_by_kind_and_sort_against_each_timeout(canopy_env: CanopyEnv) -> None:
+    """A worker near its limit, one past it, a tick, and a chore held to its own timeout, or none once it is gone."""
+    canopy_env.append_user('\n[chores.deps]\nprompt = "~/deps.md"\nevery_minutes = 60\ntimeout_minutes = 10\n')
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    journal_of_lengths(ctx.conn, NOW)
+    found = health.durations(ctx.conn, NOW, 7, ctx.config)
+    rows = [
+        (d.kind, d.what, d.runs, round(d.median_minutes, 3), round(d.p90_minutes, 3), round(d.longest_minutes, 3))
+        for d in found
+    ]
+    # Nothing before the window, and nothing still running.
+    assert rows == [
+        ("overseer", "live", 1, 3.0, 3.0, 3.0),
+        ("workers", "implement", 3, 40.0, 46.0, 46.0),
+        ("workers", "resume", 1, 5.0, 5.0, 5.0),
+        ("chores", "deps", 1, 9.0, 9.0, 9.0),
+        ("chores", "gone", 1, 2.0, 2.0, 2.0),
+    ]
+    limits = {d.what: (d.timeouts, d.limit_minutes, d.bins) for d in found}
+    assert limits == {
+        # The overseer's, the worker's, and the chore's own defaults and settings.
+        "live": (0, 15, health.Bins(under_quarter=1)),
+        # 10 of 45 minutes, 40 of them, and past them.
+        "implement": (1, 45, health.Bins(under_quarter=1, under_limit=1, over_limit=1)),
+        "resume": (0, 45, health.Bins(under_quarter=1)),
+        "deps": (0, 10, health.Bins(under_limit=1)),
+        # A chore no longer configured has no limit to hold it to.
+        "gone": (0, None, None),
+    }
+
+
+def test_durations_of_an_empty_window_are_none(canopy_env: CanopyEnv) -> None:
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    journal_of_lengths(ctx.conn, NOW)
+    assert health.durations(ctx.conn, NOW - timedelta(days=30), 1, ctx.config) == []
+
+
+def test_canopy_health_prints_the_durations(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+    """Each sort's lengths and its limit, a median at three quarters of it or more flagged."""
+    journal_of_lengths(canopy_env.journal(), datetime.now(UTC))
+    assert main(["health"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    lengths = out.index("How long they took, in minutes (! a median at three quarters of the timeout or more):")
+    words = [line.split() for line in out[lengths + 1 : lengths + 7]]
+    assert words == [
+        ["kind", "what", "median", "p90", "longest", "timeouts", "limit"],
+        ["overseer", "live", "3.0", "3.0", "3.0", "0", "15"],
+        ["workers", "implement", "40.0", "!", "46.0", "46.0", "1", "45"],
+        ["workers", "resume", "5.0", "5.0", "5.0", "0", "45"],
+        ["chores", "deps", "9.0", "9.0", "9.0", "0", "-"],
+        ["chores", "gone", "2.0", "2.0", "2.0", "0", "-"],
+    ]
+    assert main(["health", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert [(d["what"], d["timeouts"], d["limit_minutes"]) for d in data["durations"]][1] == ("implement", 1, 45)

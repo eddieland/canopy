@@ -1,7 +1,7 @@
 """The API's types for the health report (DESIGN §11): how the last days' runs ended, and what the guards refused.
 
 What `canopy health` prints, with each day's ended and failed runs beside it for the page's chart, the failures by
-their cause, and each guard's refusals by what was asked. Built on
+their cause, each guard's refusals by what was asked, and how long each sort of run took against its timeout. Built on
 `schema.Model`, as every API type is (schema/__init__.py).
 """
 
@@ -107,6 +107,46 @@ class HealthRefusal(Model):
     tick is the overseer stuck on it."""
 
 
+class HealthBins(Model):
+    """A sort's ended runs by their length's share of its timeout, a band each, for a small stacked bar."""
+
+    under_quarter: int
+    """Under a quarter of it."""
+    under_half: int
+    """From a quarter to under half."""
+    under_three_quarters: int
+    """From half to under three quarters."""
+    under_limit: int
+    """From three quarters to under the limit."""
+    over_limit: int
+    """At the limit or past it."""
+
+
+class HealthDuration(Model):
+    """How long one sort of run took, of those that started in the window and ended, against its kind's timeout."""
+
+    kind: SpendKind
+    """The kind of run."""
+    what: str
+    """Its sort, as `HealthOutcome.what`."""
+    runs: int
+    """How many ended."""
+    median_minutes: float
+    """Their median length, in minutes."""
+    p90_minutes: float
+    """The length nine in ten came in at or under, in minutes."""
+    longest_minutes: float
+    """The longest, in minutes."""
+    timeouts: int
+    """How many ended `timeout`."""
+    limit_minutes: int | None = None
+    """The timeout the sort is held to, in minutes: the overseer's for a tick, the worker's for a worker's, a plan's,
+    or a task's run, the reviewer's, or the chore's own; None for a tick that ran no overseer, or a chore no longer
+    configured."""
+    bins: HealthBins | None = None
+    """The runs by their share of the limit; None when there is none."""
+
+
 class HealthCounts(Model):
     """A count of runs by kind, 0 for a kind with none."""
 
@@ -157,6 +197,8 @@ class HealthReport(Model):
     `other` last."""
     per_day: list[HealthDay]
     """Every day of the window, oldest first."""
+    durations: list[HealthDuration]
+    """A row per sort that ended a run, in the order of `outcomes`' kinds, then by sort."""
     unpriced: list[SpendUnpriced]
     """How many of each kind's ended runs reported no cost, as the spend page counts them: a tick that ran no overseer
     cost nothing, and is never among them."""

@@ -23,9 +23,11 @@ from canopy.serve.schema.ci import (
 )
 from canopy.serve.schema.health import (
     HealthAsk,
+    HealthBins,
     HealthCause,
     HealthCounts,
     HealthDay,
+    HealthDuration,
     HealthFailure,
     HealthOutcome,
     HealthRefusal,
@@ -95,6 +97,7 @@ def health_report(backend: Backend, ctx: Context, days: int) -> HealthReport:
     with db.read_snapshot(ctx.conn):
         found = health.report(ctx.conn, now, days)
         per_day = health.by_day(ctx.conn, now, days)
+        durations = health.durations(ctx.conn, now, days, ctx.config)
         unpriced = spend.unpriced(ctx.conn, found.since, found.until)
     return HealthReport(
         days=found.days,
@@ -114,6 +117,7 @@ def health_report(backend: Backend, ctx: Context, days: int) -> HealthReport:
             for d in per_day
         ],
         unpriced=[SpendUnpriced(kind=u.kind, runs=u.runs, unpriced=u.unpriced) for u in unpriced],
+        durations=[_duration(d) for d in durations],
     )
 
 
@@ -385,6 +389,29 @@ def _refusal(found: health.Refusal) -> HealthRefusal:
             )
             for a in found.asks
         ],
+    )
+
+
+def _duration(found: health.Duration) -> HealthDuration:
+    bins = found.bins
+    return HealthDuration(
+        kind=found.kind,
+        what=found.what,
+        runs=found.runs,
+        median_minutes=found.median_minutes,
+        p90_minutes=found.p90_minutes,
+        longest_minutes=found.longest_minutes,
+        timeouts=found.timeouts,
+        limit_minutes=found.limit_minutes,
+        bins=None
+        if bins is None
+        else HealthBins(
+            under_quarter=bins.under_quarter,
+            under_half=bins.under_half,
+            under_three_quarters=bins.under_three_quarters,
+            under_limit=bins.under_limit,
+            over_limit=bins.over_limit,
+        ),
     )
 
 

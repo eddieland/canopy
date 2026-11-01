@@ -9,8 +9,11 @@ beside `canopy spend`, to say which failures recur and what they cost.
 
 from __future__ import annotations
 
+import bisect
+import math
+import statistics
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import contract, db, spend, sql
 from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunKind, RunStatus, TickStatus
@@ -20,6 +23,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from datetime import datetime
 
+    from canopy.core.config import Config
     from canopy.core.spend import Kind
 
 # The newest failures a report lists, across every kind.
@@ -47,31 +51,36 @@ _FAILED: dict[Kind, frozenset[str]] = {
     "tasks": _WORKER_FAILED,
 }
 # Each kind's runs as one shape: its id, what it was (a tick's `live` or `dry run`, a run's kind, a chore's name, or
-# `review`), its status, when it started, what it was about, its note, and its cost. A plan run is a row of `runs`, a
-# kind of its own, an old triage among them, as `canopy spend` counts them. The tables are fixed, never input, and
-# each is built from literal SQL (D125).
+# `review`), its status, when it started and ended, what it was about, its note, and its cost. A plan run is a row of
+# `runs`, a kind of its own, an old triage among them, as `canopy spend` counts them. The tables are fixed, never input,
+# and each is built from literal SQL (D125).
 _RUN_ROWS = sql.select(
-    "id, kind AS what, status, started_at, ticket_key AS subject, result_json AS note, cost_usd",
+    "id, kind AS what, status, started_at, ended_at, ticket_key AS subject, result_json AS note, cost_usd",
 ).from_("runs")
 _PLAN_KINDS = (RunKind.PLAN, RunKind.NEEDS_PLAN)
 _ROWS: Mapping[Kind, sql.Select] = {
     "overseer": sql.select(
         "id, CASE WHEN dry_run THEN 'dry run' WHEN overseer_ran = 0 THEN 'no overseer' ELSE 'live' END AS what, "
-        "status, started_at, "
-        "NULL AS subject, summary AS note, cost_usd",
+        "status, started_at, ended_at, NULL AS subject, summary AS note, cost_usd",
     ).from_("ticks"),
     "workers": _RUN_ROWS.where_not_in("kind", _PLAN_KINDS),
     "plans": _RUN_ROWS.where_in("kind", _PLAN_KINDS),
-    "chores": sql.select("id, chore AS what, status, started_at, NULL AS subject, result_json AS note, cost_usd").from_(
-        "chore_runs",
-    ),
+    "chores": sql.select(
+        "id, chore AS what, status, started_at, ended_at, NULL AS subject, result_json AS note, cost_usd",
+    ).from_("chore_runs"),
     "reviews": sql.select(
-        "id, 'review' AS what, status, started_at, pr_url AS subject, result_json AS note, cost_usd",
+        "id, 'review' AS what, status, started_at, ended_at, pr_url AS subject, result_json AS note, cost_usd",
     ).from_("review_runs"),
     "tasks": sql.select(
-        "id, 'task' AS what, status, started_at, 'task:' || task_id AS subject, result_json AS note, cost_usd",
+        "id, 'task' AS what, status, started_at, ended_at, 'task:' || task_id AS subject, result_json AS note, "
+        "cost_usd",
     ).from_("task_runs"),
 }
+#: What each band of `Bins` holds: a run whose length, over its kind's limit, is under the first, then the next; a run
+#: at or past its limit is over it.
+BANDS = (0.25, 0.5, 0.75, 1.0)
+# A tick that ran no overseer has no timeout of its own.
+_NO_OVERSEER = "no overseer"
 
 
 @dataclass(frozen=True)
@@ -177,6 +186,46 @@ class Health:
 
 
 @dataclass(frozen=True)
+class Bins:
+    """A sort's ended runs by their length's share of its limit, in the bands of `BANDS`."""
+
+    #: Under a quarter of it.
+    under_quarter: int = 0
+    #: From a quarter to under half.
+    under_half: int = 0
+    #: From half to under three quarters.
+    under_three_quarters: int = 0
+    #: From three quarters to under the limit.
+    under_limit: int = 0
+    #: At the limit or past it: a run timed out, or the harness took a while to stop it.
+    over_limit: int = 0
+
+
+@dataclass(frozen=True)
+class Duration:
+    """How long one sort of run took, of those that started in the window and ended, against its kind's timeout."""
+
+    kind: Kind
+    #: The sort, as `Outcome.what` names it.
+    what: str
+    #: How many ended.
+    runs: int
+    #: Their median length.
+    median_minutes: float
+    #: The length nine in ten of them came in at or under, by nearest rank.
+    p90_minutes: float
+    #: The longest of them.
+    longest_minutes: float
+    #: How many ended `timeout`.
+    timeouts: int
+    #: The timeout, in minutes, from `[runtime]` or the chore's own; None for a sort with none, a tick that ran no
+    #: overseer or a chore no longer in the config.
+    limit_minutes: int | None
+    #: The runs by their share of the limit; None when there is no limit.
+    bins: Bins | None
+
+
+@dataclass(frozen=True)
 class Day:
     """One local day of the window: how many of each kind's runs that started in it ended, and how many failed.
 
@@ -246,6 +295,34 @@ def by_day(conn: sqlite3.Connection, now: datetime, days: int) -> list[Day]:
                 if str(status) in _FAILED[kind]:
                     failed[str(day)][kind] += int(runs)
     return [Day(day=day, start=at, ended=ended[day], failed=failed[day]) for day, at in starts.items()]
+
+
+def durations(conn: sqlite3.Connection, now: datetime, days: int, config: Config) -> list[Duration]:
+    """How long the runs of the last `days` local days took, by kind and sort, over `report`'s window, by start.
+
+    A tick is held to the overseer's timeout; a worker, a plan, and a task's run to the worker's, a review to the
+    reviewer's, and a chore to its own, as `config` sets them.
+
+    Returns:
+        A row per sort that ended a run, in `spend.KINDS` order, then by sort.
+    """
+    start, end = spend.window(now, days)
+    since = db.format_time(start)
+    until = db.format_time(end)
+    lengths: dict[tuple[Kind, str], list[tuple[float, bool]]] = {}
+    with db.read_snapshot(conn):
+        for kind in spend.KINDS:
+            ended = (
+                sql.select("what, (julianday(ended_at) - julianday(started_at)) * 1440, status = 'timeout'")
+                .from_("({})", _ROWS[kind])
+                .where("started_at >= ? AND started_at < ?", since, until)
+                .where("status != 'running' AND ended_at IS NOT NULL")
+                .order_by("what")
+            )
+            for what, minutes, timed_out in sql.execute(conn, ended):
+                if minutes is not None:
+                    lengths.setdefault((kind, str(what)), []).append((max(float(minutes), 0.0), bool(timed_out)))
+    return [_duration(kind, what, ran, _limit(config, kind, what)) for (kind, what), ran in lengths.items()]
 
 
 def refusals(conn: sqlite3.Connection, since: str, until: str) -> list[Refusal]:
@@ -321,10 +398,49 @@ def _outcomes(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> l
     ]
 
 
+def _duration(kind: Kind, what: str, ran: Sequence[tuple[float, bool]], limit: int | None) -> Duration:
+    minutes = sorted(m for m, _ in ran)
+    bins = None
+    if limit is not None:
+        counts = [0] * (len(BANDS) + 1)
+        for m in minutes:
+            counts[bisect.bisect_right(BANDS, m / limit)] += 1
+        bins = Bins(*counts)
+    return Duration(
+        kind=kind,
+        what=what,
+        runs=len(minutes),
+        median_minutes=statistics.median(minutes),
+        p90_minutes=minutes[math.ceil(0.9 * len(minutes)) - 1],
+        longest_minutes=minutes[-1],
+        timeouts=sum(timed_out for _, timed_out in ran),
+        limit_minutes=limit,
+        bins=bins,
+    )
+
+
+# The timeout a sort of run is held to: the overseer's for a tick that ran it, the worker's for every run of a worker's
+# agent, the reviewer's, and a chore's own.
+def _limit(config: Config, kind: Kind, what: str) -> int | None:
+    runtime = config.runtime
+    match kind:
+        case "overseer":
+            return None if what == _NO_OVERSEER else runtime.overseer_timeout_minutes
+        case "workers" | "plans" | "tasks":
+            return runtime.worker_timeout_minutes
+        case "reviews":
+            return runtime.review_timeout_minutes
+        case "chores":
+            chore = config.chores.get(what)
+            return None if chore is None else chore.timeout_minutes
+        case _:
+            assert_never(kind)
+
+
 # Every failure of one kind in the window, the newest first, each with its cause: the harness's note, or None.
 def _failures(conn: sqlite3.Connection, kind: Kind, since: str, until: str) -> Iterable[tuple[Failure, str | None]]:
     failed = (
-        sql.select("*")
+        sql.select("id, what, status, started_at, subject, note, cost_usd")
         .from_("({})", _ROWS[kind])
         .where("started_at >= ? AND started_at < ?", since, until)
         .where_in("status", sorted(_FAILED[kind]))
