@@ -30,7 +30,7 @@ test('the nav opens Reports on its cards, then the months since the workspace be
     await expect(months.last().getByRole('rowheader')).toHaveText('Apr 2026')
     const delivery = page.getByTestId('reports-delivery-month')
     await expect(delivery.first().getByRole('link', { name: 'Oct 2026' })).toHaveAttribute('aria-current', 'true')
-    await expect(page.getByTestId('reports-trends').getByRole('listitem')).toHaveCount(4)
+    await expect(page.getByTestId('reports-trends').getByRole('listitem')).toHaveCount(5)
     // October holds the mock's runs, every kind with its row, and the two tickets it landed on its first day, the
     // latest first (canopy/serve/mock/history.py).
     await expect(page.getByTestId('reports-kinds')).toContainText('October 2026')

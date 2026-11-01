@@ -6,7 +6,7 @@ import type { DayBar, DayChartSeries } from '@/lib/chart'
 import type { Clock } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { counted } from '@/lib/descriptions'
-import { SERIES } from '@/lib/spend'
+import { SERIES, shareText } from '@/lib/spend'
 import { stamp } from '@/lib/time'
 
 /**
@@ -39,7 +39,8 @@ export function sinceText(months: readonly ReportMonth[]): string {
     return first === undefined ? '' : `since ${monthLabel(first.month, 'long')}`
 }
 
-// Whether a month holds anything to report: a run, a cost, a ticket landed or closed, a PR, a session outside canopy.
+// Whether a month holds anything to report: a run, a cost, a ticket landed or closed, a PR, a PR head checked, a first
+// review, a session outside canopy.
 function holdsAnything(month: ReportMonth): boolean {
     return (
         month.runs > 0 ||
@@ -47,6 +48,8 @@ function holdsAnything(month: ReportMonth): boolean {
         month.landed.length > 0 ||
         month.closed > 0 ||
         month.pull_requests > 0 ||
+        month.heads > 0 ||
+        month.first_reviews > 0 ||
         month.outside.sessions > 0
     )
 }
@@ -110,6 +113,34 @@ export function monthChange(
     return size === costText(0) ? `same as ${name}` : `${change > 0 ? '+' : '−'}${size} on ${name}`
 }
 
+/** A month's failed runs in its table's cell, as the Health page counts them: `3`; a dash when no run ended. */
+export function failedText(month: ReportMonth): string {
+    return month.runs_ended === 0 ? '–' : String(month.failed)
+}
+
+/**
+ * What a month's failed cell counts, on its hover: `3 of 46 runs failed, 7%, costing $1.20`. Undefined when no run
+ * ended.
+ */
+export function failedHint(month: ReportMonth): string | undefined {
+    if (month.runs_ended === 0) {
+        return undefined
+    }
+    const share = shareText(month.failed / month.runs_ended)
+    const said = `${month.failed} of ${counted(month.runs_ended, 'run')} failed, ${share}`
+    return month.failed_cost_usd === null ? said : `${said}, costing ${costText(month.failed_cost_usd)}`
+}
+
+/** A month's share of PR heads green first time, as the CI page reads it: `71%`; a dash when no head was checked. */
+export function greenFirstText(month: ReportMonth): string {
+    return month.heads === 0 ? '–' : shareText(month.green_first / month.heads)
+}
+
+/** What a month's green-first cell counts, on its hover: `10 of 14 PR heads`. Undefined when no head was checked. */
+export function greenFirstHint(month: ReportMonth): string | undefined {
+    return month.heads === 0 ? undefined : `${month.green_first} of ${counted(month.heads, 'PR head')}`
+}
+
 /**
  * A row's share of the month, as its bar on the reports page draws it and its hover says it, 0 to 100: `cost` over
  * `whole`, the month's; 0 when either is nothing.
@@ -130,9 +161,14 @@ export interface DeliveryTrend {
     text: (value: number | null) => string
     /** Which of the month's figures ran on GitHub's clock, for a time (`clockShare`); undefined for a count. */
     clock?: 'to land' | 'review wait'
+    /** How many figures a month's median is of, when they are not its landed tickets: `3 first reviews`. */
+    of?: (month: ReportMonth) => string
 }
 
-/** Delivery's four medians, in the table's order, each drawn across the months over it. */
+/**
+ * Delivery's medians, in the table's order, each drawn across the months over it: four per landed ticket, then the
+ * first reviews', of every PR reviewed first in the month, landed or not, as the Reviews page times them.
+ */
 export const DELIVERY_TRENDS: readonly DeliveryTrend[] = [
     { key: 'iterations', label: 'iterations', value: (m) => m.median_iterations, text: medianText },
     { key: 'comments', label: 'PR comments', value: (m) => m.median_pr_comments, text: medianText },
@@ -144,16 +180,24 @@ export const DELIVERY_TRENDS: readonly DeliveryTrend[] = [
         text: hoursText,
         clock: 'review wait',
     },
+    {
+        key: 'first-review',
+        label: 'first review',
+        value: (m) => m.median_first_review_hours ?? null,
+        text: hoursText,
+        of: (m) => counted(m.first_reviews, 'first review'),
+    },
 ]
 
 /**
  * A month's point on a Delivery trend, on hover: `Oct 2026: 20.8h`, then, for a time, how many of its figures ran on
- * GitHub's clock (`clockShare`): `Oct 2026: 20.8h · 2 of 3 from GitHub's times, the rest from proxies`.
+ * GitHub's clock (`clockShare`): `Oct 2026: 20.8h · 2 of 3 from GitHub's times, the rest from proxies`; or, for a
+ * median of other figures than the landed tickets', how many: `Oct 2026: 4.0h · 3 first reviews`.
  */
 export function trendPointHint(month: ReportMonth, trend: DeliveryTrend): string {
     const said = `${monthLabel(month.month)}: ${trend.text(trend.value(month))}`
-    const clock = trend.clock === undefined ? undefined : clockShare(month, trend.clock)
-    return clock === undefined ? said : `${said} · ${clock}`
+    const more = trend.clock === undefined ? trend.of?.(month) : clockShare(month, trend.clock)
+    return more === undefined ? said : `${said} · ${more}`
 }
 
 /** The month the search's `month` names, `YYYY-MM`, if it is one; undefined otherwise. */
