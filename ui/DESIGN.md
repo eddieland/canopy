@@ -1061,11 +1061,13 @@ sliver beside four others; and its axis names short call numbers without measuri
 - **The red checks chart** (the CI page) is the same `DayChart`: a bar per local day of the red check runs, a series
   per check the server names apart, by rank in the check fills, and the rest summed as `other` in `check-other`, the
   legend and a table of the same numbers under it. Its window is the health page's.
+- **The Reviews page's panels** each hold one thing: the first reviews chart is alone in its panel, the window's
+  median a tile, what the median leaves out in that tile's tip, and what the page cannot see in its title's help; a
+  table that answers a different question from the one beside it gets its own panel (Estimates apart from Feedback
+  rounds).
 - **The first reviews chart** (the Reviews page) is the same `DayChart`: a bar per local day of the first reviews that
   arrived, stacked by wait in the wait fills, the quickest at the bottom, the day's median on hover, the legend and a
-  table of the same numbers under it. Its window is the health page's. It is alone in its panel: the window's median
-  is a tile, what the median leaves out in that tile's tip, and what the page cannot see in its title's help. A table
-  that answers a different question from the one beside it gets its own panel (Estimates apart from Feedback rounds).
+  table of the same numbers under it. Its window is the health page's.
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
   with its unit's phase, its ticket, then the page's own figures. The spend page's By pull request, the CI page's
   flaky kicks, and the Reviews page's By pull request use it.
