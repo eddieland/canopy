@@ -45,6 +45,7 @@ export const keys = {
     choreRunTranscript: (name: string, id: number) => ['transcript', 'chore-run', name, id] as const,
     // The ticks list and each tick's page share a prefix, so one invalidation marks both stale.
     ticks: ['ticks'] as const,
+    idleTicks: ['ticks', 'idle'] as const,
     tickDetail: (id: number) => ['ticks', id] as const,
     worktrees: ['worktrees'] as const,
     host: ['host'] as const,
@@ -482,10 +483,18 @@ export function choreRunTranscriptQuery(name: string, id: number) {
 }
 
 /** The latest ticks, newest first. Marked stale whenever the stream says the latest tick changed. */
-export const ticksQuery = queryOptions({
-    queryKey: keys.ticks,
-    queryFn: async ({ signal }) => unwrap(await api.GET('/api/ticks', { signal })),
-})
+export const ticksQuery = tickListQuery(false)
+
+/** The latest live ticks the loop found idle, newest first. Marked stale with the ticks. */
+export const idleTicksQuery = tickListQuery(true)
+
+// The latest ticks, or only the idle ones: one shape, so a page can show either.
+function tickListQuery(idle: boolean) {
+    return queryOptions({
+        queryKey: idle ? keys.idleTicks : keys.ticks,
+        queryFn: async ({ signal }) => unwrap(await api.GET('/api/ticks', { params: { query: { idle } }, signal })),
+    })
+}
 
 /** One tick and its decisions, as `canopy decisions ID` prints them. */
 export function tickDetailQuery(id: number) {

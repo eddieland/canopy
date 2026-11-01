@@ -155,6 +155,8 @@ export type SpendFirstCallWeek = Schemas['SpendFirstCallWeek']
 export type SpendMonth = Schemas['SpendMonth']
 /** What every session the runtime keeps that started in a spend window cost, canopy's apart from the rest. */
 export type SpendSessions = Schemas['SpendSessions']
+/** What a set of the runtime's sessions cost: how many there were, and their cost. */
+export type SpendShare = Schemas['SpendShare']
 /** A kind of agent run, as the spend breakdown counts it: the overseer, workers, plans, chores, reviews, or tasks. */
 export type SpendKind = Schemas['SpendKind']
 /** The last months, oldest first, as the reports page shows them. */
@@ -193,6 +195,14 @@ export type HealthDay = Schemas['HealthDay']
 export type HealthCounts = Schemas['HealthCounts']
 /** The window before a health report's: its runs, failures, and what they cost. */
 export type HealthPrevious = Schemas['HealthPrevious']
+/** The window's failures one harness note explained, or `other`: how many, of which kinds, and the newest. */
+export type HealthCause = Schemas['HealthCause']
+/** One thing a guard refused: the ticket, chore, or PR it named, the run's kind, how often, and the latest tick. */
+export type HealthAsk = Schemas['HealthAsk']
+/** How long one sort of run took against its kind's timeout: its median, slowest, timeouts, and spread. */
+export type HealthDuration = Schemas['HealthDuration']
+/** A sort's ended runs by their length's share of its timeout, a band each. */
+export type HealthBins = Schemas['HealthBins']
 /** How many of a kind's ended runs reported no cost, of how many. */
 export type SpendUnpriced = Schemas['SpendUnpriced']
 /** Which checks failed in a window, what fixing them cost, and whether the flaky kicks worked. */
