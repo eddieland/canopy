@@ -298,7 +298,14 @@ def test_under_tracker_private_a_tickets_first_plan_starts_it_privately(scenario
 
 @pytest.mark.parametrize(
     ("said", "recorded"),
-    [("large", PlanEffort.LARGE), ("small", PlanEffort.SMALL), (None, None), ("huge", None), (3, None)],
+    [
+        ("large", PlanEffort.LARGE),
+        ("small", PlanEffort.SMALL),
+        (None, None),
+        ("huge", None),
+        (3, None),
+        (["large"], None),
+    ],
 )
 def test_a_plans_effort_is_recorded_as_its_planner_judged_and_one_it_misspells_drops_alone(
     scenario: Scenario,
