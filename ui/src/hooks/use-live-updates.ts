@@ -10,8 +10,9 @@ import type { StreamState } from './use-event-stream'
 /**
  * Keeps the attention list, the runs, and the tickets in the Query cache current from the server's event stream. Mount
  * once, in the shell, and only when signed in: the stream needs a session. Every connection, a reconnect included,
- * starts with the three lists whole, so nothing needs refetching after a drop but the ticket a page shows, and the
- * server's meta: a drop is most often the loop restarting, perhaps upgraded, so it may serve a newer UI (NewerBuild).
+ * starts with the lists whole, but a connection's first read names no ticket or task as changed: after a drop, the
+ * ticket and the task a page shows are read again, and the server's meta, since a drop is most often the loop
+ * restarting, perhaps upgraded, so it may serve a newer UI (NewerBuild).
  */
 export function useLiveUpdates(enabled: boolean): StreamState {
     const client = useQueryClient()
@@ -22,6 +23,7 @@ export function useLiveUpdates(enabled: boolean): StreamState {
         ending: (event) => event.type === 'stream.ending',
         onReconnect: () => {
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
+            void client.invalidateQueries({ queryKey: ['task'], refetchType: 'active' })
             void client.invalidateQueries({ queryKey: keys.meta })
         },
     })
