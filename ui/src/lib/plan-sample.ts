@@ -1,7 +1,7 @@
 // A plan as a planner writes one (docs/design/PLANNING.md §25, The prompt), with the operator's comments on it: what
 // the plan editor's page shows over mock data (src/routes/plan-editor.tsx); a ticket's own plan opens on its page.
 // Its threads are anchored as the editor anchors them, so each lands on its passage, but for one whose passage the
-// planner has since rewritten, which shows as gone, and one the operator resolved.
+// planner has since dropped, which shows as gone, and one the operator resolved.
 import type { PlanThread } from '@/lib/plan-threads'
 
 /** The sample plan, for ABC-102 in the mock journal (canopy/serve/mock/). */
@@ -90,8 +90,8 @@ export const SAMPLE_THREADS: PlanThread[] = [
     },
     {
         id: 'sample-3',
-        anchor: { quote: 'a header and a row per line', prefix: 'three rows exports as', suffix: '' },
-        body: 'Say what the header row holds: the column names as the page shows them, or the field names?',
+        anchor: { quote: 'on for one team first', prefix: 'Behind a flag,', suffix: '.' },
+        body: 'Which team? Name it, and say who turns the flag on for the rest.',
         at: '2026-10-08T11:20:00Z',
         resolved: false,
         replies: [],
