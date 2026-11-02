@@ -38,13 +38,13 @@ from datetime import timedelta
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import conversation, db, observe, plans, records, review_runs, sql
+from canopy.core import conversation, db, observe, passed_reviews, plans, records, review_runs, sql
 from canopy.core.vocab import CheckStatus, Phase, PlanStatus, PrState, ResumeReason, ReviewRunStatus, RunKind
 from canopy.core.workspace import CheckRole
 from canopy.loop import attention
 from canopy.reviews import grants
 from canopy.reviews import view as review_view
-from canopy.runs import feedback_plans, policy
+from canopy.runs import drafts, feedback_plans, policy
 
 if TYPE_CHECKING:
     import sqlite3
@@ -189,6 +189,7 @@ def _from_rows(ctx: Context, subjects: _Subjects, limits: _Limits, now: datetime
         return
     observed = records.select(records.ObservedPr).all(ctx.conn)
     heads = {p.url: p.head_sha for p in observed}
+    left = passed_reviews.left(ctx.conn, ctx.config.trust, drafts.sent_by_pr(ctx.conn), subjects.keys)
     for key in sorted(subjects.keys):
         units = subjects.units.get(key, ())
         for unit in units:
@@ -196,7 +197,8 @@ def _from_rows(ctx: Context, subjects: _Subjects, limits: _Limits, now: datetime
             if unit.unobserved and unit.repo is not None and url is not None:
                 yield _unobserved(key, unit.repo, url)
             elif unit.stale is None and unit.phases and url is not None:
-                yield from _of_unit(ctx, key, unit, url, heads.get(url), now=now)
+                passed = [p for p in left.get(key, ()) if p.pr_url == url]
+                yield from _of_unit(ctx, key, unit, url, heads.get(url), passed=passed, now=now)
         yield from _attempt_limits(ctx, key, subjects.own[key], units, limits)
 
 
@@ -232,9 +234,13 @@ def _of_unit(
     url: str,
     head: str | None,
     *,
+    passed: Sequence[passed_reviews.Left],
     now: datetime,
 ) -> Iterator[Raised]:
     """The items a unit's rows raise, from its PR at `url`, observed at `head`, at `now` (DESIGN §7, §21, §30).
+
+    `needs_reviewer` and `ready_to_merge` count the feedback on it `passed` with no worker that is still left, so the
+    operator looks before a merge.
 
     Yields:
         Each.
@@ -255,10 +261,11 @@ def _of_unit(
         yield Raised(key, REVIEW_LIMIT, limited, repo, pr=url)
         # At its limit, the unit is the next row's (DESIGN §21).
         phase = unit.phases[1] if len(unit.phases) > 1 else None
+    left = f"; {passed_reviews.summary(passed)}: canopy show {key}" if passed else ""
     if phase is Phase.GREEN_UNREVIEWED:
-        yield Raised(key, NEEDS_REVIEWER, f"{url} passes its checks and no person has approved it", repo)
+        yield Raised(key, NEEDS_REVIEWER, f"{url} passes its checks and no person has approved it{left}", repo)
     elif phase is Phase.APPROVED:
-        yield Raised(key, READY_TO_MERGE, f"{url} is approved by a person and waits to be merged", repo)
+        yield Raised(key, READY_TO_MERGE, f"{url} is approved by a person and waits to be merged{left}", repo)
 
 
 def _stuck_check(ctx: Context, repo: str, url: str, head: str, now: datetime) -> str | None:
