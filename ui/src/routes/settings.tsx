@@ -48,7 +48,7 @@ import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } fr
 import type { TickerSpeed } from '@/lib/ticker-settings'
 import { stamp, useNow } from '@/lib/time'
 import { balanceCents } from '@/lib/wallet'
-import { usePalettes } from '@/theme/palette'
+import { paletteOptions, usePalettes } from '@/theme/palette'
 import type { Palette } from '@/theme/palette'
 import type { ResolvedTheme, ThemePreference } from '@/theme/store'
 import { switchPalette, switchTheme } from '@/theme/transition'
@@ -67,27 +67,6 @@ const THEMES: { value: ThemePreference; label: string; icon: LucideIcon }[] = [
     { value: 'light', label: 'Light', icon: Sun },
     { value: 'dark', label: 'Dark', icon: Moon },
     { value: 'system', label: 'System', icon: Monitor },
-]
-
-const LIGHT_PALETTES: { value: Palette<'light'>; label: string }[] = [
-    { value: 'lavender', label: 'Lavender' },
-    { value: 'off-white', label: 'Off-white' },
-    { value: 'sage', label: 'Sage' },
-    { value: 'solarized', label: 'Solarized' },
-    { value: 'nord', label: 'Nord' },
-    { value: 'gruvbox', label: 'Gruvbox' },
-    { value: 'rose-pine', label: 'Rosé Pine' },
-]
-
-const DARK_PALETTES: { value: Palette<'dark'>; label: string }[] = [
-    { value: 'indigo', label: 'Indigo' },
-    { value: 'grey', label: 'Grey' },
-    { value: 'black', label: 'Black' },
-    { value: 'forest', label: 'Forest' },
-    { value: 'plum', label: 'Plum' },
-    { value: 'solarized', label: 'Solarized' },
-    { value: 'gruvbox', label: 'Gruvbox' },
-    { value: 'monokai', label: 'Monokai' },
 ]
 
 const SPEEDS: { value: TickerSpeed; label: string }[] = [
@@ -166,11 +145,11 @@ function ThemePanel() {
                     ))}
                 </ToggleGroup>
             </div>
-            <PaletteRow theme="light" value={palettes.light} options={LIGHT_PALETTES}>
+            <PaletteRow theme="light" value={palettes.light} options={paletteOptions('light')}>
                 The light theme&apos;s palette: lavender, which tints the canvas with the accent&apos;s hue, a warm
                 off-white, a soft sage, or an editor scheme&apos;s light tones, each with an accent of its own.
             </PaletteRow>
-            <PaletteRow theme="dark" value={palettes.dark} options={DARK_PALETTES}>
+            <PaletteRow theme="dark" value={palettes.dark} options={paletteOptions('dark')}>
                 The dark theme&apos;s: an indigo slate, a plain grey, a near black, a deep forest green, a plum, or a
                 scheme&apos;s dark tones, each with an accent of its own.
             </PaletteRow>
@@ -199,7 +178,9 @@ function PaletteRow<T extends ResolvedTheme>({
                         key={option.value}
                         value={option.value}
                         data-testid={`palette-${theme}-${option.value}`}
-                        onClick={(event) => switchPalette(theme, option.value, event.currentTarget)}
+                        onClick={(event) => {
+                            void switchPalette(theme, option.value, event.currentTarget)
+                        }}
                     >
                         {option.label}
                     </ToggleGroupItem>

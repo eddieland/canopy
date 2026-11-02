@@ -9,7 +9,8 @@ from its config files, as it always did.
 ## Theme
 
 **Light**, **Dark**, or **System**, which follows your machine. Every open tab follows along. The button at the right
-of the header flips it too.
+of the header flips it too, and hovering it offers the palettes of the theme you're looking at, so you can try a few
+without leaving the page. The card stays put while you click through them; the other theme's are here.
 
 Each theme also has a palette, picked apart. The defaults tint the canvas with the accent's hue: **Lavender** in light,
 **Indigo** in dark. Light can also be **Off-white**, a warm paper, a soft green **Sage**, or the light side of

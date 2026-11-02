@@ -269,6 +269,8 @@ Rules:
   tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), the budget's readout while a
   budget is set, the host's readout last among the readouts, and the theme toggle, in three groups with a hairline
   rule between each: the actions, the readouts, the theme. Every readout that opens a page has a hover card of it.
+  The theme toggle has one too, of the shown theme's palettes, each picked with the toggle's reveal; it stays open
+  through the reveal, so palettes can be tried in turn. Settings keeps both themes' palettes, and the keyboard's way.
 - The stream's readout sits beside the name (`StreamReadout`), not with the readouts at the end, so a drop moves
   nothing: its word hugs its text, and only the ticker's window gives way when it changes. Held to one width at the end,
   it left a hole before `live` whenever the loop was up. The word sits in a pill with a dot, as `mock` does in a pill
