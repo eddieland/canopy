@@ -174,3 +174,24 @@ def test_an_entry_a_tool_adds_after_canopys_still_finds_the_repositorys_hooks(
     assert run.status == "done"
     assert ran.read_text().splitlines() == ["pre-commit"]
     assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER]]
+
+
+def test_a_repository_the_worker_makes_elsewhere_gets_none_of_canopys_marks(
+    scenario: Scenario,
+    git_pool: GitPool,
+    tmp_path: Path,
+) -> None:
+    """As a test of the worker's makes one: `git init` works there, and its commits are as git would make them."""
+    scenario.configures(trust={"commit_prefix": "[{key}] "})
+    other = tmp_path / "a test's repository"
+    run = scenario.run(
+        worker=worker_does(
+            ["git", "init", "--quiet", str(other)],
+            ["git", "-C", str(other), "commit", "--quiet", "--allow-empty", "-m", "its own"],
+            *commit_and_push(BRANCH, "the change"),
+        ),
+    )
+    assert run.status == "done"
+    assert git("log", "--format=%B", cwd=other) == "its own"
+    assert git("log", "--format=%s", BRANCH, "^main", cwd=git_pool.origin) == "[PROJ-1] the change"
+    assert trailers_on(git_pool.origin, BRANCH) == [[TRAILER]]

@@ -499,7 +499,7 @@ def _run_agent(
     if held:
         # Where canopy's `pre-push` reads the list, which a sandboxed run may read and not write (DESIGN §24, §42).
         env[cards.ANSWERS_ENV] = str(answers)
-    env |= commit_hooks.env(snapshot, marks, os.environ, held)
+    env |= commit_hooks.env(snapshot, marks, os.environ, held, slots=[slot])
     done = ctx.runner.run(
         argv,
         cwd=slot,

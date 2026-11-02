@@ -668,7 +668,8 @@ but must be distinguishable:
   `provider/model (canopy planner)`, for the model canopy chose for its planner; a name the operator set is used as
   set, alone. git adds them, through hooks in canopy's snapshot that a worker's environment points git at (DESIGN §8),
   so a worker that forgets them still carries them, and with `trust.commit_prefix` (private) put the operator's prefix,
-  which may name the ticket's key, before each subject but a fixup's. They are a mark, not a guard: a worker can commit
+  which may name the ticket's key, before each subject but a fixup's. They mark commits in the run's slots alone, not
+  in a repository its tools make elsewhere, as a test's. They are a mark, not a guard: a worker can commit
   around the hooks, and canopy names such a commit in the run's report and does not rewrite it. Never hidden: a worker
   never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
   private), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
