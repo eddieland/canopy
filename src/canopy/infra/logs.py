@@ -70,8 +70,8 @@ def configure(state_dir: Path) -> None:
     logger.propagate = False
 
 
-def rotate(state_dir: Path, *, max_bytes: int, keep: int) -> list[Path]:
-    """Rotate `canopy.log` once it is past `max_bytes`, and drop the rotated files past the newest `keep`.
+def rotate(state_dir: Path, *, max_bytes: int, keep: int, name: str = LOG_FILE_NAME) -> list[Path]:
+    """Rotate `canopy.log`, or the file `name`, once past `max_bytes`, and drop rotated ones past the newest `keep`.
 
     The log moves to `canopy.log.1` and each rotated file up one; `keep` 0 keeps every one, and `max_bytes` 0 never
     rotates. Only regular files are moved or removed, never a link, and a move never replaces what is at its name. Run
@@ -83,11 +83,12 @@ def rotate(state_dir: Path, *, max_bytes: int, keep: int) -> list[Path]:
     Raises:
         FileExistsError: Something not a regular file holds a rotated file's name, so nothing could move up to it.
     """
-    current = state_dir / LOG_FILE_NAME
+    current = state_dir / name
     size = _regular_size(current)
     due = size is not None and max_bytes > 0 and size > max_bytes
+    pattern = re.compile(rf"{re.escape(name)}\.(\d+)")
     rotated = sorted(
-        ((int(m[1]), path) for path in state_dir.iterdir() if (m := ROTATED_RE.fullmatch(path.name)) is not None),
+        ((int(m[1]), path) for path in state_dir.iterdir() if (m := pattern.fullmatch(path.name)) is not None),
         reverse=True,
     )
     removed: list[Path] = []
@@ -100,9 +101,9 @@ def rotate(state_dir: Path, *, max_bytes: int, keep: int) -> list[Path]:
             path.unlink()
             removed.append(path)
         elif due:
-            _move(path, state_dir / f"{LOG_FILE_NAME}.{after}")
+            _move(path, state_dir / f"{name}.{after}")
     if due:
-        _move(current, state_dir / f"{LOG_FILE_NAME}.1")
+        _move(current, state_dir / f"{name}.1")
     return removed
 
 

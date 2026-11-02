@@ -39,6 +39,8 @@ dependencies = [
     "canopy-sandbox",
     "click>=8.5.0",
     "fastapi>=0.161.1",
+    "opentelemetry-api>=1.45.1",
+    "opentelemetry-sdk>=1.45.1",
     "pydantic>=2.14.1",
     "rich>=15.0.0",
     # FastAPI's own foundation; canopy.serve's middleware and responses import it directly, so it is declared too.

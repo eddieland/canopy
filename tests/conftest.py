@@ -20,7 +20,7 @@ import pytest
 from click.testing import CliRunner, Result
 
 from canopy.core import db
-from canopy.infra import resources
+from canopy.infra import resources, tracing
 from canopy.infra.procs import SubprocessRunner
 
 if TYPE_CHECKING:
@@ -55,7 +55,7 @@ HERMETIC_GIT = {
 
 @pytest.fixture(autouse=True)
 def hermetic_agent_env() -> Iterator[None]:
-    """Drop inherited CANOPY_* and OPENCODE_* variables, so a test's environment is only what it sets.
+    """Drop inherited CANOPY_*, OPENCODE_*, and trace variables, so a test's environment is only what it sets.
 
     The whole environment is restored when the test ends.
 
@@ -70,9 +70,19 @@ def hermetic_agent_env() -> Iterator[None]:
             time.tzset()
             for name in [k for k in os.environ if k.startswith(RECORDED_ENV_PREFIXES)]:
                 del os.environ[name]
+            # A trace whatever runs the suite may be in, which canopy would continue once tracing is on.
+            for name in (tracing.TRACEPARENT, "TRACESTATE"):
+                os.environ.pop(name, None)
             yield
     finally:
         time.tzset()
+
+
+@pytest.fixture(autouse=True)
+def tracing_off() -> Iterator[None]:
+    """Turn tracing off when the test ends: a workspace configured to trace turns it on for the whole process."""
+    yield
+    tracing.configure(Path(), "off")
 
 
 @pytest.fixture
