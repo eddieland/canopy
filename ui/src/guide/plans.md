@@ -125,6 +125,12 @@ Write your comment and press **Comment** again, or your [send key](settings#repl
 [reply](attention#replying) does, and its card shows it formatted. Each comment is saved
 as you make it, and sits in the **Comments** panel, quoting its passage. Click the quote to find it in the plan.
 
+Under a new comment's field sit four labels: **Verify this**, **Out of scope**, **Match existing patterns**, and
+**Needs tests**. One click starts the comment with a fixed instruction to the planner, worded as an order rather than
+a suggestion. Hover a label to read its instruction first. The cursor lands after it, so add your own words or send it
+as it is; another label swaps the instruction and keeps what you wrote. The wording is blunt on purpose: a planner
+treats "maybe double-check this?" as optional, and it is right to, since that is what you said.
+
 A comment's card says what it can do in words: **reply**, **edit**, **resolve** (or **reopen**), and **delete**,
 which asks first. Comments hold onto
 their passage by its words, so they survive your edits, and they belong to the ticket, so they carry over to the next
