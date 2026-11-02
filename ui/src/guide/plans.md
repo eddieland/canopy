@@ -211,7 +211,11 @@ under the plan, in **Open decisions**, drawn just as a worker's question is on i
 the planner's marked `recommended` and picked. Pick another and that's your answer: a line such as
 `Decision 1 (Where a schedule keeps its hour): take B, not A.` joins your notes, so
 **Approve with notes** carries it to the implement, and **Ask for changes** to the planner. Leave the planner's choice
-picked and nothing is sent; agreeing needs no paperwork. Your picks live on this page, not in the journal, so leaving
+picked and nothing is sent; agreeing needs no paperwork. Since the panel sits under the plan's last line, the foot says
+it's there from the moment the page opens: `↓ 2 open decisions` leads the line under the actions, and clicking it
+takes you to the panel. Once you've answered some it reads `1 of 2 answered`, and it counts the plan as it reads now,
+so editing its Decisions changes the count. It's a signpost, not a gate: **Approve** works without a visit, and takes
+the planner's choices. Your picks live on this page, not in the journal, so leaving
 asks first and a reload forgets them. A plan written before planners used this shape, or one that wanders from it,
 shows no panel, and its Decisions are still there to read and comment on.
 

@@ -29,7 +29,7 @@ import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef, useState 
 import type { ReactNode } from 'react'
 
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
-import { PlanDecisions } from '@/components/plan-decisions'
+import { DecisionsJump, PlanDecisions } from '@/components/plan-decisions'
 import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
 import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
@@ -222,6 +222,10 @@ export function PlanEditor({
     // answers, which go with the note.
     const [picks, setPicks] = useState<ReadonlyMap<number, string>>(new Map())
     const answers = decisionAnswers(decisions, picks)
+    // The open decisions' panel, under the plan, and the sticky header and foot it is brought into view between.
+    const decisionsPanel = useRef<HTMLElement>(null)
+    const planHeader = useRef<HTMLDivElement>(null)
+    const bar = useRef<HTMLDivElement>(null)
     // Whether the plan here says other than it did when it opened, by the editor's own Markdown for both: the planner's
     // may be written otherwise (`*` for `-`), and an edit undone can leave an empty paragraph at the end, neither of
     // which the operator wrote.
@@ -365,6 +369,20 @@ export function PlanEditor({
         }
     }, [editor])
 
+    // The open decisions brought fully into view, clear of the sticky header and foot as tall as they are now (the
+    // header's modes wrap on a narrow page, and a note being written makes the foot taller), so measured rather than
+    // the editor's fixed clearances; the keyboard goes on from there. One taller than the room shows from its top.
+    function goToDecisions() {
+        const panel = decisionsPanel.current
+        if (panel === null) {
+            return
+        }
+        panel.style.scrollMarginTop = `${(planHeader.current?.offsetHeight ?? 0) + 8}px`
+        panel.style.scrollMarginBottom = `${(bar.current?.offsetHeight ?? 0) + 8}px`
+        panel.scrollIntoView({ block: 'nearest' })
+        panel.focus({ preventScroll: true })
+    }
+
     function startComment() {
         const { from, to, empty } = editor.state.selection
         const anchor = empty ? undefined : anchorFor(editor.state, from, to)
@@ -495,6 +513,12 @@ export function PlanEditor({
     }
     const onDraftChange = (body: string) => setDraft(draft && { ...draft, body })
     const onDraftLeave = () => backToPlan(highlightsKey.getState(editor.state)?.draft)
+    // While the plan's open decisions sit under its last line, the foot says how many, and goes to them.
+    const jump =
+        editable && decisions.length > 0 ? (
+            <DecisionsJump decisions={decisions} picks={picks} onJump={goToDecisions} />
+        ) : undefined
+
     return (
         // The comments sit beside the plan once both fit (a 20rem column beside a plan of about 40rem), by the space
         // the page gives them rather than the window's width, since the rail takes some of it. The plan's column
@@ -509,7 +533,7 @@ export function PlanEditor({
                 )}
             >
                 <Panel>
-                    <PanelHeader label="Plan" sticky>
+                    <PanelHeader ref={planHeader} label="Plan" sticky>
                         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                             {status}
                             {status !== undefined && (
@@ -564,6 +588,7 @@ export function PlanEditor({
                         // Under the plan, above its foot: read after the plan, as its Decisions are written to be,
                         // and answered just over the actions that send the answers.
                         <PlanDecisions
+                            ref={decisionsPanel}
                             decisions={decisions}
                             picks={picks}
                             onPick={(decision, letter) => setPicks(new Map(picks).set(decision, letter))}
@@ -599,7 +624,7 @@ export function PlanEditor({
                         outcome !== undefined) && (
                         // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so
                         // a long plan is approved or sent back from where it is read, not from under its last line.
-                        <PanelFooter sticky data-testid="plan-bar">
+                        <PanelFooter ref={bar} sticky data-testid="plan-bar">
                             {editable && (
                                 <div className="flex flex-wrap items-center gap-2">
                                     {renderActions === undefined ? actions : renderActions(notes)}
@@ -616,13 +641,18 @@ export function PlanEditor({
                                                 setPicks(new Map())
                                             }}
                                             line={actionsNote}
+                                            lead={jump}
                                             note={note}
                                             onNoteChange={setNote}
                                         />
                                     )}
-                                    {onAskForChanges === undefined && actionsNote !== undefined && (
-                                        <p className="basis-full text-xs text-muted-foreground">{actionsNote}</p>
-                                    )}
+                                    {onAskForChanges === undefined &&
+                                        (actionsNote !== undefined || jump !== undefined) && (
+                                            <p className="basis-full text-xs text-muted-foreground">
+                                                {jump}
+                                                {actionsNote}
+                                            </p>
+                                        )}
                                 </div>
                             )}
                             {outcome}

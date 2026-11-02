@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, createRootRoute, createRouter, RouterContextProvider } from '@tanstack/react-router'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
 import { keys } from '@/api/queries'
@@ -415,6 +415,45 @@ describe('TicketPlan', () => {
             expect(screen.getByRole('radio', { name: /^A: UTF-8/u }).getAttribute('aria-checked')).toBe('true')
         })
 
+        it('says from the foot how many wait, and once some are answered, how many of them', () => {
+            renderDeciding()
+            const bar = within(screen.getByTestId('plan-bar'))
+            expect(bar.getByRole('button', { name: '1 open decision' })).toBeDefined()
+            fireEvent.click(screen.getByRole('radio', { name: /^B: Latin-1/u }))
+            expect(bar.queryByRole('button', { name: '1 open decision' })).toBeNull()
+            expect(bar.getByRole('button', { name: 'Open decisions: 1 of 1 answered' })).toBeDefined()
+        })
+
+        it('goes from the foot to the panel, not to the Decisions in the plan, and focuses it', () => {
+            const scrolled = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
+            renderDeciding()
+            fireEvent.click(within(screen.getByTestId('plan-bar')).getByRole('button', { name: '1 open decision' }))
+            const panel = screen.getByRole('region', { name: 'Open decisions' })
+            expect(scrolled).toHaveBeenCalledWith({ block: 'nearest' })
+            expect(scrolled.mock.contexts).toEqual([panel])
+            expect(document.activeElement).toBe(panel)
+        })
+
+        it("counts the plan's Decisions as they read now, in Markdown too", () => {
+            renderDeciding()
+            fireEvent.click(screen.getByRole('radio', { name: /^B: Latin-1/u }))
+            fireEvent.click(button('Markdown'))
+            const more = [
+                '### Decision 2: Where the file is written',
+                '',
+                '- **A (chosen):** Beside the report.',
+                '- **B:** In the exports folder.',
+                '',
+            ].join('\n')
+            fireEvent.change(screen.getByRole('textbox', { name: 'Plan as Markdown' }), {
+                target: { value: `${DECIDING}\n${more}` },
+            })
+            const bar = within(screen.getByTestId('plan-bar'))
+            expect(bar.getByRole('button', { name: 'Open decisions: 1 of 2 answered' })).toBeDefined()
+            fireEvent.change(screen.getByRole('textbox', { name: 'Plan as Markdown' }), { target: { value: TEXT } })
+            expect(bar.queryByRole('button', { name: /open decision|answered/iu })).toBeNull()
+        })
+
         it('shows none for a plan that waits on no answer, or that asks none in their shape', () => {
             const approved = { ...PLAN, status: 'approved' as const }
             const { unmount } = renderDeciding({
@@ -422,9 +461,11 @@ describe('TicketPlan', () => {
                 newest: { ...NEWEST, text: DECIDING, plan: approved },
             })
             expect(screen.queryByRole('region', { name: 'Open decisions' })).toBeNull()
+            expect(screen.queryByRole('button', { name: /open decision|answered/iu })).toBeNull()
             unmount()
             renderPlan()
             expect(screen.queryByRole('radiogroup')).toBeNull()
+            expect(screen.queryByRole('button', { name: /open decision|answered/iu })).toBeNull()
         })
     })
 

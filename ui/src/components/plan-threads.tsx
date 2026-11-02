@@ -185,6 +185,7 @@ export function AskForChanges({
     asked = false,
     answers = NO_ANSWERS,
     line: said,
+    lead,
     note,
     onAsk,
     onNoteChange,
@@ -201,6 +202,8 @@ export function AskForChanges({
     answers?: readonly string[]
     /** What the caller says of its own actions, after how many comments go with this one, on the line under them. */
     line?: ReactNode
+    /** What the caller puts at the start of that line, before how many comments go. */
+    lead?: ReactNode
     /** The note on the whole plan, the caller's state, so its own actions, such as Approve, can send it too. */
     note: string
     /** Sends the message. */
@@ -255,8 +258,9 @@ export function AskForChanges({
                 <Send aria-hidden />
                 {asked ? 'Ask again' : 'Ask for changes'}
             </Button>
-            {(told !== false || said !== undefined) && (
+            {(told !== false || said !== undefined || lead !== undefined) && (
                 <p className="order-2 basis-full text-xs text-muted-foreground">
+                    {lead}
                     {told} {said}
                 </p>
             )}
