@@ -251,10 +251,10 @@ class SpendFirstCallWeek(Model):
     """What their first calls read from the cache over what they were sent, from 0 to 1, summed over the runs that
     recorded both; None when none did."""
     new_runtime_versions: list[str] = []
-    """The runtime's versions their sessions named that the runs of the series' week before did not, in the order the
-    runs first ran on each: the latest earlier week in the window with runs. The series' first week names none."""
+    """The runtime's versions their sessions named that no run of the series' earlier weeks in the window did, in the
+    order the runs first ran on each. The series' first week names none."""
     new_digests: list[str] = []
-    """The definitions snapshots their runs loaded that those of the series' week before did not, the same way."""
+    """The definitions snapshots their runs loaded that no run of the series' earlier weeks did, the same way."""
 
 
 class SpendTicks(Model):

@@ -1113,12 +1113,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
   bar's rate over it, since there are six at most and the eye compares neighbours. A week whose runs recorded no cache
-  read is a stub with a dash. A week whose runs used a runtime version or definitions snapshot the week before's did
-  not has a 1px `muted-foreground` rule down the gap before its bar, and a line under the chart names what it used, in
-  `canopy spend`'s words, so a screen reader hears it beside the table of each week's runs, median first call, and
-  rate. The axis names each week's Monday. The kind filter has no `all`, since kinds' prefixes do not sum
-  (`?first_kind=`, the first kind with a week by default), and the chips over the chart pick the kind's runs, a
-  chore's, or a model's (`?first_series=`); a kind switch goes back to all its runs.
+  read is a stub with a dash. A week whose runs used a runtime version or definitions snapshot no earlier week's did
+  has a 1px `muted-foreground` rule down the gap before its bar, and a line under the chart names what it used, in
+  `canopy spend`'s words, more than one snapshot as a count whose tip names each, so a screen reader hears it beside
+  the table of each week's runs, median first call, and rate. The axis names each week's Monday. The kind filter has
+  no `all`, since kinds' prefixes do not sum (`?first_kind=`, the first kind with a week by default), and the chips
+  over the chart pick the kind's runs, a chore's, or a model's (`?first_series=`); a kind switch goes back to all its
+  runs.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.
