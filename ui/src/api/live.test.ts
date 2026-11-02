@@ -188,8 +188,9 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.reviewOutput(running.id))?.isInvalidated).toBe(true)
     })
 
-    it('writes the reviews waiting on a tick whole', () => {
+    it('writes the reviews waiting on a tick whole, and reads the PRs again when one is made or ends', () => {
         const client = new QueryClient()
+        client.setQueryData(keys.pullRequests, [])
         const requests = [
             {
                 pr_url: 'https://github.com/acme/web/pull/95',
@@ -198,10 +199,17 @@ describe('applyStreamEvent', () => {
                 author: 'dana',
             },
         ]
+        // The first a stream sends: the PRs were read with them.
         applyStreamEvent(client, { type: 'review_requests.updated', requests })
         expect(client.getQueryData(keys.reviewRequests)).toEqual(requests)
+        expect(client.getQueryState(keys.pullRequests)?.isInvalidated).toBe(false)
+        applyStreamEvent(client, { type: 'review_requests.updated', requests: [...requests] })
+        expect(client.getQueryState(keys.pullRequests)?.isInvalidated).toBe(false)
+
+        // Stopped, perhaps from the CLI: the PR's request ended, which its row and page show.
         applyStreamEvent(client, { type: 'review_requests.updated', requests: [] })
         expect(client.getQueryData(keys.reviewRequests)).toEqual([])
+        expect(client.getQueryState(keys.pullRequests)?.isInvalidated).toBe(true)
     })
 
     it('writes the pause and the capacity whole, and lifts the pause', () => {

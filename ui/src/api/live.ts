@@ -1,7 +1,17 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { keys } from './queries'
-import type { ChoreRun, ChoreRunDetail, LastTick, ReviewDetail, ReviewSummary, Run, StreamEvent, Tick } from './types'
+import type {
+    ChoreRun,
+    ChoreRunDetail,
+    LastTick,
+    RequestedReview,
+    ReviewDetail,
+    ReviewSummary,
+    Run,
+    StreamEvent,
+    Tick,
+} from './types'
 
 /**
  * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one; a changed ticket is
@@ -10,8 +20,8 @@ import type { ChoreRun, ChoreRunDetail, LastTick, ReviewDetail, ReviewSummary, R
  * ending, or changing the worktrees it holds, marks them stale, and they are read again only if a page shows them. A
  * run's transcript is read again when its status, latest tool call, or cost moves, as its worker prints; a chore run's
  * when its status does, and a tick's when the tick changes, the only times their logs can. A review's page is read
- * again when its row in the reviews list moves. The loop's pause arrives whole, as a list does. Unknown event types are
- * ignored, so the server can add some.
+ * again when its row in the reviews list moves, and the PRs when a review request is made or ends. The loop's pause
+ * arrives whole, as a list does. Unknown event types are ignored, so the server can add some.
  */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
@@ -110,7 +120,13 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             break
         }
         case 'review_requests.updated': {
+            const before = client.getQueryData<RequestedReview[]>(keys.reviewRequests)
             client.setQueryData(keys.reviewRequests, event.requests)
+            // A request made or stopped, from the CLI or another tab, changes the request its PR carries: the PRs
+            // list's chip and the PR's page. The stream sends neither.
+            if (before !== undefined && waiting(before) !== waiting(event.requests)) {
+                void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
+            }
             break
         }
         case 'ticket.changed': {
@@ -176,6 +192,11 @@ function logged(run: Run): string {
 /** Each review run's state, as one comparable string: a review starting or ending changes it. */
 function reviewStatuses(reviews: ReviewSummary[]): string {
     return reviews.map((review) => `${review.id}:${review.state}`).join(',')
+}
+
+// The requests waiting on a tick, each by its PR and when it was made: a new one, or one gone, moves it.
+function waiting(requests: RequestedReview[]): string {
+    return requests.map((request) => `${request.pr_url}@${request.created_at}`).join(',')
 }
 
 /**
