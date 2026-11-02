@@ -92,6 +92,15 @@ Acceptance, Context, and so on down to Risks), so after a few plans you'll know 
 the menu still saves you the scrolling. As it opens it marks the section you're reading, for when a long plan has lost
 you.
 
+On a ticket's newest plan, each `##` section in the outline ends in two marks: a check for read and fine, and a `!`
+for read with a concern you mean to come back to. Pick one and the menu stays open, so you can mark a few on the way
+down; pick it again to clear it. The button counts what you haven't marked (`Outline 3 left`, then `all read`) and
+how many concerns you've left yourself, so a long plan tells you what's still to read. The marks are notes to you and
+nobody else: they live in this browser, and the planner never hears of them. A concern you want the planner to act
+on is a comment. A mark holds while its section reads as it did when you marked it, so when a new plan rewrites
+Risks, Risks is unread again, and the sections the planner left alone keep their marks. That includes your own
+edits: change a section's words and it wants reading again, which, to be fair, it does.
+
 While a planner is writing, the editor is read only and says which run is writing. A plan that was replaced is read
 only too. Before the first plan, the page says whether a run is writing one or the next tick dispatches a planner; for
 a ticket that needs none, it says so and names `canopy plan KEY`. If a plan's file has gone missing or can't be read,

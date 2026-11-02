@@ -372,6 +372,7 @@ function NewestPlan({
             onChange={setMarkdown}
             editable={editable}
             edited={newest.edited}
+            marks={ticketKey}
             // A waiting plan that replaced one is read for what changed, so its changes show first.
             previous={
                 before !== undefined && typeof replaced?.text === 'string'
