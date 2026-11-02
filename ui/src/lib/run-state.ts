@@ -260,6 +260,11 @@ export function railWork({ runs, reviews = [], chores = [], tasks = [] }: EveryR
     }
 }
 
+/** How many the rail's Working section counts: its number, for anywhere else that says it. */
+export function workingCount(every: EveryRun): number {
+    return railWork(every, 0).more
+}
+
 // The page listing the rows left out when they are all of one kind.
 const MORE_AT = {
     run: '/workspace/runs',

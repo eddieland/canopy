@@ -38,6 +38,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             // A run that started or ended changes the spend page's counts of runs, even one that reported no cost.
             if (before !== undefined && statuses(before) !== statuses(event.runs)) {
                 void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
+                // The all-clear's count of the day: a tab left open all day reads it again as each run ends.
+                void client.invalidateQueries({ queryKey: ['runs-since'], refetchType: 'active' })
             }
             // A run a page holds is written whole; its transcript and output are read again when its log has more in
             // it: its worker's events reach the log as it prints them, and a new tool call or model call moves its row.
