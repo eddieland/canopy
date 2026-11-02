@@ -12,7 +12,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from canopy.core import db, gc_passes, sql
-from canopy.infra import logs
+from canopy.infra import logs, tracing
 from canopy.loop import gc
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ PASS_EVERY = timedelta(days=1)
 
 
 def run(ctx: Context, tick_id: int, log: logs.TickAdapter) -> int | None:
-    """Rotate `canopy.log` if it is past `retention.log_max_mib`, then run the pass if none started in the last day.
+    """Rotate `canopy.log` and the traces file past `retention.log_max_mib`, then run the pass if none ran in a day.
 
     Only a live tick runs it, under the tick lock, so no two passes or rotations run at once.
 
@@ -42,6 +42,19 @@ def run(ctx: Context, tick_id: int, log: logs.TickAdapter) -> int | None:
     else:
         if dropped:
             log.info("canopy.log rotated", extra={"removed": [p.name for p in dropped]})
+    # The traces file, kept as the log is: each process appends to it anew, so follows a rotation (`otlp`).
+    try:
+        dropped = logs.rotate(
+            ctx.state_dir,
+            max_bytes=retention.log_max_mib * gc.MIB,
+            keep=retention.log_keep,
+            name=tracing.TRACES_FILE_NAME,
+        )
+    except Exception as e:
+        log.exception("traces not rotated", extra={"error": str(e)})
+    else:
+        if dropped:
+            log.info("traces rotated", extra={"removed": [p.name for p in dropped]})
     now = datetime.now(UTC)
     try:
         latest = gc_passes.latest(ctx.conn)

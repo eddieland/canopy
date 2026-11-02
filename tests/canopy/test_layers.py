@@ -33,6 +33,8 @@ CONFINED = {
     "anyio": "serve",
     "click": "cli",
     "fastapi": "serve",
+    # Telemetry goes through `infra` alone: `tracing`, and any later signal beside it (D132).
+    "opentelemetry": "infra",
     "starlette": "serve",
     "tomlkit": "serve",
     "uvicorn": "serve",

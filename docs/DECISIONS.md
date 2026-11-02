@@ -578,3 +578,13 @@ such as a shipped migration, may still cite one, and git history has its text.
 - What is shown is only ever an `<img>` of its SVG: an image runs no script, follows no link, and fetches nothing, so
   a gap in mermaid's sanitizer reaches nothing shown. While drawing, mermaid lays the SVG out off screen in the page,
   where `strict` is the guard.
+
+## D132. Telemetry goes through OpenTelemetry in `infra` alone, and is off until the operator turns it on
+
+- Only `infra` imports OpenTelemetry (`tests/canopy/test_layers.py`): every span is a `tracing.span`, and a later
+  signal, such as metrics, is a module beside it. Each loads only once its `[telemetry]` key turns it on.
+- It holds canopy's own facts, never text it read (T2): a failed span names its exception's type alone, and a metric's
+  labels come from closed sets (statuses, kinds, steps, configured models), never a ticket key, a path, or text.
+- `procs` passes the current span to every child as `TRACEPARENT`: a tick starts its own trace, and its runs join it.
+- None of it leaves the machine unasked: canopy sending it is a separate opt-in and a T2 change, and a scrape of it
+  through a listener follows T8.

@@ -109,3 +109,12 @@ def test_each_process_follows_the_log_to_its_new_file(tmp_path: Path) -> None:
     rotated = [json.loads(line)["msg"] for line in (tmp_path / f"{NAME}.1").read_text().splitlines()]
     current = [json.loads(line)["msg"] for line in (tmp_path / NAME).read_text().splitlines()]
     assert (rotated, current) == (["before"], ["after"])
+
+
+def test_another_file_rotates_alike_by_its_own_name(tmp_path: Path) -> None:
+    traces = tmp_path / "traces.jsonl"
+    traces.write_text("span " * 5)
+    write(tmp_path, "", "now " * 5)
+
+    assert logs.rotate(tmp_path, max_bytes=10, keep=3, name="traces.jsonl") == []
+    assert sorted(p.name for p in tmp_path.iterdir()) == [NAME, "traces.jsonl.1"]
