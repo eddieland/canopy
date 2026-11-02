@@ -10,7 +10,7 @@ from its first worker run, and how long its PR waited for its first review. Each
 where the `vcs` source read them (DESIGN §30): a ticket lands when its PRs merged, and its PR waits from when a review
 of it was first asked for once it was ready, or from when it was ready. Where a PR has no such time read, as one read
 before canopy read them, a proxy stands in: the tick that marked the ticket done, and the end of its first worker run
-that ended `done`. Neither is backfilled, and there is no history of a ticket's phase.
+that ended `done`, until `canopy backfill` reads the PR's times. There is no history of a ticket's phase.
 """
 
 from __future__ import annotations

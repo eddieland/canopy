@@ -14,9 +14,9 @@ last plan before it that went ahead (was approved). It is answered when a source
 its PRs, after its resume started, on a head other than the one its plan read: the push. A PR whose checks no source
 observed has no push on record, so its round is not timed.
 
-A PR read before canopy kept GitHub's times, or still a draft, has no start, so its first review is counted apart and
-never mixed into a median. The journal keeps no history of a ticket's phase, so time spent red in CI or conflicted is
-not here.
+A PR read before canopy kept GitHub's times, and not read since by `canopy backfill`, or still a draft, has no start,
+so its first review is counted apart and never mixed into a median. The journal keeps no history of a ticket's phase,
+so time spent red in CI or conflicted is not here.
 """
 
 from __future__ import annotations
