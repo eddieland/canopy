@@ -452,7 +452,10 @@ Controls:
   Worker stdout goes to a log file under the workspace's `.canopy/`, readable only by the
   operator.
 - Listeners follow T8. No outbound calls from the harness except through the
-  configured commands. canopy ships programs that make them, each a separate distribution it runs only as a command.
+  configured commands, and one the operator turns on in their own config: `telemetry.traces = "otlp"` posts canopy's
+  spans, which hold its own facts and never text it read (D132), to the OTLP/HTTP endpoint they name, from
+  `infra/otlp.py` alone, following no redirect and carrying no credential; a shared workspace file can set neither key.
+  canopy ships programs that make the others, each a separate distribution it runs only as a command.
   The Slack sink (DESIGN §20) runs only as a sink the operator configured, and reads its webhook or bot token from an
   operator-only file of its own, never from canopy's config, argv, journal, or logs; `canopy-connect-slack`, which
   reads the replies in its threads, reads the same file and sends the token only to Slack's API. Both talk to Slack
@@ -465,9 +468,9 @@ Controls:
   `canopy-connect-jira` (DESIGN §30) reads an email and API token from an operator-only file of its own, held to the
   Slack sink's checks, never from canopy's config, argv, journal, or logs, and sends them only to the Jira site the
   operator names, over https, following no redirect, through `canopy-http` (D130). Lint bans network modules in the
-  harness (`urllib.request`, `http.client`, `socket`), and `test_layers.py` bans `canopy-http`, httpx2, and any import
-  of these programs, so the process that holds the journal and enforces the guards never opens a connection or reads a
-  token or a sink's secret.
+  harness (`urllib.request`, `http.client`, `socket`) but for `infra/otlp.py`'s one import of `urllib.request`, and
+  `test_layers.py` bans `canopy-http`, httpx2, and any import of these programs, so the process that holds the journal
+  and enforces the guards opens no connection but that export, and reads no token or sink's secret.
 
 ### T3. Runaway agents (cost, capacity, infinite loops)
 

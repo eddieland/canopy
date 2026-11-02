@@ -1,17 +1,25 @@
-"""Spans in OTLP's JSON encoding, and the exporter that appends them to a file.
+"""Spans in OTLP's JSON encoding, and the exporters that append them to a file or post them to an OTLP/HTTP endpoint.
 
 The encoding is OTLP/JSON's `ExportTraceServiceRequest`: what an OpenTelemetry Collector's `otlpjsonfile` receiver reads
 from a file, a request per line, and what an OTLP/HTTP endpoint takes as `application/json`. Only `tracing` imports
 this module, and only once tracing is on, since importing it loads OpenTelemetry's SDK.
+
+`HttpExporter` is the harness's one network call (TRUST_MODEL T2): made only to the endpoint the operator names in their
+own config, carrying canopy's spans and nothing else, through no proxy and following no redirect, so the spans reach
+that endpoint or none.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, override
+
+# The harness's one network call: this module alone may make it (TRUST_MODEL T2).
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener  # noqa: TID251
 
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 
@@ -21,6 +29,8 @@ if TYPE_CHECKING:
 
 #: Who may read the traces file: the operator alone, as the log (TRUST_MODEL T2).
 FILE_MODE = 0o600
+#: How long a post may take: the longest an endpoint that is down delays a process's exit, which sends what is left.
+TIMEOUT_SECONDS = 5
 
 
 class FileExporter(SpanExporter):
@@ -54,6 +64,69 @@ class FileExporter(SpanExporter):
     @override
     def shutdown(self) -> None:
         """Nothing to close: the file is open only while a line is written."""
+
+
+class HttpExporter(SpanExporter):
+    """Posts each batch of spans, as OTLP JSON, to an OTLP/HTTP endpoint's spans URL."""
+
+    def __init__(self, url: str) -> None:
+        """Post to `url`, `<endpoint>/v1/traces`, which config held to `http` or `https`."""
+        self.url = url
+        self._failing = False
+
+    @override
+    def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
+        """Post `spans` once, never again: a batch the endpoint did not take is dropped, and the next is posted anew.
+
+        Returns:
+            Whether the endpoint took them, with a 2xx.
+        """
+        request = Request(  # noqa: S310  (config holds the URL to http or https)
+            self.url,
+            data=json.dumps(encoded(spans), separators=(",", ":")).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with _OPENER.open(request, timeout=TIMEOUT_SECONDS) as response:
+                took = 200 <= response.status < 300  # noqa: PLR2004  (HTTP's success range)
+                why = f"HTTP {response.status}"
+        # Whatever the network or the endpoint does, a span never fails what canopy was doing.
+        except Exception as e:  # noqa: BLE001
+            took, why = False, type(e).__name__
+        self._note(took=took, why=why)
+        return SpanExportResult.SUCCESS if took else SpanExportResult.FAILURE
+
+    @override
+    def shutdown(self) -> None:
+        """Nothing to close: each post opens and closes its own connection."""
+
+    def _note(self, *, took: bool, why: str) -> None:
+        """Log when posts start failing, and when they recover: once each, not once per batch."""
+        if took == (not self._failing):
+            return
+        self._failing = not took
+        if took:
+            _LOG.info("traces sent again", extra={"endpoint": self.url})
+        else:
+            _LOG.warning(
+                "traces not sent; spans are dropped until the endpoint takes them",
+                extra={"endpoint": self.url, "error": why},
+            )
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    """Refuses every redirect: a post reaches the endpoint the operator named, or fails."""
+
+    @override
+    def redirect_request(self, *args: object, **kwargs: object) -> None:
+        """Follow none: returning nothing makes urllib raise the redirect as an error."""
+
+
+# No proxy, whatever the environment names: a post reaches the endpoint the operator named, a collector on this machine
+# included, or fails.
+_OPENER = build_opener(ProxyHandler({}), _NoRedirect())
+_LOG = logging.getLogger("canopy")
 
 
 def encoded(spans: Sequence[ReadableSpan]) -> dict[str, object]:
