@@ -54,9 +54,9 @@ Only when the operator asks, once the plan is approved, a filing run files the e
 files tickets (§36): the private worker (§22), whose create tool alone writes to the tracker, files each unlabeled in
 the initiative's project, sets the tracker's blocker relation between them by their `after` (§10), and names in each
 body the initiative and the `R`s it covers, as data. It writes no code and pushes nothing. canopy records each key its
-result pairs with an entry as a member, checking only the key's text against the project, the entry, and the bound
-(D003); any other raises `initiative_ticket_unrecorded` (§14) until the operator replies to the initiative. A filed
-ticket authorizes nothing until the operator labels or starts it (T1, D123).
+result pairs with an entry as a member, checking only the key's text against the project, the entry, and the bound, and
+that it is no initiative's member yet (D003); any other raises `initiative_ticket_unrecorded` (§14) until the operator
+replies to the initiative. A filed ticket authorizes nothing until the operator labels or starts it (T1, D123).
 
 ### A member's plan
 
@@ -74,8 +74,9 @@ which they read with the mark, approves it, and its `implement` follows the init
 whose own setting asks for a plan (§25) is planned, whatever the mark.
 
 **Upward.** A member's planner whose `Decisions` depart from a contract or a requirement names those ids in its result
-line, and the harness raises `initiative_drift` (§14) naming the member and the ids, until the operator approves either
-plan or asks for a new one.
+line, and the harness raises `initiative_drift` (§14) naming the member and the ids. The operator settles it one of
+three ways, and each ends the item: approving the initiative plan again, amended to the member's choice; approving the
+member's plan as written, which accepts the departure for that member alone; or asking for a new plan of either.
 
 ### When its plan changes
 
@@ -88,6 +89,8 @@ member, by where it stands:
   approves the plan again, against the new initiative plan, or asks for a new one;
 - a run in flight, or a ticket with a branch or a PR, is never paused or touched: its next run is told the changed ids,
   as data, once, and keeps to its own approved plan. Nothing built is rewritten.
+- a trivial member with no branch yet has no plan of its own: the re-approval that reached it approves it again while
+  the new plan still marks it trivial, the operator having read the change, and otherwise leaves it to be planned.
 
 The operator hears once, an `initiative.changed` event (§20) in the `runs` group, naming the reached members each way,
 and decides.
