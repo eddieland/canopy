@@ -1526,7 +1526,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   was asked to change and the comments on it lose their passages together. Resolved threads fold under a `Disclosure`
   (`Show 2 resolved`). A comment or reply form sends on the key Settings names, as a reply does; Escape drops one that
   holds nothing new, and puts one with the operator's words aside, open with them, so one key never loses what was typed
-  (`Cancel` drops it). A form takes the cursor when it opens, after any words it holds; once a comment is sent,
+  (`Cancel` drops it). A new comment's form, alone, offers labels under its field (`COMMENT_LABELS` in
+  `src/lib/plan-comment-labels.ts`), ghost `xs` buttons in muted text, each its instruction on hover: one leads the
+  comment with that fixed, firmly worded instruction to the planner, swapping any other label's, and gives the cursor
+  back to the field's end for the operator's words.
+  A form takes the cursor when it opens, after any words it holds; once a comment is sent,
   resolved, deleted, put aside, or cancelled, the cursor goes back to the plan after its passage, as a shared document's
   does, rather than to the top of the page. `Comment` again, on new words, moves an empty comment to them; one half
   written stays on its passage, and the cursor goes back to it, so its words are never lost or carried to other words.
