@@ -49,6 +49,7 @@ import type { Shell } from '@/lib/shells'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
 import type { TickerSpeed } from '@/lib/ticker-settings'
 import { stamp, useNow } from '@/lib/time'
+import { cn } from '@/lib/utils'
 import { balanceCents } from '@/lib/wallet'
 import { paletteOptions, usePalettes } from '@/theme/palette'
 import type { Palette } from '@/theme/palette'
@@ -90,10 +91,11 @@ const HOURS: { value: Hours; label: string }[] = [
     { value: '12', label: '12-hour' },
 ]
 
-const PLAN_TEXTS: { value: PlanText; label: string }[] = [
-    { value: 'small', label: 'Small' },
-    { value: 'normal', label: 'Normal' },
-    { value: 'large', label: 'Large' },
+// Each size's name is drawn at the size it picks, a plan's body text, as the plan's style menu previews each style.
+const PLAN_TEXTS: { value: PlanText; label: string; preview: string }[] = [
+    { value: 'small', label: 'Small', preview: 'text-sm' },
+    { value: 'normal', label: 'Normal', preview: 'text-base' },
+    { value: 'large', label: 'Large', preview: 'text-lg' },
 ]
 
 const SEND_KEYS: { value: SendKey; label: string }[] = [
@@ -692,8 +694,13 @@ function PlanTextPanel() {
                         }
                     }}
                 >
-                    {PLAN_TEXTS.map(({ value, label }) => (
-                        <ToggleGroupItem key={value} value={value} data-testid={`plan-text-${value}`}>
+                    {PLAN_TEXTS.map(({ value, label, preview }) => (
+                        <ToggleGroupItem
+                            key={value}
+                            value={value}
+                            data-testid={`plan-text-${value}`}
+                            className={cn(preview, 'leading-none')}
+                        >
                             {label}
                         </ToggleGroupItem>
                     ))}

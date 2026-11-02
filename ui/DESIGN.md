@@ -702,7 +702,8 @@ side.
   subsection apart from it by weight alone; the guide's page title is its header's, so its body starts at a section.
   A plan's size is the operator's (Settings, `src/lib/plan-text.ts`): Normal is these; Small and Large move the body
   and both headings a step down or up together (`text-sm`/`text-lg` under `text-lg`/`text-2xl`), the one place a size
-  outside the steps above appears. The guide stays at Normal.
+  outside the steps above appears. The guide stays at Normal. Settings draws each size's name at the body size it
+  picks, as the style menu previews each style.
   Code is set as everywhere else (`Code`, Rich text), a block on the raised surface. Its measure is fixed, 48rem at
   most (`max-w-3xl`) on both surfaces. The plan's style menu previews each style in its utility. What lays a document
   out, the guide's rules between sections or a plan's margin, is its surface's own; its type is not.
