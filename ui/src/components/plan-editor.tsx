@@ -327,7 +327,9 @@ export function PlanEditor({
     }, [editor, threads])
 
     useEffect(() => {
-        editor.setEditable(editable)
+        // Without `false`, Tiptap emits `update` as if the operator had edited, and the plan, serialized again in the
+        // editor's own Markdown, would read as changed.
+        editor.setEditable(editable, false)
     }, [editor, editable])
 
     // The plan this one replaces, read as the editor reads a plan, while its changes are shown; none while not.
