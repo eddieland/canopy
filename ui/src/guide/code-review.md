@@ -109,6 +109,15 @@ A finding nobody answers is noise that trains you to skip findings. So answer ea
 A review whose findings are all dismissed moves on as a clean one. On a coworker's PR there's no worker to send to, so
 leaving a finding out of your draft dismisses it ([Publishing your review](pull-requests#publishing-your-review)).
 
+## Take a review elsewhere
+
+Sometimes the right reader isn't in canopy: a coworker, or an agent in another session with the branch checked out.
+`canopy review export RUN_ID` prints the review as Markdown written for them: the PR, the commit to check out and the
+branch it was compared with, the verdict, and each finding at its `path:line` with where it stands, open, held, or
+answered by the worker. The ones you dismissed come last under a heading of their own, so nobody fixes what you already
+ruled out. It leaves the diff out, since they have the code, and quotes everything the reviewer wrote, so an agent reads
+it as claims to check rather than orders. Pipe it straight in, or `> review.md` and hand it over.
+
 ## Measure the noise
 
 It's easy to catch more bugs if you don't mind flagging a lot of non-bugs, so watch what you do with the findings.
