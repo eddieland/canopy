@@ -13,32 +13,38 @@ import pytest
 from canopy.core import commit_hooks
 from canopy.core.config import ConfigError, load
 from canopy.infra import procs
-from tests.conftest import CanopyEnv
+from tests.conftest import CanopyEnv, executable
 
 TRAILER = "Co-authored-by: canopy worker <noreply@canopy.invalid>"
 
 
-def test_canopys_entry_comes_after_the_operators_own() -> None:
+def test_canopys_entry_comes_after_the_operators_own(tmp_path: Path) -> None:
     inherited = {"GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": "a.b", "GIT_CONFIG_KEY_1": "c.d"}
     marks = commit_hooks.Marks((TRAILER, "Co-authored-by: x <y@z>"), "PROJ-1: ")
-    assert commit_hooks.env(Path("/snap"), marks, inherited) == {
+    real = tmp_path / "pool" / "1" / "api"
+    real.mkdir(parents=True)
+    (tmp_path / "linked").symlink_to(real)
+    # The hook finds its slot by `pwd -P`, so each is resolved, and one no line can hold marks nothing.
+    slots = [tmp_path / "linked", Path("/pool/web"), Path("/pool/a\nb")]
+    assert commit_hooks.env(Path("/snap"), marks, inherited, slots=slots) == {
         "GIT_CONFIG_COUNT": "3",
         "GIT_CONFIG_KEY_2": "core.hooksPath",
         "GIT_CONFIG_VALUE_2": "/snap/git-hooks",
+        "CANOPY_SLOTS": f"{real.resolve()}\n/pool/web",
         "CANOPY_COMMIT_TRAILERS": f"{TRAILER}\nCo-authored-by: x <y@z>",
         "CANOPY_COMMIT_PREFIX": "PROJ-1: ",
     }
 
 
 def test_a_count_git_would_refuse_is_replaced() -> None:
-    found = commit_hooks.env(Path("/snap"), commit_hooks.Marks((TRAILER,)), {"GIT_CONFIG_COUNT": "many"})
+    found = commit_hooks.env(Path("/snap"), commit_hooks.Marks((TRAILER,)), {"GIT_CONFIG_COUNT": "many"}, slots=[])
     assert (found["GIT_CONFIG_COUNT"], found["GIT_CONFIG_KEY_0"]) == ("1", "core.hooksPath")
     assert commit_hooks.PREFIX_ENV not in found
 
 
 def test_with_nothing_to_add_git_is_left_as_it_was() -> None:
-    assert commit_hooks.env(Path("/snap"), commit_hooks.NONE, {"GIT_CONFIG_COUNT": "1"}) == {}
-    assert commit_hooks.env(Path("/snap"), commit_hooks.NONE, {}, {}) == {}
+    assert commit_hooks.env(Path("/snap"), commit_hooks.NONE, {"GIT_CONFIG_COUNT": "1"}, slots=[Path("/pool")]) == {}
+    assert commit_hooks.env(Path("/snap"), commit_hooks.NONE, {}, {}, slots=[]) == {}
 
 
 def test_a_run_with_a_list_and_no_mark_still_gets_the_hooks(tmp_path: Path) -> None:
@@ -54,12 +60,31 @@ def test_a_run_with_a_list_and_no_mark_still_gets_the_hooks(tmp_path: Path) -> N
         # A path no line can hold is held by nothing.
         Path("/pool/a\tb"): answers / "ab.md",
     }
-    assert commit_hooks.env(Path("/snap"), commit_hooks.NONE, {}, lists) == {
+    # With no mark to add, no slot is named for one.
+    assert commit_hooks.env(Path("/snap"), commit_hooks.NONE, {}, lists, slots=lists) == {
         "GIT_CONFIG_COUNT": "1",
         "GIT_CONFIG_KEY_0": "core.hooksPath",
         "GIT_CONFIG_VALUE_0": "/snap/git-hooks",
         "CANOPY_CHECKLISTS": f"{real.resolve()}\t{answers}/api.md\n/pool/web\t{answers}/web.md",
     }
+
+
+def test_a_hook_in_a_repository_git_cannot_read_yet_lets_git_go_on(tmp_path: Path) -> None:
+    """As `git init` is when a recent git runs `reference-transaction` for the HEAD it writes, before HEAD exists."""
+    snapshot = tmp_path / "snapshot"
+    (snapshot / commit_hooks.HOOKS_DIR).mkdir(parents=True)
+    for rel, data in commit_hooks.files().items():
+        executable(snapshot / rel, data.decode())
+    new = tmp_path / "new"
+    (new / ".git" / "refs").mkdir(parents=True)
+    env = {
+        **commit_hooks.env(snapshot, commit_hooks.Marks((TRAILER,)), {}, slots=[new]),
+        # So git does not look past the new repository for one around it.
+        "GIT_CEILING_DIRECTORIES": str(tmp_path),
+    }
+    hook = str(snapshot / commit_hooks.HOOKS_DIR / "reference-transaction")
+    done = procs.SubprocessRunner().run([hook, "prepared"], cwd=new, env=env, stdin="", timeout=30)
+    assert (done.returncode, done.stdout, done.stderr) == (0, "", "")
 
 
 def test_the_trailers_are_the_prompts_and_none_while_canopys_is_off(canopy_env: CanopyEnv) -> None:

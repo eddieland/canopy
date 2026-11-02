@@ -2,12 +2,12 @@
 
 The marks are formed by the harness and added by git, not by the agent: a worker run's environment points git's
 `core.hooksPath` at the hooks in canopy's snapshot (DESIGN §13), through `GIT_CONFIG_COUNT` and its keys, and names
-the marks in `CANOPY_COMMIT_TRAILERS` and `CANOPY_COMMIT_PREFIX`. `prepare-commit-msg` puts the prefix before a subject
-that lacks it, but a `fixup!`, `squash!`, or `amend!` one, which `--autosquash` matches by its subject, and adds each
-trailer the message lacks; git runs it for a commit, an amend, a merge, a rebase, a cherry-pick, and a revert,
-`--no-verify` or not, and only plumbing such as `commit-tree` makes a commit without it. Every hook, that one
-included, then runs the repository's own hook of its name, the one git would have run without canopy's entry, so the
-operator's hooks run as before (docs/HOOKS.md).
+the marks in `CANOPY_COMMIT_TRAILERS` and `CANOPY_COMMIT_PREFIX`. In a commit in one of the run's slots, which
+`CANOPY_SLOTS` names, `prepare-commit-msg` puts the prefix before a subject that lacks it, but a `fixup!`, `squash!`,
+or `amend!` one, which `--autosquash` matches by its subject, and adds each trailer the message lacks; git runs it
+for a commit, an amend, a merge, a rebase, a cherry-pick, and a revert, `--no-verify` or not, and only plumbing such
+as `commit-tree` makes a commit without it. Every hook, that one included, then runs the repository's own hook of its
+name, the one git would have run without canopy's entry, so the operator's hooks run as before (docs/HOOKS.md).
 
 `pre-push` holds a worker's first push of a stretch of work for its repository's checklist (DESIGN §42), when
 `CANOPY_CHECKLISTS` names a list for the slot it runs in: it prints the list and fails, so git sends nothing, and marks
@@ -21,13 +21,14 @@ canopy's entry is the last of the `GIT_CONFIG_*` ones, after any the operator's 
 the repository's own hooks by asking git with one entry fewer, or more where a tool added its own after canopy's.
 `GIT_CONFIG_COUNT` needs git 2.31; an older git ignores it and adds no marks, so each tick checks the git on `PATH`
 (`git_too_old`), and the run's note names the commits. The variables reach every git the worker's tools run, in any
-repository: what they add there is canopy's marks, and what they run, that repository's own hooks.
+repository: what they run there is that repository's own hooks, and nothing of canopy's, so a test that makes a
+repository of its own commits as it would without canopy.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -46,6 +47,8 @@ HOOKS_DIR = "git-hooks"
 TRAILERS_ENV = "CANOPY_COMMIT_TRAILERS"
 #: The text the hooks put before a commit's subject.
 PREFIX_ENV = "CANOPY_COMMIT_PREFIX"
+#: The run's slots, a top level to a line, whose commits alone the hooks mark.
+SLOTS_ENV = "CANOPY_SLOTS"
 #: The lists `pre-push` holds a push for: a line per slot, its top level and its list's file, split by a tab.
 CHECKLISTS_ENV = "CANOPY_CHECKLISTS"
 #: The file in a slot's own git directory where `pre-push` marks its hold: the run's id and the time, in Unix seconds.
@@ -151,14 +154,22 @@ hold() {
     } >&2
     exit 1
 }
-if [ "$name" = prepare-commit-msg ] && [ -n "${CANOPY_COMMIT_PREFIX-}" ] && [ -s "$1" ]; then
+# The marks go on a commit in one of the run's slots alone, at whose top git runs this hook: a repository the worker's
+# tools make or use elsewhere, as a test's, is not the run's work.
+mark=
+if [ "$name" = prepare-commit-msg ]; then
+    top=$(pwd -P) && mark=$(printf '%s\n' "${CANOPY_SLOTS-}" | while IFS= read -r slot; do
+        if [ "$slot" = "$top" ]; then echo yes && break; fi
+    done)
+fi
+if [ -n "$mark" ] && [ -n "${CANOPY_COMMIT_PREFIX-}" ] && [ -s "$1" ]; then
     # Not an empty subject or a comment, which git drops, nor one --autosquash matches the commit it is for by.
     case $(head -n 1 "$1") in
         "$CANOPY_COMMIT_PREFIX"* | "" | "#"* | fixup!* | squash!* | amend!*) ;;
         *) { printf '%s' "$CANOPY_COMMIT_PREFIX" && cat "$1"; } >"$1.canopy" && mv "$1.canopy" "$1" || exit ;;
     esac
 fi
-if [ "$name" = prepare-commit-msg ] && [ -n "${CANOPY_COMMIT_TRAILERS-}" ]; then
+if [ -n "$mark" ] && [ -n "${CANOPY_COMMIT_TRAILERS-}" ]; then
     # A message whose last line has no newline, as a merge's has, would take the trailers into its last paragraph.
     if [ -s "$1" ] && [ -n "$(tail -c 1 "$1")" ]; then
         echo >>"$1" || exit
@@ -178,12 +189,13 @@ if [ "$name" = pre-push ] && [ -n "${CANOPY_CHECKLISTS-}" ]; then
 fi
 # The hooks directory git would use without canopy's entry: dropping GIT_CONFIG_COUNT's entries from the last, the
 # first that is not this one's. A tool may have added its own after canopy's, and handing on to this hook again would
-# never end.
+# never end. A repository git cannot read yet has no hook to hand on to: `git init` writes HEAD in a reference
+# transaction, which a recent git runs `reference-transaction` for, before there is a HEAD to find it by.
 here=$(cd -P "${0%/*}" && pwd) || exit
 n=${GIT_CONFIG_COUNT:-0}
 while [ "$n" -gt 0 ]; do
     n=$((n - 1))
-    hooks=$(GIT_CONFIG_COUNT=$n git rev-parse --git-path hooks) || exit
+    hooks=$(GIT_CONFIG_COUNT=$n git rev-parse --git-path hooks 2>/dev/null) || exit 0
     if [ "$(cd -P "$hooks" 2>/dev/null && pwd)" != "$here" ]; then
         if [ -x "$hooks/$name" ] && [ -n "$read_refs" ]; then
             # The refs read above, as git handed them: each line with its newline, and nothing for none.
@@ -258,9 +270,13 @@ def env(
     added: Marks,
     inherited: Mapping[str, str],
     lists: Mapping[Path, Path] | None = None,
+    *,
+    slots: Iterable[Path],
 ) -> dict[str, str]:
     """Return what a worker's environment needs for git to put `added` on its commits, through the hooks in `snapshot`.
 
+    `slots` are the run's worktrees, whose commits alone get `added`: a repository the worker makes elsewhere, as a
+    test of its own does, gets nothing of canopy's.
     `inherited` is the environment the worker would otherwise get, whose `GIT_CONFIG_*` entries come first. `lists`
     names, by each of the run's slots, the file in its answers directory that holds its repository's checklist, which
     `pre-push` holds the slot's push for (`checklists.file_of`); git is pointed at the hooks for those too, with no
@@ -270,12 +286,13 @@ def env(
         The variables to merge over `inherited`, or none when there is nothing to add or hold.
     """
     # The hook matches its slot by `pwd -P`, so the slot's path is resolved. A path with a tab or a line feed cannot be
-    # named on a line of the variable, and holds nothing; canopy's slots and state directory have none.
+    # named on a line of the variable, and holds or marks nothing; canopy's slots and state directory have none.
     held = [
         f"{slot.resolve()}\t{file.absolute()}"
         for slot, file in (lists or {}).items()
         if not any(c in f"{slot}{file}" for c in "\t\n")
     ]
+    marked = [str(slot.resolve()) for slot in slots if not any(c in str(slot) for c in "\t\n")]
     if not added.trailers and not added.prefix and not held:
         return {}
     count = inherited.get("GIT_CONFIG_COUNT", "")
@@ -285,6 +302,7 @@ def env(
         "GIT_CONFIG_COUNT": str(index + 1),
         f"GIT_CONFIG_KEY_{index}": "core.hooksPath",
         f"GIT_CONFIG_VALUE_{index}": str(snapshot.absolute() / HOOKS_DIR),
+        **({SLOTS_ENV: "\n".join(marked)} if added.trailers or added.prefix else {}),
         **({TRAILERS_ENV: "\n".join(added.trailers)} if added.trailers else {}),
         **({PREFIX_ENV: added.prefix} if added.prefix else {}),
         **({CHECKLISTS_ENV: "\n".join(held)} if held else {}),

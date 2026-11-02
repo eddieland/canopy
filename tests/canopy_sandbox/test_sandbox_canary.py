@@ -652,7 +652,13 @@ def test_canopys_hook_holds_a_sandboxed_workers_push_and_marks_the_hold_in_the_s
     """
     remote = canary.slot / "remote.git"
     git("init", "--quiet", "--bare", str(remote), cwd=canary.slot)
-    hooks = commit_hooks.env(canary.snapshot, commit_hooks.NONE, os.environ, {canary.slot: canary.listed})
+    hooks = commit_hooks.env(
+        canary.snapshot,
+        commit_hooks.NONE,
+        os.environ,
+        {canary.slot: canary.listed},
+        slots=[canary.slot],
+    )
     variables = {**hooks, conversation.RUN_ID_ENV: "1"}
     push = 'git push --quiet "$1" HEAD:refs/heads/work'
     commit_and_push = f"git commit --quiet --allow-empty -m work && {push}"

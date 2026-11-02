@@ -88,8 +88,9 @@ def test_worker_that_pushes_is_done(scenario: Scenario, git_pool: GitPool, treeh
         "CANOPY_ANSWERS": str(scenario.env.state_dir / "runs" / f"{run.id}.answers"),
         "CANOPY_DEADLINE": w["env"]["CANOPY_DEADLINE"],
         "OPENCODE_CONFIG_DIR": str(snapshot),
-        # The trailers canopy's git hooks add to its commits (TRUST_MODEL T5).
+        # The trailers canopy's git hooks add to its commits (TRUST_MODEL T5), in its slot alone.
         "CANOPY_COMMIT_TRAILERS": "Co-authored-by: canopy worker <noreply@canopy.invalid>",
+        "CANOPY_SLOTS": str(Path(slot_of(scenario.conn, run.id).slot_path).resolve()),
     }
     assert not objects.exists()  # removed once the run was over
     argv = w["argv"]
