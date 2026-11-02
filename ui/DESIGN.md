@@ -149,9 +149,9 @@ Rules:
   The defaults take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the
   nineties, and black no edges, soft corners, and the glow.
   Pulp's sides take Gruvbox's character and ink the page as a comic does, from a few knobs whose defaults draw
-  nothing: light's panels and bubbles inked (`shadow-bubble`), a halftone canvas (`--canvas-texture`), the primary
-  action pressed into its hard shadow (`--press-x`, `--press-y`), and a page title dropped in its section's color
-  (`--title-drop`). Each is a shadow, a transform, or a background, so it takes no room.
+  nothing: each panel and bubble outlined and dropping a hard shadow (`shadow-panel`, `shadow-bubble`), a halftone
+  canvas (`--canvas-texture`), the primary action pressed into its shadow (`--press-x`, `--press-y`), and a page title
+  dropped in its section's color (`--title-drop`). Each is a shadow, a transform, or a background, so it takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
