@@ -390,6 +390,9 @@ def test_canopy_runs_in_the_overseers_sandbox_and_records_in_the_journal(canary:
     """
     canopy = Path(sys.executable).parent / "canopy"
     serves = f"printf '%s\\n' \"$@\" | {shlex.join(mcp.COMMAND)}"
+    # The ticket is in the journal, as the query's record puts it: the tool refuses one that is not.
+    db.touch_ticket(canary.journal, "PROJ-1", str(canary.workspace))
+    canary.journal.commit()
 
     with in_tick(canary.journal) as tick_id:
         version = canary.run(f'"{canopy}" --version', role=OVERSEER)
