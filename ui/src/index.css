@@ -1466,7 +1466,9 @@
 /*
  * A working step's fill in a progress meter while its run runs: a barber pole, its diagonal stripes a veil of the
  * page's background over the fill, so they read lighter in light and darker in dark, drifting toward the work still to
- * do as the fill sweeps across its segment, again and again. At rest it stands still in the segment's left half.
+ * do as the fill sweeps across its segment, again and again. The stripes drift fast enough to outrun the slow sweep,
+ * so the pole reads as turning rather than riding along, and the two cycles' lengths share no short ratio, so they
+ * never fall in step. At rest it stands still in the segment's left half.
  */
 @utility animate-barber {
     --barber-tile: 8px;
@@ -1481,8 +1483,8 @@
         );
         background-size: var(--barber-tile) var(--barber-tile);
         animation:
-            sweep 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite,
-            barber 900ms linear infinite;
+            sweep 3.2s cubic-bezier(0.4, 0, 0.6, 1) infinite,
+            barber 300ms linear infinite;
     }
 }
 
