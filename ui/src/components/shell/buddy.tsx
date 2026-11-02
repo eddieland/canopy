@@ -31,8 +31,11 @@ const WAIT_SECONDS = { least: 120, most: 360 }
  */
 const OVERLAP_PX = 40
 
-/** How Sprig fits its slot: with the room for its bubble too, or only for itself, standing over what is working. */
-type Room = 'roomy' | 'tight'
+/**
+ * How Sprig fits its slot: `roomy`, with the room for its bubble too, or tight, only for itself, standing over what is
+ * working by the number of pixels given, which is zero when its bubble's room alone rises over it.
+ */
+type Room = 'roomy' | number
 
 /** The tip Sprig last offered: who offered it, on which view, what it says, whether it is up, and if it was asked. */
 interface Offer {
@@ -69,7 +72,8 @@ interface Offer {
  * its bubble covers nothing. A shorter one, as a laptop's window leaves, still shows Sprig if it can stand over the
  * foot of what is working by `OVERLAP_PX` or less, as the operator asked; there the bubble would cover the blocks
  * above, so a tip shows only when asked for, with a click, and Sprig lets the ones it would offer on its own pass. A
- * slot shorter still leaves Sprig out, rather than squeeze the blocks above.
+ * slot shorter still leaves Sprig out, rather than squeeze the blocks above. Whatever Sprig stands over still takes
+ * its clicks: Sprig is clicked only within its slot, and a tip only while it shows.
  *
  * Settings can put a Ghost in Sprig's place: it floats where Sprig stands, in a voice of its own
  * (src/lib/ghost.ts), and keeps every rule above. A tip one of them offered is never shown under the other's name.
@@ -110,6 +114,7 @@ export function Buddy() {
             asked,
         })
     const another = () => offerNext(true, rave)
+    const tight = typeof room === 'number'
     // Offers the next tip unasked, when the time comes, if the bubble would cover nothing and the tab is in sight to
     // read it. A rave just started is on before Sprig renders it, so it is said.
     const offerUnasked = useEffectEvent((raving: boolean = rave) => {
@@ -144,15 +149,16 @@ export function Buddy() {
         (room === 'roomy' || offer.asked)
     // A new tip opens a new bubble: the key remounts it, popping it in, and raises Sprig's brows. Closed, the bubble
     // keeps the last tip's room, whatever the page, so Sprig does not move. Sprig, and a bubble shown in a tight slot,
-    // rise out of the slot over the blocks above: positioned, so they paint over them.
+    // rise out of the slot over the blocks above: positioned, so they paint over them. What they rise over is still
+    // clicked: the aside takes no pointer, only a tip that shows does, and Sprig only within its slot.
     return (
         <div ref={slot} className="flex min-h-0 flex-1 flex-col justify-end print:hidden">
             <aside
                 aria-label={name}
                 data-testid="buddy"
-                data-room={room === false ? undefined : room}
+                data-room={room === false ? undefined : tight ? 'tight' : room}
                 className={cn(
-                    'relative flex shrink-0 flex-col items-start gap-2 px-2 pt-3 pb-1',
+                    'pointer-events-none relative flex shrink-0 flex-col items-start gap-2 px-2 pt-3 pb-1',
                     room === false && 'invisible',
                 )}
             >
@@ -174,7 +180,7 @@ export function Buddy() {
                         data-testid="buddy-sprig"
                         onClick={another}
                         className={cn(
-                            'rounded-md p-1 transition-transform outline-none',
+                            'relative rounded-md p-1 transition-transform outline-none',
                             'focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5',
                         )}
                     >
@@ -183,6 +189,12 @@ export function Buddy() {
                         ) : (
                             <Figure cue={offer.n} hat={worn} rave={rave} />
                         )}
+                        {/* Where Sprig takes a click: all of it but what rises over the blocks above. */}
+                        <span
+                            aria-hidden
+                            className="pointer-events-auto absolute inset-x-0 bottom-0"
+                            style={{ top: tight ? room : 0 }}
+                        />
                     </button>
                     {season === null ? null : <SeasonDecoration id={season} aloft={room === 'roomy'} />}
                 </div>
@@ -218,19 +230,23 @@ function viewOf(routeId: keyof FileRoutesById | undefined): View | undefined {
 
 /**
  * How Sprig, the slot's one child, fits: whole, its bubble included, or the figure alone once it may stand over the
- * blocks above by `OVERLAP_PX`. False for neither.
+ * blocks above by `OVERLAP_PX`, with how far its button does. False for neither.
  */
 function roomFor(slot: HTMLElement): Room | false {
     const sprig = slot.firstElementChild
     const figure = sprig?.lastElementChild
-    if (!(sprig instanceof HTMLElement) || !(figure instanceof HTMLElement)) {
+    const button = figure?.firstElementChild
+    if (!(sprig instanceof HTMLElement) || !(figure instanceof HTMLElement) || !(button instanceof HTMLElement)) {
         return false
     }
     if (sprig.offsetHeight <= slot.clientHeight) {
         return 'roomy'
     }
-    // From the figure's top to Sprig's foot: the aside is positioned, so it is the figure's offsetParent.
-    return sprig.offsetHeight - figure.offsetTop <= slot.clientHeight + OVERLAP_PX ? 'tight' : false
+    // From the figure's top, and the button's, to Sprig's foot: the aside is positioned, so it is their offsetParent.
+    if (sprig.offsetHeight - figure.offsetTop > slot.clientHeight + OVERLAP_PX) {
+        return false
+    }
+    return Math.max(0, sprig.offsetHeight - button.offsetTop - slot.clientHeight)
 }
 
 /**
@@ -265,7 +281,7 @@ function Bubble({
         <div
             data-testid="buddy-tip"
             className={cn(
-                'animate-buddy-tip relative w-full rounded-md border bg-surface-raised p-3 text-sm',
+                'animate-buddy-tip pointer-events-auto relative w-full rounded-md border bg-surface-raised p-3 text-sm',
                 !shown && 'invisible',
             )}
         >
