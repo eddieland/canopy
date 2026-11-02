@@ -21,7 +21,7 @@ test("the nav opens CI under Reports, the week's checks the worst first", async 
     await expect(rows).toHaveCount(7)
     // Its rate first, red and runs beside it, then the next head, and two reruns on an unchanged head, both red.
     await expect(rows.first().locator('th, td')).toHaveText(['e2e', '50%', '3', '7', '1 of 1', '0 of 2'])
-    await expect(page.getByTestId('ci-limits')).toContainText('A commit status has no check run')
+    await expect(page.getByTestId('ci-limits')).toContainText('A commit status has no run id')
 })
 
 test('the red checks chart stacks each day by check, with a table of the same numbers', async ({ page }) => {
