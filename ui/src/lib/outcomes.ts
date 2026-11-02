@@ -30,6 +30,7 @@ import type {
     ReviewRequested,
     ReviewRequestStopped,
     ReviewSent,
+    LeftSent,
     Started,
     Stopped,
     TaskSubmitted,
@@ -266,6 +267,15 @@ export function reviewSentText(sent: ReviewSent): string {
         return `${head} went to ${to}: the next tick reads it as your go-ahead.`
     }
     return `${head} already went to ${to}.`
+}
+
+/** What sending ticket `key`'s left feedback did, as `canopy send KEY N...` says it. */
+export function leftSentText(key: string, sent: LeftSent): string {
+    const head = `${key} feedback ${sent.numbers.join(', ')}`
+    if (sent.new) {
+        return `${head} went to it as message ${sent.message_id}: the next tick reads it as your go-ahead.`
+    }
+    return `${head} already went to it as message ${sent.message_id}.`
 }
 
 /** What a change to review run `run`'s draft did, as `canopy review edit` says it: its version and hash now. */

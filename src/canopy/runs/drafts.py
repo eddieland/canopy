@@ -366,8 +366,8 @@ def _url(value: object) -> str:
     return value
 
 
-def sent_by_pr(conn: sqlite3.Connection) -> dict[str, dict[str, list[int]]]:
-    """Return what the operator sent through canopy on each PR, by GitHub's ids: the comments and the reviews.
+def sent_by_pr(conn: sqlite3.Connection, prs: Collection[str] | None = None) -> dict[str, dict[str, list[int]]]:
+    """Return what the operator sent through canopy on each PR, or on each of `prs`, by GitHub's ids.
 
     A sent reply carries no mark and is by the operator's login, so these ids are how the loop knows it (DESIGN §29).
     A staged draft's reply and review count from the start: the operator may submit them on GitHub before canopy reads
@@ -377,8 +377,7 @@ def sent_by_pr(conn: sqlite3.Connection) -> dict[str, dict[str, list[int]]]:
         Each PR's URL, to its sent `comments` and `reviews`, each list of ids in order.
     """
     found: dict[str, dict[str, list[int]]] = {}
-    rows = sql.execute(
-        conn,
+    query = (
         sql.select(
             "pr_url, sent_comment_id, CASE WHEN status = ? THEN pending_review_id ELSE sent_review_id END "
             "AS sent_review_id",
@@ -387,8 +386,9 @@ def sent_by_pr(conn: sqlite3.Connection) -> dict[str, dict[str, list[int]]]:
         .from_("drafts")
         .where_in("status", (DraftStatus.SENT, DraftStatus.STAGED))
         .where("pr_url IS NOT NULL")
-        .order_by("pr_url, sent_at IS NULL, sent_at, id"),
+        .order_by("pr_url, sent_at IS NULL, sent_at, id")
     )
+    rows = sql.execute(conn, query if prs is None else query.where_in("pr_url", sorted(prs)))
     for r in rows:
         sent = found.setdefault(str(r["pr_url"]), {"comments": [], "reviews": []})
         for name, column in (("comments", "sent_comment_id"), ("reviews", "sent_review_id")):

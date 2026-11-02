@@ -1,4 +1,4 @@
-"""The tickets canopy has a record of, and the operator's verbs on one: start, stop, reply, forget, grant, and choose.
+"""The tickets canopy has a record of, and the operator's verbs on one: start, stop, reply, send, forget, grant, choose.
 
 Choosing is of the persona or the model one of the ticket's agents runs in or on.
 """
@@ -6,13 +6,15 @@ Choosing is of the persona or the model one of the ticket's agents runs in or on
 from __future__ import annotations
 
 import contextlib
+import functools
 from collections.abc import Callable
 
 from fastapi import APIRouter, HTTPException
 
-from canopy.core import conversation, db, personas, plans, ticket_models
+from canopy.core import conversation, db, passed_reviews, personas, plans, ticket_models
 from canopy.core.vocab import PlanSetting
 from canopy.infra import lock, logs
+from canopy.runs import drafts
 from canopy.runtime.report import ModelList
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
@@ -24,6 +26,8 @@ from canopy.serve.schema.ticket import (
     ForgetRequest,
     Forgot,
     GrantRequest,
+    LeftSendRequest,
+    LeftSent,
     Started,
     StartRequest,
     Stopped,
@@ -149,6 +153,39 @@ def reply(key: TicketKey, body: ReplyRequest, backend: BackendDep) -> Replied:
             raise RefusedError(r) from None
     _log.info("operator replied", extra={"ticket": ref.id, "message_id": replied.message_id, "channel": WEB})
     return Replied(message_id=replied.message_id, answers=replied.answers, new=replied.new)
+
+
+@router.post(
+    "/tickets/{key}/sends",
+    operation_id="sendLeftFeedback",
+    summary="Send feedback a ticket left with no worker to one",
+    responses=REFUSED,
+)
+def send(key: TicketKey, body: LeftSendRequest, backend: BackendDep) -> LeftSent:
+    """`canopy send KEY N...`: a reply on the ticket naming feedback its review cursors left, the operator's go-ahead.
+
+    Idempotent on the submission id: a retried submission records nothing new (DESIGN §7).
+    """
+    ref = ticket_ref(key, "send")
+    numbers = sorted(set(body.numbers))
+    with backend.open() as ctx:
+        try:
+            sent = passed_reviews.send(
+                ctx.conn,
+                ctx.config.trust,
+                functools.partial(drafts.sent_by_pr, ctx.conn),
+                ref.id,
+                numbers,
+                channel=WEB,
+                submission=body.submission,
+            )
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info(
+        "left feedback sent",
+        extra={"ticket": ref.id, "numbers": numbers, "message_id": sent.replied.message_id, "channel": WEB},
+    )
+    return LeftSent(numbers=numbers, message_id=sent.replied.message_id, new=sent.replied.new)
 
 
 # Forgetting cannot be undone from here, so the request carries the ticket's key as the operator typed it, and a
