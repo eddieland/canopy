@@ -921,7 +921,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   (past `15rem`, under its pinned column names, so a week shows whole and 30 days scroll). Past `28rem` the rows
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
   so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
-  not: the page scrolls instead.
+  not: the page scrolls instead. The attention list beside its item is the one exception (below).
 - **A thread scrolls inside its panel too** (`ThreadScroll`): a ticket's conversation, on its page and in the attention
   item, and a chore's notes. Past 60% of the window's height (never less than `20rem`) the messages scroll between the
   panel's header and the reply form, so a long thread never pushes the form a page away. It opens at its newest end,
@@ -1146,8 +1146,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   fresh its read is. What the page shows on every visit is its title's help. Idle slots fold as
   they lie in the whole pool, so a filtered line never spans a slot in another state.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item while the page is at
-  least 48rem wide (a container query, `@3xl`). Under that, on half a monitor, the list and the item take turns, each
-  the page's whole width: the list shows until an item is chosen, which opens in its place with `Back to the list`
+  least 48rem wide (a container query, `@3xl`). There the two scroll apart: the list is `sticky`, as tall as the window
+  has room for, and scrolls in itself (`PanelScroll`), so the page scrolls only the item, however tall. Choosing a row
+  takes the page to its top, as any new page does, so the item opens at its head and the row stays where it was
+  clicked. Under that, on half a monitor, the list and the item take turns, each the page's whole width, and the page
+  scrolls whichever shows: the list shows until an item is chosen, which opens in its place with `Back to the list`
   (a ghost button with a left chevron) as its first stop, where the focus goes, since the row went with the list; back
   on the list, its row is chosen and focused. An item the URL names opens so too. A reply that answers its item
   (`awaiting_reply`, `untrusted_review`) moves on: the next item that waits on the operator's answer and is not
