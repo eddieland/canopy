@@ -197,6 +197,13 @@ export const GHOST_TIPS = {
         "Field report: tried to lease a worktree. Told I'm not a ticket. I'm a sphere. Rude.",
         'Dear Traveler, a clean worktree is one nobody has fought in yet.',
     ],
+    '/workspace/checklists': [
+        'Eyes up, Guardian. The checklists. Every worker reads these before it pushes. Most of them.',
+        'Scanning... this page can read a list. It cannot change one. Neither can I. Not for lack of trying.',
+        'Grimoire: an item that always passes is a rule nobody breaks, or one nobody reads.',
+        'Field report: the push was held, not rejected. It was asked a question first. Fair.',
+        'Dear Traveler, the review comment you keep writing is an item you have not written yet.',
+    ],
     '/components': [
         'Eyes up, Guardian. Every button in the armory, and not one of them is Tick now.',
         'Scanning... six kinds of button. The destructive one is red. Some lore writes itself.',
