@@ -126,13 +126,15 @@ Rules:
   Gruvbox's purple); the others take one that suits the canvas. Light has off-white, a warm paper, sage, and the light
   tones of Solarized, Nord, Gruvbox, Rosé Pine Dawn, and Acme, Plan 9's editor; dark has grey (the near-colorless
   neutrals the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox,
-  and Monokai. A light canvas is never grey, which only looks dim. Every other hue is the same in all, so a component
+  and Monokai. Pulp, on both sides, is Gruvbox's tones inked as a comic. A light canvas is never grey, which only
+  looks dim. Every other hue is the same in all, so a component
   never knows which it is on, and an accent is read through its token, never assumed indigo; where a scheme's own bases
   would drop a hue below 4.5:1, the bases move, never the hue. A palette's accent is darkened or lightened until it
   reads as text there, on its own tint, and under `accent-foreground`, and sets `ring` with it. A scheme whose accent
   would pass for a status wears another of its colors, as Gruvbox wears its purple, not its orange, and a green canvas
   never takes a green accent. A scheme whose bases would have to move until it matched another palette is left out, as
-  Nord's dark is. `tokens.test.ts` measures every palette `src/theme/palette.ts` lists, and `theme-script.test.ts`
+  Nord's dark is; Pulp alone shares another's colors, Gruvbox's, set apart by its character. `tokens.test.ts`
+  measures every palette `src/theme/palette.ts` lists, and `theme-script.test.ts`
   checks the inline script knows each.
   A palette sets its character too, beyond color, from a few closed choices, in the same rule, so a component still
   never knows which it is on: its corners (`--radius`: crisp, the default, or soft), its `edge` (a hairline, or none,
@@ -140,11 +142,16 @@ Rules:
   no blur, or, on black, where a shadow does nothing, the accent's glow), and its face (`--face`: interface text in
   Plex Sans, or in Plex Mono, as an editor sets it). Spacing, sizes, and layout never change with a palette, and
   neither do the status colors; only the mono face reflows text, since it runs wider, so it stays with the few palettes
-  that are an editor's own look: Gruvbox's sides, Monokai, and Acme. There it draws every line a step smaller, at 15/16
+  that are an editor's own look, Gruvbox's sides, Monokai, and Acme, and Pulp, lettered as Gruvbox is. There it
+  draws every line a step smaller, at 15/16
   of the size asked for, in the same line boxes, so the wider face crowds less and no line changes height. The guide
   keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono.
   The defaults take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the
   nineties, and black no edges, soft corners, and the glow.
+  Pulp's sides take Gruvbox's character and ink the page as a comic does, from a few knobs whose defaults draw
+  nothing: each panel and bubble outlined and dropping a hard shadow (`shadow-panel`, `shadow-bubble`), a halftone
+  canvas (`--canvas-texture`), the primary action pressed into its shadow (`--press-x`, `--press-y`), and a page title
+  dropped in its section's color (`--title-drop`). Each is a shadow, a transform, or a background, so it takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
@@ -194,8 +201,9 @@ Rules:
 - Depth is used sparingly, in three places and nowhere else: a faint lift under a panel and a counter
   (`shadow-panel`), a shadow under what floats over the page, a menu, a card, a tip, a dialog, a toast, the rail's
   sheet, and the settings' save bar (`shadow-float`), and one under the primary action, the default button
-  (`shadow-action`). Each is the palette's (Palettes, under Tokens), so its form changes with it, and nothing inside
-  a panel casts one but a pressed segment's `shadow-xs`.
+  (`shadow-action`, and `shadow-action-pressed` while it is pressed). Each is the palette's (Palettes, under Tokens),
+  so its form changes with it, and nothing inside a panel casts one but a pressed segment's `shadow-xs` and a
+  conversation's bubble (`shadow-bubble`), which casts none but on a palette that inks it.
 - Radius: `rounded-md` (8px) for panels, buttons, and fields, `rounded-sm` (6px) for chips and nav items, `rounded-xs`
   (4px) for a mark smaller than a line of text, a checkbox or a slot's square, at the default palettes' `--radius`. A
   palette may set its own, and the scale follows it. The scale is in `tokens.css`; no arbitrary radius

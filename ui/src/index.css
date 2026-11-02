@@ -30,8 +30,8 @@
     html {
         /* Inherited, so every scroller (the page, a panel's list, a textarea) has the same thumb in both themes. */
         scrollbar-color: var(--scrollbar) transparent;
-        /* On the root, so it paints the whole canvas. */
-        background-color: var(--background);
+        /* On the root, so it paints the whole canvas, under a palette's texture (Gruvbox's halftone dots). */
+        background: var(--canvas-texture), var(--background);
         -webkit-font-smoothing: antialiased;
         /*
          * Every size is in rem, so the whole interface grows with the window on a large screen: the browser's size up
@@ -58,6 +58,15 @@
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums slashed-zero;
     letter-spacing: -0.01em;
+}
+
+/*
+ * A page title's drop in its section's color (`--section-hue`, set on its header), as a comic's lettering casts one: a
+ * palette sets how far (`--title-drop`) and makes it opaque (`--title-drop-alpha`); by default it is transparent.
+ */
+@utility title-drop {
+    text-shadow: var(--title-drop) var(--title-drop) 0
+        color-mix(in oklab, var(--section-hue, var(--accent)) calc(var(--title-drop-alpha) * 100%), transparent);
 }
 
 /*

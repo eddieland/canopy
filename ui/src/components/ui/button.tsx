@@ -13,15 +13,18 @@ const buttonVariants = cva(
         'group/button inline-flex shrink-0 items-center justify-center',
         'rounded-md border border-transparent bg-clip-padding',
         'text-sm font-medium whitespace-nowrap outline-none select-none',
-        'transition-[color,background-color,border-color,box-shadow]',
+        'transition-[color,background-color,border-color,box-shadow,translate]',
         'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
-        'active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50',
+        // Pressed, it moves by its palette's shift (`--press-x`, `--press-y`): a pixel down, or into its hard shadow.
+        'active:not-aria-[haspopup]:translate-x-(--press-x) active:not-aria-[haspopup]:translate-y-(--press-y)',
+        'disabled:pointer-events-none disabled:opacity-50',
         "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
     ],
     {
         variants: {
             variant: {
-                default: 'bg-accent text-accent-foreground shadow-action hover:bg-accent/85',
+                default:
+                    'bg-accent text-accent-foreground shadow-action hover:bg-accent/85 active:shadow-action-pressed',
                 outline: [
                     'border-border bg-surface-raised hover:bg-surface hover:text-foreground',
                     'aria-expanded:bg-surface aria-expanded:text-foreground',
