@@ -24,6 +24,7 @@ the operator chose.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fnmatch import fnmatchcase
 from typing import TYPE_CHECKING, Literal
 
 from canopy.runtime import agents, invocation
@@ -32,7 +33,7 @@ from canopy.runtime.agents import Model
 from canopy.runtime.definitions import MODEL_RE, VARIANT_RE
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
     from pathlib import Path
 
     from canopy.core.config import Chore, Config
@@ -239,6 +240,32 @@ def variants_listed(found: ModelList, model: str) -> str:
     listed = sorted(found.variants.get(model, ()))
     some = ", ".join(listed[:_MAX_NAMED]) + (", ..." if len(listed) > _MAX_NAMED else "")
     return f"it lists {some}" if listed else "it lists none for it"
+
+
+def hidden(found: ModelList, patterns: Iterable[str]) -> frozenset[str]:
+    """Which of the models and variants `found` lists `runtime.hide_models`' `patterns` hide from what canopy shows.
+
+    Each pattern is a shell glob, matched case-sensitively against each model's `provider/model` and each of its
+    variants' `provider/model@variant`: `github-copilot/*` hides a provider's models, `*@xhigh` one variant of each.
+    A model hidden takes its variants with it. Hiding only narrows what is shown: a run's model is still checked
+    against the whole list, so config or a ticket may name a hidden one.
+
+    Returns:
+        The ids hidden: a model's as `provider/model`, and a variant of a model that is shown as
+        `provider/model@variant`.
+    """
+    globs = tuple(patterns)
+    if not globs:
+        return frozenset()
+    out: set[str] = set()
+    for model in found.models:
+        if any(fnmatchcase(model, g) for g in globs):
+            out.add(model)
+            continue
+        out.update(
+            f"{model}@{v}" for v in found.variants.get(model, ()) if any(fnmatchcase(f"{model}@{v}", g) for g in globs)
+        )
+    return frozenset(out)
 
 
 def check_role(role: str) -> str:

@@ -316,6 +316,8 @@ def test_what_the_overseer_records_about_a_ticket_the_harness_dispatches_is_refu
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
 ) -> None:
+    # In the journal, as the query's record puts it.
+    db.touch_ticket(conn, KEY, str(canopy_env.root))
     observe_ticket(conn, KEY, at=db.now())
     conn.commit()
     with enabled(), in_tick(conn) as tick_id:

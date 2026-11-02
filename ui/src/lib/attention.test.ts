@@ -14,6 +14,7 @@ import {
     feedbackPlanOf,
     feedbackPlanReview,
     nextWaiting,
+    oldestWaiting,
     pullRequestOf,
     reviewOf,
     severity,
@@ -102,6 +103,40 @@ describe('bySeverity', () => {
 
 // Nothing answered yet.
 const none = () => false
+
+describe('oldestWaiting', () => {
+    it('finds the longest wait across what waits on the operator, not their questions alone', () => {
+        const list = [
+            item('asked', 'awaiting_reply', '2026-01-02T00:00:00Z'),
+            item('draft', 'review_waiting', '2026-01-01T00:00:00Z'),
+        ]
+        expect(oldestWaiting(list, none)).toBe('2026-01-01T00:00:00Z')
+    })
+
+    it('leaves out what the nav does not count as waiting', () => {
+        const list = [
+            item('broke', 'crashed', '2026-01-01T00:00:00Z'),
+            item('parked', 'ready_to_merge', '2026-01-01T00:00:00Z'),
+            item('found', 'lodash-advisory', '2026-01-01T00:00:00Z', true),
+            item('asked', 'awaiting_reply', '2026-01-03T00:00:00Z'),
+        ]
+        expect(oldestWaiting(list, none)).toBe('2026-01-03T00:00:00Z')
+    })
+
+    it('leaves out what is answered already', () => {
+        const list = [
+            item('answered', 'awaiting_reply', '2026-01-01T00:00:00Z'),
+            item('asked', 'plan_review', '2026-01-02T00:00:00Z'),
+        ]
+        expect(oldestWaiting(list, (i) => i.id === 'answered')).toBe('2026-01-02T00:00:00Z')
+    })
+
+    it('is null when nothing waits on the operator', () => {
+        expect(oldestWaiting([], none)).toBeNull()
+        expect(oldestWaiting([item('broke', 'crashed', '2026-01-01T00:00:00Z')], none)).toBeNull()
+        expect(oldestWaiting([item('asked', 'awaiting_reply', '2026-01-01T00:00:00Z')], () => true)).toBeNull()
+    })
+})
 
 describe('nextWaiting', () => {
     const T = '2026-10-08T11:00:00Z'

@@ -25,8 +25,12 @@ operator's review (D126, below).
 
 The operator approves the newest plan as its file stands, their edits included. A reply (§22) newer than the plan asks
 for changes: the overseer dispatches `plan` again with the reply in the planner's prompt, and the new plan supersedes
-the old; an approval sent before that re-plan starts wins, as the operator's later word. The approval authorizes the
-`implement`, not the plan's text as an instruction (TRUST_MODEL T1). Two guards hold it in code (§4, principle 2):
+the old; an approval sent before that re-plan starts wins, as the operator's later word. An approval may carry the
+operator's notes, written with it as their message on the ticket, which the `implement` reads beside the plan, so a
+small point needs no re-plan. The planner writes each choice the ticket left open in one shape, a question with
+lettered options and its own choice marked, so the operator answers it on the plan's page by picking another: a line
+of the approval's notes, or of a request for changes. The approval authorizes the `implement`, not the plan's text as
+an instruction (TRUST_MODEL T1). Two guards hold it in code (§4, principle 2):
 `unplanned` refuses an `implement` while the ticket needs a plan and has none approved;
 `plan_changed` refuses an `implement` or `resume` when the approved plan's file is missing or changed since approval.
 
@@ -121,7 +125,8 @@ a few times a day, except while `archive_unpushed` is open; a tick that waits, a
 The web UI lets the operator comment on passages and edit a plan in place (D120). A plan is model text (T1): its HTML is
 never rendered, an image never fetched, and a link is not a link (D113). A Mermaid fence is drawn as its diagram, an
 image beside its code, which stays the document (D131). A comment is a thread anchored by its passage's
-words, found again on each new plan; asking for changes sends the open threads as one reply (§22). A saved edit never
+words, found again on each new plan; asking for changes sends the open threads as one reply (§22), and an approval's
+notes leave out a thread a planner has read since, unless it changed after. A saved edit never
 overwrites unseen one made elsewhere. Only the web channel writes threads and edits, behind its token (T8).
 
 ### Open

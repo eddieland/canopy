@@ -569,17 +569,21 @@ Controls now:
   a repository's definition of the same agent, allowing a command canopy's
   denies, does not make it run.
 - canopy's own code runs inside every agent process that loads its definitions: canopy's plugin, whose jobs are the
-  clock, the split, the nudge for a stale update and the answer to its question (DESIGN §41), and, under OpenCode 2,
-  holding a session's first prompt until its MCP tools are registered (DESIGN §33), from the snapshot. canopy takes
-  the snapshot's write permission away once it is written, the operator's included, so no run changes it through its
-  permissions or its sandbox, and the runtime installs nothing into it. The plugin reads three variables,
+  clock, the split, the nudge for a stale update and the answer to its question (DESIGN §41), moving a shell command's
+  leading `cd` into its working directory, and, under OpenCode 2, holding a session's first prompt until its MCP tools
+  are registered (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is
+  written, the operator's included, so no run changes it through its permissions or its sandbox, and the runtime
+  installs nothing into it. The plugin reads three variables,
   `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, and `CANOPY_ANSWERS`, the clock, the system prompt the runtime hands it, which it
   cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its session,
   one file, the answer canopy writes in the run's answers directory, through the runtime's own `node:fs`, and under
   OpenCode 2 the runtime's MCP servers' states and its tools' names; it writes no file, refuses no call, grants no
-  tool, and catches its own errors. A repository's own plugins already load in the same process (T7). The answers
-  directory is the run's own, in the state directory beside its other files, made before the agent starts and removed
-  once it ends; a sandboxed run may read it and nothing else of the state directory, and write none of it (§24).
+  tool, and catches its own errors. The one call it changes is a shell command that opens with `cd <dir> &&`, whose
+  directory becomes the call's working directory, which the runtime's `external_directory` rule then checks, with the
+  rest of the command from it, as it checks any call's: so the plugin reaches nothing the `cd` could not. A
+  repository's own plugins already load in the same process (T7). The answers directory is the run's own, in the
+  state directory beside its other files, made before the agent starts and removed once it ends; a sandboxed run may
+  read it and nothing else of the state directory, and write none of it (§24).
 - canopy's git hooks, from the same snapshot, run in every worker's git (T5). Their `pre-push` holds a worker's first
   push of a stretch for its repository's checklist (DESIGN §42): it reads one more file, the slot's list in the run's
   answers directory, which the run cannot write, and writes one marker, the run's id and the time, in the slot's own
@@ -671,7 +675,8 @@ but must be distinguishable:
   `provider/model (canopy planner)`, for the model canopy chose for its planner; a name the operator set is used as
   set, alone. git adds them, through hooks in canopy's snapshot that a worker's environment points git at (DESIGN §8),
   so a worker that forgets them still carries them, and with `trust.commit_prefix` (private) put the operator's prefix,
-  which may name the ticket's key, before each subject but a fixup's. They are a mark, not a guard: a worker can commit
+  which may name the ticket's key, before each subject but a fixup's. They mark commits in the run's slots alone, not
+  in a repository its tools make elsewhere, as a test's. They are a mark, not a guard: a worker can commit
   around the hooks, and canopy names such a commit in the run's report and does not rewrite it. Never hidden: a worker
   never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
   private), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
@@ -1071,7 +1076,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
   note something to a chore as `canopy reply chore:NAME` does, try a chore as a recorded `canopy chore try` does,
   dismiss a chore's or a review's finding or take that
-  back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a
+  back as `canopy dismiss` does, send a review's findings, or feedback a ticket left with no worker, to a worker as
+  `canopy send` does, make and end a
   review request on a PR, with its personas, as `canopy start URL --review` and `canopy stop URL` do, pause and
   resume the loop as `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice`
   does, ask for, skip, or approve a ticket's plan as `canopy plan` does, approve its feedback plan whole or by item,

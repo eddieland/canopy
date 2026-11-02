@@ -321,6 +321,7 @@ def test_what_the_overseer_records_about_another_ticket_is_not_refused(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
 ) -> None:
+    db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     with in_tick(conn) as tick_id:
         harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
         assert not overseer_calls(decides("PROJ-2", "wait", "r")).error
@@ -337,6 +338,7 @@ def test_decisions_in_one_call_are_refused_together_when_the_harness_decided_one
         {"key": "PROJ-2", "action": "wait", "rationale": "r"},
         {"key": KEY, "action": "wait", "rationale": "r"},
     ]
+    db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     with in_tick(conn) as tick_id:
         harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
         said = overseer_calls(calls("canopy_decide", decisions=arguments))
@@ -346,13 +348,13 @@ def test_decisions_in_one_call_are_refused_together_when_the_harness_decided_one
         [_, (action, reason)] = decisions(conn, tick_id)
         assert action == "refused:decided"
         assert reason.startswith(f"the harness decided {KEY} this tick")
-    assert conn.execute("SELECT count(*) FROM tickets WHERE key = 'PROJ-2'").fetchone()[0] == 0
 
 
 def test_a_ticket_set_of_several_is_refused_whole_when_the_harness_decided_one(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
 ) -> None:
+    db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     with in_tick(conn) as tick_id:
         harness.record(conn, tick_id, str(canopy_env.root), [RUNNING])
         said = overseer_calls(ticket_sets("PROJ-2", KEY, phase="ready"))
@@ -363,7 +365,7 @@ def test_a_ticket_set_of_several_is_refused_whole_when_the_harness_decided_one(
         [_, (action, reason)] = decisions(conn, tick_id)
         assert action == "refused:decided"
         assert reason.startswith(f"the harness decided {KEY} this tick")
-    assert conn.execute("SELECT count(*) FROM tickets WHERE key = 'PROJ-2'").fetchone()[0] == 0
+    assert conn.execute("SELECT phase FROM tickets WHERE key = 'PROJ-2'").fetchone()[0] is None
     assert conn.execute("SELECT phase FROM tickets WHERE key = ?", (KEY,)).fetchone()[0] == Phase.RUNNING
 
 

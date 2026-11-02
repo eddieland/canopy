@@ -232,7 +232,10 @@ the harness passes those that need no handling directly after a cursor, a worker
 sent, as its own decision (§37). A `resume` moves each cursor of its reasons it leaves out to the newest item of that
 kind the block showed, short of the first the checks above would refuse it to cover, on a public ticket and from fresh
 observations alone; the overseer passes one to stop shorter (§37). A review comment waiting on a human is not advanced
-past. A cursor but `message` is a journal number: each comment, review, review comment, and completed check run takes
+past. A `review` cursor `ticket-set` moves past feedback no worker was sent names each item, with why it is left, and is
+refused for one it leaves out or names wrongly; one on a resolved thread is the harness's to name. So "seen and left"
+stays in the journal beside the cursor, for the operator to read and overrule, not only in a rationale.
+A cursor but `message` is a journal number: each comment, review, review comment, and completed check run takes
 the next one when a source first
 observes it, and keeps it across reads, and a canopy review run takes one when it ends. So "newer" is one order for
 every kind, and a re-run at the same head is new. Rejected: the source's ids, which no tracker orders, and times, which
@@ -313,8 +316,9 @@ on the host. A command named in that directory's config still runs (§24, Git st
 A worker's own git runs canopy's hooks, from the snapshot (§13), in place of the repository's: `prepare-commit-msg`
 adds canopy's trailers and the operator's subject prefix, if set, but not to a `fixup!`, `squash!`, or `amend!` subject,
 which `--autosquash` matches; `pre-push` holds a worker's first push for its repository's checklist (§42); and each
-hook then runs the repository's own of its name, so the operator's hooks run as before. Step 5 names a pushed commit
-that lacks either in the run's note, and never rewrites it (TRUST_MODEL T5).
+hook then runs the repository's own of its name, so the operator's hooks run as before. They mark and hold in the
+run's own slots alone: a repository the worker's tools make elsewhere, as a test's, runs only its own hooks. Step 5
+names a pushed commit that lacks either in the run's note, and never rewrites it (TRUST_MODEL T5).
 
 Worker result contract, one JSON line, the last of the worker's text (§13); `prs` maps each repository the run worked
 in to its PR, and `pr_titles` is optional and for display only. An `implement` or `resume` may add `"created"`, the

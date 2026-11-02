@@ -109,12 +109,14 @@ TASK = "task"
 # `persona` (a review request and its persona, `reviews/review_requests.py`), and `show`; working one is PR-scoped work
 # (ROADMAP M14).
 VERBS: Mapping[str, tuple[str, ...]] = {
+    # A ticket's `send` sends feedback its `review` cursors passed with no worker to one (DESIGN §7).
     TICKET: (
         "start",
         "stop",
         "reply",
         "forget",
         "grant",
+        "send",
         "show",
         "plan",
         "persona",

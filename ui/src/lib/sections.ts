@@ -50,6 +50,19 @@ export const SECTION_TEXT: Record<Section, string> = {
     '/settings': 'text-section-settings',
 }
 
+/** Each section's color as `--section-hue`, for what draws in it from a palette's token, such as a title's drop. */
+export const SECTION_HUE: Record<Section, string> = {
+    '/attention': '[--section-hue:var(--section-attention)]',
+    '/workspace': '[--section-hue:var(--section-workspace)]',
+    '/tickets': '[--section-hue:var(--section-tickets)]',
+    '/tasks': '[--section-hue:var(--section-tasks)]',
+    '/pull-requests': '[--section-hue:var(--section-pull-requests)]',
+    '/chores': '[--section-hue:var(--section-chores)]',
+    '/reports': '[--section-hue:var(--section-reports)]',
+    '/memory': '[--section-hue:var(--section-memory)]',
+    '/settings': '[--section-hue:var(--section-settings)]',
+}
+
 /** Each section's color as a tint: the nav's highlight on the section shown, under its label in that color. */
 export const SECTION_TINT: Record<Section, string> = {
     '/attention': 'bg-section-attention/24',

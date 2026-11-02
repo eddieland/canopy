@@ -3,7 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { mockRuns } from '@/api/mocks'
 import type { ModelsServed, Run } from '@/api/types'
 
-import { isUnread, modelNames, pickerModel, ranOn, runModelIds, sameModel, unservedReason, withVariant } from './models'
+import {
+    isUnread,
+    modelNames,
+    pickerModel,
+    ranOn,
+    runModelIds,
+    sameModel,
+    shownModels,
+    unservedReason,
+    withVariant,
+} from './models'
 
 const [RUNNING, BLOCKED] = mockRuns as [Run, Run]
 
@@ -111,5 +121,16 @@ describe('sameModel', () => {
         expect(sameModel('openai/gpt-5', 'openai/gpt-5@high')).toBe(false)
         // An `@` in the provider is no variant.
         expect(sameModel('me@corp/model', 'me')).toBe(false)
+    })
+})
+
+describe('shownModels', () => {
+    it('leaves out each model hidden, its variants with it, and each variant hidden', () => {
+        const shown = shownModels({
+            models: ['acme/a', 'acme/b', 'copilot/c'],
+            variants: { 'acme/a': ['high', 'xhigh'], 'acme/b': ['xhigh'], 'copilot/c': ['high'] },
+            hidden: ['acme/a@xhigh', 'acme/b@xhigh', 'copilot/c'],
+        })
+        expect(shown).toEqual({ models: ['acme/a', 'acme/b'], variants: { 'acme/a': ['high'] } })
     })
 })

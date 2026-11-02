@@ -12,6 +12,7 @@ from canopy.infra import procs
 from canopy.runtime import agents
 from canopy.runtime.agents import Model
 from canopy.runtime.implementation import Version
+from canopy.runtime.report import ModelList
 from tests.conftest import CanopyEnv
 
 MODEL = "acme/fake-model-1"
@@ -309,3 +310,21 @@ def test_every_chore_runs_an_agent_of_the_operators_own_when_the_chore_command_d
     )
     cfg = config.load(canopy_env.root, canopy_env.user_file)
     assert agent_models.of_chore(cfg, cfg.chores["triage"]) == agent_models.Chosen(None, "agent", "my-chore")
+
+
+def test_hide_models_hides_a_model_whole_or_one_variant_of_it_by_glob(canopy_env: CanopyEnv) -> None:
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"hide_models": ["github-copilot/*", "*@xhigh"]}})
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    found = ModelList(
+        frozenset({MODEL, OTHER, "github-copilot/model-3", "GitHub-Copilot/model-4"}),
+        {MODEL: ("high", "xhigh"), "github-copilot/model-3": ("xhigh",), OTHER: ("XHIGH",)},
+    )
+    # A model hidden takes its variants with it, and a glob matches case and all.
+    assert agent_models.hidden(found, cfg.runtime.hide_models) == {"github-copilot/model-3", f"{MODEL}@xhigh"}
+    assert agent_models.hidden(found, ()) == frozenset()
+
+
+def test_hide_models_takes_no_blank_pattern(canopy_env: CanopyEnv) -> None:
+    canopy_env.configure(canopy_env.user_file, {"runtime": {"hide_models": [" "]}})
+    with pytest.raises(ConfigError, match="must not be empty"):
+        config.load(canopy_env.root, canopy_env.user_file)

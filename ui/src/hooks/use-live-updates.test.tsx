@@ -63,10 +63,12 @@ describe('useLiveUpdates', () => {
         expect(result.current.status).toBe('open')
     })
 
-    it("after a drop, reads the server's meta and the tickets shown again, not the lists the stream resends", () => {
+    it("after a drop, reads the server's meta and the tickets and tasks shown again, not the lists it resends", () => {
         const client = new QueryClient()
         client.setQueryData(keys.meta, {})
         client.setQueryData(keys.ticket('ABC-1'), {})
+        client.setQueryData(keys.task(7), {})
+        client.setQueryData(keys.taskReport(7, 40), {})
         client.setQueryData(keys.attention, mockAttention)
         live(client)
         act(() => latest().open())
@@ -78,6 +80,8 @@ describe('useLiveUpdates', () => {
         })
         expect(client.getQueryState(keys.meta)?.isInvalidated).toBe(true)
         expect(client.getQueryState(keys.ticket('ABC-1'))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.task(7))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.taskReport(7, 40))?.isInvalidated).toBe(true)
         expect(client.getQueryState(keys.attention)?.isInvalidated).toBe(false)
     })
 })

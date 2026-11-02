@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.core import conversation, db, notice, review_runs
+from canopy.core import conversation, db, notice, records, review_runs
 from canopy.core.vocab import NumberedItem, ResumeReason, ReviewRunStatus, RunKind
 from canopy.loop import observations
 from tests.canopy.helpers import (
@@ -588,7 +588,97 @@ def test_a_ticket_set_cursor_naming_nothing_observed_is_unobserved(
     assert action == "refused:unobserved"
     assert reason.startswith(why)
     ran = number_of(observed, NumberedItem.CHECK_RUN, 12)
-    assert ticket_set(observed, {"comment": str(said), "review": str(reviewed), "ci": str(ran)}) == []
+    cursors = {"comment": str(said), "review": str(reviewed), "ci": str(ran)}
+    assert ticket_set(observed, cursors, {str(reviewed): "optional"}) == []
+
+
+def test_a_review_cursor_past_feedback_no_worker_was_sent_names_it(observed: sqlite3.Connection) -> None:
+    """Feedback a `ticket-set` passes is named with why it is left, so the journal says it was seen and left."""
+    approved = review(observed, 1, "octocat", "approved", EARLIER)
+    nit = review(observed, 2, "octocat", None, EARLIER, "Could use chain().", item="comment")
+    [(action, reason)] = ticket_set(observed, {"review": str(nit)})
+    assert action == "refused:unexplained"
+    assert f"passes feedback on {PR} that no worker was sent: {nit} (comment 2 by octocat)" in reason
+    # The approval is no feedback, so it needs no name.
+    assert ticket_set(observed, {"review": str(nit)}, {str(nit): "would_reset_approval"}) == []
+    assert approved < nit
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param("999", id="of-nothing-observed"),
+        pytest.param("approval", id="of-what-is-no-feedback"),
+        pytest.param("later", id="past-the-cursor"),
+    ],
+)
+def test_a_passed_name_of_no_feedback_the_cursor_passes_is_a_bad_reference(
+    observed: sqlite3.Connection,
+    name: str,
+) -> None:
+    approved = review(observed, 1, "octocat", "approved", EARLIER)
+    nit = review(observed, 2, "octocat", None, EARLIER, "A nit.", item="comment")
+    later = review(observed, 3, "octocat", None, LATER, "Another.", item="comment")
+    number = {"999": "999", "approval": str(approved), "later": str(later)}[name]
+    [(action, reason)] = ticket_set(observed, {"review": str(nit)}, {str(nit): "optional", number: "optional"})
+    assert action == "refused:bad_reference"
+    assert reason.startswith(f"passed names {number}, the number of no feedback review cursor {nit} passes on {PR}")
+
+
+def test_a_private_tickets_review_cursor_names_what_it_passes_too(observed: sqlite3.Connection) -> None:
+    """Its start record authorizes its runs, but what the cursor passes is still the journal's to say."""
+    assert operator("start", KEY) == 0
+    nit = review(observed, 1, "octocat", None, EARLIER, "A nit.", item="comment")
+    [(action, _)] = ticket_set(observed, {"review": str(nit)})
+    assert action == "refused:unexplained"
+    assert ticket_set(observed, {"review": str(nit)}, {str(nit): "question"}) == []
+
+
+def test_a_passed_name_on_a_unit_whose_pr_is_stale_is_a_bad_reference(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+) -> None:
+    # A private ticket's cursors are its own, so a stale PR is no refusal of them; but none of its items can be named.
+    canopy_env.configure(canopy_env.user_file, {**TRACKER, **TRUST})
+    held(canopy_env, conn, KEY, at=ago(hours=2))
+    with_unit(canopy_env, conn, KEY)
+    observe_ticket(conn, at=ago())
+    observe_pr(conn, at=ago(hours=1))
+    branches_read(conn, at=ago())
+    assert operator("start", KEY) == 0
+    nit = review(conn, 1, "octocat", None, EARLIER, "A nit.", item="comment")
+    [(action, reason)] = ticket_set(conn, {"review": str(nit)}, {str(nit): "optional"})
+    assert action == "refused:bad_reference"
+    assert reason.startswith(f"passed names {nit}, but this moves no review cursor over {KEY} in repo's PR")
+
+
+def test_feedback_resolved_or_answered_on_its_thread_needs_no_name(observed: sqlite3.Connection) -> None:
+    resolved = review(observed, 1, "octocat", None, EARLIER, "A nit.", item="comment", thread="T1", resolved=True)
+    asked = review(observed, 2, "octocat", None, EARLIER, "Rename it.", item="comment", thread="T2")
+    answered = review(observed, 3, "operator", None, LATER, "CANOPY: Renamed it.", item="comment", thread="T2")
+    assert resolved < asked < answered
+    assert ticket_set(observed, {"review": str(answered)}) == []
+
+
+def test_a_live_ticket_set_records_what_its_review_cursor_passed(observed: sqlite3.Connection) -> None:
+    nit = review(observed, 1, "octocat", None, EARLIER, "A nit.", item="comment", thread="T1")
+    done = review(observed, 2, "octocat", None, EARLIER, "Done already?", item="comment", thread="T2", resolved=True)
+    assert ticket_set(observed, {"review": str(done)}, {str(nit): "optional"}) == []
+    assert passed(observed) == []
+    assert ticket_set(observed, {"review": str(done)}, {str(nit): "optional"}, dry_run=False) == []
+    assert passed(observed) == [
+        (nit, 1, "optional", "overseer"),
+        (done, 2, "resolved", "harness"),
+    ]
+
+
+def test_passed_with_no_review_cursor_is_refused_as_invalid(observed: sqlite3.Connection) -> None:
+    nit = review(observed, 1, "octocat", None, EARLIER, "A nit.", item="comment")
+    with in_tick(observed, dry_run=True) as tick_id:
+        said = overseer_calls(ticket_sets(KEY, repo="repo", passed={str(nit): "optional"}))
+        assert said.error
+        assert "passed names what a review cursor passes: set the review cursor too" in said.text
+        assert decisions(observed, tick_id) == []
 
 
 def test_a_ticket_set_cursor_past_what_the_block_left_out_is_unobserved(observed: sqlite3.Connection) -> None:
@@ -693,17 +783,32 @@ def dispatched(
     return decision
 
 
-def ticket_set(conn: sqlite3.Connection, cursors: Mapping[str, str]) -> list[tuple[str, str]]:
-    """Move KEY's cursors in `repo` through the `ticket-set` tool, in a dry-run tick of its own.
+def ticket_set(
+    conn: sqlite3.Connection,
+    cursors: Mapping[str, str],
+    passed: Mapping[str, str] | None = None,
+    *,
+    dry_run: bool = True,
+) -> list[tuple[str, str]]:
+    """Move KEY's cursors in `repo` through `ticket-set`, naming `passed`, in a tick of its own, dry by default.
 
     Returns:
         The decisions it recorded: none when it took the cursors, else the refusal.
     """
-    with in_tick(conn, dry_run=True) as tick_id:
-        said = overseer_calls(ticket_sets(KEY, repo="repo", cursors=dict(cursors)))
+    named = {} if passed is None else {"passed": dict(passed)}
+    with in_tick(conn, dry_run=dry_run, ends_ok=True) as tick_id:
+        said = overseer_calls(ticket_sets(KEY, repo="repo", cursors=dict(cursors), **named))
         made = decisions(conn, tick_id)
     assert said.error == bool(made), said.text
     return made
+
+
+def passed(conn: sqlite3.Connection) -> list[tuple[int, int, str, str]]:
+    """The feedback the journal records as passed with no worker: each item's number and id, why, and on whose word."""
+    return [
+        (p.number, p.id, p.reason.value, p.decider.value)
+        for p in records.select(records.PassedReview).order_by("number").all(conn)
+    ]
 
 
 def with_unit(env: CanopyEnv, conn: sqlite3.Connection, key: str, *, pr: str | None = PR) -> None:

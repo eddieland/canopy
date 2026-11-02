@@ -36,6 +36,31 @@ test.describe('in a narrow window', () => {
         await expect(row.getByText('needs human')).toBeHidden()
     })
 
+    test("a ticket's run working now keeps its words on one line, and cuts what it is doing instead", async ({
+        page,
+    }) => {
+        await page.goto('tickets/ABC-101')
+        await settled(page)
+        const row = page.getByTestId('working-41')
+        // A command as long as a worker's often are, in place of the mock's short one.
+        await row.getByText('npm test -- login').evaluate((span) => {
+            span.textContent = `uv run pytest -q tests/canopy/runs/test_dispatch.py -k resume ${'-x '.repeat(40)}`
+        })
+        const label = row.getByText('working now', { exact: true })
+        // The lines the words take, one rect each: a flex item's own box is one rect however its text wraps.
+        const lines = await label.evaluate((span) => {
+            const range = document.createRange()
+            range.selectNodeContents(span)
+            return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size
+        })
+        expect(lines).toBe(1)
+        await expect(row.getByRole('link', { name: 'run:41' })).toBeInViewport({ ratio: 1 })
+        await expect(row.getByText('$0.42')).toBeInViewport({ ratio: 1 })
+        expect(await row.getByText(/^uv run pytest/u).evaluate((span) => span.scrollWidth > span.clientWidth)).toBe(
+            true,
+        )
+    })
+
     test('the runs list keeps when each run happened, and lets its cost go', async ({ page }) => {
         await page.goto('workspace/runs')
         await settled(page)
@@ -313,7 +338,7 @@ for (const width of [1720, 1280]) {
 async function longModels(page: Page): Promise<{ chosen: string | null }> {
     const served: { chosen: string | null } = { chosen: null }
     await page.route('**/api/models', (route) =>
-        route.fulfill({ json: { models: [LONG], variants: { [LONG]: ['high'] }, error: null } }),
+        route.fulfill({ json: { models: [LONG], variants: { [LONG]: ['high'] }, hidden: [], error: null } }),
     )
     await page.route('**/api/tickets/ABC-102/models', async (route) => {
         served.chosen = (route.request().postDataJSON() as { model: string | null }).model

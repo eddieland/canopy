@@ -16,6 +16,12 @@ export const MAX_COMMENT = 4000
  */
 export const MAX_REQUEST = 4000
 
+/**
+ * The most characters of notes an approval carries to the implement: the server's `plans.MAX_NOTE`, an operator
+ * message's bound less the sentence the approval puts before them.
+ */
+export const MAX_NOTES = 3800
+
 /** How much of a passage a change request quotes: enough to find it, so a long one leaves room for the comments. */
 export const MAX_QUOTE = 160
 
@@ -41,6 +47,11 @@ export interface PlanThread {
     at: string
     /** Whether the operator marked it done. A resolved thread is kept, and asks the planner for nothing. */
     resolved: boolean
+    /**
+     * Whether a planner has read it as it stands: sent in a request for changes and answered by a new plan. An
+     * approval's notes leave it out (`approvalNotes`); a reply, an edit, or reopening it makes it unread.
+     */
+    read?: boolean
     /** Its replies, oldest first. */
     replies: PlanReply[]
 }
@@ -52,26 +63,30 @@ export function addThread(threads: PlanThread[], thread: Omit<PlanThread, 'resol
 
 /** `threads` with `reply` at the end of thread `id`'s replies. */
 export function addReply(threads: PlanThread[], id: string, reply: PlanReply): PlanThread[] {
-    return threads.map((thread) => (thread.id === id ? { ...thread, replies: [...thread.replies, reply] } : thread))
+    return threads.map((thread) =>
+        thread.id === id ? { ...thread, replies: [...thread.replies, reply], read: false } : thread,
+    )
 }
 
 /** `threads` with thread `id`'s comment saying `body` instead. */
 export function editThread(threads: PlanThread[], id: string, body: string): PlanThread[] {
-    return threads.map((thread) => (thread.id === id ? { ...thread, body } : thread))
+    return threads.map((thread) => (thread.id === id ? { ...thread, body, read: false } : thread))
 }
 
 /** `threads` with reply `replyId` of thread `id` saying `body` instead. */
 export function editReply(threads: PlanThread[], id: string, replyId: string, body: string): PlanThread[] {
-    return threads.map((thread) =>
-        thread.id === id
-            ? { ...thread, replies: thread.replies.map((reply) => (reply.id === replyId ? { ...reply, body } : reply)) }
-            : thread,
-    )
+    return threads.map((thread) => {
+        if (thread.id !== id) {
+            return thread
+        }
+        const replies = thread.replies.map((reply) => (reply.id === replyId ? { ...reply, body } : reply))
+        return { ...thread, replies, read: false }
+    })
 }
 
 /** `threads` with thread `id` resolved, or reopened. */
 export function setResolved(threads: PlanThread[], id: string, resolved: boolean): PlanThread[] {
-    return threads.map((thread) => (thread.id === id ? { ...thread, resolved } : thread))
+    return threads.map((thread) => (thread.id === id ? { ...thread, resolved, read: false } : thread))
 }
 
 /** `threads` without thread `id`. */
@@ -112,38 +127,45 @@ export const EDITED = 'I edited the plan myself before asking: keep my edits, un
 
 /**
  * The message that asks the planner for a new plan: each open thread, in plan order, as the passage it is on, the
- * comment, and its replies, then the operator's `note` on the whole plan, if any, and with `edited`, that the operator
- * edited the plan's text. The planner keeps what it was not asked to change, but reads the plan it replaces as its
- * own: this says which words are the operator's. It is the operator's words and the plan's own, so it goes to the
- * planner as an operator message, as a reply does. Empty when there is nothing to ask: no open thread and no note.
+ * comment, and its replies, then the `answers` to the plan's open decisions (`decisionAnswers`), then the operator's
+ * `note` on the whole plan, if any, and with `edited`, that the operator edited the plan's text. The planner keeps
+ * what it was not asked to change, but reads the plan it replaces as its own: this says which words are the
+ * operator's. It is the operator's words and the plan's own, so it goes to the planner as an operator message, as a
+ * reply does. Empty when there is nothing to ask: no open thread, no answer, and no note.
  */
 export function changeRequest(
     threads: PlanThread[],
     starts: ReadonlyMap<string, number>,
     note = '',
     edited = false,
+    answers: readonly string[] = [],
 ): string {
-    const open = inPlanOrder(threads, starts).filter((thread) => !thread.resolved)
-    const parts: string[] = []
-    if (open.length > 0) {
-        parts.push('Change the plan where I commented. Each comment quotes the passage it is on.')
-        open.forEach((thread, i) => {
-            const gone = starts.has(thread.id) ? '' : ' (no longer in the plan)'
-            const lines = [
-                `${i + 1}. On "${cut(thread.anchor.quote)}"${gone}:`,
-                indent(thread.body),
-                ...thread.replies.map((reply) => indent(`Reply: ${reply.body}`)),
-            ]
-            parts.push(lines.join('\n'))
-        })
-    }
-    if (note.trim()) {
-        parts.push(open.length > 0 ? `On the whole plan:\n${note.trim()}` : note.trim())
-    }
+    const parts = commented(threads, starts, 'Change the plan where I commented.', note, answers)
     if (edited && parts.length > 0) {
         parts.push(EDITED)
     }
     return parts.join('\n\n')
+}
+
+/**
+ * The notes an approval carries to the implement (`canopy plan KEY --approve --message`): the open threads no planner
+ * has read (`unread`), the `answers` to the plan's open decisions, and the `note` on the whole plan, as `changeRequest`
+ * puts them, for small points that need no new plan. A thread a planner has read is left out: the plan answers it, and
+ * sent again it would ask the implement to do twice what the plan already does. The implement reads the plan as
+ * approved, edits included, so this says nothing of them. Empty when there is nothing to send.
+ */
+export function approvalNotes(
+    threads: PlanThread[],
+    starts: ReadonlyMap<string, number>,
+    note = '',
+    answers: readonly string[] = [],
+): string {
+    return commented(unread(threads), starts, 'Where I commented on the plan, do as I say.', note, answers).join('\n\n')
+}
+
+/** The open threads no planner has read as they stand: what an approval's notes carry. */
+export function unread(threads: PlanThread[]): PlanThread[] {
+    return threads.filter((thread) => !thread.resolved && thread.read !== true)
 }
 
 /** The journal's threads (`GET /tickets/{key}/plans`), as the editor holds them: each id the journal's, as text. */
@@ -154,6 +176,7 @@ export function fromServer(threads: PlanThreadView[]): PlanThread[] {
         body: thread.body,
         at: thread.at,
         resolved: thread.resolved,
+        read: thread.read,
         replies: thread.replies.map((reply) => ({ id: String(reply.id), body: reply.body, at: reply.at })),
     }))
 }
@@ -212,6 +235,38 @@ export function movedAnchors(saved: PlanThread[], held: PlanThread[]): PlanThrea
         const old = was.get(thread.id)
         return old !== undefined && !sameAnchor(old.anchor, thread.anchor)
     })
+}
+
+// Each open thread, in plan order, as the passage it is on, the comment, and its replies, after `lead`; then the
+// answers to the plan's decisions, a line each; then `note`, headed as such when anything comes before it.
+function commented(
+    threads: PlanThread[],
+    starts: ReadonlyMap<string, number>,
+    lead: string,
+    note: string,
+    answers: readonly string[],
+): string[] {
+    const open = inPlanOrder(threads, starts).filter((thread) => !thread.resolved)
+    const parts: string[] = []
+    if (open.length > 0) {
+        parts.push(`${lead} Each comment quotes the passage it is on.`)
+        open.forEach((thread, i) => {
+            const gone = starts.has(thread.id) ? '' : ' (no longer in the plan)'
+            const lines = [
+                `${i + 1}. On "${cut(thread.anchor.quote)}"${gone}:`,
+                indent(thread.body),
+                ...thread.replies.map((reply) => indent(`Reply: ${reply.body}`)),
+            ]
+            parts.push(lines.join('\n'))
+        })
+    }
+    if (answers.length > 0) {
+        parts.push(answers.join('\n'))
+    }
+    if (note.trim()) {
+        parts.push(parts.length > 0 ? `On the whole plan:\n${note.trim()}` : note.trim())
+    }
+    return parts
 }
 
 // A passage as the planner reads it: without the placeholders its HTML tags and images stand as in the editor's text,

@@ -45,6 +45,7 @@ const PLANS: TicketPlans = {
             body: 'Why?',
             at: '2026-10-08T11:10:00Z',
             resolved: false,
+            read: false,
             replies: [],
         },
         {
@@ -55,6 +56,7 @@ const PLANS: TicketPlans = {
             body: 'Done.',
             at: '2026-10-08T11:20:00Z',
             resolved: true,
+            read: false,
             replies: [],
         },
     ],

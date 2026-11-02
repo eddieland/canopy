@@ -37,6 +37,9 @@ any OpenCode upgrade, and before relying on a permission they check.
   review's or a chore's prompt sends it to. Expect the run to read the file, and a worker asked to read it refused
   (`external_directory`). Under OpenCode 2, check that it still expands `~/` in a permission's pattern: if not, the
   read is refused, failing closed.
+- **S71. A shell command's leading `cd`** (taken on request 2026-11-02). Confirmed in OpenCode's source (1.19.3 and
+  2.1.2), not in a run. Have a worker run `cd src && cat ../README.md`, then `cd src && cd ../..`. Expect the first to
+  print the file, and the second refused (`external_directory`), on OpenCode 1 and 2 both.
 - **S3. The private worker's wildcard deny** (M18). Confirmed in OpenCode's source (1.18.35), not in a run. Start a
   ticket privately and check that its worker can call the tracker's `tracker.read_tools` and is refused every other
   tool of the tracker's server, and the tracker CLIs in bash.

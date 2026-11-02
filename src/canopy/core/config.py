@@ -813,6 +813,11 @@ class Runtime(Section):
     #: Private: it chooses what the operator's spend buys, and which provider is sent the ticket and the code (DESIGN
     #: §13, TRUST_MODEL T7).
     models: Annotated[dict[ModelRole, ModelId], Scope.PRIVATE] = {}
+    #: Shell globs of models to leave out of the lists canopy shows, `canopy models` and the web UI's model menus,
+    #: each matched against `provider/model` and `provider/model@variant`: `github-copilot/*` hides a provider,
+    #: `*@xhigh` a variant of every model. It hides, never forbids: `models` or a ticket may still name one (DESIGN
+    #: §13). Private, as `models` is.
+    hide_models: Annotated[tuple[NonBlank, ...], Scope.PRIVATE] = ()
     #: The repositories, by name, whose runs canopy starts in the sandbox wrapper itself: each worker run's commands,
     #: `setup_cmd`, and a review's, with the role each takes (DESIGN §24). Names need not be in this workspace's map,
     #: as the user file serves every workspace. Private: it decides what a run may reach (TRUST_MODEL T4, T7).

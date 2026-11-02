@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { api, unwrap } from './client'
 import { keys } from './queries'
 import type {
+    LeftSent,
     AgentModel,
     Answered,
     AgentPersona,
@@ -59,13 +60,13 @@ import type {
 
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, trying a chore, dismissing
- * a finding, sending a review's findings to a worker, granting a run past a limit, asking for a PR to be reviewed,
- * submitting a task, pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and
- * those on a run's drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`,
- * `forget`, `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `task submit`, `pause`,
- * `resume`, `notice`, `memory promote`, `reject`, `renew`, `pin`, `unpin`, `edit`, and `forget`, `draft edit`, `drop`,
- * and `send`, `review edit` and `publish`, and `reply review:ID`, and `reply run:ID` to a running agent's question, or
- * as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming its guard.
+ * a finding, sending a review's findings or a ticket's left feedback to a worker, granting a run past a limit, asking
+ * for a PR to be reviewed, submitting a task, pausing the loop, asking it for a tick now, a notice to workers, the
+ * verbs on agent memory, and those on a run's drafts. Each goes through the same function on the server as `canopy
+ * start`, `stop`, `reply`, `forget`, `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `task
+ * submit`, `pause`, `resume`, `notice`, `memory promote`, `reject`, `renew`, `pin`, `unpin`, `edit`, and `forget`,
+ * `draft edit`, `drop`, and `send`, `review edit` and `publish`, and `reply review:ID`, and `reply run:ID` to a running
+ * agent's question, or as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -205,10 +206,16 @@ export async function stopTask(id: number, now: boolean): Promise<TaskStopped> {
 
 /**
  * `canopy plan KEY --approve`, `canopy plan KEY`, or `canopy plan KEY --skip`: approve the newest plan as its file
- * stands, ask for a new one, or skip the plan (DESIGN §25).
+ * stands, ask for a new one, or skip the plan (DESIGN §25). An approval's `message`, as `--message`, is written on the
+ * ticket for its implement.
  */
-export async function decidePlan(key: string, action: PlanChanged['action']): Promise<PlanChanged> {
-    return unwrap(await api.POST('/api/tickets/{key}/plan', { params: { path: { key } }, body: { action } }))
+export async function decidePlan(key: string, action: PlanChanged['action'], message?: string): Promise<PlanChanged> {
+    return unwrap(
+        await api.POST('/api/tickets/{key}/plan', {
+            params: { path: { key } },
+            body: message === undefined ? { action } : { action, message },
+        }),
+    )
 }
 
 /**
@@ -257,7 +264,10 @@ export async function replyPlanThread(key: string, thread: number, body: string)
     )
 }
 
-/** A change to one of the ticket's plan comment threads: its words, a reply's, whether resolved, or its passage. */
+/**
+ * A change to one of the ticket's plan comment threads: its words, a reply's, whether resolved, its passage, or that a
+ * request for changes just sent it to a planner (`sent`).
+ */
 export async function changePlanThread(
     key: string,
     thread: number,
@@ -266,6 +276,7 @@ export async function changePlanThread(
         reply?: number
         resolved?: boolean
         anchor?: { quote: string; prefix: string; suffix: string }
+        sent?: true
     },
 ): Promise<PlanThreadView> {
     return unwrap(
@@ -373,6 +384,19 @@ export async function sendReviewFindings(run: number, findings: number[], submis
         await api.POST('/api/reviews/{run_id}/sends', {
             params: { path: { run_id: run } },
             body: { findings, submission },
+        }),
+    )
+}
+
+/**
+ * `canopy send KEY N...`: a reply on the ticket naming feedback its review cursors left with no worker, by journal
+ * number, which the next tick reads as the operator's go-ahead on it. Idempotent on `submission`, as a reply is.
+ */
+export async function sendLeftFeedback(key: string, numbers: number[], submission: string): Promise<LeftSent> {
+    return unwrap(
+        await api.POST('/api/tickets/{key}/sends', {
+            params: { path: { key } },
+            body: { numbers, submission },
         }),
     )
 }

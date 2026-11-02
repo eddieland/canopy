@@ -29,23 +29,32 @@ The `ticket-set` tool moves cursors too, so its cursors are checked the same way
 items, so a cursor on one may move no further than the items it already passed. A unit with no PR is unobserved, since
 no source reads checks or reviews but a PR's.
 
-A private ticket, which its start record authorizes (§22), is not checked; nor is a subject no source can read, such as
-a unit whose PR is not a PR's URL: its claims stay claims, checked again by the worker (D051). Neither, nor a stale
-subject, gets a default cursor, since none can be read from a fresh observation. A cursor is a
-journal number (§35): it names an item by the number it took when first observed, or a review run by the one it took
+A `ticket-set` that moves a `review` cursor past feedback no worker was sent names each item it passes, with why, in its
+`passed` (`passed_over`, DESIGN §7), so the journal says what was seen and left. One on a resolved thread, or one a
+worker or the operator replied to on its thread, needs no name; the harness names the first `resolved`. Refused:
+
+- `bad_reference`: a name that is the number of no feedback the cursor passes on the unit's fresh PR.
+- `unexplained`: feedback the cursor passes that is not named and needs a name.
+
+This holds on a private ticket too, since it records what was decided rather than authorizing a run.
+
+A private ticket, which its start record authorizes (§22), is not otherwise checked; nor is a subject no source can
+read, such as a unit whose PR is not a PR's URL: its claims stay claims, checked again by the worker (D051). Neither,
+nor a stale subject, gets a default cursor, since none can be read from a fresh observation. A cursor is a journal
+number (§35): it names an item by the number it took when first observed, or a review run by the one it took
 when it ended.
 """
 
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, item_numbers, notice, observe, records, review_runs
+from canopy.core import conversation, db, item_numbers, notice, observe, passed_reviews, records, review_runs
 from canopy.core.config import CANOPY_REVIEWER
-from canopy.core.vocab import CheckStatus, ResumeReason, RunKind
+from canopy.core.vocab import CheckStatus, Decider, PassReason, ResumeReason, ReviewItem, RunKind
 from canopy.core.workspace import CheckRole
 from canopy.loop import observations, phases
 from canopy.runs import artifact_authority, drafts
@@ -148,6 +157,71 @@ def check_cursors(
         )
     _check_ci(reader, pr, cursors.get("ci"))
     _Review.read(reader, pr, unit, cursors.get("review"), None, any_run=True).check_named()
+
+
+def passed_over(
+    ctx: Context,
+    tick_id: int,
+    now: datetime,
+    *,
+    key: str,
+    repo: str | None,
+    cursor: str | None,
+    passed: Mapping[str, PassReason],
+) -> list[passed_reviews.Passed]:
+    """Check what a `ticket-set`'s `review` cursor passes of `repo`'s unit against the reasons it names, at `now`.
+
+    `passed` names feedback items by journal number. Feedback is as a `resume` for `review` addresses it: a review
+    comment, a change request, or a review that says something, not the PR author's, a worker's, or one the operator
+    sent. Each item the cursor passes needs a name, unless its thread is resolved, or a worker or the operator replied
+    on it since.
+
+    Returns:
+        What to record once the cursor moves: each item named, with its reason, and each unnamed one on a resolved
+        thread, `resolved` and the harness's. Empty with no cursor, or no unit with a fresh PR, when `passed` is too.
+
+    Raises:
+        Refusal: `bad_reference` or `unexplained`, as the module says.
+    """
+    found = _fresh_unit(ctx, tick_id, now, key, repo) if cursor is not None else None
+    if found is None:
+        if passed:
+            subject = key if repo is None else f"{key} in {repo}"
+            raise Refusal(
+                "bad_reference",
+                f"passed names {_listed(passed)}, but this moves no review cursor over {subject}'s PR observed fresh; "
+                "name none",
+            )
+        return []
+    reader, pr, unit = found
+    review = _Review.read(reader, pr, unit, cursor, None, any_run=True)
+    sent = drafts.sent_by_pr(ctx.conn)
+    feedback = [r for r in review.covered if r.number is not None and _feedback(r, pr, ctx.config.trust, sent)]
+    by_number = {str(r.number): r for r in feedback}
+    if unknown := [n for n in passed if n not in by_number]:
+        raise Refusal(
+            "bad_reference",
+            f"passed names {_listed(unknown)}, the number of no feedback review cursor {cursor} passes on "
+            f"{pr['url']}; name each by the number the state block shows it with",
+        )
+    trust = ctx.config.trust
+    answered = _answered(review.items, trust, sent)
+    unnamed = [r for r in feedback if str(r.number) not in passed and not r.resolved and r.id not in answered]
+    if unnamed:
+        said = ", ".join(f"{r.number} ({r.item.value} {r.id} by {r.author or 'unknown'})" for r in unnamed)
+        raise Refusal(
+            "unexplained",
+            f"review cursor {cursor} passes feedback on {pr['url']} that no worker was sent: {said}; name each in "
+            "passed with why, or send a worker with a resume for review",
+        )
+    found = [passed_reviews.Passed(by_number[n], reason, Decider.OVERSEER) for n, reason in passed.items()]
+    named = {p.item.id for p in found}
+    found += [
+        passed_reviews.Passed(r, PassReason.RESOLVED, Decider.HARNESS)
+        for r in feedback
+        if r.resolved and r.id not in named
+    ]
+    return found
 
 
 def default_cursors(
@@ -576,6 +650,60 @@ def _feedback(
     author = (pr["author"] or "").lower()
     marked = conversation.worker_marked(r.body, trust.comment_prefix, trust.comment_suffix)
     return phases.is_feedback(r) and (r.author or "").lower() != author and not marked and not drafts.was_sent(r, sent)
+
+
+def _fresh_unit(
+    ctx: Context,
+    tick_id: int,
+    now: datetime,
+    key: str,
+    repo: str | None,
+) -> tuple[observations.Reader, observations.PrObservation, records.TicketUnit] | None:
+    """Read ticket `key`'s unit in `repo`, with its PR, while that PR is observed fresh at `now`.
+
+    Returns:
+        The reader, the PR as the block shows it, and the unit; None without such a unit.
+    """
+    record = db.get_ticket(ctx.conn, key)
+    if record is None:
+        return None
+    reader = observations.Reader.read(ctx, phases.recorded(ctx.conn, tick_id), now, [record])
+    pr = _fresh_pr(next((u for u in reader.units(key) if u["repo"] == repo), None))
+    unit = next((u for u in reader.units_of.get(key, []) if u.repo == repo), None)
+    return None if pr is None or unit is None else (reader, pr, unit)
+
+
+def _answered(
+    items: Sequence[records.ObservedReview],
+    trust: Trust,
+    sent: Mapping[str, Mapping[str, Sequence[int]]],
+) -> AbstractSet[int]:
+    """The review comments a worker, or the operator through canopy, replied to on their thread since.
+
+    Returns:
+        Their GitHub ids.
+    """
+    replies = [
+        r
+        for r in items
+        if r.item is ReviewItem.COMMENT
+        and (conversation.worker_marked(r.body, trust.comment_prefix, trust.comment_suffix) or drafts.was_sent(r, sent))
+    ]
+    return frozenset(
+        r.id
+        for r in items
+        if r.item is ReviewItem.COMMENT
+        and any(a.thread_id == r.thread_id and a.id != r.id and item_numbers.newer(a.number, r.number) for a in replies)
+    )
+
+
+def _listed(numbers: Iterable[str]) -> str:
+    """Name the numbers a `passed` names, in order.
+
+    Returns:
+        Them, joined.
+    """
+    return ", ".join(numbers)
 
 
 def _go_ahead(r: records.ObservedReview, trusted: AbstractSet[str], said: Collection[datetime]) -> bool:

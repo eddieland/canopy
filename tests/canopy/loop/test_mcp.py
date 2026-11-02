@@ -147,6 +147,8 @@ def fresh(env: CanopyEnv, verb: Verb) -> Iterator[sqlite3.Connection]:
         leftover.unlink()
     conn = env.journal()
     db.set_unit(conn, "PROJ-1", str(env.root), "repo", pr_url=PR)
+    # PROJ-2 is in the journal too, as the query's record puts it, for the verbs that name two tickets.
+    db.touch_ticket(conn, "PROJ-2", str(env.root))
     # The tracker source reads PROJ-1, and shows a comment on it, journal number 1, which a cursor may name.
     tracker_holds(conn)
     comment(conn, "c7", "acc-1", "2026-10-18T10:00:00.000Z", "See the login page.")
@@ -214,7 +216,7 @@ RECORDS = [
                 ],
             },
             said="recorded wait for PROJ-1\nrecorded done for PROJ-2",
-            writes=("decisions", "tickets"),
+            writes=("decisions",),
             result={"decisions": [{"key": "PROJ-1", "action": "wait"}, {"key": "PROJ-2", "action": "done"}]},
         ),
         id="decide-several",
@@ -266,6 +268,7 @@ RECORDS = [
                         "phase": "ci_red",
                         "cursors": ["comment"],
                         "done": False,
+                        "passed": [],
                         "dry_run": False,
                     },
                 ],
@@ -282,7 +285,15 @@ RECORDS = [
             writes=(),
             result={
                 "tickets": [
-                    {"key": "PROJ-1", "repo": None, "phase": None, "cursors": [], "done": False, "dry_run": True},
+                    {
+                        "key": "PROJ-1",
+                        "repo": None,
+                        "phase": None,
+                        "cursors": [],
+                        "done": False,
+                        "passed": [],
+                        "dry_run": True,
+                    },
                 ],
             },
         ),
@@ -296,7 +307,15 @@ RECORDS = [
             writes=("tickets",),
             result={
                 "tickets": [
-                    {"key": key, "repo": None, "phase": "ready", "cursors": [], "done": False, "dry_run": False}
+                    {
+                        "key": key,
+                        "repo": None,
+                        "phase": "ready",
+                        "cursors": [],
+                        "done": False,
+                        "passed": [],
+                        "dry_run": False,
+                    }
                     for key in ("PROJ-1", "PROJ-2")
                 ],
             },
@@ -522,6 +541,7 @@ def test_a_tool_refuses_and_records_only_a_guards_refusal(
 
 def test_a_refusal_is_a_tool_error_and_the_server_goes_on(overseen: CanopyEnv) -> None:
     conn = overseen.journal()
+    db.touch_ticket(conn, "PROJ-1", str(overseen.root))
     with in_tick(conn) as tick_id:
         served = mcp_session(
             tool_call("decide", decisions=[{"action": "wait", "rationale": "r"}]),

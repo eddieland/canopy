@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 
 import {
     diffFile,
+    holdAttentionList,
     placeholderGuide,
     LIGHT_ROUTES,
     NOW,
@@ -121,6 +122,21 @@ for (const theme of THEMES) {
         await expect(page).toHaveScreenshot(`sign-in-${theme}.png`, { fullPage: true })
     })
 }
+
+// The true all clear, which the mock's journal, with its items, never shows: the list reads empty, and the stream,
+// which would send it again whole, keeps what else it says. Its main pane alone, the digest over the void it fills.
+test('the all-clear digest in dark', async ({ page }) => {
+    await page.clock.setFixedTime(NOW)
+    await storeTheme(page, 'dark')
+    await signIn(page)
+    await page.route('**/api/attention', (route) => route.fulfill({ json: [] }))
+    await holdAttentionList(page)
+    await page.goto('attention')
+    await settled(page)
+    await expect(page.getByTestId('all-clear-today')).toBeVisible()
+    await expect(page.getByTestId('all-clear-working')).toBeVisible()
+    await screenshotMain(page, 'attention-all-clear-dark.png')
+})
 
 // Every palette but a theme's default sets the neutrals, the accent, and its corners, edges, depth, and face, all of
 // which one page's panels show: its main pane alone, so a change to the header or the rail rewrites none of these.

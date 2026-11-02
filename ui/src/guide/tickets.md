@@ -74,6 +74,8 @@ Below:
   runs on. See [Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model). Once more than
   one model has served the ticket, a line under its total cost splits it by model, then `unread` for runs whose
   sessions canopy hasn't read yet and `none` for runs it read that named no model: the override's bill, itemized.
+  When the loop read a reviewer's comments and chose not to send a worker, Work lists them under **Feedback left with
+  no worker**. See [Feedback left with no worker](#feedback-left-with-no-worker).
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
@@ -123,6 +125,26 @@ reply before **Stop** or **Forget**. Hover over each to see its command.
   hint worth reading. Closing its PRs and deleting its branch on origin is yours to do, and until you do, the
   overseer will find them again and the ticket can't start over. canopy refuses while a run is on it, and when nothing
   has happened since you last forgot it.
+
+## Feedback left with no worker
+
+Sometimes the overseer reads a comment on the ticket's PR and decides it isn't worth a worker: a nit marked optional,
+a question rather than a change, something the head already does, or a change whose push would dismiss the approval
+you're about to merge on. When it moves past such a comment it has to say which one and why, and canopy refuses the
+move if it skips any without a reason. Those comments are listed in **Work** under **Feedback left with no worker**:
+where each one is, linking out to it on GitHub, who wrote it, why it was left (`optional`, `would reset approval`,
+`a question`, `already done`, `out of scope`, `you said to leave it`), and the tick that decided, linking to that tick's
+reasoning. A comment on a thread someone resolved needs no reason, and drops off the list. So does one a worker has
+answered on its thread.
+
+The attention item `ready_to_merge`, or `needs_reviewer`, counts them too, for example "2 feedback items left with no
+worker (optional, would_reset_approval)". Read them before you merge. "Optional" is the reviewer's word, and "would
+reset approval" is the overseer's guess at what you'd rather avoid, and you may see it differently.
+
+To overrule it, use **send to a worker** on the comment, or `canopy send KEY N` with the number `canopy show KEY`
+lists. canopy replies on the ticket for you, naming the comment by its id, PR, and line without quoting it, and the
+next tick reads that reply as your go-ahead and sends a worker, whoever wrote the comment. The comment stays on the
+list until the worker answers it on its thread.
 
 ## Allowing one more run
 
@@ -189,12 +211,15 @@ keeps the list it read for five minutes, or until the loop reads its config agai
 agent's row names a model, so a picker rarely makes you wait; with every agent on the default, nothing is asked until
 you open one. A runtime with a gateway or two behind it lists hundreds, so they come grouped by provider under a field
 that narrows them to the ids holding what you type, and the model chosen now is pinned at the top, with where it comes
-from, and checked wherever it sits in the list, whether your config or this ticket set it. The arrow keys walk the list
-from the field and Enter picks. While you type, the pinned row steps aside, so Enter takes the first id that holds what
-you typed, not the model you already have. If the runtime can't answer, the picker says why in red and offers **Read
-again**; until it answers, the only thing you can do is clear the override, since canopy won't take a model it can't
-look up. Picking one saves it after checking it against that list, asked again first if the list lacks your pick, so a
-provider you set up a minute ago isn't turned away for being newer than the list. The button shows your pick with a
+from, and checked wherever it sits in the list, whether your config or this ticket set it. Hundreds is still a lot to
+scroll past for the three you use, so `hide_models` under `[runtime]` takes globs to leave out:
+`hide_models = ["github-copilot/*", "*@xhigh"]` drops a provider whole and one variant of every model. It hides, it
+doesn't forbid: a hidden model stays pinned when it's the one chosen, and its runs go ahead. The arrow keys walk the
+list from the field and Enter picks. While you type, the pinned row steps aside, so Enter takes the first id that holds
+what you typed, not the model you already have. If the runtime can't answer, the picker says why in red and offers
+**Read again**; until it answers, the only thing you can do is clear the override, since canopy won't take a model it
+can't look up. Picking one saves it after checking it against that list, asked again first if the list lacks your pick,
+so a provider you set up a minute ago isn't turned away for being newer than the list. The button shows your pick with a
 trailing `…` until it's saved, then a green **saved** (**cleared**, for a clear) where it says where the model comes
 from, so nothing below jumps, and the keyboard's focus is back on the button you started from. It stays until the
 ticket's models change again; a pick canopy refuses says why in that agent's row.

@@ -93,13 +93,31 @@ function DropdownMenuRadioItem({
 
 /**
  * An option in the menu that is on or off, with a check at its left while on; `checked` is its state and
- * `onCheckedChange` hears it flip. Picking one closes the menu unless its `onSelect` prevents that.
+ * `onCheckedChange` hears it flip. Picking one closes the menu unless its `onSelect` prevents that. With `bare`, it
+ * draws no check and leaves its children to show its state, as an icon alone does by its `data-state`.
  */
 function DropdownMenuCheckboxItem({
     className,
     children,
+    bare = false,
     ...props
-}: ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+}: ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem> & { bare?: boolean }) {
+    if (bare) {
+        return (
+            <DropdownMenuPrimitive.CheckboxItem
+                data-slot="dropdown-menu-checkbox-item"
+                className={cn(
+                    'relative flex cursor-default items-center justify-center rounded-sm p-1.5 outline-hidden',
+                    'select-none focus:bg-surface-raised data-disabled:pointer-events-none data-disabled:opacity-50',
+                    '[&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
+                    className,
+                )}
+                {...props}
+            >
+                {children}
+            </DropdownMenuPrimitive.CheckboxItem>
+        )
+    }
     return (
         <DropdownMenuPrimitive.CheckboxItem
             data-slot="dropdown-menu-checkbox-item"

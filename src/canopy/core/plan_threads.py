@@ -3,8 +3,9 @@
 A thread belongs to the ticket, not to one plan, so it carries from plan to plan, and the web UI's editor anchors it
 again on each by its passage's words: the quote, and up to 32 characters either side, whitespace collapsed, never a
 position. Open threads become one operator message when the operator asks for changes, through `canopy reply`'s code;
-nothing here sends anything. Only the web channel writes threads, behind its token (TRUST_MODEL T8), and each write
-refuses inside canopy's own runs, as every operator verb does.
+nothing here sends anything, but the UI marks each thread it sent (`sent`), so an approval's notes leave out what a
+planner has read since (`Thread.read`). Only the web channel writes threads, behind its token (TRUST_MODEL T8), and
+each write refuses inside canopy's own runs, as every operator verb does.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, records
+from canopy.core import conversation, db, records, sql
 from canopy.core.conversation import Refused
 
 if TYPE_CHECKING:
@@ -30,17 +31,23 @@ MAX_CONTEXT = 32
 class Thread:
     """A comment on a passage of the ticket's plan, with its replies, oldest first."""
 
+    #: The thread's row.
     thread: records.PlanThread
+    #: Its replies, oldest first.
     replies: Sequence[records.PlanReply]
+    #: Whether a planner has read it as it stands: it was sent in a request for changes, and a plan run that started
+    #: since wrote a plan. An approval's notes leave it out, since that plan answered it.
+    read: bool = False
 
 
 def threads(conn: sqlite3.Connection, key: str) -> list[Thread]:
     """Every thread on the ticket's plans, open and resolved, oldest first, each with its replies.
 
     Returns:
-        The threads, in the order they were written.
+        The threads, in the order they were written, each saying whether a planner has read it.
     """
     found = records.select(records.PlanThread).where("ticket_key = ?", key).order_by("id").all(conn)
+    planned = _planned(conn, key)
     replies = (
         records.select(records.PlanReply, "r")
         .join("plan_threads t ON t.id = r.thread_id")
@@ -48,7 +55,14 @@ def threads(conn: sqlite3.Connection, key: str) -> list[Thread]:
         .order_by("r.id")
         .all(conn)
     )
-    return [Thread(t, [r for r in replies if r.thread_id == t.id]) for t in found]
+    return [
+        Thread(
+            t,
+            [r for r in replies if r.thread_id == t.id],
+            read=t.sent_at is not None and planned is not None and planned > t.sent_at,
+        )
+        for t in found
+    ]
 
 
 def add(conn: sqlite3.Connection, key: str, *, quote: str, prefix: str, suffix: str, body: str) -> Thread:
@@ -81,7 +95,7 @@ def add(conn: sqlite3.Connection, key: str, *, quote: str, prefix: str, suffix: 
 
 
 def reply(conn: sqlite3.Connection, key: str, thread_id: int, body: str) -> records.PlanReply:
-    """Reply in one of the ticket's threads.
+    """Reply in one of the ticket's threads, which then says something no planner has read.
 
     Returns:
         The reply.
@@ -94,6 +108,7 @@ def reply(conn: sqlite3.Connection, key: str, thread_id: int, body: str) -> reco
     with db.transaction(conn):
         _thread(conn, key, thread_id)
         [found] = records.insert(records.PlanReply, thread_id=thread_id, body=text, created_at=db.now()).returned(conn)
+        _unsent(conn, thread_id)
     return found
 
 
@@ -106,11 +121,16 @@ def change(
     reply_id: int | None = None,
     resolved: bool | None = None,
     anchor: tuple[str, str, str] | None = None,
+    sent: bool = False,
 ) -> Thread:
     """Change one of the ticket's threads: its comment's words, or with `reply_id` a reply's, or whether it is resolved.
 
     `anchor`, the passage's quote and the text either side, moves the thread to its passage's words as they stand after
     the operator's edit of the plan, which the web UI's editor saves with it.
+
+    `sent` records that the operator sent the thread, as it now stands, to a planner in a request for changes. A change
+    to its words, a reply's, or whether it is resolved says something no planner has read, so it clears that; moving it
+    to its passage's words does not.
 
     Nothing marks a comment edited: the journal keeps its body alone, and only the operator writes there.
 
@@ -128,7 +148,7 @@ def change(
         raise Refused("bad_body", f"name the words for reply {reply_id}, or leave out the reply")
     text = _body(body) if body is not None else None
     with db.transaction(conn):
-        _thread(conn, key, thread_id)
+        was = _thread(conn, key, thread_id)
         if text is not None and reply_id is not None:
             changed = (
                 records.update(records.PlanReply)
@@ -139,8 +159,9 @@ def change(
             )
             if not changed:
                 raise Refused("unknown", f"thread {thread_id} of {key} has no reply {reply_id}")
-        elif text is not None:
-            records.update(records.PlanThread).set(body=text).where("id = ?", thread_id).run(conn)
+            _unsent(conn, thread_id)
+        elif text is not None and text != was.body:
+            records.update(records.PlanThread).set(body=text, sent_at=None).where("id = ?", thread_id).run(conn)
         if anchor is not None:
             quote, prefix, suffix = anchor
             moved = records.update(records.PlanThread).set(quote=quote, prefix=prefix, suffix=suffix)
@@ -153,6 +174,10 @@ def change(
                 db.now(),
             )
             resolving.where("id = ?", thread_id).run(conn)
+            if resolved != (was.resolved_at is not None):
+                _unsent(conn, thread_id)
+        if sent:
+            records.update(records.PlanThread).set(sent_at=db.now()).where("id = ?", thread_id).run(conn)
     [found] = [t for t in threads(conn, key) if t.thread.id == thread_id]
     return found
 
@@ -183,6 +208,27 @@ def _thread(conn: sqlite3.Connection, key: str, thread_id: int) -> records.PlanT
     if found is None:
         raise Refused("unknown", f"{key} has no plan comment {thread_id}")
     return found
+
+
+def _planned(conn: sqlite3.Connection, key: str) -> str | None:
+    """When the newest plan run of the ticket that wrote a plan started: what it read, its planner has read.
+
+    Returns:
+        The start as the journal holds it, or None when no plan run has written one.
+    """
+    newest = (
+        sql.select("max(r.started_at)")
+        .from_("plans p")
+        .join("runs r ON r.id = p.run_id")
+        .where("p.ticket_key = ?", key)
+    )
+    started = sql.execute(conn, newest).fetchone()[0]
+    return str(started) if started is not None else None
+
+
+def _unsent(conn: sqlite3.Connection, thread_id: int) -> None:
+    """Record that the thread says something no planner has read: its words, a reply, or its resolution changed."""
+    records.update(records.PlanThread).set(sent_at=None).where("id = ?", thread_id).run(conn)
 
 
 def _check_anchor(quote: str, prefix: str, suffix: str) -> None:

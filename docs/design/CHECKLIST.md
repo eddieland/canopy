@@ -49,8 +49,9 @@ hook before it learns that; the next is git's rejection, which a worker never re
 
 The list reaches the hook as the operator's answer reaches a running agent (§41): a file in the run's answers
 directory, which a sandboxed run may read and not write, and canopy points a worker's git at its hooks whenever the run
-has a list, not only when it has a mark to add. It is a reminder, not a guard: `--no-verify` skips it as it skips the
-repository's own hooks. The overseer, a planner, a reviewer, and a chore hear none.
+has a list, not only when it has a mark to add. The hook's line and the worker's prompt both name that file, so a
+worker whose output reaches it cut short reads the list there. It is a reminder, not a guard: `--no-verify` skips it
+as it skips the repository's own hooks. The overseer, a planner, a reviewer, and a chore hear none.
 
 The worker's result line gains `checklist`: for each repository and item, `pass`, `fixed`, `held` with the reason, or
 `n/a`, validated (D026). A reminded run whose result answers no item is recorded as unanswered, never refused: its push

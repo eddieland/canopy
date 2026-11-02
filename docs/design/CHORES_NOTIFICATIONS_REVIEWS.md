@@ -252,9 +252,10 @@ the operator asks for one at a time (Review requests), reviewed as a query match
 
 Why nothing is posted: a review on the PR speaks for the operator to everyone, and an adversarial reader is wrong often
 enough that the operator wants its findings first; kept in the journal, it needs no write tool and cannot be forged. It
-is read from the journal only, apart from worker runs, its text shown as data, made printable. Its verdict leaves the
-machine only as a notification (§20), so no automation can let a PR skip a human reviewer on it; that waits on a bot
-identity (ROADMAP, deferred).
+is read from the journal only, apart from worker runs, its text shown as data, made printable; `canopy review export`
+prints one as Markdown for the operator to hand a person or agent outside canopy who has the code, its text quoted as
+claims to check. Its verdict leaves the machine only as a notification (§20), so no automation can let a PR skip a
+human reviewer on it; that waits on a bot identity (ROADMAP, deferred).
 
 Every review key is private (§12) except `policy.max_reviews_per_pr` and §34's `policy.max_revisions_per_draft`,
 shared limits the repository may only tighten (TRUST_MODEL T7). With no source of reviews or no review capacity,

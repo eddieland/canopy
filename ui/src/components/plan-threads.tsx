@@ -13,10 +13,19 @@ import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { usePending } from '@/hooks/use-pending'
+import { COMMENT_LABELS, withLabel } from '@/lib/plan-comment-labels'
 import { changeRequest, MAX_COMMENT, MAX_REQUEST } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
 import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
+
+// What the `planner read` chip means, in its tip.
+const READ_MEANING =
+    'A planner read this with your request for changes and wrote a plan since, so Approve leaves it out of its ' +
+    'notes. Reply or edit it to send it again.'
+
+// A change request that answers none of the plan's decisions.
+const NO_ANSWERS: readonly string[] = []
 
 /** A comment being written: the passage it is on and what it says so far. */
 export interface Draft {
@@ -167,19 +176,22 @@ export function PlanThreads({
 }
 
 /**
- * Asks the planner for a new plan, as M44's Ask for changes does: the open threads, each on its passage, and a note on
- * the whole plan, as one message (`changeRequest`). Disabled with nothing to ask, and over a reply's bound, which it
- * says rather than cut the message. It sits in a plan's foot, in the line of the caller's actions: its form lays out
- * nothing of its own, so the note field and the button take their places in that line, and the note takes a line of
- * its own while it is focused or holds words. How many open comments go with it, then the caller's `note`, take the
- * line under them.
+ * Asks the planner for a new plan, as M44's Ask for changes does: the open threads, each on its passage, the answers to
+ * the plan's decisions, and a note on the whole plan, as one message (`changeRequest`). Disabled with nothing to ask,
+ * and over a reply's bound, which it says rather than cut the message. It sits in a plan's foot, in the line of the
+ * caller's actions: its form lays out nothing of its own, so the note field and the button take their places in that
+ * line, and the note takes a line of its own while it is focused or holds words. How many open comments go with it,
+ * then the caller's `note`, take the line under them.
  */
 export function AskForChanges({
     threads,
     starts,
     edited,
     asked = false,
-    note: said,
+    answers = NO_ANSWERS,
+    line: said,
+    lead,
+    note,
     onAsk,
     onNoteChange,
 }: {
@@ -191,20 +203,22 @@ export function AskForChanges({
     edited: boolean
     /** Whether they asked already and no planner has read it, so another request is asking again. */
     asked?: boolean
+    /** The answers to the plan's open decisions (`decisionAnswers`), a line each, which go with the comments. */
+    answers?: readonly string[]
     /** What the caller says of its own actions, after how many comments go with this one, on the line under them. */
-    note?: ReactNode
+    line?: ReactNode
+    /** What the caller puts at the start of that line, before how many comments go. */
+    lead?: ReactNode
+    /** The note on the whole plan, the caller's state, so its own actions, such as Approve, can send it too. */
+    note: string
     /** Sends the message. */
     onAsk: (message: string) => void
-    /** Called with the note on the whole plan as it changes, so the caller's own actions can say what it leaves. */
-    onNoteChange?: ((note: string) => void) | undefined
+    /** Called with the note on the whole plan as the operator writes it, and with nothing once it is sent. */
+    onNoteChange: (note: string) => void
 }) {
-    const [note, setNoteState] = useState('')
-    function setNote(next: string) {
-        setNoteState(next)
-        onNoteChange?.(next)
-    }
+    const setNote = onNoteChange
     usePending(note.trim() !== '')
-    const message = changeRequest(threads, starts, note, edited)
+    const message = changeRequest(threads, starts, note, edited, answers)
     const open = threads.filter((thread) => !thread.resolved).length
     const over = message.length > MAX_REQUEST
 
@@ -249,8 +263,9 @@ export function AskForChanges({
                 <Send aria-hidden />
                 {asked ? 'Ask again' : 'Ask for changes'}
             </Button>
-            {(told !== false || said !== undefined) && (
+            {(told !== false || said !== undefined || lead !== undefined) && (
                 <p className="order-2 basis-full text-xs text-muted-foreground">
+                    {lead}
                     {told} {said}
                 </p>
             )}
@@ -258,7 +273,7 @@ export function AskForChanges({
     )
 }
 
-/** The comment being written: the passage it is on, quoted, and its form. */
+/** The comment being written: the passage it is on, quoted, and its form, which offers the one-click labels. */
 export function DraftForm({
     draft,
     onDraftChange,
@@ -284,6 +299,7 @@ export function DraftForm({
                 key={draft.opened}
                 label="Comment"
                 submit="Comment"
+                labels
                 value={draft.body}
                 onValueChange={onDraftChange}
                 onSubmit={onDraftSubmit}
@@ -329,6 +345,8 @@ export function ThreadCard({
     const [deleting, setDeleting] = useState(false)
     // Nothing in the card is open: no reply, edit, or question being answered.
     const idle = editable && editing === undefined && !replying && !deleting
+    // An open thread a planner has read as it stands, which Approve's notes leave out.
+    const read = !thread.resolved && thread.read === true
     // An open thread's words can be edited while nothing else in its card is open.
     const startEdit = idle && !thread.resolved
     // Reply shows on the card that is open, as a shared document's does, so the rest stay short and near their
@@ -402,11 +420,12 @@ export function ThreadCard({
                     </div>
                 )}
             </div>
-            {(lost || thread.resolved) && (
+            {(lost || thread.resolved || read) && (
                 // On a line of their own, so the quote keeps the width the actions leave it.
                 <div className="flex gap-1.5">
                     {lost && <Chip>passage gone</Chip>}
                     {thread.resolved && <Chip>resolved</Chip>}
+                    {read && <Chip word="planner read" meaning={READ_MEANING} />}
                 </div>
             )}
             {editing === COMMENT ? (
@@ -596,10 +615,12 @@ function Said({
 // A comment or a reply being written. It sends on the key Settings names, as a reply to a ticket does. Escape drops it
 // while it holds nothing new; with words of the operator's own in it, Escape leaves it open, words and all, and goes
 // back to the plan (`onLeave`), so one key never loses what was typed: Cancel drops it. It keeps its own words, or the
-// caller's through `value` and `onValueChange`, which outlive the form.
+// caller's through `value` and `onValueChange`, which outlive the form. With `labels`, a new comment's, it offers the
+// one-click labels (`COMMENT_LABELS`), each writing its instruction to the planner at the comment's start.
 function CommentForm({
     label,
     submit,
+    labels = false,
     initial = '',
     value,
     onValueChange,
@@ -609,6 +630,7 @@ function CommentForm({
 }: {
     label: string
     submit: string
+    labels?: boolean
     initial?: string
     value?: string
     onValueChange?: (body: string) => void
@@ -636,6 +658,18 @@ function CommentForm({
         const frame = requestAnimationFrame(() => element.scrollIntoView({ block: 'nearest' }))
         return () => cancelAnimationFrame(frame)
     }, [])
+
+    // Counts the labels put on the comment: after each, once its words are in the field, the cursor goes back to the
+    // field's end, where the operator's own words follow the instruction.
+    const [labelled, setLabelled] = useState(0)
+    useEffect(() => {
+        const element = field.current
+        if (labelled === 0 || element === null) {
+            return
+        }
+        element.focus({ preventScroll: true })
+        element.setSelectionRange(element.value.length, element.value.length)
+    }, [labelled])
 
     function send(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -667,6 +701,27 @@ function CommentForm({
                 onKeyDown={onKey}
                 ref={field}
             />
+            {labels && (
+                // Under the field, as its toolbar is, so Tab reaches the text first. Each says on hover what it writes.
+                <fieldset aria-label="Labels" className="-ml-2 flex flex-wrap items-center">
+                    {COMMENT_LABELS.map((each) => (
+                        <Button
+                            key={each.name}
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            className="text-muted-foreground"
+                            title={each.instruction}
+                            onClick={() => {
+                                setBody(withLabel(body, each))
+                                setLabelled((count) => count + 1)
+                            }}
+                        >
+                            {each.name}
+                        </Button>
+                    ))}
+                </fieldset>
+            )}
             <div className="flex items-center justify-end gap-1">
                 <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
                     Cancel

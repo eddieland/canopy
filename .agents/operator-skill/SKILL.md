@@ -43,11 +43,11 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy status` | The last tick, attention list, running workers, chores, and sinks. Start here. |
 | `canopy show REF` | A ticket's phase, PRs, runs, conversation, and comments; or `run:ID`, `chore:NAME`, or `task:N`. |
 | `canopy task submit TEXT` | Hands canopy one-off work in your words, about no ticket (`-` reads stdin; `--repo`, `--project`). The next tick starts it on `<branch_prefix>task/N`; `canopy task list` lists them. |
-| `canopy reply task:N [TEXT]` | Answers a task (TEXT or stdin): the next tick starts its next run, on its branch, with the conversation so far. A waiting loop wakes. |
+| `canopy reply task:N [TEXT]` | Answers a task (TEXT, or stdin without it or with `-`): the next tick starts its next run, on its branch, with the conversation so far. A waiting loop wakes. |
 | `canopy stop task:N [--now]` | No tick starts the task again, and a queued one is dropped; `--now` ends its run. |
 | `canopy start KEY` | Works a ticket privately: no label, and nothing canopy writes reaches the ticket. |
 | `canopy stop KEY [--now]` | No dispatch of a started ticket until `canopy start`; `--now` ends its run. |
-| `canopy reply KEY [TEXT]` | Answers a ticket (TEXT or stdin); never posted to the ticket. A waiting loop wakes. |
+| `canopy reply KEY [TEXT]` | Answers a ticket (TEXT, or stdin without it or with `-`); never posted to the ticket. A waiting loop wakes. |
 | `canopy reply chore:NAME TEXT` | A note the chore's next runs follow, such as a finding to leave out until a date. |
 | `canopy dismiss chore:NAME ID...` | Keeps findings off the attention list until the chore stops reporting them; `--undo`. |
 | `canopy dismiss review:ID N...` | Holds a review's findings back from workers and the overseer; `--undo`. |
@@ -71,7 +71,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy memory forget ID`, `purge` | Deletes one memory's text, or many (`--ticket`, `--run`, `--all`); the rows stay. |
 | `canopy draft list [KEY\|URL]` | Comments workers drafted for you under `trust.review_replies = "approve"`, with hashes. |
 | `canopy draft send run:ID N@HASH...` | Posts drafts as your words, one comment review a PR; also `edit` (text, `--react`), `drop`, `settle`. |
-| `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
+| `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage (`-` reads stdin); `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: latest) and its overseer output file; `--ticket KEY`. |
 | `canopy config show` | Each number, switch, and choice in the config, its default, and the file that set it; `--json`. |
 | `canopy config commands` | Each agent's command as a run starts it, and the keys it is made of; `--json`. |

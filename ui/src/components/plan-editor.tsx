@@ -5,8 +5,10 @@ import type { Editor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import {
     Bold,
+    Check,
     ChevronDown,
     ChevronUp,
+    CircleAlert,
     Code,
     Diff,
     FileCode,
@@ -27,11 +29,13 @@ import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef, useState 
 import type { ReactNode } from 'react'
 
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
+import { DecisionsJump, PlanDecisions } from '@/components/plan-decisions'
 import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
 import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
 import {
     DropdownMenu,
+    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuRadioGroup,
@@ -47,16 +51,22 @@ import {
     ToolbarToggleGroup,
     ToolbarToggleItem,
 } from '@/components/ui/toolbar'
+import { decisionAnswers } from '@/lib/plan-decisions'
+import type { PlanDecision } from '@/lib/plan-decisions'
 import { changesKey, outlineOf, PlanChanges } from '@/lib/plan-diff'
 import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } from '@/lib/plan-highlights'
 import type { Range } from '@/lib/plan-highlights'
 import { alignComments, floatUnder, releaseComments } from '@/lib/plan-margin'
+import { markSection, marksOn, planSections, usePlanMarks } from '@/lib/plan-marks'
+import type { PlanSection, SectionMark } from '@/lib/plan-marks'
 import { planOutline, sectionAt } from '@/lib/plan-outline'
 import type { OutlineEntry } from '@/lib/plan-outline'
 import { planExtensions } from '@/lib/plan-schema'
+import { usePlanText } from '@/lib/plan-text'
 import {
     addReply,
     addThread,
+    approvalNotes,
     editReply,
     editThread,
     inPlanOrder,
@@ -70,6 +80,8 @@ import { ariaKeys, keysLabel } from '@/lib/shortcut'
 import { cn } from '@/lib/utils'
 
 const APPLE = isApple(navigator.userAgent)
+// A plan that asks no open decision, or none the page answers.
+const NO_DECISIONS: readonly PlanDecision[] = []
 // The selection's bubble, by its key, so opening a comment can hide it.
 const BUBBLE = new PluginKey('planBubble')
 // How far below the top of the page the editor keeps what it scrolls into view, in pixels: the sticky header's height,
@@ -101,6 +113,8 @@ const SOURCE = [
  * in Ask for changes, which sends the open comments to the planner as one message (`changeRequest`). Markdown, in the
  * header, swaps the document for its Markdown as plain text, to read or edit as written; `onChange` gets that text as
  * it is typed, and turning Markdown off reads it back into the document, where the comments find their passages again.
+ * With `marks`, the Outline lets the operator mark each section read or a concern, and counts those left to read
+ * (`src/lib/plan-marks.ts`).
  */
 export function PlanEditor({
     markdown,
@@ -112,11 +126,13 @@ export function PlanEditor({
     status,
     onAskForChanges,
     asked = false,
-    onNoteChange,
+    decisions = NO_DECISIONS,
     actions,
+    renderActions,
     actionsNote,
     outcome,
     previous,
+    marks,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -136,10 +152,19 @@ export function PlanEditor({
     onAskForChanges?: (message: string) => void
     /** Whether the operator asked for changes no planner has read yet, so that asking again is said as such. */
     asked?: boolean
-    /** Called with the note on the whole plan, which goes with Ask for changes, as the operator writes it. */
-    onNoteChange?: (note: string) => void
+    /**
+     * The plan's open decisions (`planDecisions`), answered under it while it may be edited (`PlanDecisions`): an
+     * answer goes with the approval's notes and with Ask for changes. None while the plan waits on no answer.
+     */
+    decisions?: readonly PlanDecision[]
     /** The caller's own word on the plan, such as Approve, at the start of the plan's foot. */
     actions?: ReactNode
+    /**
+     * In place of `actions`, those drawn from the notes an approval would carry to the implement: the open comments,
+     * the answers to the plan's decisions, and the note on the whole plan (`approvalNotes`), which goes only where it
+     * is written, beside Ask for changes.
+     */
+    renderActions?: (notes: string) => ReactNode
     /** What the caller says of those, in words, on the line under them: what they will do. */
     actionsNote?: ReactNode
     /**
@@ -152,6 +177,11 @@ export function PlanEditor({
      * `shown`, the changes show as the editor opens, until the operator turns them off.
      */
     previous?: { label: string; markdown: string; shown?: boolean } | undefined
+    /**
+     * Whose section marks the Outline keeps, by the ticket's key: the operator's own, in this browser. Without it, the
+     * Outline marks nothing.
+     */
+    marks?: string | undefined
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -183,7 +213,19 @@ export function PlanEditor({
             },
         },
     })
+    // How large the plan's text is set, as Settings picks it (`.plan-doc` in src/index.css).
+    const planText = usePlanText()
     const [draft, setDraft] = useState<Draft | undefined>(undefined)
+    // The note on the whole plan, which goes with Ask for changes or with Approve, whichever the operator presses.
+    const [note, setNote] = useState('')
+    // The option picked for each of the plan's decisions, by its number: those other than the planner's choice are
+    // answers, which go with the note.
+    const [picks, setPicks] = useState<ReadonlyMap<number, string>>(new Map())
+    const answers = decisionAnswers(decisions, picks)
+    // The open decisions' panel, under the plan, and the sticky header and foot it is brought into view between.
+    const decisionsPanel = useRef<HTMLElement>(null)
+    const planHeader = useRef<HTMLDivElement>(null)
+    const bar = useRef<HTMLDivElement>(null)
     // Whether the plan here says other than it did when it opened, by the editor's own Markdown for both: the planner's
     // may be written otherwise (`*` for `-`), and an edit undone can leave an empty paragraph at the end, neither of
     // which the operator wrote.
@@ -289,7 +331,9 @@ export function PlanEditor({
     }, [editor, threads])
 
     useEffect(() => {
-        editor.setEditable(editable)
+        // Without `false`, Tiptap emits `update` as if the operator had edited, and the plan, serialized again in the
+        // editor's own Markdown, would read as changed.
+        editor.setEditable(editable, false)
     }, [editor, editable])
 
     // The plan this one replaces, read as the editor reads a plan, while its changes are shown; none while not.
@@ -324,6 +368,20 @@ export function PlanEditor({
             editor.off('planCommentRequest', key)
         }
     }, [editor])
+
+    // The open decisions brought fully into view, clear of the sticky header and foot as tall as they are now (the
+    // header's modes wrap on a narrow page, and a note being written makes the foot taller), so measured rather than
+    // the editor's fixed clearances; the keyboard goes on from there. One taller than the room shows from its top.
+    function goToDecisions() {
+        const panel = decisionsPanel.current
+        if (panel === null) {
+            return
+        }
+        panel.style.scrollMarginTop = `${(planHeader.current?.offsetHeight ?? 0) + 8}px`
+        panel.style.scrollMarginBottom = `${(bar.current?.offsetHeight ?? 0) + 8}px`
+        panel.scrollIntoView({ block: 'nearest' })
+        panel.focus({ preventScroll: true })
+    }
 
     function startComment() {
         const { from, to, empty } = editor.state.selection
@@ -440,6 +498,8 @@ export function PlanEditor({
     }
 
     const open = threads.filter((thread) => !thread.resolved).length
+    // What an approval would carry to the implement, for the caller's actions (`renderActions`).
+    const notes = approvalNotes(threads, starts, onAskForChanges ? note : '', answers)
     const threadActions: ThreadActions = {
         onActivate: (id) => activate(id, true),
         onOpen: (id) => editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id })),
@@ -453,6 +513,12 @@ export function PlanEditor({
     }
     const onDraftChange = (body: string) => setDraft(draft && { ...draft, body })
     const onDraftLeave = () => backToPlan(highlightsKey.getState(editor.state)?.draft)
+    // While the plan's open decisions sit under its last line, the foot says how many, and goes to them.
+    const jump =
+        editable && decisions.length > 0 ? (
+            <DecisionsJump decisions={decisions} picks={picks} onJump={goToDecisions} />
+        ) : undefined
+
     return (
         // The comments sit beside the plan once both fit (a 20rem column beside a plan of about 40rem), by the space
         // the page gives them rather than the window's width, since the rail takes some of it. The plan's column
@@ -467,7 +533,7 @@ export function PlanEditor({
                 )}
             >
                 <Panel>
-                    <PanelHeader label="Plan" sticky>
+                    <PanelHeader ref={planHeader} label="Plan" sticky>
                         <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                             {status}
                             {status !== undefined && (
@@ -495,7 +561,7 @@ export function PlanEditor({
                                 <FileCode aria-hidden />
                                 Markdown
                             </Toggle>
-                            {!raw && <OutlineMenu editor={editor} />}
+                            {!raw && <OutlineMenu editor={editor} ticket={marks} />}
                         </span>
                         {editable && !raw && (
                             <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />
@@ -503,6 +569,7 @@ export function PlanEditor({
                     </PanelHeader>
                     <EditorContent
                         editor={editor}
+                        data-plan-text={planText}
                         className={cn('px-6 py-4', showChanges && 'plan-changes', raw && 'hidden')}
                     />
                     {source !== undefined && (
@@ -516,6 +583,16 @@ export function PlanEditor({
                                 onChange={(event) => editSource(event.target.value)}
                             />
                         </div>
+                    )}
+                    {editable && decisions.length > 0 && (
+                        // Under the plan, above its foot: read after the plan, as its Decisions are written to be,
+                        // and answered just over the actions that send the answers.
+                        <PlanDecisions
+                            ref={decisionsPanel}
+                            decisions={decisions}
+                            picks={picks}
+                            onPick={(decision, letter) => setPicks(new Map(picks).set(decision, letter))}
+                        />
                     )}
                     {editable && (
                         <BubbleMenu
@@ -542,28 +619,40 @@ export function PlanEditor({
                             </Button>
                         </BubbleMenu>
                     )}
-                    {((editable && (actions !== undefined || onAskForChanges !== undefined)) ||
+                    {((editable &&
+                        (actions !== undefined || renderActions !== undefined || onAskForChanges !== undefined)) ||
                         outcome !== undefined) && (
                         // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so
                         // a long plan is approved or sent back from where it is read, not from under its last line.
-                        <PanelFooter sticky data-testid="plan-bar">
+                        <PanelFooter ref={bar} sticky data-testid="plan-bar">
                             {editable && (
                                 <div className="flex flex-wrap items-center gap-2">
-                                    {actions}
+                                    {renderActions === undefined ? actions : renderActions(notes)}
                                     {onAskForChanges !== undefined && (
                                         <AskForChanges
                                             threads={threads}
                                             starts={starts}
                                             edited={edited || changed}
                                             asked={asked}
-                                            onAsk={onAskForChanges}
-                                            note={actionsNote}
-                                            onNoteChange={onNoteChange}
+                                            answers={answers}
+                                            onAsk={(message) => {
+                                                onAskForChanges(message)
+                                                // Sent: the planner has them, and the next plan answers them.
+                                                setPicks(new Map())
+                                            }}
+                                            line={actionsNote}
+                                            lead={jump}
+                                            note={note}
+                                            onNoteChange={setNote}
                                         />
                                     )}
-                                    {onAskForChanges === undefined && actionsNote !== undefined && (
-                                        <p className="basis-full text-xs text-muted-foreground">{actionsNote}</p>
-                                    )}
+                                    {onAskForChanges === undefined &&
+                                        (actionsNote !== undefined || jump !== undefined) && (
+                                            <p className="basis-full text-xs text-muted-foreground">
+                                                {jump}
+                                                {actionsNote}
+                                            </p>
+                                        )}
                                 </div>
                             )}
                             {outcome}
@@ -640,7 +729,8 @@ export function PlanDocument({ markdown, label }: { markdown: string; label: str
             attributes: { class: 'plan-doc min-h-0', 'aria-label': label, role: 'document' },
         },
     })
-    return <EditorContent editor={editor} className="px-6 py-4" />
+    const planText = usePlanText()
+    return <EditorContent editor={editor} data-plan-text={planText} className="px-6 py-4" />
 }
 
 // How many changes are marked, and buttons that step the cursor to the one before or after it.
@@ -681,9 +771,17 @@ const DEPTHS = ['pl-2', 'pl-5', 'pl-8', 'pl-11']
 // under the plan's shallowest, and the section being read as the menu opens marked as where the page is. A heading
 // chosen comes to the top of the page, under the sticky header (its scroll margin, `.plan-doc` in src/index.css); in a
 // plan the operator may edit, the cursor goes to it too, so the keyboard reads on from there. Escape gives the focus
-// back to the menu's button.
-function OutlineMenu({ editor }: { editor: Editor }) {
+// back to the menu's button. With a `ticket`, each section's row ends in its marks, read and concern, which leave the
+// menu open, so several are marked at once, and the button counts the sections left unmarked.
+function OutlineMenu({ editor, ticket }: { editor: Editor; ticket: string | undefined }) {
     const outline = useEditorState({ editor, selector: ({ editor: current }) => planOutline(current.state.doc) })
+    const sections = useEditorState({
+        editor,
+        selector: ({ editor: current }) => (ticket === undefined ? [] : planSections(current.state.doc)),
+    })
+    const marked = marksOn(usePlanMarks(ticket), sections)
+    const sectionAtPos = new Map(sections.map((section) => [section.pos, section]))
+    const marking = sections.length > 0
     const [chose, setChose] = useState(false)
     const [reading, setReading] = useState<number | undefined>(undefined)
 
@@ -719,15 +817,26 @@ function OutlineMenu({ editor }: { editor: Editor }) {
             }}
         >
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="xs" title="Go to a section of the plan">
+                <Button
+                    variant="ghost"
+                    size="xs"
+                    title={marking ? 'Go to a section of the plan, or mark it read' : 'Go to a section of the plan'}
+                >
                     <ListTree aria-hidden />
                     Outline
+                    {/* For the button's name, `Outline 3 left`; on the page, the button's gap spaces it. */}
+                    {marking && ' '}
+                    {marking && <MarksLeft sections={sections} marked={marked} />}
                     <ChevronDown aria-hidden />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
                 align="end"
-                className="max-w-[min(24rem,calc(100vw-2rem))]"
+                className={cn(
+                    'max-w-[min(24rem,calc(100vw-2rem))]',
+                    // A section's row is its heading, then its two marks, each in a column of its own.
+                    marking && 'grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-0.5',
+                )}
                 onCloseAutoFocus={(event) => {
                     if (chose) {
                         event.preventDefault()
@@ -735,23 +844,93 @@ function OutlineMenu({ editor }: { editor: Editor }) {
                 }}
             >
                 {outline.length === 0 && <DropdownMenuItem disabled>No headings yet</DropdownMenuItem>}
-                {outline.map((entry, i) => (
-                    <DropdownMenuItem
-                        key={entry.pos}
-                        aria-current={i === reading ? 'location' : undefined}
-                        title={entry.text}
-                        className={cn(
-                            DEPTHS[Math.min(entry.depth, DEPTHS.length - 1)],
-                            entry.depth === 0 ? 'font-medium' : 'text-muted-foreground',
-                            'aria-[current=location]:text-accent',
-                        )}
-                        onSelect={() => go(entry)}
-                    >
-                        <span className="truncate">{entry.text}</span>
-                    </DropdownMenuItem>
-                ))}
+                {outline.map((entry, i) => {
+                    const section = sectionAtPos.get(entry.pos)
+                    return (
+                        <Fragment key={entry.pos}>
+                            <DropdownMenuItem
+                                aria-current={i === reading ? 'location' : undefined}
+                                title={entry.text}
+                                className={cn(
+                                    DEPTHS[Math.min(entry.depth, DEPTHS.length - 1)],
+                                    entry.depth === 0 ? 'font-medium' : 'text-muted-foreground',
+                                    'aria-[current=location]:text-accent',
+                                    marking && section === undefined && 'col-span-3',
+                                )}
+                                onSelect={() => go(entry)}
+                            >
+                                <span className="truncate">{entry.text}</span>
+                            </DropdownMenuItem>
+                            {ticket !== undefined && section !== undefined && (
+                                <SectionMarks
+                                    name={entry.text}
+                                    mark={marked.get(section.key)}
+                                    onMark={(mark) => markSection(ticket, section, mark)}
+                                />
+                            )}
+                        </Fragment>
+                    )
+                })}
             </DropdownMenuContent>
         </DropdownMenu>
+    )
+}
+
+// How many of the plan's sections are left to read, in the Outline's button: `3 left`, or `all read` once each is
+// marked, then the concerns among them in the color of what waits on the operator.
+function MarksLeft({ sections, marked }: { sections: PlanSection[]; marked: Map<string, SectionMark> }) {
+    const left = sections.filter((section) => !marked.has(section.key)).length
+    const concerns = [...marked.values()].filter((mark) => mark === 'concern').length
+    return (
+        <span className="readout text-muted-foreground">
+            {left === 0 ? 'all read' : `${left} left`}
+            {concerns > 0 && (
+                <span className="text-status-blocked">
+                    {' · '}
+                    {concerns === 1 ? '1 concern' : `${concerns} concerns`}
+                </span>
+            )}
+        </span>
+    )
+}
+
+// A section's two marks, at the end of its row in the Outline: read, a check that turns the accent, and concern, which
+// turns the color of what waits on the operator; each on its own tint while on. One clears the other, and either clears
+// itself picked again. Picking one leaves the menu open, so the operator can mark the next.
+function SectionMarks({
+    name,
+    mark,
+    onMark,
+}: {
+    name: string
+    mark: SectionMark | undefined
+    onMark: (mark: SectionMark | undefined) => void
+}) {
+    return (
+        <>
+            <DropdownMenuCheckboxItem
+                bare
+                checked={mark === 'read'}
+                onCheckedChange={(on) => onMark(on ? 'read' : undefined)}
+                onSelect={(event) => event.preventDefault()}
+                aria-label={`${name}: read`}
+                title="Read, and fine"
+                className="group/mark text-muted-foreground data-[state=checked]:bg-accent/14"
+            >
+                <Check aria-hidden className="group-data-[state=checked]/mark:text-accent" />
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+                bare
+                checked={mark === 'concern'}
+                onCheckedChange={(on) => onMark(on ? 'concern' : undefined)}
+                onSelect={(event) => event.preventDefault()}
+                aria-label={`${name}: a concern`}
+                title="Read, with a concern to come back to"
+                className="group/mark text-muted-foreground data-[state=checked]:bg-status-blocked/15"
+            >
+                <CircleAlert aria-hidden className="group-data-[state=checked]/mark:text-status-blocked" />
+            </DropdownMenuCheckboxItem>
+        </>
     )
 }
 

@@ -2,9 +2,9 @@
 
 A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your limits and
 trust settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and the
-skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the clock, the send key, whether
-attention lists chore findings, your review personas, and the fun are kept in this browser; everything else canopy reads
-from its config files, as it always did.
+skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the clock, a plan's text size,
+the send key, whether attention lists chore findings, your review personas, and the fun are kept in this browser;
+everything else canopy reads from its config files, as it always did.
 
 ## Theme
 
@@ -12,33 +12,42 @@ from its config files, as it always did.
 of the header flips it too, and hovering it offers the palettes of the theme you're looking at, so you can try a few
 without leaving the page. The card stays put while you click through them; the other theme's are here.
 
-Each theme also has a palette, picked apart. The defaults tint the canvas with the accent's hue: **Lavender** in light,
+Each theme also has a palette, picked apart; hover one, here or in the header's card, for a line on what it looks
+like before you commit to it. The defaults tint the canvas with the accent's hue: **Lavender** in light,
 **Indigo** in dark. Light can also be **Off-white**, a warm paper, a soft green **Sage**, or the light side of
-**Solarized**, **Nord**, **Gruvbox**, or **Rosé Pine** (its Dawn variant). Dark can be a plain **Grey**, a near
-**Black** for an OLED screen, a deep green **Forest**, a wine-dark **Plum**, or the dark side of **Solarized**,
-**Gruvbox**, or **Monokai**. The background, surfaces, text, and accent change. Schemes with an accent bring it:
-Nord and Solarized their blues, Monokai its hot pink, Rosé Pine its dusty one, Gruvbox its purple, since its orange
-looked like every run was blocked. The rest get one that suits them: ink blue on Off-white, heather on Sage and
-in the Forest alike, steel blue on Grey, ultraviolet on Black, and orchid on Plum. Neither green one gets a green
-accent, for the same reason Gruvbox lost its orange, and the Forest gave up its lake blue, which kept passing for a
-ticket. Every status color stays where you learned it. Scheme purists
+**Solarized**, **Nord**, **Gruvbox**, **Rosé Pine** (its Dawn variant), or **Acme**, in the two tones of Plan 9's
+editor. **Pulp**, on either side, is Gruvbox's colors inked as a comic. Dark can be a plain **Grey**, a near
+**Black** for an OLED screen, a deep green **Forest**, a wine-dark
+**Plum**, or the dark side of **Solarized**, **Gruvbox**, or **Monokai**. The background, surfaces, text, and accent
+change. Schemes with an accent bring it: Nord and Solarized their blues, Monokai its hot pink, Rosé Pine its dusty one,
+Acme its dark blue, Gruvbox its purple, since its orange looked like every run was blocked. The rest get one that suits
+them: ink blue on Off-white, heather on Sage and in the Forest alike, steel blue on Grey, ultraviolet on Black, and
+orchid on Plum.
+Neither green one gets a green accent, for the same reason Gruvbox lost its orange, and the Forest gave up its lake
+blue, which kept passing for a ticket. Every status color stays where you learned it. Scheme purists
 will notice the bases and accents sit a shade off the spec, so everything stays readable on them.
 Nord's dark side didn't make it: moved far enough for that, it was Indigo with a different name. Rosé Pine's and
 Dracula's dark sides missed out the same way.
 
 A few palettes bring more than color. Dark **Gruvbox** has the crisp corners of an editor from the nineties, sets every
-line in monospace as one would, and menus and cards cast a hard shadow with no blur. **Black** drops the panels'
+line in monospace as one would, and menus and cards cast a hard shadow with no blur. **Pulp** takes all of that and
+prints it: every panel and speech bubble is outlined and drops a hard shadow onto a page of halftone dots, a title
+casts its section's color, and the primary button sinks into its shadow when you press it. Nothing explodes, though
+not for want of trying. **Black** drops the panels'
 outlines, since a step of lightness does the job on an OLED screen, rounds its corners, and lights what floats with its
 ultraviolet, because a shadow on black is a shadow nobody sees. The rest cast a soft shadow under what floats. Gruvbox
 turns the strip under the header into a stepped status bar and sets the name on a yellow block, and its section colors
 fade to Gruvbox's own; Black makes it glow like a neon sign, and turns its section colors all the way up. The others
 have a little of the same: Gruvbox's light side matches its dark one, monospace included, Solarized is crisp and flat,
-Monokai crisp and monospaced with a neon glow, Nord's light side a calm fade through its blues, Grey one steel-blue
-rule, Off-white panels lying on the page like paper, and Sage, Rosé Pine, Forest, and Plum round their corners, Plum
-most of all. Layout and sizes never change with a palette, so nothing moves when you switch, except under Gruvbox and
-Monokai, where monospace runs wider and a long line wraps a little sooner. Their text is drawn a step smaller to make
-up some of the width; every line keeps its height, so nothing shifts up or down. This guide stays in its usual sans
-under both: monospace suits a readout, and a manual set in it reads like one long log line.
+Monokai crisp and monospaced with a neon glow, Acme square-cornered and monospaced, pale yellow panels on a pale cyan
+page under one olive rule, the way Plan 9's editor drew them, before anyone thought to ask for a dark mode, Nord's light
+side a calm fade through its blues, Grey one steel-blue rule, Off-white panels lying on the page like paper, and Sage,
+Rosé Pine, Forest, and Plum round their corners, Plum most of all. Layout and sizes never change with a palette, so
+nothing moves when you switch, except under Gruvbox, Pulp, Monokai, and Acme, where monospace runs wider and a long
+line wraps
+a little sooner. Their text is drawn a step smaller to make up some of the width; every line keeps its height, so
+nothing shifts up or down. This guide stays in its usual sans under all four: monospace suits a readout, and a manual
+set in it reads like one long log line.
 
 ## Time
 
@@ -46,6 +55,15 @@ How every time of day on the page reads: **24-hour** (`14:05`, the default) or *
 zone** puts the zone after each one, as your browser abbreviates it (`14:05 EDT`), which settles the question of whose
 2 PM it was before anyone has to ask. The line above the switches shows the time now, as it will read. Every time
 follows along, the ones you hover for included. Ages (`3m ago`) don't change; minutes are minutes everywhere.
+
+## Plans
+
+How large a plan's text is set: **Tiny**, **Small**, **Normal** (the default, the guide's size), or **Large**, each
+named in the size it picks. A sample of a plan under them shows the size you picked, so you see what you're getting
+before you open one. The headings come along a step, so a plan keeps its shape at any size. It holds on a ticket's plan
+page and in a task's report, which is laid out the same way; the guide stays put. Comments beside a plan follow their
+passages as the text grows, so a long plan you'd rather read from across the room loses nothing but some scrolling. Tiny
+is for the other direction: the whole plan on one screen, squinting optional but likely.
 
 ## Replies
 
@@ -56,7 +74,7 @@ Shift+Enter always makes a new line. The key you pick shows on each send button.
 
 ## Attention
 
-**Hide chore findings** leaves what your [chores](chores) find off the [attention](attention) list, its counter, and
+**Hide chore findings** leaves what your [chores](chores) find off the [attention](attention) list, its count, and
 the nav's badge, so the list holds only what needs you. Nothing is dismissed: each chore's page still lists its
 findings, and the attention page says how many it left out, with a link back here, so a hidden finding is never
 mistaken for none. It's this browser's alone. `canopy status` still lists every finding, and so does the next tab you
@@ -133,8 +151,9 @@ The panel only reads. The line under it names the file to edit: the user file se
 and which provider sees the code. It shows what the loop runs on, so an edit appears after **Reload**, and applies from
 each agent's next run; a run already going keeps its model. One ticket's override is set on
 [its page](tickets#choosing-a-model) and never shows here. **Show the runtime's models** lists what you can name, as
-`canopy models` prints it, read only when you open it, since asking starts the runtime; canopy then keeps that list
-for five minutes, or until the loop reads its config again.
+`canopy models` prints it, less what `[runtime] hide_models` hides (see [choosing a model](tickets#choosing-a-model)),
+read only when you open it, since asking starts the runtime; canopy then keeps that list for five minutes, or until the
+loop reads its config again.
 
 ## Skills
 

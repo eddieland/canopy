@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ChevronLeft, FileText, GitPullRequest, MessageSquareReply, Sprout } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { ReactNode, RefObject } from 'react'
 
 import { ApiError } from '@/api/client'
 import type { AnswerTarget } from '@/api/mutations'
@@ -24,9 +24,7 @@ import { EmptyAttention } from '@/components/all-clear'
 import { ChoreFindingText } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
-import { Code } from '@/components/code'
 import { Copyable } from '@/components/copy-button'
-import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
 import { FeedbackPlanWaits } from '@/components/feedback-plan-card'
 import { GrantLimits } from '@/components/grant-limits'
@@ -34,7 +32,8 @@ import { Leaf } from '@/components/leaf'
 import { LessonsDue, LessonsWrong, ProposalsWaiting } from '@/components/memory-attention'
 import { ModelAttention } from '@/components/model-attention'
 import { Notice } from '@/components/notice'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
+import type { PanelRead } from '@/components/panel'
 import { PlanCard } from '@/components/plan-card'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
@@ -52,6 +51,7 @@ import { TicketTitle } from '@/components/ticket-title'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAttention } from '@/hooks/use-attention'
+import { useLeavingRows } from '@/hooks/use-leaving-rows'
 import { useToast } from '@/hooks/use-toast'
 import { answered } from '@/lib/acknowledged'
 import {
@@ -61,6 +61,7 @@ import {
     feedbackPlanOf,
     modelRefused,
     nextWaiting,
+    oldestWaiting,
     pullRequestOf,
     reviewOf,
     severity,
@@ -69,8 +70,6 @@ import {
 import type { Ask, Severity } from '@/lib/attention'
 import { useFindingsHidden } from '@/lib/attention-findings'
 import { counted } from '@/lib/descriptions'
-import { settled, withLeaving } from '@/lib/leaving'
-import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
 import { reasonMeaning } from '@/lib/meanings'
 import { pullRequestLabel } from '@/lib/pull-request-label'
@@ -101,9 +100,9 @@ const TONE: Record<Severity, Tone> = {
     finding: 'plain',
 }
 
-// How long a cleared item's row plays its exit before it is let go: `animate-leave` in src/index.css, and a little
-// over, so the row is folded shut before it goes.
-const LEAVE_MS = 700
+// What the page shows, the same on every visit, on its title's hover (ui/DESIGN.md, "A detail page leads with what it
+// is about").
+const HELP = 'What needs you, as canopy status lists it, most severe first. An item leaves when its cause is gone.'
 
 // The page's width under which the list and an item take turns rather than sit side by side: Tailwind's `@3xl`, the
 // `@max-3xl:` and `@3xl:` classes below.
@@ -122,19 +121,21 @@ function AttentionPage() {
     const { item: wanted } = Route.useSearch()
     const navigate = Route.useNavigate()
     const toast = useToast()
-    const { data } = useAttention()
+    const attention = useAttention()
+    const { data } = attention
     const tickets = useQuery(ticketsQuery).data
     const tasks = useQuery(tasksQuery).data
     const items = data === undefined ? undefined : bySeverity(data)
-    const rows = useLeavingRows(data, items)
-    // The item asked for while it is listed; else the most severe one about a ticket, which has a thread to show.
-    const selected = items?.find((i) => i.id === wanted) ?? items?.find((i) => i.ticket_key !== null) ?? items?.[0]
+    const { rows, clearing, cleared } = useLeavingRows(data, items)
+    const selected = useSelected(items, wanted)
     // Narrow, the item chosen is open in the list's place, as a page of its own, until the operator goes back to the
     // list, which then shows it chosen: `listFor` is the item they went back from.
     const [listFor, setListFor] = useState<string | undefined>(undefined)
     const open = wanted !== undefined && selected?.id === wanted && listFor !== wanted
     const pane = useRef<HTMLDivElement>(null)
     const focusOnce = useFocusOnce(wanted)
+    const scroller = useRef<HTMLElement>(null)
+    useNamedRowInView(scroller, selected?.id === wanted ? wanted : undefined)
 
     function choose(item: string) {
         setListFor(undefined)
@@ -155,6 +156,8 @@ function AttentionPage() {
         return answered(item, tickets, tasks)
     }
 
+    const oldest = items === undefined ? null : oldestWaiting(items, isDone)
+
     // A reply that answers its item moves on to the next that waits on the operator, its row chosen and focused, the
     // list in view; a toast says what the reply did, as the form that said it goes with its item.
     function moveOn(from: AttentionItem, said: string) {
@@ -170,14 +173,14 @@ function AttentionPage() {
 
     return (
         <>
-            <PageHeader title="Attention">
-                What needs you, as <Code>canopy status</Code> lists it, most severe first. An item leaves when its cause
-                is gone.
-            </PageHeader>
-            <Counters />
+            <PageHeader title="Attention" help={HELP} />
             <HiddenFindings />
-            {items !== undefined && items.length === 0 ? (
-                <EmptyAttention />
+            {items !== undefined && items.length === 0 && !clearing ? (
+                // The page's arrival (`stagger`) brings the all clear in only after the last item's exit, which earned
+                // it: a read that finds the list empty just shows it.
+                <div className={cn(!cleared && 'animate-none!')}>
+                    <EmptyAttention />
+                </div>
             ) : (
                 // Side by side from 48rem of the page's width; under it, the list and the item take turns, full width.
                 <div ref={pane} className="@container">
@@ -186,36 +189,58 @@ function AttentionPage() {
                             className={cn(
                                 'flex max-w-md min-w-0 flex-[1_1_22rem] flex-col gap-6 2xl:max-w-lg 2xl:basis-md',
                                 '@max-3xl:max-w-none @max-3xl:flex-none',
+                                '@3xl:sticky @3xl:top-6 @3xl:print:static',
                                 open && '@max-3xl:hidden',
                             )}
                         >
-                            {/* What is working now is the rail's, on every page: this column is the list alone. */}
-                            <Panel data-testid="attention-list">
+                            {/* What is working now is the rail's, on every page: this column is the list alone. Side
+                            by side it stays put and scrolls in itself, so choosing a low row keeps it in view while
+                            the page, which only the item scrolls, opens the item at its top. Its height fits the window
+                            under the shell's header, the page's title, and the main pane's padding: 10.75rem. */}
+                            <Panel
+                                data-testid="attention-list"
+                                className={cn(
+                                    'flex flex-col @3xl:max-h-[max(20rem,calc(100dvh-10.75rem))]',
+                                    '@3xl:print:max-h-none',
+                                )}
+                            >
                                 <PanelHeader label="Attention">
-                                    <span className="readout text-xs text-muted-foreground">{items?.length}</span>
+                                    <span className="text-xs whitespace-nowrap text-muted-foreground">
+                                        {oldest !== null && (
+                                            <span data-testid="attention-oldest">
+                                                oldest waiting <Age at={oldest} className="inline" />
+                                                {' · '}
+                                            </span>
+                                        )}
+                                        <span className="readout" data-testid="attention-count">
+                                            {items?.length}
+                                        </span>
+                                    </span>
                                 </PanelHeader>
                                 {items === undefined ? (
-                                    <PanelSkeleton className="min-h-40" />
+                                    <PanelLoading query={attention} className="min-h-40" />
                                 ) : (
-                                    <ul className="stagger flex flex-col gap-0.5 p-1.5">
-                                        {rows.map(({ item, leaving }) =>
-                                            leaving ? (
-                                                <Leaving
-                                                    key={item.id}
-                                                    item={item}
-                                                    done={answered(item, tickets, tasks)}
-                                                />
-                                            ) : (
-                                                <Row
-                                                    key={item.id}
-                                                    item={item}
-                                                    selected={item.id === selected?.id}
-                                                    done={answered(item, tickets, tasks)}
-                                                    onChoose={choose}
-                                                />
-                                            ),
-                                        )}
-                                    </ul>
+                                    <PanelScroll ref={scroller} label="Attention items" className="max-h-none min-h-0">
+                                        <ul className="stagger flex flex-col gap-0.5 p-1.5">
+                                            {rows.map(({ item, leaving }) =>
+                                                leaving ? (
+                                                    <Leaving
+                                                        key={item.id}
+                                                        item={item}
+                                                        done={answered(item, tickets, tasks)}
+                                                    />
+                                                ) : (
+                                                    <Row
+                                                        key={item.id}
+                                                        item={item}
+                                                        selected={item.id === selected?.id}
+                                                        done={answered(item, tickets, tasks)}
+                                                        onChoose={choose}
+                                                    />
+                                                ),
+                                            )}
+                                        </ul>
+                                    </PanelScroll>
                                 )}
                             </Panel>
                         </div>
@@ -230,9 +255,14 @@ function AttentionPage() {
                                 Back to the list
                             </Button>
                             {selected === undefined ? (
-                                <Panel>
-                                    <PanelSkeleton rows={1} className="min-h-72" />
-                                </Panel>
+                                // Only while the list is read: a list that failed says so once, in its own panel, and
+                                // one read empty, its last row on its way out, has nothing to load.
+                                items === undefined &&
+                                attention.error === null && (
+                                    <Panel>
+                                        <PanelSkeleton rows={1} className="min-h-72" />
+                                    </Panel>
+                                )
                             ) : (
                                 <Detail
                                     key={selected.id}
@@ -248,6 +278,44 @@ function AttentionPage() {
             )}
         </>
     )
+}
+
+/**
+ * The item the page shows: the one asked for while it is listed. Once it leaves, the row that took its place, so a
+ * long list is worked down where the operator stands. With none asked for, or one never seen listed, as on an old link,
+ * the most severe item about a ticket, which has a thread to show.
+ */
+function useSelected(items: AttentionItem[] | undefined, wanted: string | undefined): AttentionItem | undefined {
+    const [place, setPlace] = useState<{ item: string; index: number } | undefined>(undefined)
+    const index = items?.findIndex((i) => i.id === wanted) ?? -1
+    if (wanted !== undefined && index !== -1 && (place?.item !== wanted || place.index !== index)) {
+        setPlace({ item: wanted, index })
+    }
+    if (index !== -1) {
+        return items?.[index]
+    }
+    const successor = place !== undefined && place.item === wanted ? (items?.[place.index] ?? items?.at(-1)) : undefined
+    return successor ?? items?.find((i) => i.ticket_key !== null) ?? items?.[0]
+}
+
+/**
+ * Brings the row of the item the URL names into view in the list that scrolls in itself, when none of it shows, as on a
+ * reload or a notification's link: the list alone moves, never the page, and a row the operator can see stays put.
+ * Named again only when `item` changes, so the stream never takes a list they scrolled away.
+ */
+function useNamedRowInView(scroller: RefObject<HTMLElement | null>, item: string | undefined) {
+    useLayoutEffect(() => {
+        const list = scroller.current
+        const row = item === undefined ? null : (list?.querySelector('[aria-current=page]') ?? null)
+        if (list === null || row === null) {
+            return
+        }
+        const shown = list.getBoundingClientRect()
+        const { top, bottom } = row.getBoundingClientRect()
+        if (list.scrollHeight > list.clientHeight && (bottom <= shown.top || top >= shown.bottom)) {
+            list.scrollBy({ top: (top + bottom - shown.top - shown.bottom) / 2, behavior: 'instant' })
+        }
+    }, [scroller, item])
 }
 
 /**
@@ -269,34 +337,6 @@ function HiddenFindings() {
             ask. Each chore&apos;s page still lists its own.
         </p>
     )
-}
-
-/**
- * The list's rows as the stream changes it: an item that leaves keeps its row a moment, leaving, so it can go with a
- * small reward rather than vanish (ui/DESIGN.md, "Fun"). Each list from the query is compared once, by identity, as it
- * arrives; the leaving rows are let go together once the last to leave has played its exit.
- */
-function useLeavingRows(data: AttentionItem[] | undefined, items: AttentionItem[] | undefined) {
-    const [listed, setListed] = useState(() => ({ from: data, rows: withLeaving([], items ?? []) }))
-    if (listed.from !== data) {
-        setListed({ from: data, rows: withLeaving(listed.rows, items ?? []) })
-    }
-    // Which rows are leaving, so one more leaving starts the wait again and every exit plays in full.
-    const leaving = listed.rows
-        .filter((row) => row.leaving)
-        .map((row) => row.item.id)
-        .join(' ')
-    useEffect(() => {
-        if (leaving === '') {
-            return
-        }
-        const timer = globalThis.setTimeout(
-            () => setListed((now) => ({ from: now.from, rows: settled(now.rows) })),
-            LEAVE_MS,
-        )
-        return () => globalThis.clearTimeout(timer)
-    }, [leaving])
-    return listed.rows satisfies Listed<AttentionItem>[]
 }
 
 /**
@@ -518,12 +558,13 @@ function ItemHead({ item, asks, done }: { item: AttentionItem; asks: Ask; done: 
  * before the ticket's actions and conversation.
  */
 function PlanReview({ ticketKey }: { ticketKey: string }) {
-    const { data, error } = useQuery(ticketPlansQuery(ticketKey))
+    const query = useQuery(ticketPlansQuery(ticketKey))
+    const { data, error } = query
     if (error instanceof ApiError) {
         return <Notice error={error} className="border-b p-3" />
     }
     if (data === undefined) {
-        return <PanelSkeleton rows={2} className="min-h-44 border-b" />
+        return <PanelLoading query={query} rows={2} className="min-h-44 border-b" />
     }
     return <PlanCard ticketKey={ticketKey} plans={data} bare />
 }
@@ -692,12 +733,13 @@ function RunQuestion({ item, onAnswered }: { item: AttentionItem; onAnswered: (s
 
 /** A worker's or a planner's run's question, from the run as its page reads it. */
 function WorkerQuestion({ id, onAnswered }: { id: number; onAnswered: (said: string) => void }) {
-    const { data, error } = useQuery(runQuery(id))
+    const query = useQuery(runQuery(id))
+    const { data } = query
     return (
         <QuestionBlock
             card={data?.card}
             running={data?.state === 'running'}
-            error={error}
+            query={query}
             answers={{ kind: 'run', id }}
             onAnswered={onAnswered}
         />
@@ -706,12 +748,13 @@ function WorkerQuestion({ id, onAnswered }: { id: number; onAnswered: (said: str
 
 /** A review's question, from the review as its page reads it. */
 function ReviewQuestion({ id, onAnswered }: { id: number; onAnswered: (said: string) => void }) {
-    const { data, error } = useQuery(reviewQuery(id))
+    const query = useQuery(reviewQuery(id))
+    const { data } = query
     return (
         <QuestionBlock
             card={data?.card}
             running={data?.review.state === 'running'}
-            error={error}
+            query={query}
             answers={{ kind: 'review', id }}
             onAnswered={onAnswered}
         />
@@ -722,21 +765,22 @@ function ReviewQuestion({ id, onAnswered }: { id: number; onAnswered: (said: str
 function QuestionBlock({
     card,
     running,
-    error,
+    query,
     answers,
     onAnswered,
 }: {
     card: RunCard | null | undefined
     running: boolean
-    error: Error | null
+    /** The read of the run or review that carries the card. */
+    query: PanelRead
     answers: AnswerTarget
     onAnswered: (said: string) => void
 }) {
-    if (error instanceof ApiError) {
-        return <Notice error={error} className="border-b p-3" />
+    if (query.error instanceof ApiError) {
+        return <Notice error={query.error} className="border-b p-3" />
     }
     if (card === undefined) {
-        return <PanelSkeleton rows={2} className="min-h-44 border-b" />
+        return <PanelLoading query={query} rows={2} className="min-h-44 border-b" />
     }
     const question = card?.question ?? null
     if (question === null) {
@@ -816,12 +860,13 @@ function RunCommand({ command, note, className }: { command: string; note?: stri
 
 /** A PR's item: a grant of one more review when the PR is at its review limit (DESIGN §21), else nothing to answer. */
 function PullRequestLimits({ url }: { url: string }) {
-    const { data, error } = useQuery(pullRequestQuery(url))
+    const query = useQuery(pullRequestQuery(url))
+    const { data, error } = query
     if (error instanceof ApiError) {
         return <Notice error={error} className="p-3" />
     }
     if (data === undefined) {
-        return <PanelSkeleton rows={1} className="min-h-24" />
+        return <PanelLoading query={query} rows={1} className="min-h-24" />
     }
     const limits = data.review_limit === null ? [] : [data.review_limit]
     return limits.some((limit) => limit.runs >= limit.limit) ? (
@@ -833,12 +878,13 @@ function PullRequestLimits({ url }: { url: string }) {
 
 /** A chore's item: the chore's notes, which its next runs read, and the form for another (DESIGN §19). */
 function ChoreThread({ name }: { name: string }) {
-    const { data, error } = useQuery(choreQuery(name))
+    const query = useQuery(choreQuery(name))
+    const { data, error } = query
     if (error instanceof ApiError) {
         return <Notice error={error} className="p-3" />
     }
     if (data === undefined) {
-        return <PanelSkeleton className="min-h-60" />
+        return <PanelLoading query={query} className="min-h-60" />
     }
     return <ChoreNotes detail={data} />
 }
@@ -860,12 +906,13 @@ function Thread({
     asks: Ask
     onReplied: (said: string) => void
 }) {
-    const { data, error } = useQuery(ticketQuery(ticketKey))
+    const query = useQuery(ticketQuery(ticketKey))
+    const { data, error } = query
     if (error instanceof ApiError) {
         return <Notice error={error} className="p-3" />
     }
     if (data === undefined) {
-        return <PanelSkeleton className="min-h-60" />
+        return <PanelLoading query={query} className="min-h-60" />
     }
     const { ticket } = data
     const leads = asks === 'ticket'

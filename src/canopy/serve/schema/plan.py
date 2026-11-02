@@ -10,6 +10,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
+from canopy.core import plans
 from canopy.serve.schema import Model
 from canopy.serve.schema.persona import RunPersona
 
@@ -86,6 +87,9 @@ class PlanThreadView(Model):
     """When it was written."""
     resolved: bool
     """Whether the operator resolved it. A resolved thread is kept, and asks the planner for nothing."""
+    read: bool
+    """Whether a planner has read it as it stands: sent in a request for changes, then answered by a new plan. Approve
+    leaves it out of its notes, and a change to its words, a reply, or its resolution makes it unread again."""
     replies: list[PlanReplyView]
     """Its replies, oldest first."""
 
@@ -116,6 +120,9 @@ class PlanAction(Model):
 
     action: Literal["approve", "request", "skip"]
     """`approve` the newest plan as its file stands, `request` a new plan, or `skip` the plan."""
+    message: Annotated[str, Field(max_length=plans.MAX_NOTE + 1000)] | None = None
+    """With `approve`, the operator's note for its implement, written on the ticket with the approval, as `--message`.
+    Bounded again in code."""
 
 
 class PlanChanged(Model):
@@ -181,7 +188,7 @@ class PlanAnchor(Model):
 
 
 class PlanThreadChange(Model):
-    """A change to a comment thread on a plan: its comment's words, a reply's, or whether it is resolved."""
+    """A change to a comment thread on a plan: its words, a reply's, whether it is resolved, or that it was sent."""
 
     body: Annotated[str, Field(max_length=20_000)] | None = None
     """New words for the comment, or with `reply` for that reply."""
@@ -191,6 +198,8 @@ class PlanThreadChange(Model):
     """Resolve the thread, or reopen it; none to leave it."""
     anchor: PlanAnchor | None = None
     """The passage as it now stands, after an edit of the plan moved or changed its words; none to leave it."""
+    sent: bool | None = None
+    """True when the operator just sent it, as it stands, to a planner in a request for changes."""
 
 
 class PlanThreadDeleted(Model):
