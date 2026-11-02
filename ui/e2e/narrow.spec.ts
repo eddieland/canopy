@@ -313,7 +313,7 @@ for (const width of [1720, 1280]) {
 async function longModels(page: Page): Promise<{ chosen: string | null }> {
     const served: { chosen: string | null } = { chosen: null }
     await page.route('**/api/models', (route) =>
-        route.fulfill({ json: { models: [LONG], variants: { [LONG]: ['high'] }, error: null } }),
+        route.fulfill({ json: { models: [LONG], variants: { [LONG]: ['high'] }, hidden: [], error: null } }),
     )
     await page.route('**/api/tickets/ABC-102/models', async (route) => {
         served.chosen = (route.request().postDataJSON() as { model: string | null }).model

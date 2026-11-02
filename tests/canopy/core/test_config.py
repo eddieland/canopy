@@ -111,6 +111,7 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("personas", "worker = 'canopy'"),
         ("personas", "planner = 'skeptic'"),
         ("personas", "reviewer = 'lenient'"),
+        ("runtime", "hide_models = ['acme/*']"),
     ],
 )
 def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:

@@ -14,6 +14,7 @@ from canopy.runtime import models as runtime_models
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
+    from collections.abc import Set as AbstractSet
 
     from canopy.runtime.agents import Model
     from canopy.runtime.report import ModelList
@@ -95,20 +96,26 @@ def cmd_model(
 
 
 @click.command("models")
+@click.option("--all", "show_all", is_flag=True, help="Show the models and variants runtime.hide_models hides too.")
 @click.pass_context
-def cmd_models(click_ctx: click.Context) -> int:
+def cmd_models(click_ctx: click.Context, *, show_all: bool) -> int:
     """List the models the runtime can run an agent on, read from it now in the workspace root.
 
     Each line names the agents [runtime.models] chooses it for. The list is the runtime's own, from its cache or the
-    catalog built into it: a model on it can still fail when called. Exits 1 when the list cannot be read, or an agent's
-    model in [runtime.models] is not on it, or its variant is not one the model lists, since that agent's runs are
-    refused until it is.
+    catalog built into it: a model on it can still fail when called. What runtime.hide_models matches is left out
+    unless --all, and still checked against. Exits 1 when the list cannot be read, or an agent's model in
+    [runtime.models] is not on it, or its variant is not one the model lists, since that agent's runs are refused until
+    it is.
     """
     ctx = open_context(click_ctx)
-    lines, refused = render(
-        runtime_models.listed(ctx.runner, version=ctx.config.runtime.version, cwd=ctx.workspace.root, variants=True),
-        ctx.config.runtime.models,
+    listed = runtime_models.listed(
+        ctx.runner,
+        version=ctx.config.runtime.version,
+        cwd=ctx.workspace.root,
+        variants=True,
     )
+    hidden = frozenset[str]() if show_all else agent_models.hidden(listed, ctx.config.runtime.hide_models)
+    lines, refused = render(listed, ctx.config.runtime.models, hidden)
     for line in lines:
         click.echo(line)
     return int(refused)
@@ -147,25 +154,30 @@ def show(key: str, found: Sequence[ticket_models.Next]) -> list[str]:
     return lines
 
 
-def render(listed: ModelList, models: Mapping[str, str]) -> tuple[list[str], bool]:
+def render(
+    listed: ModelList,
+    models: Mapping[str, str],
+    hidden: AbstractSet[str] = frozenset(),
+) -> tuple[list[str], bool]:
     """The models as `canopy models` prints them, and whether an agent's runs would be refused their model.
 
     A model in `models`, `runtime.models`, may name a variant, `provider/model@variant`, as dispatch reads it
-    (`agent_models.parse`): it is listed when its model is, and its variant is one `listed` gives the model.
+    (`agent_models.parse`): it is listed when its model is, and its variant is one `listed` gives the model. `hidden`,
+    as `agent_models.hidden` gives it, is left out of the lines but not of that check.
 
     Returns:
-        The lines, without line ends: a line per model, with its variants and the agents given it, then one per model
-        `models` names that is not listed, or whose variant is not; and True when the list could not be read or such a
-        model is named.
+        The lines, without line ends: a line per model not hidden, with its variants not hidden and the agents given
+        it, then one per model `models` names that is not listed, or whose variant is not; and True when the list
+        could not be read or such a model is named.
     """
     if listed.error is not None:
         return [f"could not read the models {invocation.NAME} lists ({agent_models.LIST_FAILED}): {listed.error}"], True
     count = len(listed.models)
-    lines = [f"{invocation.NAME} lists {count} model{'' if count == 1 else 's'}:"]
+    lines = [f"{invocation.NAME} lists {count} {_plural(count, 'model')}{_hiding(listed, hidden)}:"]
     chosen = {role: agent_models.parse(value) for role, value in models.items()}
-    for model in sorted(listed.models):
+    for model in sorted(listed.models - hidden):
         line = f"  {model}"
-        if variants := sorted(listed.variants.get(model, ())):
+        if variants := sorted(v for v in listed.variants.get(model, ()) if f"{model}@{v}" not in hidden):
             line += f"  variants: {', '.join(variants)}"
         roles = [_given(role, m) for role, m in chosen.items() if m.id == model]
         lines.append(f"{line}  (runtime.models: {', '.join(roles)})" if roles else line)
@@ -191,3 +203,23 @@ def _given(role: str, model: Model) -> str:
         The words, such as `reviewer` or `reviewer@xhigh`.
     """
     return role if model.variant is None else f"{role}@{model.variant}"
+
+
+def _hiding(listed: ModelList, hidden: AbstractSet[str]) -> str:
+    """Say what `runtime.hide_models` leaves out of the list, for its heading.
+
+    Returns:
+        The words, starting with their separator, or nothing when it hides none.
+    """
+    models = len(hidden & listed.models)
+    counts = [f"{n} {_plural(n, what)}" for n, what in ((models, "model"), (len(hidden) - models, "variant")) if n]
+    return f"; runtime.hide_models hides {' and '.join(counts)} (--all shows them)" if counts else ""
+
+
+def _plural(count: int, word: str) -> str:
+    """Return `word` as `count` of it reads: plural unless one.
+
+    Returns:
+        The word.
+    """
+    return word if count == 1 else f"{word}s"

@@ -6573,6 +6573,14 @@ export type components = {
              */
             error: string | null;
             /**
+             * Hidden
+             * @description What `runtime.hide_models` leaves out of the menus, in order: a model as `provider/model`, which hides its
+             *     variants too, or one variant of a model as `provider/model@variant`. Still listed, so a model chosen that is hidden
+             *     is no less listed, and its runs no less run.
+             * @default []
+             */
+            hidden: string[];
+            /**
              * Models
              * @description Each model, as `provider/model`, in order; none when the list could not be read.
              * @default []

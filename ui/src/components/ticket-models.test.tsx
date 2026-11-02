@@ -74,7 +74,7 @@ const server: Middleware = {
         const text = await request.text()
         sent.push({ method: request.method, path, body: text === '' ? null : (JSON.parse(text) as unknown) })
         if (request.method === 'GET') {
-            return listed ?? Response.json({ models: LISTED, variants: {}, error: null })
+            return listed ?? Response.json({ models: LISTED, variants: {}, hidden: [], error: null })
         }
         return answer ?? Response.json(CHOSEN)
     },
@@ -200,7 +200,7 @@ describe('TicketModels', () => {
     })
 
     it('groups a long list by provider and narrows it to the ids holding what is typed', async () => {
-        listed = Response.json({ models: MANY, variants: {}, error: null })
+        listed = Response.json({ models: MANY, variants: {}, hidden: [], error: null })
         renderModels()
         const list = openPicker('reviewer model: runtime default')
         expect(await offered(list)).toHaveLength(200)
@@ -303,7 +303,7 @@ describe('TicketModels', () => {
     })
 
     it('says in the failure color why the list could not be read, offers no model, and reads it again', async () => {
-        listed = Response.json({ models: [], variants: {}, error: '`opencode models` exited 1' })
+        listed = Response.json({ models: [], variants: {}, hidden: [], error: '`opencode models` exited 1' })
         renderModels()
         const list = openPicker('worker model: acme/deep-2')
         expect(await within(list).findByText('Could not read its models: `opencode models` exited 1')).toBeDefined()
@@ -359,7 +359,7 @@ describe('TicketModels', () => {
     })
 
     it("offers each model's variants under it, and sets the override to one, as canopy model does", async () => {
-        listed = Response.json({ models: LISTED, variants: VARIANTS, error: null })
+        listed = Response.json({ models: LISTED, variants: VARIANTS, hidden: [], error: null })
         answer = Response.json({ ...CHOSEN, model: 'acme/deep-2@high', variant: 'high' })
         renderModels()
         const list = openPicker('reviewer model: runtime default')
@@ -387,6 +387,22 @@ describe('TicketModels', () => {
             path: '/api/tickets/ABC-1/models',
             body: { agent: 'reviewer', model: 'acme/deep-2@high' },
         })
+    })
+
+    it('leaves out what runtime.hide_models hides, but a hidden model chosen is pinned, not marked gone', async () => {
+        listed = Response.json({
+            models: LISTED,
+            variants: VARIANTS,
+            hidden: ['acme/fast-1', 'acme/deep-2@low'],
+            error: null,
+        })
+        renderModels()
+        // The planner is on config's acme/fast-1, which is hidden but still listed: its next run is not refused.
+        await waitFor(() => expect(sent.map((s) => s.path)).toEqual(['/api/models']))
+        const list = openPicker('planner model: acme/fast-1')
+        expect((await offered(list)).map((o) => said(o))).toEqual(['acme/deep-2 (default)', 'acme/deep-2@high'])
+        expect(readOption(pinned(list))).toEqual(['acme/fast-1[runtime.models]', 'true', 'false'])
+        expect(screen.queryByRole('button', { name: /no longer listed/u })).toBeNull()
     })
 
     it('takes the first model at a variant typed when Enter is pressed, not a model at its default', async () => {
@@ -418,7 +434,7 @@ describe('TicketModels', () => {
     })
 
     it("shows config's model at its variant, checked at that variant, and takes it whole as the override", async () => {
-        listed = Response.json({ models: LISTED, variants: VARIANTS, error: null })
+        listed = Response.json({ models: LISTED, variants: VARIANTS, hidden: [], error: null })
         answer = Response.json({ ...AT_HIGH, source: 'ticket' })
         renderModels([AT_HIGH])
         // What served it is the model alone, or at the variant, either of which its row names.
@@ -439,7 +455,7 @@ describe('TicketModels', () => {
     })
 
     it("says an override naming no variant sets config's aside, as canopy model does", async () => {
-        listed = Response.json({ models: LISTED, variants: VARIANTS, error: null })
+        listed = Response.json({ models: LISTED, variants: VARIANTS, hidden: [], error: null })
         answer = Response.json({
             ...AT_HIGH,
             model: 'acme/deep-2',
@@ -460,7 +476,7 @@ describe('TicketModels', () => {
     })
 
     it('marks a variant the runtime no longer lists for its model, as a model no longer listed', async () => {
-        listed = Response.json({ models: LISTED, variants: { 'acme/deep-2': ['low'] }, error: null })
+        listed = Response.json({ models: LISTED, variants: { 'acme/deep-2': ['low'] }, hidden: [], error: null })
         renderModels([AT_HIGH])
         const gone = 'planner model: acme/deep-2@high, variant no longer listed; its next run is refused'
         await screen.findByRole('button', { name: gone })
@@ -508,7 +524,7 @@ describe('TicketModels', () => {
 
     it('names a long id whole on hover, which its trigger and the list end in an ellipsis', async () => {
         const long = 'openrouter/anthropic/claude-opus-4.1-20250805-preview'
-        listed = Response.json({ models: [long], variants: { [long]: ['high'] }, error: null })
+        listed = Response.json({ models: [long], variants: { [long]: ['high'] }, hidden: [], error: null })
         renderModels([{ ...AT_HIGH, model: `${long}@high` }])
         const trigger = screen.getByRole('button', { name: `planner model: ${long}@high` })
         expect(trigger.getAttribute('title')).toBe(`${long}@high`)
