@@ -50,7 +50,8 @@ follows along, the ones you hover for included. Ages (`3m ago`) don't change; mi
 ## Plans
 
 How large a plan's text is set: **Small**, **Normal** (the default, the guide's size), or **Large**, each named in the
-size it picks, so you see what you're getting before you get it. The headings come along a step, so a plan keeps its
+size it picks. A sample of a plan under them shows the size you picked, so you see what you're getting before you open
+one. The headings come along a step, so a plan keeps its
 shape at any size. It holds on a ticket's plan page and in a task's report, which is laid out the same way; the guide
 stays put. Comments beside a plan follow their passages as the text grows, so a long plan you'd rather read from across
 the room loses nothing but some scrolling.

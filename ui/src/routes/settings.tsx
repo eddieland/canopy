@@ -671,13 +671,16 @@ function ClockPanel() {
     )
 }
 
-/** How large a plan's text is set, in its editor and in a task's report; the guide keeps a document's own size. */
+/**
+ * How large a plan's text is set, in its editor and in a task's report; the guide keeps a document's own size. Under
+ * the choice, a sample of a plan, a section and a paragraph, drawn by the plan's own rules at the size picked.
+ */
 function PlanTextPanel() {
     const planText = usePlanText()
     return (
         <Panel>
             <PanelHeader label="Plans" />
-            <div className="flex items-center justify-between gap-4 p-3">
+            <div className="flex items-center justify-between gap-4 border-b p-3">
                 <p className="max-w-3xl text-sm text-muted-foreground">
                     How large a plan&apos;s text is set, its headings with it, on its page and in a task&apos;s report.
                     Normal is the guide&apos;s size.
@@ -705,6 +708,17 @@ function PlanTextPanel() {
                         </ToggleGroupItem>
                     ))}
                 </ToggleGroup>
+            </div>
+            {/* A sample, not a plan: hidden from a screen reader, which would read it as the page's own words. */}
+            <div aria-hidden data-plan-text={planText} data-testid="plan-text-sample" className="p-3">
+                <div className="plan-doc min-h-0">
+                    <p data-level="2">Export reports as CSV</p>
+                    <p>
+                        In <strong>web</strong>, the reports page gains an <em>Export CSV</em> button. It calls a new
+                        route, <code>GET /reports/{'{id}'}/export.csv</code>, which streams the report&apos;s rows as
+                        they are read, so a large report never sits whole in memory.
+                    </p>
+                </div>
             </div>
         </Panel>
     )
