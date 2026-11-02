@@ -180,6 +180,18 @@
         0 12px 32px -12px oklch(from var(--foreground) l c h / 0.24),
         0 2px 6px oklch(from var(--foreground) l c h / 0.08);
     --depth-action: 0 1px 2px oklch(from var(--accent) l c h / 0.35);
+    /* A comic's ink, which only Gruvbox draws: the primary action pressed into its shadow (`--press-x`,
+     * `--press-y`, and `--depth-action-pressed`), a message's bubble inked and dropped (`--depth-bubble`), the
+     * canvas's halftone dots (`--canvas-texture`), and a page title's drop in its section's color (`--title-drop`).
+     * The defaults press a pixel down and draw none of the rest, the title's drop transparent
+     * (`--title-drop-alpha`). Each is a shadow, a transform, or a background, so none takes room. */
+    --press-x: 0px;
+    --press-y: 1px;
+    --depth-action-pressed: var(--depth-action);
+    --depth-bubble: none;
+    --canvas-texture: none;
+    --title-drop: 0;
+    --title-drop-alpha: 0;
 
     /* The face interface text is set in: Plex Sans, or the mono data is set in (`--face-mono`), for an editor that
      * sets everything in it. Both are bundled and preloaded, so a palette that switches never paints in a fallback
@@ -423,9 +435,21 @@
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
     --code-size: 1em;
-    --depth-panel: none;
-    --depth-float: 4px 4px 0 oklch(from var(--foreground) l c h / 0.85);
-    --depth-action: 3px 3px 0 oklch(from var(--foreground) l c h / 0.85);
+    /* A comic's page: panels inked in its dark fg, a line and a half thick, each dropping a hard shadow; halftone
+     * dots on the gutter between them; the primary action pressed flat into its shadow; and a bubble inked as a
+     * panel is. The extra half line is a shadow's spread, so it takes no room. */
+    --ink: oklch(from var(--foreground) l c h / 0.9);
+    --edge: var(--ink);
+    --depth-panel: 0 0 0 0.5px var(--ink), 4px 4px 0 var(--ink);
+    --depth-float: 0 0 0 0.5px var(--ink), 6px 6px 0 var(--ink);
+    --depth-action: 0 0 0 1.5px var(--ink), 3px 3px 0 1.5px var(--ink);
+    --depth-action-pressed: 0 0 0 1.5px var(--ink);
+    --press-x: 3px;
+    --press-y: 3px;
+    --depth-bubble: 0 0 0 1.5px var(--ink), 3px 3px 0 1.5px var(--ink);
+    --canvas-texture: radial-gradient(oklch(from var(--foreground) l c h / 0.11) 1px, transparent 1.5px) 0 0 / 6px 6px;
+    --title-drop: 0.08em;
+    --title-drop-alpha: 1;
     --aurora-height: 0.25rem;
     --aurora-image: linear-gradient(
         90deg,
@@ -674,9 +698,21 @@
     --section-chores: oklch(0.74 0.15 52);
     --section-reports: oklch(0.84 0.15 85);
     --section-memory: oklch(0.78 0.07 190);
-    --depth-panel: none;
-    --depth-float: 4px 4px 0 oklch(0.1 0 0);
-    --depth-action: 3px 3px 0 oklch(0.1 0 0);
+    /* A comic's page at night: panels outlined in its bg3, a step brighter than the hairlines inside them, drop a
+     * hard black shadow off the gutter, which is dotted in halftone, and the primary action presses flat into its
+     * shadow. */
+    --ink: oklch(0.06 0 0);
+    --edge: oklch(0.44 0.017 58);
+    --depth-panel: 5px 5px 0 var(--ink);
+    --depth-float: 0 0 0 1px var(--ink), 6px 6px 0 var(--ink);
+    --depth-action: 0 0 0 1.5px var(--ink), 3px 3px 0 1.5px var(--ink);
+    --depth-action-pressed: 0 0 0 1.5px var(--ink);
+    --press-x: 3px;
+    --press-y: 3px;
+    --depth-bubble: 3px 3px 0 var(--ink);
+    --canvas-texture: radial-gradient(oklch(from var(--foreground) l c h / 0.1) 1px, transparent 1.5px) 0 0 / 6px 6px;
+    --title-drop: 0.08em;
+    --title-drop-alpha: 1;
 }
 
 /* Forest: a deep green canvas, the dark side of Sage, and heather for an accent, as Sage wears: a lake blue read as
@@ -865,6 +901,8 @@
     --shadow-panel: var(--depth-panel);
     --shadow-float: var(--depth-float);
     --shadow-action: var(--depth-action);
+    --shadow-action-pressed: var(--depth-action-pressed);
+    --shadow-bubble: var(--depth-bubble);
 
     /*
      * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names

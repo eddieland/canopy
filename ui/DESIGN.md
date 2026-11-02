@@ -145,6 +145,10 @@ Rules:
   keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono.
   The defaults take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the
   nineties, and black no edges, soft corners, and the glow.
+  Gruvbox's sides also ink the page as a comic does, from a few knobs whose defaults draw nothing: each panel and
+  bubble inked and dropping a hard shadow, a halftone canvas (`--canvas-texture`), the primary action pressed into its
+  shadow (`--press-x`, `--press-y`), and a page title dropped in its section's color (`--title-drop`). Each is a
+  shadow, a transform, or a background, so it takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
@@ -194,8 +198,9 @@ Rules:
 - Depth is used sparingly, in three places and nowhere else: a faint lift under a panel and a counter
   (`shadow-panel`), a shadow under what floats over the page, a menu, a card, a tip, a dialog, a toast, the rail's
   sheet, and the settings' save bar (`shadow-float`), and one under the primary action, the default button
-  (`shadow-action`). Each is the palette's (Palettes, under Tokens), so its form changes with it, and nothing inside
-  a panel casts one but a pressed segment's `shadow-xs`.
+  (`shadow-action`, and `shadow-action-pressed` while it is pressed). Each is the palette's (Palettes, under Tokens),
+  so its form changes with it, and nothing inside a panel casts one but a pressed segment's `shadow-xs` and a
+  conversation's bubble (`shadow-bubble`), which casts none but on a palette that inks it.
 - Radius: `rounded-md` (8px) for panels, buttons, and fields, `rounded-sm` (6px) for chips and nav items, `rounded-xs`
   (4px) for a mark smaller than a line of text, a checkbox or a slot's square, at the default palettes' `--radius`. A
   palette may set its own, and the scale follows it. The scale is in `tokens.css`; no arbitrary radius
