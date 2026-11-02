@@ -27,7 +27,7 @@ export function Mark({ live = false, ticking = false, beat }: { live?: boolean; 
                         strokeWidth="1.5"
                         strokeLinecap="round"
                         strokeDasharray="12 40"
-                        className="animate-sweep"
+                        className="animate-turn"
                     />
                 )}
                 <circle cx="8" cy="8" r="2" fill="currentColor" className={cn(live && 'animate-breathe')} />
