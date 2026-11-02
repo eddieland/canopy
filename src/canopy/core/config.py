@@ -51,6 +51,7 @@ from pydantic import (
 from canopy.core import agent_models, bash_allows, chore_result, contract, hostgit
 from canopy.core.vocab import MemoryMode, PlannerApproval, PoolKind, ReplyMode
 from canopy.infra import procs, tracing
+from canopy.infra.metrics import Metrics  # noqa: TC001  (pydantic reads `Telemetry.metrics` at run time)
 from canopy.runtime import agents, invocation
 from canopy.runtime.agents import McpTools
 from canopy.runtime.definitions import MAX_SKILL_NAME, SKILL_NAME_RE, TOOL_PART_RE
@@ -1140,15 +1141,19 @@ class Telemetry(Section):
     #: `off`; `file`, each span appended, as OTLP JSON, to `traces.jsonl` in the state directory, for a collector the
     #: operator runs to read; or `otlp`, sent to `endpoint`, the harness's one network call (TRUST_MODEL T2).
     traces: Annotated[tracing.Traces, Scope.PRIVATE] = "off"
+    #: `off`; `file`, appended, as OTLP JSON, to `metrics.jsonl` in the state directory; or `otlp`, sent to `endpoint`
+    #: as traces are: how many runs and ticks ended, how long they took, what they cost, and how many are at work.
+    metrics: Annotated[Metrics, Scope.PRIVATE] = "off"
     #: An OTLP/HTTP endpoint's base URL, such as a collector's `http://localhost:4318`: spans go to `/v1/traces` under
-    #: it. Read only while `traces` is `otlp`, which needs it.
+    #: it, and metrics to `/v1/metrics`. Read only while `traces` or `metrics` is `otlp`, which needs it.
     endpoint: Annotated[Annotated[StrictStr, AfterValidator(_otlp_endpoint)] | None, Scope.PRIVATE] = None
 
     @model_validator(mode="after")
     def _otlp_needs_an_endpoint(self) -> Telemetry:
-        if self.traces == "otlp" and self.endpoint is None:
-            msg = "telemetry.traces = 'otlp' needs telemetry.endpoint, the OTLP/HTTP endpoint to send spans to"
-            raise ValueError(msg)
+        for signal, value in (("traces", self.traces), ("metrics", self.metrics)):
+            if value == "otlp" and self.endpoint is None:
+                msg = f"telemetry.{signal} = 'otlp' needs telemetry.endpoint, the OTLP/HTTP endpoint to send it to"
+                raise ValueError(msg)
         return self
 
 

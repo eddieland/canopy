@@ -13,7 +13,7 @@ from unittest import mock
 
 import pytest
 
-from canopy.infra import otlp, tracing
+from canopy.infra import metrics, otlp, tracing
 
 
 @dataclass
@@ -117,3 +117,14 @@ def test_a_proxy_the_environment_names_is_not_used() -> None:
     with endpoint() as url, mock.patch.dict(os.environ, unreachable):
         assert otlp.HttpExporter(url + tracing.TRACES_PATH).export([]) is otlp.SpanExportResult.SUCCESS
     assert [h.path for h in _Endpoint.heard] == [tracing.TRACES_PATH]
+
+
+def test_metrics_are_posted_as_otlp_json_to_the_endpoints_metrics_path(tmp_path: Path) -> None:
+    with endpoint() as url:
+        metrics.configure(tmp_path, "otlp", url)
+        metrics.count("canopy.ticks", dry_run=False)
+        metrics.configure(tmp_path, "off")
+    [heard] = _Endpoint.heard
+    assert (heard.method, heard.path, heard.content_type) == ("POST", metrics.METRICS_PATH, "application/json")
+    [scope] = heard.body["resourceMetrics"][0]["scopeMetrics"]
+    assert [m["name"] for m in scope["metrics"]] == ["canopy.ticks"]
