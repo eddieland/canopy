@@ -1,4 +1,4 @@
-"""`canopy review`: `show`, `noise`, `eval`, and drafts, for you. The overseer starts reviews through its tools (§27).
+"""`canopy review`: `show`, `export`, `noise`, `eval`, and drafts, for you. The overseer starts reviews (§27).
 
 The detached `_review` does one review run (DESIGN §21), or one revision of a review's draft (§34). A review of a PR
 the loop does not own is a draft of a review on that PR (§34): `draft` shows it as it would post, `edit` changes it,
@@ -25,7 +25,7 @@ from canopy.core import conversation, db, records, review_drafts, review_drafts_
 from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
 from canopy.infra import logs
-from canopy.reviews import evals, execute, findings, noise, view
+from canopy.reviews import evals, execute, export, findings, noise, view
 
 if TYPE_CHECKING:
     import sqlite3
@@ -65,6 +65,25 @@ def cmd_review_show(click_ctx: click.Context, run_id: int | None) -> int:
         return 0
     lines = findings.listed(ctx.conn, db.format_time(datetime.now(UTC) - view.RECENT))
     click.echo("\n".join(lines) if lines else "no reviews in the last 14 days")
+    return 0
+
+
+@review_group.command("export")
+@click.argument("run_id", type=click.IntRange(min=1))
+@click.pass_context
+def cmd_review_export(click_ctx: click.Context, run_id: int) -> int:
+    """Print review run RUN_ID as Markdown to hand a person or an agent who has the code.
+
+    It names the PR, the commit the review read and what it was compared with, the verdict, the summary, and each
+    finding at its `path:line` with where it stands; the findings you dismissed come last, under a heading of their own.
+    The diff is left out. The reviewer's text is quoted, as claims to check rather than instructions. Redirect it to a
+    file, or pipe it to the agent. It marks nothing seen.
+    """
+    ctx = open_context(click_ctx)
+    try:
+        click.echo(export.exported(ctx.conn, run_id), nl=False)
+    except export.Unexportable as e:
+        raise CliError(str(e)) from None
     return 0
 
 

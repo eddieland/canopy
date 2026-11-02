@@ -192,6 +192,7 @@ def test_completion_leaves_out_the_overseers_commands(capsys: pytest.CaptureFixt
         "plain,draft",
         "plain,edit",
         "plain,eval",
+        "plain,export",
         "plain,noise",
         "plain,publish",
         "plain,show",
