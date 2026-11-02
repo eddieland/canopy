@@ -205,10 +205,16 @@ export async function stopTask(id: number, now: boolean): Promise<TaskStopped> {
 
 /**
  * `canopy plan KEY --approve`, `canopy plan KEY`, or `canopy plan KEY --skip`: approve the newest plan as its file
- * stands, ask for a new one, or skip the plan (DESIGN §25).
+ * stands, ask for a new one, or skip the plan (DESIGN §25). An approval's `message`, as `--message`, is written on the
+ * ticket for its implement.
  */
-export async function decidePlan(key: string, action: PlanChanged['action']): Promise<PlanChanged> {
-    return unwrap(await api.POST('/api/tickets/{key}/plan', { params: { path: { key } }, body: { action } }))
+export async function decidePlan(key: string, action: PlanChanged['action'], message?: string): Promise<PlanChanged> {
+    return unwrap(
+        await api.POST('/api/tickets/{key}/plan', {
+            params: { path: { key } },
+            body: message === undefined ? { action } : { action, message },
+        }),
+    )
 }
 
 /**

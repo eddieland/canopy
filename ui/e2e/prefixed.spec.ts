@@ -907,12 +907,15 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await expect(panel.getByText('changes asked', { exact: true })).toBeVisible()
     await expect(ask.getByRole('button', { name: 'Ask again' })).toBeVisible()
 
-    // An edit, saved and approved in one: the approval takes the file as saved.
+    // An edit, saved and approved in one: the approval takes the file as saved, and its open comments go with it to
+    // the implement, as notes, and resolve.
     await plan(page).getByRole('heading', { level: 3 }).click()
     await page.keyboard.press('End')
     await page.keyboard.type(', weekly too')
-    await actions.getByRole('button', { name: 'Save and approve' }).click()
+    await actions.getByRole('button', { name: 'Save and approve with notes' }).click()
     await expect(said).toContainText('Plan 2 of ABC-105 is approved as its file stands now.')
+    await expect(said).toContainText('Your notes went with it, to its implement.')
+    await expect(page.getByRole('article')).toHaveCount(0)
     await expect(panel).toContainText('approved')
     await expect(state).toContainText('edited since the planner wrote it')
 
