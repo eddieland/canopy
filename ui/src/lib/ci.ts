@@ -23,8 +23,8 @@ export const VERDICTS_TEXT =
 
 /** What the page cannot see, as it says under its checks. */
 export const LIMITS_TEXT =
-    'Only the PRs canopy observed, and only their check runs from M36 on. A commit status has no check run, so it ' +
-    'has no history and is not counted.'
+    'Only the PRs canopy observed. A commit status has no run id, so canopy tells its runs apart by what it saw of ' +
+    'the status at a head: a rerun that ended as the last run did, seen only once it ended, is not counted.'
 
 // The checks' fills by rank, the most often red first, written out so Tailwind finds them; the rest is a neutral.
 const CHECK_FILLS = ['bg-check-1', 'bg-check-2', 'bg-check-3', 'bg-check-4'] as const

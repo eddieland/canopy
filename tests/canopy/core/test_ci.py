@@ -4,7 +4,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from canopy.core import ci
+from canopy.core import ci, records
 from canopy.core.vocab import CheckConclusion, ResumeReason, RunKind, RunStatus
 from tests.canopy.helpers import check_ran, earlier, in_zone, kicked, worker_ran
 from tests.conftest import Journals
@@ -95,6 +95,35 @@ def test_a_rerun_on_a_head_its_check_was_red_on_is_counted_with_whether_it_passe
     check_ran(conn, PR_2, "b1", "unit", S, earlier(NOW, 1))
     found = ci.report(conn, NOW, 7)
     assert [(c.name, c.runs, c.reruns, c.reruns_green) for c in found.checks] == [("e2e", 4, 2, 1), ("unit", 3, 1, 1)]
+
+
+def test_a_commit_status_counts_as_its_runs_and_one_still_running_not_at_all(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """A CI that reports by commit status, as Jenkins does, is counted beside check runs, by the runs canopy kept."""
+    conn = journals.open(tmp_path / "canopy.db")
+    check_ran(conn, PR_1, "h1", "lint", S, earlier(NOW, 3))
+    for head, conclusion, at in (
+        ("h1", F, earlier(NOW, 3)),
+        ("h1", S, earlier(NOW, 3, -1)),
+        ("h2", F, earlier(NOW, 2)),
+        ("h3", None, earlier(NOW, 1)),
+    ):
+        records.insert(
+            records.ObservedStatusRun,
+            pr_url=PR_1,
+            name="jenkins",
+            head_sha=head,
+            conclusion=conclusion,
+            observed_at=at,
+        ).run(conn)
+    found = ci.report(conn, NOW, 7)
+    assert [(c.name, c.runs, c.red, c.green, c.reruns, c.reruns_green) for c in found.checks] == [
+        ("jenkins", 3, 2, 1, 1, 1),
+        ("lint", 1, 0, 1, 0, 0),
+    ]
+    assert (found.heads, found.green_first) == (2, 0), "h3's status is still running: no head checked yet"
 
 
 def test_each_day_counts_the_heads_first_checked_on_it(tmp_path: Path, journals: Journals) -> None:

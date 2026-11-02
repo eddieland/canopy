@@ -345,10 +345,12 @@ def _left_behind(git: Git, branch: str, start: Start, remote: str) -> list[str]:
     """Commits HEAD held during the run whose changes neither HEAD nor origin holds.
 
     That is commits that neither HEAD, origin's `branch` now or when the run started, nor any of origin's branches
-    holds, less those whose own change origin's `branch` already has (`_on_origin`). A worker that rebased, could not
-    push the copies, and pushed the same work another way left nothing behind; one that rebased and pushed with a lease
-    (`trust.rebase`) replaced the commits origin had, which were pushed before the run; one that aborted a rebase and
-    made it again left the first attempt's copies of commits the second one pushed.
+    holds, less those whose own change origin's `branch` already has (`_on_origin`), and those a later commit left
+    behind builds on whose whole work it has (`_holds_all`). A worker that rebased, could not push the copies, and
+    pushed the same work another way left nothing behind; one that rebased and pushed with a lease (`trust.rebase`)
+    replaced the commits origin had, which were pushed before the run; one that aborted a rebase and made it again left
+    the first attempt's copies of commits the second one pushed; and one that squashed its commits left each one's
+    copy, whose change a later commit may have changed again, under the last one, whose work the squash holds.
 
     Read from HEAD's reflog, the slot's own, so a worker that cleared it hides what it left; this catches a worker that
     checked something else out, not one that tried to hide its work.
@@ -368,7 +370,23 @@ def _left_behind(git: Git, branch: str, start: Start, remote: str) -> list[str]:
         return git.run("rev-list", *held, "--not", *keep, "--remotes=origin").split()
     left = git.run("rev-list", *held, "--not", *keep, remote, "--remotes=origin").split()
     tree = git.run("rev-parse", f"{remote}^{{tree}}")
-    return [commit for commit in left if not _on_origin(git, commit, remote, tree)]
+    lost = [commit for commit in left if not _on_origin(git, commit, remote, tree)]
+    if not lost:
+        return []
+    whole = [commit for commit in left if _holds_all(git, commit, remote, tree)]
+    return [c for c in lost if not any(git.ok("merge-base", "--is-ancestor", c, later) for later in whole)]
+
+
+def _holds_all(git: Git, commit: str, remote: str, tree: str) -> bool:
+    """Whether `remote`, with tree `tree`, already has all of `commit`'s work since their merge base.
+
+    That covers `commit`'s ancestors too: what they made that `commit` no longer holds, `commit`'s own changes replaced.
+
+    Returns:
+        True if merging `commit` into `remote` is clean and leaves `remote`'s tree as it is.
+    """
+    merged = git.result("merge-tree", "--write-tree", remote, commit)
+    return merged.ok and merged.stdout.split()[:1] == [tree]
 
 
 def _on_origin(git: Git, commit: str, remote: str, tree: str) -> bool:
