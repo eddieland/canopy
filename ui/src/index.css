@@ -212,7 +212,8 @@
     }
 }
 
-@keyframes sweep {
+/* A full turn about the element's center (`animate-turn`, `rave-beams`). */
+@keyframes turn {
     to {
         transform: rotate(1turn);
     }
@@ -265,7 +266,7 @@
 }
 
 /* A fill half its track's width crosses the track, in from the left edge and out past the right (`animate-barber`). */
-@keyframes sweep {
+@keyframes barber-sweep {
     from {
         translate: -100%;
     }
@@ -617,11 +618,11 @@
     }
 }
 
-@utility animate-sweep {
+@utility animate-turn {
     transform-box: view-box;
     transform-origin: center;
     @media (prefers-reduced-motion: no-preference) {
-        animation: sweep 1.4s linear infinite;
+        animation: turn 1.4s linear infinite;
     }
 }
 
@@ -1399,7 +1400,7 @@
         transparent 314deg 360deg
     );
     @media (prefers-reduced-motion: no-preference) {
-        animation: sweep 8s linear infinite;
+        animation: turn 8s linear infinite;
     }
 }
 
@@ -1492,7 +1493,7 @@
         );
         background-size: var(--barber-tile) var(--barber-tile);
         animation:
-            sweep 3.2s cubic-bezier(0.4, 0, 0.6, 1) infinite,
+            barber-sweep 3.2s cubic-bezier(0.4, 0, 0.6, 1) infinite,
             barber 300ms linear infinite;
     }
 }
