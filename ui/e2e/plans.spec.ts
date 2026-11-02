@@ -13,12 +13,13 @@ test.beforeEach(async ({ page }) => {
     await settled(page)
 })
 
-test('with comments open, the foot says they go with Ask for changes, and Approve sends none of them', async ({
+test('with comments open, the foot says they go with Ask for changes, or with Approve to the implement', async ({
     page,
 }) => {
     await expect(page.getByTestId('plan-bar')).toContainText(
-        '2 open comments go with Ask for changes. Approving sends none of them: the implement reads the plan alone.',
+        '2 open comments go with Ask for changes. Approve sends them to the implement instead, and resolves them.',
     )
+    await expect(page.getByTestId('plan-actions').getByRole('button', { name: 'Approve with notes' })).toBeVisible()
 })
 
 test("a ticket's newest plan opens in the editor, its comments on their passages", async ({ page }) => {

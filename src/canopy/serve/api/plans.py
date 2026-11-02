@@ -79,16 +79,30 @@ def ticket_plan(key: TicketKey, plan_id: PlanId, backend: BackendDep) -> PlanFil
     responses=REFUSED,
 )
 def change(key: TicketKey, body: PlanAction, backend: BackendDep) -> PlanChanged:
-    """`canopy plan KEY --approve`, `canopy plan KEY`, or `--skip`: approve the newest plan, ask for a new one, or skip.
+    """`canopy plan KEY --approve [--message TEXT]`, `canopy plan KEY`, or `--skip`: approve, ask for a plan, or skip.
 
-    Approving takes the file as it stands, edits included. Asking for changes is a reply, not this.
+    Approving takes the file as it stands, edits included, and with `message` writes it on the ticket for the
+    implement, refused `bad_body` empty or over its bound. Asking for changes is a reply, not this; a `message` with
+    any other action is refused `bad_body`.
     """
     ref = ticket_ref(key, "plan")
+    if body.message is not None and body.action != "approve":
+        raise RefusedError(conversation.Refused("bad_body", "a message goes with approve; reply to say more"))
     with backend.open() as ctx:
         try:
             if body.action == "approve":
-                plan = plans.approve(ctx.conn, ctx.state_dir, ref.id, channel=WEB, dispatch_lock=ctx.dispatch_lock_path)
-                _log.info("plan approved", extra={"ticket": ref.id, "plan": plan.id, "channel": WEB})
+                plan = plans.approve(
+                    ctx.conn,
+                    ctx.state_dir,
+                    ref.id,
+                    channel=WEB,
+                    dispatch_lock=ctx.dispatch_lock_path,
+                    note=body.message,
+                )
+                _log.info(
+                    "plan approved",
+                    extra={"ticket": ref.id, "plan": plan.id, "noted": body.message is not None, "channel": WEB},
+                )
                 return PlanChanged(action=body.action, plan=plan.id, already=False)
             verb = plans.skip if body.action == "skip" else plans.ask
             asked = verb(ctx.conn, ref.id, dispatch_lock=ctx.dispatch_lock_path)

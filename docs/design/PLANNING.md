@@ -25,8 +25,10 @@ operator's review (D126, below).
 
 The operator approves the newest plan as its file stands, their edits included. A reply (§22) newer than the plan asks
 for changes: the overseer dispatches `plan` again with the reply in the planner's prompt, and the new plan supersedes
-the old; an approval sent before that re-plan starts wins, as the operator's later word. The approval authorizes the
-`implement`, not the plan's text as an instruction (TRUST_MODEL T1). Two guards hold it in code (§4, principle 2):
+the old; an approval sent before that re-plan starts wins, as the operator's later word. An approval may carry the
+operator's notes, written with it as their message on the ticket, which the `implement` reads beside the plan, so a
+small point needs no re-plan. The approval authorizes the `implement`, not the plan's text as an instruction
+(TRUST_MODEL T1). Two guards hold it in code (§4, principle 2):
 `unplanned` refuses an `implement` while the ticket needs a plan and has none approved;
 `plan_changed` refuses an `implement` or `resume` when the approved plan's file is missing or changed since approval.
 
