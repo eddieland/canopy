@@ -11,9 +11,9 @@
  *
  * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
- * others set the neutrals and the accent over the default's: off-white, Solarized, Nord, Gruvbox, sage, and
- * Rosé Pine Dawn for light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized, Gruvbox,
- * forest, plum, and Monokai for dark.
+ * others set the neutrals and the accent over the default's: off-white, Solarized, Nord, Gruvbox, sage, Rosé Pine
+ * Dawn, and Acme for light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized,
+ * Gruvbox, forest, plum, and Monokai for dark.
  */
 
 :root {
@@ -491,6 +491,37 @@
     /* Dawn: soft, rounded corners, and the nav's highlight a tint with no hairline. */
     --radius: 0.75rem;
     --nav-hairline: 0;
+}
+
+/* Acme, Plan 9's editor, in its two tones: the pale cyan of its tag lines the canvas, the pale yellow of its text
+ * panes each surface, its olive the hairlines, near-black the text, and the dark blue of its dirty-window box the
+ * accent. The cyan sits a shade darker than Acme's own, so every hue reads at 4.5:1 on it, and the blue a step
+ * lighter, so every status still reads in a selected row. */
+:root[data-light-palette='acme']:not(.dark) {
+    --accent: oklch(0.44 0.18 264);
+    --ring: oklch(0.44 0.18 264 / 0.55);
+    --background: oklch(0.955 0.03 197);
+    --surface: oklch(0.993 0.028 107);
+    --surface-raised: oklch(0.968 0.042 107);
+    --border: oklch(0.84 0.06 109);
+    --foreground: oklch(0.2 0.005 100);
+    --muted-foreground: oklch(0.46 0.035 105);
+    --scrollbar: oklch(0.666 0.1 109);
+    --status-stopped: oklch(0.44 0.035 105);
+    --spend-dry-run: oklch(0.6 0.03 105);
+    --check-other: oklch(0.6 0.03 105);
+    --answer-na: oklch(0.6 0.03 105);
+    --context-carried: oklch(0.6 0.03 105);
+
+    /* An editor from Bell Labs: square corners, panels and the primary action flat, every line in its mono, and the
+     * aurora one rule in its olive. */
+    --radius: 0.125rem;
+    --face-mono: var(--face-mono-compact);
+    --face: var(--face-mono);
+    --code-size: 1em;
+    --depth-panel: none;
+    --depth-action: none;
+    --aurora-image: linear-gradient(oklch(0.666 0.1 109), oklch(0.666 0.1 109));
 }
 
 /* The dark theme's grey palette, Mailroom's neutrals, with a steel blue accent. Muted text is a step further from the
