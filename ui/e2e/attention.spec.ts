@@ -413,6 +413,57 @@ test('after a reply, the next item waiting on you is chosen, its row focused, an
     await expect(page.getByTestId('toast')).toContainText('Recorded message 12 on ABC-102, answering message 5.')
 })
 
+test.describe('on a wide window', () => {
+    test.use({ viewport: { width: 1720, height: 1000 } })
+
+    test('choosing the last row keeps it in view, with its item open at the top of the page', async ({ page }) => {
+        await page.goto('attention')
+        await settled(page)
+        const list = page.getByTestId('attention-list')
+        const last = list.getByRole('link').last()
+        // The list fits the window and scrolls in itself, so the page has nothing of its own to scroll.
+        await last.scrollIntoViewIfNeeded()
+        await expect(last).toBeInViewport({ ratio: 1 })
+        const scrolled = await list
+            .getByRole('region', { name: 'Attention items' })
+            .evaluate((region) => region.scrollTop)
+        expect(scrolled).toBeGreaterThan(0)
+
+        await last.click()
+        await expect(last).toHaveAttribute('aria-current', 'page')
+        const detail = page.getByTestId('attention-detail')
+        await expect(detail).toContainText('lodash-advisory')
+        await expect(last).toBeInViewport({ ratio: 1 })
+        await expect(detail).toBeInViewport()
+        await expect.poll(() => scrollTop(page)).toBe(0)
+        await expect(last).toBeInViewport({ ratio: 1 })
+    })
+
+    test('an item taller than the window is reached whole, its list beside it', async ({ page }) => {
+        await padMessages(page, 'ABC-102', 30)
+        await page.setViewportSize({ width: 1720, height: 560 })
+        await page.goto('attention')
+        await settled(page)
+        const list = page.getByTestId('attention-list')
+        const row = list.getByRole('link').filter({ hasText: 'awaiting reply' }).filter({ hasText: 'ABC-102' })
+        await row.click()
+        const detail = page.getByTestId('attention-detail')
+        const actions = detail.getByTestId('attention-actions')
+        await expect(actions).toBeVisible()
+        await expect.poll(() => detail.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThan(560)
+
+        // The page's own scroll carries the item, to its last control, while the list stays beside it.
+        await page.getByRole('heading', { level: 1 }).hover()
+        await expect(async () => {
+            await page.mouse.wheel(0, 2000)
+            await expect(actions).toBeInViewport({ ratio: 1 })
+        }).toPass()
+        await expect(row).toBeInViewport()
+        // A refetch of the ticket can still be in the padding route when the page closes (padMessages).
+        await page.unrouteAll({ behavior: 'ignoreErrors' })
+    })
+})
+
 test.describe('on half a monitor', () => {
     test.use({ viewport: { width: 820, height: 900 } })
 
@@ -471,6 +522,11 @@ test.describe('on half a monitor', () => {
         ).toBeInViewport()
     })
 })
+
+/** How far the page has scrolled under the header, in the scroller the shell gives it. */
+function scrollTop(page: Page): Promise<number> {
+    return page.locator('.page-scroll').evaluate((scroller) => scroller.scrollTop)
+}
 
 /** Presses Tab until the focus leaves `region`, which holds at most a few dozen stops. */
 async function tabOutOf(page: Page, region: Locator): Promise<void> {

@@ -32,7 +32,7 @@ import { Leaf } from '@/components/leaf'
 import { LessonsDue, LessonsWrong, ProposalsWaiting } from '@/components/memory-attention'
 import { ModelAttention } from '@/components/model-attention'
 import { Notice } from '@/components/notice'
-import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import type { PanelRead } from '@/components/panel'
 import { PlanCard } from '@/components/plan-card'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -189,11 +189,21 @@ function AttentionPage() {
                             className={cn(
                                 'flex max-w-md min-w-0 flex-[1_1_22rem] flex-col gap-6 2xl:max-w-lg 2xl:basis-md',
                                 '@max-3xl:max-w-none @max-3xl:flex-none',
+                                '@3xl:sticky @3xl:top-6 @3xl:print:static',
                                 open && '@max-3xl:hidden',
                             )}
                         >
-                            {/* What is working now is the rail's, on every page: this column is the list alone. */}
-                            <Panel data-testid="attention-list">
+                            {/* What is working now is the rail's, on every page: this column is the list alone. Side
+                            by side it stays put and scrolls in itself, so choosing a low row keeps it in view while
+                            the page, which only the item scrolls, opens the item at its top. Its height fits the window
+                            under the shell's header, the page's title, and the main pane's padding: 10.75rem. */}
+                            <Panel
+                                data-testid="attention-list"
+                                className={cn(
+                                    'flex flex-col @3xl:max-h-[max(20rem,calc(100dvh-10.75rem))]',
+                                    '@3xl:print:max-h-none',
+                                )}
+                            >
                                 <PanelHeader label="Attention">
                                     <span className="text-xs whitespace-nowrap text-muted-foreground">
                                         {oldest !== null && (
@@ -210,25 +220,27 @@ function AttentionPage() {
                                 {items === undefined ? (
                                     <PanelLoading query={attention} className="min-h-40" />
                                 ) : (
-                                    <ul className="stagger flex flex-col gap-0.5 p-1.5">
-                                        {rows.map(({ item, leaving }) =>
-                                            leaving ? (
-                                                <Leaving
-                                                    key={item.id}
-                                                    item={item}
-                                                    done={answered(item, tickets, tasks)}
-                                                />
-                                            ) : (
-                                                <Row
-                                                    key={item.id}
-                                                    item={item}
-                                                    selected={item.id === selected?.id}
-                                                    done={answered(item, tickets, tasks)}
-                                                    onChoose={choose}
-                                                />
-                                            ),
-                                        )}
-                                    </ul>
+                                    <PanelScroll label="Attention items" className="max-h-none min-h-0">
+                                        <ul className="stagger flex flex-col gap-0.5 p-1.5">
+                                            {rows.map(({ item, leaving }) =>
+                                                leaving ? (
+                                                    <Leaving
+                                                        key={item.id}
+                                                        item={item}
+                                                        done={answered(item, tickets, tasks)}
+                                                    />
+                                                ) : (
+                                                    <Row
+                                                        key={item.id}
+                                                        item={item}
+                                                        selected={item.id === selected?.id}
+                                                        done={answered(item, tickets, tasks)}
+                                                        onChoose={choose}
+                                                    />
+                                                ),
+                                            )}
+                                        </ul>
+                                    </PanelScroll>
                                 )}
                             </Panel>
                         </div>
