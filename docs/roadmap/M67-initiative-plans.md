@@ -1,0 +1,61 @@
+# M67. Initiative plans, shared by many tickets
+
+REQUIREMENTS R28, DESIGN §10, §18, §22, §25, §36, TRUST_MODEL T1, T3, T7. Asked for by the operator (2026-11-02): a
+ticket's plan (§25) works for one ticket, and work that spans several has no plan of its own, so each ticket's planner
+settles the shared questions again and the operator approves them again. One plan for the whole, approved once, and a
+simpler plan per ticket that points back to it. A sketch: the design, a section beside §25, comes before any code, and
+PRIOR_ART "Shared plans across tickets" is what it starts from.
+
+- **The initiative.** canopy's own subject, like a task (§36), `init:N`: the operator submits its goal in their own
+  words, names its repositories, and adds or removes member tickets, each through their own channels alone and refused
+  inside a tick or any run (T1). A tracker's epic, parent, or sub-issue link is data: it never makes a ticket a member
+  by itself, as the tracker skills already say of blockers and parents (§17).
+- **Its plan.** A plan run as §25's: the planner, the desk at the repositories' bases, one file written, approved by
+  the operator by hash, `proposed`, `approved`, `superseded`, in the state directory beside a ticket's plans and
+  archived with them. Its outline is fixed, as a ticket's is: `Goal`; `Requirements`, each `R<n>` with an id that
+  never changes, tracing to the operator's words; `Contracts` between the tickets, each what it is, who provides it,
+  and who uses it; `Breakdown`, each proposed ticket with the `R`s it covers, its repositories, and what it comes
+  after; `Decisions`, as a ticket's plan writes them; `Out of scope`. It is shallow by rule: it does not write a
+  ticket's steps, and it is bounded as a plan is.
+- **Filing the breakdown.** Only when the operator asks, once the plan is approved, a run files the breakdown's
+  tickets as a task's does (§36): unlabeled, in the project the initiative names, ordered with the tracker's blocker
+  relation (§10), each naming its initiative and its `R`s in its body as data. canopy records them as members, checking
+  only their text (D003); they authorize nothing until the operator labels or starts them (T1, D123).
+- **A member's plan.** Its planner gets the initiative plan's outline and a hash-checked copy, as an `implement` gets
+  its own plan (§25), and the plan's outline gains `## Initiative`: the `R`s it covers, the contracts it provides and
+  uses, and the siblings its `Out of scope` names. The member's plan row records the hash of the initiative plan it was
+  written against. `policy.plan` is unchanged; whether a member may skip its own plan and follow the initiative's
+  directly is the operator's to decide.
+- **When the initiative plan changes.** A re-approval keeps the ids. A member's plan still `proposed` is marked stale,
+  naming the ids that changed, and planned again; an approved one whose ticket has no branch yet has its `implement`
+  refused, `initiative_changed`, until the operator approves it again or asks for a re-plan; a run in flight, or a
+  ticket with a PR, is never touched. The operator hears once, an `initiative.changed` event (§20) naming the members
+  each way, and decides. Nothing built is rewritten.
+- **Upward.** A member's planner whose `Decisions` depart from a contract or a requirement says so in its result, and
+  the harness raises `initiative_drift` (§14) naming the member, for the operator to amend the initiative or the plan.
+- **Close-out.** Once every member's PRs merged, the operator may ask one review over them together, for defects at the
+  seams no PR's review saw, as a review request (§21). Never automatic.
+- **Guards in code** (§4): membership and both approvals operator-only; `policy.max_initiative_tickets` bounds the
+  members; one plan run per initiative at a time, attempts never reset (D030); still one worker per ticket (§6).
+- **Rejected:** the plan in the tracker's epic body (its text is data, T1; a private ticket's plan would leak; Copilot
+  and Linear freeze a copy at dispatch); inlining the plan's text into each member's plan (copies go stale: Hermes,
+  Taskmaster, BMAD v6); one run that implements several members (one worker per ticket, and agent-orchestrator removed
+  its decomposition for the PRs it fragmented); filing or approving without the operator (the incidents in PRIOR_ART
+  are where that was the default); a plan per tracker epic found by the overseer (membership would then be the
+  tracker's word).
+- **Open, for the operator:** whether a member in flight pauses when the initiative changes, or only hears of it;
+  whether the plan is written by the planner or by the operator, who may know the whole better than any run; whether a
+  tracker's epic may suggest members for the operator to confirm; whether a member may skip its own plan.
+- **Tests with the fakes**, once designed: an initiative planned, approved, and its breakdown filed and recorded; a
+  member's planner given the outline and copy, its plan carrying the hash; a changed initiative marking a proposed
+  member stale, refusing an approved one's `implement`, and leaving a running one alone; drift raised; membership and
+  approval refused inside a run; the bound; `test_prompt_sizes.py` for the prompts, `core/test_db.py` and
+  `test_records.py` for the rows.
+
+Accept: live, on the operator's workspace, one initiative of three tickets: its plan approved once, each member's plan
+citing its `R`s and the contracts, the first member's PR providing a contract the second's uses, and a change to the
+initiative plan after the first merged leaving it alone, marking the second's proposed plan stale, and telling the
+operator once.
+
+Status: not started. Sketched 2026-11-02 from the survey in PRIOR_ART; its design, and the operator's answers to the
+open points, come before any code.

@@ -1,9 +1,10 @@
 # Prior art
 
 A survey of open-source projects that overlap with canopy, and what their issue trackers show they learned the hard
-way. Surveyed 2026-09-29, and aide 2026-10-18. Why canopy is built anyway is D050.
+way. Surveyed 2026-09-29, aide 2026-10-18, and shared plans across tickets 2026-11-02 ([Shared plans across
+tickets](#shared-plans-across-tickets)). Why canopy is built anyway is D050.
 
-The canopy statuses below are as of that date and are not kept current. Check the code before acting on one.
+The canopy statuses below are as of those dates and are not kept current. Check the code before acting on one.
 
 A bare § is a section of the design (`design/`); other documents are named, as in TRUST_MODEL §6.
 
@@ -31,6 +32,79 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   verify, and docs stages. Unlike canopy: no tracker, loop, PRs, or CI follow-up; the orchestrator is the operator's
   interactive session; agents write memory and decisions through its CLI. Read from its code and commit history at
   [457e4e6](https://github.com/jmylchreest/aide/commit/457e4e6) (2026-10-12).
+
+## Shared plans across tickets
+
+Surveyed 2026-11-02 for REQUIREMENTS R28 and ROADMAP M67: how harnesses and plan-driven frameworks give several tickets
+one plan. None shipped canopy's target shape, an approved plan for the whole and a plan per ticket pinned to it. Read in
+source unless marked secondary; docs sites the session could not reach are so marked.
+
+### Ticket-loop harnesses
+
+- **Symphony** has no parent, sub-issue, or project document in its normalized issue (SPEC §4.1.1); the template's
+  only inputs are the issue and the attempt. Ordering is `blocked_by`, "best-effort provider metadata", which holds an
+  issue back only while it is in `Todo` (`elixir/lib/symphony_elixir/linear/client.ex`); the GitHub, GitLab, and Asana
+  adapters return none. Its `WORKFLOW.md` has the agent file out-of-scope work as new issues, related and `blockedBy`,
+  for a human to move to `Todo`, as canopy's follow-ups do (§18).
+- **agent-orchestrator** removed its one decomposition feature, `ao spawn --decompose`
+  ([#1104](https://github.com/Untrivial-ai/agent-orchestrator/pull/1104), from
+  [#1045](https://github.com/Untrivial-ai/agent-orchestrator/issues/1045)): every leaf opened its own branch and PR,
+  "fragmenting history and complicating review/merge". A work-graph proposal, items with acceptance criteria and typed
+  edges in SQLite, was closed not planned ([#2764](https://github.com/Untrivial-ai/agent-orchestrator/issues/2764)).
+  Today an orchestrator session plans in its chat; a worker gets its own issue inlined, nothing of its parent.
+- **Hermes kanban** decomposes a triage task into 2 to 6 children by a model call (`hermes_cli/kanban_decompose.py`),
+  on by default, and copies context rather than linking it: "every child card body must carry every decision it
+  depends on", since workers cannot see sibling cards. Its issues show what copying costs: a task re-triaged after its
+  PR merged was split into four children that redid finished work, the decomposer reading only title and body
+  ([#147234](https://github.com/NousResearch/hermes-agent/issues/147234)), and parked cards were decomposed and their
+  children run ([#144887](https://github.com/NousResearch/hermes-agent/issues/144887)). An edge added to a running
+  child is refused.
+- **Copilot coding agent** gets a snapshot of its own issue at assignment and nothing of its parent; GitHub staff said
+  an agent on a parent issue "does not take in context of its sub issues" (community discussion #159068). Copilot Chat
+  drafts a parent with sub-issues the human edits before publishing, each sub-issue carrying its own acceptance
+  criteria and file pointers: copying again.
+- **Linear for Agents** inlines the parent issue's title and description and the project's summary into
+  `promptContext` when a session starts, frozen there (developer docs, agent interaction; read from a mirror). Its
+  Agent Plan API is a checklist per session, not shared.
+- **Factory Missions** (secondary: an unofficial, reverse-engineered gist) is the nearest analogue: the operator
+  approves a mission, the orchestrator writes `mission.md`, a validation contract, and an ordered `features.json` with
+  preconditions, and workers read the files themselves. A change mid-run pauses the workers, gets the user's agreement,
+  rewrites "every file that states the old truth", resets the assertions it unproves, and commits atomically; passed
+  milestones are sealed.
+- **Devin** (secondary): a coordinator session launches child sessions, each with its own prompt and playbook, children
+  starting without asking by default. No shared plan the children read was found.
+
+### Plan-driven frameworks
+
+- **BMAD v7** ([BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD), `docs/plan/`, `skills/bmad-agent-po/`) is
+  the closest to R28's shape, initiative to epic to story. The parent is a list of requirements with stable ids
+  (`R3 (prd FR-2): ...`), its contracts, and a `tickets.toml` of children in build order, each a thin entry:
+  `covers = ["R2", "R3"]`, `after = [...]`, `verify`. A child's full plan is written just before it is built, "so detail
+  is not written months before it is used". On a change, ids are kept, children whose `covers` cite a changed id are
+  marked stale, an in-progress child's plan is never edited ("ask whether its build stops"), nothing built is
+  rewritten, and a dated decision line goes in the parent. Contracts several epics must adopt are settled in the
+  architecture or become a story in the opening epic the others wait on. A retrospective at the epic's end looks for
+  defects at the seams between stories. v6's `create-story` inlined the upstream docs into each story file and is
+  deprecated.
+- **Spec Kit** ([github/spec-kit](https://github.com/github/spec-kit), `docs/concepts/spec-of-specs.md`): a shallow
+  `roadmap.md` per epic (id, scope boundary, depends on, status) that "does not design" its sub-features; each child
+  spec's Input line points back to its roadmap entry; children are specified one at a time; reconciling a change is by
+  hand, "roadmap first, then reconcile", and the docs call the pattern a last resort.
+- **Taskmaster** ([claude-task-master](https://github.com/eyaltoledano/claude-task-master)) inlines the PRD into each
+  task's `details` with no link back; `update --from` rewrites later tasks and leaves completed ones alone.
+- **Conductor** approves a track's spec and plan separately and, when a track completes, updates the project-level docs
+  from it. **Agent OS v3** dropped its spec and task scaffolding altogether. Both, and Spec Kit, name the same
+  complaints: over-planning, and the burden of reviewing markdown.
+
+### What they agree on, and what none does
+
+- The parent is shallow: boundaries, requirement ids, the children's order, and the contracts between them.
+- A child points back by id and never inlines the parent: Hermes, Taskmaster, and BMAD v6 show copies going stale.
+- A child's plan is written just in time, as canopy's planner already does (§25).
+- Shared contracts are settled first, in the parent or as a first ticket the others are blocked by.
+- A human approves at both levels; the defaults that approved alone (Hermes, Devin) are where the incidents are.
+- None pins the parent's version in the child. Staleness is ignored, frozen at dispatch, or a manual pause and rewrite.
+  canopy's plan hashes and `plan_changed` guard (§25) would make that a guard in code; M67 says how.
 
 ## Lessons canopy's design already answers
 

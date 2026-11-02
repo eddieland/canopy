@@ -2,9 +2,9 @@
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17 on
 2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 to R22 and R26 on 2026-10-17, R23 and R24 on 2026-10-19, R25 on
-2026-10-21), and where canopy stands on each. The design (`design/`) is how canopy meets them; this file is what it must
-meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles
-it, and the design doc stays normative until then (AGENTS.md).
+2026-10-21, R28 on 2026-11-02), and where canopy stands on each. The design (`design/`) is how canopy meets them; this
+file is what it must meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a
+`DECISIONS.md` entry settles it, and the design doc stays normative until then (AGENTS.md).
 
 A bare § is a section of the design (`design/`). Status words:
 
@@ -346,6 +346,17 @@ moment it matters, once the worker's diff is whole and before it pushes, so a fi
 answer to each rule recorded, so the nits are fixed before a person reads the PR and the list earns its items; and, if
 that is not enough or for PRs workers did not write, a second review that asks the same list of a PR. The rules are a
 repository's: a workspace's repositories differ in language and team, so each has its own list (2026-10-30).
+
+### R28. One plan shared by many tickets, each with its own plan pointing back to it
+
+Gap (M67). Written down 2026-11-02. A ticket's plan (R18) serves one ticket. Work that spans several, an epic or an
+initiative, has no plan of its own in canopy: each ticket's planner settles the shared questions again, in a fresh
+session, and the operator approves the same choice several times, or a different one each time. The operator wants one
+plan for the whole, approved once, that holds the goal, the requirements, the contracts between the tickets, and their
+order, and for each ticket a simpler plan of its own that points back to it and covers its part, so a ticket's planner
+reads the shared plan rather than rediscovering it, and a change to the shared plan is noticed by the tickets it
+reaches. Today's nearest substitute is a planning task's report (R25) attached to each ticket (M63): a copy per ticket,
+with no single source and nothing that notices a copy went stale.
 
 ## Nice to have
 
