@@ -99,6 +99,7 @@ from canopy.core.records.observed import (
     ObservedPr,
     ObservedReview,
     ObservedTicket,
+    PassedReview,
     PrTitle,
 )
 from canopy.core.records.plans import (
@@ -201,6 +202,7 @@ __all__ = [
     "ObservedReview",
     "ObservedTicket",
     "OverseerRun",
+    "PassedReview",
     "Pause",
     "PersonaText",
     "Plan",

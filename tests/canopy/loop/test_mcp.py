@@ -266,6 +266,7 @@ RECORDS = [
                         "phase": "ci_red",
                         "cursors": ["comment"],
                         "done": False,
+                        "passed": [],
                         "dry_run": False,
                     },
                 ],
@@ -282,7 +283,15 @@ RECORDS = [
             writes=(),
             result={
                 "tickets": [
-                    {"key": "PROJ-1", "repo": None, "phase": None, "cursors": [], "done": False, "dry_run": True},
+                    {
+                        "key": "PROJ-1",
+                        "repo": None,
+                        "phase": None,
+                        "cursors": [],
+                        "done": False,
+                        "passed": [],
+                        "dry_run": True,
+                    },
                 ],
             },
         ),
@@ -296,7 +305,15 @@ RECORDS = [
             writes=("tickets",),
             result={
                 "tickets": [
-                    {"key": key, "repo": None, "phase": "ready", "cursors": [], "done": False, "dry_run": False}
+                    {
+                        "key": key,
+                        "repo": None,
+                        "phase": "ready",
+                        "cursors": [],
+                        "done": False,
+                        "passed": [],
+                        "dry_run": False,
+                    }
                     for key in ("PROJ-1", "PROJ-2")
                 ],
             },

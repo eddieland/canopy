@@ -19,8 +19,10 @@ from canopy.core.vocab import (
     CheckConclusion,
     CheckStatus,
     ConnectorRunStatus,
+    Decider,
     MergeState,
     NumberedItem,
+    PassReason,
     PrState,
     ReviewItem,
     ReviewState,
@@ -85,6 +87,28 @@ class ObservedReview(Row):
     observed_at: str
     #: Its journal number, taken when a source first observed it (DESIGN §35).
     number: int | None
+
+
+@dataclass(frozen=True)
+class PassedReview(Row):
+    """Feedback a unit's `review` cursor passed with no worker sent to it, and why (DESIGN §7). Kept when re-read."""
+
+    TABLE: ClassVar[LiteralString] = "passed_reviews"
+
+    pr_url: str
+    item: ReviewItem
+    #: GitHub's id for it, as `observed_reviews.id`.
+    id: int
+    #: Its journal number (DESIGN §35), the one the state block showed.
+    number: int
+    ticket_key: str
+    repo: str | None
+    #: The tick whose cursor move passed it.
+    tick_id: int
+    reason: PassReason
+    #: The overseer, who named it, or the harness, for one on a resolved thread.
+    decider: Decider
+    passed_at: str
 
 
 @dataclass(frozen=True)
