@@ -33,7 +33,7 @@ CONFINED = {
     "anyio": "serve",
     "click": "cli",
     "fastapi": "serve",
-    # Every span goes through `infra/tracing.py` (D132).
+    # Telemetry goes through `infra` alone: `tracing`, and any later signal beside it (D132).
     "opentelemetry": "infra",
     "starlette": "serve",
     "tomlkit": "serve",
