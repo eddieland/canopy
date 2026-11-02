@@ -18,8 +18,9 @@ runs page. If nothing runs and the last tick was idle, that is the loop doing it
 tasks. Each gets one row per subject, by its latest run: a ticket's, a PR's, a chore's, a task's. The running ones come
 first, then the ones that ended most recently. A subject with earlier runs shows **Show N earlier runs** under it, so a
 PR reviewed at every push is one row and not a wall of them. The overseer's ticks are not among them: the **Ticks** link
-in the page's description opens [their page](ticks#the-ticks-page), beside it under Workspace, and **Worktrees** opens
-the [pools](#worktrees) the runs work in. The nav opens all three under **Workspace** while you're here, too.
+in the page's description opens [their page](ticks#the-ticks-page), beside it under Workspace, **Worktrees** opens
+the [pools](#worktrees) the runs work in, and **Checklists** [each repository's list](checklists#the-checklists-page).
+The nav opens all four under **Workspace** while you're here, too.
 
 Each row has the run's state, its id, what it works for, its kind, what it cost, and how long it ran or how long since
 it ended:

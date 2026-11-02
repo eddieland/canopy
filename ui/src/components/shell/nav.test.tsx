@@ -108,7 +108,7 @@ describe('Nav', () => {
     })
 
     it.each([
-        ['Workspace', '/workspace', ['Workspace', 'Runs', 'Ticks', 'Worktrees'], 'Workspace'],
+        ['Workspace', '/workspace', ['Workspace', 'Runs', 'Ticks', 'Worktrees', 'Checklists'], 'Workspace'],
         ['Pull requests', '/pull-requests', ['Pull requests', 'Reviews'], 'Pull requests'],
         ['Reports', '/reports?month=2026-08', REPORTS, 'Reports'],
     ] as const)("opens %s's pages under it on %s, the section current", async (_, at, opened, page) => {
@@ -118,9 +118,10 @@ describe('Nav', () => {
     })
 
     it.each([
-        ['Runs', '/workspace/runs?state=running', ['Workspace', 'Runs', 'Ticks', 'Worktrees']],
-        ['Ticks', '/workspace/ticks', ['Workspace', 'Runs', 'Ticks', 'Worktrees']],
-        ['Worktrees', '/workspace/worktrees', ['Workspace', 'Runs', 'Ticks', 'Worktrees']],
+        ['Runs', '/workspace/runs?state=running', ['Workspace', 'Runs', 'Ticks', 'Worktrees', 'Checklists']],
+        ['Ticks', '/workspace/ticks', ['Workspace', 'Runs', 'Ticks', 'Worktrees', 'Checklists']],
+        ['Worktrees', '/workspace/worktrees', ['Workspace', 'Runs', 'Ticks', 'Worktrees', 'Checklists']],
+        ['Checklists', '/workspace/checklists', ['Workspace', 'Runs', 'Ticks', 'Worktrees', 'Checklists']],
         ['Reviews', '/pull-requests/reviews', ['Pull requests', 'Reviews']],
         ['Spend', '/reports/spend?days=30', REPORTS],
         ['Checklist', '/reports/checklist?days=14', REPORTS],

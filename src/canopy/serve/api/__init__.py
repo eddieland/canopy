@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends
 
 from canopy.serve.api import (
     attachments,
+    checklists,
     chores,
     deps,
     docs,
@@ -74,6 +75,7 @@ _RESOURCES = (
     skills,
     drafts,
     memory,
+    checklists,
     reports,
 )
 
