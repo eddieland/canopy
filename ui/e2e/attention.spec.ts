@@ -524,8 +524,13 @@ test.describe('on half a monitor', () => {
 })
 
 test("the last item's row plays its exit, with no detail, and then the all clear rises in", async ({ page }) => {
+    // The page's clock stands still through the exit, so what it holds is read however slow the runner. One step lets
+    // the query's change out, which it sends on a timer.
+    await page.clock.install()
     await lastItemListed(page)
+    await page.clock.pauseAt(Date.now() + 1000)
     await clearAttentionList(page)
+    await page.clock.runFor(1)
 
     const list = page.getByTestId('attention-list')
     const clear = page.getByTestId('all-clear')
@@ -536,6 +541,7 @@ test("the last item's row plays its exit, with no detail, and then the all clear
     await expect(page.locator('main [data-slot=skeleton]')).toHaveCount(0)
     await expect(clear).toHaveCount(0)
 
+    await page.clock.resume()
     await expect(clear).toBeVisible()
     await expect(list).toHaveCount(0)
     expect(await arrival(clear)).toBe('rise')
