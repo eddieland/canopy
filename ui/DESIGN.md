@@ -1182,7 +1182,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   ticket, the page is the first step, an `Empty`: `no tickets yet: give one your queue label in the tracker, or start
   one privately on Tickets, then Tick now, and what needs you lands here`, with Tickets a link and Tick now the header's
   button inline, since an inbox that was never filled is not one emptied. Once there was work, the empty inbox (Fun) is
-  the reward.
+  the reward, and a digest for a tab left open all day: one centered column at reading width, muted type, no panel, no
+  tiles, that fills the page by composition. The canopy over `Nothing needs you.`, then `Today: 2 PRs opened · 5 runs
+  ended`, then `Working now: 5`, the rail's number by its own reckoning (`workingCount`), to Workspace, and the latest
+  tick, to its page, naming a status that is not `ok` in its color. Every figure must hold on a reload, so its window is
+  the local day, which the journal answers (`startOfDay`, `GET /api/runs/since`): items cleared are not counted, since
+  only a tab sees one go. The away note, over one absence, can. A figure of none is left out, and a day with none the
+  line goes. The tick repeats the header by the operator's choice, an exception to One home per fact. A paused loop
+  says so, in `status-blocked`, under the day, since a quiet page and a loop told to wait look alike. A loop down drops
+  the digest whole (`Nothing needed you as of`, in a panel): none of it stands while the loop isn't answering.
 - **The attention detail: the reason picks the first block**, under the item's head, what the reason asks of the
   operator (`ask` in `src/lib/attention.ts`), so the action it calls for is never buried under louder controls about
   something else. A run that broke (`worker_failed`, `crashed`, `unpushed`, `unknown_result`, `attempt_limit`): the

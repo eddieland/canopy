@@ -3,14 +3,24 @@
 What needs you, worst first, as `canopy status` lists it. It's the home page, and on a good day it's empty: "Nothing
 needs you", and a little canopy swaying in a breeze.
 
+Under the canopy, a short digest for the tab you leave open all day: `Today: 2 PRs opened · 5 runs ended`, then
+`Working now: 5`, the same number as the rail, with a link to [Workspace](/workspace), and when the last tick ran,
+with a link to it. A tick that went badly says so, in color. The day is your browser's, from midnight, and the counts
+come from the journal, so a reload doesn't reset them; `runs ended` means ticket runs, not chores, reviews, or tasks. A
+figure of zero stays off the page, and a day with nothing in it drops the line. If you paused the loop, a line says so:
+no tick starts until you resume, so a calm page might just be one you told to wait.
+
+The away note further down counts items cleared. The digest doesn't, because the journal keeps no record of an item
+leaving; only an open tab sees one go, and a number that resets on reload isn't a number.
+
 The canopy is earned. In a fresh workspace, before the journal holds a single ticket, the page says so instead,
 `no tickets yet`, and names the first step: give a ticket your queue label in the tracker, or start one privately on
 [Tickets](/tickets), then **Tick now**, and what needs you lands here. A quiet inbox and one nobody has filled yet look
 alike from a distance, and only one of them is good news.
 
 So do a quiet inbox and a dead loop. While the loop isn't answering, an empty list grows no canopy: it says
-`Nothing needed you as of 14:05`, and that the list can't change until the loop is back. An all-clear from a loop that
-stopped at lunch is a timestamp, not a verdict.
+`Nothing needed you as of 14:05`, and that the list can't change until the loop is back, and the digest stays away too.
+An all-clear from a loop that stopped at lunch is a timestamp, not a verdict.
 
 ## The list
 

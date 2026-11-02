@@ -122,6 +122,35 @@ for (const theme of THEMES) {
     })
 }
 
+// The true all clear, which the mock's journal, with its items, never shows: the list reads empty, and the stream,
+// which would send it again whole, keeps what else it says. Its main pane alone, the digest over the void it fills.
+test('the all-clear digest in dark', async ({ page }) => {
+    await page.clock.setFixedTime(NOW)
+    await storeTheme(page, 'dark')
+    await signIn(page)
+    await page.route('**/api/attention', (route) => route.fulfill({ json: [] }))
+    await page.addInitScript(() => {
+        // The first listener on the stream, so it stops the attention list before the page hears it: the rest of the
+        // stream keeps the page live.
+        const Source = globalThis.EventSource
+        globalThis.EventSource = class extends Source {
+            constructor(...args: ConstructorParameters<typeof EventSource>) {
+                super(...args)
+                this.addEventListener('message', (event) => {
+                    if (String(event.data).includes('"attention.updated"')) {
+                        event.stopImmediatePropagation()
+                    }
+                })
+            }
+        }
+    })
+    await page.goto('attention')
+    await settled(page)
+    await expect(page.getByTestId('all-clear-today')).toBeVisible()
+    await expect(page.getByTestId('all-clear-working')).toBeVisible()
+    await screenshotMain(page, 'attention-all-clear-dark.png')
+})
+
 // Every palette but a theme's default sets the neutrals, the accent, and its corners, edges, depth, and face, all of
 // which one page's panels show: its main pane alone, so a change to the header or the rail rewrites none of these.
 for (const theme of THEMES) {
