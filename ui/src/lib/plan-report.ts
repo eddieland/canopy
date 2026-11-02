@@ -101,7 +101,7 @@ export function pagesText(lines: number, pageLines: number): string {
     return `≈ ${pages} ${halves <= 2 ? 'page' : 'pages'}`
 }
 
-/** A length bucket in pages: `under 1 page`, `2–4 pages`, `4 pages and up`. The server cuts them at whole pages. */
+/** A length bucket in pages: `under 1 page`, `4–6 pages`, `6 pages and up`. The server cuts them at whole pages. */
 export function lengthText(length: Pick<PlansLength, 'low' | 'high'>, pageLines: number): string {
     const low = length.low / pageLines
     if (length.high === null) {
@@ -114,7 +114,7 @@ export function lengthText(length: Pick<PlansLength, 'low' | 'high'>, pageLines:
     return `${String(low)}–${String(high)} pages`
 }
 
-/** A length bucket in the editor's lines, on its hover: `under 50 lines`, `100–200 lines`, `200 lines and up`. */
+/** A length bucket in the editor's lines, on its hover: `under 50 lines`, `200–300 lines`, `300 lines and up`. */
 export function lengthLinesText(length: Pick<PlansLength, 'low' | 'high'>): string {
     if (length.high === null) {
         return `${String(length.low)} lines and up`

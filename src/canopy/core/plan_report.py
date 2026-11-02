@@ -35,8 +35,8 @@ if TYPE_CHECKING:
 RESUMES = (RunKind.RESUME, RunKind.FIX_CI)
 #: A page of a plan, in the plan editor's lines (`plan_metrics.Metrics.lines`): about a screen at 1440 pixels tall.
 PAGE_LINES = 50
-#: Where the length table cuts a plan's length, in lines: under a page, under 2, under 4, and the rest.
-LENGTH_BOUNDS = (PAGE_LINES, 2 * PAGE_LINES, 4 * PAGE_LINES)
+#: Where the length table cuts a plan's length, in lines: under a page, under 2, under 4, under 6, and the rest.
+LENGTH_BOUNDS = (PAGE_LINES, 2 * PAGE_LINES, 4 * PAGE_LINES, 6 * PAGE_LINES)
 
 
 class Outcome(StrEnum):

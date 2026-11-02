@@ -125,7 +125,7 @@ const REPORT: PlansReport = {
     ],
     lengths: [
         { low: 50, high: 100, plans: 1, median_hours_to_approve: 1, as_written: 1 },
-        { low: 200, high: null, plans: 1, median_hours_to_approve: 3, as_written: 0 },
+        { low: 300, high: null, plans: 1, median_hours_to_approve: 3, as_written: 0 },
     ],
     page_lines: 50,
     outcomes: { planner: 1, as_written: 1, revised: 1, replaced: 1, dropped: 0, waiting: 1 },
@@ -190,9 +190,9 @@ describe('the Plans page', () => {
         const lengths = within(await screen.findByTestId('plans-length-table')).getAllByTestId('plans-length')
         expect(lengths.map((n) => texts(n))).toEqual([
             ['1–2 pages', '1', '1.0h', '1'],
-            ['4 pages and up', '1', '3.0h', '0'],
+            ['6 pages and up', '1', '3.0h', '0'],
         ])
-        expect(tipOf(within(lengths[1] as HTMLElement).getByText('4 pages and up'))).toBe('200 lines and up')
+        expect(tipOf(within(lengths[1] as HTMLElement).getByText('6 pages and up'))).toBe('300 lines and up')
     })
 
     it('lists each plan with its level, how it went, its length, and the resumes after it', async () => {
