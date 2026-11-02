@@ -47,6 +47,11 @@ export interface PlanThread {
     at: string
     /** Whether the operator marked it done. A resolved thread is kept, and asks the planner for nothing. */
     resolved: boolean
+    /**
+     * Whether a planner has read it as it stands: sent in a request for changes and answered by a new plan. An
+     * approval's notes leave it out (`approvalNotes`); a reply, an edit, or reopening it makes it unread.
+     */
+    read?: boolean
     /** Its replies, oldest first. */
     replies: PlanReply[]
 }
@@ -58,26 +63,30 @@ export function addThread(threads: PlanThread[], thread: Omit<PlanThread, 'resol
 
 /** `threads` with `reply` at the end of thread `id`'s replies. */
 export function addReply(threads: PlanThread[], id: string, reply: PlanReply): PlanThread[] {
-    return threads.map((thread) => (thread.id === id ? { ...thread, replies: [...thread.replies, reply] } : thread))
+    return threads.map((thread) =>
+        thread.id === id ? { ...thread, replies: [...thread.replies, reply], read: false } : thread,
+    )
 }
 
 /** `threads` with thread `id`'s comment saying `body` instead. */
 export function editThread(threads: PlanThread[], id: string, body: string): PlanThread[] {
-    return threads.map((thread) => (thread.id === id ? { ...thread, body } : thread))
+    return threads.map((thread) => (thread.id === id ? { ...thread, body, read: false } : thread))
 }
 
 /** `threads` with reply `replyId` of thread `id` saying `body` instead. */
 export function editReply(threads: PlanThread[], id: string, replyId: string, body: string): PlanThread[] {
-    return threads.map((thread) =>
-        thread.id === id
-            ? { ...thread, replies: thread.replies.map((reply) => (reply.id === replyId ? { ...reply, body } : reply)) }
-            : thread,
-    )
+    return threads.map((thread) => {
+        if (thread.id !== id) {
+            return thread
+        }
+        const replies = thread.replies.map((reply) => (reply.id === replyId ? { ...reply, body } : reply))
+        return { ...thread, replies, read: false }
+    })
 }
 
 /** `threads` with thread `id` resolved, or reopened. */
 export function setResolved(threads: PlanThread[], id: string, resolved: boolean): PlanThread[] {
-    return threads.map((thread) => (thread.id === id ? { ...thread, resolved } : thread))
+    return threads.map((thread) => (thread.id === id ? { ...thread, resolved, read: false } : thread))
 }
 
 /** `threads` without thread `id`. */
@@ -139,10 +148,11 @@ export function changeRequest(
 }
 
 /**
- * The notes an approval carries to the implement (`canopy plan KEY --approve --message`): the open threads, the
- * `answers` to the plan's open decisions, and the `note` on the whole plan, as `changeRequest` puts them, for small
- * points that need no new plan. The implement reads the plan as approved, edits included, so this says nothing of
- * them. Empty when there is nothing to send.
+ * The notes an approval carries to the implement (`canopy plan KEY --approve --message`): the open threads no planner
+ * has read (`unread`), the `answers` to the plan's open decisions, and the `note` on the whole plan, as `changeRequest`
+ * puts them, for small points that need no new plan. A thread a planner has read is left out: the plan answers it, and
+ * sent again it would ask the implement to do twice what the plan already does. The implement reads the plan as
+ * approved, edits included, so this says nothing of them. Empty when there is nothing to send.
  */
 export function approvalNotes(
     threads: PlanThread[],
@@ -150,7 +160,12 @@ export function approvalNotes(
     note = '',
     answers: readonly string[] = [],
 ): string {
-    return commented(threads, starts, 'Where I commented on the plan, do as I say.', note, answers).join('\n\n')
+    return commented(unread(threads), starts, 'Where I commented on the plan, do as I say.', note, answers).join('\n\n')
+}
+
+/** The open threads no planner has read as they stand: what an approval's notes carry. */
+export function unread(threads: PlanThread[]): PlanThread[] {
+    return threads.filter((thread) => !thread.resolved && thread.read !== true)
 }
 
 /** The journal's threads (`GET /tickets/{key}/plans`), as the editor holds them: each id the journal's, as text. */
@@ -161,6 +176,7 @@ export function fromServer(threads: PlanThreadView[]): PlanThread[] {
         body: thread.body,
         at: thread.at,
         resolved: thread.resolved,
+        read: thread.read,
         replies: thread.replies.map((reply) => ({ id: String(reply.id), body: reply.body, at: reply.at })),
     }))
 }

@@ -152,6 +152,18 @@ describe('approvalNotes', () => {
         expect(approvalNotes([], new Map(), '  ')).toBe('')
     })
 
+    it('leaves out a comment a planner has read, until a reply or an edit says something new', () => {
+        const read = two().map((thread) => Object.assign(thread, { read: thread.id === 'a' }))
+        expect(approvalNotes(read, new Map())).not.toContain('Page instead?')
+        expect(approvalNotes(read, new Map())).toContain('Name the route.')
+        expect(approvalNotes(setResolved(read, 'b', true), new Map())).toBe('')
+        const replied = addReply(read, 'a', { id: 'r', body: 'Still paging, please.', at: AT })
+        expect(approvalNotes(replied, new Map())).toContain('Page instead?')
+        expect(approvalNotes(editThread(read, 'a', 'Page it.'), new Map())).toContain('Page it.')
+        // A request for changes asks again about every open comment, read or not.
+        expect(changeRequest(read, new Map())).toContain('Page instead?')
+    })
+
     it("carries the answers to the plan's decisions, even with no comment or note", () => {
         const answer = 'Decision 1 (Where the hour is kept): take B, not A.'
         expect(approvalNotes([], new Map(), '', [answer])).toBe(answer)
@@ -170,6 +182,7 @@ describe('the journal', () => {
                 body: 'Page instead?',
                 at: AT,
                 resolved: true,
+                read: false,
                 replies: [{ id: 9, body: 'Or both.', at: AT }],
             },
         ])
@@ -179,6 +192,7 @@ describe('the journal', () => {
             body: 'Page instead?',
             at: AT,
             resolved: true,
+            read: false,
             replies: [{ id: '9', body: 'Or both.', at: AT }],
         })
     })
