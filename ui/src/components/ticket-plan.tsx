@@ -368,7 +368,11 @@ function NewestPlan({
                 await save()
             }
             const replied = await replyTicket(ticketKey, message, newSubmission())
-            await Promise.all(sent.map(async (id) => changePlanThread(ticketKey, await serverId(id), { sent: true })))
+            // The request is recorded whatever the marks do: one that fails costs only that Approve sends its comment
+            // once more, where failing the request would have the operator send it again.
+            await Promise.allSettled(
+                sent.map(async (id) => changePlanThread(ticketKey, await serverId(id), { sent: true })),
+            )
             void client.invalidateQueries({ queryKey: keys.ticket(ticketKey) })
             return (
                 `Recorded message ${replied.message_id} on ${ticketKey}: the next tick asks the planner for a new ` +

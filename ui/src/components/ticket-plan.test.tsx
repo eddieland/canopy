@@ -561,6 +561,17 @@ describe('TicketPlan', () => {
         expect(sent[1]?.body).toEqual({ sent: true })
     })
 
+    it('says the request is recorded though a comment could not be marked sent, so it is not sent twice', async () => {
+        answers['PATCH /api/tickets/ABC-1/plan-threads/9'] = Response.json(
+            { detail: { guard: 'unknown', reason: 'ABC-1 has no plan comment 9' } },
+            { status: 409 },
+        )
+        renderPlan({ threads: [THREAD] })
+        fireEvent.submit(screen.getByRole('form', { name: 'Ask for changes' }))
+        expect((await screen.findByRole('status')).textContent).toMatch(/^Recorded message 6 on ABC-1/u)
+        expect(screen.queryByRole('alert')).toBeNull()
+    })
+
     it('approves without the comments a planner has read, which the plan already answers', async () => {
         renderPlan({ threads: [{ ...THREAD, read: true }] })
         const card = screen.getByRole('article', { name: 'Comment on “CSV writer”' })
