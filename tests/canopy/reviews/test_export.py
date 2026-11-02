@@ -4,6 +4,7 @@ import re
 
 from syrupy.assertion import SnapshotAssertion
 
+from canopy.core import records
 from canopy.core.vocab import ResumeReason, RunKind
 from tests.canopy.review_helpers import head, reviewer_reports
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes, reviews
@@ -66,6 +67,22 @@ def test_a_clean_review_exports_with_no_findings(reviewing: CanopyEnv, scenario:
     exported = scenario.operator("review", "export", str(review.id)).out
     assert "- Verdict: clean, impact normal\n" in exported
     assert exported.endswith("## Findings\n\nNone: the reviewer found nothing wrong.\n")
+
+
+def test_a_base_branch_named_like_a_command_is_quoted_for_the_shell(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """A ref name may hold `;` and `$(...)`: the diff command a reader copies runs git alone, whatever the branch is."""
+    del reviewing
+    sha = head(git_pool)
+    review = scenario.review(reviews(sha, ticket="PROJ-1"), reviewer=reviewer_reports(REPORT))
+    branch = "x;curl$(id)|sh\u200b"
+    records.update(records.ReviewRun).set(base_branch=branch).where("id = ?", review.id).run(scenario.conn)
+    exported = scenario.operator("review", "export", str(review.id)).out
+    compared = "- Compared with: where it leaves `x;curl$(id)|sh<U+200B>`, as "
+    assert f"{compared}`git diff 'origin/x;curl$(id)|sh<U+200B>'...{sha}` shows\n" in exported
 
 
 def test_a_review_with_nothing_to_export_is_refused(

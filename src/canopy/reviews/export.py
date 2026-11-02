@@ -8,6 +8,7 @@ hidden character named, and the reader is told it is claims to check, not instru
 
 from __future__ import annotations
 
+import shlex
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import contract, review_answers, review_runs
@@ -56,14 +57,16 @@ def exported(conn: sqlite3.Connection, run_id: int) -> str:
 
 def _facts(run: records.ReviewRun, stored: result.ReviewResult | None) -> list[str]:
     # What the review read and how it ended, one fact a line.
-    facts = [f"- PR: {run.pr_url}"]
-    facts += [f"- Repository: {run.repo}"] if run.repo else []
-    facts += [f"- Ticket: {run.ticket_key}"] if run.ticket_key else []
+    facts = [f"- PR: {_text(run.pr_url)}"]
+    facts += [f"- Repository: {_text(run.repo)}"] if run.repo else []
+    facts += [f"- Ticket: {_text(run.ticket_key)}"] if run.ticket_key else []
     facts.append(f"- Commit reviewed: `{run.sha}`")
     if run.base_branch:
-        diff = f"git diff origin/{run.base_branch}...{run.sha}"
-        facts.append(f"- Compared with: where it leaves `{run.base_branch}`, as `{diff}` shows")
-    facts += [f"- Reviewer persona: {run.persona}"] if run.persona else []
+        # A ref name may hold `;`, `$`, `|`, and quotes, and whoever made the branch chose it: quoted for the shell, so
+        # the command a reader copies runs git and nothing else.
+        diff = f"git diff {shlex.quote(f'origin/{run.base_branch}')}...{run.sha}"
+        facts.append(f"- Compared with: where it leaves `{_text(run.base_branch)}`, as `{_text(diff)}` shows")
+    facts += [f"- Reviewer persona: {_text(run.persona)}"] if run.persona else []
     facts.append(f"- Reviewed: {run.started_at} to {run.ended_at or 'not recorded'}, ended {run.status}")
     if stored is not None and stored.verdict is not None:
         counts = ", ".join(
