@@ -624,7 +624,13 @@ def _run_agent(
     if run["kind"] in (policy.PLAN, policy.FEEDBACK_PLAN):
         served[git_tools.SERVER] = git_tools.command({s.repo: s.path for s in slots})
     env |= servers.env(served, version=ctx.config.runtime.version, cwd=ctx.workspace.root.absolute())
-    env |= commit_hooks.env(snapshot, marks, os.environ, _held_for(_answers(ctx, run), slots))
+    env |= commit_hooks.env(
+        snapshot,
+        marks,
+        os.environ,
+        _held_for(_answers(ctx, run), slots),
+        slots=[s.path for s in slots],
+    )
     with run_offers.probing(
         ctx.conn,
         "runs",
