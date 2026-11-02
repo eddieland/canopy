@@ -18,6 +18,7 @@ describe('parsePlanText', () => {
     })
 
     it('reads what was stored, and falls back on anything else', () => {
+        expect(parsePlanText('tiny')).toBe('tiny')
         expect(parsePlanText('small')).toBe('small')
         expect(parsePlanText('large')).toBe('large')
         expect(parsePlanText('huge')).toBe(DEFAULT)

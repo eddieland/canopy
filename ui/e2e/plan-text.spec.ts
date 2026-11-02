@@ -34,6 +34,13 @@ test("settings sets a plan's text size, which the plan keeps after a reload", as
 
     await page.goto('settings')
     await settled(page)
+    await page.getByTestId('plan-text-tiny').click()
+    await page.goto('plan-editor')
+    await settled(page)
+    await expect(plan(page)).toHaveCSS('font-size', '12px')
+
+    await page.goto('settings')
+    await settled(page)
     await page.getByTestId('plan-text-normal').click()
     await page.goto('plan-editor')
     await settled(page)
