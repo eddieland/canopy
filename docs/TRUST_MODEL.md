@@ -1069,7 +1069,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
   note something to a chore as `canopy reply chore:NAME` does, try a chore as a recorded `canopy chore try` does,
   dismiss a chore's or a review's finding or take that
-  back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a
+  back as `canopy dismiss` does, send a review's findings, or feedback a ticket left with no worker, to a worker as
+  `canopy send` does, make and end a
   review request on a PR, with its personas, as `canopy start URL --review` and `canopy stop URL` do, pause and
   resume the loop as `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice`
   does, ask for, skip, or approve a ticket's plan as `canopy plan` does, approve its feedback plan whole or by item,

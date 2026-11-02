@@ -63,6 +63,7 @@ function detail(messages: Message[], forgets: TicketForget[] = []): TicketDetail
         persona_names: [],
         models: [],
         worker_models: [],
+        left_feedback: [],
     }
 }
 

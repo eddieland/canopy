@@ -21,9 +21,12 @@ from canopy.core.vocab import Decider, PassReason, ReviewItem
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 
     from canopy.core.config import Trust
+
+    #: What the operator sent through canopy on each of some PRs, by GitHub's ids, as `runs.drafts.sent_by_pr` reads it.
+    type SentBy = Callable[[Collection[str]], Mapping[str, Mapping[str, Collection[int]]]]
 
 
 @dataclass(frozen=True)
@@ -60,13 +63,13 @@ class Left(records.View):
 def left(
     conn: sqlite3.Connection,
     trust: Trust,
-    sent: Mapping[str, Mapping[str, Collection[int]]],
+    sent: SentBy,
     keys: Collection[str],
 ) -> dict[str, list[Left]]:
     """The feedback passed with no worker on each of `keys`' units that is still left.
 
-    A worker's reply is known by `trust`'s marks, and one the operator sent through canopy by its id among `sent`, as
-    `runs.drafts.sent_by_pr` reads them.
+    A worker's reply is known by `trust`'s marks, and one the operator sent through canopy by its id among what `sent`
+    reads of the PRs the items are on, as `runs.drafts.sent_by_pr` does.
 
     Returns:
         Each ticket's, by key, oldest first; a ticket with none is not in it.
@@ -84,7 +87,8 @@ def left(
         .order_by("p.number")
     )
     rows = records.fetch_all(conn, _Read, query)
-    answered = _answered(conn, trust, sent, {r.pr_url for r in rows})
+    urls = {r.pr_url for r in rows}
+    answered = _answered(conn, trust, sent(urls) if urls else {}, urls)
     found: dict[str, list[Left]] = {}
     for r in rows:
         replies = answered.get((r.pr_url, r.thread_id), []) if r.thread_id is not None else []
@@ -123,17 +127,19 @@ def summary(items: Sequence[Left]) -> str:
 def send(
     conn: sqlite3.Connection,
     trust: Trust,
-    sent: Mapping[str, Mapping[str, Collection[int]]],
+    sent: SentBy,
     key: str,
     numbers: Collection[int],
     *,
     channel: str,
+    submission: str | None = None,
 ) -> conversation.Sent:
     """Send feedback on ticket `key`'s PRs that is left with no worker to one: the operator's go-ahead, as a reply.
 
     The message names each item by GitHub's id, its PR, and where it is, never quoting it: the item is the reviewer's
     text, and the message the operator's. The next tick reads it as their go-ahead (DESIGN §7, D089), and a worker
     addresses the items it names, whoever wrote them. Each stays left until it is answered on its thread or resolved.
+    A retried `submission`, as `reply` takes it, records nothing new.
 
     Returns:
         The ticket, and the reply it recorded.
@@ -156,7 +162,8 @@ def send(
     named = "; ".join(_named(p) for p in items)
     noun = "this review item" if len(items) == 1 else "these review items"
     body = f"Address {noun}, which the loop left with no worker: {named}."
-    replied = conversation.reply(conn, conversation.Ref(conversation.TICKET, key), body, channel=channel)
+    ref = conversation.Ref(conversation.TICKET, key)
+    replied = conversation.reply(conn, ref, body, channel=channel, submission=submission)
     return conversation.Sent(ticket=key, replied=replied)
 
 

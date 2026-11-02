@@ -6,6 +6,7 @@ sees the item ends it, how `canopy show` lists it to the operator, and how `cano
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING
 
 import pytest
@@ -38,7 +39,7 @@ def observed(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> sqlite3.Connect
 def left(env: CanopyEnv) -> list[tuple[int, str]]:
     """KEY's feedback still left with no worker: each item's id and reason."""
     ctx = context(env)
-    found = passed_reviews.left(ctx.conn, ctx.config.trust, drafts.sent_by_pr(ctx.conn), [KEY])
+    found = passed_reviews.left(ctx.conn, ctx.config.trust, functools.partial(drafts.sent_by_pr, ctx.conn), [KEY])
     return [(p.id, p.reason.value) for p in found.get(KEY, [])]
 
 
