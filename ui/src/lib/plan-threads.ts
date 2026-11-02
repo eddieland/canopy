@@ -213,8 +213,6 @@ export function movedAnchors(saved: PlanThread[], held: PlanThread[]): PlanThrea
     })
 }
 
-// A passage as the planner reads it: without the placeholders its HTML tags and images stand as in the editor's text,
-// which are no characters of the plan, and cut to `MAX_QUOTE` characters, at a word when one ends near the cut.
 // Each open thread, in plan order, as the passage it is on, the comment, and its replies, after `lead`, then `note`.
 function commented(threads: PlanThread[], starts: ReadonlyMap<string, number>, lead: string, note: string): string[] {
     const open = inPlanOrder(threads, starts).filter((thread) => !thread.resolved)
@@ -237,6 +235,8 @@ function commented(threads: PlanThread[], starts: ReadonlyMap<string, number>, l
     return parts
 }
 
+// A passage as the planner reads it: without the placeholders its HTML tags and images stand as in the editor's text,
+// which are no characters of the plan, and cut to `MAX_QUOTE` characters, at a word when one ends near the cut.
 function cut(passage: string): string {
     const quote = collapse(passage.replaceAll(ATOM, ''))
     if (quote.length <= MAX_QUOTE) {
