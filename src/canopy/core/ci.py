@@ -15,9 +15,10 @@ is approximate: `observed_at` is when a source saw a run completed, not when it 
 are still running reads green until a source sees one go red.
 
 Red is `failure`, `error`, `timed_out`, or `startup_failure`; green is `success`; the rest (`cancelled`, `skipped`,
-`neutral`, `stale`, `action_required`) count as neither. Only the check runs a `vcs` source observed are kept
-(`observed_check_runs`, from M36 on), so only the PRs canopy observed are here, and a commit status, which has no run,
-has no history and is not counted.
+`neutral`, `stale`, `action_required`) count as neither. Only the runs a `vcs` source observed are kept, so only the
+PRs canopy observed are here: each check run (`observed_check_runs`, from M36 on), and each run of a commit status
+(`observed_status_runs`), which has no run id, as canopy told it apart from what it saw of the status at its head. A
+status rerun that ended as its last run did, with no read seeing it running, is not told apart, so is not counted.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING, Literal, cast
 
-from canopy.core import contract, db, records, spend, tracked_prs
+from canopy.core import contract, db, records, spend, sql, tracked_prs
 from canopy.core.vocab import CheckConclusion, ResumeReason, RunKind
 
 if TYPE_CHECKING:
@@ -49,6 +50,31 @@ TOP_CHECKS = 4
 type Verdict = Literal["green", "red", "neither"]
 #: A PR's spell of red: when it began, and when it ended, None while it lasts; journal times.
 type Spell = tuple[str, str | None]
+
+
+@dataclass(frozen=True)
+class _Run(records.View):
+    """A completed run of a CI context on a PR: a check run, or a commit status's run as canopy told it apart."""
+
+    pr_url: str
+    #: What tells it from its PR's other runs: a check run's id, or a commit status run's id negated, which no check
+    #: run's id is.
+    key: int
+    name: str
+    head_sha: str
+    conclusion: CheckConclusion
+    #: When a source first observed it completed.
+    observed_at: str
+
+
+#: Every completed run the page counts, check runs and commit status runs alike.
+_EVERY_RUN = sql.union(
+    sql.select("pr_url, run_id AS key, name, head_sha, conclusion, observed_at").from_("observed_check_runs"),
+    sql.select("pr_url, -id AS key, name, head_sha, conclusion, observed_at")
+    .from_("observed_status_runs")
+    .where("conclusion IS NOT NULL"),
+    every=True,
+)
 
 
 @dataclass(frozen=True)
@@ -240,7 +266,7 @@ def between(conn: sqlite3.Connection, start: datetime, end: datetime) -> Ci:
             prs={url for urls in fix_prs.values() for url in urls},
             heads={h for k in kicks for h in (k.from_head, k.to_head)},
         )
-    by_pr: dict[str, list[records.ObservedCheckRun]] = {}
+    by_pr: dict[str, list[_Run]] = {}
     for run in runs:
         by_pr.setdefault(run.pr_url, []).append(run)
     in_window = [r for r in runs if since <= r.observed_at < until]
@@ -310,27 +336,29 @@ def _check_runs(
     *,
     prs: Iterable[str],
     heads: Iterable[str],
-) -> list[records.ObservedCheckRun]:
+) -> list[_Run]:
     query = (
-        records.select(records.ObservedCheckRun)
+        sql.select("pr_url, key, name, head_sha, conclusion, observed_at")
+        .with_("every_run AS ({})", _EVERY_RUN)
+        .from_("every_run")
         .where(
-            "(pr_url IN (SELECT pr_url FROM observed_check_runs WHERE observed_at >= ? AND observed_at < ?) "
+            "(pr_url IN (SELECT pr_url FROM every_run WHERE observed_at >= ? AND observed_at < ?) "
             "OR pr_url IN (SELECT value FROM json_each(?)) OR head_sha IN (SELECT value FROM json_each(?)))",
             since,
             until,
             json.dumps(sorted(set(prs))),
             json.dumps(sorted(set(heads))),
         )
-        .order_by("observed_at, run_id")
+        .order_by("observed_at, key")
     )
-    return query.all(conn)
+    return records.fetch_all(conn, _Run, query)
 
 
 # Each PR head first checked in the window that had a red or green first run of a check, as the local day it was first
 # checked and whether it had no red one: each check's first run on the head is what the head's push got, before any
 # rerun.
 def _first_heads(
-    by_pr: Mapping[str, Sequence[records.ObservedCheckRun]],
+    by_pr: Mapping[str, Sequence[_Run]],
     since: str,
     until: str,
 ) -> list[tuple[str, bool]]:
@@ -352,10 +380,10 @@ def _first_heads(
 # Each check's runs in the window, the worst first, with how often a red one's next run on a new head passed, and how
 # often a rerun on a head it had been red on did.
 def _checks(
-    in_window: Iterable[records.ObservedCheckRun],
-    by_pr: Mapping[str, Sequence[records.ObservedCheckRun]],
+    in_window: Iterable[_Run],
+    by_pr: Mapping[str, Sequence[_Run]],
 ) -> list[Check]:
-    by_name: dict[str, list[records.ObservedCheckRun]] = {}
+    by_name: dict[str, list[_Run]] = {}
     for run in in_window:
         by_name.setdefault(run.name, []).append(run)
     reruns = _reruns(by_pr)
@@ -364,7 +392,7 @@ def _checks(
         verdicts = [_verdict(r.conclusion) for r in runs]
         after = [_next_on_new_head(by_pr[r.pr_url], r) for r in runs if _verdict(r.conclusion) == "red"]
         followed = [r for r in after if r is not None]
-        rerun = [r for r in runs if (r.pr_url, r.run_id) in reruns]
+        rerun = [r for r in runs if (r.pr_url, r.key) in reruns]
         found.append(
             Check(
                 name=name,
@@ -381,13 +409,13 @@ def _checks(
 
 
 # The runs, by PR and id, observed after a red run of their check on their PR's same head.
-def _reruns(by_pr: Mapping[str, Sequence[records.ObservedCheckRun]]) -> set[tuple[str, int]]:
+def _reruns(by_pr: Mapping[str, Sequence[_Run]]) -> set[tuple[str, int]]:
     found: set[tuple[str, int]] = set()
     for url, runs in by_pr.items():
         red: set[tuple[str, str]] = set()
         for run in runs:
             if (run.head_sha, run.name) in red:
-                found.add((url, run.run_id))
+                found.add((url, run.key))
             elif _verdict(run.conclusion) == "red":
                 red.add((run.head_sha, run.name))
     return found
@@ -400,21 +428,19 @@ def _share(check: Check) -> float:
 
 # The first run of `run`'s check on its PR, observed after it, on a head other than its own.
 def _next_on_new_head(
-    runs: Iterable[records.ObservedCheckRun],
-    run: records.ObservedCheckRun,
-) -> records.ObservedCheckRun | None:
+    runs: Iterable[_Run],
+    run: _Run,
+) -> _Run | None:
     later = (
         r
         for r in runs
-        if r.name == run.name
-        and r.head_sha != run.head_sha
-        and (r.observed_at, r.run_id) > (run.observed_at, run.run_id)
+        if r.name == run.name and r.head_sha != run.head_sha and (r.observed_at, r.key) > (run.observed_at, run.key)
     )
     return next(later, None)
 
 
 # The chart's series: the `TOP_CHECKS` names most often red in the window, then None for the rest, if any was red.
-def _series(in_window: Iterable[records.ObservedCheckRun]) -> list[str | None]:
+def _series(in_window: Iterable[_Run]) -> list[str | None]:
     red: dict[str, int] = {}
     for run in in_window:
         if _verdict(run.conclusion) == "red":
@@ -425,7 +451,7 @@ def _series(in_window: Iterable[records.ObservedCheckRun]) -> list[str | None]:
 
 
 def _per_day(
-    in_window: Iterable[records.ObservedCheckRun],
+    in_window: Iterable[_Run],
     series: Sequence[str | None],
     starts: Mapping[str, str],
     first_heads: Iterable[tuple[str, bool]],
@@ -453,8 +479,8 @@ def _per_day(
 
 # A PR's spells of red, oldest first, as the module's docstring says: when each began, and when it ended, None for one
 # that lasts, which is the last.
-def _red_spells(runs: Sequence[records.ObservedCheckRun]) -> list[Spell]:
-    by_head: dict[str, list[records.ObservedCheckRun]] = {}
+def _red_spells(runs: Sequence[_Run]) -> list[Spell]:
+    by_head: dict[str, list[_Run]] = {}
     for run in runs:
         by_head.setdefault(run.head_sha, []).append(run)
     order = {head: i for i, head in enumerate(by_head)}
@@ -489,8 +515,8 @@ def _red_spells(runs: Sequence[records.ObservedCheckRun]) -> list[Spell]:
 
 # When a head's runs, oldest first, went green: no check's last red or green run red and one green, at the latest of
 # those runs' observations; None when they are not green.
-def _green_at(runs: Iterable[records.ObservedCheckRun]) -> str | None:
-    deciding: dict[str, records.ObservedCheckRun] = {}
+def _green_at(runs: Iterable[_Run]) -> str | None:
+    deciding: dict[str, _Run] = {}
     for run in runs:
         if _verdict(run.conclusion) != "neither":
             deciding[run.name] = run
@@ -535,7 +561,7 @@ def _red_order(pr: PullRequest) -> tuple[int, str, float, str]:
 def _fix(
     run: records.Run,
     prs: Collection[str],
-    by_pr: Mapping[str, Sequence[records.ObservedCheckRun]],
+    by_pr: Mapping[str, Sequence[_Run]],
     spells: Mapping[str, Sequence[Spell]],
 ) -> Fix:
     checks: list[FixedCheck] = []
@@ -586,10 +612,10 @@ def _kick(
     kick: records.FlakyKick,
     kicks: Iterable[records.FlakyKick],
     kick_runs: Mapping[int, records.Run],
-    runs: Iterable[records.ObservedCheckRun],
+    runs: Iterable[_Run],
 ) -> Kick:
-    latest: dict[str, records.ObservedCheckRun] = {}
-    first_after: dict[str, records.ObservedCheckRun] = {}
+    latest: dict[str, _Run] = {}
+    first_after: dict[str, _Run] = {}
     for r in runs:
         if r.head_sha == kick.from_head:
             latest[r.name] = r

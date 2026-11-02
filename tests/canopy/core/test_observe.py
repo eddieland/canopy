@@ -136,6 +136,35 @@ def test_a_held_checks_re_run_is_observed_at_the_same_head_and_the_run_it_repeat
     ], "a commit status has no run to keep"
 
 
+def test_a_commit_status_keeps_a_run_each_time_it_is_seen_running_again_or_ending_another_way(
+    ctx: Context,
+    connector_state: Path,
+) -> None:
+    """A status has no run id: a run is a start seen and the end after it, or an end with another conclusion."""
+    pr = {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7}
+    status = {"kind": "check", "pr": PR, "head_sha": "abc1234", "name": "jenkins", "status": "completed"}
+    pending = {**status, "status": "pending"}
+    for read in (
+        pending,
+        {**status, "conclusion": "failure"},
+        {**status, "conclusion": "failure"},
+        pending,
+        pending,
+        {**status, "conclusion": "failure"},
+        {**status, "conclusion": "success"},
+        {**pending, "head_sha": "def5678"},
+    ):
+        prints(connector_state, pr, read)
+        run(ctx)
+    kept = records.select(records.ObservedStatusRun).order_by("id").all(ctx.conn)
+    assert [(r.head_sha, r.conclusion) for r in kept] == [
+        ("abc1234", "failure"),
+        ("abc1234", "failure"),
+        ("abc1234", "success"),
+        ("def5678", None),
+    ], "a failure read twice is one run; one seen pending between is two; a new head's pending is open"
+
+
 def test_a_prs_title_is_kept_to_one_line_cut_and_marked_and_none_when_not_printed(
     ctx: Context,
     connector_state: Path,

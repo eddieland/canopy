@@ -318,8 +318,11 @@ Red means `failure`, `error`, `timed_out`, or `startup_failure`; green means `su
   latest tick. The [health page](#the-health-page) has every guard's refusals; this one just points there.
 
 The page sees only the PRs canopy observed, and only their check runs from M36 on, when canopy started keeping every
-one. A commit status has no check run, so it has no history here and isn't counted. If your CI reports by status
-alone, this page will look suspiciously calm.
+one. It counts commit statuses too, the way Jenkins, Buildkite, and friends report, but a status has no run id: GitHub
+keeps only its latest state at a head. So canopy tells a status's runs apart by what it saw: seen running again, or
+done with a different result, is a new run. A rerun that went the same way as the last, finished between two reads,
+looks to canopy like nothing happened, which is also what it looks like on GitHub. Statuses count from the day you
+upgrade: the ones already finished at your PRs' heads then come in as their first runs.
 
 ## The Reviews page
 
