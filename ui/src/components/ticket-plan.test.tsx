@@ -332,6 +332,79 @@ describe('TicketPlan', () => {
         })
     })
 
+    describe("the plan's open decisions", () => {
+        const DECIDING = [
+            '# Plan',
+            '',
+            'Add the CSV writer.',
+            '',
+            '## Decisions',
+            '',
+            '### Decision 1: Which encoding the file is in',
+            '',
+            '- **A (chosen):** UTF-8, as the other exports are.',
+            '- **B:** Latin-1, for the old spreadsheet.',
+            '',
+        ].join('\n')
+        const ANSWER = 'Decision 1 (Which encoding the file is in): take B, not A.'
+
+        function renderDeciding(plans: Partial<TicketPlans> = {}) {
+            return renderPlan({ newest: { ...NEWEST, text: DECIDING }, ...plans })
+        }
+
+        it("offers each, the planner's choice picked, and sends nothing while it stays picked", async () => {
+            renderDeciding()
+            const decisions = screen.getByRole('region', { name: 'Open decisions' })
+            const group = within(decisions).getByRole('radiogroup', {
+                name: 'Decision 1: Which encoding the file is in',
+            })
+            const radios = within(group).getAllByRole<HTMLButtonElement>('radio')
+            expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['true', 'false'])
+            expect(within(group).getByRole('radio', { name: /^A: UTF-8.*the planner's choice/u })).toBe(radios[0])
+            fireEvent.click(button('Approve'))
+            await screen.findByTestId('plan-approved')
+            expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
+        })
+
+        it('approves with another option picked as a note for the implement', async () => {
+            renderDeciding()
+            fireEvent.click(screen.getByRole('radio', { name: /^B: Latin-1/u }))
+            expect(screen.getByText(/^1 answer goes with Approve, to the implement/u)).toBeDefined()
+            fireEvent.click(button('Approve with notes'))
+            await screen.findByTestId('plan-approved')
+            expect(sent).toEqual([
+                { method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve', message: ANSWER } },
+            ])
+        })
+
+        it("asks for changes with another option picked, and picks the planner's again once asked", async () => {
+            renderDeciding()
+            fireEvent.click(screen.getByRole('radio', { name: /^B: Latin-1/u }))
+            fireEvent.submit(screen.getByRole('form', { name: 'Ask for changes' }))
+            await screen.findByRole('status')
+            expect(sent).toEqual([
+                {
+                    method: 'POST',
+                    path: '/api/tickets/ABC-1/replies',
+                    body: expect.objectContaining({ body: ANSWER }) as unknown,
+                },
+            ])
+            expect(screen.getByRole('radio', { name: /^A: UTF-8/u }).getAttribute('aria-checked')).toBe('true')
+        })
+
+        it('shows none for a plan that waits on no answer, or that asks none in their shape', () => {
+            const approved = { ...PLAN, status: 'approved' as const }
+            const { unmount } = renderDeciding({
+                plans: [EARLIER, approved],
+                newest: { ...NEWEST, text: DECIDING, plan: approved },
+            })
+            expect(screen.queryByRole('region', { name: 'Open decisions' })).toBeNull()
+            unmount()
+            renderPlan()
+            expect(screen.queryByRole('radiogroup')).toBeNull()
+        })
+    })
+
     it('approves with nothing more while there are no notes', async () => {
         renderPlan()
         fireEvent.click(button('Approve'))

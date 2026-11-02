@@ -27,6 +27,7 @@ import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef, useState 
 import type { ReactNode } from 'react'
 
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
+import { PlanDecisions } from '@/components/plan-decisions'
 import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
 import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
@@ -47,6 +48,8 @@ import {
     ToolbarToggleGroup,
     ToolbarToggleItem,
 } from '@/components/ui/toolbar'
+import { decisionAnswers } from '@/lib/plan-decisions'
+import type { PlanDecision } from '@/lib/plan-decisions'
 import { changesKey, outlineOf, PlanChanges } from '@/lib/plan-diff'
 import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } from '@/lib/plan-highlights'
 import type { Range } from '@/lib/plan-highlights'
@@ -71,6 +74,8 @@ import { ariaKeys, keysLabel } from '@/lib/shortcut'
 import { cn } from '@/lib/utils'
 
 const APPLE = isApple(navigator.userAgent)
+// A plan that asks no open decision, or none the page answers.
+const NO_DECISIONS: readonly PlanDecision[] = []
 // The selection's bubble, by its key, so opening a comment can hide it.
 const BUBBLE = new PluginKey('planBubble')
 // How far below the top of the page the editor keeps what it scrolls into view, in pixels: the sticky header's height,
@@ -113,6 +118,7 @@ export function PlanEditor({
     status,
     onAskForChanges,
     asked = false,
+    decisions = NO_DECISIONS,
     actions,
     renderActions,
     actionsNote,
@@ -137,11 +143,17 @@ export function PlanEditor({
     onAskForChanges?: (message: string) => void
     /** Whether the operator asked for changes no planner has read yet, so that asking again is said as such. */
     asked?: boolean
+    /**
+     * The plan's open decisions (`planDecisions`), answered under it while it may be edited (`PlanDecisions`): an
+     * answer goes with the approval's notes and with Ask for changes. None while the plan waits on no answer.
+     */
+    decisions?: readonly PlanDecision[]
     /** The caller's own word on the plan, such as Approve, at the start of the plan's foot. */
     actions?: ReactNode
     /**
-     * In place of `actions`, those drawn from the notes an approval would carry to the implement: the open comments
-     * and the note on the whole plan (`approvalNotes`), which goes only where it is written, beside Ask for changes.
+     * In place of `actions`, those drawn from the notes an approval would carry to the implement: the open comments,
+     * the answers to the plan's decisions, and the note on the whole plan (`approvalNotes`), which goes only where it
+     * is written, beside Ask for changes.
      */
     renderActions?: (notes: string) => ReactNode
     /** What the caller says of those, in words, on the line under them: what they will do. */
@@ -190,6 +202,10 @@ export function PlanEditor({
     const [draft, setDraft] = useState<Draft | undefined>(undefined)
     // The note on the whole plan, which goes with Ask for changes or with Approve, whichever the operator presses.
     const [note, setNote] = useState('')
+    // The option picked for each of the plan's decisions, by its number: those other than the planner's choice are
+    // answers, which go with the note.
+    const [picks, setPicks] = useState<ReadonlyMap<number, string>>(new Map())
+    const answers = decisionAnswers(decisions, picks)
     // Whether the plan here says other than it did when it opened, by the editor's own Markdown for both: the planner's
     // may be written otherwise (`*` for `-`), and an edit undone can leave an empty paragraph at the end, neither of
     // which the operator wrote.
@@ -446,6 +462,8 @@ export function PlanEditor({
     }
 
     const open = threads.filter((thread) => !thread.resolved).length
+    // What an approval would carry to the implement, for the caller's actions (`renderActions`).
+    const notes = approvalNotes(threads, starts, onAskForChanges ? note : '', answers)
     const threadActions: ThreadActions = {
         onActivate: (id) => activate(id, true),
         onOpen: (id) => editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id })),
@@ -523,6 +541,15 @@ export function PlanEditor({
                             />
                         </div>
                     )}
+                    {editable && decisions.length > 0 && (
+                        // Under the plan, above its foot: read after the plan, as its Decisions are written to be,
+                        // and answered just over the actions that send the answers.
+                        <PlanDecisions
+                            decisions={decisions}
+                            picks={picks}
+                            onPick={(decision, letter) => setPicks(new Map(picks).set(decision, letter))}
+                        />
+                    )}
                     {editable && (
                         <BubbleMenu
                             editor={editor}
@@ -556,16 +583,19 @@ export function PlanEditor({
                         <PanelFooter sticky data-testid="plan-bar">
                             {editable && (
                                 <div className="flex flex-wrap items-center gap-2">
-                                    {renderActions === undefined
-                                        ? actions
-                                        : renderActions(approvalNotes(threads, starts, onAskForChanges ? note : ''))}
+                                    {renderActions === undefined ? actions : renderActions(notes)}
                                     {onAskForChanges !== undefined && (
                                         <AskForChanges
                                             threads={threads}
                                             starts={starts}
                                             edited={edited || changed}
                                             asked={asked}
-                                            onAsk={onAskForChanges}
+                                            answers={answers}
+                                            onAsk={(message) => {
+                                                onAskForChanges(message)
+                                                // Sent: the planner has them, and the next plan answers them.
+                                                setPicks(new Map())
+                                            }}
                                             line={actionsNote}
                                             note={note}
                                             onNoteChange={setNote}

@@ -118,18 +118,20 @@ export const EDITED = 'I edited the plan myself before asking: keep my edits, un
 
 /**
  * The message that asks the planner for a new plan: each open thread, in plan order, as the passage it is on, the
- * comment, and its replies, then the operator's `note` on the whole plan, if any, and with `edited`, that the operator
- * edited the plan's text. The planner keeps what it was not asked to change, but reads the plan it replaces as its
- * own: this says which words are the operator's. It is the operator's words and the plan's own, so it goes to the
- * planner as an operator message, as a reply does. Empty when there is nothing to ask: no open thread and no note.
+ * comment, and its replies, then the `answers` to the plan's open decisions (`decisionAnswers`), then the operator's
+ * `note` on the whole plan, if any, and with `edited`, that the operator edited the plan's text. The planner keeps
+ * what it was not asked to change, but reads the plan it replaces as its own: this says which words are the
+ * operator's. It is the operator's words and the plan's own, so it goes to the planner as an operator message, as a
+ * reply does. Empty when there is nothing to ask: no open thread, no answer, and no note.
  */
 export function changeRequest(
     threads: PlanThread[],
     starts: ReadonlyMap<string, number>,
     note = '',
     edited = false,
+    answers: readonly string[] = [],
 ): string {
-    const parts = commented(threads, starts, 'Change the plan where I commented.', note)
+    const parts = commented(threads, starts, 'Change the plan where I commented.', note, answers)
     if (edited && parts.length > 0) {
         parts.push(EDITED)
     }
@@ -137,12 +139,18 @@ export function changeRequest(
 }
 
 /**
- * The notes an approval carries to the implement (`canopy plan KEY --approve --message`): the open threads and the
- * `note` on the whole plan, as `changeRequest` puts them, for small points that need no new plan. The implement reads
- * the plan as approved, edits included, so this says nothing of them. Empty when there is nothing to send.
+ * The notes an approval carries to the implement (`canopy plan KEY --approve --message`): the open threads, the
+ * `answers` to the plan's open decisions, and the `note` on the whole plan, as `changeRequest` puts them, for small
+ * points that need no new plan. The implement reads the plan as approved, edits included, so this says nothing of
+ * them. Empty when there is nothing to send.
  */
-export function approvalNotes(threads: PlanThread[], starts: ReadonlyMap<string, number>, note = ''): string {
-    return commented(threads, starts, 'Where I commented on the plan, do as I say.', note).join('\n\n')
+export function approvalNotes(
+    threads: PlanThread[],
+    starts: ReadonlyMap<string, number>,
+    note = '',
+    answers: readonly string[] = [],
+): string {
+    return commented(threads, starts, 'Where I commented on the plan, do as I say.', note, answers).join('\n\n')
 }
 
 /** The journal's threads (`GET /tickets/{key}/plans`), as the editor holds them: each id the journal's, as text. */
@@ -213,10 +221,15 @@ export function movedAnchors(saved: PlanThread[], held: PlanThread[]): PlanThrea
     })
 }
 
-// A passage as the planner reads it: without the placeholders its HTML tags and images stand as in the editor's text,
-// which are no characters of the plan, and cut to `MAX_QUOTE` characters, at a word when one ends near the cut.
-// Each open thread, in plan order, as the passage it is on, the comment, and its replies, after `lead`, then `note`.
-function commented(threads: PlanThread[], starts: ReadonlyMap<string, number>, lead: string, note: string): string[] {
+// Each open thread, in plan order, as the passage it is on, the comment, and its replies, after `lead`; then the
+// answers to the plan's decisions, a line each; then `note`, headed as such when anything comes before it.
+function commented(
+    threads: PlanThread[],
+    starts: ReadonlyMap<string, number>,
+    lead: string,
+    note: string,
+    answers: readonly string[],
+): string[] {
     const open = inPlanOrder(threads, starts).filter((thread) => !thread.resolved)
     const parts: string[] = []
     if (open.length > 0) {
@@ -231,12 +244,17 @@ function commented(threads: PlanThread[], starts: ReadonlyMap<string, number>, l
             parts.push(lines.join('\n'))
         })
     }
+    if (answers.length > 0) {
+        parts.push(answers.join('\n'))
+    }
     if (note.trim()) {
-        parts.push(open.length > 0 ? `On the whole plan:\n${note.trim()}` : note.trim())
+        parts.push(parts.length > 0 ? `On the whole plan:\n${note.trim()}` : note.trim())
     }
     return parts
 }
 
+// A passage as the planner reads it: without the placeholders its HTML tags and images stand as in the editor's text,
+// which are no characters of the plan, and cut to `MAX_QUOTE` characters, at a word when one ends near the cut.
 function cut(passage: string): string {
     const quote = collapse(passage.replaceAll(ATOM, ''))
     if (quote.length <= MAX_QUOTE) {

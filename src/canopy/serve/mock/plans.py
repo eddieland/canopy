@@ -1,8 +1,8 @@
 """The mock journal's planned ticket (DESIGN §25), for `python -m canopy.serve --mock`.
 
-ABC-105 is planned: its plan waits on the operator, with three comments on it, one resolved, and an earlier plan it
-superseded, each written to its file under the state directory. The earlier one was superseded after the operator asked
-for changes; each comment's passage is in the one waiting.
+ABC-105 is planned: its plan waits on the operator, with three comments on it, one resolved, an open decision for the
+page to offer, and an earlier plan it superseded, each written to its file under the state directory. The earlier one
+was superseded after the operator asked for changes; each comment's passage is in the one waiting.
 """
 
 from __future__ import annotations
@@ -44,6 +44,13 @@ In **api**, `ReportQuery` gains `owner_timezone()`, so an hour means the owner's
 | web | `app/reports/schedule.py` | the menu and its form |
 | web | `app/jobs/export_job.py` | the job |
 | api | `api/reports/query.py` | `owner_timezone()` |
+
+## Decisions
+
+### Decision 1: Where a schedule keeps its hour
+
+- **A (chosen):** As the owner's local hour: the ticket asks for the owner's hour, so it holds when the clocks change.
+- **B:** As an hour in UTC: simpler to store, but the export moves an hour twice a year.
 
 ## Tests
 

@@ -109,6 +109,18 @@ describe('changeRequest', () => {
         expect(changeRequest(threads, new Map([['a', 0]]))).toContain('1. On "Use raw rows":')
     })
 
+    it("asks with the answers to the plan's decisions, after the comments and before the note, or alone", () => {
+        const answers = ['Decision 1 (Where the hour is kept): take B, not A.', 'Decision 2 (Retries): take C, not A.']
+        const request = changeRequest(two(), new Map([['a', 0]]), 'Shorter.', true, answers)
+        expect(request).toContain(
+            `   Name the route.\n\n${answers.join('\n')}\n\nOn the whole plan:\nShorter.\n\n${EDITED}`,
+        )
+        expect(changeRequest([], new Map(), '', false, answers)).toBe(answers.join('\n'))
+        expect(changeRequest([], new Map(), 'Shorter.', false, answers.slice(0, 1))).toBe(
+            `${answers[0] ?? ''}\n\nOn the whole plan:\nShorter.`,
+        )
+    })
+
     it('cuts a long passage in the request, not in the thread', () => {
         const long = 'word '.repeat(100).trim()
         const threads = addThread([], { id: 'a', anchor: anchor(long), body: 'Too much.', at: AT })
@@ -138,6 +150,12 @@ describe('approvalNotes', () => {
         expect(approvalNotes([], new Map(), ' Shorter. ')).toBe('Shorter.')
         expect(approvalNotes(setResolved(two(), 'a', true), new Map(), '').startsWith('Where I commented')).toBe(true)
         expect(approvalNotes([], new Map(), '  ')).toBe('')
+    })
+
+    it("carries the answers to the plan's decisions, even with no comment or note", () => {
+        const answer = 'Decision 1 (Where the hour is kept): take B, not A.'
+        expect(approvalNotes([], new Map(), '', [answer])).toBe(answer)
+        expect(approvalNotes([], new Map(), 'Shorter.', [answer])).toBe(`${answer}\n\nOn the whole plan:\nShorter.`)
     })
 })
 

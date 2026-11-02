@@ -40,6 +40,7 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { PendingWork, usePending, usePendingWork } from '@/hooks/use-pending'
 import { planText } from '@/lib/outcomes'
+import { planDecisions } from '@/lib/plan-decisions'
 import { planNeededWhy, planWaits } from '@/lib/plan-state'
 import { fromServer, MAX_NOTES, movedAnchors, threadChanges } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
@@ -392,6 +393,8 @@ function NewestPlan({
             }
             onAskForChanges={status === 'proposed' ? askForChanges : undefined}
             asked={plans.changes_asked !== null}
+            // Asked while the plan waits on the operator, as it reads now: an edit to its Decisions changes what is.
+            decisions={status === 'proposed' ? planDecisions(markdown) : undefined}
             renderActions={(notes) => (
                 // `contents`, so its buttons are items of the foot's line, with Ask for changes after them.
                 <div className="contents" data-testid="plan-actions">

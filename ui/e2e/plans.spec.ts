@@ -22,6 +22,21 @@ test('with comments open, the foot says they go with Ask for changes, or with Ap
     await expect(page.getByTestId('plan-actions').getByRole('button', { name: 'Approve with notes' })).toBeVisible()
 })
 
+test("the plan's open decisions are answered under it, the planner's choice picked until another is", async ({
+    page,
+}) => {
+    const decisions = page.getByRole('region', { name: 'Open decisions' })
+    const group = decisions.getByRole('radiogroup', { name: 'Decision 1: Where a schedule keeps its hour' })
+    await expect(group.getByRole('radio', { name: /^A: As the owner's local hour/u })).toBeChecked()
+    // Under the plan, above its foot, so it is read after the plan and answered over the actions that send it.
+    const doc = await plan(page).boundingBox()
+    const box = await decisions.boundingBox()
+    expect(box?.y ?? 0).toBeGreaterThan((doc?.y ?? 0) + (doc?.height ?? 0) - 1)
+    await group.getByText('As an hour in UTC').click()
+    await expect(group.getByRole('radio', { name: /^B: As an hour in UTC/u })).toBeChecked()
+    await expect(decisions).toContainText('1 answer goes with Approve, to the implement, or with Ask for changes')
+})
+
 test("a ticket's newest plan opens in the editor, its comments on their passages", async ({ page }) => {
     const section = page.getByTestId('ticket-plan')
     // In words, as everything that waits on you reads; nothing says a plan that waits is not needed.
