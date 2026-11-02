@@ -1539,9 +1539,19 @@
     }
 
     /*
-     * A plan's text size, as Settings picks it (src/lib/plan-text.ts, on the editor's frame): a step down or up from a
-     * document's type, its two steps of heading moving with it. Normal is the document's own, above, as the guide's.
+     * A plan's text size, as Settings picks it (src/lib/plan-text.ts, on the editor's frame): two steps down, one step
+     * down, or one up from a document's type, its two steps of heading moving with it. Normal is the document's own,
+     * above, as the guide's.
      */
+    [data-plan-text='tiny'] .plan-doc {
+        @apply text-xs/5;
+        & :is([data-level='1'], [data-level='2']) {
+            @apply text-base;
+        }
+        & :is([data-level='3'], [data-level='4']) {
+            @apply text-xs/5;
+        }
+    }
     [data-plan-text='small'] .plan-doc {
         @apply text-sm/6;
         & :is([data-level='1'], [data-level='2']) {
