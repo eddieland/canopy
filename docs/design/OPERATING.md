@@ -268,8 +268,9 @@ off, no span is made and OpenTelemetry is not loaded. Each tick is a trace of it
 steps, and each run it starts, in a process of its own, is traced under the step that started it: every process canopy
 starts is given the current span as `TRACEPARENT`. A span holds canopy's own facts (ids,
 kinds, statuses, counts, cost), never text canopy read, which is untrusted and may be private (TRUST_MODEL T2). Spans
-go to `<state_dir>/traces.jsonl`, readable by the operator alone, as OTLP JSON for a collector they run to read;
-nothing leaves the machine (D132).
+go to `<state_dir>/traces.jsonl`, readable by the operator alone, as OTLP JSON for a collector they run to read, or,
+with `traces = "otlp"`, are posted to the OTLP/HTTP endpoint the operator names: in batches, following no redirect,
+and dropped when the endpoint does not take them, so a collector that is down costs a span, never a step (D132).
 
 ## 13. Agent runtime
 

@@ -225,7 +225,8 @@ stay in canopy.
 
 ### Trust model changes
 
-- T2: the harness makes no outbound call except through configured commands and reads no token. The Slack sink does
+- T2: the harness makes no outbound call except through configured commands, and its opt-in OTLP export of spans
+  (D132), and reads no token. The Slack sink does
   both, but runs only as a configured sink, and lint keeps network modules and the sink out of the harness.
 - T6: notifications carry agent- and org-member-written text off the machine. Controls: only bounded fields; Slack
   escaping. Residual: a steered agent picks text shown in the channel, and a link can carry data.

@@ -263,6 +263,8 @@ banned-from = ["unittest.mock"]
 [tool.ruff.lint.per-file-ignores]
 # The subprocess boundary (D015). Arguments are an argv list, never a shell string.
 "src/canopy/infra/procs.py" = ["TID251", "S603"]
+# The harness's one network call: the OTLP export the operator turns on in their own config (TRUST_MODEL T2, D132).
+"src/canopy/infra/otlp.py" = ["TID251"]
 "tests/**" = [
     "ARG001",  # Fixtures requested only for their side effects (fakes on PATH, state files set).
     "D1",      # Docstrings are optional in tests; test names are the documentation. One that is there is checked.
