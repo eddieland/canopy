@@ -2,12 +2,14 @@
 
 import contextlib
 import json
+import os
 import threading
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, ClassVar, override
+from unittest import mock
 
 import pytest
 
@@ -102,3 +104,16 @@ def test_an_endpoint_that_is_down_fails_the_batch_and_nothing_else() -> None:
 def test_otlp_without_an_endpoint_is_refused(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=r"needs telemetry\.endpoint"):
         tracing.configure(tmp_path, "otlp")
+
+
+def test_a_proxy_the_environment_names_is_not_used() -> None:
+    # A proxy that is not there: were it used, the post would fail.
+    unreachable = {
+        "HTTP_PROXY": "http://127.0.0.1:9",
+        "http_proxy": "http://127.0.0.1:9",
+        "NO_PROXY": "",
+        "no_proxy": "",
+    }
+    with endpoint() as url, mock.patch.dict(os.environ, unreachable):
+        assert otlp.HttpExporter(url + tracing.TRACES_PATH).export([]) is otlp.SpanExportResult.SUCCESS
+    assert [h.path for h in _Endpoint.heard] == [tracing.TRACES_PATH]

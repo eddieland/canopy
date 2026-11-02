@@ -5,8 +5,8 @@ from a file, a request per line, and what an OTLP/HTTP endpoint takes as `applic
 this module, and only once tracing is on, since importing it loads OpenTelemetry's SDK.
 
 `HttpExporter` is the harness's one network call (TRUST_MODEL T2): made only to the endpoint the operator names in their
-own config, carrying canopy's spans and nothing else, and following no redirect, so the spans reach that endpoint or
-none.
+own config, carrying canopy's spans and nothing else, through no proxy and following no redirect, so the spans reach
+that endpoint or none.
 """
 
 from __future__ import annotations
@@ -14,10 +14,12 @@ from __future__ import annotations
 import json
 import logging
 import os
-import urllib.request
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, override
+
+# The harness's one network call: this module alone may make it (TRUST_MODEL T2).
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener  # noqa: TID251
 
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 
@@ -79,7 +81,7 @@ class HttpExporter(SpanExporter):
         Returns:
             Whether the endpoint took them, with a 2xx.
         """
-        request = urllib.request.Request(  # noqa: S310  (config holds the URL to http or https)
+        request = Request(  # noqa: S310  (config holds the URL to http or https)
             self.url,
             data=json.dumps(encoded(spans), separators=(",", ":")).encode(),
             headers={"Content-Type": "application/json"},
@@ -113,7 +115,7 @@ class HttpExporter(SpanExporter):
             )
 
 
-class _NoRedirect(urllib.request.HTTPRedirectHandler):
+class _NoRedirect(HTTPRedirectHandler):
     """Refuses every redirect: a post reaches the endpoint the operator named, or fails."""
 
     @override
@@ -121,7 +123,9 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         """Follow none: returning nothing makes urllib raise the redirect as an error."""
 
 
-_OPENER = urllib.request.build_opener(_NoRedirect())
+# No proxy, whatever the environment names: a post reaches the endpoint the operator named, a collector on this machine
+# included, or fails.
+_OPENER = build_opener(ProxyHandler({}), _NoRedirect())
 _LOG = logging.getLogger("canopy")
 
 
