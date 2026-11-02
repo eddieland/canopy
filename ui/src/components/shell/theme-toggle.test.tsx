@@ -63,7 +63,8 @@ describe('ThemeToggle', () => {
             dark: 'plum',
         })
         expect(within(palettes).getByRole('radio', { name: 'Plum' }).getAttribute('aria-checked')).toBe('true')
-        expect(within(card).getByRole('link', { name: "Both themes' palettes are in Settings." })).toBeDefined()
+        expect(card.textContent).toContain("The light theme's are in Settings.")
+        expect(within(card).getByRole('link', { name: 'Settings' })).toBeDefined()
     })
 
     it("follows the theme: once flipped, the card offers the other theme's palettes", async () => {

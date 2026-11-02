@@ -10,6 +10,8 @@ import type { ResolvedTheme } from '@/theme/store'
 import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
+import { ReadoutCard } from './readout-card'
+
 /**
  * Flips between light and dark with a circular reveal from the button. System is chosen in Settings.
  * The new icon spins in. Hovered, a card offers the shown theme's palettes, each switched with the same reveal.
@@ -65,7 +67,7 @@ export function ThemeToggle() {
                     )}
                 </Button>
             </HoverCardTrigger>
-            <HoverCardContent ref={card} className="w-48" data-testid="palette-card">
+            <HoverCardContent ref={card} data-testid="palette-card">
                 <PalettePicker theme={resolved} onPick={pick} />
             </HoverCardContent>
         </HoverCard>
@@ -73,22 +75,32 @@ export function ThemeToggle() {
 }
 
 /**
- * The palettes `theme` can wear, the one it wears picked, and a pointer to Settings for the other theme's. A pick
- * switches with a reveal from the item pressed, handed to `onPick` until it is over.
+ * The palettes `theme` can wear, laid out as the header's other cards are, the one it wears picked. A pick switches
+ * with a reveal from the item pressed, handed to `onPick` until it is over.
  */
 function PalettePicker({ theme, onPick }: { theme: ResolvedTheme; onPick: (reveal: Promise<void>) => void }) {
     const palettes = usePalettes()
-    const label = theme === 'light' ? 'Light palette' : 'Dark palette'
+    const other = theme === 'light' ? 'dark' : 'light'
     return (
-        <div className="flex flex-col gap-2.5 text-xs">
-            <span className="font-medium">{label}</span>
+        <ReadoutCard
+            title="Palette"
+            aside={theme}
+            foot={
+                <>
+                    The {other} theme&apos;s are in{' '}
+                    <Link to="/settings" className="underline-offset-4 hover:text-foreground hover:underline">
+                        Settings
+                    </Link>
+                    .
+                </>
+            }
+        >
             {/* Switched on click, not on a value change, so the reveal grows from the item pressed. */}
             <ToggleGroup
                 type="single"
-                orientation="vertical"
                 value={palettes[theme]}
-                aria-label={label}
-                className="w-full flex-col items-stretch"
+                aria-label={theme === 'light' ? 'Light palette' : 'Dark palette'}
+                className="grid w-full grid-cols-2 gap-0.5 border-0 bg-transparent p-0"
             >
                 {paletteOptions(theme).map((option) => (
                     <ToggleGroupItem
@@ -102,9 +114,6 @@ function PalettePicker({ theme, onPick }: { theme: ResolvedTheme; onPick: (revea
                     </ToggleGroupItem>
                 ))}
             </ToggleGroup>
-            <Link to="/settings" className="text-muted-foreground hover:text-foreground">
-                Both themes&apos; palettes are in Settings.
-            </Link>
-        </div>
+        </ReadoutCard>
     )
 }
