@@ -321,7 +321,7 @@ function NewestPlan({
         }
         // Never the browser's own Save, which would keep a copy of the page rather than save the plan.
         event.preventDefault()
-        if (dirty && busy === 0) {
+        if (editable && dirty && busy === 0) {
             act(saveAndSay)
         }
     })

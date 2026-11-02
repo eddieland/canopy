@@ -130,13 +130,17 @@ function renderPlan(plans: Partial<TicketPlans> = {}) {
         routeTree: createRootRoute(),
         history: createMemoryHistory({ initialEntries: ['/tickets/ABC-1'] }),
     })
-    return render(
+    const page = (shown: Partial<TicketPlans>) => (
         <QueryClientProvider client={client}>
             <RouterContextProvider router={router}>
-                <TicketPlan ticketKey="ABC-1" plans={{ ...PLANS, ...plans }} />
+                <TicketPlan ticketKey="ABC-1" plans={{ ...PLANS, ...shown }} />
             </RouterContextProvider>
-        </QueryClientProvider>,
+        </QueryClientProvider>
     )
+    const rendered = render(page(plans))
+    // The same page with the plans read again, as a stream event would bring them.
+    const replan = (next: Partial<TicketPlans>) => rendered.rerender(page(next))
+    return { ...rendered, replan }
 }
 
 // The plan's editor, through the handle Tiptap leaves on it for tests: an edit there is the operator typing.
@@ -468,6 +472,17 @@ describe('TicketPlan', () => {
         renderPlan({ planning: 51 })
         expect(screen.getByRole('textbox', { name: 'Plan' }).getAttribute('contenteditable')).toBe('false')
         expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+    })
+
+    it('counts no edit when the plan turns read only and back, and Ctrl+S saves nothing then', () => {
+        const { replan } = renderPlan()
+        replan({ planning: 51 })
+        replan({ planning: null })
+        expect(screen.queryByText('Unsaved edits')).toBeNull()
+        expect(button('Approve')).toBeDefined()
+
+        fireEvent.keyDown(document, { key: 's', ctrlKey: true })
+        expect(sent).toEqual([])
     })
 
     it('says an edit is unsaved, and saves it over the file as read, refused if the file changed', async () => {
