@@ -103,6 +103,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M64. Slack replies](M64-slack-replies.md): deferred 2026-11-01.
 - [M65. Running agents say where they stand](M65-running-agents-say-where-they-stand.md): in progress.
 - [M66. The checklist, asked before the push](M66-the-checklist.md): in progress.
+- [M67. Initiative plans, shared by many tickets](M67-initiative-plans.md): not started.
 
 ## Deferred, with the trigger that would unblock each
 
