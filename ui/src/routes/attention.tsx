@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { ChevronLeft, FileText, GitPullRequest, MessageSquareReply, Sprout } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { ReactNode, RefObject } from 'react'
 
 import { ApiError } from '@/api/client'
 import type { AnswerTarget } from '@/api/mutations'
@@ -127,14 +127,15 @@ function AttentionPage() {
     const tasks = useQuery(tasksQuery).data
     const items = data === undefined ? undefined : bySeverity(data)
     const { rows, clearing, cleared } = useLeavingRows(data, items)
-    // The item asked for while it is listed; else the most severe one about a ticket, which has a thread to show.
-    const selected = items?.find((i) => i.id === wanted) ?? items?.find((i) => i.ticket_key !== null) ?? items?.[0]
+    const selected = useSelected(items, wanted)
     // Narrow, the item chosen is open in the list's place, as a page of its own, until the operator goes back to the
     // list, which then shows it chosen: `listFor` is the item they went back from.
     const [listFor, setListFor] = useState<string | undefined>(undefined)
     const open = wanted !== undefined && selected?.id === wanted && listFor !== wanted
     const pane = useRef<HTMLDivElement>(null)
     const focusOnce = useFocusOnce(wanted)
+    const scroller = useRef<HTMLElement>(null)
+    useNamedRowInView(scroller, selected?.id === wanted ? wanted : undefined)
 
     function choose(item: string) {
         setListFor(undefined)
@@ -219,7 +220,7 @@ function AttentionPage() {
                                 {items === undefined ? (
                                     <PanelLoading query={attention} className="min-h-40" />
                                 ) : (
-                                    <PanelScroll label="Attention items" className="max-h-none min-h-0">
+                                    <PanelScroll ref={scroller} label="Attention items" className="max-h-none min-h-0">
                                         <ul className="stagger flex flex-col gap-0.5 p-1.5">
                                             {rows.map(({ item, leaving }) =>
                                                 leaving ? (
@@ -277,6 +278,44 @@ function AttentionPage() {
             )}
         </>
     )
+}
+
+/**
+ * The item the page shows: the one asked for while it is listed. Once it leaves, the row that took its place, so a
+ * long list is worked down where the operator stands. With none asked for, or one never seen listed, as on an old link,
+ * the most severe item about a ticket, which has a thread to show.
+ */
+function useSelected(items: AttentionItem[] | undefined, wanted: string | undefined): AttentionItem | undefined {
+    const [place, setPlace] = useState<{ item: string; index: number } | undefined>(undefined)
+    const index = items?.findIndex((i) => i.id === wanted) ?? -1
+    if (wanted !== undefined && index !== -1 && (place?.item !== wanted || place.index !== index)) {
+        setPlace({ item: wanted, index })
+    }
+    if (index !== -1) {
+        return items?.[index]
+    }
+    const successor = place !== undefined && place.item === wanted ? (items?.[place.index] ?? items?.at(-1)) : undefined
+    return successor ?? items?.find((i) => i.ticket_key !== null) ?? items?.[0]
+}
+
+/**
+ * Brings the row of the item the URL names into view in the list that scrolls in itself, when none of it shows, as on a
+ * reload or a notification's link: the list alone moves, never the page, and a row the operator can see stays put.
+ * Named again only when `item` changes, so the stream never takes a list they scrolled away.
+ */
+function useNamedRowInView(scroller: RefObject<HTMLElement | null>, item: string | undefined) {
+    useLayoutEffect(() => {
+        const list = scroller.current
+        const row = item === undefined ? null : (list?.querySelector('[aria-current=page]') ?? null)
+        if (list === null || row === null) {
+            return
+        }
+        const shown = list.getBoundingClientRect()
+        const { top, bottom } = row.getBoundingClientRect()
+        if (list.scrollHeight > list.clientHeight && (bottom <= shown.top || top >= shown.bottom)) {
+            list.scrollBy({ top: (top + bottom - shown.top - shown.bottom) / 2, behavior: 'instant' })
+        }
+    }, [scroller, item])
 }
 
 /**

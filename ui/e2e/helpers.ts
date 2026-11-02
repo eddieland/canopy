@@ -155,7 +155,8 @@ export async function settled(page: Page): Promise<void> {
 /**
  * Keeps the attention list as the page read it, whatever the stream says of it: the first listener on the stream stops
  * each list before the page hears it, and the rest of the stream keeps the page live. Call it before opening the page.
- * `clearAttentionList` then says the list is empty, as the stream would.
+ * `clearAttentionList` then says the list is empty, and `sendAttentionList` that it holds what it is given, as the
+ * stream would.
  */
 export async function holdAttentionList(page: Page): Promise<void> {
     await page.addInitScript(() => {
@@ -168,8 +169,9 @@ export async function holdAttentionList(page: Page): Promise<void> {
                         event.stopImmediatePropagation()
                     }
                 })
-                globalThis.addEventListener('clear-attention', () => {
-                    const data = JSON.stringify({ type: 'attention.updated', items: [] })
+                globalThis.addEventListener('send-attention', (event) => {
+                    const { detail: items } = event as CustomEvent<unknown[]>
+                    const data = JSON.stringify({ type: 'attention.updated', items })
                     this.dispatchEvent(new MessageEvent('message', { data }))
                 })
             }
@@ -179,7 +181,12 @@ export async function holdAttentionList(page: Page): Promise<void> {
 
 /** Empties a list `holdAttentionList` holds, as the stream does when the loop clears the last item. */
 export async function clearAttentionList(page: Page): Promise<void> {
-    await page.evaluate(() => globalThis.dispatchEvent(new Event('clear-attention')))
+    await sendAttentionList(page, [])
+}
+
+/** Sends a list `holdAttentionList` holds these `items`, as the stream does whenever the list changes. */
+export async function sendAttentionList(page: Page, items: unknown[]): Promise<void> {
+    await page.evaluate((detail) => globalThis.dispatchEvent(new CustomEvent('send-attention', { detail })), items)
 }
 
 /** The narrowest window the whole rail takes its place in (`src/hooks/use-rail-mode.ts`); narrower, it is a strip. */
