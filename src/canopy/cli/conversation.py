@@ -32,6 +32,7 @@ from canopy.core import (
     conversation,
     db,
     notice,
+    passed_reviews,
     pause,
     personas,
     plan_threads,
@@ -42,13 +43,13 @@ from canopy.core import (
     review_revisions,
     review_runs,
 )
-from canopy.core.vocab import DismissalReason, PlanItem, PlanSetting, PlanStatus, ReviewRunStatus, RunKind
+from canopy.core.vocab import Decider, DismissalReason, PlanItem, PlanSetting, PlanStatus, ReviewRunStatus, RunKind
 from canopy.infra import lock, logs
 from canopy.infra.text import one_line
 from canopy.loop import attention, readback
 from canopy.loop.render import phase_of
 from canopy.reviews import grants, review_requests
-from canopy.runs import feedback_items, feedback_plans, halt, policy
+from canopy.runs import drafts, feedback_items, feedback_plans, halt, policy
 from canopy.runtime import models as runtime_models
 
 if TYPE_CHECKING:
@@ -848,11 +849,29 @@ def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:
             click.echo("  the runs and messages before the latest forget are history: the loop reads only later ones")
         for unit in db.units(ctx.conn, key):
             click.echo(f"  {unit.repo}  PR {unit.pr_url or 'none recorded'}  phase {unit.phase or 'unknown'}")
+        _show_passed(ctx, key)
         _show_plans(ctx, ticket, every=every_plan)
         _show_feedback_plan(ctx, key)
     _show_runs(ctx, key)
     attachments_cli.listed(ctx, conversation.Ref(conversation.TICKET, key))
     _show_conversation(ctx, key, record)
+
+
+def _show_passed(ctx: Context, key: str) -> None:
+    """Print the feedback on the ticket's PRs its `review` cursors passed with no worker, still left, and why."""
+    left = passed_reviews.left(ctx.conn, ctx.config.trust, drafts.sent_by_pr(ctx.conn), [key]).get(key, [])
+    if not left:
+        return
+    click.echo(f"\nFeedback left with no worker ({len(left)}): unanswered, on threads not resolved")
+    for p in left:
+        where = f" at {p.path}:{p.line}" if p.path is not None and p.line is not None else ""
+        who = "the overseer" if p.decider is Decider.OVERSEER else "the harness"
+        repo = f"{p.repo}  " if p.repo is not None else ""
+        click.echo(
+            f"  {repo}{p.item.value} {p.id} (number {p.number}) by {p.author or 'unknown'}{where}: {p.reason.value}, "
+            f"by {who} in tick {p.tick_id}",
+        )
+        click.echo(f"    {p.url or p.pr_url}")
 
 
 def _forget_line(forget: records.Forget) -> str:

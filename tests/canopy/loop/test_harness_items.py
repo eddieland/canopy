@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.core import db, plans, records
-from canopy.core.vocab import Decider, RunStatus, TickStatus
+from canopy.core.vocab import Decider, PassReason, RunStatus, TickStatus
 from canopy.loop import attention, harness_items, phases
 from tests.canopy.helpers import (
     KEY,
@@ -44,6 +44,7 @@ from tests.canopy.observation_helpers import (
     held,
     observe_pr,
     observe_ticket,
+    passed_over,
     review,
 )
 
@@ -290,6 +291,31 @@ def test_its_details_are_its_own_words(canopy_env: CanopyEnv, observed: sqlite3.
         ),
     }
     assert "Rename it." not in json.dumps(found)
+
+
+def test_ready_to_merge_counts_the_feedback_left_with_no_worker(
+    canopy_env: CanopyEnv,
+    observed: sqlite3.Connection,
+) -> None:
+    """The operator looks before merging: what the overseer passed over, and why, until it is answered or resolved."""
+    approved(canopy_env, observed)
+    for ident in (2, 3, 4):
+        review(observed, ident, "carol", None, FRESH, "A nit.", item="comment", thread=f"T{ident}")
+    passed_over(observed, 2)
+    passed_over(observed, 3, PassReason.WOULD_RESET_APPROVAL)
+    passed_over(observed, 4)
+    # A worker answered the third on its thread since; the cursor has passed it all.
+    reply = review(observed, 5, "operator", None, FRESH, "CANOPY: Done.", item="comment", thread="T4")
+    db.set_unit(observed, KEY, str(canopy_env.root), "repo", cursors={"review": str(reply)})
+    observed.commit()
+    ctx = context(canopy_env)
+    found = {i.reason: i.detail for i in harness_items.raised(ctx, phases.derive(ctx, NOW), NOW)}
+    assert found == {
+        "ready_to_merge": (
+            f"{PR} is approved by a person and waits to be merged; 2 feedback items left with no worker (optional, "
+            f"would_reset_approval): canopy show {KEY}"
+        ),
+    }
 
 
 def test_a_unit_whose_pr_no_source_reads_names_its_url(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
