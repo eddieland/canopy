@@ -157,7 +157,7 @@ export function RunProgressLine({ card, className }: { card: RunCard; className?
 /**
  * A run's steps as a bar of segments, one each, in its status's color. Only a done step fills its segment, in
  * `status-done`, so the filled segments are the count beside the meter; working fills half of the track in
- * `status-running`, a barber pole's stripes drifting along it while the run runs, blocked or stuck half in
+ * `status-running`, a barber pole sweeping across its segment while the run runs, blocked or stuck half in
  * `muted-foreground`, to do is the bare track, skipped the track fainter still. Drawn, so its words are its label.
  */
 export function ProgressMeter({ card, running, className }: { card: RunCard; running: boolean; className?: string }) {
