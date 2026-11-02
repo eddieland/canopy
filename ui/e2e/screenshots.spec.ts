@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test'
 
 import {
     diffFile,
+    holdAttentionList,
     placeholderGuide,
     LIGHT_ROUTES,
     NOW,
@@ -129,21 +130,7 @@ test('the all-clear digest in dark', async ({ page }) => {
     await storeTheme(page, 'dark')
     await signIn(page)
     await page.route('**/api/attention', (route) => route.fulfill({ json: [] }))
-    await page.addInitScript(() => {
-        // The first listener on the stream, so it stops the attention list before the page hears it: the rest of the
-        // stream keeps the page live.
-        const Source = globalThis.EventSource
-        globalThis.EventSource = class extends Source {
-            constructor(...args: ConstructorParameters<typeof EventSource>) {
-                super(...args)
-                this.addEventListener('message', (event) => {
-                    if (String(event.data).includes('"attention.updated"')) {
-                        event.stopImmediatePropagation()
-                    }
-                })
-            }
-        }
-    })
+    await holdAttentionList(page)
     await page.goto('attention')
     await settled(page)
     await expect(page.getByTestId('all-clear-today')).toBeVisible()

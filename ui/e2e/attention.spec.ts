@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { padMessages, settled, signIn } from './helpers.ts'
+import { clearAttentionList, holdAttentionList, padMessages, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -522,6 +522,58 @@ test.describe('on half a monitor', () => {
         ).toBeInViewport()
     })
 })
+
+test("the last item's row plays its exit, with no detail, and then the all clear rises in", async ({ page }) => {
+    await lastItemListed(page)
+    await clearAttentionList(page)
+
+    const list = page.getByTestId('attention-list')
+    const clear = page.getByTestId('all-clear')
+    await expect(list.locator('li[data-leaving]')).toHaveCount(1)
+    await expect(page.getByTestId('attention-count')).toHaveText('0')
+    await expect(list.getByRole('link')).toHaveCount(0)
+    await expect(page.getByTestId('attention-detail')).toHaveCount(0)
+    await expect(page.locator('main [data-slot=skeleton]')).toHaveCount(0)
+    await expect(clear).toHaveCount(0)
+
+    await expect(clear).toBeVisible()
+    await expect(list).toHaveCount(0)
+    expect(await arrival(clear)).toBe('rise')
+})
+
+test('under reduced motion the all clear replaces the last item at once', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await lastItemListed(page)
+    await clearAttentionList(page)
+    await expect(page.getByTestId('all-clear')).toBeVisible()
+    await expect(page.getByTestId('attention-list')).toHaveCount(0)
+})
+
+test('a list read empty shows the all clear with no exit and no arrival', async ({ page }) => {
+    await holdAttentionList(page)
+    await page.route('**/api/attention', (route) => route.fulfill({ json: [] }))
+    await page.goto('attention')
+    const clear = page.getByTestId('all-clear')
+    await expect(clear).toBeVisible()
+    await expect(page.locator('li[data-leaving]')).toHaveCount(0)
+    expect(await arrival(clear)).toBe('none')
+})
+
+/** Opens the page on one item, which the stream leaves listed until the test empties the list. */
+async function lastItemListed(page: Page): Promise<void> {
+    await holdAttentionList(page)
+    await page.route('**/api/attention', async (route) => {
+        const items = (await (await route.fetch()).json()) as unknown[]
+        await route.fulfill({ json: items.slice(0, 1) })
+    })
+    await page.goto('attention')
+    await expect(page.getByTestId('attention-list').getByRole('link')).toHaveCount(1)
+}
+
+/** The animation the page's column gives the block that holds `all clear`, `none` when it plays nothing. */
+function arrival(clear: Locator): Promise<string> {
+    return clear.locator('..').evaluate((block) => getComputedStyle(block).animationName)
+}
 
 /** How far the page has scrolled under the header, in the scroller the shell gives it. */
 function scrollTop(page: Page): Promise<number> {

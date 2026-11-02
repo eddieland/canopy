@@ -152,6 +152,36 @@ export async function settled(page: Page): Promise<void> {
     await expect(page.locator('main [data-slot=skeleton]')).toHaveCount(0)
 }
 
+/**
+ * Keeps the attention list as the page read it, whatever the stream says of it: the first listener on the stream stops
+ * each list before the page hears it, and the rest of the stream keeps the page live. Call it before opening the page.
+ * `clearAttentionList` then says the list is empty, as the stream would.
+ */
+export async function holdAttentionList(page: Page): Promise<void> {
+    await page.addInitScript(() => {
+        const Source = globalThis.EventSource
+        globalThis.EventSource = class extends Source {
+            constructor(...args: ConstructorParameters<typeof EventSource>) {
+                super(...args)
+                this.addEventListener('message', (event) => {
+                    if (event.isTrusted && String(event.data).includes('"attention.updated"')) {
+                        event.stopImmediatePropagation()
+                    }
+                })
+                globalThis.addEventListener('clear-attention', () => {
+                    const data = JSON.stringify({ type: 'attention.updated', items: [] })
+                    this.dispatchEvent(new MessageEvent('message', { data }))
+                })
+            }
+        }
+    })
+}
+
+/** Empties a list `holdAttentionList` holds, as the stream does when the loop clears the last item. */
+export async function clearAttentionList(page: Page): Promise<void> {
+    await page.evaluate(() => globalThis.dispatchEvent(new Event('clear-attention')))
+}
+
 /** The narrowest window the whole rail takes its place in (`src/hooks/use-rail-mode.ts`); narrower, it is a strip. */
 export const FULL_RAIL = 1024
 
