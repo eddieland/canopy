@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { clearAttentionList, holdAttentionList, padMessages, settled, signIn } from './helpers.ts'
+import { clearAttentionList, holdAttentionList, padMessages, sendAttentionList, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -437,6 +437,41 @@ test.describe('on a wide window', () => {
         await expect(detail).toBeInViewport()
         await expect.poll(() => scrollTop(page)).toBe(0)
         await expect(last).toBeInViewport({ ratio: 1 })
+    })
+
+    test("a link to a low item opens with its row in the list's view, and the page at its top", async ({ page }) => {
+        await page.setViewportSize({ width: 1720, height: 560 })
+        await page.goto('attention')
+        await settled(page)
+        const last = page.getByTestId('attention-list').getByRole('link').last()
+        await page.goto((await last.getAttribute('href')) ?? 'attention')
+        await settled(page)
+        await expect(last).toHaveAttribute('aria-current', 'page')
+        await expect(last).toBeInViewport()
+        await expect(page.getByTestId('attention-detail')).toContainText('lodash-advisory')
+        expect(await scrollTop(page)).toBe(0)
+    })
+
+    test('an item that leaves hands the selection to the row that took its place', async ({ page }) => {
+        await page.setViewportSize({ width: 1720, height: 560 })
+        await holdAttentionList(page)
+        await page.goto('attention')
+        await settled(page)
+        const list = page.getByTestId('attention-list')
+        const rows = list.getByRole('link')
+        await rows.filter({ hasText: 'task ticket unrecorded' }).click()
+        await expect(rows.filter({ hasText: 'task ticket unrecorded' })).toHaveAttribute('aria-current', 'page')
+
+        const items = await page.request.get('api/attention')
+        const listed = (await items.json()) as { reason: string }[]
+        await sendAttentionList(
+            page,
+            listed.filter((item) => item.reason !== 'task_ticket_unrecorded'),
+        )
+        const next = rows.filter({ hasText: 'lodash-advisory' })
+        await expect(next).toHaveAttribute('aria-current', 'page')
+        await expect(next).toBeInViewport()
+        await expect(page.getByTestId('attention-detail')).toContainText('lodash-advisory')
     })
 
     test('an item taller than the window is reached whole, its list beside it', async ({ page }) => {
