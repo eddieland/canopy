@@ -118,6 +118,11 @@ describe('AllClear', () => {
         expect(screen.getByTestId('all-clear-tick').textContent).toMatch(/^Last tick overseer failed \S+ ago$/u)
     })
 
+    it('says a dry run for what it is', async () => {
+        await renderRouted(<AllClear />, { client: seeded({ tick: { ...TICK, dry_run: true } }) })
+        expect(screen.getByTestId('all-clear-tick').textContent).toMatch(/^Last dry run \S+ ago$/u)
+    })
+
     it('says a tick is running while one is', async () => {
         await renderRouted(<AllClear />, {
             client: seeded({ tick: { ...TICK, status: 'running', ended_at: null } }),

@@ -127,18 +127,20 @@ function Digest() {
                             resume.
                         </p>
                     )}
-                    <p className="flex flex-wrap justify-center gap-x-6">
-                        {working > 0 && (
-                            <Link
-                                to="/workspace"
-                                className="text-accent underline-offset-4 hover:underline"
-                                data-testid="all-clear-working"
-                            >
-                                Working now: <span className="readout">{working}</span>
-                            </Link>
-                        )}
-                        {tick !== null && <TickLine tick={tick} />}
-                    </p>
+                    {(working > 0 || tick !== null) && (
+                        <p className="flex flex-wrap justify-center gap-x-6">
+                            {working > 0 && (
+                                <Link
+                                    to="/workspace"
+                                    className="text-accent underline-offset-4 hover:underline"
+                                    data-testid="all-clear-working"
+                                >
+                                    Working now: <span className="readout">{working}</span>
+                                </Link>
+                            )}
+                            {tick !== null && <TickLine tick={tick} />}
+                        </p>
+                    )}
                 </div>
             </div>
         </div>
