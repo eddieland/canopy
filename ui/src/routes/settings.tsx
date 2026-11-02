@@ -34,6 +34,8 @@ import { buy as buyHat, HATS, hatsCents, setWardrobe, useWardrobe } from '@/lib/
 import type { Hat } from '@/lib/hats'
 import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
+import { setPlanText, usePlanText } from '@/lib/plan-text'
+import type { PlanText } from '@/lib/plan-text'
 import { setRave, useRave } from '@/lib/rave'
 import { dropDrafts } from '@/lib/reply-draft'
 import { setReviewPersonas, usablePersonas, useReviewPersonas } from '@/lib/review-personas'
@@ -55,9 +57,9 @@ import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
 /**
- * What this browser keeps (the theme, the clock, the send key, chores' findings on the attention list, the review
- * personas, the fun, the session), the limits
- * and trust settings of the workspace's config, and reloading the loop's config.
+ * What this browser keeps (the theme, the clock, a plan's text size, the send key, chores' findings on the attention
+ * list, the review personas, the fun, the session), the limits and trust settings of the workspace's config, and
+ * reloading the loop's config.
  */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
@@ -88,6 +90,12 @@ const HOURS: { value: Hours; label: string }[] = [
     { value: '12', label: '12-hour' },
 ]
 
+const PLAN_TEXTS: { value: PlanText; label: string }[] = [
+    { value: 'small', label: 'Small' },
+    { value: 'normal', label: 'Normal' },
+    { value: 'large', label: 'Large' },
+]
+
 const SEND_KEYS: { value: SendKey; label: string }[] = [
     { value: 'enter', label: 'Enter' },
     { value: 'mod-enter', label: 'Ctrl+Enter' },
@@ -98,12 +106,13 @@ function SettingsPage() {
     return (
         <>
             <PageHeader title="Settings">
-                The theme, the clock, the send key, chores&apos; findings on the attention list, your review personas,
-                and the fun are kept in this browser. Everything else canopy reads from its config files, whose limits
-                and trust settings can be changed here.
+                The theme, the clock, a plan&apos;s text size, the send key, chores&apos; findings on the attention
+                list, your review personas, and the fun are kept in this browser. Everything else canopy reads from its
+                config files, whose limits and trust settings can be changed here.
             </PageHeader>
             <ThemePanel />
             <ClockPanel />
+            <PlanTextPanel />
             <SendKeyPanel />
             <AttentionPanel />
             <ReviewsPanel />
@@ -655,6 +664,40 @@ function ClockPanel() {
                     />
                     Show time zone
                 </label>
+            </div>
+        </Panel>
+    )
+}
+
+/** How large a plan's text is set, in its editor and in a task's report; the guide keeps a document's own size. */
+function PlanTextPanel() {
+    const planText = usePlanText()
+    return (
+        <Panel>
+            <PanelHeader label="Plans" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                    How large a plan&apos;s text is set, its headings with it, on its page and in a task&apos;s report.
+                    Normal is the guide&apos;s size.
+                </p>
+                <ToggleGroup
+                    type="single"
+                    value={planText}
+                    aria-label="Plan text size"
+                    className="shrink-0"
+                    onValueChange={(value) => {
+                        const picked = PLAN_TEXTS.find((t) => t.value === value)
+                        if (picked) {
+                            setPlanText(picked.value)
+                        }
+                    }}
+                >
+                    {PLAN_TEXTS.map(({ value, label }) => (
+                        <ToggleGroupItem key={value} value={value} data-testid={`plan-text-${value}`}>
+                            {label}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
             </div>
         </Panel>
     )
