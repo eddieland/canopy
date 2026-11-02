@@ -107,6 +107,8 @@ def test_the_contract_names_each_repository_with_a_list() -> None:
     assert checklist_answers.contract_text([]) == ""
     text = checklist_answers.contract_text([API, WEB])
     assert text.startswith("\n\nThe operator keeps a checklist for `api`, `web`: rules no linter checks.")
+    # Where the hook reads each list, for a worker whose push's output reaches it cut short.
+    assert "Each list is also in `$CANOPY_ANSWERS/checklists/<repository>.md`" in text
     assert '"checklist":{"<repository>":' in text
 
 
