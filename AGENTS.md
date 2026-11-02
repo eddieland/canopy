@@ -204,11 +204,12 @@ If code and the design disagree, the design doc wins until a decision entry says
   text is literal SQL, each value a `?`, a piece built elsewhere a `{}`, and a table or column chosen at run time a
   `Literal` or `sql.name`, and a value that differs per row of `sql.execute_many` a `sql.ROW`. Never an f-string, `%`,
   or `+` into SQL.
-- A query that returns a table's whole rows reads them as that table's row type in `core/records.py`, not as
+- A query that returns a table's whole rows reads them as that table's row type in `core/records/`, not as
   `sqlite3.Row`: `records.select(records.Run).where(...).all(conn)`, which names the table and its columns from the row
   type, or `records.fetch_all`/`fetch_one` for a statement built elsewhere. New code reads a query of some columns, or
   of a join, as a `records.View` defined beside it, not as `sqlite3.Row`; older code converts when a PR is already
-  changing it. Every table has a row type, and a new table gets its row type in the PR that adds it.
+  changing it. Every table has a row type, and a new table gets its row type in the PR that adds it, in its
+  domain's module of `core/records/`.
   `tests/canopy/core/test_records.py` holds each row type to its table, so a migration that adds a column to a typed
   table adds the field too. A status, kind, or phase column is a field of its `core/vocab.py` enum, so the row carries
   the member and refuses a value the vocabulary does not hold. A helper that reads the same columns from several tables,
