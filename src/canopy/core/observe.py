@@ -759,6 +759,8 @@ def _insert(
             _insert_review(conn, line, now)
         case _Check():
             number = _keep_check_run(conn, line, now)
+            if line.run_id is None:
+                _keep_status_run(conn, line, now)
             records.insert(
                 records.ObservedCheck,
                 pr_url=line.pr,
@@ -888,6 +890,46 @@ def _keep_check_run(conn: sqlite3.Connection, line: _Check, now: str) -> int | N
         number=number,
     ).or_ignore().run(conn)
     return number
+
+
+def _keep_status_run(conn: sqlite3.Connection, line: _Check, now: str) -> None:
+    """Keep the run of a commit status that `line` shows, in `observed_status_runs` (DESIGN §35).
+
+    A status has no run id, so its runs are told apart by what canopy saw of its context at its head: seen running
+    after it ended, it started a new run; seen ended with no run open, or with another conclusion than its last run's,
+    it ended a new one. A rerun that went the same way with no read between seeing it running is not seen at all.
+    """
+    last = (
+        records.select(records.ObservedStatusRun)
+        .where("pr_url = ? AND name = ? AND head_sha = ?", line.pr, line.name, line.head_sha)
+        .order_by("id DESC")
+        .limit(1)
+        .one(conn)
+    )
+    if line.status is not CheckStatus.COMPLETED:
+        if last is None or last.conclusion is not None:
+            _insert_status_run(conn, line, None, now)
+        return
+    if line.conclusion is None or (last is not None and last.conclusion is line.conclusion):
+        return
+    if last is not None and last.conclusion is None:
+        records.update(records.ObservedStatusRun).set(conclusion=line.conclusion, observed_at=now).where(
+            "id = ?",
+            last.id,
+        ).run(conn)
+        return
+    _insert_status_run(conn, line, line.conclusion, now)
+
+
+def _insert_status_run(conn: sqlite3.Connection, line: _Check, conclusion: CheckConclusion | None, now: str) -> None:
+    records.insert(
+        records.ObservedStatusRun,
+        pr_url=line.pr,
+        name=line.name,
+        head_sha=line.head_sha,
+        conclusion=conclusion,
+        observed_at=now,
+    ).run(conn)
 
 
 # How many subjects a run's `missed` names before it counts the rest.

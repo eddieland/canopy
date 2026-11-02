@@ -180,7 +180,7 @@ describe('the CI page', () => {
             ['e2e', '40%', '2', '5', '1 of 2', '2 of 3flaky'],
             ['lint', '0%', '0', '4', '–', '–'],
         ])
-        expect(screen.getByTestId('ci-limits').textContent).toContain('A commit status has no check run')
+        expect(screen.getByTestId('ci-limits').textContent).toContain('A commit status has no run id')
         expect(screen.getByTestId('ci-limits').textContent).toContain('cancelled, skipped, neutral, stale')
     })
 

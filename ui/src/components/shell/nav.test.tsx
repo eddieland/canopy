@@ -170,7 +170,7 @@ describe('Nav', () => {
         expect(router.state.location.pathname).toBe('/reports')
     })
 
-    it("splits Attention's count as its counter does, in words for a screen reader and on hover", async () => {
+    it("splits Attention's count, in words for a screen reader and on hover", async () => {
         await renderNav({ at: '/workspace/runs', items: [...ITEMS, WAITING] })
         expect(screen.getByRole('link', { name: 'Attention 1 broken, 2 waiting on you, 1 other' })).toBeDefined()
         expect(screen.getByTitle('1 broken, 2 waiting on you, 1 other')).toBeDefined()
