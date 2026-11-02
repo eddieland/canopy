@@ -40,13 +40,15 @@ function press(editor: Editor, key: string): boolean {
     return editor.view.someProp('handleKeyDown', (handle) => handle(editor.view, event)) ?? false
 }
 
-// The document position of `word`'s first letter.
-function posOf(editor: Editor, word: string): number {
+// The document position of the first letter of `word`'s `nth` copy, counting text nodes, the first by default.
+function posOf(editor: Editor, word: string, nth = 1): number {
     let found: number | undefined
+    let seen = 0
     editor.state.doc.descendants((node, pos) => {
         const at = node.isText ? (node.text?.indexOf(word) ?? -1) : -1
         if (found === undefined && at >= 0) {
-            found = pos + at
+            seen += 1
+            found = seen === nth ? pos + at : undefined
         }
     })
     if (found === undefined) {
@@ -98,6 +100,43 @@ describe('PlanHighlights', () => {
         expect(anchorsOf(editor.state).anchors.has('a')).toBe(false)
         editor.commands.undo()
         expect(quoteOf(editor, 'a')).toBe('the rows')
+    })
+
+    it('finds an open thread on its passage reworded, and a resolved one only on its exact words', () => {
+        const editor = open(PLAN)
+        const from = posOf(editor, 'Test')
+        const anchor = anchorFor(editor.state, from, from + 'Test with a large report'.length)
+        if (!anchor) {
+            throw new Error('no anchor')
+        }
+        sync(editor, [
+            { id: 'open', anchor, resolved: false },
+            { id: 'done', anchor, resolved: true },
+        ])
+        // As the Markdown mode reads its text back: the whole document replaced, every range lost and looked for.
+        editor.commands.setContent(PLAN.replace('Test with', 'Test it with'), { contentType: 'markdown' })
+        expect(quoteOf(editor, 'open')).toBe('Test it with a large report')
+        expect(quoteOf(editor, 'done')).toBeUndefined()
+        editor.commands.setContent(PLAN.replace('Test with a large report', 'Ship it.'), { contentType: 'markdown' })
+        expect(quoteOf(editor, 'open')).toBeUndefined()
+    })
+
+    it('finds a reworded passage nearest where it was, of copies alike', () => {
+        const filler = 'x'.repeat(40)
+        const copies = `${filler}\n\nRetry the upload twice.\n\n`.repeat(3) + filler
+        const editor = open(copies)
+        const second = posOf(editor, 'Retry', 2)
+        const anchor = anchorFor(editor.state, second, second + 'Retry the upload twice'.length)
+        if (!anchor) {
+            throw new Error('no anchor')
+        }
+        // Commented on there, as the editor adds a thread: synced alone, its words would find the first copy.
+        const range = { from: second, to: second + 'Retry the upload twice'.length }
+        editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'add', id: 'a', range }))
+        sync(editor, [{ id: 'a', anchor, resolved: false }])
+        expect(highlightsKey.getState(editor.state)?.ranges.get('a')?.from).toBe(second)
+        editor.commands.setContent(copies.replaceAll('twice', 'two times'), { contentType: 'markdown' })
+        expect(highlightsKey.getState(editor.state)?.ranges.get('a')?.from).toBe(posOf(editor, 'Retry', 2))
     })
 
     it('adds a thread at the selection, and drops one no longer synced', () => {

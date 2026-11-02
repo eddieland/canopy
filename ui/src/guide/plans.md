@@ -128,8 +128,11 @@ as you make it, and sits in the **Comments** panel, quoting its passage. Click t
 A comment's card says what it can do in words: **reply**, **edit**, **resolve** (or **reopen**), and **delete**,
 which asks first. Comments hold onto
 their passage by its words, so they survive your edits, and they belong to the ticket, so they carry over to the next
-plan. When a new plan drops a passage, its comments are marked `passage gone`, and **resolve all** clears them in one
-go. Resolved comments fold away under the open ones.
+plan. A passage the planner only reworded keeps its open comments: a word swapped or a clause added, and the comment
+finds it anyway, as long as most of its words and the text around them are still there. When a new plan drops or
+rewrites a passage, its comments are marked `passage gone`, and **resolve all** clears them in one go. A resolved
+comment only finds its passage word for word: it's done asking for things, so it doesn't go looking. Resolved comments
+fold away under the open ones.
 
 Escape drops a comment you haven't written anything in. One with words in it stays open until you **Cancel** it.
 
@@ -157,8 +160,8 @@ The **Table** menu has no keys. It inserts a table, and inside one adds or delet
 read or edit as written. It's for what a toolbar makes tedious: moving a section, fixing a table by hand, or seeing
 exactly what the planner wrote. The toolbar, the outline, and the changes step aside while it's on, and the comments
 sit in a plain list. Turn it off and the text is read back into the document, as one step of undo, and each comment
-finds its passage again by its words. A passage you rewrote there is `passage gone`, as it would be if you'd rewritten
-it in the document.
+finds its passage again by its words. A passage you only touched up there keeps its open comments; one you rewrote is
+`passage gone`, as it would be if you'd deleted it in the document and typed something new.
 
 Leaving the page with edits not saved or a comment not sent asks first. And if the file changed since you opened it,
 the save is refused rather than overwriting someone else's edit unseen.
