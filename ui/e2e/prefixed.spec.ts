@@ -898,10 +898,14 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await page.reload()
     await expect(page.getByRole('article').filter({ hasText: 'owner has none set' })).toBeVisible()
 
-    // Ask for changes is a reply: it lands in the ticket's conversation, which its page shows.
+    // Ask for changes is a reply: it lands in the ticket's conversation, which its page shows, with the answer to a
+    // decision picked under the plan; once asked, the planner's choice is picked again.
+    const decision = page.getByRole('radiogroup', { name: /^Decision 1:/u })
+    await decision.getByRole('radio', { name: /^B:/u }).click()
     const ask = page.getByRole('form', { name: 'Ask for changes' })
     await ask.getByRole('button', { name: /Ask for changes/u }).click()
     await expect(said).toContainText('the next tick asks the planner for a new plan')
+    await expect(decision.getByRole('radio', { name: /^A:/u })).toBeChecked()
     // A band under the page's header says so until a planner reads it, and another request is asking again.
     await expect(page.getByRole('region', { name: 'Changes asked' })).toContainText('You asked for changes')
     await expect(panel.getByText('changes asked', { exact: true })).toBeVisible()
@@ -932,6 +936,9 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     // The ticket's page has the request in its conversation, and the plan's card says where the plan stands.
     await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'ABC-105' }).click()
     await expect(page.getByTestId('conversation')).toContainText('Which timezone when the owner has none set?')
+    await expect(page.getByTestId('conversation')).toContainText(
+        'Decision 1 (Where a schedule keeps its hour): take B, not A.',
+    )
     await expect(page.getByTestId('plan-card')).toContainText('superseded')
 })
 
