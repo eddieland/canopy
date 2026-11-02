@@ -6,8 +6,9 @@ so "seen, and chosen not to act on" is in the journal beside the cursor, not onl
 
 What `canopy show` and the attention list read (`left`) is each such item still left: not on a thread resolved since,
 nor answered on it since by a worker or the operator through canopy. An item the reader no longer sees, deleted on
-GitHub, is no longer left either. The operator overrules the call with `send`: a reply on the ticket naming the items,
-which the next tick reads as their go-ahead, as `canopy send review:ID` is for a review run's findings.
+GitHub, is no longer left either, nor one on a PR none of the ticket's units has any more, as after a forget. The
+operator overrules the call with `send`: a reply on the ticket naming the items, which the next tick reads as their
+go-ahead, as `canopy send review:ID` is for a review run's findings.
 """
 
 from __future__ import annotations
@@ -80,6 +81,8 @@ def left(
         )
         .from_("passed_reviews p")
         .join("observed_reviews r ON r.pr_url = p.pr_url AND r.item = p.item AND r.id = p.id")
+        # Only a PR one of the ticket's units still has: a forget drops its PRs, and what was left on them with it.
+        .join("ticket_units u ON u.ticket_key = p.ticket_key AND u.pr_url = p.pr_url")
         .where_in("p.ticket_key", sorted(keys))
         .order_by("p.number")
     )

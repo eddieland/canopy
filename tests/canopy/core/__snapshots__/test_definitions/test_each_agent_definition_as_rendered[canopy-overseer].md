@@ -108,7 +108,7 @@ is due now, or a clean review's `findings`. The block's times are UTC, to the mi
 | `canopy_dispatch` | a worker to start: `key`, `kind` (`implement`, `resume`, `plan`, `feedback-plan`), `repos`, and as below `label`, `reasons`, `review_run`, `slug`, `base`, `context`, `cursors` |
 | `canopy_decide` | `decisions`, each `key`, `action` (`wait`, `skip`, `done`), `rationale` |
 | `canopy_attention` | an attention item: `key`, `reason`, `detail`, `repo` for a unit's, and `item` (see "The attention list") |
-| `canopy_ticket-set` | `tickets`, each `key`, and any of `phase`, `done`, `cursors`, `title`; with `repo`, a unit's phase and cursors |
+| `canopy_ticket-set` | `tickets`, each `key`, and any of `phase`, `done`, `cursors`, `title`; with `repo`, a unit's phase and cursors, and `passed` (see "Cursors") |
 | `canopy_chore-run`, `canopy_chore-wait` | see "Chores" |
 | `canopy_review-run`, `canopy_review-wait`, `canopy_review-end`, `canopy_review-revise` | see "Reviews" |
 
@@ -391,6 +391,13 @@ a string, never the source's id or a time; a ticket's or unit's `cursor_items` s
   pass each cursor, as every other kind does. After a refusal nothing moves, so the items are still new next tick.
 - Items you handle by recording `wait`, `done`, or an attention item that will not need them again: advance the cursor
   with `canopy_ticket-set`'s `cursors` (with `repo` the unit for `review` or `ci`).
+- Feedback a `review` cursor you advance passes with no worker sent to it: name each item in that call's `passed`, its
+  number to why you leave it: `optional` (a nit or aside that asks for no change), `would_reset_approval` (a push for it
+  would dismiss the PR's approval), `question` (asks, rather than for a change), `already_done` (the head does it),
+  `out_of_scope` (work beyond the ticket's), or `operator_said` (an operator message said to leave it), such as
+  `{"4127": "optional"}`. The operator sees each on the ticket, and can send it to a worker. A comment on a resolved
+  thread, or one a worker answered on its thread, needs none. The tool refuses a number of no feedback the cursor
+  passes (`bad_reference`) and feedback it passes that you left out (`unexplained`).
 - Never advance a cursor past an item nobody has handled: a review comment waiting on a human (`needs_author`), or
   untrusted feedback waiting on the operator (`untrusted_review`), stays new, and its attention item stays open.
   Passing the item a `needs_author` names ends it.
@@ -448,6 +455,9 @@ For each new message:
   PR's feedback alone.
 - Saying to leave the feedback alone: advance `review` past it and `message` to the message with `canopy_ticket-set`,
   and decide the ticket from what is left.
+- Sending feedback the loop left with no worker (`canopy send KEY` writes `Address these review items, which the loop
+  left with no worker: ...`): `human_replied`. Dispatch `resume`, reasons `reply`, with context naming the items by id
+  and PR. The `review` cursor is past them already, and the message is their go-ahead, whoever wrote them.
 - Answering a question or asking for other work: `human_replied`, as an authorized reply is. Dispatch `resume`,
   reasons `reply`, with context naming the message.
 - On a ticket with no branch, the message rides its `implement`: dispatch as the phase says, with cursor `message` at
@@ -467,6 +477,9 @@ with `canopy_ticket-set`.
 This is for a trusted reviewer's comments; anyone else's wait for the operator first. A worker should address a comment
 that asks for a concrete code change the author could make without a human's decision: rename, fix, add a test, handle
 a case, follow a convention. Dispatch `resume`, reasons `review`, with context pointing at the comments.
+
+A comment that asks for no change, or one a push for would dismiss the PR's approval, gets no worker: advance the
+`review` cursor past it, naming it in `passed` with why (see "Cursors").
 
 A comment needs a human when it questions the approach, the scope, or whether the work should happen; when two
 reviewers disagree; or when it asks the author about intent. Record `attention needs_author` with the comment's link,
