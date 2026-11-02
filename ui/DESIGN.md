@@ -1530,6 +1530,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   resolved, deleted, put aside, or cancelled, the cursor goes back to the plan after its passage, as a shared document's
   does, rather than to the top of the page. `Comment` again, on new words, moves an empty comment to them; one half
   written stays on its passage, and the cursor goes back to it, so its words are never lost or carried to other words.
+  While the plan waits on the operator, the choices its Decisions leave open (`src/lib/plan-decisions.ts`, the
+  planner's `### Decision N` and its lettered options) are asked again under it, in its panel above its foot: `Open
+  decisions`, an `h3` in `panel-label` type under a hairline, a muted line on what an answer does, then each decision a
+  `RadioGroup` named by its question, the planner's choice picked and marked `(the planner's choice)` in muted
+  `text-xs`. Under the plan, not in the foot, so the foot keeps its two lines and the decisions are read after the plan
+  and answered just above the actions that send them. Another pick is an answer, a line of the notes `Approve` carries
+  and of what `Ask for changes` sends.
   The plan's actions are its panel's sticky foot (`PanelFooter`), which stays at the bottom of the page while the plan
   scrolls, as a document's do, so a long plan is approved or sent back from where it is read: the caller's own actions
   (a ticket's `Approve`, the foot's one primary, then `Save`, outlined, and `Skip the plan`, ghost), then a note on the
@@ -1646,8 +1653,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   refuses `radix-ui` anywhere else): a button that is on or off is a `Toggle`, a part of the page that opens under its
   button is a `Collapsible` (the panel or row itself, by `asChild`, so it adds no wrapper) opened by a `Disclosure`
   (below), an option that is on or off a `Checkbox` (or, for the lightswitch rave alone, a `Switch`), a choice of a
-  few options a `ToggleGroup`, and a row of an editor's controls a `Toolbar` (`src/components/ui/toolbar.tsx`), one
-  tab stop with the arrow keys between them.
+  few options a `ToggleGroup`, or a `RadioGroup` when each is a sentence, and a row of an editor's controls a
+  `Toolbar` (`src/components/ui/toolbar.tsx`), one tab stop with the arrow keys between them.
   Radix keeps their ARIA in step with their state (`aria-pressed`, `aria-expanded` with `aria-controls`), so a
   component never writes it by hand. Two stay native on purpose: a transcript's tool call is a `<details>` (above),
   and rich text's `show N more lines` (`MoreLines`, a transcript's thinking's too) shows more of text already on
@@ -1684,6 +1691,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`ToggleGroup`, `src/components/ui/toggle-group.tsx`): the options in a well on the canvas, the picked one raised on
   `surface-raised` with `shadow-xs`. It is a radio group, so one option is always picked: the arrow keys move between
   them, Space picks one, and Tab leaves the group.
+- **A choice of one among options a sentence long** (a plan's open decision) is a radio group (`RadioGroup`,
+  `src/components/ui/radio-group.tsx`), since a segment cannot hold a sentence: the options in a column, each a round
+  well on the raised surface beside its words, in a `label` for it so a click on the words picks it, the picked one's
+  border and dot in the accent. It is named by the question it answers, its `fieldset`'s `legend`; the arrow keys move
+  the pick, and Tab leaves the group.
 - **A choice of repositories** is a repository picker (`src/components/repo-picker.tsx`), never a chip or a segment for
   each, since a workspace may have dozens: an outline `sm` button in monospace `text-xs` saying what is chosen
   (`every repository`, in `muted-foreground` while it narrows nothing; a name; two; then `3 repositories`), opening a

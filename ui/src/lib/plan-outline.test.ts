@@ -29,6 +29,17 @@ describe('planOutline', () => {
         ])
     })
 
+    it('lists a decision as a step is listed, a level under its section, and never among the steps', () => {
+        const plan = '# Plan\n\n## Decisions\n\n### Decision 1: the encoding\n\n## Steps\n\n### Step 1: the route\n'
+        expect(outline(plan)).toEqual([
+            { level: 1, depth: 0, text: 'Plan' },
+            { level: 2, depth: 1, text: 'Decisions' },
+            { level: 3, depth: 2, text: 'Decision 1: the encoding' },
+            { level: 2, depth: 1, text: 'Steps' },
+            { level: 3, depth: 2, text: 'Step 1: the route' },
+        ])
+    })
+
     it('indents from the shallowest heading the plan has, not from a `#`', () => {
         expect(outline('## Goal\n\n### Step 1\n\n## Risks')).toEqual([
             { level: 2, depth: 0, text: 'Goal' },

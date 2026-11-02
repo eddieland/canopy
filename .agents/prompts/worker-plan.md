@@ -48,8 +48,11 @@ fixed; how much goes under each is the persona's to set. A section with nothing 
 - `## Repository rules`: for each repository, the rules its docs set that this change in particular must keep (docs or
   a changelog to update, migrations, test conventions), each naming the file it comes from; not the checks every
   change runs, which `Verification` names.
-- `## Decisions`: each choice the ticket left open, what you chose, and the alternative you rejected, with why; then
-  each assumption you could not confirm from the code, so the operator can correct it.
+- `## Decisions`: each choice the ticket left open, a `### Decision N: <the question>` heading numbered from 1, then
+  its options as `-` items, lettered from A and each with its why: `- **A (chosen):** <option>: <why>` for the one the
+  plan follows, exactly one, and `- **B:** <option>: <why you rejected it>` for each other. canopy offers the operator
+  these as a choice, and picking another is their answer. Then, as prose under `### Assumptions`, each assumption you
+  could not confirm from the code, so the operator can correct it.
 - `## Steps`: the work in order, each a `### Step N: <what it does>` heading, numbered from 1, naming its repository
   when the plan covers more than one; a repository that provides an interface comes before one that uses it. Each step
   names the files and signatures it adds or changes, the `Acceptance` lines it meets, if any, and the test that proves
@@ -109,9 +112,9 @@ lessons.{{STANDING_SECTION}}
   `question`, with `ask`, two to five `options`, lettered A, B, and on, and the one you `recommend`. Meanwhile, go on
   with what does not depend on it, and write the plan along the option you recommend; keep the question in each update
   until the answer comes, a line starting `[canopy]` naming one of your options by its letter. Then make the plan follow
-  that option, say under `Decisions` that it was chosen in your progress, and drop the question from your next update.
-  With no answer by the time the plan is done, `Decisions` names your recommendation as the choice and the other
-  options as its alternatives, saying you asked. A question you cannot plan around is `blocked`, below.
+  that option, mark it `(chosen)` under `Decisions`, its letters as in your question, saying it was chosen in your
+  progress, and drop the question from your next update. With no answer by the time the plan is done, mark your
+  recommendation `(chosen)`, saying you asked. A question you cannot plan around is `blocked`, below.
 - Time limit: {{TIMEOUT_MINUTES}} minutes, which is ample for this job: work at your usual pace, and never cut scope or
   skip a check to save time. Near the end, canopy adds the minutes left to your tool calls' results, in a line starting
   `[canopy]`; until then, the time is not yours to watch. It asks only that you wrap up: if the plan is not finished,

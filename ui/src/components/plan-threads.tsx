@@ -18,6 +18,9 @@ import type { PlanThread } from '@/lib/plan-threads'
 import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
+// A change request that answers none of the plan's decisions.
+const NO_ANSWERS: readonly string[] = []
+
 /** A comment being written: the passage it is on and what it says so far. */
 export interface Draft {
     /** The passage, quoted. */
@@ -167,18 +170,19 @@ export function PlanThreads({
 }
 
 /**
- * Asks the planner for a new plan, as M44's Ask for changes does: the open threads, each on its passage, and a note on
- * the whole plan, as one message (`changeRequest`). Disabled with nothing to ask, and over a reply's bound, which it
- * says rather than cut the message. It sits in a plan's foot, in the line of the caller's actions: its form lays out
- * nothing of its own, so the note field and the button take their places in that line, and the note takes a line of
- * its own while it is focused or holds words. How many open comments go with it, then the caller's `note`, take the
- * line under them.
+ * Asks the planner for a new plan, as M44's Ask for changes does: the open threads, each on its passage, the answers to
+ * the plan's decisions, and a note on the whole plan, as one message (`changeRequest`). Disabled with nothing to ask,
+ * and over a reply's bound, which it says rather than cut the message. It sits in a plan's foot, in the line of the
+ * caller's actions: its form lays out nothing of its own, so the note field and the button take their places in that
+ * line, and the note takes a line of its own while it is focused or holds words. How many open comments go with it,
+ * then the caller's `note`, take the line under them.
  */
 export function AskForChanges({
     threads,
     starts,
     edited,
     asked = false,
+    answers = NO_ANSWERS,
     line: said,
     note,
     onAsk,
@@ -192,6 +196,8 @@ export function AskForChanges({
     edited: boolean
     /** Whether they asked already and no planner has read it, so another request is asking again. */
     asked?: boolean
+    /** The answers to the plan's open decisions (`decisionAnswers`), a line each, which go with the comments. */
+    answers?: readonly string[]
     /** What the caller says of its own actions, after how many comments go with this one, on the line under them. */
     line?: ReactNode
     /** The note on the whole plan, the caller's state, so its own actions, such as Approve, can send it too. */
@@ -203,7 +209,7 @@ export function AskForChanges({
 }) {
     const setNote = onNoteChange
     usePending(note.trim() !== '')
-    const message = changeRequest(threads, starts, note, edited)
+    const message = changeRequest(threads, starts, note, edited, answers)
     const open = threads.filter((thread) => !thread.resolved).length
     const over = message.length > MAX_REQUEST
 

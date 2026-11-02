@@ -170,12 +170,12 @@ decided from wherever you got to. **Approve** is always its main button; everyth
 
 - **Approve**, or **Save and approve** with edits not yet saved, as `canopy plan KEY --approve`. It approves the plan
   as saved, your edits included, and the next tick can implement it. Editing an approved plan means approving it
-  again, and until you do, the ticket's implement waits. With open comments or a note on the whole plan, it reads
-  **Approve with notes**, as `canopy plan KEY --approve --message TEXT`: see below.
-- **Ask for changes**, while the plan waits on you, sends the planner back with your open comments, and an optional note
-  on the whole plan, as one reply on the ticket. If you edited the plan yourself, the reply says so, and asks the
-  planner to keep your edits. Resolved comments aren't sent. The reply's 4000-character bound holds, so a long round of
-  comments may need resolving or shortening first.
+  again, and until you do, the ticket's implement waits. With open comments, an answered decision, or a note on the
+  whole plan, it reads **Approve with notes**, as `canopy plan KEY --approve --message TEXT`: see below.
+- **Ask for changes**, while the plan waits on you, sends the planner back with your open comments, your answers to
+  its decisions, and an optional note on the whole plan, as one reply on the ticket. If you edited the plan yourself,
+  the reply says so, and asks the planner to keep your edits. Resolved comments aren't sent. The reply's
+  4000-character bound holds, so a long round of comments may need resolving or shortening first.
 - **Skip the plan**, as `canopy plan KEY --skip`: the implement goes ahead with no plan. The current plan's file
   stays. Nothing on the page undoes it, so it asks first, right there in the foot; **Keep** (or Escape) backs out.
 
@@ -186,6 +186,15 @@ for changes would. The implement reads it beside the plan, and where the two dis
 word. The comments it sent are resolved, since the worker has them now and the planner never will. Resolve one first
 to leave it out, which is also how you approve with none; and as with Ask for changes, a reply's bound holds, so a long
 round may need trimming first.
+
+Some of a plan is a question only you can answer. The planner writes each choice the ticket left open under
+Decisions, as a question with lettered options and the one it went with marked `(chosen)`, and the page asks it again
+under the plan, in **Open decisions**, as a set of options with the planner's choice picked. Pick another and that's
+your answer: a line such as `Decision 1 (Where a schedule keeps its hour): take B, not A.` joins your notes, so
+**Approve with notes** carries it to the implement, and **Ask for changes** to the planner. Leave the planner's choice
+picked and nothing is sent; agreeing needs no paperwork. Your picks live on this page, not in the journal, so leaving
+asks first and a reload forgets them. A plan written before planners used this shape, or one that wanders from it,
+shows no panel, and its Decisions are still there to read and comment on.
 
 After you ask, a green band under the plan's title says "You asked for changes", and when, until the next planner
 starts or you approve the plan after all; the ticket's Plan card carries the same band, and the plan's chip reads
