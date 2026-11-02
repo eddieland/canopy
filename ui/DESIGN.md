@@ -1503,7 +1503,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   and the comments are a plain list, since their passages have no place on the page. Last, a ghost `xs` `Outline ▾`
   (`src/lib/plan-outline.ts`) lists the plan's headings, a step deeper for each level under its shallowest, the
   section the page has scrolled to as it opens in the accent (`aria-current`), and puts the one chosen at the top of
-  the page under the header, the cursor at its start where the plan may be edited. While the changes are marked, a
+  the page under the header, the cursor at its start where the plan may be edited. On a ticket's newest plan, each `##`
+  section's row ends in two bare checkbox items, `read`, a check, and `a concern`, a circled `!`, muted until on, then
+  the accent and `status-blocked` on their own tint, one clearing the other and leaving the menu open; the button
+  counts what is unmarked in `readout` muted (`Outline 3 left`, `all read`), then the concerns in `status-blocked`.
+  The marks are this browser's alone, localStorage (`src/lib/plan-marks.ts`), never the journal, and a mark holds while
+  its section's words are as marked, so a rewritten section is unread again. While the changes are marked, a
   commented passage drops its tint, so no word wears a comment's and a change's at once, but keeps a 1px underline in
   the accent, so the operator still sees where the comments are; the open one keeps its own.
   The toolbar takes the header's second line, under the label. The header is `sticky`, and what the editor scrolls

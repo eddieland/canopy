@@ -5,8 +5,10 @@ import type { Editor } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
 import {
     Bold,
+    Check,
     ChevronDown,
     ChevronUp,
+    CircleAlert,
     Code,
     Diff,
     FileCode,
@@ -32,6 +34,7 @@ import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
 import {
     DropdownMenu,
+    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuRadioGroup,
@@ -51,6 +54,8 @@ import { changesKey, outlineOf, PlanChanges } from '@/lib/plan-diff'
 import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } from '@/lib/plan-highlights'
 import type { Range } from '@/lib/plan-highlights'
 import { alignComments, floatUnder, releaseComments } from '@/lib/plan-margin'
+import { markSection, marksOn, planSections, usePlanMarks } from '@/lib/plan-marks'
+import type { PlanSection, SectionMark } from '@/lib/plan-marks'
 import { planOutline, sectionAt } from '@/lib/plan-outline'
 import type { OutlineEntry } from '@/lib/plan-outline'
 import { planExtensions } from '@/lib/plan-schema'
@@ -101,6 +106,8 @@ const SOURCE = [
  * in Ask for changes, which sends the open comments to the planner as one message (`changeRequest`). Markdown, in the
  * header, swaps the document for its Markdown as plain text, to read or edit as written; `onChange` gets that text as
  * it is typed, and turning Markdown off reads it back into the document, where the comments find their passages again.
+ * With `marks`, the Outline lets the operator mark each section read or a concern, and counts those left to read
+ * (`src/lib/plan-marks.ts`).
  */
 export function PlanEditor({
     markdown,
@@ -117,6 +124,7 @@ export function PlanEditor({
     actionsNote,
     outcome,
     previous,
+    marks,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -152,6 +160,11 @@ export function PlanEditor({
      * `shown`, the changes show as the editor opens, until the operator turns them off.
      */
     previous?: { label: string; markdown: string; shown?: boolean } | undefined
+    /**
+     * Whose section marks the Outline keeps, by the ticket's key: the operator's own, in this browser. Without it, the
+     * Outline marks nothing.
+     */
+    marks?: string | undefined
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -495,7 +508,7 @@ export function PlanEditor({
                                 <FileCode aria-hidden />
                                 Markdown
                             </Toggle>
-                            {!raw && <OutlineMenu editor={editor} />}
+                            {!raw && <OutlineMenu editor={editor} ticket={marks} />}
                         </span>
                         {editable && !raw && (
                             <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />
@@ -681,9 +694,17 @@ const DEPTHS = ['pl-2', 'pl-5', 'pl-8', 'pl-11']
 // under the plan's shallowest, and the section being read as the menu opens marked as where the page is. A heading
 // chosen comes to the top of the page, under the sticky header (its scroll margin, `.plan-doc` in src/index.css); in a
 // plan the operator may edit, the cursor goes to it too, so the keyboard reads on from there. Escape gives the focus
-// back to the menu's button.
-function OutlineMenu({ editor }: { editor: Editor }) {
+// back to the menu's button. With a `ticket`, each section's row ends in its marks, read and concern, which leave the
+// menu open, so several are marked at once, and the button counts the sections left unmarked.
+function OutlineMenu({ editor, ticket }: { editor: Editor; ticket: string | undefined }) {
     const outline = useEditorState({ editor, selector: ({ editor: current }) => planOutline(current.state.doc) })
+    const sections = useEditorState({
+        editor,
+        selector: ({ editor: current }) => (ticket === undefined ? [] : planSections(current.state.doc)),
+    })
+    const marked = marksOn(usePlanMarks(ticket), sections)
+    const sectionAtPos = new Map(sections.map((section) => [section.pos, section]))
+    const marking = sections.length > 0
     const [chose, setChose] = useState(false)
     const [reading, setReading] = useState<number | undefined>(undefined)
 
@@ -719,15 +740,26 @@ function OutlineMenu({ editor }: { editor: Editor }) {
             }}
         >
             <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="xs" title="Go to a section of the plan">
+                <Button
+                    variant="ghost"
+                    size="xs"
+                    title={marking ? 'Go to a section of the plan, or mark it read' : 'Go to a section of the plan'}
+                >
                     <ListTree aria-hidden />
                     Outline
+                    {/* For the button's name, `Outline 3 left`; on the page, the button's gap spaces it. */}
+                    {marking && ' '}
+                    {marking && <MarksLeft sections={sections} marked={marked} />}
                     <ChevronDown aria-hidden />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
                 align="end"
-                className="max-w-[min(24rem,calc(100vw-2rem))]"
+                className={cn(
+                    'max-w-[min(24rem,calc(100vw-2rem))]',
+                    // A section's row is its heading, then its two marks, each in a column of its own.
+                    marking && 'grid grid-cols-[minmax(0,1fr)_auto_auto] gap-x-0.5',
+                )}
                 onCloseAutoFocus={(event) => {
                     if (chose) {
                         event.preventDefault()
@@ -735,23 +767,93 @@ function OutlineMenu({ editor }: { editor: Editor }) {
                 }}
             >
                 {outline.length === 0 && <DropdownMenuItem disabled>No headings yet</DropdownMenuItem>}
-                {outline.map((entry, i) => (
-                    <DropdownMenuItem
-                        key={entry.pos}
-                        aria-current={i === reading ? 'location' : undefined}
-                        title={entry.text}
-                        className={cn(
-                            DEPTHS[Math.min(entry.depth, DEPTHS.length - 1)],
-                            entry.depth === 0 ? 'font-medium' : 'text-muted-foreground',
-                            'aria-[current=location]:text-accent',
-                        )}
-                        onSelect={() => go(entry)}
-                    >
-                        <span className="truncate">{entry.text}</span>
-                    </DropdownMenuItem>
-                ))}
+                {outline.map((entry, i) => {
+                    const section = sectionAtPos.get(entry.pos)
+                    return (
+                        <Fragment key={entry.pos}>
+                            <DropdownMenuItem
+                                aria-current={i === reading ? 'location' : undefined}
+                                title={entry.text}
+                                className={cn(
+                                    DEPTHS[Math.min(entry.depth, DEPTHS.length - 1)],
+                                    entry.depth === 0 ? 'font-medium' : 'text-muted-foreground',
+                                    'aria-[current=location]:text-accent',
+                                    marking && section === undefined && 'col-span-3',
+                                )}
+                                onSelect={() => go(entry)}
+                            >
+                                <span className="truncate">{entry.text}</span>
+                            </DropdownMenuItem>
+                            {ticket !== undefined && section !== undefined && (
+                                <SectionMarks
+                                    name={entry.text}
+                                    mark={marked.get(section.key)}
+                                    onMark={(mark) => markSection(ticket, section, mark)}
+                                />
+                            )}
+                        </Fragment>
+                    )
+                })}
             </DropdownMenuContent>
         </DropdownMenu>
+    )
+}
+
+// How many of the plan's sections are left to read, in the Outline's button: `3 left`, or `all read` once each is
+// marked, then the concerns among them in the color of what waits on the operator.
+function MarksLeft({ sections, marked }: { sections: PlanSection[]; marked: Map<string, SectionMark> }) {
+    const left = sections.filter((section) => !marked.has(section.key)).length
+    const concerns = [...marked.values()].filter((mark) => mark === 'concern').length
+    return (
+        <span className="readout text-muted-foreground">
+            {left === 0 ? 'all read' : `${left} left`}
+            {concerns > 0 && (
+                <span className="text-status-blocked">
+                    {' · '}
+                    {concerns === 1 ? '1 concern' : `${concerns} concerns`}
+                </span>
+            )}
+        </span>
+    )
+}
+
+// A section's two marks, at the end of its row in the Outline: read, a check that turns the accent, and concern, which
+// turns the color of what waits on the operator; each on its own tint while on. One clears the other, and either clears
+// itself picked again. Picking one leaves the menu open, so the operator can mark the next.
+function SectionMarks({
+    name,
+    mark,
+    onMark,
+}: {
+    name: string
+    mark: SectionMark | undefined
+    onMark: (mark: SectionMark | undefined) => void
+}) {
+    return (
+        <>
+            <DropdownMenuCheckboxItem
+                bare
+                checked={mark === 'read'}
+                onCheckedChange={(on) => onMark(on ? 'read' : undefined)}
+                onSelect={(event) => event.preventDefault()}
+                aria-label={`${name}: read`}
+                title="Read, and fine"
+                className="group/mark text-muted-foreground data-[state=checked]:bg-accent/14"
+            >
+                <Check aria-hidden className="group-data-[state=checked]/mark:text-accent" />
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+                bare
+                checked={mark === 'concern'}
+                onCheckedChange={(on) => onMark(on ? 'concern' : undefined)}
+                onSelect={(event) => event.preventDefault()}
+                aria-label={`${name}: a concern`}
+                title="Read, with a concern to come back to"
+                className="group/mark text-muted-foreground data-[state=checked]:bg-status-blocked/15"
+            >
+                <CircleAlert aria-hidden className="group-data-[state=checked]/mark:text-status-blocked" />
+            </DropdownMenuCheckboxItem>
+        </>
     )
 }
 
