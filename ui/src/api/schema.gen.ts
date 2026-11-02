@@ -2189,7 +2189,7 @@ export type paths = {
         head?: never;
         /**
          * Change a comment thread on a plan
-         * @description Edit the comment's words or a reply's, resolve or reopen the thread, or move it to its passage's new words.
+         * @description Edit the comment's words or a reply's, resolve or reopen the thread, move it, or mark it sent to a planner.
          */
         patch: operations["changeTicketPlanThread"];
         trace?: never;
@@ -7311,7 +7311,7 @@ export type components = {
         };
         /**
          * PlanThreadChange
-         * @description A change to a comment thread on a plan: its comment's words, a reply's, or whether it is resolved.
+         * @description A change to a comment thread on a plan: its words, a reply's, whether it is resolved, or that it was sent.
          */
         PlanThreadChange: {
             /** @description The passage as it now stands, after an edit of the plan moved or changed its words; none to leave it. */
@@ -7331,6 +7331,11 @@ export type components = {
              * @description Resolve the thread, or reopen it; none to leave it.
              */
             resolved?: boolean | null;
+            /**
+             * Sent
+             * @description True when the operator just sent it, as it stands, to a planner in a request for changes.
+             */
+            sent?: boolean | null;
         };
         /**
          * PlanThreadDeleted
@@ -7374,6 +7379,12 @@ export type components = {
              * @description The passage it is on, whitespace collapsed.
              */
             quote: string;
+            /**
+             * Read
+             * @description Whether a planner has read it as it stands: sent in a request for changes, then answered by a new plan. Approve
+             *     leaves it out of its notes, and a change to its words, a reply, or its resolution makes it unread again.
+             */
+            read: boolean;
             /**
              * Replies
              * @description Its replies, oldest first.

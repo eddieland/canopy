@@ -19,6 +19,11 @@ import type { PlanThread } from '@/lib/plan-threads'
 import { useSendKeys } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
+// What the `planner read` chip means, in its tip.
+const READ_MEANING =
+    'A planner read this with your request for changes and wrote a plan since, so Approve leaves it out of its ' +
+    'notes. Reply or edit it to send it again.'
+
 // A change request that answers none of the plan's decisions.
 const NO_ANSWERS: readonly string[] = []
 
@@ -336,6 +341,8 @@ export function ThreadCard({
     const [deleting, setDeleting] = useState(false)
     // Nothing in the card is open: no reply, edit, or question being answered.
     const idle = editable && editing === undefined && !replying && !deleting
+    // An open thread a planner has read as it stands, which Approve's notes leave out.
+    const read = !thread.resolved && thread.read === true
     // An open thread's words can be edited while nothing else in its card is open.
     const startEdit = idle && !thread.resolved
     // Reply shows on the card that is open, as a shared document's does, so the rest stay short and near their
@@ -409,11 +416,12 @@ export function ThreadCard({
                     </div>
                 )}
             </div>
-            {(lost || thread.resolved) && (
+            {(lost || thread.resolved || read) && (
                 // On a line of their own, so the quote keeps the width the actions leave it.
                 <div className="flex gap-1.5">
                     {lost && <Chip>passage gone</Chip>}
                     {thread.resolved && <Chip>resolved</Chip>}
+                    {read && <Chip word="planner read" meaning={READ_MEANING} />}
                 </div>
             )}
             {editing === COMMENT ? (

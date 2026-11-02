@@ -193,14 +193,16 @@ class PlanThread(Row):
 
     id: int
     ticket_key: str
-    # The passage, and up to 32 characters either side of it, each with its whitespace collapsed.
+    #: The passage, and up to 32 characters either side of it, each with its whitespace collapsed.
     quote: str
     prefix: str
     suffix: str
     body: str
     created_at: str
-    # When the operator resolved it; None while it is open.
+    #: When the operator resolved it; None while it is open.
     resolved_at: str | None
+    #: When the operator last sent it, as it stands, to a planner in a request for changes; None since it changed.
+    sent_at: str | None
 
 
 @dataclass(frozen=True)

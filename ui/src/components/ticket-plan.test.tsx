@@ -53,6 +53,7 @@ const THREAD: PlanThreadView = {
     body: 'Which encoding?',
     at: '2026-10-08T11:10:00Z',
     resolved: false,
+    read: false,
     replies: [],
 }
 
@@ -550,6 +551,25 @@ describe('TicketPlan', () => {
         )
         expect(writes()).toEqual(['PUT /api/tickets/ABC-1/plans/2/file', 'POST /api/tickets/ABC-1/replies'])
         expect(sent[1]?.body).toMatchObject({ body: expect.stringMatching(/^Split it in two\./u) as unknown })
+    })
+
+    it('asks for changes with the open comments, and marks them sent once the request is recorded', async () => {
+        renderPlan({ threads: [THREAD] })
+        fireEvent.submit(screen.getByRole('form', { name: 'Ask for changes' }))
+        await screen.findByRole('status')
+        expect(writes()).toEqual(['POST /api/tickets/ABC-1/replies', 'PATCH /api/tickets/ABC-1/plan-threads/9'])
+        expect(sent[1]?.body).toEqual({ sent: true })
+    })
+
+    it('approves without the comments a planner has read, which the plan already answers', async () => {
+        renderPlan({ threads: [{ ...THREAD, read: true }] })
+        const card = screen.getByRole('article', { name: 'Comment on “CSV writer”' })
+        expect(within(card).getByText('planner read')).toBeDefined()
+        expect(screen.getByText(/The one a planner has read stays out\.$/u)).toBeDefined()
+        // Nothing left to send, so the approval carries no notes and resolves nothing.
+        fireEvent.click(button('Approve'))
+        await screen.findByTestId('plan-approved')
+        expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
     })
 
     it('saves a change to a comment as it is made', async () => {

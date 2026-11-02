@@ -285,6 +285,41 @@ def test_comments_asked_for_from_the_web_reach_the_next_plans_prompt(
     assert "   Blue." in prompt
 
 
+def test_a_comment_a_planner_has_read_is_read_until_it_changes(
+    git_pool: GitPool,
+    ctx: Context,
+    conn: sqlite3.Connection,
+) -> None:
+    """A comment sent with a request for changes reads as read once a planner wrote a plan from it, not before."""
+    with planner_does(plan=TEXT):
+        dispatch_and_run(conn, PLAN)
+    c, headers = signed_in_client(ctx)
+    base = f"/api/tickets/{KEY}/plan-threads"
+    comment = {"quote": "red", "prefix": "", "suffix": "", "body": "Blue."}
+    thread = c.post(base, json=comment, headers=headers).json()["id"]
+    reply = c.post(
+        f"/api/tickets/{KEY}/replies",
+        json={"body": "Blue, please.", "submission": "abcdefgh"},
+        headers=headers,
+    )
+    assert reply.status_code == 200
+    # Sent, but no planner has read it yet: an approval now would still carry it to the implement.
+    assert c.patch(f"{base}/{thread}", json={"sent": True}, headers=headers).json()["read"] is False
+
+    def read() -> bool:
+        [listed] = c.get(f"/api/tickets/{KEY}/plans").json()["threads"]
+        return bool(listed["read"])
+
+    with planner_does(plan="# Plan, blue\n"):
+        dispatch_and_run(conn, PLAN)
+    assert read() is True
+    # Moving it to its passage's new words says nothing new; a reply does.
+    moved = {"anchor": {"quote": "blue", "prefix": "Plan, ", "suffix": ""}}
+    assert c.patch(f"{base}/{thread}", json=moved, headers=headers).json()["read"] is True
+    c.post(f"{base}/{thread}/replies", json={"body": "And bold."}, headers=headers)
+    assert read() is False
+
+
 def test_the_tickets_list_says_whose_plan_waits_on_the_operator(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
 

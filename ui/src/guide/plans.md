@@ -205,6 +205,11 @@ word. The comments it sent are resolved, since the worker has them now and the p
 to leave it out, which is also how you approve with none; and as with Ask for changes, a reply's bound holds, so a long
 round may need trimming first.
 
+A comment you already sent with **Ask for changes** stays open on the next plan, so you can check the planner's
+answer against it, and its card reads `planner read`. Approve leaves those out: the plan is the answer, and sending
+the question along to the worker too only gets it done twice. If the answer fell short, reply to the comment or edit
+it, and it goes with the notes again.
+
 Some of a plan is a question only you can answer. The planner writes each choice the ticket left open under
 Decisions, as a question with lettered options and the one it went with marked `(chosen)`, and the page asks it again
 under the plan, in **Open decisions**, drawn just as a worker's question is on its progress card: lettered options,
