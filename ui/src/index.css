@@ -256,7 +256,7 @@
 }
 
 /* A fill half its track's width crosses the track, in from the left edge and out past the right (`animate-barber`). */
-@keyframes sweep {
+@keyframes barber-sweep {
     from {
         translate: -100%;
     }
@@ -1483,7 +1483,7 @@
         );
         background-size: var(--barber-tile) var(--barber-tile);
         animation:
-            sweep 3.2s cubic-bezier(0.4, 0, 0.6, 1) infinite,
+            barber-sweep 3.2s cubic-bezier(0.4, 0, 0.6, 1) infinite,
             barber 300ms linear infinite;
     }
 }
