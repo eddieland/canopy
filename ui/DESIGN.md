@@ -1503,7 +1503,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   and the comments are a plain list, since their passages have no place on the page. Last, a ghost `xs` `Outline ▾`
   (`src/lib/plan-outline.ts`) lists the plan's headings, a step deeper for each level under its shallowest, the
   section the page has scrolled to as it opens in the accent (`aria-current`), and puts the one chosen at the top of
-  the page under the header, the cursor at its start where the plan may be edited. While the changes are marked, a
+  the page under the header, the cursor at its start where the plan may be edited. On a ticket's newest plan, each `##`
+  section's row ends in two bare checkbox items, `read`, a check, and `a concern`, a circled `!`, muted until on, then
+  the accent and `status-blocked` on their own tint, one clearing the other and leaving the menu open; the button
+  counts what is unmarked in `readout` muted (`Outline 3 left`, `all read`), then the concerns in `status-blocked`.
+  The marks are this browser's alone, localStorage (`src/lib/plan-marks.ts`), never the journal, and a mark holds while
+  its section's words are as marked, so a rewritten section is unread again. While the changes are marked, a
   commented passage drops its tint, so no word wears a comment's and a change's at once, but keeps a 1px underline in
   the accent, so the operator still sees where the comments are; the open one keeps its own.
   The toolbar takes the header's second line, under the label. The header is `sticky`, and what the editor scrolls
@@ -1526,7 +1531,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   was asked to change and the comments on it lose their passages together. Resolved threads fold under a `Disclosure`
   (`Show 2 resolved`). A comment or reply form sends on the key Settings names, as a reply does; Escape drops one that
   holds nothing new, and puts one with the operator's words aside, open with them, so one key never loses what was typed
-  (`Cancel` drops it). A form takes the cursor when it opens, after any words it holds; once a comment is sent,
+  (`Cancel` drops it). A new comment's form, alone, offers labels under its field (`COMMENT_LABELS` in
+  `src/lib/plan-comment-labels.ts`), ghost `xs` buttons in muted text, each its instruction on hover: one leads the
+  comment with that fixed, firmly worded instruction to the planner, swapping any other label's, and gives the cursor
+  back to the field's end for the operator's words.
+  A form takes the cursor when it opens, after any words it holds; once a comment is sent,
   resolved, deleted, put aside, or cancelled, the cursor goes back to the plan after its passage, as a shared document's
   does, rather than to the top of the page. `Comment` again, on new words, moves an empty comment to them; one half
   written stays on its passage, and the cursor goes back to it, so its words are never lost or carried to other words.

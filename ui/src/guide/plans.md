@@ -92,6 +92,15 @@ Acceptance, Context, and so on down to Risks), so after a few plans you'll know 
 the menu still saves you the scrolling. As it opens it marks the section you're reading, for when a long plan has lost
 you.
 
+On a ticket's newest plan, each `##` section in the outline ends in two marks: a check for read and fine, and a `!`
+for read with a concern you mean to come back to. Pick one and the menu stays open, so you can mark a few on the way
+down; pick it again to clear it. The button counts what you haven't marked (`Outline 3 left`, then `all read`) and
+how many concerns you've left yourself, so a long plan tells you what's still to read. The marks are notes to you and
+nobody else: they live in this browser, and the planner never hears of them. A concern you want the planner to act
+on is a comment. A mark holds while its section reads as it did when you marked it, so when a new plan rewrites
+Risks, Risks is unread again, and the sections the planner left alone keep their marks. That includes your own
+edits: change a section's words and it wants reading again, which, to be fair, it does.
+
 While a planner is writing, the editor is read only and says which run is writing. A plan that was replaced is read
 only too. Before the first plan, the page says whether a run is writing one or the next tick dispatches a planner; for
 a ticket that needs none, it says so and names `canopy plan KEY`. If a plan's file has gone missing or can't be read,
@@ -124,6 +133,12 @@ Select a passage and press **Comment**, in the bubble that appears or the toolba
 Write your comment and press **Comment** again, or your [send key](settings#replies). It takes the same Markdown a
 [reply](attention#replying) does, and its card shows it formatted. Each comment is saved
 as you make it, and sits in the **Comments** panel, quoting its passage. Click the quote to find it in the plan.
+
+Under a new comment's field sit four labels: **Verify this**, **Out of scope**, **Match existing patterns**, and
+**Needs tests**. One click starts the comment with a fixed instruction to the planner, worded as an order rather than
+a suggestion. Hover a label to read its instruction first. The cursor lands after it, so add your own words or send it
+as it is; another label swaps the instruction and keeps what you wrote. The wording is blunt on purpose: a planner
+treats "maybe double-check this?" as optional, and it is right to, since that is what you said.
 
 A comment's card says what it can do in words: **reply**, **edit**, **resolve** (or **reopen**), and **delete**,
 which asks first. Comments hold onto
