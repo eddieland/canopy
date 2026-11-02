@@ -43,6 +43,8 @@ const PLANS: TicketPlans = {
     plans: [EARLIER, PLAN],
     newest: NEWEST,
 }
+// A plan in sections, as a planner writes one: a title, then `##` sections, which the Outline lets the operator mark.
+const SECTIONED = '# Plan: ABC-1 Export\n\n## Goal\n\nExport.\n\n## Risks\n\nNone.\n'
 const THREAD: PlanThreadView = {
     id: 9,
     quote: 'CSV writer',
@@ -165,6 +167,23 @@ function typeInPlan(text: string) {
 
 function button(name: string): HTMLButtonElement {
     return screen.getByRole('button', { name })
+}
+
+// Opens the Outline menu by its button's name, which counts the sections left to read.
+function openOutline(name: string): HTMLElement {
+    fireEvent.pointerDown(button(name), { button: 0, ctrlKey: false })
+    return screen.getByRole('menu')
+}
+
+// The Outline's button by its name: while its menu is open, Radix hides the rest of the page from a screen reader, the
+// button included.
+function outline(name: string): HTMLElement {
+    return screen.getByRole('button', { name, hidden: true })
+}
+
+// Whether the open menu's mark `name` is on, as its aria-checked says.
+function checked(menu: HTMLElement, name: string): string | null {
+    return within(menu).getByRole('menuitemcheckbox', { name }).getAttribute('aria-checked')
 }
 
 function writes(): string[] {
@@ -477,5 +496,52 @@ describe('TicketPlan', () => {
         const opened = screen.getAllByRole('textbox', { name: 'Plan' })[1]
         expect(opened?.textContent).toBe('PlanShow the CSV.')
         expect(opened?.getAttribute('contenteditable')).toBe('false')
+    })
+
+    describe('section marks', () => {
+        beforeEach(() => localStorage.clear())
+
+        it('counts the sections left to read, and marks each read or a concern, the outline staying open', () => {
+            renderPlan({ newest: { ...NEWEST, text: SECTIONED } })
+            const menu = openOutline('Outline 2 left')
+            // The title heads no section: only a `##` has marks.
+            expect(
+                within(menu)
+                    .getAllByRole('menuitemcheckbox')
+                    .map((item) => item.getAttribute('aria-label')),
+            ).toEqual(['Goal: read', 'Goal: a concern', 'Risks: read', 'Risks: a concern'])
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Goal: read' }))
+            expect(checked(menu, 'Goal: read')).toBe('true')
+            expect(outline('Outline 1 left')).toBeDefined()
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Risks: a concern' }))
+            expect(outline('Outline all read · 1 concern')).toBeDefined()
+            // One mark a section: read clears the concern, and read again clears itself.
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Risks: read' }))
+            expect([checked(menu, 'Risks: read'), checked(menu, 'Risks: a concern')]).toEqual(['true', 'false'])
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Risks: read' }))
+            expect(outline('Outline 1 left')).toBeDefined()
+            // A note to yourself: the planner hears nothing of it.
+            expect(sent).toEqual([])
+        })
+
+        it('keeps the mark of a section a new plan left as it was, and drops one it rewrote', () => {
+            renderPlan({ newest: { ...NEWEST, text: SECTIONED } })
+            const menu = openOutline('Outline 2 left')
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Goal: read' }))
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Risks: a concern' }))
+            cleanup()
+
+            const next: PlanFile = { ...NEWEST, plan: { ...PLAN, id: 3 }, text: SECTIONED.replace('None.', 'Some.') }
+            renderPlan({ plans: [EARLIER, PLAN, next.plan], newest: next })
+            const reopened = openOutline('Outline 1 left')
+            expect(checked(reopened, 'Goal: read')).toBe('true')
+            expect(checked(reopened, 'Risks: a concern')).toBe('false')
+        })
+
+        it('marks nothing on a plan with no sections', () => {
+            renderPlan()
+            expect(button('Outline')).toBeDefined()
+            expect(within(openOutline('Outline')).queryAllByRole('menuitemcheckbox')).toEqual([])
+        })
     })
 })
