@@ -145,8 +145,9 @@ The panel only reads. The line under it names the file to edit: the user file se
 and which provider sees the code. It shows what the loop runs on, so an edit appears after **Reload**, and applies from
 each agent's next run; a run already going keeps its model. One ticket's override is set on
 [its page](tickets#choosing-a-model) and never shows here. **Show the runtime's models** lists what you can name, as
-`canopy models` prints it, read only when you open it, since asking starts the runtime; canopy then keeps that list
-for five minutes, or until the loop reads its config again.
+`canopy models` prints it, less what `[runtime] hide_models` hides (see [choosing a model](tickets#choosing-a-model)),
+read only when you open it, since asking starts the runtime; canopy then keeps that list for five minutes, or until the
+loop reads its config again.
 
 ## Skills
 

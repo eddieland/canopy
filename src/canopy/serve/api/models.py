@@ -1,7 +1,8 @@
 """The models the runtime lists to run an agent on (DESIGN §13), as `canopy models` prints them.
 
 They are what the operator may choose a ticket's agent's model from, which only the operator does, from a ticket's
-page; this reads the list from the runtime and changes nothing.
+page; this reads the list from the runtime and changes nothing. What `runtime.hide_models` hides is named apart, for the
+menus to leave out, since a model chosen that is hidden is still listed.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
+from canopy.core import agent_models
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.schema.model import ModelList
 
@@ -33,6 +35,9 @@ def model_list(
     """
     with backend.open() as ctx:
         found = backend.model_list(ctx, refresh=refresh)
+        # Read from the config as the loop runs on it now, so an edit shows once it reads its config again, while the
+        # list the runtime gave is kept.
+        hidden = agent_models.hidden(found, ctx.config.runtime.hide_models)
     # Each model's variants in the order the runtime lists them, as a picker offers them.
     variants = {model: list(found.variants[model]) for model in sorted(found.variants) if found.variants[model]}
-    return ModelList(models=sorted(found.models), variants=variants, error=found.error)
+    return ModelList(models=sorted(found.models), variants=variants, hidden=sorted(hidden), error=found.error)

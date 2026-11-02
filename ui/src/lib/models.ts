@@ -1,4 +1,4 @@
-import type { ModelsServed, Run } from '@/api/types'
+import type { ModelList, ModelsServed, Run } from '@/api/types'
 
 /** What a read of a run's session that failed says, as a reason after `none: `: canopy tries again later. */
 export const FAILED_READ = 'its session could not be read, tried again later'
@@ -39,6 +39,31 @@ export interface PickerModel {
     model: string | null
     /** The variant `model` names after its id, set apart; null for the model's default. */
     variant: string | null
+}
+
+/** The models and variants a menu offers, of what the runtime lists: what `runtime.hide_models` leaves in. */
+export interface ShownModels {
+    /** Each model shown, as `provider/model`, in the list's order. */
+    models: string[]
+    /** Each shown model's variants shown, in the runtime's order; a model with none is left out. */
+    variants: Record<string, string[]>
+}
+
+/**
+ * What a menu offers of `listed`: its models and variants but those `hidden` names, a model's hiding its variants too.
+ * A model hidden is still listed, so whether one chosen is gone is read from `listed` itself, never from this.
+ */
+export function shownModels(listed: Pick<ModelList, 'models' | 'variants' | 'hidden'>): ShownModels {
+    const hidden = new Set(listed.hidden)
+    const models = listed.models.filter((model) => !hidden.has(model))
+    const variants: Record<string, string[]> = {}
+    for (const model of models) {
+        const each = (listed.variants[model] ?? []).filter((v) => !hidden.has(`${model}@${v}`))
+        if (each.length > 0) {
+            variants[model] = each
+        }
+    }
+    return { models, variants }
 }
 
 /**

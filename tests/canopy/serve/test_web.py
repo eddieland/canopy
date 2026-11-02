@@ -571,6 +571,7 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
     assert c.get("/api/models").json() == {
         "models": ["acme/fake-model-1", "acme/fake-model-2"],
         "variants": {"acme/fake-model-1": ["low", "high"]},
+        "hidden": [],
         "error": None,
     }
     # The CLI's guards hold, and a ticket canopy has not seen may have one.
@@ -627,6 +628,7 @@ def test_a_model_chosen_from_the_web_is_the_tickets_override_as_canopy_model_mak
     assert c.get("/api/models", params={"refresh": 1}).json() == {
         "models": [],
         "variants": {},
+        "hidden": [],
         "error": "`opencode models --verbose` exited 1",
     }
     assert refused(choose({"model": "acme/fake-model-1"})).startswith("model_list_failed: ")

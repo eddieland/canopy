@@ -10,7 +10,7 @@ import { Notice } from '@/components/notice'
 import { PanelLoading } from '@/components/panel'
 import { Chip } from '@/components/status'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
-import { RUNTIME_DEFAULT, withVariant } from '@/lib/models'
+import { RUNTIME_DEFAULT, shownModels, withVariant } from '@/lib/models'
 import { readFailure } from '@/lib/read-failure'
 
 /**
@@ -143,13 +143,14 @@ function FilePath({ path }: { path: string }) {
 }
 
 /**
- * The models the runtime lists, as `canopy models` prints them: read when opened, since a read can start it, or found
- * already read by a ticket's page, as its model menus share the list.
+ * The models the runtime lists, as `canopy models` prints them, but those `runtime.hide_models` hides: read when
+ * opened, since a read can start it, or found already read by a ticket's page, as its model menus share the list.
  */
 function RuntimeModels() {
     const [open, setOpen] = useState(false)
     const listed = useQuery({ ...modelsQuery, enabled: open })
-    const models = listed.data?.models ?? []
+    // Those `runtime.hide_models` leaves in, as `canopy models` prints them.
+    const models = listed.data === undefined ? [] : shownModels(listed.data).models
     return (
         <Collapsible asChild open={open} onOpenChange={setOpen}>
             <div className="border-t px-3 py-1.5">
