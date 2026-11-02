@@ -1543,9 +1543,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   whole plan, one line that takes the rest of the line and a line of its own, the foot's whole width, while it is
   focused or holds words, and `Ask for changes`, outlined (the request says the plan was edited, when it was). The line
   under them says how many open comments go with Ask for changes, or how far over a reply's bound the request is, then
-  what the caller says of its own actions: on a ticket's plan, that approving sends none of the open comments, since the
-  implement reads the plan alone, or that an approved plan's edit is approved again. What `Approve` takes is on its
-  hover. `Skip the plan`, and `Approve` while the note holds words it would leave unsent, ask first in the actions'
+  what the caller says of its own actions: on a ticket's plan, that `Approve` sends the open comments to the implement
+  instead, and resolves them, or that an approved plan's edit is approved again. With open comments or a note, the
+  primary reads `Approve with notes`. What `Approve` takes is on its hover. `Skip the plan` asks first in the actions'
   place, as a comment's Delete does: the question, then `Keep`, which takes the focus and Escape gives too, then the
   action. What an action did goes under that line, and stays once the plan turns read only, Skip's, so the foot stays
   for it. An approval, once the journal holds it, is a moment of its own: its words in the accent on the accent's tint
