@@ -37,6 +37,35 @@ test("the plan's open decisions are answered under it, the planner's choice pick
     await expect(decisions).toContainText('1 answer goes with Approve, to the implement, or with Ask for changes')
 })
 
+test('the foot says open decisions wait under the plan, and goes to them clear of its header and foot', async ({
+    page,
+}) => {
+    await page.setViewportSize({ width: 1280, height: 600 })
+    const bar = page.getByTestId('plan-bar')
+    const jump = bar.getByRole('button', { name: '1 open decision' })
+    const decisions = page.getByRole('region', { name: 'Open decisions' })
+    // Said from the top of the page, before any scrolling, while the panel itself is out of sight.
+    await expect(jump).toBeInViewport({ ratio: 1 })
+    await expect(decisions).not.toBeInViewport()
+    const header = page.getByRole('heading', { level: 2, name: 'Plan', exact: true }).locator('..')
+    // Not under the sticky header, whatever its modes wrap to, nor under the foot, which keeps its height for the line.
+    async function inTheClear() {
+        await expect(decisions).toBeInViewport({ ratio: 1 })
+        await expect(async () => {
+            const [head, box, foot] = await Promise.all([header, decisions, bar].map((at) => at.boundingBox()))
+            expect(box?.y ?? 0).toBeGreaterThanOrEqual((head?.y ?? 0) + (head?.height ?? 0) - 1)
+            expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual((foot?.y ?? 0) + 1)
+        }).toPass()
+    }
+    await jump.click()
+    await expect(decisions).toBeFocused()
+    await inTheClear()
+    // From half under the sticky header, too, where the window alone would call it in view.
+    await decisions.evaluate((panel) => panel.scrollIntoView({ block: 'start' }))
+    await jump.click()
+    await inTheClear()
+})
+
 test("a ticket's newest plan opens in the editor, its comments on their passages", async ({ page }) => {
     const section = page.getByTestId('ticket-plan')
     // In words, as everything that waits on you reads; nothing says a plan that waits is not needed.
