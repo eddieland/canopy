@@ -129,10 +129,7 @@ export function PageHeader({
                     </ol>
                 </nav>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h1
-                        className={cn('min-w-0 text-xl font-semibold tracking-tight break-words', 'title-drop')}
-                        title={help}
-                    >
+                    <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words title-drop" title={help}>
                         {isBlank(subject) ? (
                             title
                         ) : (

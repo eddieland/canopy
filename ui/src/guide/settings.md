@@ -15,7 +15,8 @@ without leaving the page. The card stays put while you click through them; the o
 Each theme also has a palette, picked apart. The defaults tint the canvas with the accent's hue: **Lavender** in light,
 **Indigo** in dark. Light can also be **Off-white**, a warm paper, a soft green **Sage**, or the light side of
 **Solarized**, **Nord**, **Gruvbox**, **Rosé Pine** (its Dawn variant), or **Acme**, in the two tones of Plan 9's
-editor. Dark can be a plain **Grey**, a near **Black** for an OLED screen, a deep green **Forest**, a wine-dark
+editor. **Pulp**, on either side, is Gruvbox's colors inked as a comic. Dark can be a plain **Grey**, a near
+**Black** for an OLED screen, a deep green **Forest**, a wine-dark
 **Plum**, or the dark side of **Solarized**, **Gruvbox**, or **Monokai**. The background, surfaces, text, and accent
 change. Schemes with an accent bring it: Nord and Solarized their blues, Monokai its hot pink, Rosé Pine its dusty one,
 Acme its dark blue, Gruvbox its purple, since its orange looked like every run was blocked. The rest get one that suits
@@ -28,10 +29,10 @@ Nord's dark side didn't make it: moved far enough for that, it was Indigo with a
 Dracula's dark sides missed out the same way.
 
 A few palettes bring more than color. Dark **Gruvbox** has the crisp corners of an editor from the nineties, sets every
-line in monospace as one would, and menus and cards cast a hard shadow with no blur. Both its sides go further, into a
-comic: panels lie on a page of halftone dots, inked on the light side along with every speech bubble, a title casts its
-section's color, and the primary button sinks into its shadow when you press it. Nothing explodes, though not for want
-of trying. **Black** drops the panels'
+line in monospace as one would, and menus and cards cast a hard shadow with no blur. **Pulp** takes all of that and
+prints it: panels lie on a page of halftone dots, inked on the light side along with every speech bubble, a title
+casts its section's color, and the primary button sinks into its shadow when you press it. Nothing explodes, though
+not for want of trying. **Black** drops the panels'
 outlines, since a step of lightness does the job on an OLED screen, rounds its corners, and lights what floats with its
 ultraviolet, because a shadow on black is a shadow nobody sees. The rest cast a soft shadow under what floats. Gruvbox
 turns the strip under the header into a stepped status bar and sets the name on a yellow block, and its section colors
@@ -41,9 +42,10 @@ Monokai crisp and monospaced with a neon glow, Acme square-cornered and monospac
 page under one olive rule, the way Plan 9's editor drew them, before anyone thought to ask for a dark mode, Nord's light
 side a calm fade through its blues, Grey one steel-blue rule, Off-white panels lying on the page like paper, and Sage,
 Rosé Pine, Forest, and Plum round their corners, Plum most of all. Layout and sizes never change with a palette, so
-nothing moves when you switch, except under Gruvbox, Monokai, and Acme, where monospace runs wider and a long line wraps
+nothing moves when you switch, except under Gruvbox, Pulp, Monokai, and Acme, where monospace runs wider and a long
+line wraps
 a little sooner. Their text is drawn a step smaller to make up some of the width; every line keeps its height, so
-nothing shifts up or down. This guide stays in its usual sans under all three: monospace suits a readout, and a manual
+nothing shifts up or down. This guide stays in its usual sans under all four: monospace suits a readout, and a manual
 set in it reads like one long log line.
 
 ## Time

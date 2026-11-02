@@ -11,9 +11,9 @@
  *
  * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
- * others set the neutrals and the accent over the default's: off-white, Solarized, Nord, Gruvbox, sage, Rosé Pine
- * Dawn, and Acme for light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized,
- * Gruvbox, forest, plum, and Monokai for dark.
+ * others set the neutrals and the accent over the default's: off-white, Solarized, Nord, Gruvbox, Pulp, sage, Rosé
+ * Pine Dawn, and Acme for light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized,
+ * Gruvbox, Pulp, forest, plum, and Monokai for dark.
  */
 
 :root {
@@ -180,7 +180,7 @@
         0 12px 32px -12px oklch(from var(--foreground) l c h / 0.24),
         0 2px 6px oklch(from var(--foreground) l c h / 0.08);
     --depth-action: 0 1px 2px oklch(from var(--accent) l c h / 0.35);
-    /* A comic's ink, which only Gruvbox draws: the primary action pressed into its shadow (`--press-x`,
+    /* A comic's ink, which only Pulp draws: the primary action pressed into its shadow (`--press-x`,
      * `--press-y`, and `--depth-action-pressed`), a message's bubble inked and dropped (`--depth-bubble`), the
      * canvas's halftone dots (`--canvas-texture`), and a page title's drop in its section's color (`--title-drop`).
      * The defaults press a pixel down and draw none of the rest, the title's drop transparent
@@ -431,6 +431,54 @@
 
     /* As its dark side: crisp corners, a hard shadow with no blur, every line in its mono, the stepped aurora, the
      * name on a block of its yellow, and the nav's highlight a solid block. */
+    --radius: 0.1875rem;
+    --face-mono: var(--face-mono-compact);
+    --face: var(--face-mono);
+    --code-size: 1em;
+    --depth-panel: none;
+    --depth-float: 4px 4px 0 oklch(from var(--foreground) l c h / 0.85);
+    --depth-action: 3px 3px 0 oklch(from var(--foreground) l c h / 0.85);
+    --aurora-height: 0.25rem;
+    --aurora-image: linear-gradient(
+        90deg,
+        var(--section-attention) 0 12.5%,
+        var(--section-tickets) 0 25%,
+        var(--section-tasks) 0 37.5%,
+        var(--section-pull-requests) 0 50%,
+        var(--section-workspace) 0 62.5%,
+        var(--section-chores) 0 75%,
+        var(--section-reports) 0 87.5%,
+        var(--section-memory) 0
+    );
+    --wordmark-image: linear-gradient(var(--section-reports), var(--section-reports));
+    --wordmark-clip: border-box;
+    --wordmark-ink: var(--surface);
+    --wordmark-frame: 0 0 0 0.25em var(--section-reports);
+    --nav-block: 1;
+    --nav-hairline: 0;
+    --nav-on-ink: var(--surface);
+}
+
+/* Pulp light: Gruvbox's light tones, its cream the newsprint, inked as a comic's page. Its colors are Gruvbox
+ * light's, set again here so the two never drift into each other by accident. */
+:root[data-light-palette='pulp']:not(.dark) {
+    --accent: oklch(0.5 0.12 344);
+    --ring: oklch(0.5 0.12 344 / 0.55);
+    --background: oklch(0.958 0.05 96);
+    --surface: oklch(0.985 0.035 101);
+    --surface-raised: oklch(0.968 0.05 96);
+    --border: oklch(0.904 0.057 89);
+    --foreground: oklch(0.3 0.008 50);
+    --muted-foreground: oklch(0.5 0.023 63);
+    --scrollbar: oklch(0.5 0.023 63 / 0.4);
+    --status-stopped: oklch(0.47 0.023 63);
+    --spend-dry-run: oklch(0.59 0.02 70);
+    --check-other: oklch(0.59 0.02 70);
+    --answer-na: oklch(0.59 0.02 70);
+    --context-carried: oklch(0.59 0.02 70);
+
+    /* As its dark side: crisp corners, every line in its mono as a letterer's caps would be, the stepped aurora,
+     * the name on a block of its yellow, and the nav's highlight a solid block. */
     --radius: 0.1875rem;
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
@@ -690,6 +738,66 @@
     /* Its section colors are Gruvbox's own faded set, each in its section's hue family, a few degrees toward
      * Gruvbox's own shades: purple turned toward violet, so Pull requests is not the accent, and blue toward the sky,
      * so Tickets is not done's. */
+    --section-attention: oklch(0.72 0.13 5);
+    --section-tickets: oklch(0.72 0.06 230);
+    --section-tasks: oklch(0.78 0.15 115);
+    --section-pull-requests: oklch(0.72 0.09 320);
+    --section-workspace: oklch(0.68 0.06 260);
+    --section-chores: oklch(0.74 0.15 52);
+    --section-reports: oklch(0.84 0.15 85);
+    --section-memory: oklch(0.78 0.07 190);
+    --depth-panel: none;
+    --depth-float: 4px 4px 0 oklch(0.1 0 0);
+    --depth-action: 3px 3px 0 oklch(0.1 0 0);
+}
+
+/* Pulp dark: Gruvbox's dark tones, inked as a comic's page at night. Its colors are Gruvbox dark's, set again here
+ * so the two never drift into each other by accident. */
+.dark[data-dark-palette='pulp'] {
+    --accent: oklch(0.75 0.1 350);
+    --ring: oklch(0.75 0.1 350 / 0.5);
+    --background: oklch(0.171 0.005 220);
+    --surface: oklch(0.207 0 90);
+    --surface-raised: oklch(0.274 0.007 49);
+    --border: oklch(0.341 0.012 52);
+    --foreground: oklch(0.894 0.057 89);
+    --muted-foreground: oklch(0.69 0.035 76);
+    --accent-foreground: oklch(0.171 0.005 220);
+    --scrollbar: oklch(0.69 0.035 76 / 0.4);
+    --status-stopped: oklch(0.74 0.035 76);
+    --spend-dry-run: oklch(0.62 0.02 70);
+    --check-other: oklch(0.62 0.02 70);
+    --answer-na: oklch(0.62 0.02 70);
+    --context-carried: oklch(0.62 0.02 70);
+
+    /* Crisp corners, a hard shadow with no blur under what floats and the primary action, and every line of text in
+     * its mono, as a letterer's caps would be. */
+    --radius: 0.1875rem;
+    --face-mono: var(--face-mono-compact);
+    --face: var(--face-mono);
+    --code-size: 1em;
+    /* Its aurora is a stepped bar of solid blocks; its name sits on a block of its yellow; the nav's highlight is a
+     * solid block, the active item inked in the canvas's color, with no hairline. */
+    --aurora-height: 0.25rem;
+    --aurora-image: linear-gradient(
+        90deg,
+        var(--section-attention) 0 12.5%,
+        var(--section-tickets) 0 25%,
+        var(--section-tasks) 0 37.5%,
+        var(--section-pull-requests) 0 50%,
+        var(--section-workspace) 0 62.5%,
+        var(--section-chores) 0 75%,
+        var(--section-reports) 0 87.5%,
+        var(--section-memory) 0
+    );
+    --wordmark-image: linear-gradient(var(--section-reports), var(--section-reports));
+    --wordmark-clip: border-box;
+    --wordmark-ink: var(--background);
+    --wordmark-frame: 0 0 0 0.25em var(--section-reports);
+    --nav-block: 1;
+    --nav-hairline: 0;
+    --nav-on-ink: var(--background);
+    /* Its section colors are Gruvbox dark's: its faded set, each in its section's hue family. */
     --section-attention: oklch(0.72 0.13 5);
     --section-tickets: oklch(0.72 0.06 230);
     --section-tasks: oklch(0.78 0.15 115);
