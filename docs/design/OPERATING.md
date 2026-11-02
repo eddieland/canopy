@@ -412,6 +412,9 @@ promises:
   variant, or a list that cannot be read, refuses the run with an attention item, spending no attempt and leasing no
   slot, so the work resumes once the model is back: a task waits, and a tick closes without its overseer (§6 step 5).
   It never falls back to the default, since a run on a model nobody chose would read as the one the operator chose.
+- **Hiding narrows only what is shown.** `runtime.hide_models` leaves models and variants matching its globs out of the
+  lists canopy shows, `canopy models` and the web UI's menus, never out of the check above: config or a ticket may
+  still name a hidden one, and its runs run.
 
 The PR that builds the choosing proposes T1, T5, T7, and T8 to match. Rejected: a model chosen by the overseer or
 ticket labels (T1); a list of models shipped with canopy; one override for all of a ticket's agents; recording only the

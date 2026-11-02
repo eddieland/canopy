@@ -64,6 +64,10 @@ class ModelList(Model):
     variants: dict[str, list[str]] = {}
     """The variants each model lists, such as reasoning efforts, by model, each list in order; a model with none is
     left out."""
+    hidden: list[str] = []
+    """What `runtime.hide_models` leaves out of the menus, in order: a model as `provider/model`, which hides its
+    variants too, or one variant of a model as `provider/model@variant`. Still listed, so a model chosen that is hidden
+    is no less listed, and its runs no less run."""
     error: str | None = None
     """Why the list could not be read, in canopy's words; None when it was."""
 

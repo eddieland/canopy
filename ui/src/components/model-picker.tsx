@@ -7,6 +7,7 @@ import { freshModelsQuery, modelsQuery } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { shownModels } from '@/lib/models'
 import type { PickerModel } from '@/lib/models'
 import { modelName } from '@/lib/outcomes'
 import { whyReadFailed } from '@/lib/read-failure'
@@ -21,15 +22,16 @@ const VARIANT_GONE = 'variant no longer listed; its next run is refused'
  * The menu that chooses the model one of canopy's agents runs on (DESIGN §13), shared by a ticket's agents
  * (`TicketModels`) and a review request (`ReviewModelMenu`): the trigger names the model its next run goes to, its
  * variant set apart, or `unchosen` in muted prose while the menu's own choice is unset, and opens a list of the models
- * the runtime lists, read as the trigger shows when `eager`, else when it opens, under a field that narrows it, grouped
- * by provider, each model's variants under it in the runtime's order, with the model chosen now pinned at the top and
- * checked wherever it is, whatever sets it. What is typed finds each row by its own id alone, the pinned one set aside,
- * so a variant typed and Enter picks the first model at that variant. Picking one hands it to `onChoose` and closes the
- * list; `clear`, below the list rather than in it, so a long list never scrolls it away, hands it null. The trigger
- * ends a long id in an ellipsis, the whole of it on hover, and stays in the keyboard's reach while a choice saves, so
- * the focus comes back to it once the list closes; it opens nothing until the save is done. A model or variant the
- * runtime no longer lists refuses the agent's next run rather than run it on another: the trigger is in the failure
- * color once the list says so, and the pinned row says why under it.
+ * the runtime lists, but those `runtime.hide_models` hides, read as the trigger shows when `eager`, else when it opens,
+ * under a field that narrows it, grouped by provider, each model's variants under it in the runtime's order, with the
+ * model chosen now pinned at the top and checked wherever it is, whatever sets it. What is typed finds each row by its
+ * own id alone, the pinned one set aside, so a variant typed and Enter picks the first model at that variant. Picking
+ * one hands it to `onChoose` and closes the list; `clear`, below the list rather than in it, so a long list never
+ * scrolls it away, hands it null. The trigger ends a long id in an ellipsis, the whole of it on hover, and stays in the
+ * keyboard's reach while a choice saves, so the focus comes back to it once the list closes; it opens nothing until the
+ * save is done. A model or variant the runtime no longer lists refuses the agent's next run rather than run it on
+ * another: the trigger is in the failure color once the list says so, and the pinned row says why under it. A model
+ * hidden is still listed, so one chosen that is hidden is pinned as any other.
  */
 export function ModelPicker({
     current,
@@ -96,6 +98,9 @@ export function ModelPicker({
     // What the runtime lists, once read; undefined while unread or unreadable, when no model is known to be gone.
     const models = why === null ? listed.data?.models : undefined
     const variants = listed.data?.variants ?? {}
+    // What the list offers: the runtime's, but what `runtime.hide_models` hides, which is still listed, so `models`
+    // alone says whether the model chosen now is gone.
+    const offered = models === undefined || listed.data === undefined ? undefined : shownModels(listed.data)
     const id = modelId(current)
     // Why the model chosen now would be refused as a choice, and refuses its agent's next run: shown, checked, never
     // offered. Null while the list is unread, or nothing is chosen.
@@ -212,10 +217,10 @@ export function ModelPicker({
                                 </CommandItem>
                             </>
                         )}
-                        {byProvider(models ?? []).map(([provider, ids]) => (
+                        {byProvider(offered?.models ?? []).map(([provider, ids]) => (
                             <CommandGroup key={provider} heading={provider}>
                                 {ids.flatMap((model) => {
-                                    const each = (variants[model] ?? []).map((v) => `${model}@${v}`)
+                                    const each = (offered?.variants[model] ?? []).map((v) => `${model}@${v}`)
                                     // A variant found by what is typed, its model not, names its model to the eye too.
                                     const alone = holds(model, search) === 0
                                     return [

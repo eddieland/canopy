@@ -70,3 +70,20 @@ def test_canopy_models_asks_opencode_2_its_own_way(scenario: Scenario, opencode_
     assert scenario.operator("models", code=1).out == (
         "could not read the models OpenCode lists (model_list_failed): `opencode api model.list` exited 1\n"
     )
+
+
+def test_canopy_models_leaves_out_what_hide_models_hides_but_still_checks_it(
+    scenario: Scenario,
+    opencode_state: Path,
+) -> None:
+    hidden = "copilot/fake-model-3"
+    opencode_state.write_text(json.dumps({"models": [OTHER, MODEL, hidden], "variants": {MODEL: ["xhigh", "high"]}}))
+    scenario.configures(runtime={"hide_models": ["copilot/*", "*@xhigh"], "models": {"reviewer": f"{MODEL}@xhigh"}})
+    assert scenario.operator("models").out == (
+        "OpenCode lists 3 models; runtime.hide_models hides 1 model and 1 variant (--all shows them):\n"
+        f"  {MODEL}  variants: high  (runtime.models: reviewer@xhigh)\n  {OTHER}\n"
+    )
+    assert scenario.operator("models", "--all").out == (
+        f"OpenCode lists 3 models:\n  {MODEL}  variants: high, xhigh  (runtime.models: reviewer@xhigh)\n"
+        f"  {OTHER}\n  {hidden}\n"
+    )

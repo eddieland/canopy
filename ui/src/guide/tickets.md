@@ -211,12 +211,15 @@ keeps the list it read for five minutes, or until the loop reads its config agai
 agent's row names a model, so a picker rarely makes you wait; with every agent on the default, nothing is asked until
 you open one. A runtime with a gateway or two behind it lists hundreds, so they come grouped by provider under a field
 that narrows them to the ids holding what you type, and the model chosen now is pinned at the top, with where it comes
-from, and checked wherever it sits in the list, whether your config or this ticket set it. The arrow keys walk the list
-from the field and Enter picks. While you type, the pinned row steps aside, so Enter takes the first id that holds what
-you typed, not the model you already have. If the runtime can't answer, the picker says why in red and offers **Read
-again**; until it answers, the only thing you can do is clear the override, since canopy won't take a model it can't
-look up. Picking one saves it after checking it against that list, asked again first if the list lacks your pick, so a
-provider you set up a minute ago isn't turned away for being newer than the list. The button shows your pick with a
+from, and checked wherever it sits in the list, whether your config or this ticket set it. Hundreds is still a lot to
+scroll past for the three you use, so `hide_models` under `[runtime]` takes globs to leave out:
+`hide_models = ["github-copilot/*", "*@xhigh"]` drops a provider whole and one variant of every model. It hides, it
+doesn't forbid: a hidden model stays pinned when it's the one chosen, and its runs go ahead. The arrow keys walk the
+list from the field and Enter picks. While you type, the pinned row steps aside, so Enter takes the first id that holds
+what you typed, not the model you already have. If the runtime can't answer, the picker says why in red and offers
+**Read again**; until it answers, the only thing you can do is clear the override, since canopy won't take a model it
+can't look up. Picking one saves it after checking it against that list, asked again first if the list lacks your pick,
+so a provider you set up a minute ago isn't turned away for being newer than the list. The button shows your pick with a
 trailing `…` until it's saved, then a green **saved** (**cleared**, for a clear) where it says where the model comes
 from, so nothing below jumps, and the keyboard's focus is back on the button you started from. It stays until the
 ticket's models change again; a pick canopy refuses says why in that agent's row.
