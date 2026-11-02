@@ -11,9 +11,10 @@
 // the answer reads its file, so it loads with no network; and each job does as little as it can: it reads only what it
 // is handed for that job (the clock, CANOPY_DEADLINE and the time; the split, the system prompt; the nudge,
 // CANOPY_RUN_ID and each call's tool and session; the answer, CANOPY_RUN_ID and the one file canopy writes in the
-// directory CANOPY_ANSWERS names), changes only what its hook is handed, writes no file, refuses no call, and grants no
-// tool. Each job's hooks run in its own try, in the order of `JOBS`, so a job that throws neither fails a call that has
-// already run nor keeps the jobs after it from theirs.
+// directory CANOPY_ANSWERS names; the directory, a shell call's command and working directory), changes only what its
+// hook is handed, writes no file, refuses no call, and grants no tool. Each job's hooks run in its own try, in the
+// order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the jobs after it from
+// theirs.
 //
 // Its third is the nudge (DESIGN §41): in a worker's, planner's, reviewer's, or one-off task's run, after a number of
 // tool calls with no call of canopy's `status` tool, one line on the next tool call's result asks the agent to post an
@@ -21,6 +22,10 @@
 //
 // Its fourth is the answer (DESIGN §41): in a run that keeps its progress, when the operator has answered the question
 // it asks, one line on the next tool call's result tells the agent the letter and the option it names, once.
+//
+// Its fifth is the directory (DESIGN §33): a shell command that opens with `cd <dir> &&` runs with that directory as
+// its working directory instead, which the runtime checks as it checks the `cd`, so the rest of the command is checked
+// from where it runs.
 //
 // Under OpenCode 2 it has one job more, its own: a session's first prompt waits until the tools of its MCP servers are
 // registered, which 2 does only after the server connects, so that the first model call is sent them (`mcpTools`).
@@ -74,6 +79,13 @@ const ANSWER_FILE = "answer.json";
 const ANSWER_BYTES = 4096;
 /** The letter of a question's option. */
 const LETTER = /^[A-E]$/;
+/** The shell tool, as OpenCode 1 names it and as OpenCode 2 does. */
+const SHELL_TOOLS = new Set(["bash", "shell"]);
+/**
+ * A command's leading `cd` and the `&&` after it: its directory written plainly, in single quotes, or in double quotes
+ * with nothing the shell would expand, and the space after the `&&`, a newline included.
+ */
+const LEADING_CD = /^\s*cd[ \t]+(?:([\w./@%+=:,][\w./@%+=:,-]*)|'([^'\n]*)'|"([^"$`\\\n]*)")[ \t]*&&\s*/;
 /** The longest a session's first prompt waits on MCP servers still connecting, in milliseconds. */
 const MCP_WAIT_MS = 30_000;
 /** The longest it waits, once none is connecting, for a connected server's tools to be registered. */
@@ -96,7 +108,7 @@ const ENVIRONMENT = new RegExp(
  *
  * @type {Array<() => Hooks>}
  */
-const JOBS = [clock, split, nudge, answer];
+const JOBS = [clock, split, nudge, answer, workdir];
 
 /**
  * The plugin, as each major version of OpenCode reads it: its id, and its entry point for each.
@@ -130,7 +142,8 @@ function hooksOfJobs() {
 /**
  * OpenCode 2's entry point: the jobs' hooks, each registered under 2's name for it.
  *
- * 2 hands `execute.after` every call, failed ones too, with the result as the tool returned it; it truncates the
+ * 2 hands `execute.before` each call's input, which a job changes in place, as 1 hands it `args`. 2 hands
+ * `execute.after` every call, failed ones too, with the result as the tool returned it; it truncates the
  * result after the hook, keeping its head, whatever the tool. So the jobs get each successful call's result as 1 hands
  * them an MCP tool's, its content as a list (`contentOf`), and the hook puts that list back only when a job changed it.
  * A failed call reaches them with no result, so the nudge counts it and no job writes to it.
@@ -140,7 +153,19 @@ function hooksOfJobs() {
  */
 async function setup(ctx) {
     await ctx.session.hook("prompt", mcpTools(ctx));
-    const after = hooksOfJobs()["tool.execute.after"];
+    const hooks = hooksOfJobs();
+    const before = hooks["tool.execute.before"];
+    if (before !== undefined) {
+        await ctx.tool.hook("execute.before", async (event) => {
+            try {
+                // 2 hands the hook the call's input to change, as 1 hands it `args`.
+                await before({ tool: event.tool, sessionID: event.sessionID, callID: event.id }, { args: event.input });
+            } catch {
+                // A hook that throws refuses the call.
+            }
+        });
+    }
+    const after = hooks["tool.execute.after"];
     if (after === undefined) {
         return;
     }
@@ -543,4 +568,70 @@ function answerLine(text) {
         `${MARK} The operator answers your question "${ask}": ${letter}, ${option}. Go on with it, and drop the` +
         " question from your next update."
     );
+}
+
+/**
+ * The directory's hooks: the one that moves a shell command's leading `cd` into the call's working directory.
+ *
+ * Each shell call starts in the agent's directory, and the runtime checks every `cd` in it from there, not from where
+ * an earlier `cd` in the same command went; so `cd app && cd ../lib`, which stays inside, is refused as leaving it, and
+ * the refusal does not say why. A command that opens with `cd <dir> &&` runs the rest in that directory, as one with
+ * that working directory does, so the job makes it one: it takes the leading `cd`s off the command and joins their
+ * directories onto the call's working directory, and the runtime checks that directory, and the rest of the command
+ * from it, as it checks any call's. So it reaches nothing the `cd` could not, and a `cd` out of the agent's directory
+ * is refused as before. Only a directory written plainly moves, letters, digits, and `._/@%+=:,-`, or quoted with none
+ * of `$`, `` ` ``, `\`, or a quote inside; anything else, `cd -`, `cd ~`, and a `cd` with an option among them, leaves
+ * the command as it is. It reads and changes only the shell call's command and working directory.
+ *
+ * @returns {Hooks} The directory's hooks.
+ */
+function workdir() {
+    return {
+        /**
+         * @param {{ tool?: string } | undefined} input
+         * @param {{ args?: unknown } | undefined} output
+         */
+        "tool.execute.before": async (input, output) => {
+            const args = output?.args;
+            if (!SHELL_TOOLS.has(input?.tool ?? "") || args === null || typeof args !== "object") {
+                return;
+            }
+            const call = /** @type {{ command?: unknown, workdir?: unknown }} */ (args);
+            if (typeof call.command !== "string") {
+                return;
+            }
+            const moved = leadingCd(call.command);
+            if (moved === null) {
+                return;
+            }
+            let dir = typeof call.workdir === "string" && call.workdir !== "" ? call.workdir : null;
+            for (const each of moved.dirs) {
+                dir = dir === null || each.startsWith("/") ? each : `${dir.replace(/\/+$/, "")}/${each}`;
+            }
+            call.command = moved.rest;
+            call.workdir = dir;
+        },
+    };
+}
+
+/**
+ * The directories of a command's leading `cd`s, each joined by `&&`, and the command after them, or null when it opens
+ * with none the job moves, or nothing follows them.
+ *
+ * @param {string} command
+ * @returns {{ dirs: string[], rest: string } | null}
+ */
+function leadingCd(command) {
+    /** @type {string[]} */
+    const dirs = [];
+    let rest = command;
+    for (let found = LEADING_CD.exec(rest); found !== null; found = LEADING_CD.exec(rest)) {
+        const [whole, plain, single, double] = found;
+        dirs.push(plain ?? single ?? double ?? "");
+        rest = rest.slice(whole.length);
+    }
+    if (dirs.length === 0 || rest.trim() === "" || dirs.includes("")) {
+        return null;
+    }
+    return { dirs, rest };
 }

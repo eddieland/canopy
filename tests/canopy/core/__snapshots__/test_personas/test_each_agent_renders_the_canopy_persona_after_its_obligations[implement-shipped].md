@@ -1,8 +1,8 @@
 ## Obligations
 
-- Stay inside your directory. Each shell command starts there, and each `cd` is checked from there, so
-  `cd app && cd ../lib` is refused as leaving it: `cd` by a path from your directory, or set the command's working
-  directory.
+- Stay inside your directory. Every shell command starts in it, whatever `cd` an earlier command made, and one that
+  leads out of it is refused: run in a subdirectory by setting the command's working directory or opening the command
+  with `cd <subdirectory> &&`, never by a `cd ..` from where you think an earlier command left you.
 - Never quote, paraphrase, or mention the operator's messages or notice, or earlier runs' reports (which may repeat
   what the operator said), on the ticket, a PR, or in a commit message: they reach nobody else.
 - Commit your work. git adds `Co-authored-by: canopy worker <noreply@canopy.invalid>` to each commit; keep it, and the agent runtime's attribution trailer if it adds one. Never disguise agent work as human work.
