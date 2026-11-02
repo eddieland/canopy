@@ -68,9 +68,18 @@ test("a job whose hook throws does not fail the call it runs after", async () =>
     await assert.doesNotReject(hooks["tool.execute.after"]({ tool: "bash", sessionID: "ses_1" }, output));
 });
 
-test("a run with no deadline gets no hook on its tool calls, and OpenCode 2 none at all", async () => {
-    assert.deepEqual(Object.keys(await canopy.server({})), ["experimental.chat.system.transform"]);
-    assert.deepEqual(await setUp(), {});
+test("a run with no deadline gets no hook after its tool calls, only the directory's before them", async () => {
+    const hooks = ["experimental.chat.system.transform", "tool.execute.before"];
+    assert.deepEqual(Object.keys(await canopy.server({})).sort(), hooks);
+    assert.deepEqual(Object.keys(await setUp()), ["execute.before"]);
+});
+
+test("under OpenCode 2, a shell call's leading cd becomes its working directory, in the input it runs", async () => {
+    const event = { tool: "shell", sessionID: "ses_1", agent: "a", messageID: "m", id: "call_1" };
+    const input = { command: "cd app && cd ../lib" };
+    await (await setUp())["execute.before"]({ ...event, input });
+    assert.deepEqual(input, { command: "cd ../lib", workdir: "app" });
+    await assert.doesNotReject((await setUp())["execute.before"]({ ...event, input: undefined }));
 });
 
 test("under OpenCode 2, the line goes first in a result's content, whatever its shape", async () => {

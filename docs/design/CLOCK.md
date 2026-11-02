@@ -45,7 +45,8 @@ What lets it run inside every agent process (TRUST_MODEL T4):
 
 - The clock reads `CANOPY_DEADLINE` and the clock, and the split the system prompt it is handed, nothing else.
   Without the variable the clock adds nothing.
-- It writes no file, refuses no call, grants no tool, and keeps nothing but whether it has warned in this session.
+- It writes no file, refuses no call, and grants no tool; the one call it changes, a shell command's leading `cd`,
+  the runtime checks after it. It keeps nothing but whether it has warned in this session.
 - It catches every error, since a hook that throws fails a call that has already run.
 
 An agent thinking without calling a tool hears nothing until its next call; its prompt's time limit covers that.
@@ -64,7 +65,17 @@ These rest on OpenCode's source at 1.19.3, read 2026-10-19 and read again on an 
 every config directory, the snapshot's last, so a repository's own plugins already run in the agent's process (T7);
 a hook that throws fails the call; and an MCP result is truncated after the hook. OpenCode 2's, at 2.1.2, read
 2026-10-22: it loads a plugin file only by a default export with an id and a `setup` that registers hooks, and
-logs any other and runs without it; and the same three hold, for every tool's result.
+logs any other and runs without it; and the same three hold, for every tool's result. In both, read 2026-11-02, a
+hook before a call changes the input the tool runs with.
+
+### A shell command's leading `cd`
+
+OpenCode refuses a shell command that leads out of the agent's directory, and checks each `cd` and path in it from
+where the command starts, not from where an earlier `cd` in it went: `cd app && cat ../README.md`, which stays inside,
+is refused, and the refusal does not say why. Before each shell call, the plugin moves the command's leading
+`cd <dir> &&` into the call's working directory, where the shell would have run the rest. The runtime checks that
+directory, and the rest from it, as it checks any call's, so the job reaches nothing the `cd` could not, and a `cd` out
+is refused as before. A directory the shell would expand is left in the command.
 
 ### The split
 
@@ -76,9 +87,8 @@ first call can read them from the cache, if another run of the agent wrote them 
 parts joined by a newline are the block as it was, and a prompt whose environment it cannot find is left as it is.
 A sandboxed run gains nothing from it: the shell tool's description names the run's own `TMPDIR` (§24), and the
 tools come before the body, so no two sandboxed runs share a prefix. OpenCode 2 needs no split, so the plugin gives it
-none: it sends the body as a system block of its own, with a breakpoint after it as after the tools, and names the
-working directory and `TMPDIR` only in the environment after them, so every run of an agent, sandboxed or not, shares
-the tools and the body (MEASUREMENTS 2026-10-23, where OpenCode 2.1.4 caches).
+none: it caches the tools and the body apart from the environment, a sandboxed run's included (MEASUREMENTS
+2026-10-23).
 
 ### The snapshot, unwritable
 
