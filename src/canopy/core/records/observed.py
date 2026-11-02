@@ -213,6 +213,26 @@ class ObservedCheckRun(Row):
 
 
 @dataclass(frozen=True)
+class ObservedStatusRun(Row):
+    """A run of a commit status a `vcs` source observed, kept across later reads of its PR (DESIGN §35).
+
+    A status has no run id, so a run is what canopy saw of its context at one head between one start and the next.
+    """
+
+    TABLE: ClassVar[LiteralString] = "observed_status_runs"
+
+    id: int
+    pr_url: str
+    #: Its context's name, as `observed_checks.name`.
+    name: str
+    head_sha: str
+    #: How it ended; None while it runs.
+    conclusion: CheckConclusion | None
+    #: When a source first observed it in the state this row holds: started, or ended once it has a conclusion.
+    observed_at: str
+
+
+@dataclass(frozen=True)
 class ConnectorRun(Row):
     """One run of a source (DESIGN §30): what it was asked, how it ended, and what it read."""
 

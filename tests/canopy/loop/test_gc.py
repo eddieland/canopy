@@ -265,11 +265,17 @@ def test_a_kept_check_run_goes_after_journal_days_once_its_pr_is_seen_past_its_h
             "VALUES (?, ?, 'ci', 'aaa', 'failure', ?)",
             (pr, run_id, observed_at),
         )
+        conn.execute(
+            "INSERT INTO observed_status_runs (pr_url, name, head_sha, conclusion, observed_at) "
+            "VALUES (?, 'jenkins', 'aaa', 'failure', ?)",
+            (pr, observed_at),
+        )
     conn.commit()
     kinds = dry_run(capsys)
     # The old runs of the moved, merged, and closed PRs go; one at its PR's head, one of a PR read with no head, one of
-    # a PR no read recorded, and the recent ones stay.
+    # a PR no read recorded, and the recent ones stay. A commit status's runs go by the same rule.
     assert (kinds["check runs"]["count"], kinds["check runs"]["removable"]) == (8, 3)
+    assert (kinds["status runs"]["count"], kinds["status runs"]["removable"]) == (8, 3)
 
 
 @pytest.mark.parametrize("env", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])

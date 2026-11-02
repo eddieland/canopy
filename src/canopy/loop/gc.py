@@ -44,7 +44,7 @@ KIB = 1024
 MIB = KIB * KIB
 _COUNT_OBJECTS_TIMEOUT_SECONDS = 60
 #: A table of the journal a pass removes rows of (DESIGN §26, The journal).
-type RowTable = Literal["decisions", "connector_runs", "derivations", "observed_check_runs"]
+type RowTable = Literal["decisions", "connector_runs", "derivations", "observed_check_runs", "observed_status_runs"]
 # The bytes of each row's text, in each table a pass removes rows of: what it holds, not the pages it fills.
 _DECISION_BYTES = sql.frag(
     "length(CAST(action AS BLOB)) + length(CAST(rationale AS BLOB)) + length(CAST(created_at AS BLOB)) + "
@@ -63,6 +63,10 @@ _DERIVED_BYTES = sql.frag(
 _CHECK_RUN_BYTES = sql.frag(
     "length(CAST(pr_url AS BLOB)) + length(CAST(name AS BLOB)) + length(CAST(head_sha AS BLOB)) + "
     "length(CAST(conclusion AS BLOB)) + length(CAST(observed_at AS BLOB))",
+)
+_STATUS_RUN_BYTES = sql.frag(
+    "length(CAST(pr_url AS BLOB)) + length(CAST(name AS BLOB)) + length(CAST(head_sha AS BLOB)) + "
+    "coalesce(length(CAST(conclusion AS BLOB)), 0) + length(CAST(observed_at AS BLOB))",
 )
 
 
@@ -286,6 +290,22 @@ def row_kinds(conn: sqlite3.Connection, now: datetime, retention: Retention) -> 
                 sql.frag(
                     "EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = observed_check_runs.pr_url AND "
                     "(p.state IN (?, ?) OR (p.head_sha IS NOT NULL AND p.head_sha != observed_check_runs.head_sha)))",
+                    PrState.MERGED,
+                    PrState.CLOSED,
+                ),
+            ),
+            f"journal_days = {retention.journal_days}, not at its PR's head",
+        ),
+        RowKind(
+            "status runs",
+            "observed_status_runs",
+            sql.frag("1"),
+            _STATUS_RUN_BYTES,
+            sql.all_of(
+                sql.frag("observed_at < ?", cutoff),
+                sql.frag(
+                    "EXISTS (SELECT 1 FROM observed_prs p WHERE p.url = observed_status_runs.pr_url AND "
+                    "(p.state IN (?, ?) OR (p.head_sha IS NOT NULL AND p.head_sha != observed_status_runs.head_sha)))",
                     PrState.MERGED,
                     PrState.CLOSED,
                 ),
