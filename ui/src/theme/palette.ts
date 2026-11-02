@@ -98,6 +98,11 @@ export function usePalettes(): Palettes {
     return useStoredSetting(palettes)
 }
 
+/** Each theme's palette as stored now, for code outside React. */
+export function getPalettes(): Palettes {
+    return setting.get()
+}
+
 /** Picks `palette` for `theme` and applies it now, synchronously, so a view transition can snapshot the result. */
 export function setPalette<T extends ResolvedTheme>(theme: T, palette: Palette<T>): void {
     const next: Palettes = { ...setting.get(), [theme]: palette }

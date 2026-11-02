@@ -19,29 +19,39 @@ export function ThemeToggle() {
     const next = resolved === 'dark' ? 'light' : 'dark'
     const [open, setOpen] = useState(false)
     // While a pick's reveal runs, the page under it takes no pointer, so the card hears the pointer leave though it
-    // has not: the card stays open until the reveal is over, then closes only if the pointer has really gone.
-    const revealing = useRef(false)
+    // has not, and the browser's idea of what is hovered is stale for a moment after. So the card stays open until
+    // every reveal is over (a count: a pick during a reveal cuts that one short, settling it early), and then the
+    // pointer's next move, whose target is hit-tested afresh, closes it unless it lands on the card or the button.
+    const revealing = useRef(0)
     const card = useRef<HTMLDivElement>(null)
+    const button = useRef<HTMLButtonElement>(null)
     const pick = (reveal: Promise<void>): void => {
-        revealing.current = true
+        revealing.current += 1
         void reveal.finally(() => {
-            revealing.current = false
-            if (card.current?.matches(':hover') !== true) {
-                setOpen(false)
+            revealing.current -= 1
+            if (revealing.current === 0) {
+                document.addEventListener('pointermove', closeIfLeft, { once: true, capture: true })
             }
         })
+    }
+    const closeIfLeft = (event: PointerEvent): void => {
+        const target = event.target instanceof Node ? event.target : null
+        if (revealing.current === 0 && ![card.current, button.current].some((element) => element?.contains(target))) {
+            setOpen(false)
+        }
     }
     return (
         <HoverCard
             open={open}
             onOpenChange={(opening) => {
-                if (opening || !revealing.current) {
+                if (opening || revealing.current === 0) {
                     setOpen(opening)
                 }
             }}
         >
             <HoverCardTrigger asChild>
                 <Button
+                    ref={button}
                     variant="ghost"
                     size="icon-sm"
                     aria-label={`Switch to ${next} theme`}

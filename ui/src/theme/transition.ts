@@ -1,6 +1,6 @@
 import { flushSync } from 'react-dom'
 
-import { setPalette } from './palette'
+import { getPalettes, setPalette } from './palette'
 import type { Palette } from './palette'
 import { getSnapshot, setPreference } from './store'
 import type { ResolvedTheme, ThemePreference } from './store'
@@ -20,16 +20,19 @@ export function switchTheme(preference: ThemePreference, origin?: HTMLElement | 
 }
 
 /**
- * Picks `palette` for `theme`, with the same reveal as a theme's when the page shows that theme, else at once.
- * Settles when the reveal is over: while it runs, the page under it takes no pointer, so what follows the pointer, as
- * the theme toggle's card does, waits for it.
+ * Picks `palette` for `theme`, with the same reveal as a theme's when the page shows that theme, else at once; the
+ * palette `theme` already wears changes nothing. Settles when the reveal is over: while it runs, the page under it
+ * takes no pointer, so what follows the pointer, as the theme toggle's card does, waits for it.
  */
-export function switchPalette<T extends ResolvedTheme>(
+export async function switchPalette<T extends ResolvedTheme>(
     theme: T,
     palette: Palette<T>,
     origin?: HTMLElement | null,
 ): Promise<void> {
-    return reveal(() => setPalette(theme, palette), getSnapshot().resolved === theme ? origin : null)
+    if (getPalettes()[theme] === palette) {
+        return
+    }
+    await reveal(() => setPalette(theme, palette), getSnapshot().resolved === theme ? origin : null)
 }
 
 /**

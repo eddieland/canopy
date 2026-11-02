@@ -113,6 +113,15 @@ describe('switchPalette', () => {
         await revealed
     })
 
+    it('starts no reveal for the palette the theme already wears', async () => {
+        const start = stubViewTransitions(Promise.resolve())
+        const { switchPalette } = await load()
+
+        await switchPalette('light', 'lavender', button())
+        expect(start).not.toHaveBeenCalled()
+        expect(localStorage).toHaveLength(0)
+    })
+
     it('settles once the reveal is over, not before', async () => {
         let end: (() => void) | undefined
         const over = new Promise<void>((resolve) => {
