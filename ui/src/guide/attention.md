@@ -3,14 +3,24 @@
 What needs you, worst first, as `canopy status` lists it. It's the home page, and on a good day it's empty: "Nothing
 needs you", and a little canopy swaying in a breeze.
 
+Under the canopy, a short digest for the tab you leave open all day: `Today: 2 PRs opened · 5 runs ended`, then
+`Working now: 5`, the same number as the rail, with a link to [Workspace](/workspace), and when the last tick ran,
+with a link to it. A tick that went badly says so, in color. The day is your browser's, from midnight, and the counts
+come from the journal, so a reload doesn't reset them; `runs ended` means ticket runs, not chores, reviews, or tasks. A
+figure of zero stays off the page, and a day with nothing in it drops the line. If you paused the loop, a line says so:
+no tick starts until you resume, so a calm page might just be one you told to wait.
+
+The away note further down counts items cleared. The digest doesn't, because the journal keeps no record of an item
+leaving; only an open tab sees one go, and a number that resets on reload isn't a number.
+
 The canopy is earned. In a fresh workspace, before the journal holds a single ticket, the page says so instead,
 `no tickets yet`, and names the first step: give a ticket your queue label in the tracker, or start one privately on
-[Tickets](/tickets), then **Tick now**. A quiet inbox and one nobody has filled yet look alike from a distance, and
-only one of them is good news.
+[Tickets](/tickets), then **Tick now**, and what needs you lands here. A quiet inbox and one nobody has filled yet look
+alike from a distance, and only one of them is good news.
 
 So do a quiet inbox and a dead loop. While the loop isn't answering, an empty list grows no canopy: it says
-`Nothing needed you as of 14:05`, and that the list can't change until the loop is back. An all-clear from a loop that
-stopped at lunch is a timestamp, not a verdict.
+`Nothing needed you as of 14:05`, and that the list can't change until the loop is back, and the digest stays away too.
+An all-clear from a loop that stopped at lunch is a timestamp, not a verdict.
 
 ## The list
 
@@ -22,7 +32,9 @@ about is settled: a comment that `needs author` until it's handled or you reply 
 repositories (`multi repo`) until you reply, a check a notice held (`notice rerun`) until it runs again. You can't clear
 an item by hand, only its cause, and chore findings are the one exception. A running agent's question doesn't wait for a
 tick at all: it's read as the list is, so it arrives with the update that asks it and leaves the moment you answer, the
-agent drops it, or the run ends. When an item leaves while you're looking, it folds shut and a leaf drifts off.
+agent drops it, or the run ends. When an item leaves while you're looking, it folds shut and a leaf drifts off, and
+if it was the one you had open, the row that took its place opens, so dismissing your way down a list of findings
+doesn't send you back to the top each time.
 
 The items come in four groups, in this order, and within a group the one open longest comes first:
 
@@ -48,16 +60,16 @@ The items come in four groups, in this order, and within a group the one open lo
    queue's status or a sign-off, neither of which turns green on an open PR, however long you wait; the item names the
    line to add under `[repos.<repo>.checks]` if it isn't CI. If it is, the item leaves when the build finally does.
 4. **Findings**: what your chores found. If you'd rather read them on each chore's page, **Hide chore findings** in
-   [Settings](settings#attention) leaves them off the list, its counter, and the nav's badge, and a line above the
+   [Settings](settings#attention) leaves them off the list, its count, and the nav's badge, and a line above the
    list says how many it left out.
 
 Forgot what `review late` is? Hover over a reason, or Tab to it, and its tip says what it means under the CLI's
 spelling. Nobody memorizes forty reasons, and nobody should have to.
 
-The counters above the list say how many runs are going, a task's among them, how many tickets and tasks wait on you
-(on your reply, or on your approval of a feedback plan) and how long the oldest question has waited, and how many items
-the list holds. How those items break down is the
-nav's badge, on every page, so the counters don't say it again; one page saying a number five times doesn't make it
+The list's header counts its items, and says how long the oldest one waiting on your answer has waited:
+`oldest waiting 1h · 11`. That's anything in amber, questions, plans, and drafts alike, but for what you've already
+answered, which waits on the loop now. With nothing waiting on you, it's the count alone. How the items break down is
+the nav's badge, on every page, so the page doesn't say it again; one page saying a number five times doesn't make it
 truer. The browser tab's title counts the items that block work, so a glance at the tab says whether to look.
 Findings, `needs reviewer`, and `ready to merge` don't count there: they're news, not blockers.
 
@@ -163,8 +175,9 @@ the flaky test is flaky. A reply holds up to 4000 characters, counted beside the
 from the CLI, a longer one is refused, not cut.
 
 The box takes the Markdown the conversation draws: **bold**, `code`, a `##` heading, bulleted and numbered lists, and
-fenced code blocks from the buttons under the text, and `*italics*`, `~~strikethrough~~`, `>` quotes, `---` rules,
-and pipe tables typed by hand. A labelled link stays as characters, so its address never hides behind friendlier
+fenced code blocks from the buttons under the text (name the language after the opening fence, as ```` ```python ````,
+and the thread colors it), and `*italics*`, `~~strikethrough~~`, `>` quotes, `---` rules, and pipe tables typed by
+hand. A labelled link stays as characters, so its address never hides behind friendlier
 words. Press ⌘B and ⌘E (Ctrl+B and Ctrl+E) for bold and code; Shift+Enter in a list starts the next item, and on an
 empty one ends the list. ⌘Z undoes a button as it undoes typing. **Preview** shows the reply as the thread will,
 which is the cheapest way to find the backtick you didn't close; ⌘⇧P switches back and forth.

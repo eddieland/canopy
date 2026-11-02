@@ -30,8 +30,8 @@
     html {
         /* Inherited, so every scroller (the page, a panel's list, a textarea) has the same thumb in both themes. */
         scrollbar-color: var(--scrollbar) transparent;
-        /* On the root, so it paints the whole canvas. */
-        background-color: var(--background);
+        /* On the root, so it paints the whole canvas, under a palette's texture (Gruvbox's halftone dots). */
+        background: var(--canvas-texture), var(--background);
         -webkit-font-smoothing: antialiased;
         /*
          * Every size is in rem, so the whole interface grows with the window on a large screen: the browser's size up
@@ -61,9 +61,18 @@
 }
 
 /*
+ * A page title's drop in its section's color (`--section-hue`, set on its header), as a comic's lettering casts one: a
+ * palette sets how far (`--title-drop`) and makes it opaque (`--title-drop-alpha`); by default it is transparent.
+ */
+@utility title-drop {
+    text-shadow: var(--title-drop) var(--title-drop) 0
+        color-mix(in oklab, var(--section-hue, var(--accent)) calc(var(--title-drop-alpha) * 100%), transparent);
+}
+
+/*
  * The guide in the default faces under every palette: Plex Sans for its prose and Plex Mono at full size for its code.
- * A palette that sets every line in mono (Gruvbox, Monokai) is an editor's look for the app's readouts, not for pages
- * of prose, which read worse in it and wrap sooner.
+ * A palette that sets every line in mono (Gruvbox, Monokai, Acme) is an editor's look for the app's readouts, not for
+ * pages of prose, which read worse in it and wrap sooner.
  */
 @utility guide-face {
     --face: var(--face-sans);
@@ -203,7 +212,8 @@
     }
 }
 
-@keyframes sweep {
+/* A full turn about the element's center (`animate-turn`, `rave-beams`). */
+@keyframes turn {
     to {
         transform: rotate(1turn);
     }
@@ -255,10 +265,13 @@
     }
 }
 
-/* A fill wipes in from its left edge. */
-@keyframes wipe {
+/* A fill half its track's width crosses the track, in from the left edge and out past the right (`animate-barber`). */
+@keyframes barber-sweep {
     from {
-        clip-path: inset(0 100% 0 0);
+        translate: -100%;
+    }
+    to {
+        translate: 200%;
     }
 }
 
@@ -605,11 +618,11 @@
     }
 }
 
-@utility animate-sweep {
+@utility animate-turn {
     transform-box: view-box;
     transform-origin: center;
     @media (prefers-reduced-motion: no-preference) {
-        animation: sweep 1.4s linear infinite;
+        animation: turn 1.4s linear infinite;
     }
 }
 
@@ -1387,7 +1400,7 @@
         transparent 314deg 360deg
     );
     @media (prefers-reduced-motion: no-preference) {
-        animation: sweep 8s linear infinite;
+        animation: turn 8s linear infinite;
     }
 }
 
@@ -1463,7 +1476,9 @@
 /*
  * A working step's fill in a progress meter while its run runs: a barber pole, its diagonal stripes a veil of the
  * page's background over the fill, so they read lighter in light and darker in dark, drifting toward the work still to
- * do. It wipes in from the left as it first shows. At rest the stripes stand still where they start.
+ * do as the fill sweeps across its segment, again and again. The stripes drift fast enough to outrun the slow sweep,
+ * so the pole reads as turning rather than riding along, and the two cycles' lengths share no short ratio, so they
+ * never fall in step. At rest it stands still in the segment's left half.
  */
 @utility animate-barber {
     --barber-tile: 8px;
@@ -1478,8 +1493,8 @@
         );
         background-size: var(--barber-tile) var(--barber-tile);
         animation:
-            wipe 600ms cubic-bezier(0.2, 0, 0, 1) backwards,
-            barber 900ms linear infinite;
+            barber-sweep 3.2s cubic-bezier(0.4, 0, 0.6, 1) infinite,
+            barber 300ms linear infinite;
     }
 }
 
@@ -1521,6 +1536,39 @@
     /* The cards that follow the placed ones (a passage gone) keep the gap between cards. */
     .plan-margin[data-aligned] > article:not([data-align]) {
         @apply mt-2;
+    }
+
+    /*
+     * A plan's text size, as Settings picks it (src/lib/plan-text.ts, on the editor's frame): two steps down, one step
+     * down, or one up from a document's type, its two steps of heading moving with it. Normal is the document's own,
+     * above, as the guide's.
+     */
+    [data-plan-text='tiny'] .plan-doc {
+        @apply text-xs/5;
+        & :is([data-level='1'], [data-level='2']) {
+            @apply text-base;
+        }
+        & :is([data-level='3'], [data-level='4']) {
+            @apply text-xs/5;
+        }
+    }
+    [data-plan-text='small'] .plan-doc {
+        @apply text-sm/6;
+        & :is([data-level='1'], [data-level='2']) {
+            @apply text-lg;
+        }
+        & :is([data-level='3'], [data-level='4']) {
+            @apply text-sm/6;
+        }
+    }
+    [data-plan-text='large'] .plan-doc {
+        @apply text-lg/8;
+        & :is([data-level='1'], [data-level='2']) {
+            @apply text-2xl;
+        }
+        & :is([data-level='3'], [data-level='4']) {
+            @apply text-lg/8;
+        }
     }
 
     .plan-doc {

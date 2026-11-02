@@ -176,6 +176,7 @@ from tests.canopy.helpers import (
     last_run,
     last_tick,
     log_file,
+    named_tickets,
     operator,
     overseer_calls,
     overseer_does,
@@ -865,8 +866,9 @@ class Scenario:
         Returns:
             What the call came back with, as the overseer would read it.
         """
-        # A ticket it dispatches that the journal does not know yet, the tracker reads first, as `tick` has it.
-        if keys := [key for key in _dispatched([move]) if db.get_ticket(self.conn, key) is None]:
+        # A ticket it names that the journal does not know yet, the tracker reads first, as `tick` has it: the
+        # overseer is refused one the query never returned (`unknown`).
+        if keys := [key for key in dict.fromkeys(named_tickets([move])) if db.get_ticket(self.conn, key) is None]:
             tracker_holds(self.conn, *keys)
         with ExitStack() as stack:
             tick_id = self.open_tick

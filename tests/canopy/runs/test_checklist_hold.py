@@ -43,6 +43,13 @@ def ran(agent_log: Path) -> list[dict[str, object]]:
     return cast("list[dict[str, object]]", run["commands"])
 
 
+def named_list(agent_log: Path) -> str:
+    """Where the latest worker's list is, as the hook names it, so a worker whose output is cut short can read it."""
+    [*_, run] = [r for r in agent_runs(agent_log) if "canopy-worker" in cast("list[str]", r["argv"])]
+    answers = cast("dict[str, str]", run["env"])[cards.ANSWERS_ENV]
+    return f"is below, and in {answers}/{checklists.DIR}/repo{checklists.SUFFIX}, should this output be cut short."
+
+
 def own_git_dirs(slots: list[Path]) -> list[Path]:
     """Each slot's own git directory, a worktree's in its primary clone's, where the hook keeps its marker."""
     return [Path(git("rev-parse", "--absolute-git-dir", cwd=slot)) for slot in slots]
@@ -66,6 +73,7 @@ def test_the_first_push_is_held_with_the_list_and_the_next_goes_through(
     assert held["returncode"] != 0
     printed = str(held["stderr"])
     assert printed.startswith(HELD)
+    assert named_list(scenario.agent_log) in printed.splitlines()[0]
     assert "`checklist`, under repo: pass, fixed, held with the reason, or n/a." in printed
     assert f"\n\n{LIST}" in printed
     assert sent["returncode"] == 0
@@ -153,6 +161,7 @@ def test_near_the_deadline_the_list_is_printed_and_the_push_goes_through(
     assert pushed["returncode"] == 0
     printed = str(pushed["stderr"])
     assert printed.startswith(NEAR)
+    assert named_list(scenario.agent_log) in printed.splitlines()[0]
     assert "if one fails and there is time, commit the fix and push it." in printed
     assert f"\n\n{LIST}" in printed
     assert run.status == "done"

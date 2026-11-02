@@ -62,8 +62,8 @@ function WorkingNow({ task, run }: { task: number; run: TaskRun }) {
             aria-live="polite"
         >
             <RunDot state="running" />
-            <span className="text-status-running">working now</span>
-            <TaskRunLink task={task} run={run.id} />
+            <span className="shrink-0 whitespace-nowrap text-status-running">working now</span>
+            <TaskRunLink task={task} run={run.id} className="shrink-0" />
             <span className="ml-auto flex shrink-0 items-center gap-3">
                 <Cost usd={run.cost_usd} />
                 <Age variant="span" started={run.started_at} ended={null} />

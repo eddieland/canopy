@@ -122,28 +122,36 @@ Rules:
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
 - **Palettes.** Lavender is light's default and indigo dark's. Each other palette is a rule in `tokens.css` that sets
   the neutrals and the accent over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. A
-  scheme with an accent of its own wears it (Nord's, Solarized's, Monokai's, Rosé Pine Dawn's, and Gruvbox's purple);
-  the others take one that suits the canvas. Light has off-white, a warm paper, sage, and the light tones of Solarized,
-  Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the near-colorless neutrals the 2026-10-19 exploration drew for
-  Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox, and Monokai. A light canvas is never grey,
-  which only looks dim. Every other hue is the same in all, so a component never knows which it is on, and an accent is
-  read through its token, never assumed indigo; where a scheme's own bases would drop a hue below 4.5:1, the bases move,
-  never the hue. A palette's accent is darkened or lightened until it reads as text there, on its own tint, and under
-  `accent-foreground`, and sets `ring` with it. A scheme whose accent would pass for a status wears another of its
-  colors, as Gruvbox wears its purple, not its orange, and a green canvas never takes a green accent. A scheme whose
-  bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts` measures
-  every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
+  scheme with an accent of its own wears it (Nord's, Solarized's, Monokai's, Rosé Pine Dawn's, Acme's dark blue, and
+  Gruvbox's purple); the others take one that suits the canvas. Light has off-white, a warm paper, sage, and the light
+  tones of Solarized, Nord, Gruvbox, Rosé Pine Dawn, and Acme, Plan 9's editor; dark has grey (the near-colorless
+  neutrals the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox,
+  and Monokai. Pulp, on both sides, is Gruvbox's tones inked as a comic. A light canvas is never grey, which only
+  looks dim. Every other hue is the same in all, so a component
+  never knows which it is on, and an accent is read through its token, never assumed indigo; where a scheme's own bases
+  would drop a hue below 4.5:1, the bases move, never the hue. A palette's accent is darkened or lightened until it
+  reads as text there, on its own tint, and under `accent-foreground`, and sets `ring` with it. A scheme whose accent
+  would pass for a status wears another of its colors, as Gruvbox wears its purple, not its orange, and a green canvas
+  never takes a green accent. A scheme whose bases would have to move until it matched another palette is left out, as
+  Nord's dark is; Pulp alone shares another's colors, Gruvbox's, set apart by its character. `tokens.test.ts`
+  measures every palette `src/theme/palette.ts` lists, and `theme-script.test.ts`
+  checks the inline script knows each.
   A palette sets its character too, beyond color, from a few closed choices, in the same rule, so a component still
   never knows which it is on: its corners (`--radius`: crisp, the default, or soft), its `edge` (a hairline, or none,
   where panels stand apart by their lightness alone), its depth (a soft shadow in the canvas's hue, a hard one with
   no blur, or, on black, where a shadow does nothing, the accent's glow), and its face (`--face`: interface text in
   Plex Sans, or in Plex Mono, as an editor sets it). Spacing, sizes, and layout never change with a palette, and
   neither do the status colors; only the mono face reflows text, since it runs wider, so it stays with the few palettes
-  that are an editor's own look: Gruvbox's sides and Monokai. There it draws every line a step smaller, at 15/16 of
-  the size asked for, in the same line boxes, so the wider face crowds less and no line changes height. The guide
-  keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono. The defaults
-  take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the nineties, and
-  black no edges, soft corners, and the glow.
+  that are an editor's own look, Gruvbox's sides, Monokai, and Acme, and Pulp, lettered as Gruvbox is. There it
+  draws every line a step smaller, at 15/16
+  of the size asked for, in the same line boxes, so the wider face crowds less and no line changes height. The guide
+  keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono.
+  The defaults take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the
+  nineties, and black no edges, soft corners, and the glow.
+  Pulp's sides take Gruvbox's character and ink the page as a comic does, from a few knobs whose defaults draw
+  nothing: each panel and bubble outlined and dropping a hard shadow (`shadow-panel`, `shadow-bubble`), a halftone
+  canvas (`--canvas-texture`), the primary action pressed into its shadow (`--press-x`, `--press-y`), and a page title
+  dropped in its section's color (`--title-drop`). Each is a shadow, a transform, or a background, so it takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
@@ -154,9 +162,10 @@ Rules:
   sit a few degrees round the wheel. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
   from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage.
   Every other palette picks from the same choices, so each reads as its own place: Gruvbox's light side as its dark
-  one, Solarized's sides crisp and flat, Monokai crisp and in mono under a neon aurora, Nord's light side soft under a
-  fade through Frost's blues, grey tight under one steel rule, and sage, Rosé Pine Dawn, forest, and plum soft, plum
-  the softest. Off-white lays its panels on the canvas like paper.
+  one, Solarized's sides crisp and flat, Monokai crisp and in mono under a neon aurora, Acme square and in mono, its
+  panels pale yellow on a pale cyan canvas, the one palette in two hues, under one olive rule, Nord's light side soft
+  under a fade through Frost's blues, grey tight under one steel rule, and sage, Rosé Pine Dawn, forest, and plum soft,
+  plum the softest. Off-white lays its panels on the canvas like paper.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
@@ -192,8 +201,9 @@ Rules:
 - Depth is used sparingly, in three places and nowhere else: a faint lift under a panel and a counter
   (`shadow-panel`), a shadow under what floats over the page, a menu, a card, a tip, a dialog, a toast, the rail's
   sheet, and the settings' save bar (`shadow-float`), and one under the primary action, the default button
-  (`shadow-action`). Each is the palette's (Palettes, under Tokens), so its form changes with it, and nothing inside
-  a panel casts one but a pressed segment's `shadow-xs`.
+  (`shadow-action`, and `shadow-action-pressed` while it is pressed). Each is the palette's (Palettes, under Tokens),
+  so its form changes with it, and nothing inside a panel casts one but a pressed segment's `shadow-xs` and a
+  conversation's bubble (`shadow-bubble`), which casts none but on a palette that inks it.
 - Radius: `rounded-md` (8px) for panels, buttons, and fields, `rounded-sm` (6px) for chips and nav items, `rounded-xs`
   (4px) for a mark smaller than a line of text, a checkbox or a slot's square, at the default palettes' `--radius`. A
   palette may set its own, and the scale follows it. The scale is in `tokens.css`; no arbitrary radius
@@ -285,13 +295,13 @@ Rules:
   search hits do; and an empty attention list says nothing needed the operator as of the drop rather than celebrate.
   What is on screen stays. All of it reads the stream from the shell (`useLoopDown`), and leaves the moment the stream
   opens again, with no reload.
-  The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The counters are the
-  attention page's, and the nav's Attention item shows how many items it lists, on every page, split by severity:
-  broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the rest muted, each only when there
+  The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The nav's Attention
+  item shows how many items it lists, on every page, split by severity: broken in `status-failed`, waiting on the
+  operator's answer in `status-blocked`, the rest muted, each only when there
   is one. Never in the section's rose, too near the failure color to tell apart at that size. Since color alone tells
   the numbers apart, they are said in words on hover and to a screen reader (`1 broken, 1 waiting on you, 3 other`;
-  `breakdown` in `src/lib/attention.ts`). That split is the nav's alone: the Attention counter does not say it again
-  under its value, on the one page that shows both (Counters, below). The Memory item shows how many proposals wait on
+  `breakdown` in `src/lib/attention.ts`). That split is the nav's alone: the list's panel header gives the whole and
+  does not say it again. The Memory item shows how many proposals wait on
   the operator, in `status-blocked` as what waits on their answer is, said in words (`2 proposals waiting on you`), and
   nothing while none waits or proposals are off. It comes with the loop's state on the stream, so it moves as a run
   proposes and as the operator promotes or rejects. The Reviews item shows how many reviews with a result to read the
@@ -581,7 +591,9 @@ the rules it all keeps; what each one does is written in its code. None of it is
   away.
 - **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`, `rave-dark`) or the accent,
   never a status color, so nothing in it reads as a run's state.
-- **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and counters.
+- **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and its count.
+  The last one's plays out too, beside no detail, before the all clear rises in; under reduced motion, or on a page
+  that reads the list empty, the all clear is there at once, and plays nothing.
 - **A tip is true; a joke never looks like one.** The ticker's tips open with "Tip:" and name a real key, command, or
   setting in its own words; one that stops being true is fixed or dropped. Nothing else opens with "Tip:".
 - **Fun honours reduced motion** (Motion, below): it holds still, and says the same. Nothing flashes more than twice a
@@ -700,6 +712,11 @@ side.
   `document-section`, a `#` or `##` heading, the page title's `text-xl` semibold; and `document-subsection`, a `###`
   or `####`, the body's size in semibold. Two steps of heading, so a section stands a quarter above the body and a
   subsection apart from it by weight alone; the guide's page title is its header's, so its body starts at a section.
+  A plan's size is the operator's (Settings, `src/lib/plan-text.ts`): Normal is these; Small and Large move the body
+  and both headings a step down or up together (`text-sm`/`text-lg` under `text-lg`/`text-2xl`), and Tiny two steps
+  down (`text-xs` under `text-base`), the one place a size outside the steps above appears. The guide stays at Normal.
+  Settings draws each size's name at the body size it picks, as the style menu previews each style, over a sample of a
+  plan at the size picked, drawn by `.plan-doc`.
   Code is set as everywhere else (`Code`, Rich text), a block on the raised surface. Its measure is fixed, 48rem at
   most (`max-w-3xl`) on both surfaces. The plan's style menu previews each style in its utility. What lays a document
   out, the guide's rules between sections or a plan's margin, is its surface's own; its type is not.
@@ -800,8 +817,8 @@ side.
   whose cells are too narrow to name the window before under each figure, so a line under the grid names it once. A kind
   that spent nothing is no tile of a dash but a muted line under the grid (`No dry runs.`), so the tiles hold what was
   spent. A panel with headline figures of its own has a row of them at its top, over its tables (the Reviews page's
-  canopy's reviewer). A figure still being read holds its place. A `Counter` stays the attention and worktrees pages'
-  count of the present, with its state's color.
+  canopy's reviewer). A figure still being read holds its place. A `Counter` stays a page's count of the present,
+  with its state's color.
 - **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest
   (`barPercent`), where comparing the rows is the point: spent by ticket, by model, and by landed ticket, the bytes a
   tool returned, a check's failure rate, a reviewer's reviews and wait, a PR's first review, resumes per plan by
@@ -875,7 +892,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   measures: `ago` for a moment (`3m ago`: a message, a decision, a search hit, a ticket's or PR's last activity),
   `span` for something that runs (`for 3m`, then `ended 3m ago`: a run, a review, a tick, a chore run, a held
   worktree), and `bare` for how long an item has stood open, where its place says so (`3m`: an attention item, an open
-  finding, the rail's runs, the oldest question). The header's tick is the one exception: `3m ago` once it ended, so
+  finding, the rail's runs, the oldest wait). The header's tick is the one exception: `3m ago` once it ended, so
   its line stays short. A moment shown whole is `Timestamp`, the local `Oct 8 10:30` with the ISO time the journal
   keeps on hover, beside its age on a review's page, and in a run's, tick's, or chore run's `when` field, which sets
   its end after it, the time alone on the same day, how long it ran (`lasted`, the age's units), and its `span` age;
@@ -915,7 +932,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   (past `15rem`, under its pinned column names, so a week shows whole and 30 days scroll). Past `28rem` the rows
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
   so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
-  not: the page scrolls instead.
+  not: the page scrolls instead. The attention list beside its item is the one exception (below).
 - **A thread scrolls inside its panel too** (`ThreadScroll`): a ticket's conversation, on its page and in the attention
   item, and a chore's notes. Past 60% of the window's height (never less than `20rem`) the messages scroll between the
   panel's header and the reply form, so a long thread never pushes the form a page away. It opens at its newest end,
@@ -1033,15 +1050,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   reads `untitled`, muted, so its cell is never blank, the rail's working runs included, never the run's kind in its
   place. A ticket's page heading sets the key in muted mono before it. Nowhere too narrow to show more than a few
   letters of it.
-- **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you, and
-  attention; the spend is in the rail) and the worktrees page (working, held, needs a look, free, across every pool).
-  The line under the value is cut to fit, and whole in its tip, since it grows with the workspace (`4 pools unread`).
+- **Counters** (`Counter`, `src/components/counter.tsx`) head the worktrees page (working, held, needs a look, free,
+  across every pool). The line under the value is cut to fit, and whole in its tip, since it grows with the workspace
+  (`4 pools unread`).
   A line is state, never what every visit would say: Held's names what holds its slots (`1 in use · 1 canopy-sync`).
-  Nor what another counter or the nav already says (One home per fact): on the attention page only Waiting on you has
-  a line, the oldest open question's age (`oldest 9d`), since it has no other home. Running's would count the runs
-  waiting on you, which is the next counter's value, and Attention's would split the list, which the nav's badge does
-  on every page; so neither has one, and `waiting on you` is said once there outside the rail and the nav. A counter
-  with no line of its own shows none.
+  Nor what another counter or the nav already says (One home per fact). A counter with no line of its own shows none.
+  The attention page has none: the nav's badge, the rail, the tab's title, and its icon carry the glance, and tiles
+  there only said their numbers again.
   A counter counts what its line lists, and a line that splits the count names only its parts there are: Needs a look
   adds dirty slots, broken ones, and unread pools (`needsLook`), so one of each dirty and unread reads `2` over
   `1 dirty · 1 pool unread`, never a `0 broken` among them.
@@ -1142,10 +1157,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   fresh its read is. What the page shows on every visit is its title's help. Idle slots fold as
   they lie in the whole pool, so a filtered line never spans a slot in another state.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item while the page is at
-  least 48rem wide (a container query, `@3xl`). Under that, on half a monitor, the list and the item take turns, each
-  the page's whole width: the list shows until an item is chosen, which opens in its place with `Back to the list`
-  (a ghost button with a left chevron) as its first stop, where the focus goes, since the row went with the list; back
-  on the list, its row is chosen and focused. An item the URL names opens so too. A reply that answers its item
+  least 48rem wide (a container query, `@3xl`). There the two scroll apart: the list is `sticky`, as tall as the window
+  has room for, and scrolls in itself (`PanelScroll`), so the page scrolls only the item, however tall. Choosing a row
+  takes the page to its top, as any new page does, so the item opens at its head and the row stays where it was
+  clicked. An item the URL names whose row is out of the list's view, as on a reload or a notification's link, brings
+  it into view in the list, which alone moves. Under that, on half a monitor, the list and the item take turns, each
+  the page's whole width, and the page scrolls whichever shows: the list shows until an item is chosen,
+  which opens in its place with `Back to the list` (a ghost button with a left chevron) as its first stop, where the
+  focus goes, since the row went with the list; back on the list, its row is chosen and focused. An item the URL names
+  opens so too. A reply that answers its item
   (`awaiting_reply`, `untrusted_review`) moves on: the next item that waits on the operator's answer and is not
   answered yet, after it in the list and then from the top (`nextWaiting`), is chosen and its row focused, the list in
   view, and a toast says what the reply did, since the form that said it goes with its item; the row it left keeps
@@ -1154,7 +1174,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   `attempt_limit`, `chore_failed`, the review reasons, and a run refused its model, `model_missing` and
   `model_list_failed`, which only the operator clears), then what waits on the operator's answer (`awaiting_reply`,
   `untrusted_review`, `plan_review`), then every other reason, then chores' findings; within each, the item open longest
-  first. Settings can hide the findings, in this browser alone (`useAttention`): the list, its counter, and the nav's
+  first. Settings can hide the findings, in this browser alone (`useAttention`): the list, its count, and the nav's
   badge leave them out, and a muted line above the list counts what it hid, so a hidden finding never reads as none.
   A row reads as an inbox's: its reason, subject, and age, then its ticket's title (`TicketTitle`, semibold) when
   it is about a ticket, or its task's text's first line when it is about a task, as a message's subject, then its
@@ -1165,13 +1185,26 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`InlineCode`), but for a GitHub PR's address, which is a `PullRequestLink` (its name alone in a row, which is a link
   already), so a detail names a PR as the rest of the page does, and a run named as `canopy show` reads one, `run:40`,
   which is a `RunLink`. The CLI's `answer with canopy reply KEY` is left off the end of a question's detail: the page's
-  reply form is the answer (`shownDetail`). The list is Attention, as the page and its counter are; what waits on the
-  operator's answer is `waiting on you` wherever it shows: the counter, a question's chip in a conversation, the tickets
-  list, and the rail. The selection is `?item=<id>`; with none, the most severe item about a ticket.
+  reply form is the answer (`shownDetail`). The list is Attention, as the page is; what waits on the
+  operator's answer is `waiting on you` wherever it shows: a question's chip in a conversation, the tickets
+  list, and the rail. The list's panel header holds its count, after the longest wait when one stands
+  (`oldest waiting 1h · 11`): the oldest of the nav's `waiting` part (`oldestWaiting`), past what is answered already,
+  so a review's draft counts as a question does. The selection is `?item=<id>`; with none, the most severe item about a
+  ticket. When the selected item leaves, the row that took its place is selected, so a long list is worked down where
+  the operator stands rather than sent back to its top.
 - **An empty attention list tells never started from all handled** (`EmptyAttention`). Before the journal holds any
   ticket, the page is the first step, an `Empty`: `no tickets yet: give one your queue label in the tracker, or start
-  one privately on Tickets, then Tick now`, with Tickets a link and Tick now the header's button inline, since an
-  inbox that was never filled is not one emptied. Once there was work, the empty inbox (Fun) is the reward.
+  one privately on Tickets, then Tick now, and what needs you lands here`, with Tickets a link and Tick now the header's
+  button inline, since an inbox that was never filled is not one emptied. Once there was work, the empty inbox (Fun) is
+  the reward, and a digest for a tab left open all day: one centered column at reading width, muted type, no panel, no
+  tiles, that fills the page by composition. The canopy over `Nothing needs you.`, then `Today: 2 PRs opened · 5 runs
+  ended`, then `Working now: 5`, the rail's number by its own reckoning (`workingCount`), to Workspace, and the latest
+  tick, to its page, naming a status that is not `ok` in its color. Every figure must hold on a reload, so its window is
+  the local day, which the journal answers (`startOfDay`, `GET /api/runs/since`): items cleared are not counted, since
+  only a tab sees one go. The away note, over one absence, can. A figure of none is left out, and a day with none the
+  line goes. The tick repeats the header by the operator's choice, an exception to One home per fact. A paused loop
+  says so, in `status-blocked`, under the day, since a quiet page and a loop told to wait look alike. A loop down drops
+  the digest whole (`Nothing needed you as of`, in a panel): none of it stands while the loop isn't answering.
 - **The attention detail: the reason picks the first block**, under the item's head, what the reason asks of the
   operator (`ask` in `src/lib/attention.ts`), so the action it calls for is never buried under louder controls about
   something else. A run that broke (`worker_failed`, `crashed`, `unpushed`, `unknown_result`, `attempt_limit`): the
@@ -1270,7 +1303,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   reads to know what a run is up to now, so it leads wherever it shows. Whole, it is the summary in `font-medium`, a
   meter of its steps if it has any (a segment each, 2px apart, on the bare `border` track: only done fills its
   segment, in `status-done`, so the filled ones are the `N` beside it; working fills half in `status-running`,
-  wiping in and striped as a barber pole whose stripes drift along it while the run runs, blocked
+  striped as a barber pole that sweeps across its segment while the run runs, blocked
   or stuck half in `muted-foreground`; to do is the track) with `N of M done · stage S`, its question, then its work
   as one checklist, each entry led by a 12px mark: a `status-done` check, the pulsing running dot, an hourglass, a
   dash for skipped, an empty ring to do. The steps are the list when it has any, `now` under the working one, and what
@@ -1399,8 +1432,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   small step, as the page's heading ladder does not apply inside a bubble), `>` quotes as their own blocks, muted on
   a stroke at their left, a
   `---` rule as a hairline, a pipe table with its head as column headers and its columns aligned by their colons,
-  scrolling sideways when wide, fenced code as a `surface-raised` block that scrolls sideways, and `code`, **strong**,
-  *emphasis*, and ~~struck~~ inline. Code, inline or fenced, is `text-code`: a step under its line on a sans palette,
+  scrolling sideways when wide, fenced code as a `surface-raised` block that scrolls sideways, colored as the guide's
+  is in the language its fence names (```` ```python ````; `CodeBlock`), and `code`, **strong**, *emphasis*, and
+  ~~struck~~ inline. Code, inline or fenced, is `text-code`: a step under its line on a sans palette,
   where the change of face sets it apart, and the line's own size on a mono one, where a smaller copy of the same face
   reads as a mistake. Inline code sits on `code-chip`, a tint of its own ink, so it stands apart on any bubble or tint
   without a tile darker than the text around it, and keeps its ends on each line it wraps to. Every code span in a
@@ -1503,7 +1537,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   and the comments are a plain list, since their passages have no place on the page. Last, a ghost `xs` `Outline ▾`
   (`src/lib/plan-outline.ts`) lists the plan's headings, a step deeper for each level under its shallowest, the
   section the page has scrolled to as it opens in the accent (`aria-current`), and puts the one chosen at the top of
-  the page under the header, the cursor at its start where the plan may be edited. While the changes are marked, a
+  the page under the header, the cursor at its start where the plan may be edited. On a ticket's newest plan, each `##`
+  section's row ends in two bare checkbox items, `read`, a check, and `a concern`, a circled `!`, muted until on, then
+  the accent and `status-blocked` on their own tint, one clearing the other and leaving the menu open; the button
+  counts what is unmarked in `readout` muted (`Outline 3 left`, `all read`), then the concerns in `status-blocked`.
+  The marks are this browser's alone, localStorage (`src/lib/plan-marks.ts`), never the journal, and a mark holds while
+  its section's words are as marked, so a rewritten section is unread again. While the changes are marked, a
   commented passage drops its tint, so no word wears a comment's and a change's at once, but keeps a 1px underline in
   the accent, so the operator still sees where the comments are; the open one keeps its own.
   The toolbar takes the header's second line, under the label. The header is `sticky`, and what the editor scrolls
@@ -1526,19 +1565,36 @@ sliver beside four others; and its axis names short call numbers without measuri
   was asked to change and the comments on it lose their passages together. Resolved threads fold under a `Disclosure`
   (`Show 2 resolved`). A comment or reply form sends on the key Settings names, as a reply does; Escape drops one that
   holds nothing new, and puts one with the operator's words aside, open with them, so one key never loses what was typed
-  (`Cancel` drops it). A form takes the cursor when it opens, after any words it holds; once a comment is sent,
+  (`Cancel` drops it). A new comment's form, alone, offers labels under its field (`COMMENT_LABELS` in
+  `src/lib/plan-comment-labels.ts`), ghost `xs` buttons in muted text, each its instruction on hover: one leads the
+  comment with that fixed, firmly worded instruction to the planner, swapping any other label's, and gives the cursor
+  back to the field's end for the operator's words.
+  A form takes the cursor when it opens, after any words it holds; once a comment is sent,
   resolved, deleted, put aside, or cancelled, the cursor goes back to the plan after its passage, as a shared document's
   does, rather than to the top of the page. `Comment` again, on new words, moves an empty comment to them; one half
   written stays on its passage, and the cursor goes back to it, so its words are never lost or carried to other words.
+  While the plan waits on the operator, the choices its Decisions leave open (`src/lib/plan-decisions.ts`, the
+  planner's `### Decision N` and its lettered options) are asked again under it, in its panel above its foot: `Open
+  decisions`, an `h3` in `panel-label` type under a hairline, a muted line on what an answer does, then each decision
+  in a run's question's box (above), muted on `surface-raised`: `Decision N` and whether you answered it, the
+  question, and its options as the same lettered rows (`LetteredOption`), each the radio of a `RadioGroup` named by
+  the question, the planner's choice `recommended`, the one picked a check in `status-done`. Under the plan, not in
+  the foot, so the foot keeps its two lines and the decisions are read after the plan and answered just above the
+  actions that send them. Another pick is an answer, a line of the notes `Approve` carries
+  and of what `Ask for changes` sends. Since the panel is out of sight under a long plan, the line under the foot's
+  actions leads with a jump to it (`DecisionsJump`), a plain button in the accent's monospace as `MoreLines` is:
+  `↓ 2 open decisions`, then `↓ 1 of 2 answered`, counting the plan as it reads now. It brings the panel fully into
+  view, clear of the sticky header and foot as tall as each is then, and focuses it. It is there whenever the panel
+  is, so the foot keeps its height, and it informs rather than gates: no status tone, nothing on `Approve`.
   The plan's actions are its panel's sticky foot (`PanelFooter`), which stays at the bottom of the page while the plan
   scrolls, as a document's do, so a long plan is approved or sent back from where it is read: the caller's own actions
   (a ticket's `Approve`, the foot's one primary, then `Save`, outlined, and `Skip the plan`, ghost), then a note on the
   whole plan, one line that takes the rest of the line and a line of its own, the foot's whole width, while it is
   focused or holds words, and `Ask for changes`, outlined (the request says the plan was edited, when it was). The line
   under them says how many open comments go with Ask for changes, or how far over a reply's bound the request is, then
-  what the caller says of its own actions: on a ticket's plan, that approving sends none of the open comments, since the
-  implement reads the plan alone, or that an approved plan's edit is approved again. What `Approve` takes is on its
-  hover. `Skip the plan`, and `Approve` while the note holds words it would leave unsent, ask first in the actions'
+  what the caller says of its own actions: on a ticket's plan, that `Approve` sends the open comments to the implement
+  instead, and resolves them, or that an approved plan's edit is approved again. With open comments or a note, the
+  primary reads `Approve with notes`. What `Approve` takes is on its hover. `Skip the plan` asks first in the actions'
   place, as a comment's Delete does: the question, then `Keep`, which takes the focus and Escape gives too, then the
   action. What an action did goes under that line, and stays once the plan turns read only, Skip's, so the foot stays
   for it. An approval, once the journal holds it, is a moment of its own: its words in the accent on the accent's tint
@@ -1646,8 +1702,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   refuses `radix-ui` anywhere else): a button that is on or off is a `Toggle`, a part of the page that opens under its
   button is a `Collapsible` (the panel or row itself, by `asChild`, so it adds no wrapper) opened by a `Disclosure`
   (below), an option that is on or off a `Checkbox` (or, for the lightswitch rave alone, a `Switch`), a choice of a
-  few options a `ToggleGroup`, and a row of an editor's controls a `Toolbar` (`src/components/ui/toolbar.tsx`), one
-  tab stop with the arrow keys between them.
+  few options a `ToggleGroup`, or a `RadioGroup` when each is a sentence, and a row of an editor's controls a
+  `Toolbar` (`src/components/ui/toolbar.tsx`), one tab stop with the arrow keys between them.
   Radix keeps their ARIA in step with their state (`aria-pressed`, `aria-expanded` with `aria-controls`), so a
   component never writes it by hand. Two stay native on purpose: a transcript's tool call is a `<details>` (above),
   and rich text's `show N more lines` (`MoreLines`, a transcript's thinking's too) shows more of text already on
@@ -1684,6 +1740,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`ToggleGroup`, `src/components/ui/toggle-group.tsx`): the options in a well on the canvas, the picked one raised on
   `surface-raised` with `shadow-xs`. It is a radio group, so one option is always picked: the arrow keys move between
   them, Space picks one, and Tab leaves the group.
+- **A choice of one among an agent's lettered options** (a plan's open decision) is a radio group (`RadioGroup`,
+  `src/components/ui/radio-group.tsx`), since a segment cannot hold a sentence, drawn as a run's question's options are
+  (`LetteredOption`), so the two read as one thing: each option a full-width row that is its radio, its letter in a
+  small square that turns to a check in `status-done` once picked, `recommended` after the agent's own. It is named by
+  the question it answers; the arrow keys move the pick, and Tab leaves the group.
 - **A choice of repositories** is a repository picker (`src/components/repo-picker.tsx`), never a chip or a segment for
   each, since a workspace may have dozens: an outline `sm` button in monospace `text-xs` saying what is chosen
   (`every repository`, in `muted-foreground` while it narrows nothing; a name; two; then `3 repositories`), opening a

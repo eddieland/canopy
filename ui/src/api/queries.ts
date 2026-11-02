@@ -145,7 +145,8 @@ export const runsQuery = queryOptions({
 
 /**
  * What the runs did since `since`, counted over the whole journal rather than the runs list's recent few: the note
- * on coming back to a tab left hidden (`useAwayNote`). Not on the stream: read once, when the tab is shown again.
+ * on coming back to a tab left hidden (`useAwayNote`), read once as the tab is shown again, and the all-clear's digest
+ * of the day. Not on the stream, which marks it stale when a run starts or ends (live.ts).
  */
 export function runsSinceQuery(since: string) {
     return queryOptions({

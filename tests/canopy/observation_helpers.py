@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from unittest import mock
 
 from canopy.core import conversation, db, item_numbers, records, sql
-from canopy.core.vocab import DraftStatus, NumberedItem, RunStatus
+from canopy.core.vocab import Decider, DraftStatus, NumberedItem, PassReason, ReviewItem, RunStatus
 from canopy.runs import artifact_feed
 from tests.canopy.helpers import KEY, LABEL, context, present, running_run
 
@@ -200,21 +200,53 @@ def review(
     *,
     item: str = "review",
     bot: bool = False,
+    thread: str = "PRRT_1",
+    resolved: bool | None = None,
 ) -> int:
-    """Record a review, or with `item` a review comment, of PR by `author`.
+    """Record a review, or with `item` a review comment, of PR by `author`, a comment's on `thread`, `resolved` or not.
 
     Returns:
         Its journal number, what a `review` cursor names.
     """
-    thread = "PRRT_1" if item == "comment" else None
+    on = thread if item == "comment" else None
     kind = NumberedItem.REVIEW if item == "review" else NumberedItem.REVIEW_COMMENT
     number = item_numbers.take(conn, kind, PR, ident, at=FRESH)
     conn.execute(
         "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, url, thread_id, "
-        "observed_at, number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (PR, item, ident, author, bot, state, at, body, f"{PR}#review-{ident}", thread, FRESH, number),
+        "resolved, observed_at, number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (PR, item, ident, author, bot, state, at, body, f"{PR}#review-{ident}", on, resolved, FRESH, number),
     )
     return number
+
+
+def passed_over(
+    conn: sqlite3.Connection,
+    ident: int,
+    reason: PassReason = PassReason.OPTIONAL,
+    *,
+    item: ReviewItem = ReviewItem.COMMENT,
+) -> int:
+    """Record that KEY's `review` cursor in `repo` passed review item `ident` of PR with no worker, for `reason`.
+
+    Returns:
+        The tick that passed it.
+    """
+    [found] = records.select(records.ObservedReview).where("id = ? AND item = ?", ident, item).all(conn)
+    tick_id = db.start_tick(conn, dry_run=False)
+    records.insert(
+        records.PassedReview,
+        pr_url=PR,
+        item=item,
+        id=ident,
+        number=present(found.number),
+        ticket_key=KEY,
+        repo="repo",
+        tick_id=tick_id,
+        reason=reason,
+        decider=Decider.HARNESS if reason is PassReason.RESOLVED else Decider.OVERSEER,
+        passed_at=FRESH,
+    ).run(conn)
+    return tick_id
 
 
 def sent_draft(env: CanopyEnv, conn: sqlite3.Connection, *, comment_id: int, review_id: int) -> None:

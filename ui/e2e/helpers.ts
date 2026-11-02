@@ -9,8 +9,8 @@ import { E2E_SECRET } from './secret.ts'
 export const STORAGE_KEY = 'canopy-theme'
 /** Each theme's palettes besides its default (lavender, indigo), as src/theme/palette.ts names them. */
 export const OTHER_PALETTES = {
-    light: ['off-white', 'sage', 'solarized', 'nord', 'gruvbox', 'rose-pine'],
-    dark: ['grey', 'black', 'forest', 'plum', 'solarized', 'gruvbox', 'monokai'],
+    light: ['off-white', 'sage', 'solarized', 'nord', 'gruvbox', 'pulp', 'rose-pine', 'acme'],
+    dark: ['grey', 'black', 'forest', 'plum', 'solarized', 'gruvbox', 'pulp', 'monokai'],
 } as const
 /** Where the page keeps each theme's palette: the same key as src/theme/palette.ts. */
 export const PALETTE_KEY = 'canopy-palette'
@@ -150,6 +150,43 @@ export async function settled(page: Page): Promise<void> {
     await expect(page.getByTestId('host-readout')).toBeVisible()
     await expect(page.getByTestId('stream-status')).toHaveAttribute('data-status', 'open')
     await expect(page.locator('main [data-slot=skeleton]')).toHaveCount(0)
+}
+
+/**
+ * Keeps the attention list as the page read it, whatever the stream says of it: the first listener on the stream stops
+ * each list before the page hears it, and the rest of the stream keeps the page live. Call it before opening the page.
+ * `clearAttentionList` then says the list is empty, and `sendAttentionList` that it holds what it is given, as the
+ * stream would.
+ */
+export async function holdAttentionList(page: Page): Promise<void> {
+    await page.addInitScript(() => {
+        const Source = globalThis.EventSource
+        globalThis.EventSource = class extends Source {
+            constructor(...args: ConstructorParameters<typeof EventSource>) {
+                super(...args)
+                this.addEventListener('message', (event) => {
+                    if (event.isTrusted && String(event.data).includes('"attention.updated"')) {
+                        event.stopImmediatePropagation()
+                    }
+                })
+                globalThis.addEventListener('send-attention', (event) => {
+                    const { detail: items } = event as CustomEvent<unknown[]>
+                    const data = JSON.stringify({ type: 'attention.updated', items })
+                    this.dispatchEvent(new MessageEvent('message', { data }))
+                })
+            }
+        }
+    })
+}
+
+/** Empties a list `holdAttentionList` holds, as the stream does when the loop clears the last item. */
+export async function clearAttentionList(page: Page): Promise<void> {
+    await sendAttentionList(page, [])
+}
+
+/** Sends a list `holdAttentionList` holds these `items`, as the stream does whenever the list changes. */
+export async function sendAttentionList(page: Page, items: unknown[]): Promise<void> {
+    await page.evaluate((detail) => globalThis.dispatchEvent(new CustomEvent('send-attention', { detail })), items)
 }
 
 /** The narrowest window the whole rail takes its place in (`src/hooks/use-rail-mode.ts`); narrower, it is a strip. */

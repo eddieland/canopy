@@ -13,6 +13,7 @@ import { Decisions } from '@/components/decisions'
 import { Disclosure } from '@/components/disclosure'
 import { FeedbackPlanCard } from '@/components/feedback-plan-card'
 import { Field, Fields } from '@/components/fields'
+import { LeftFeedbackList } from '@/components/left-feedback'
 import { ListPanel } from '@/components/list-panel'
 import { MemoryBand, MemoryDigestFold, MemoryRows } from '@/components/memory'
 import { MemorySaid, NoteActions } from '@/components/memory-actions'
@@ -176,6 +177,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             </Fields>
                         </PanelScroll>
                     )}
+                    {/* What its review cursors passed with no worker, yours to overrule, by the PRs it is on. */}
+                    <LeftFeedbackList ticketKey={ticket.key} items={detail.left_feedback} className="pb-0" />
                     <Fields className="pt-1.5">
                         <CostTotalRow cost={cost} />
                     </Fields>

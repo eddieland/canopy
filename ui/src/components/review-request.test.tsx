@@ -49,6 +49,7 @@ const CONFIG: ConfigModels = {
 const LISTED: ModelList = {
     models: ['acme/fast-1', 'acme/deep-2'],
     variants: { 'acme/deep-2': ['low', 'high'] },
+    hidden: [],
     error: null,
 }
 

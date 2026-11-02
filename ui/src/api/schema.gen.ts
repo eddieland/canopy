@@ -2137,9 +2137,11 @@ export type paths = {
         put?: never;
         /**
          * Decide a ticket's plan
-         * @description `canopy plan KEY --approve`, `canopy plan KEY`, or `--skip`: approve the newest plan, ask for a new one, or skip.
+         * @description `canopy plan KEY --approve [--message TEXT]`, `canopy plan KEY`, or `--skip`: approve, ask for a plan, or skip.
          *
-         *     Approving takes the file as it stands, edits included. Asking for changes is a reply, not this.
+         *     Approving takes the file as it stands, edits included, and with `message` writes it on the ticket for the
+         *     implement, refused `bad_body` empty or over its bound. Asking for changes is a reply, not this; a `message` with
+         *     any other action is refused `bad_body`.
          */
         post: operations["changeTicketPlan"];
         delete?: never;
@@ -2187,7 +2189,7 @@ export type paths = {
         head?: never;
         /**
          * Change a comment thread on a plan
-         * @description Edit the comment's words or a reply's, resolve or reopen the thread, or move it to its passage's new words.
+         * @description Edit the comment's words or a reply's, resolve or reopen the thread, move it, or mark it sent to a planner.
          */
         patch: operations["changeTicketPlanThread"];
         trace?: never;
@@ -2293,6 +2295,28 @@ export type paths = {
          *     Idempotent on the submission id: a retried submission records nothing new.
          */
         post: operations["replyTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}/sends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send feedback a ticket left with no worker to one
+         * @description `canopy send KEY N...`: a reply on the ticket naming feedback its review cursors left, the operator's go-ahead.
+         *
+         *     Idempotent on the submission id: a retried submission records nothing new (DESIGN §7).
+         */
+        post: operations["sendLeftFeedback"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5637,6 +5661,112 @@ export type components = {
             tick: components["schemas"]["Tick"] | null;
         };
         /**
+         * LeftFeedback
+         * @description Feedback on a ticket's PR its `review` cursor passed with no worker, still left (DESIGN §7), and why.
+         */
+        LeftFeedback: {
+            /**
+             * Author
+             * @description Who wrote it, as the reader saw them.
+             */
+            author: string | null;
+            /**
+             * Decider
+             * @description The overseer, who named it, or the harness, for one on a resolved thread.
+             * @enum {string}
+             */
+            decider: "overseer" | "harness";
+            /**
+             * Id
+             * @description GitHub's id for it.
+             */
+            id: number;
+            /**
+             * Item
+             * @description A review comment, or a review with something to say.
+             * @enum {string}
+             */
+            item: "review" | "comment";
+            /**
+             * Line
+             * @description Its line in that file.
+             */
+            line: number | null;
+            /**
+             * Number
+             * @description Its journal number, what `canopy send KEY N` names it by.
+             */
+            number: number;
+            /**
+             * Path
+             * @description The file a review comment is on; None for a review.
+             */
+            path: string | null;
+            /**
+             * Pr Url
+             * @description The PR it is on.
+             */
+            pr_url: string;
+            /**
+             * Reason
+             * @description Why it was left (`vocab.PassReason`).
+             * @enum {string}
+             */
+            reason: "optional" | "would_reset_approval" | "question" | "already_done" | "out_of_scope" | "operator_said" | "resolved";
+            /**
+             * Repo
+             * @description The repository of the unit whose PR it is on.
+             */
+            repo: string | null;
+            /**
+             * Tick Id
+             * @description The tick whose cursor move passed it.
+             */
+            tick_id: number;
+            /**
+             * Url
+             * @description Its link on GitHub.
+             */
+            url: string | null;
+        };
+        /**
+         * LeftSendRequest
+         * @description Feedback a ticket left with no worker to send to one, by number, with the submission id the form drew.
+         */
+        LeftSendRequest: {
+            /**
+             * Numbers
+             * @description The items' journal numbers, as `left_feedback` lists them.
+             */
+            numbers: number[];
+            /**
+             * Submission
+             * @description The id the form drew when the items were picked, sent again unchanged on a retry.
+             */
+            submission: string;
+        };
+        /**
+         * LeftSent
+         * @description What sending left feedback recorded: the operator message on the ticket that names it.
+         */
+        LeftSent: {
+            /**
+             * Message Id
+             * @description The message, the operator's go-ahead on them.
+             */
+            message_id: number;
+            /**
+             * New
+             * @description Whether it was recorded now, rather than by an earlier submission with the same id.
+             */
+            new: boolean;
+            /**
+             * Numbers
+             * @description The items sent, by number.
+             */
+            numbers: number[];
+        };
+        /**
          * LessonEditRequest
          * @description An edit, as `canopy memory edit ID [--text TEXT] [--repo NAME | --every-repo]` takes it (DESIGN §28).
          */
@@ -6443,6 +6573,14 @@ export type components = {
              */
             error: string | null;
             /**
+             * Hidden
+             * @description What `runtime.hide_models` leaves out of the menus, in order: a model as `provider/model`, which hides its
+             *     variants too, or one variant of a model as `provider/model@variant`. Still listed, so a model chosen that is hidden
+             *     is no less listed, and its runs no less run.
+             * @default []
+             */
+            hidden: string[];
+            /**
              * Models
              * @description Each model, as `provider/model`, in order; none when the list could not be read.
              * @default []
@@ -6665,6 +6803,12 @@ export type components = {
              * @enum {string}
              */
             action: "approve" | "request" | "skip";
+            /**
+             * Message
+             * @description With `approve`, the operator's note for its implement, written on the ticket with the approval, as `--message`.
+             *     Bounded again in code.
+             */
+            message?: string | null;
         };
         /**
          * PlanAnchor
@@ -7175,7 +7319,7 @@ export type components = {
         };
         /**
          * PlanThreadChange
-         * @description A change to a comment thread on a plan: its comment's words, a reply's, or whether it is resolved.
+         * @description A change to a comment thread on a plan: its words, a reply's, whether it is resolved, or that it was sent.
          */
         PlanThreadChange: {
             /** @description The passage as it now stands, after an edit of the plan moved or changed its words; none to leave it. */
@@ -7195,6 +7339,11 @@ export type components = {
              * @description Resolve the thread, or reopen it; none to leave it.
              */
             resolved?: boolean | null;
+            /**
+             * Sent
+             * @description True when the operator just sent it, as it stands, to a planner in a request for changes.
+             */
+            sent?: boolean | null;
         };
         /**
          * PlanThreadDeleted
@@ -7238,6 +7387,12 @@ export type components = {
              * @description The passage it is on, whitespace collapsed.
              */
             quote: string;
+            /**
+             * Read
+             * @description Whether a planner has read it as it stands: sent in a request for changes, then answered by a new plan. Approve
+             *     leaves it out of its notes, and a change to its words, a reply, or its resolution makes it unread again.
+             */
+            read: boolean;
             /**
              * Replies
              * @description Its replies, oldest first.
@@ -11604,6 +11759,13 @@ export type components = {
              * @default []
              */
             forgets: components["schemas"]["TicketForget"][];
+            /**
+             * Left Feedback
+             * @description The feedback on its PRs its `review` cursors passed with no worker that is still left, oldest first: unanswered
+             *     on its thread, on a thread not resolved. `canopy send KEY N` sends one to a worker.
+             * @default []
+             */
+            left_feedback: components["schemas"]["LeftFeedback"][];
             /**
              * Limits
              * @description Each kind's limit in each repository it has had runs in, then the review limit of each of its units' PRs canopy
@@ -21342,6 +21504,96 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Replied"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sendLeftFeedback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeftSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeftSent"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

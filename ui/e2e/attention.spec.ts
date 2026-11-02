@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { padMessages, settled, signIn } from './helpers.ts'
+import { clearAttentionList, holdAttentionList, padMessages, sendAttentionList, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -255,7 +255,7 @@ test("Settings hides chores' findings from the list and its counts, and the list
     const rows = page.getByTestId('attention-list').getByRole('link')
     await expect(rows).toHaveCount(10)
     await expect(rows.filter({ hasText: 'lodash-advisory' })).toHaveCount(0)
-    await expect(page.getByTestId('counter-attention')).toContainText('10')
+    await expect(page.getByTestId('attention-count')).toHaveText('10')
     const hidden = page.getByTestId('attention-findings-hidden')
     await expect(hidden).toContainText('1 chore finding hidden from this list')
 
@@ -282,22 +282,15 @@ test('an item about no ticket offers the command that fixes it, with nothing to 
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })
 
-test('the counters show the loop at a glance, and the nav counts the list by severity on every page', async ({
+test("the list's header says the longest wait and its count, and the nav counts the list by severity", async ({
     page,
 }) => {
     await page.goto('attention')
     await settled(page)
-    // ABC-101's and ABC-104's runs, and task 6's; ABC-102, and task 4, waiting on a reply, and the feedback plans of
-    // ABC-099 and ABC-133 to ABC-136 on your approval.
-    await expect(page.getByTestId('counter-running')).toContainText('3')
-    await expect(page.getByTestId('counter-waiting')).toContainText('7')
-    await expect(page.getByTestId('counter-waiting')).toContainText('oldest')
-    await expect(page.getByTestId('counter-attention')).toContainText('11')
-    // The split is the nav's, and what waits on you the counter's value: no line under them says either again.
-    await expect(page.getByTestId('counter-attention')).toHaveText('Attention11')
-    await expect(page.getByTestId('counter-running')).toHaveText('Running3')
-    // Outside the rail and the nav, the page says it once: the counter's label.
-    await expect(page.getByRole('main').getByText(/waiting on you/iu)).toHaveCount(1)
+    await expect(page.getByTestId('attention-oldest')).toHaveText(/^oldest waiting \S+ · $/u)
+    await expect(page.getByTestId('attention-count')).toHaveText('11')
+    // What every visit would repeat is the title's hover, so the list starts high on the page.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('title', /^What needs you/u)
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Workspace' }).click()
     await expect(page.getByTestId('nav-attention-failed')).toHaveText('1')
@@ -313,7 +306,6 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
             .getByRole('navigation', { name: 'Main' })
             .getByRole('link', { name: /1 broken, 6 waiting on you, 4 other/u }),
     ).toHaveCount(1)
-    await expect(page.getByTestId('counters')).toHaveCount(0)
 })
 
 test("a question's item is answered in its reply, with the ticket's own actions a quiet row under it", async ({
@@ -421,6 +413,92 @@ test('after a reply, the next item waiting on you is chosen, its row focused, an
     await expect(page.getByTestId('toast')).toContainText('Recorded message 12 on ABC-102, answering message 5.')
 })
 
+test.describe('on a wide window', () => {
+    test.use({ viewport: { width: 1720, height: 1000 } })
+
+    test('choosing the last row keeps it in view, with its item open at the top of the page', async ({ page }) => {
+        await page.goto('attention')
+        await settled(page)
+        const list = page.getByTestId('attention-list')
+        const last = list.getByRole('link').last()
+        // The list fits the window and scrolls in itself, so the page has nothing of its own to scroll.
+        await last.scrollIntoViewIfNeeded()
+        await expect(last).toBeInViewport({ ratio: 1 })
+        const scrolled = await list
+            .getByRole('region', { name: 'Attention items' })
+            .evaluate((region) => region.scrollTop)
+        expect(scrolled).toBeGreaterThan(0)
+
+        await last.click()
+        await expect(last).toHaveAttribute('aria-current', 'page')
+        const detail = page.getByTestId('attention-detail')
+        await expect(detail).toContainText('lodash-advisory')
+        await expect(last).toBeInViewport({ ratio: 1 })
+        await expect(detail).toBeInViewport()
+        await expect.poll(() => scrollTop(page)).toBe(0)
+        await expect(last).toBeInViewport({ ratio: 1 })
+    })
+
+    test("a link to a low item opens with its row in the list's view, and the page at its top", async ({ page }) => {
+        await page.setViewportSize({ width: 1720, height: 560 })
+        await page.goto('attention')
+        await settled(page)
+        const last = page.getByTestId('attention-list').getByRole('link').last()
+        await page.goto((await last.getAttribute('href')) ?? 'attention')
+        await settled(page)
+        await expect(last).toHaveAttribute('aria-current', 'page')
+        await expect(last).toBeInViewport()
+        await expect(page.getByTestId('attention-detail')).toContainText('lodash-advisory')
+        expect(await scrollTop(page)).toBe(0)
+    })
+
+    test('an item that leaves hands the selection to the row that took its place', async ({ page }) => {
+        await page.setViewportSize({ width: 1720, height: 560 })
+        await holdAttentionList(page)
+        await page.goto('attention')
+        await settled(page)
+        const list = page.getByTestId('attention-list')
+        const rows = list.getByRole('link')
+        await rows.filter({ hasText: 'task ticket unrecorded' }).click()
+        await expect(rows.filter({ hasText: 'task ticket unrecorded' })).toHaveAttribute('aria-current', 'page')
+
+        const items = await page.request.get('api/attention')
+        const listed = (await items.json()) as { reason: string }[]
+        await sendAttentionList(
+            page,
+            listed.filter((item) => item.reason !== 'task_ticket_unrecorded'),
+        )
+        const next = rows.filter({ hasText: 'lodash-advisory' })
+        await expect(next).toHaveAttribute('aria-current', 'page')
+        await expect(next).toBeInViewport()
+        await expect(page.getByTestId('attention-detail')).toContainText('lodash-advisory')
+    })
+
+    test('an item taller than the window is reached whole, its list beside it', async ({ page }) => {
+        await padMessages(page, 'ABC-102', 30)
+        await page.setViewportSize({ width: 1720, height: 560 })
+        await page.goto('attention')
+        await settled(page)
+        const list = page.getByTestId('attention-list')
+        const row = list.getByRole('link').filter({ hasText: 'awaiting reply' }).filter({ hasText: 'ABC-102' })
+        await row.click()
+        const detail = page.getByTestId('attention-detail')
+        const actions = detail.getByTestId('attention-actions')
+        await expect(actions).toBeVisible()
+        await expect.poll(() => detail.evaluate((el) => el.getBoundingClientRect().height)).toBeGreaterThan(560)
+
+        // The page's own scroll carries the item, to its last control, while the list stays beside it.
+        await page.getByRole('heading', { level: 1 }).hover()
+        await expect(async () => {
+            await page.mouse.wheel(0, 2000)
+            await expect(actions).toBeInViewport({ ratio: 1 })
+        }).toPass()
+        await expect(row).toBeInViewport()
+        // A refetch of the ticket can still be in the padding route when the page closes (padMessages).
+        await page.unrouteAll({ behavior: 'ignoreErrors' })
+    })
+})
+
 test.describe('on half a monitor', () => {
     test.use({ viewport: { width: 820, height: 900 } })
 
@@ -434,12 +512,12 @@ test.describe('on half a monitor', () => {
         const detail = page.getByTestId('attention-detail')
         await expect(detail).toBeHidden()
         const listBox = await list.boundingBox()
-        const counters = await page.getByTestId('counters').boundingBox()
-        if (listBox === null || counters === null) {
+        const header = await page.getByRole('main').locator('header').boundingBox()
+        if (listBox === null || header === null) {
             throw new Error('the list is not drawn')
         }
-        // As wide as the counters above it, within a pixel.
-        expect(Math.abs(listBox.width - counters.width)).toBeLessThanOrEqual(1)
+        // As wide as the page's header above it, within a pixel.
+        expect(Math.abs(listBox.width - header.width)).toBeLessThanOrEqual(1)
 
         await list.getByRole('link').filter({ hasText: 'awaiting reply' }).filter({ hasText: 'ABC-102' }).click()
         await expect(list).toBeHidden()
@@ -479,6 +557,69 @@ test.describe('on half a monitor', () => {
         ).toBeInViewport()
     })
 })
+
+test("the last item's row plays its exit, with no detail, and then the all clear rises in", async ({ page }) => {
+    // The page's clock stands still through the exit, so what it holds is read however slow the runner. One step lets
+    // the query's change out, which it sends on a timer.
+    await page.clock.install()
+    await lastItemListed(page)
+    await page.clock.pauseAt(Date.now() + 1000)
+    await clearAttentionList(page)
+    await page.clock.runFor(1)
+
+    const list = page.getByTestId('attention-list')
+    const clear = page.getByTestId('all-clear')
+    await expect(list.locator('li[data-leaving]')).toHaveCount(1)
+    await expect(page.getByTestId('attention-count')).toHaveText('0')
+    await expect(list.getByRole('link')).toHaveCount(0)
+    await expect(page.getByTestId('attention-detail')).toHaveCount(0)
+    await expect(page.locator('main [data-slot=skeleton]')).toHaveCount(0)
+    await expect(clear).toHaveCount(0)
+
+    await page.clock.resume()
+    await expect(clear).toBeVisible()
+    await expect(list).toHaveCount(0)
+    expect(await arrival(clear)).toBe('rise')
+})
+
+test('under reduced motion the all clear replaces the last item at once', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await lastItemListed(page)
+    await clearAttentionList(page)
+    await expect(page.getByTestId('all-clear')).toBeVisible()
+    await expect(page.getByTestId('attention-list')).toHaveCount(0)
+})
+
+test('a list read empty shows the all clear with no exit and no arrival', async ({ page }) => {
+    await holdAttentionList(page)
+    await page.route('**/api/attention', (route) => route.fulfill({ json: [] }))
+    await page.goto('attention')
+    const clear = page.getByTestId('all-clear')
+    await expect(clear).toBeVisible()
+    await expect(page.locator('li[data-leaving]')).toHaveCount(0)
+    expect(await arrival(clear)).toBe('none')
+})
+
+/** Opens the page on one item, which the stream leaves listed until the test empties the list. */
+async function lastItemListed(page: Page): Promise<void> {
+    await holdAttentionList(page)
+    await page.route('**/api/attention', async (route) => {
+        const items = (await (await route.fetch()).json()) as unknown[]
+        await route.fulfill({ json: items.slice(0, 1) })
+    })
+    await page.goto('attention')
+    await expect(page.getByTestId('attention-list').getByRole('link')).toHaveCount(1)
+}
+
+/** The animation the page's column gives the block that holds `all clear`, `none` when it plays nothing. */
+function arrival(clear: Locator): Promise<string> {
+    return clear.locator('..').evaluate((block) => getComputedStyle(block).animationName)
+}
+
+/** How far the page has scrolled under the header, in the scroller the shell gives it. */
+function scrollTop(page: Page): Promise<number> {
+    return page.locator('.page-scroll').evaluate((scroller) => scroller.scrollTop)
+}
 
 /** Presses Tab until the focus leaves `region`, which holds at most a few dozen stops. */
 async function tabOutOf(page: Page, region: Locator): Promise<void> {

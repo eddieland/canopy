@@ -514,6 +514,25 @@ class ReviewItem(StrEnum):
     COMMENT = "comment"
 
 
+class PassReason(StrEnum):
+    """Why a unit's `review` cursor passed feedback no worker was sent, `passed_reviews.reason` (DESIGN §7)."""
+
+    #: The reviewer said it needs no change: a nit, a thought, an aside.
+    OPTIONAL = "optional"
+    #: A push for it would dismiss the approval the PR has, so the operator decides.
+    WOULD_RESET_APPROVAL = "would_reset_approval"
+    #: It asks a question rather than for a change.
+    QUESTION = "question"
+    #: The PR's head already does what it asks.
+    ALREADY_DONE = "already_done"
+    #: It asks for work beyond the ticket's.
+    OUT_OF_SCOPE = "out_of_scope"
+    #: An operator message said to leave it.
+    OPERATOR_SAID = "operator_said"
+    #: Its thread was resolved: the harness's alone, since no judgment is made.
+    RESOLVED = "resolved"
+
+
 class NumberedItem(StrEnum):
     """What a journal number names, `item_numbers.kind` (DESIGN §35): what a cursor passes."""
 

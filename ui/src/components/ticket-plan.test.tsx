@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, createRootRoute, createRouter, RouterContextProvider } from '@tanstack/react-router'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
 import { keys } from '@/api/queries'
@@ -43,6 +43,8 @@ const PLANS: TicketPlans = {
     plans: [EARLIER, PLAN],
     newest: NEWEST,
 }
+// A plan in sections, as a planner writes one: a title, then `##` sections, which the Outline lets the operator mark.
+const SECTIONED = '# Plan: ABC-1 Export\n\n## Goal\n\nExport.\n\n## Risks\n\nNone.\n'
 const THREAD: PlanThreadView = {
     id: 9,
     quote: 'CSV writer',
@@ -51,6 +53,7 @@ const THREAD: PlanThreadView = {
     body: 'Which encoding?',
     at: '2026-10-08T11:10:00Z',
     resolved: false,
+    read: false,
     replies: [],
 }
 
@@ -128,13 +131,17 @@ function renderPlan(plans: Partial<TicketPlans> = {}) {
         routeTree: createRootRoute(),
         history: createMemoryHistory({ initialEntries: ['/tickets/ABC-1'] }),
     })
-    return render(
+    const page = (shown: Partial<TicketPlans>) => (
         <QueryClientProvider client={client}>
             <RouterContextProvider router={router}>
-                <TicketPlan ticketKey="ABC-1" plans={{ ...PLANS, ...plans }} />
+                <TicketPlan ticketKey="ABC-1" plans={{ ...PLANS, ...shown }} />
             </RouterContextProvider>
-        </QueryClientProvider>,
+        </QueryClientProvider>
     )
+    const rendered = render(page(plans))
+    // The same page with the plans read again, as a stream event would bring them.
+    const replan = (next: Partial<TicketPlans>) => rendered.rerender(page(next))
+    return { ...rendered, replan }
 }
 
 // The plan's editor, through the handle Tiptap leaves on it for tests: an edit there is the operator typing.
@@ -167,6 +174,23 @@ function button(name: string): HTMLButtonElement {
     return screen.getByRole('button', { name })
 }
 
+// Opens the Outline menu by its button's name, which counts the sections left to read.
+function openOutline(name: string): HTMLElement {
+    fireEvent.pointerDown(button(name), { button: 0, ctrlKey: false })
+    return screen.getByRole('menu')
+}
+
+// The Outline's button by its name: while its menu is open, Radix hides the rest of the page from a screen reader, the
+// button included.
+function outline(name: string): HTMLElement {
+    return screen.getByRole('button', { name, hidden: true })
+}
+
+// Whether the open menu's mark `name` is on, as its aria-checked says.
+function checked(menu: HTMLElement, name: string): string | null {
+    return within(menu).getByRole('menuitemcheckbox', { name }).getAttribute('aria-checked')
+}
+
 function writes(): string[] {
     return sent.map((request) => `${request.method} ${request.path}`)
 }
@@ -189,8 +213,8 @@ describe('TicketPlan', () => {
             renderPlan({ threads: [THREAD, { ...THREAD, id: 10 }] })
             expect(
                 screen.getByText(
-                    '2 open comments go with Ask for changes. Approving sends none of them: the implement reads the ' +
-                        'plan alone.',
+                    '2 open comments go with Ask for changes. Approve sends them to the implement instead, and ' +
+                        'resolves them.',
                 ),
             ).toBeDefined()
         })
@@ -305,20 +329,151 @@ describe('TicketPlan', () => {
         expect(screen.queryByTestId('plan-approved')).toBeNull()
     })
 
-    it('asks before approving while the note holds words, which only Ask for changes sends', async () => {
-        renderPlan()
+    it('approves with notes: the note and open comments go to the implement, and the comments resolve', async () => {
+        renderPlan({ threads: [THREAD] })
         fireEvent.change(screen.getByRole('textbox', { name: 'On the whole plan' }), {
             target: { value: 'Name the timezone.' },
         })
-        fireEvent.click(button('Approve'))
-        expect(screen.getByText('Approve without your note? It goes only with Ask for changes.')).toBeDefined()
-        expect(document.activeElement).toBe(button('Keep'))
-        expect(sent).toEqual([])
-        fireEvent.click(button('Approve'))
+        fireEvent.click(button('Approve with notes'))
         // The line under the actions gives way to the approval's moment, which says it.
         expect((await screen.findByTestId('plan-approved')).textContent).toContain(
-            'Plan 2 of ABC-1 is approved as its file stands now. The next tick can implement it.',
+            'Plan 2 of ABC-1 is approved as its file stands now. The next tick can implement it. Your notes went ' +
+                'with it, to its implement.',
         )
+        const [approved, resolved] = sent
+        expect(approved).toMatchObject({ method: 'POST', path: '/api/tickets/ABC-1/plan' })
+        expect(approved?.body).toEqual({
+            action: 'approve',
+            message: expect.stringMatching(
+                // The comment on its passage, then the note.
+                /^Where I commented.*\n\n1\. On "CSV writer":\n.*On the whole plan:\nName the timezone\.$/su,
+            ) as unknown,
+        })
+        expect(resolved).toEqual({
+            method: 'PATCH',
+            path: '/api/tickets/ABC-1/plan-threads/9',
+            body: { resolved: true },
+        })
+    })
+
+    describe("the plan's open decisions", () => {
+        const DECIDING = [
+            '# Plan',
+            '',
+            'Add the CSV writer.',
+            '',
+            '## Decisions',
+            '',
+            '### Decision 1: Which encoding the file is in',
+            '',
+            '- **A (chosen):** UTF-8, as the other exports are.',
+            '- **B:** Latin-1, for the old spreadsheet.',
+            '',
+        ].join('\n')
+        const ANSWER = 'Decision 1 (Which encoding the file is in): take B, not A.'
+
+        function renderDeciding(plans: Partial<TicketPlans> = {}) {
+            return renderPlan({ newest: { ...NEWEST, text: DECIDING }, ...plans })
+        }
+
+        it("offers each, the planner's choice picked, and sends nothing while it stays picked", async () => {
+            renderDeciding()
+            const decisions = screen.getByRole('region', { name: 'Open decisions' })
+            const group = within(decisions).getByRole('radiogroup', {
+                name: 'Decision 1: Which encoding the file is in',
+            })
+            const radios = within(group).getAllByRole<HTMLButtonElement>('radio')
+            expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['true', 'false'])
+            expect(within(group).getByRole('radio', { name: /^A: UTF-8.*, recommended$/u })).toBe(radios[0])
+            fireEvent.click(button('Approve'))
+            await screen.findByTestId('plan-approved')
+            expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
+        })
+
+        it('approves with another option picked as a note for the implement', async () => {
+            renderDeciding()
+            fireEvent.click(screen.getByRole('radio', { name: /^B: Latin-1/u }))
+            expect(screen.getByText(/^1 answer goes with Approve, to the implement/u)).toBeDefined()
+            fireEvent.click(button('Approve with notes'))
+            await screen.findByTestId('plan-approved')
+            expect(sent).toEqual([
+                { method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve', message: ANSWER } },
+            ])
+        })
+
+        it("asks for changes with another option picked, and picks the planner's again once asked", async () => {
+            renderDeciding()
+            fireEvent.click(screen.getByRole('radio', { name: /^B: Latin-1/u }))
+            fireEvent.submit(screen.getByRole('form', { name: 'Ask for changes' }))
+            await screen.findByRole('status')
+            expect(sent).toEqual([
+                {
+                    method: 'POST',
+                    path: '/api/tickets/ABC-1/replies',
+                    body: expect.objectContaining({ body: ANSWER }) as unknown,
+                },
+            ])
+            expect(screen.getByRole('radio', { name: /^A: UTF-8/u }).getAttribute('aria-checked')).toBe('true')
+        })
+
+        it('says from the foot how many wait, and once some are answered, how many of them', () => {
+            renderDeciding()
+            const bar = within(screen.getByTestId('plan-bar'))
+            expect(bar.getByRole('button', { name: '1 open decision' })).toBeDefined()
+            fireEvent.click(screen.getByRole('radio', { name: /^B: Latin-1/u }))
+            expect(bar.queryByRole('button', { name: '1 open decision' })).toBeNull()
+            expect(bar.getByRole('button', { name: 'Open decisions: 1 of 1 answered' })).toBeDefined()
+        })
+
+        it('goes from the foot to the panel, not to the Decisions in the plan, and focuses it', () => {
+            const scrolled = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
+            renderDeciding()
+            fireEvent.click(within(screen.getByTestId('plan-bar')).getByRole('button', { name: '1 open decision' }))
+            const panel = screen.getByRole('region', { name: 'Open decisions' })
+            expect(scrolled).toHaveBeenCalledWith({ block: 'nearest' })
+            expect(scrolled.mock.contexts).toEqual([panel])
+            expect(document.activeElement).toBe(panel)
+        })
+
+        it("counts the plan's Decisions as they read now, in Markdown too", () => {
+            renderDeciding()
+            fireEvent.click(screen.getByRole('radio', { name: /^B: Latin-1/u }))
+            fireEvent.click(button('Markdown'))
+            const more = [
+                '### Decision 2: Where the file is written',
+                '',
+                '- **A (chosen):** Beside the report.',
+                '- **B:** In the exports folder.',
+                '',
+            ].join('\n')
+            fireEvent.change(screen.getByRole('textbox', { name: 'Plan as Markdown' }), {
+                target: { value: `${DECIDING}\n${more}` },
+            })
+            const bar = within(screen.getByTestId('plan-bar'))
+            expect(bar.getByRole('button', { name: 'Open decisions: 1 of 2 answered' })).toBeDefined()
+            fireEvent.change(screen.getByRole('textbox', { name: 'Plan as Markdown' }), { target: { value: TEXT } })
+            expect(bar.queryByRole('button', { name: /open decision|answered/iu })).toBeNull()
+        })
+
+        it('shows none for a plan that waits on no answer, or that asks none in their shape', () => {
+            const approved = { ...PLAN, status: 'approved' as const }
+            const { unmount } = renderDeciding({
+                plans: [EARLIER, approved],
+                newest: { ...NEWEST, text: DECIDING, plan: approved },
+            })
+            expect(screen.queryByRole('region', { name: 'Open decisions' })).toBeNull()
+            expect(screen.queryByRole('button', { name: /open decision|answered/iu })).toBeNull()
+            unmount()
+            renderPlan()
+            expect(screen.queryByRole('radiogroup')).toBeNull()
+            expect(screen.queryByRole('button', { name: /open decision|answered/iu })).toBeNull()
+        })
+    })
+
+    it('approves with nothing more while there are no notes', async () => {
+        renderPlan()
+        fireEvent.click(button('Approve'))
+        await screen.findByTestId('plan-approved')
         expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
     })
 
@@ -359,6 +514,17 @@ describe('TicketPlan', () => {
         renderPlan({ planning: 51 })
         expect(screen.getByRole('textbox', { name: 'Plan' }).getAttribute('contenteditable')).toBe('false')
         expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+    })
+
+    it('counts no edit when the plan turns read only and back, and Ctrl+S saves nothing then', () => {
+        const { replan } = renderPlan()
+        replan({ planning: 51 })
+        replan({ planning: null })
+        expect(screen.queryByText('Unsaved edits')).toBeNull()
+        expect(button('Approve')).toBeDefined()
+
+        fireEvent.keyDown(document, { key: 's', ctrlKey: true })
+        expect(sent).toEqual([])
     })
 
     it('says an edit is unsaved, and saves it over the file as read, refused if the file changed', async () => {
@@ -428,6 +594,36 @@ describe('TicketPlan', () => {
         expect(sent[1]?.body).toMatchObject({ body: expect.stringMatching(/^Split it in two\./u) as unknown })
     })
 
+    it('asks for changes with the open comments, and marks them sent once the request is recorded', async () => {
+        renderPlan({ threads: [THREAD] })
+        fireEvent.submit(screen.getByRole('form', { name: 'Ask for changes' }))
+        await screen.findByRole('status')
+        expect(writes()).toEqual(['POST /api/tickets/ABC-1/replies', 'PATCH /api/tickets/ABC-1/plan-threads/9'])
+        expect(sent[1]?.body).toEqual({ sent: true })
+    })
+
+    it('says the request is recorded though a comment could not be marked sent, so it is not sent twice', async () => {
+        answers['PATCH /api/tickets/ABC-1/plan-threads/9'] = Response.json(
+            { detail: { guard: 'unknown', reason: 'ABC-1 has no plan comment 9' } },
+            { status: 409 },
+        )
+        renderPlan({ threads: [THREAD] })
+        fireEvent.submit(screen.getByRole('form', { name: 'Ask for changes' }))
+        expect((await screen.findByRole('status')).textContent).toMatch(/^Recorded message 6 on ABC-1/u)
+        expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it('approves without the comments a planner has read, which the plan already answers', async () => {
+        renderPlan({ threads: [{ ...THREAD, read: true }] })
+        const card = screen.getByRole('article', { name: 'Comment on “CSV writer”' })
+        expect(within(card).getByText('planner read')).toBeDefined()
+        expect(screen.getByText(/The one a planner has read stays out\.$/u)).toBeDefined()
+        // Nothing left to send, so the approval carries no notes and resolves nothing.
+        fireEvent.click(button('Approve'))
+        await screen.findByTestId('plan-approved')
+        expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
+    })
+
     it('saves a change to a comment as it is made', async () => {
         renderPlan({ threads: [THREAD] })
         const card = screen.getByRole('article', { name: 'Comment on “CSV writer”' })
@@ -477,5 +673,52 @@ describe('TicketPlan', () => {
         const opened = screen.getAllByRole('textbox', { name: 'Plan' })[1]
         expect(opened?.textContent).toBe('PlanShow the CSV.')
         expect(opened?.getAttribute('contenteditable')).toBe('false')
+    })
+
+    describe('section marks', () => {
+        beforeEach(() => localStorage.clear())
+
+        it('counts the sections left to read, and marks each read or a concern, the outline staying open', () => {
+            renderPlan({ newest: { ...NEWEST, text: SECTIONED } })
+            const menu = openOutline('Outline 2 left')
+            // The title heads no section: only a `##` has marks.
+            expect(
+                within(menu)
+                    .getAllByRole('menuitemcheckbox')
+                    .map((item) => item.getAttribute('aria-label')),
+            ).toEqual(['Goal: read', 'Goal: a concern', 'Risks: read', 'Risks: a concern'])
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Goal: read' }))
+            expect(checked(menu, 'Goal: read')).toBe('true')
+            expect(outline('Outline 1 left')).toBeDefined()
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Risks: a concern' }))
+            expect(outline('Outline all read · 1 concern')).toBeDefined()
+            // One mark a section: read clears the concern, and read again clears itself.
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Risks: read' }))
+            expect([checked(menu, 'Risks: read'), checked(menu, 'Risks: a concern')]).toEqual(['true', 'false'])
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Risks: read' }))
+            expect(outline('Outline 1 left')).toBeDefined()
+            // A note to yourself: the planner hears nothing of it.
+            expect(sent).toEqual([])
+        })
+
+        it('keeps the mark of a section a new plan left as it was, and drops one it rewrote', () => {
+            renderPlan({ newest: { ...NEWEST, text: SECTIONED } })
+            const menu = openOutline('Outline 2 left')
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Goal: read' }))
+            fireEvent.click(within(menu).getByRole('menuitemcheckbox', { name: 'Risks: a concern' }))
+            cleanup()
+
+            const next: PlanFile = { ...NEWEST, plan: { ...PLAN, id: 3 }, text: SECTIONED.replace('None.', 'Some.') }
+            renderPlan({ plans: [EARLIER, PLAN, next.plan], newest: next })
+            const reopened = openOutline('Outline 1 left')
+            expect(checked(reopened, 'Goal: read')).toBe('true')
+            expect(checked(reopened, 'Risks: a concern')).toBe('false')
+        })
+
+        it('marks nothing on a plan with no sections', () => {
+            renderPlan()
+            expect(button('Outline')).toBeDefined()
+            expect(within(openOutline('Outline')).queryAllByRole('menuitemcheckbox')).toEqual([])
+        })
     })
 })

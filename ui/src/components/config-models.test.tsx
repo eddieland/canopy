@@ -33,7 +33,7 @@ const MODELS: Models = {
 // Every path the panel reads, and what the server stand-in answers each.
 let sent: string[] = []
 let models: Models = MODELS
-let listed: ModelList | Response = { models: ['acme/deep-2', 'acme/fast-1'], variants: {}, error: null }
+let listed: ModelList | Response = { models: ['acme/deep-2', 'acme/fast-1'], variants: {}, hidden: [], error: null }
 
 const server: Middleware = {
     onRequest({ request }) {
@@ -49,7 +49,7 @@ const server: Middleware = {
 beforeEach(() => {
     sent = []
     models = MODELS
-    listed = { models: ['acme/deep-2', 'acme/fast-1'], variants: {}, error: null }
+    listed = { models: ['acme/deep-2', 'acme/fast-1'], variants: {}, hidden: [], error: null }
     api.use(server)
 })
 
@@ -125,8 +125,21 @@ describe('ConfigModels', () => {
         expect(sent).toEqual(['/api/config/models', '/api/models'])
     })
 
+    it('leaves out what runtime.hide_models hides, as canopy models does', async () => {
+        listed = { models: ['acme/deep-2', 'acme/fast-1'], variants: {}, hidden: ['acme/fast-1'], error: null }
+        renderPanel()
+        await rows()
+        fireEvent.click(screen.getByRole('button', { name: "Show the runtime's models" }))
+        const list = await screen.findByRole('list', { name: "The runtime's models" })
+        expect(
+            within(list)
+                .getAllByRole('listitem')
+                .map((item) => item.textContent),
+        ).toEqual(['acme/deep-2'])
+    })
+
     it('says why the list could not be read', async () => {
-        listed = { models: [], variants: {}, error: '`opencode models` exited 1' }
+        listed = { models: [], variants: {}, hidden: [], error: '`opencode models` exited 1' }
         renderPanel()
         await rows()
         fireEvent.click(screen.getByRole('button', { name: "Show the runtime's models" }))

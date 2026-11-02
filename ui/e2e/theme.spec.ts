@@ -245,8 +245,11 @@ test.describe('the guide under a mono palette', () => {
 
     for (const [theme, palette] of [
         ['dark', 'gruvbox'],
+        ['dark', 'pulp'],
         ['dark', 'monokai'],
         ['light', 'gruvbox'],
+        ['light', 'pulp'],
+        ['light', 'acme'],
     ] as const) {
         test(`${theme} ${palette} sets the app in mono and the guide in Plex Sans`, async ({ page }) => {
             await storeTheme(page, theme)

@@ -65,6 +65,10 @@ _HEADING_RE = re.compile(r"#{1,6}(?:[ \t]|$)")
 _FENCE_RE = re.compile(r"(`{3,}|~{3,})")
 _MAX_INDENT = 3
 
+#: The most characters of the operator's note an approval carries to the plan's implement, within an operator message's
+#: bound after the sentence that names the plan (DESIGN §25, Approving a plan).
+MAX_NOTE = conversation.MAX_OPERATOR - 200
+
 #: The channel a plan's approval names when the harness approved it on its planner's word that it needs no review,
 #: under `policy.planner_may_approve`: the planner's approval, never the operator's (DESIGN §25).
 PLANNER = "planner"
@@ -599,11 +603,22 @@ def history(conn: sqlite3.Connection, key: str) -> list[records.Plan]:
     return records.select(records.Plan).where("ticket_key = ?", key).order_by("id").all(conn)
 
 
-def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str, dispatch_lock: Path) -> records.Plan:
+def approve(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    key: str,
+    *,
+    channel: str,
+    dispatch_lock: Path,
+    note: str | None = None,
+) -> records.Plan:
     """Approve the ticket's current plan as its file stands now, the operator's edits included, recording its hash.
 
     An operator message newer than the plan, asking for changes, does not stop it: an approval before the new plan run
-    starts is the operator's later word (DESIGN §25, Approving a plan).
+    starts is the operator's later word (DESIGN §25, Approving a plan). With a `note`, the approval writes it on the
+    ticket as an operator message, in the same transaction, after a sentence naming the plan: the message is the
+    operator's instruction, which the `implement` reads beside the plan, so a small point needs no new plan. Written
+    after the approval, it asks for no changes (`changes_asked`), and it answers no question a run asked.
 
     Returns:
         The approved plan's row.
@@ -611,9 +626,11 @@ def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str
     Raises:
         Refused: `inside_run` inside one of canopy's own ticks or runs; `bad_plan` while a plan run for the ticket is
             running, when it has no current plan, when that plan is approved and its file has not changed since, or
-            when its file is missing, not a regular file, unreadable, or no longer a plan.
+            when its file is missing, not a regular file, unreadable, or no longer a plan; `bad_body` for a `note`
+            empty or over `MAX_NOTE`.
     """
     conversation.check_operator()
+    said = _note(note)
     with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
         _not_planning(conn, key)
         plan = current(conn, key)
@@ -637,7 +654,48 @@ def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str
             .where("id = ?", plan.id)
             .returned(conn)
         )
+        if said is not None:
+            conversation.write_reply(
+                conn,
+                conversation.Ref(conversation.TICKET, key),
+                approval_note(plan.id, said),
+                channel=channel,
+                # Distinct for each note: a plan approved again after an edit may carry a note of its own.
+                submission=f"plan/{plan.id}/after/{db.latest_message_id(conn)}",
+                answers=False,
+            )
     return approved
+
+
+def approval_note(plan_id: int, note: str) -> str:
+    """Return the operator message an approval with a note writes: a sentence naming the plan, then the note.
+
+    The plan is named, never quoted: its text is data, and this message is the instruction (TRUST_MODEL T1).
+
+    Returns:
+        The message.
+    """
+    lead = f"Plan {plan_id} is approved. Follow it with these notes, which come first where the two differ:"
+    return f"{lead}\n\n{note}"
+
+
+def _note(note: str | None) -> str | None:
+    """The operator's note for an approval, stripped, or None when they gave none.
+
+    Returns:
+        The note.
+
+    Raises:
+        Refused: (`bad_body`) for a note that is empty or over `MAX_NOTE`.
+    """
+    if note is None:
+        return None
+    text = note.strip()
+    if not text:
+        raise Refused("bad_body", "the note is empty; leave it out to approve with none")
+    if len(text) > MAX_NOTE:
+        raise Refused("bad_body", f"the note is {len(text)} characters; the most is {MAX_NOTE}")
+    return text
 
 
 def save(

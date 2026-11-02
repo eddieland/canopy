@@ -9,6 +9,7 @@ it as text.
 
 from __future__ import annotations
 
+import functools
 import json
 from datetime import timedelta
 from pathlib import Path
@@ -22,6 +23,7 @@ from canopy.core import (
     db,
     items,
     notice,
+    passed_reviews,
     pause,
     personas,
     plans,
@@ -32,7 +34,7 @@ from canopy.core import (
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunKind, RunStatus
-from canopy.runs import attachments
+from canopy.runs import attachments, drafts
 from canopy.serve import checklist_views, draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,
@@ -70,7 +72,7 @@ from canopy.serve.schema import (
 from canopy.serve.schema.model import AgentModel
 from canopy.serve.schema.persona import AgentPersona, PersonaChoice
 from canopy.serve.schema.spend import SpendModel
-from canopy.serve.schema.ticket import TicketDetail, TicketForget, Unit
+from canopy.serve.schema.ticket import LeftFeedback, TicketDetail, TicketForget, Unit
 from canopy.serve.transcript_views import raw_output, removed_after, session_transcript
 
 if TYPE_CHECKING:
@@ -718,7 +720,40 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         models=[agent_model(n, served) for n in ticket_models.next_for(ctx.conn, ctx.config, key)],
         worker_models=_worker_models(backend, ctx, key),
         attachments=attachments_of(ctx, conversation.Ref(conversation.TICKET, key)),
+        left_feedback=[left_feedback(p) for p in _left(ctx, key)],
     )
+
+
+def left_feedback(item: passed_reviews.Left) -> LeftFeedback:
+    """Feedback a ticket left with no worker, as the API sends it.
+
+    Returns:
+        It, with why it was left and the tick that left it.
+    """
+    return LeftFeedback(
+        number=item.number,
+        repo=item.repo,
+        pr_url=item.pr_url,
+        item=item.item.value,
+        id=item.id,
+        author=item.author,
+        path=item.path,
+        line=item.line,
+        url=item.url,
+        reason=item.reason.value,
+        decider=item.decider.value,
+        tick_id=item.tick_id,
+    )
+
+
+def _left(ctx: Context, key: str) -> list[passed_reviews.Left]:
+    """The feedback on ticket `key`'s PRs left with no worker, as `canopy show` lists it.
+
+    Returns:
+        Each item still left, oldest first.
+    """
+    sent_by = functools.partial(drafts.sent_by_pr, ctx.conn)
+    return passed_reviews.left(ctx.conn, ctx.config.trust, sent_by, [key]).get(key, [])
 
 
 def attachments_of(ctx: Context, ref: conversation.Ref) -> Attachments:

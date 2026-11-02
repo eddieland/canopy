@@ -37,6 +37,7 @@ from canopy.core import (
     config,
     conversation,
     db,
+    item_numbers,
     pools,
     records,
     review_runs,
@@ -45,7 +46,7 @@ from canopy.core import (
 )
 from canopy.core.context import db_path
 from canopy.core.items import Item
-from canopy.core.vocab import RunKind, RunStatus
+from canopy.core.vocab import Decider, NumberedItem, PassReason, ReviewItem, RunKind, RunStatus
 from canopy.infra import resources
 from canopy.runtime.report import ModelList
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
@@ -376,11 +377,65 @@ def seed(directory: Path) -> Backend:
             feedback_plans.seed_answered(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
             _every_kind(ctx.conn)
             review_waits.seed(ctx.conn, at)
+            _left_feedback(ctx.conn)
             # Last, so its runs take ids after every other fixture's.
             plan_approvals.seed(ctx.conn, ws.state_dir, root)
         reviews.drafts(ctx.conn, at)
     transcripts.write(ws.state_dir, T0)
     return backend
+
+
+#: The review comments on ABC-103's PR 91 tick 2 passed with no worker: id, author, path, line, why, and the words.
+_LEFT = (
+    (2_468_020_011, "carol", "src/billing/client.ts", 42, PassReason.OPTIONAL, "Nit: `fetchInvoices` could be `list`."),
+    (
+        2_468_020_037,
+        "carol",
+        "src/billing/v1.ts",
+        8,
+        PassReason.WOULD_RESET_APPROVAL,
+        "Could the v1 shim go in a follow-up instead?",
+    ),
+)
+
+
+def _left_feedback(conn: sqlite3.Connection) -> None:
+    """Give ABC-103 review comments on its PR that tick 2 left with no worker, so its page shows them (DESIGN §7)."""
+    url = "https://github.com/acme/web/pull/91"
+    for ident, author, path, line, reason, body in _LEFT:
+        number = item_numbers.take(conn, NumberedItem.REVIEW_COMMENT, url, ident, at=at(-62))
+        records.insert(
+            records.ObservedReview,
+            pr_url=url,
+            item=ReviewItem.COMMENT,
+            id=ident,
+            author=author,
+            bot=0,
+            created_at=at(-64),
+            body=body,
+            url=f"{url}#discussion_r{ident}",
+            thread_id=f"PRRT_kwDOB{ident % 100}",
+            path=path,
+            line=line,
+            side="right",
+            outdated=0,
+            resolved=0,
+            observed_at=at(-62),
+            number=number,
+        ).run(conn)
+        records.insert(
+            records.PassedReview,
+            pr_url=url,
+            item=ReviewItem.COMMENT,
+            id=ident,
+            number=number,
+            ticket_key="ABC-103",
+            repo="web",
+            tick_id=2,
+            reason=reason,
+            decider=Decider.OVERSEER,
+            passed_at=at(-60),
+        ).run(conn)
 
 
 def _every_kind(conn: sqlite3.Connection) -> None:

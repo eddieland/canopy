@@ -107,6 +107,10 @@ export type Dismissed = Schemas['Dismissed']
 export type ReviewDismissed = Schemas['ReviewDismissed']
 /** What sending a review's findings recorded: the operator message on the review's ticket that names them. */
 export type ReviewSent = Schemas['ReviewSent']
+/** Feedback on a ticket's PR its review cursor passed with no worker, still left, and why (DESIGN §7). */
+export type LeftFeedback = Schemas['LeftFeedback']
+/** What sending left feedback recorded: the operator message on the ticket that names it. */
+export type LeftSent = Schemas['LeftSent']
 /** What a mark of subjects seen recorded: every subject named, and the ones not seen before. */
 export type SeenMarked = Schemas['SeenMarked']
 /** One message on the event stream, told apart by its `type` (`applyStreamEvent` in live.ts). */

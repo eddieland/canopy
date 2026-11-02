@@ -15,6 +15,7 @@ what a revision of the review's draft should change, and `grant` allows its draf
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import sys
 from datetime import UTC, datetime
@@ -32,6 +33,7 @@ from canopy.core import (
     conversation,
     db,
     notice,
+    passed_reviews,
     pause,
     personas,
     plan_threads,
@@ -42,13 +44,13 @@ from canopy.core import (
     review_revisions,
     review_runs,
 )
-from canopy.core.vocab import DismissalReason, PlanItem, PlanSetting, PlanStatus, ReviewRunStatus, RunKind
+from canopy.core.vocab import Decider, DismissalReason, PlanItem, PlanSetting, PlanStatus, ReviewRunStatus, RunKind
 from canopy.infra import lock, logs
 from canopy.infra.text import one_line
 from canopy.loop import attention, readback
 from canopy.loop.render import phase_of
 from canopy.reviews import grants, review_requests
-from canopy.runs import feedback_items, feedback_plans, halt, policy
+from canopy.runs import drafts, feedback_items, feedback_plans, halt, policy
 from canopy.runtime import models as runtime_models
 
 if TYPE_CHECKING:
@@ -132,7 +134,8 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
 
     Workers that build, fix CI, or resume, reviews, and chores hear it in their prompts, and the overseer holds a
     failed check it explains rather than spending a resume attempt on it. A run already running keeps the prompt it
-    started with. Setting a notice replaces the one in force. Without TEXT or --clear, prints the one in force.
+    started with. Setting a notice replaces the one in force. Without TEXT or --clear, prints the one in force. TEXT
+    `-` reads the notice from stdin.
     """
     if clear and (text is not None or duration is not None):
         raise click.UsageError("--clear takes no TEXT or --for")
@@ -154,9 +157,10 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
         log.info("notice cleared", extra={"channel": CLI, "notice": ended.id})
         click.echo("Notice cleared: runs dispatched from now on hear none. The loop ticks soon.")
         return 0
+    body = sys.stdin.read() if text == "-" else text or ""
     try:
         minutes = notice.parse_duration(duration) if duration is not None else None
-        held = notice.set_notice(ctx.conn, text or "", minutes=minutes, channel=CLI)
+        held = notice.set_notice(ctx.conn, body, minutes=minutes, channel=CLI)
     except conversation.Refused as r:
         raise CliError(f"notice refused ({r.guard}): {r.reason}") from None
     log.info("notice set", extra={"channel": CLI, "notice": held.id, "lapses_at": held.lapses_at})
@@ -396,6 +400,8 @@ def _stop_review(click_ctx: click.Context, subject: Ref) -> int:
 def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     """Answer a ticket, a task, or a running agent, note to a chore, or revise a review's draft, with TEXT or stdin.
 
+    Without TEXT, or with TEXT `-`, the reply is read from stdin.
+
     On a ticket the next tick reads it and a waiting loop wakes. On a public ticket it is your word to the loop, read as
     an authorized reply is, and how you say what to do about an untrusted reviewer's comments (`untrusted_review`). It
     never reaches the ticket. On `task:N` it is your next instruction to the task, answering its run's question if one
@@ -411,7 +417,7 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     """
     _operator("reply")
     subject = _ref(ref, "reply")
-    body = text if text is not None else sys.stdin.read()
+    body = sys.stdin.read() if text in {None, "-"} else text
     ctx = open_context(click_ctx)
     if subject.kind == conversation.RUN or (subject.kind == conversation.REVIEW and _running_review(ctx, subject)):
         return _answer(ctx, subject, body)
@@ -713,20 +719,23 @@ def cmd_dismiss(
 
 
 @click.command("send")
-@click.argument("ref", metavar="review:ID")
+@click.argument("ref", metavar="review:ID|KEY")
 @click.argument("findings", metavar="N...", nargs=-1, required=True, type=int)
 @click.pass_context
 def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> int:
-    """Send findings N... of a review run (`review:ID`, by their numbers) to a worker.
+    """Send findings N... of a review run (`review:ID`), or feedback N... a ticket left with no worker (KEY), to one.
 
-    It replies on the review's ticket for you, naming the findings by number and the ones it leaves alone, as you would
-    with `canopy reply KEY`: the next tick reads it as your go-ahead and resumes a worker with the review's findings,
-    which addresses the ones it names, whether or not `trust.trusted_reviewers` lists `canopy:review`. A review of a PR
-    with no ticket refuses, as does a dismissed finding.
+    It replies on the ticket for you, as you would with `canopy reply KEY`: the next tick reads it as your go-ahead and
+    resumes a worker. For a review run, the reply names its findings by number and the ones it leaves alone, and the
+    worker gets the review's findings, whether or not `trust.trusted_reviewers` lists `canopy:review`; a review of a PR
+    with no ticket refuses, as does a dismissed finding. For a ticket, N... are the numbers `canopy show KEY` lists
+    under "Feedback left with no worker", and the reply names those items, whoever wrote them.
     """
     _operator("send")
     subject = _ref(ref, "send")
     ctx = open_context(click_ctx)
+    if subject.kind == conversation.TICKET:
+        return _send_left(ctx, subject.id, findings)
     try:
         sent = conversation.send(ctx.conn, subject, findings, channel=CLI)
     except conversation.Refused as r:
@@ -749,6 +758,28 @@ def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> i
         )
     else:
         click.echo(f"{subject} findings {numbers} already went to {sent.ticket} as message {sent.replied.message_id}.")
+    return 0
+
+
+def _send_left(ctx: Context, key: str, numbers: tuple[int, ...]) -> int:
+    """Send feedback ticket `key` left with no worker, by its numbers, to one."""
+    try:
+        sent_by = functools.partial(drafts.sent_by_pr, ctx.conn)
+        sent = passed_reviews.send(ctx.conn, ctx.config.trust, sent_by, key, numbers, channel=CLI)
+    except conversation.Refused as r:
+        raise CliError(f"send refused ({r.guard}): {r.reason}") from None
+    named = ", ".join(str(n) for n in sorted(set(numbers)))
+    logs.for_tick(None).info(
+        "left feedback sent",
+        extra={"ticket": key, "numbers": sorted(set(numbers)), "message_id": sent.replied.message_id, "channel": CLI},
+    )
+    if sent.replied.new:
+        click.echo(
+            f"{key} feedback {named} went to it as message {sent.replied.message_id}: the next tick reads it "
+            "as your go-ahead.",
+        )
+    else:
+        click.echo(f"{key} feedback {named} already went to it as message {sent.replied.message_id}.")
     return 0
 
 
@@ -848,11 +879,30 @@ def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:
             click.echo("  the runs and messages before the latest forget are history: the loop reads only later ones")
         for unit in db.units(ctx.conn, key):
             click.echo(f"  {unit.repo}  PR {unit.pr_url or 'none recorded'}  phase {unit.phase or 'unknown'}")
+        _show_passed(ctx, key)
         _show_plans(ctx, ticket, every=every_plan)
         _show_feedback_plan(ctx, key)
     _show_runs(ctx, key)
     attachments_cli.listed(ctx, conversation.Ref(conversation.TICKET, key))
     _show_conversation(ctx, key, record)
+
+
+def _show_passed(ctx: Context, key: str) -> None:
+    """Print the feedback on the ticket's PRs its `review` cursors passed with no worker, still left, and why."""
+    sent_by = functools.partial(drafts.sent_by_pr, ctx.conn)
+    left = passed_reviews.left(ctx.conn, ctx.config.trust, sent_by, [key]).get(key, [])
+    if not left:
+        return
+    click.echo(f"\nFeedback left with no worker ({len(left)}): unanswered, on threads not resolved")
+    for p in left:
+        where = f" at {p.path}:{p.line}" if p.path is not None and p.line is not None else ""
+        who = "the overseer" if p.decider is Decider.OVERSEER else "the harness"
+        repo = f"{p.repo}  " if p.repo is not None else ""
+        click.echo(
+            f"  {repo}{p.item.value} {p.id} (number {p.number}) by {p.author or 'unknown'}{where}: {p.reason.value}, "
+            f"by {who} in tick {p.tick_id}",
+        )
+        click.echo(f"    {p.url or p.pr_url}")
 
 
 def _forget_line(forget: records.Forget) -> str:

@@ -4,6 +4,7 @@ import { ATOM } from '@/lib/plan-anchors'
 import {
     addReply,
     addThread,
+    approvalNotes,
     changeRequest,
     EDITED,
     editReply,
@@ -108,12 +109,65 @@ describe('changeRequest', () => {
         expect(changeRequest(threads, new Map([['a', 0]]))).toContain('1. On "Use raw rows":')
     })
 
+    it("asks with the answers to the plan's decisions, after the comments and before the note, or alone", () => {
+        const answers = ['Decision 1 (Where the hour is kept): take B, not A.', 'Decision 2 (Retries): take C, not A.']
+        const request = changeRequest(two(), new Map([['a', 0]]), 'Shorter.', true, answers)
+        expect(request).toContain(
+            `   Name the route.\n\n${answers.join('\n')}\n\nOn the whole plan:\nShorter.\n\n${EDITED}`,
+        )
+        expect(changeRequest([], new Map(), '', false, answers)).toBe(answers.join('\n'))
+        expect(changeRequest([], new Map(), 'Shorter.', false, answers.slice(0, 1))).toBe(
+            `${answers[0] ?? ''}\n\nOn the whole plan:\nShorter.`,
+        )
+    })
+
     it('cuts a long passage in the request, not in the thread', () => {
         const long = 'word '.repeat(100).trim()
         const threads = addThread([], { id: 'a', anchor: anchor(long), body: 'Too much.', at: AT })
         const request = changeRequest(threads, new Map([['a', 0]]))
         expect(request).toContain('…"')
         expect(request.length).toBeLessThan(long.length)
+    })
+})
+
+describe('approvalNotes', () => {
+    it('carries each open comment on its passage, in plan order, then the note, and nothing of edits', () => {
+        const starts = new Map([
+            ['b', 0],
+            ['a', 20],
+        ])
+        expect(approvalNotes(setResolved(two(), 'a', true), starts, 'Keep it small.')).toBe(
+            [
+                'Where I commented on the plan, do as I say. Each comment quotes the passage it is on.',
+                '',
+                '1. On "Add a CSV export":',
+                '   Name the route.',
+                '',
+                'On the whole plan:',
+                'Keep it small.',
+            ].join('\n'),
+        )
+        expect(approvalNotes([], new Map(), ' Shorter. ')).toBe('Shorter.')
+        expect(approvalNotes(setResolved(two(), 'a', true), new Map(), '').startsWith('Where I commented')).toBe(true)
+        expect(approvalNotes([], new Map(), '  ')).toBe('')
+    })
+
+    it('leaves out a comment a planner has read, until a reply or an edit says something new', () => {
+        const read = two().map((thread) => Object.assign(thread, { read: thread.id === 'a' }))
+        expect(approvalNotes(read, new Map())).not.toContain('Page instead?')
+        expect(approvalNotes(read, new Map())).toContain('Name the route.')
+        expect(approvalNotes(setResolved(read, 'b', true), new Map())).toBe('')
+        const replied = addReply(read, 'a', { id: 'r', body: 'Still paging, please.', at: AT })
+        expect(approvalNotes(replied, new Map())).toContain('Page instead?')
+        expect(approvalNotes(editThread(read, 'a', 'Page it.'), new Map())).toContain('Page it.')
+        // A request for changes asks again about every open comment, read or not.
+        expect(changeRequest(read, new Map())).toContain('Page instead?')
+    })
+
+    it("carries the answers to the plan's decisions, even with no comment or note", () => {
+        const answer = 'Decision 1 (Where the hour is kept): take B, not A.'
+        expect(approvalNotes([], new Map(), '', [answer])).toBe(answer)
+        expect(approvalNotes([], new Map(), 'Shorter.', [answer])).toBe(`${answer}\n\nOn the whole plan:\nShorter.`)
     })
 })
 
@@ -128,6 +182,7 @@ describe('the journal', () => {
                 body: 'Page instead?',
                 at: AT,
                 resolved: true,
+                read: false,
                 replies: [{ id: 9, body: 'Or both.', at: AT }],
             },
         ])
@@ -137,6 +192,7 @@ describe('the journal', () => {
             body: 'Page instead?',
             at: AT,
             resolved: true,
+            read: false,
             replies: [{ id: '9', body: 'Or both.', at: AT }],
         })
     })

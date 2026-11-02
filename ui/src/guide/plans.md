@@ -92,6 +92,15 @@ Acceptance, Context, and so on down to Risks), so after a few plans you'll know 
 the menu still saves you the scrolling. As it opens it marks the section you're reading, for when a long plan has lost
 you.
 
+On a ticket's newest plan, each `##` section in the outline ends in two marks: a check for read and fine, and a `!`
+for read with a concern you mean to come back to. Pick one and the menu stays open, so you can mark a few on the way
+down; pick it again to clear it. The button counts what you haven't marked (`Outline 3 left`, then `all read`) and
+how many concerns you've left yourself, so a long plan tells you what's still to read. The marks are notes to you and
+nobody else: they live in this browser, and the planner never hears of them. A concern you want the planner to act
+on is a comment. A mark holds while its section reads as it did when you marked it, so when a new plan rewrites
+Risks, Risks is unread again, and the sections the planner left alone keep their marks. That includes your own
+edits: change a section's words and it wants reading again, which, to be fair, it does.
+
 While a planner is writing, the editor is read only and says which run is writing. A plan that was replaced is read
 only too. Before the first plan, the page says whether a run is writing one or the next tick dispatches a planner; for
 a ticket that needs none, it says so and names `canopy plan KEY`. If a plan's file has gone missing or can't be read,
@@ -125,11 +134,20 @@ Write your comment and press **Comment** again, or your [send key](settings#repl
 [reply](attention#replying) does, and its card shows it formatted. Each comment is saved
 as you make it, and sits in the **Comments** panel, quoting its passage. Click the quote to find it in the plan.
 
+Under a new comment's field sit four labels: **Verify this**, **Out of scope**, **Match existing patterns**, and
+**Needs tests**. One click starts the comment with a fixed instruction to the planner, worded as an order rather than
+a suggestion. Hover a label to read its instruction first. The cursor lands after it, so add your own words or send it
+as it is; another label swaps the instruction and keeps what you wrote. The wording is blunt on purpose: a planner
+treats "maybe double-check this?" as optional, and it is right to, since that is what you said.
+
 A comment's card says what it can do in words: **reply**, **edit**, **resolve** (or **reopen**), and **delete**,
 which asks first. Comments hold onto
 their passage by its words, so they survive your edits, and they belong to the ticket, so they carry over to the next
-plan. When a new plan drops a passage, its comments are marked `passage gone`, and **resolve all** clears them in one
-go. Resolved comments fold away under the open ones.
+plan. A passage the planner only reworded keeps its open comments: a word swapped or a clause added, and the comment
+finds it anyway, as long as most of its words and the text around them are still there. When a new plan drops or
+rewrites a passage, its comments are marked `passage gone`, and **resolve all** clears them in one go. A resolved
+comment only finds its passage word for word: it's done asking for things, so it doesn't go looking. Resolved comments
+fold away under the open ones.
 
 Escape drops a comment you haven't written anything in. One with words in it stays open until you **Cancel** it.
 
@@ -157,8 +175,8 @@ The **Table** menu has no keys. It inserts a table, and inside one adds or delet
 read or edit as written. It's for what a toolbar makes tedious: moving a section, fixing a table by hand, or seeing
 exactly what the planner wrote. The toolbar, the outline, and the changes step aside while it's on, and the comments
 sit in a plain list. Turn it off and the text is read back into the document, as one step of undo, and each comment
-finds its passage again by its words. A passage you rewrote there is `passage gone`, as it would be if you'd rewritten
-it in the document.
+finds its passage again by its words. A passage you only touched up there keeps its open comments; one you rewrote is
+`passage gone`, as it would be if you'd deleted it in the document and typed something new.
 
 Leaving the page with edits not saved or a comment not sent asks first. And if the file changed since you opened it,
 the save is refused rather than overwriting someone else's edit unseen.
@@ -170,19 +188,41 @@ decided from wherever you got to. **Approve** is always its main button; everyth
 
 - **Approve**, or **Save and approve** with edits not yet saved, as `canopy plan KEY --approve`. It approves the plan
   as saved, your edits included, and the next tick can implement it. Editing an approved plan means approving it
-  again, and until you do, the ticket's implement waits.
-- **Ask for changes**, while the plan waits on you, sends the planner back with your open comments, and an optional note
-  on the whole plan, as one reply on the ticket. If you edited the plan yourself, the reply says so, and asks the
-  planner to keep your edits. Resolved comments aren't sent. The reply's 4000-character bound holds, so a long round of
-  comments may need resolving or shortening first.
+  again, and until you do, the ticket's implement waits. With open comments, an answered decision, or a note on the
+  whole plan, it reads **Approve with notes**, as `canopy plan KEY --approve --message TEXT`: see below.
+- **Ask for changes**, while the plan waits on you, sends the planner back with your open comments, your answers to
+  its decisions, and an optional note on the whole plan, as one reply on the ticket. If you edited the plan yourself,
+  the reply says so, and asks the planner to keep your edits. Resolved comments aren't sent. The reply's
+  4000-character bound holds, so a long round of comments may need resolving or shortening first.
 - **Skip the plan**, as `canopy plan KEY --skip`: the implement goes ahead with no plan. The current plan's file
   stays. Nothing on the page undoes it, so it asks first, right there in the foot; **Keep** (or Escape) backs out.
 
-Approving doesn't send open comments. The implement reads the plan alone, so a comment left open is a comment nobody
-acts on. While any are open, the line under the buttons counts them and says so, every time, until you resolve them
-or send them.
-The note on the whole plan travels the same way: only with Ask for changes. Press Approve with words in it and the
-foot asks whether to approve without them, rather than quietly throw away what you wrote.
+Not every comment deserves another plan. "Name the test after the bug" is a point for the worker, not a reason to
+send the planner round again, so **Approve with notes** carries your open comments and the note on the whole plan to
+the implement instead: one message on the ticket, written with the approval, each comment quoting its passage as Ask
+for changes would. The implement reads it beside the plan, and where the two disagree, your notes win, being your later
+word. The comments it sent are resolved, since the worker has them now and the planner never will. Resolve one first
+to leave it out, which is also how you approve with none; and as with Ask for changes, a reply's bound holds, so a long
+round may need trimming first.
+
+A comment you already sent with **Ask for changes** stays open on the next plan, so you can check the planner's
+answer against it, and its card reads `planner read`. Approve leaves those out: the plan is the answer, and sending
+the question along to the worker too only gets it done twice. If the answer fell short, reply to the comment or edit
+it, and it goes with the notes again.
+
+Some of a plan is a question only you can answer. The planner writes each choice the ticket left open under
+Decisions, as a question with lettered options and the one it went with marked `(chosen)`, and the page asks it again
+under the plan, in **Open decisions**, drawn just as a worker's question is on its progress card: lettered options,
+the planner's marked `recommended` and picked. Pick another and that's your answer: a line such as
+`Decision 1 (Where a schedule keeps its hour): take B, not A.` joins your notes, so
+**Approve with notes** carries it to the implement, and **Ask for changes** to the planner. Leave the planner's choice
+picked and nothing is sent; agreeing needs no paperwork. Since the panel sits under the plan's last line, the foot says
+it's there from the moment the page opens: `↓ 2 open decisions` leads the line under the actions, and clicking it
+takes you to the panel. Once you've answered some it reads `1 of 2 answered`, and it counts the plan as it reads now,
+so editing its Decisions changes the count. It's a signpost, not a gate: **Approve** works without a visit, and takes
+the planner's choices. Your picks live on this page, not in the journal, so leaving
+asks first and a reload forgets them. A plan written before planners used this shape, or one that wanders from it,
+shows no panel, and its Decisions are still there to read and comment on.
 
 After you ask, a green band under the plan's title says "You asked for changes", and when, until the next planner
 starts or you approve the plan after all; the ticket's Plan card carries the same band, and the plan's chip reads

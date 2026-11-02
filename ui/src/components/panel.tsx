@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useMatchRoute, useRouterState } from '@tanstack/react-router'
 import { BookText, ChevronRight, RotateCw } from 'lucide-react'
 import { Children } from 'react'
-import type { ComponentProps, ReactNode } from 'react'
+import type { ComponentProps, ReactNode, Ref } from 'react'
 
 import { attentionQuery } from '@/api/queries'
 import { Notice } from '@/components/notice'
@@ -13,7 +13,7 @@ import { blocking } from '@/lib/attention'
 import { guideFor } from '@/lib/guide'
 import { pageTitle } from '@/lib/page-title'
 import { readFailure } from '@/lib/read-failure'
-import { SECTION_LABEL, SECTION_TEXT } from '@/lib/sections'
+import { SECTION_HUE, SECTION_LABEL, SECTION_TEXT } from '@/lib/sections'
 import { cn, isBlank } from '@/lib/utils'
 
 /**
@@ -85,7 +85,7 @@ export function PageHeader({
     const plain = typeof title === 'string' ? title : undefined
     const named = plain === undefined || isBlank(subject) ? plain : `${plain} ${subject}`
     return (
-        <header className="flex items-start gap-4">
+        <header className={cn('flex items-start gap-4', section !== undefined && SECTION_HUE[section])}>
             {/* React puts it in the document's head, ahead of index.html's, so it names the tab. */}
             <title>{pageTitle(tab ?? named, attention)}</title>
             <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -129,7 +129,7 @@ export function PageHeader({
                     </ol>
                 </nav>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words" title={help}>
+                    <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words title-drop" title={help}>
                         {isBlank(subject) ? (
                             title
                         ) : (
@@ -204,13 +204,17 @@ export function PanelHeader({
     label,
     sticky = false,
     children,
+    ref,
 }: {
     label: string
     sticky?: boolean
     children?: ReactNode
+    /** The header, for one that measures it, as what is scrolled to stays clear of a sticky one. */
+    ref?: Ref<HTMLDivElement>
 }) {
     return (
         <div
+            ref={ref}
             className={cn(
                 'flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-3 py-0.5',
                 'bg-surface-raised/50',

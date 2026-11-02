@@ -25,7 +25,7 @@ def test_the_model_list_is_read_once_for_the_menus_and_a_choice_until_refreshed(
 ) -> None:
     lists(opencode_state, "acme/fake-model-1")
     c, headers = signed_in_client(ctx)
-    expected: dict[str, object] = {"models": ["acme/fake-model-1"], "variants": {}, "error": None}
+    expected: dict[str, object] = {"models": ["acme/fake-model-1"], "variants": {}, "hidden": [], "error": None}
 
     def choose(model: str) -> httpx2.Response:
         return c.post(f"/api/tickets/{KEY}/models", json={"model": model}, headers=headers)
@@ -48,6 +48,26 @@ def test_the_model_list_is_read_once_for_the_menus_and_a_choice_until_refreshed(
     assert runtime_runs(opencode_state) == 4
     assert choose("acme/fake-model-2").json()["model"] == "acme/fake-model-2"
     assert runtime_runs(opencode_state) == 4
+
+
+def test_the_list_names_what_hide_models_hides_and_a_hidden_model_may_still_be_chosen(
+    ctx: Context,
+    opencode_state: Path,
+) -> None:
+    models = ["acme/fake-model-1", "copilot/fake-model-2"]
+    opencode_state.write_text(json.dumps({"models": models, "variants": {"acme/fake-model-1": ["high", "xhigh"]}}))
+    hide = ("copilot/*", "*@xhigh")
+    runtime = ctx.config.runtime.model_copy(update={"hide_models": hide})
+    c, headers = signed_in_client(dataclasses.replace(ctx, config=ctx.config.model_copy(update={"runtime": runtime})))
+    # Still listed, so a menu can tell a hidden model chosen from one gone, and named apart for the menus to leave out.
+    assert c.get("/api/models").json() == {
+        "models": models,
+        "variants": {"acme/fake-model-1": ["high", "xhigh"]},
+        "hidden": ["acme/fake-model-1@xhigh", "copilot/fake-model-2"],
+        "error": None,
+    }
+    chosen = c.post(f"/api/tickets/{KEY}/models", json={"model": "copilot/fake-model-2"}, headers=headers)
+    assert chosen.json()["model"] == "copilot/fake-model-2"
 
 
 def test_a_list_that_could_not_be_read_is_never_kept(ctx: Context, opencode_state: Path) -> None:

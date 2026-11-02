@@ -128,6 +128,15 @@ export function nextWaiting(
     return around.find((item) => item.id !== current && severity(item) === 'waiting' && !done(item)) ?? null
 }
 
+/**
+ * When the longest wait on the operator began: the oldest of the items of the nav's `waiting` part that are not `done`
+ * (answered already, so waiting on the loop now). Null when none waits on them.
+ */
+export function oldestWaiting(items: AttentionItem[], done: (item: AttentionItem) => boolean): string | null {
+    const [oldest] = bySeverity(items.filter((item) => severity(item) === 'waiting' && !done(item)))
+    return oldest?.since ?? null
+}
+
 /** One part of the attention list's count: what is broken, what waits on the operator's answer, or the rest. */
 export interface BreakdownPart {
     /** Which part: the failure color's, the operator's, or the muted rest, chores' findings among them. */

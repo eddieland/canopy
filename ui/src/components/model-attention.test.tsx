@@ -35,7 +35,7 @@ const server: Middleware = {
     onRequest({ request }) {
         const url = new URL(request.url)
         read.push(url.pathname + url.search)
-        return Response.json({ models: ['acme/fast-1', 'acme/deep-2'], error: null })
+        return Response.json({ models: ['acme/fast-1', 'acme/deep-2'], variants: {}, hidden: [], error: null })
     },
 }
 

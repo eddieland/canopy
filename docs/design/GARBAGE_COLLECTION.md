@@ -22,6 +22,7 @@ All of it is built but one row: the pass removes no memory text yet, though `can
 | Attention items the harness raised | each open item, every tick | outside the window (below) |
 | Connector runs and derivations (§30) | each tick, and each of the loop's polls (§6) | outside the window (below) |
 | Check runs a `vcs` source keeps (§7) | each completed check run of a PR | once off its PR's head (below) |
+| Commit status runs a `vcs` source keeps | each run of a commit status canopy tells apart | once off its PR's head (below) |
 | Free pages and the WAL in the journal | deletes, and checkpoints held back by readers | checkpointed each pass; `canopy gc --vacuum` |
 | Loose objects and packs in a primary clone | every worker's fetches and commits | by hand, `canopy gc --git` (below) |
 | `$XDG_CACHE_HOME/canopy/sandbox/<role>/` | every sandboxed run's tool caches | by hand, `canopy gc --caches` |
@@ -63,10 +64,10 @@ A harness-raised attention item is deleted only once it is older than `journal_d
 window the attention list reads, so the list, its open-since, and notifications do not change. Rejected: recording
 an item only when it opens and closes, which changes how §14 derives the list and every reader with it. Connector runs
 and derivations (§30) go under the same rule, except each source's newest run and the newest that recorded the query's
-result, which `canopy status`, `connector_failed`, and the derivation read. A kept check run goes after `journal_days`
-once a read shows its PR at another head, merged, or closed, since `handled` reads only those at the head. `--vacuum`
-refuses while any run is live, and when the disk has less free space than the journal, since `VACUUM` writes a whole
-copy first.
+result, which `canopy status`, `connector_failed`, and the derivation read. A kept check or status run goes after
+`journal_days` once a read shows its PR at another head, merged, or closed, since `handled` reads only those at the
+head. `--vacuum` refuses while any run is live, and when the disk has less free space than the journal, since `VACUUM`
+writes a whole copy first.
 
 ### Git in the primary clones
 
