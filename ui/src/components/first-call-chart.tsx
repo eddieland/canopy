@@ -1,7 +1,7 @@
 import type { SpendFirstCallWeek } from '@/api/types'
 import { Hinted, Tipped } from '@/components/tip'
 import { HEADROOM } from '@/lib/chart'
-import { weekChanges, weekHint, weekLabel } from '@/lib/first-calls'
+import { snapshotsOf, weekChanges, weekHint, weekLabel } from '@/lib/first-calls'
 import { shareText } from '@/lib/spend'
 import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
@@ -13,9 +13,10 @@ const FROM_CACHE_HINT = "What the week's first calls read from the cache, over w
 /**
  * One series' first model calls by week (ui/DESIGN.md, Charts): a bar per week, as tall as the share of what its first
  * calls were sent that the cache served, from zero to the whole, its rate over it, and a rule before each week whose
- * runs used a runtime version or a definitions snapshot the week before's did not. Under it, each of those weeks names
- * what it used, and a table holds the numbers, the median first call among them: the chart is for the eye, so a screen
- * reader reads the list and the table. `fill` is the kind's spend series fill.
+ * runs used a runtime version or a definitions snapshot no earlier week's did. Under it, each of those weeks names
+ * what it used, several snapshots as a count with each in its tip, and a table holds the numbers, the median first
+ * call among them: the chart is for the eye, so a screen reader reads the list and the table. `fill` is the kind's
+ * spend series fill.
  */
 export function FirstCallChart({ weeks, fill }: { weeks: SpendFirstCallWeek[]; fill: string }) {
     const changed = weeks.filter((week) => weekChanges(week).length > 0)
@@ -50,7 +51,9 @@ export function FirstCallChart({ weeks, fill }: { weeks: SpendFirstCallWeek[]; f
                             <span>
                                 Week of {weekLabel(week.week)}:{' '}
                                 <span className="readout break-all text-foreground">
-                                    {weekChanges(week).join(', ')}
+                                    <Tipped fact={snapshotsOf(week)} mono>
+                                        {weekChanges(week).join(', ')}
+                                    </Tipped>
                                 </span>
                             </span>
                         </li>

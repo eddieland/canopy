@@ -172,8 +172,10 @@ rail's. Then:
   Sunday on canopy's clock. That first call carries the prefix every run of the kind starts with, so a warm cache
   makes it cheap, and a bar that drops is a prefix the cache no longer recognizes. The usual suspects get a rule
   before their week and a line under the chart: a runtime version, or a definitions snapshot (canopy's prompts and
-  agent definitions, as a run loaded them), that the week's runs used and the week before's did not. A dip with no
-  rule beside it is your cue to look elsewhere. Pick the kind in the header, then **all runs**, one chore, or one
+  agent definitions, as a run loaded them), that the week's runs used and no earlier week's did. A kind keeps a
+  snapshot for each prompt, persona, and model its runs use, so one change to canopy or your config mints a handful
+  at once: the line counts them, and hovering the count names each. A dip with no rule beside it is your cue to look
+  elsewhere. Pick the kind in the header, then **all runs**, one chore, or one
   model under it; runs that more than one model served stay in **all runs**. The table holds each week's runs and
   median first call. The 7 days hold one or two weeks, which is not much of a trend, so pick **30 days**; it's what
   `canopy spend --days 30` prints, by week.

@@ -7,6 +7,7 @@ import {
     KIND_SERIES,
     seriesOf,
     seriesWeeks,
+    snapshotsOf,
     weekChanges,
     weekHint,
     weekLabel,
@@ -99,6 +100,13 @@ describe('weekChanges and weekHint', () => {
             'Week of Sep 28: 79% from the cache, a median 22.4k sent, 3 runs; new runtime 1.0.104, ' +
                 'snapshot a81d2c4e9f306b17',
         )
+    })
+
+    it('count a week of several new snapshots, as one change to canopy makes, and name them apart', () => {
+        const several = week({ new_runtime_versions: ['1.0.104'], new_digests: ['a81d2c4e', 'b92e3d5f', 'c03f4e60'] })
+        expect(weekChanges(several)).toEqual(['runtime 1.0.104', '3 snapshots'])
+        expect(snapshotsOf(several)).toBe('a81d2c4e\nb92e3d5f\nc03f4e60')
+        expect(snapshotsOf(week({ new_digests: ['a81d2c4e'] }))).toBeUndefined()
     })
 
     it('say a week whose runs recorded no cache read, and a lone run', () => {

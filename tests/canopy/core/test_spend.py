@@ -801,6 +801,19 @@ def test_first_calls_by_week_are_by_kind_chore_and_model_and_name_what_changed(
     assert by_week["chores", "kind", None, "2026-W41"].hit_rate == pytest.approx(0.5)
 
 
+def test_a_first_calls_snapshot_is_new_only_in_the_first_week_its_series_used_it(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """A snapshot back after a week away is not new again, and a week's several new ones are each named once."""
+    conn = journals.open(tmp_path / "canopy.db")
+    for days, digest in ((21, "d1"), (21.5, "d2"), (14, "d1"), (7, "d2"), (7.5, "d3"), (0, "d1"), (0.5, "d4")):
+        db.set_tick_report(conn, tick(conn, earlier(NOW, days), 0.1), "s", first_call(50_000, 1_000), digest=digest)
+    found = spend.breakdown(conn, NOW, 28, state_dir=STATE_DIR).first_call_weeks
+    weeks = [w.new_digests for w in found if (w.kind, w.by) == ("overseer", "kind")]
+    assert weeks == [(), (), ("d3",), ("d4",)]
+
+
 def test_a_first_calls_week_is_a_local_iso_week(tmp_path: Path, journals: Journals) -> None:
     """A Monday's first hour in local time is in that Monday's week, though UTC still has it on Sunday."""
     conn = journals.open(tmp_path / "canopy.db")
@@ -829,6 +842,21 @@ def test_canopy_spend_prints_each_kind_s_first_calls_by_week(
         [this, "chores", "2", "40.0k", "50%"],
     ]
     assert out[start + 6] == "--json breaks each kind's weeks down by chore and by model."
+
+
+def test_canopy_spend_counts_a_week_s_new_snapshots_when_there_are_several(
+    canopy_env: CanopyEnv,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """One change to canopy renders every prompt's snapshot anew: the line counts them, and `--json` names them."""
+    now = noon_today()
+    conn = canopy_env.journal()
+    for days, digest in ((7, "d1"), (0, "d2"), (0.25, "d3"), (0.5, "d4")):
+        db.set_tick_report(conn, tick(conn, earlier(now, days), 0.1), "s", first_call(50_000, 1_000), digest=digest)
+    assert main(["spend", "--days", "14"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    this = next(line for line in out if line.startswith(iso_week(now)))
+    assert this.split()[-2:] == ["3", "snapshots"]
 
 
 def test_canopy_spend_says_when_no_first_call_was_recorded(

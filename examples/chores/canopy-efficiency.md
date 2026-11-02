@@ -47,7 +47,7 @@ In `spend`, `tools` lists, per kind, each tool its runs called, with calls, erro
 kind's median first model call (`first_call`, in tokens): its fixed overhead, which every tool and skill offered to it
 adds to, used or not. `first_call_weeks` gives each kind's first calls by local ISO week, its runs whole (`by`
 `kind`), by chore, and by model: what each week's first calls read from the cache over what they were sent
-(`hit_rate`), and the runtime's versions and definitions snapshots its runs used that the week before's did not.
+(`hit_rate`), and the runtime's versions and definitions snapshots its runs used that no earlier week's did.
 
 1. **Unused MCP servers.** A server whose `reach` is not `none` for a kind's agents, none of whose tools the kind
    called in 28 days, over 10 or more runs of that kind: a finding with id `unused/<kind>/<server>`. If no kind called

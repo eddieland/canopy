@@ -265,11 +265,10 @@ class FirstCallWeek:
     #: What their first calls read from the cache over what they were sent, summed over the runs that recorded both;
     #: None when none did.
     hit_rate: float | None
-    #: The runtime's versions their sessions' records named that the runs of the series' week before did not, in the
-    #: order the runs first ran on each; the week before is the latest earlier one in the window with runs, and the
-    #: series' first week names none, having none before it.
+    #: The runtime's versions their sessions' records named that no run of the series' earlier weeks in the window
+    #: did, in the order the runs first ran on each; the series' first week names none, having none before it.
     new_runtime_versions: Sequence[str] = ()
-    #: The definitions snapshots their runs loaded that those of the series' week before did not, the same way.
+    #: The definitions snapshots their runs loaded that no run of the series' earlier weeks did, the same way.
     new_digests: Sequence[str] = ()
 
 
@@ -1108,7 +1107,10 @@ def _first_call_weeks(calls: Iterable[_FirstCall]) -> list[FirstCallWeek]:
             series.setdefault((call.kind, by, name), {}).setdefault(week, []).append(call)
     found: list[FirstCallWeek] = []
     for (kind, by, name), weeks in sorted(series.items(), key=lambda s: _series_order(*s[0])):
-        before: list[_FirstCall] | None = None
+        # What the series' earlier weeks used, all of them: a kind's runs use many snapshots side by side, one for each
+        # prompt, persona, and model its runs rendered, so one the week before missed is not one the series never had.
+        seen_versions: set[str | None] | None = None
+        seen_digests: set[str | None] | None = None
         for week, group in sorted(weeks.items()):
             found.append(
                 FirstCallWeek(
@@ -1119,14 +1121,12 @@ def _first_call_weeks(calls: Iterable[_FirstCall]) -> list[FirstCallWeek]:
                     runs=len(group),
                     first_call=statistics.median_low(c.sent for c in group),
                     hit_rate=_hit_rate([(c.sent, c.read) for c in group if c.read is not None]),
-                    new_runtime_versions=_new(
-                        [c.runtime_version for c in group],
-                        None if before is None else {c.runtime_version for c in before},
-                    ),
-                    new_digests=_new([c.digest for c in group], None if before is None else {c.digest for c in before}),
+                    new_runtime_versions=_new([c.runtime_version for c in group], seen_versions),
+                    new_digests=_new([c.digest for c in group], seen_digests),
                 ),
             )
-            before = group
+            seen_versions = (seen_versions or set()) | {c.runtime_version for c in group}
+            seen_digests = (seen_digests or set()) | {c.digest for c in group}
     return found
 
 
