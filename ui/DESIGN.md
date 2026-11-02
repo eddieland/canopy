@@ -287,13 +287,13 @@ Rules:
   search hits do; and an empty attention list says nothing needed the operator as of the drop rather than celebrate.
   What is on screen stays. All of it reads the stream from the shell (`useLoopDown`), and leaves the moment the stream
   opens again, with no reload.
-  The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The counters are the
-  attention page's, and the nav's Attention item shows how many items it lists, on every page, split by severity:
-  broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the rest muted, each only when there
+  The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The nav's Attention
+  item shows how many items it lists, on every page, split by severity: broken in `status-failed`, waiting on the
+  operator's answer in `status-blocked`, the rest muted, each only when there
   is one. Never in the section's rose, too near the failure color to tell apart at that size. Since color alone tells
   the numbers apart, they are said in words on hover and to a screen reader (`1 broken, 1 waiting on you, 3 other`;
-  `breakdown` in `src/lib/attention.ts`). That split is the nav's alone: the Attention counter does not say it again
-  under its value, on the one page that shows both (Counters, below). The Memory item shows how many proposals wait on
+  `breakdown` in `src/lib/attention.ts`). That split is the nav's alone: the list's panel header gives the whole and
+  does not say it again. The Memory item shows how many proposals wait on
   the operator, in `status-blocked` as what waits on their answer is, said in words (`2 proposals waiting on you`), and
   nothing while none waits or proposals are off. It comes with the loop's state on the stream, so it moves as a run
   proposes and as the operator promotes or rejects. The Reviews item shows how many reviews with a result to read the
@@ -583,7 +583,7 @@ the rules it all keeps; what each one does is written in its code. None of it is
   away.
 - **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`, `rave-dark`) or the accent,
   never a status color, so nothing in it reads as a run's state.
-- **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and counters.
+- **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and its count.
 - **A tip is true; a joke never looks like one.** The ticker's tips open with "Tip:" and name a real key, command, or
   setting in its own words; one that stops being true is fixed or dropped. Nothing else opens with "Tip:".
 - **Fun honours reduced motion** (Motion, below): it holds still, and says the same. Nothing flashes more than twice a
@@ -806,8 +806,8 @@ side.
   whose cells are too narrow to name the window before under each figure, so a line under the grid names it once. A kind
   that spent nothing is no tile of a dash but a muted line under the grid (`No dry runs.`), so the tiles hold what was
   spent. A panel with headline figures of its own has a row of them at its top, over its tables (the Reviews page's
-  canopy's reviewer). A figure still being read holds its place. A `Counter` stays the attention and worktrees pages'
-  count of the present, with its state's color.
+  canopy's reviewer). A figure still being read holds its place. A `Counter` stays a page's count of the present,
+  with its state's color.
 - **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest
   (`barPercent`), where comparing the rows is the point: spent by ticket, by model, and by landed ticket, the bytes a
   tool returned, a check's failure rate, a reviewer's reviews and wait, a PR's first review, resumes per plan by
@@ -881,7 +881,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   measures: `ago` for a moment (`3m ago`: a message, a decision, a search hit, a ticket's or PR's last activity),
   `span` for something that runs (`for 3m`, then `ended 3m ago`: a run, a review, a tick, a chore run, a held
   worktree), and `bare` for how long an item has stood open, where its place says so (`3m`: an attention item, an open
-  finding, the rail's runs, the oldest question). The header's tick is the one exception: `3m ago` once it ended, so
+  finding, the rail's runs, the oldest wait). The header's tick is the one exception: `3m ago` once it ended, so
   its line stays short. A moment shown whole is `Timestamp`, the local `Oct 8 10:30` with the ISO time the journal
   keeps on hover, beside its age on a review's page, and in a run's, tick's, or chore run's `when` field, which sets
   its end after it, the time alone on the same day, how long it ran (`lasted`, the age's units), and its `span` age;
@@ -1039,15 +1039,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   reads `untitled`, muted, so its cell is never blank, the rail's working runs included, never the run's kind in its
   place. A ticket's page heading sets the key in muted mono before it. Nowhere too narrow to show more than a few
   letters of it.
-- **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you, and
-  attention; the spend is in the rail) and the worktrees page (working, held, needs a look, free, across every pool).
-  The line under the value is cut to fit, and whole in its tip, since it grows with the workspace (`4 pools unread`).
+- **Counters** (`Counter`, `src/components/counter.tsx`) head the worktrees page (working, held, needs a look, free,
+  across every pool). The line under the value is cut to fit, and whole in its tip, since it grows with the workspace
+  (`4 pools unread`).
   A line is state, never what every visit would say: Held's names what holds its slots (`1 in use · 1 canopy-sync`).
-  Nor what another counter or the nav already says (One home per fact): on the attention page only Waiting on you has
-  a line, the oldest open question's age (`oldest 9d`), since it has no other home. Running's would count the runs
-  waiting on you, which is the next counter's value, and Attention's would split the list, which the nav's badge does
-  on every page; so neither has one, and `waiting on you` is said once there outside the rail and the nav. A counter
-  with no line of its own shows none.
+  Nor what another counter or the nav already says (One home per fact). A counter with no line of its own shows none.
+  The attention page has none: the nav's badge, the rail, the tab's title, and its icon carry the glance, and tiles
+  there only said their numbers again.
   A counter counts what its line lists, and a line that splits the count names only its parts there are: Needs a look
   adds dirty slots, broken ones, and unread pools (`needsLook`), so one of each dirty and unread reads `2` over
   `1 dirty · 1 pool unread`, never a `0 broken` among them.
@@ -1160,7 +1158,7 @@ sliver beside four others; and its axis names short call numbers without measuri
   `attempt_limit`, `chore_failed`, the review reasons, and a run refused its model, `model_missing` and
   `model_list_failed`, which only the operator clears), then what waits on the operator's answer (`awaiting_reply`,
   `untrusted_review`, `plan_review`), then every other reason, then chores' findings; within each, the item open longest
-  first. Settings can hide the findings, in this browser alone (`useAttention`): the list, its counter, and the nav's
+  first. Settings can hide the findings, in this browser alone (`useAttention`): the list, its count, and the nav's
   badge leave them out, and a muted line above the list counts what it hid, so a hidden finding never reads as none.
   A row reads as an inbox's: its reason, subject, and age, then its ticket's title (`TicketTitle`, semibold) when
   it is about a ticket, or its task's text's first line when it is about a task, as a message's subject, then its
@@ -1171,13 +1169,17 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`InlineCode`), but for a GitHub PR's address, which is a `PullRequestLink` (its name alone in a row, which is a link
   already), so a detail names a PR as the rest of the page does, and a run named as `canopy show` reads one, `run:40`,
   which is a `RunLink`. The CLI's `answer with canopy reply KEY` is left off the end of a question's detail: the page's
-  reply form is the answer (`shownDetail`). The list is Attention, as the page and its counter are; what waits on the
-  operator's answer is `waiting on you` wherever it shows: the counter, a question's chip in a conversation, the tickets
-  list, and the rail. The selection is `?item=<id>`; with none, the most severe item about a ticket.
+  reply form is the answer (`shownDetail`). The list is Attention, as the page is; what waits on the
+  operator's answer is `waiting on you` wherever it shows: a question's chip in a conversation, the tickets
+  list, and the rail. The list's panel header holds its count, after the longest wait when one stands
+  (`oldest waiting 1h · 11`): the oldest of the nav's `waiting` part (`oldestWaiting`), past what is answered already,
+  so a review's draft counts as a question does. The selection is `?item=<id>`; with none, the most severe item about a
+  ticket.
 - **An empty attention list tells never started from all handled** (`EmptyAttention`). Before the journal holds any
   ticket, the page is the first step, an `Empty`: `no tickets yet: give one your queue label in the tracker, or start
-  one privately on Tickets, then Tick now`, with Tickets a link and Tick now the header's button inline, since an
-  inbox that was never filled is not one emptied. Once there was work, the empty inbox (Fun) is the reward.
+  one privately on Tickets, then Tick now, and what needs you lands here`, with Tickets a link and Tick now the header's
+  button inline, since an inbox that was never filled is not one emptied. Once there was work, the empty inbox (Fun) is
+  the reward.
 - **The attention detail: the reason picks the first block**, under the item's head, what the reason asks of the
   operator (`ask` in `src/lib/attention.ts`), so the action it calls for is never buried under louder controls about
   something else. A run that broke (`worker_failed`, `crashed`, `unpushed`, `unknown_result`, `attempt_limit`): the
