@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Literal, assert_never, cast
 
 from pydantic import BaseModel, ConfigDict
 
-from canopy.core import contract, db, records, spend, sql
+from canopy.core import cards, checklists, contract, db, records, spend, sql
 from canopy.core.vocab import ItemAnswer
 
 if TYPE_CHECKING:
@@ -427,7 +427,9 @@ def contract_text(lists: Sequence[Checklist]) -> str:
                 "your first push of a stretch of work, before anything is sent, and prints the repository's list in a "
                 "`[canopy] Push held` line. A held push is not a rejected one: diff the branch against its base, hold "
                 "each item to the diff, commit a fix for each item that fails, and push again, and that push goes "
-                "through. A push the remote rejects is still never retried."
+                "through. A push the remote rejects is still never retried. Each list is also in "
+                f"`${cards.ANSWERS_ENV}/{checklists.DIR}/<repository>{checklists.SUFFIX}`: read it there when the "
+                "hook's output reaches you cut short."
             ),
             "",
             (
