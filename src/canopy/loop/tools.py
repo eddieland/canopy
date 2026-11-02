@@ -37,7 +37,7 @@ from pydantic import (
 )
 from pydantic_core import PydanticUndefined
 
-from canopy.core import config, contract, conversation, db, kept_items, memory, recorded_runs, vocab
+from canopy.core import config, contract, conversation, db, kept_items, memory, passed_reviews, recorded_runs, vocab
 from canopy.core.vocab import RecordedStatus, ResumeReason, RunKind, TickStatus
 from canopy.infra import logs
 from canopy.loop import attention, claims, harness, harness_dispatches
@@ -74,6 +74,10 @@ RAISED = "raised"
 UNNAMED = "unnamed"
 #: The phases the overseer sets. `split` is retired (M46): old tickets may still hold it, and nothing sets it.
 SETTABLE_PHASES = tuple(p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT)
+#: Why the overseer may say a `review` cursor passed feedback with no worker: all but `resolved`, the harness's alone.
+PASS_REASONS = tuple(r.value for r in vocab.PassReason if r is not vocab.PassReason.RESOLVED)
+#: A journal number, as the state block shows an item's.
+_NUMBER_RE = re.compile(r"[0-9]+")
 
 
 #: What a verb's result says of the recorded run it returns (DESIGN §40).
@@ -841,6 +845,28 @@ class TicketSet(Request):
     ] = None
     #: The cursors to advance past what was handled. A dry run advances none.
     cursors: Cursors = Field(default_factory=dict)
+    #: The feedback the `review` cursor passes with no worker sent to it, each by number, with why.
+    passed: Annotated[
+        Mapping[Annotated[str, matching(_NUMBER_RE, "number")], Annotated[str, one_of("reason", PASS_REASONS)]],
+        _null_left_out(dict),
+        WithJsonSchema(
+            {
+                "anyOf": [
+                    {
+                        "type": "object",
+                        "propertyNames": {"pattern": f"^{_NUMBER_RE.pattern}$"},
+                        "additionalProperties": {"type": "string", "enum": list(PASS_REASONS)},
+                    },
+                    {"type": "null"},
+                ],
+            },
+        ),
+        Field(
+            description="With a review cursor: each review comment or review with feedback it passes that no worker "
+            "was sent, by its number as the state block shows it, to why it is left. One on a resolved thread, or "
+            "answered on its thread by a worker, needs none.",
+        ),
+    ] = Field(default_factory=dict)
     #: Mark the ticket done in the journal. A dry run does not.
     done: Annotated[
         StrictBool,
@@ -852,6 +878,12 @@ class TicketSet(Request):
         Annotated[str, AfterValidator(clean_title)] | None,
         Field(description="A short name for the ticket, from its own title: shown beside its key."),
     ] = None
+
+    @model_validator(mode="after")
+    def _passed_with_cursor(self) -> Self:
+        if self.passed and "review" not in self.cursors:
+            raise ValueError("passed names what a review cursor passes: set the review cursor too")
+        return self
 
 
 class TicketSets(Request):
@@ -890,6 +922,11 @@ class TicketUpdated(Result):
     cursors: Annotated[tuple[CursorName, ...], Field(description="The cursors advanced; a dry run advances none.")]
     #: Whether the ticket was marked done; a dry run marks none.
     done: Annotated[bool, Field(description="Whether the ticket was marked done; a dry run marks none.")]
+    #: The feedback recorded as passed with no worker, by number; a dry run records none.
+    passed: Annotated[
+        tuple[str, ...],
+        Field(description="The feedback recorded as passed with no worker, by number; a dry run records none."),
+    ] = ()
     #: Whether this was in a dry run.
     dry_run: Annotated[bool, Field(description="Whether this was in a dry run.")]
 
@@ -937,7 +974,7 @@ def ticket_set(ctx: Context, request: TicketSets) -> Outcome[TicketsUpdated]:
     # runs saw, or never see the ticket at all.
     dry_run = current.dry_run
     with db.transaction(ctx.conn):
-        outcomes = [_record_setting(ctx, c, dry_run=dry_run) for c in checked]
+        outcomes = [_record_setting(ctx, current.id, c, dry_run=dry_run) for c in checked]
     return Outcome(
         "\n".join(o.text for o in outcomes),
         TicketsUpdated(tickets=tuple(o.result for o in outcomes)),
@@ -954,6 +991,8 @@ class _Checked:
     unit: str | None
     #: The phase, when it is a unit's.
     unit_phase: str | None
+    #: The feedback its `review` cursor passes with no worker, to record once the cursor moves.
+    passed: Sequence[passed_reviews.Passed] = ()
 
 
 def _check_setting(ctx: Context, current: records.Tick, setting: TicketSet) -> _Checked:
@@ -973,13 +1012,13 @@ def _check_setting(ctx: Context, current: records.Tick, setting: TicketSet) -> _
     if unit is None and (unit_cursor is not None or unit_phase is not None):
         unit = _only_unit(ctx, key, f"a {unit_cursor} cursor" if unit_cursor else f"the {unit_phase} phase")
     _refuse_decided(ctx, current.id, key, "ticket-set")
-    if cursors:
-        _check_cursors(ctx, current.id, key, unit, cursors)
-    return _Checked(setting, unit, unit_phase)
+    reasons = {number: vocab.PassReason(reason) for number, reason in setting.passed.items()}
+    passed = _check_cursors(ctx, current.id, key, unit, cursors, passed=reasons) if cursors else []
+    return _Checked(setting, unit, unit_phase, passed)
 
 
-def _record_setting(ctx: Context, checked: _Checked, *, dry_run: bool) -> Outcome[TicketUpdated]:
-    """Record one checked setting, inside the call's transaction.
+def _record_setting(ctx: Context, tick_id: int, checked: _Checked, *, dry_run: bool) -> Outcome[TicketUpdated]:
+    """Record one checked setting in tick `tick_id`, inside the call's transaction.
 
     Returns:
         The tool's text of it, and the same as fields.
@@ -990,6 +1029,7 @@ def _record_setting(ctx: Context, checked: _Checked, *, dry_run: bool) -> Outcom
     ignored = [
         *(["cursors not advanced"] if dry_run and cursor_pairs else []),
         *(["not marked done"] if dry_run and done else []),
+        *(["passed feedback not recorded"] if dry_run and checked.passed else []),
     ]
     ticket_cursors = {} if dry_run else {n: v for n, v in cursor_pairs if n in db.TICKET_CURSORS}
     db.set_ticket(
@@ -1007,7 +1047,11 @@ def _record_setting(ctx: Context, checked: _Checked, *, dry_run: bool) -> Outcom
     unit_cursors: dict[str, str] = {} if dry_run else {n: v for n, v in cursor_pairs if n in db.UNIT_CURSORS}
     if unit is not None and (unit_phase is not None or unit_cursors):
         db.set_unit(ctx.conn, key, ctx.repo, unit, phase=unit_phase, cursors=unit_cursors)
+    passed = [] if dry_run else checked.passed
+    passed_reviews.record(ctx.conn, tick_id, key, unit, passed)
     note = f"; dry run, {' and '.join(ignored)}" if ignored else ""
+    if passed:
+        note += f"; recorded {', '.join(f'{p.item.number} as {p.reason}' for p in passed)}"
     return Outcome(
         f"updated {key if unit is None else attention.subject(key, unit)}{note}",
         TicketUpdated(
@@ -1016,22 +1060,39 @@ def _record_setting(ctx: Context, checked: _Checked, *, dry_run: bool) -> Outcom
             phase=phase,
             cursors=() if dry_run else tuple(setting.cursors),
             done=done and not dry_run,
+            passed=tuple(str(p.item.number) for p in passed),
             dry_run=dry_run,
         ),
     )
 
 
-def _check_cursors(ctx: Context, tick_id: int, key: str, repo: str | None, cursors: Mapping[str, str]) -> None:
+def _check_cursors(
+    ctx: Context,
+    tick_id: int,
+    key: str,
+    repo: str | None,
+    cursors: Mapping[str, str],
+    *,
+    passed: Mapping[str, vocab.PassReason],
+) -> list[passed_reviews.Passed]:
     """Check a `ticket-set`'s cursors against what the connectors observed, as a dispatch's are (DESIGN §35).
 
-    A dry run checks them too, so its plan holds the refusals a live tick would get (D036).
+    And what its `review` cursor passes against the feedback it names in `passed` (DESIGN §7). A dry run checks them
+    too, so its plan holds the refusals a live tick would get (D036).
+
+    Returns:
+        The feedback to record as passed with no worker, once the cursor moves.
 
     Raises:
-        Refused: A cursor names no item observed, or passes one the state block left out; the refusal is recorded.
+        Refused: A cursor names no item observed, or passes one the state block left out, or `passed` names what the
+            review cursor does not pass, or leaves out feedback it passes; the refusal is recorded.
     """
     db.touch_ticket(ctx.conn, key, ctx.repo)
+    now = datetime.now(UTC)
     try:
-        claims.check_cursors(ctx, tick_id, datetime.now(UTC), key=key, repo=repo, cursors=cursors)
+        claims.check_cursors(ctx, tick_id, now, key=key, repo=repo, cursors=cursors)
+        review = cursors.get("review")
+        return claims.passed_over(ctx, tick_id, now, key=key, repo=repo, cursor=review, passed=passed)
     except dispatch.Refusal as r:
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
         logs.for_tick(tick_id).info("ticket-set refused", extra={"ticket": key, "guard": r.guard, "reason": r.reason})
