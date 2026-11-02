@@ -12,7 +12,8 @@ everything else canopy reads from its config files, as it always did.
 of the header flips it too, and hovering it offers the palettes of the theme you're looking at, so you can try a few
 without leaving the page. The card stays put while you click through them; the other theme's are here.
 
-Each theme also has a palette, picked apart. The defaults tint the canvas with the accent's hue: **Lavender** in light,
+Each theme also has a palette, picked apart; hover one, here or in the header's card, for a line on what it looks
+like before you commit to it. The defaults tint the canvas with the accent's hue: **Lavender** in light,
 **Indigo** in dark. Light can also be **Off-white**, a warm paper, a soft green **Sage**, or the light side of
 **Solarized**, **Nord**, **Gruvbox**, **Rosé Pine** (its Dawn variant), or **Acme**, in the two tones of Plan 9's
 editor. **Pulp**, on either side, is Gruvbox's colors inked as a comic. Dark can be a plain **Grey**, a near

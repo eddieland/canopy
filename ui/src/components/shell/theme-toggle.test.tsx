@@ -54,6 +54,7 @@ describe('ThemeToggle', () => {
         const card = await waitFor(() => screen.getByTestId('palette-card'))
         const palettes = within(card).getByRole('radiogroup', { name: 'Dark palette' })
         expect(within(palettes).getByRole('radio', { name: 'Indigo' }).getAttribute('aria-checked')).toBe('true')
+        expect(within(palettes).getByRole('radio', { name: 'Plum', description: /wine purple/u })).toBeDefined()
 
         fireEvent.click(within(palettes).getByRole('radio', { name: 'Plum' }))
         expect(document.documentElement.dataset['darkPalette']).toBe('plum')
