@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useMatchRoute, useRouterState } from '@tanstack/react-router'
 import { BookText, ChevronRight, RotateCw } from 'lucide-react'
 import { Children } from 'react'
-import type { ComponentProps, ReactNode } from 'react'
+import type { ComponentProps, ReactNode, Ref } from 'react'
 
 import { attentionQuery } from '@/api/queries'
 import { Notice } from '@/components/notice'
@@ -204,13 +204,17 @@ export function PanelHeader({
     label,
     sticky = false,
     children,
+    ref,
 }: {
     label: string
     sticky?: boolean
     children?: ReactNode
+    /** The header, for one that measures it, as what is scrolled to stays clear of a sticky one. */
+    ref?: Ref<HTMLDivElement>
 }) {
     return (
         <div
+            ref={ref}
             className={cn(
                 'flex min-h-9 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-3 py-0.5',
                 'bg-surface-raised/50',

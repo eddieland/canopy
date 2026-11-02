@@ -1559,7 +1559,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   the question, the planner's choice `recommended`, the one picked a check in `status-done`. Under the plan, not in
   the foot, so the foot keeps its two lines and the decisions are read after the plan and answered just above the
   actions that send them. Another pick is an answer, a line of the notes `Approve` carries
-  and of what `Ask for changes` sends.
+  and of what `Ask for changes` sends. Since the panel is out of sight under a long plan, the line under the foot's
+  actions leads with a jump to it (`DecisionsJump`), a plain button in the accent's monospace as `MoreLines` is:
+  `↓ 2 open decisions`, then `↓ 1 of 2 answered`, counting the plan as it reads now. It brings the panel fully into
+  view, clear of the sticky header and foot as tall as each is then, and focuses it. It is there whenever the panel
+  is, so the foot keeps its height, and it informs rather than gates: no status tone, nothing on `Approve`.
   The plan's actions are its panel's sticky foot (`PanelFooter`), which stays at the bottom of the page while the plan
   scrolls, as a document's do, so a long plan is approved or sent back from where it is read: the caller's own actions
   (a ticket's `Approve`, the foot's one primary, then `Save`, outlined, and `Skip the plan`, ghost), then a note on the
