@@ -93,6 +93,7 @@ const HOURS: { value: Hours; label: string }[] = [
 
 // Each size's name is drawn at the size it picks, a plan's body text, as the plan's style menu previews each style.
 const PLAN_TEXTS: { value: PlanText; label: string; preview: string }[] = [
+    { value: 'tiny', label: 'Tiny', preview: 'text-xs' },
     { value: 'small', label: 'Small', preview: 'text-sm' },
     { value: 'normal', label: 'Normal', preview: 'text-base' },
     { value: 'large', label: 'Large', preview: 'text-lg' },
