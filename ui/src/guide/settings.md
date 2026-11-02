@@ -2,9 +2,9 @@
 
 A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your limits and
 trust settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and the
-skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the clock, the send key, whether
-attention lists chore findings, your review personas, and the fun are kept in this browser; everything else canopy reads
-from its config files, as it always did.
+skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the clock, a plan's text size,
+the send key, whether attention lists chore findings, your review personas, and the fun are kept in this browser;
+everything else canopy reads from its config files, as it always did.
 
 ## Theme
 
@@ -46,6 +46,15 @@ How every time of day on the page reads: **24-hour** (`14:05`, the default) or *
 zone** puts the zone after each one, as your browser abbreviates it (`14:05 EDT`), which settles the question of whose
 2 PM it was before anyone has to ask. The line above the switches shows the time now, as it will read. Every time
 follows along, the ones you hover for included. Ages (`3m ago`) don't change; minutes are minutes everywhere.
+
+## Plans
+
+How large a plan's text is set: **Small**, **Normal** (the default, the guide's size), or **Large**, each named in the
+size it picks. A sample of a plan under them shows the size you picked, so you see what you're getting before you open
+one. The headings come along a step, so a plan keeps its
+shape at any size. It holds on a ticket's plan page and in a task's report, which is laid out the same way; the guide
+stays put. Comments beside a plan follow their passages as the text grows, so a long plan you'd rather read from across
+the room loses nothing but some scrolling.
 
 ## Replies
 

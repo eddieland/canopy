@@ -62,6 +62,7 @@ import type { PlanSection, SectionMark } from '@/lib/plan-marks'
 import { planOutline, sectionAt } from '@/lib/plan-outline'
 import type { OutlineEntry } from '@/lib/plan-outline'
 import { planExtensions } from '@/lib/plan-schema'
+import { usePlanText } from '@/lib/plan-text'
 import {
     addReply,
     addThread,
@@ -212,6 +213,8 @@ export function PlanEditor({
             },
         },
     })
+    // How large the plan's text is set, as Settings picks it (`.plan-doc` in src/index.css).
+    const planText = usePlanText()
     const [draft, setDraft] = useState<Draft | undefined>(undefined)
     // The note on the whole plan, which goes with Ask for changes or with Approve, whichever the operator presses.
     const [note, setNote] = useState('')
@@ -540,6 +543,7 @@ export function PlanEditor({
                     </PanelHeader>
                     <EditorContent
                         editor={editor}
+                        data-plan-text={planText}
                         className={cn('px-6 py-4', showChanges && 'plan-changes', raw && 'hidden')}
                     />
                     {source !== undefined && (
@@ -693,7 +697,8 @@ export function PlanDocument({ markdown, label }: { markdown: string; label: str
             attributes: { class: 'plan-doc min-h-0', 'aria-label': label, role: 'document' },
         },
     })
-    return <EditorContent editor={editor} className="px-6 py-4" />
+    const planText = usePlanText()
+    return <EditorContent editor={editor} data-plan-text={planText} className="px-6 py-4" />
 }
 
 // How many changes are marked, and buttons that step the cursor to the one before or after it.
