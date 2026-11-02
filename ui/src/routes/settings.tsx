@@ -34,6 +34,8 @@ import { buy as buyHat, HATS, hatsCents, setWardrobe, useWardrobe } from '@/lib/
 import type { Hat } from '@/lib/hats'
 import type { TickerTopic } from '@/lib/headlines'
 import { reloadedText } from '@/lib/outcomes'
+import { setPlanText, usePlanText } from '@/lib/plan-text'
+import type { PlanText } from '@/lib/plan-text'
 import { setRave, useRave } from '@/lib/rave'
 import { dropDrafts } from '@/lib/reply-draft'
 import { setReviewPersonas, usablePersonas, useReviewPersonas } from '@/lib/review-personas'
@@ -47,6 +49,7 @@ import type { Shell } from '@/lib/shells'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
 import type { TickerSpeed } from '@/lib/ticker-settings'
 import { stamp, useNow } from '@/lib/time'
+import { cn } from '@/lib/utils'
 import { balanceCents } from '@/lib/wallet'
 import { paletteOptions, usePalettes } from '@/theme/palette'
 import type { Palette } from '@/theme/palette'
@@ -55,9 +58,9 @@ import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
 /**
- * What this browser keeps (the theme, the clock, the send key, chores' findings on the attention list, the review
- * personas, the fun, the session), the limits
- * and trust settings of the workspace's config, and reloading the loop's config.
+ * What this browser keeps (the theme, the clock, a plan's text size, the send key, chores' findings on the attention
+ * list, the review personas, the fun, the session), the limits and trust settings of the workspace's config, and
+ * reloading the loop's config.
  */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
@@ -88,6 +91,13 @@ const HOURS: { value: Hours; label: string }[] = [
     { value: '12', label: '12-hour' },
 ]
 
+// Each size's name is drawn at the size it picks, a plan's body text, as the plan's style menu previews each style.
+const PLAN_TEXTS: { value: PlanText; label: string; preview: string }[] = [
+    { value: 'small', label: 'Small', preview: 'text-sm' },
+    { value: 'normal', label: 'Normal', preview: 'text-base' },
+    { value: 'large', label: 'Large', preview: 'text-lg' },
+]
+
 const SEND_KEYS: { value: SendKey; label: string }[] = [
     { value: 'enter', label: 'Enter' },
     { value: 'mod-enter', label: 'Ctrl+Enter' },
@@ -98,12 +108,13 @@ function SettingsPage() {
     return (
         <>
             <PageHeader title="Settings">
-                The theme, the clock, the send key, chores&apos; findings on the attention list, your review personas,
-                and the fun are kept in this browser. Everything else canopy reads from its config files, whose limits
-                and trust settings can be changed here.
+                The theme, the clock, a plan&apos;s text size, the send key, chores&apos; findings on the attention
+                list, your review personas, and the fun are kept in this browser. Everything else canopy reads from its
+                config files, whose limits and trust settings can be changed here.
             </PageHeader>
             <ThemePanel />
             <ClockPanel />
+            <PlanTextPanel />
             <SendKeyPanel />
             <AttentionPanel />
             <ReviewsPanel />
@@ -655,6 +666,59 @@ function ClockPanel() {
                     />
                     Show time zone
                 </label>
+            </div>
+        </Panel>
+    )
+}
+
+/**
+ * How large a plan's text is set, in its editor and in a task's report; the guide keeps a document's own size. Under
+ * the choice, a sample of a plan, a section and a paragraph, drawn by the plan's own rules at the size picked.
+ */
+function PlanTextPanel() {
+    const planText = usePlanText()
+    return (
+        <Panel>
+            <PanelHeader label="Plans" />
+            <div className="flex items-center justify-between gap-4 border-b p-3">
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                    How large a plan&apos;s text is set, its headings with it, on its page and in a task&apos;s report.
+                    Normal is the guide&apos;s size.
+                </p>
+                <ToggleGroup
+                    type="single"
+                    value={planText}
+                    aria-label="Plan text size"
+                    className="shrink-0"
+                    onValueChange={(value) => {
+                        const picked = PLAN_TEXTS.find((t) => t.value === value)
+                        if (picked) {
+                            setPlanText(picked.value)
+                        }
+                    }}
+                >
+                    {PLAN_TEXTS.map(({ value, label, preview }) => (
+                        <ToggleGroupItem
+                            key={value}
+                            value={value}
+                            data-testid={`plan-text-${value}`}
+                            className={cn(preview, 'leading-none')}
+                        >
+                            {label}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
+            </div>
+            {/* A sample, not a plan: hidden from a screen reader, which would read it as the page's own words. */}
+            <div aria-hidden data-plan-text={planText} data-testid="plan-text-sample" className="p-3">
+                <div className="plan-doc min-h-0">
+                    <p data-level="2">Export reports as CSV</p>
+                    <p>
+                        In <strong>web</strong>, the reports page gains an <em>Export CSV</em> button. It calls a new
+                        route, <code>GET /reports/{'{id}'}/export.csv</code>, which streams the report&apos;s rows as
+                        they are read, so a large report never sits whole in memory.
+                    </p>
+                </div>
             </div>
         </Panel>
     )
