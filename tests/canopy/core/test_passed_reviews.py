@@ -60,6 +60,15 @@ def test_feedback_passed_over_is_left_until_answered_resolved_or_gone(
     assert left(canopy_env) == [(2, "optional")]
 
 
+def test_a_forget_drops_what_was_left_on_the_prs_it_drops(canopy_env: CanopyEnv, observed: sqlite3.Connection) -> None:
+    review(observed, 1, "carol", None, FRESH, "A nit.", item="comment")
+    passed_over(observed, 1)
+    observed.commit()
+    assert left(canopy_env) == [(1, "optional")]
+    assert operator("forget", KEY) == 0
+    assert left(canopy_env) == []
+
+
 def test_show_lists_what_is_left_with_why_and_the_tick(
     canopy_env: CanopyEnv,
     observed: sqlite3.Connection,
