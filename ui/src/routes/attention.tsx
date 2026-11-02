@@ -34,7 +34,8 @@ import { Leaf } from '@/components/leaf'
 import { LessonsDue, LessonsWrong, ProposalsWaiting } from '@/components/memory-attention'
 import { ModelAttention } from '@/components/model-attention'
 import { Notice } from '@/components/notice'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } from '@/components/panel'
+import type { PanelRead } from '@/components/panel'
 import { PlanCard } from '@/components/plan-card'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
@@ -122,7 +123,8 @@ function AttentionPage() {
     const { item: wanted } = Route.useSearch()
     const navigate = Route.useNavigate()
     const toast = useToast()
-    const { data } = useAttention()
+    const attention = useAttention()
+    const { data } = attention
     const tickets = useQuery(ticketsQuery).data
     const tasks = useQuery(tasksQuery).data
     const items = data === undefined ? undefined : bySeverity(data)
@@ -195,7 +197,7 @@ function AttentionPage() {
                                     <span className="readout text-xs text-muted-foreground">{items?.length}</span>
                                 </PanelHeader>
                                 {items === undefined ? (
-                                    <PanelSkeleton className="min-h-40" />
+                                    <PanelLoading query={attention} className="min-h-40" />
                                 ) : (
                                     <ul className="stagger flex flex-col gap-0.5 p-1.5">
                                         {rows.map(({ item, leaving }) =>
@@ -230,9 +232,12 @@ function AttentionPage() {
                                 Back to the list
                             </Button>
                             {selected === undefined ? (
-                                <Panel>
-                                    <PanelSkeleton rows={1} className="min-h-72" />
-                                </Panel>
+                                // Only while the list is read: a list that failed says so once, in its own panel.
+                                attention.error === null && (
+                                    <Panel>
+                                        <PanelSkeleton rows={1} className="min-h-72" />
+                                    </Panel>
+                                )
                             ) : (
                                 <Detail
                                     key={selected.id}
@@ -518,12 +523,13 @@ function ItemHead({ item, asks, done }: { item: AttentionItem; asks: Ask; done: 
  * before the ticket's actions and conversation.
  */
 function PlanReview({ ticketKey }: { ticketKey: string }) {
-    const { data, error } = useQuery(ticketPlansQuery(ticketKey))
+    const query = useQuery(ticketPlansQuery(ticketKey))
+    const { data, error } = query
     if (error instanceof ApiError) {
         return <Notice error={error} className="border-b p-3" />
     }
     if (data === undefined) {
-        return <PanelSkeleton rows={2} className="min-h-44 border-b" />
+        return <PanelLoading query={query} rows={2} className="min-h-44 border-b" />
     }
     return <PlanCard ticketKey={ticketKey} plans={data} bare />
 }
@@ -692,12 +698,13 @@ function RunQuestion({ item, onAnswered }: { item: AttentionItem; onAnswered: (s
 
 /** A worker's or a planner's run's question, from the run as its page reads it. */
 function WorkerQuestion({ id, onAnswered }: { id: number; onAnswered: (said: string) => void }) {
-    const { data, error } = useQuery(runQuery(id))
+    const query = useQuery(runQuery(id))
+    const { data } = query
     return (
         <QuestionBlock
             card={data?.card}
             running={data?.state === 'running'}
-            error={error}
+            query={query}
             answers={{ kind: 'run', id }}
             onAnswered={onAnswered}
         />
@@ -706,12 +713,13 @@ function WorkerQuestion({ id, onAnswered }: { id: number; onAnswered: (said: str
 
 /** A review's question, from the review as its page reads it. */
 function ReviewQuestion({ id, onAnswered }: { id: number; onAnswered: (said: string) => void }) {
-    const { data, error } = useQuery(reviewQuery(id))
+    const query = useQuery(reviewQuery(id))
+    const { data } = query
     return (
         <QuestionBlock
             card={data?.card}
             running={data?.review.state === 'running'}
-            error={error}
+            query={query}
             answers={{ kind: 'review', id }}
             onAnswered={onAnswered}
         />
@@ -722,21 +730,22 @@ function ReviewQuestion({ id, onAnswered }: { id: number; onAnswered: (said: str
 function QuestionBlock({
     card,
     running,
-    error,
+    query,
     answers,
     onAnswered,
 }: {
     card: RunCard | null | undefined
     running: boolean
-    error: Error | null
+    /** The read of the run or review that carries the card. */
+    query: PanelRead
     answers: AnswerTarget
     onAnswered: (said: string) => void
 }) {
-    if (error instanceof ApiError) {
-        return <Notice error={error} className="border-b p-3" />
+    if (query.error instanceof ApiError) {
+        return <Notice error={query.error} className="border-b p-3" />
     }
     if (card === undefined) {
-        return <PanelSkeleton rows={2} className="min-h-44 border-b" />
+        return <PanelLoading query={query} rows={2} className="min-h-44 border-b" />
     }
     const question = card?.question ?? null
     if (question === null) {
@@ -816,12 +825,13 @@ function RunCommand({ command, note, className }: { command: string; note?: stri
 
 /** A PR's item: a grant of one more review when the PR is at its review limit (DESIGN §21), else nothing to answer. */
 function PullRequestLimits({ url }: { url: string }) {
-    const { data, error } = useQuery(pullRequestQuery(url))
+    const query = useQuery(pullRequestQuery(url))
+    const { data, error } = query
     if (error instanceof ApiError) {
         return <Notice error={error} className="p-3" />
     }
     if (data === undefined) {
-        return <PanelSkeleton rows={1} className="min-h-24" />
+        return <PanelLoading query={query} rows={1} className="min-h-24" />
     }
     const limits = data.review_limit === null ? [] : [data.review_limit]
     return limits.some((limit) => limit.runs >= limit.limit) ? (
@@ -833,12 +843,13 @@ function PullRequestLimits({ url }: { url: string }) {
 
 /** A chore's item: the chore's notes, which its next runs read, and the form for another (DESIGN §19). */
 function ChoreThread({ name }: { name: string }) {
-    const { data, error } = useQuery(choreQuery(name))
+    const query = useQuery(choreQuery(name))
+    const { data, error } = query
     if (error instanceof ApiError) {
         return <Notice error={error} className="p-3" />
     }
     if (data === undefined) {
-        return <PanelSkeleton className="min-h-60" />
+        return <PanelLoading query={query} className="min-h-60" />
     }
     return <ChoreNotes detail={data} />
 }
@@ -860,12 +871,13 @@ function Thread({
     asks: Ask
     onReplied: (said: string) => void
 }) {
-    const { data, error } = useQuery(ticketQuery(ticketKey))
+    const query = useQuery(ticketQuery(ticketKey))
+    const { data, error } = query
     if (error instanceof ApiError) {
         return <Notice error={error} className="p-3" />
     }
     if (data === undefined) {
-        return <PanelSkeleton className="min-h-60" />
+        return <PanelLoading query={query} className="min-h-60" />
     }
     const { ticket } = data
     const leads = asks === 'ticket'
