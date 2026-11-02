@@ -2,7 +2,7 @@ import type { AttentionItem } from '@/api/types'
 import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
 /**
- * Whether the attention list shows chores' findings (`useAttention`): its page, its counter, and the nav's badge.
+ * Whether the attention list shows chores' findings (`useAttention`): its page and the nav's badge.
  * Shown until the operator hides them; a chore's own page lists its findings either way. Kept in localStorage like the
  * send key, and synced across tabs. Only this browser reads it: the CLI's `canopy status` and the loop never do.
  */

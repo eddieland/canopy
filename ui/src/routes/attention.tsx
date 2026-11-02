@@ -24,9 +24,7 @@ import { EmptyAttention } from '@/components/all-clear'
 import { ChoreFindingText } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
-import { Code } from '@/components/code'
 import { Copyable } from '@/components/copy-button'
-import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
 import { FeedbackPlanWaits } from '@/components/feedback-plan-card'
 import { GrantLimits } from '@/components/grant-limits'
@@ -61,6 +59,7 @@ import {
     feedbackPlanOf,
     modelRefused,
     nextWaiting,
+    oldestWaiting,
     pullRequestOf,
     reviewOf,
     severity,
@@ -100,6 +99,10 @@ const TONE: Record<Severity, Tone> = {
     other: 'plain',
     finding: 'plain',
 }
+
+// What the page shows, the same on every visit, on its title's hover (ui/DESIGN.md, "A detail page leads with what it
+// is about").
+const HELP = 'What needs you, as canopy status lists it, most severe first. An item leaves when its cause is gone.'
 
 // How long a cleared item's row plays its exit before it is let go: `animate-leave` in src/index.css, and a little
 // over, so the row is folded shut before it goes.
@@ -155,6 +158,8 @@ function AttentionPage() {
         return answered(item, tickets, tasks)
     }
 
+    const oldest = items === undefined ? null : oldestWaiting(items, isDone)
+
     // A reply that answers its item moves on to the next that waits on the operator, its row chosen and focused, the
     // list in view; a toast says what the reply did, as the form that said it goes with its item.
     function moveOn(from: AttentionItem, said: string) {
@@ -170,11 +175,7 @@ function AttentionPage() {
 
     return (
         <>
-            <PageHeader title="Attention">
-                What needs you, as <Code>canopy status</Code> lists it, most severe first. An item leaves when its cause
-                is gone.
-            </PageHeader>
-            <Counters />
+            <PageHeader title="Attention" help={HELP} />
             <HiddenFindings />
             {items !== undefined && items.length === 0 ? (
                 <EmptyAttention />
@@ -192,7 +193,17 @@ function AttentionPage() {
                             {/* What is working now is the rail's, on every page: this column is the list alone. */}
                             <Panel data-testid="attention-list">
                                 <PanelHeader label="Attention">
-                                    <span className="readout text-xs text-muted-foreground">{items?.length}</span>
+                                    <span className="text-xs whitespace-nowrap text-muted-foreground">
+                                        {oldest !== null && (
+                                            <span data-testid="attention-oldest">
+                                                oldest waiting <Age at={oldest} className="inline" />
+                                                {' · '}
+                                            </span>
+                                        )}
+                                        <span className="readout" data-testid="attention-count">
+                                            {items?.length}
+                                        </span>
+                                    </span>
                                 </PanelHeader>
                                 {items === undefined ? (
                                     <PanelSkeleton className="min-h-40" />

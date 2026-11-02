@@ -68,7 +68,7 @@ Shift+Enter always makes a new line. The key you pick shows on each send button.
 
 ## Attention
 
-**Hide chore findings** leaves what your [chores](chores) find off the [attention](attention) list, its counter, and
+**Hide chore findings** leaves what your [chores](chores) find off the [attention](attention) list, its count, and
 the nav's badge, so the list holds only what needs you. Nothing is dismissed: each chore's page still lists its
 findings, and the attention page says how many it left out, with a link back here, so a hidden finding is never
 mistaken for none. It's this browser's alone. `canopy status` still lists every finding, and so does the next tab you

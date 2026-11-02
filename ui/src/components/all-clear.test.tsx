@@ -57,7 +57,7 @@ describe('EmptyAttention', () => {
         const { router } = await renderEmpty([])
         expect(screen.getByTestId('first-run').textContent).toBe(
             'no tickets yet: give one your queue label in the tracker, or start one privately on Tickets, ' +
-                'then Tick now',
+                'then Tick now, and what needs you lands here',
         )
         expect(screen.queryByTestId('all-clear')).toBeNull()
         expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Tick now' }).disabled).toBe(false)
