@@ -1532,10 +1532,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   written stays on its passage, and the cursor goes back to it, so its words are never lost or carried to other words.
   While the plan waits on the operator, the choices its Decisions leave open (`src/lib/plan-decisions.ts`, the
   planner's `### Decision N` and its lettered options) are asked again under it, in its panel above its foot: `Open
-  decisions`, an `h3` in `panel-label` type under a hairline, a muted line on what an answer does, then each decision a
-  `RadioGroup` named by its question, the planner's choice picked and marked `(the planner's choice)` in muted
-  `text-xs`. Under the plan, not in the foot, so the foot keeps its two lines and the decisions are read after the plan
-  and answered just above the actions that send them. Another pick is an answer, a line of the notes `Approve` carries
+  decisions`, an `h3` in `panel-label` type under a hairline, a muted line on what an answer does, then each decision
+  in a run's question's box (above), muted on `surface-raised`: `Decision N` and whether you answered it, the
+  question, and its options as the same lettered rows (`LetteredOption`), each the radio of a `RadioGroup` named by
+  the question, the planner's choice `recommended`, the one picked a check in `status-done`. Under the plan, not in
+  the foot, so the foot keeps its two lines and the decisions are read after the plan and answered just above the
+  actions that send them. Another pick is an answer, a line of the notes `Approve` carries
   and of what `Ask for changes` sends.
   The plan's actions are its panel's sticky foot (`PanelFooter`), which stays at the bottom of the page while the plan
   scrolls, as a document's do, so a long plan is approved or sent back from where it is read: the caller's own actions
@@ -1691,11 +1693,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`ToggleGroup`, `src/components/ui/toggle-group.tsx`): the options in a well on the canvas, the picked one raised on
   `surface-raised` with `shadow-xs`. It is a radio group, so one option is always picked: the arrow keys move between
   them, Space picks one, and Tab leaves the group.
-- **A choice of one among options a sentence long** (a plan's open decision) is a radio group (`RadioGroup`,
-  `src/components/ui/radio-group.tsx`), since a segment cannot hold a sentence: the options in a column, each a round
-  well on the raised surface beside its words, in a `label` for it so a click on the words picks it, the picked one's
-  border and dot in the accent. It is named by the question it answers, its `fieldset`'s `legend`; the arrow keys move
-  the pick, and Tab leaves the group.
+- **A choice of one among an agent's lettered options** (a plan's open decision) is a radio group (`RadioGroup`,
+  `src/components/ui/radio-group.tsx`), since a segment cannot hold a sentence, drawn as a run's question's options are
+  (`LetteredOption`), so the two read as one thing: each option a full-width row that is its radio, its letter in a
+  small square that turns to a check in `status-done` once picked, `recommended` after the agent's own. It is named by
+  the question it answers; the arrow keys move the pick, and Tab leaves the group.
 - **A choice of repositories** is a repository picker (`src/components/repo-picker.tsx`), never a chip or a segment for
   each, since a workspace may have dozens: an outline `sm` button in monospace `text-xs` saying what is chosen
   (`every repository`, in `muted-foreground` while it narrows nothing; a name; two; then `3 repositories`), opening a

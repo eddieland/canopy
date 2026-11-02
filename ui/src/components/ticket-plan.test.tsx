@@ -360,7 +360,7 @@ describe('TicketPlan', () => {
             })
             const radios = within(group).getAllByRole<HTMLButtonElement>('radio')
             expect(radios.map((radio) => radio.getAttribute('aria-checked'))).toEqual(['true', 'false'])
-            expect(within(group).getByRole('radio', { name: /^A: UTF-8.*the planner's choice/u })).toBe(radios[0])
+            expect(within(group).getByRole('radio', { name: /^A: UTF-8.*, recommended$/u })).toBe(radios[0])
             fireEvent.click(button('Approve'))
             await screen.findByTestId('plan-approved')
             expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])

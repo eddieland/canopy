@@ -189,8 +189,9 @@ round may need trimming first.
 
 Some of a plan is a question only you can answer. The planner writes each choice the ticket left open under
 Decisions, as a question with lettered options and the one it went with marked `(chosen)`, and the page asks it again
-under the plan, in **Open decisions**, as a set of options with the planner's choice picked. Pick another and that's
-your answer: a line such as `Decision 1 (Where a schedule keeps its hour): take B, not A.` joins your notes, so
+under the plan, in **Open decisions**, drawn just as a worker's question is on its progress card: lettered options,
+the planner's marked `recommended` and picked. Pick another and that's your answer: a line such as
+`Decision 1 (Where a schedule keeps its hour): take B, not A.` joins your notes, so
 **Approve with notes** carries it to the implement, and **Ask for changes** to the planner. Leave the planner's choice
 picked and nothing is sent; agreeing needs no paperwork. Your picks live on this page, not in the journal, so leaving
 asks first and a reload forgets them. A plan written before planners used this shape, or one that wanders from it,

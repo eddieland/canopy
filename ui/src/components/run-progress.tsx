@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, Circle, CircleCheck, CircleMinus, Clock, Hourglass } from 'lucide-react'
+import { Circle, CircleCheck, CircleMinus, Clock, Hourglass } from 'lucide-react'
 import { useState } from 'react'
 
 import { answerQuestion, refreshAnswered } from '@/api/mutations'
@@ -7,12 +7,14 @@ import type { AnswerTarget } from '@/api/mutations'
 import type { RunCard, RunCardQuestion } from '@/api/types'
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
+import { LetteredOption } from '@/components/lettered-option'
 import { LinkedText } from '@/components/linked-text'
 import { Notice } from '@/components/notice'
 import { Panel, PanelHeader } from '@/components/panel'
 import { RunDot } from '@/components/status'
 import { Clipped } from '@/components/tip'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { LETTERS, OPTION_HOVER, OPTION_ROW } from '@/lib/lettered-options'
 import { answeredText } from '@/lib/outcomes'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
@@ -407,9 +409,6 @@ function NoteLine({ label, children }: { label: string; children: React.ReactNod
     )
 }
 
-/** The letters a question's options go by, in order. */
-const LETTERS = ['A', 'B', 'C', 'D', 'E'] as const
-
 /**
  * The agent's question: whether it waits on you, the question, and each option by its letter, the one the agent
  * recommends marked as the one it works toward meanwhile, and once you answered, your letter. While it waits it sits on
@@ -468,39 +467,21 @@ export function ProgressQuestion({
                     const letter = LETTERS[i] ?? '?'
                     const chosen = letter === question.answer
                     const body = (
-                        <>
-                            <span
-                                className={cn(
-                                    'grid size-5 shrink-0 place-items-center rounded-xs border font-mono text-xs',
-                                    chosen
-                                        ? 'border-status-done/40 bg-status-done/12 text-status-done'
-                                        : 'bg-surface text-muted-foreground',
-                                )}
-                            >
-                                {chosen ? <Check aria-hidden className="size-3" /> : letter}
-                            </span>
-                            <span className="min-w-0 flex-1 break-words">
-                                <LinkedText text={option} />
-                            </span>
-                            {letter === question.recommend && (
-                                <span className="shrink-0 text-xs text-muted-foreground">
-                                    {waiting ? 'recommended · working toward it' : 'recommended'}
-                                </span>
-                            )}
-                            {chosen && <span className="shrink-0 text-xs text-status-done">your answer</span>}
-                        </>
+                        <LetteredOption
+                            letter={letter}
+                            chosen={chosen}
+                            recommended={letter === question.recommend}
+                            recommendedNote={waiting ? 'recommended · working toward it' : 'recommended'}
+                        >
+                            <LinkedText text={option} />
+                        </LetteredOption>
                     )
-                    const row = 'flex w-full items-center gap-2.5 rounded-sm px-2 py-1 text-left text-sm'
                     return (
                         <li key={letter}>
                             {running && answers !== undefined && !chosen ? (
                                 <button
                                     type="button"
-                                    className={cn(
-                                        row,
-                                        'hover:bg-surface-raised focus-visible:ring-2 focus-visible:ring-ring',
-                                        'outline-none disabled:opacity-50',
-                                    )}
+                                    className={cn(OPTION_ROW, OPTION_HOVER)}
                                     disabled={mutation.isPending}
                                     aria-label={`Answer ${letter}: ${option}`}
                                     onClick={() => mutation.mutate({ target: answers, letter })}
@@ -508,7 +489,7 @@ export function ProgressQuestion({
                                     {body}
                                 </button>
                             ) : (
-                                <div className={row}>{body}</div>
+                                <div className={OPTION_ROW}>{body}</div>
                             )}
                         </li>
                     )
