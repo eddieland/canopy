@@ -264,8 +264,9 @@ skill the workers load (§17). `tracker.query` finds candidates; it does not aut
 (TRUST_MODEL T7).
 
 **Traces.** canopy records what it does as OpenTelemetry spans only once the operator's `telemetry.traces` turns them on;
-off, no span is made and OpenTelemetry is not loaded. Each tick is a trace, with a span for each of its steps, and each
-run it starts, in a process of its own, is traced under the step that started it. A span holds canopy's own facts (ids,
+off, no span is made and OpenTelemetry is not loaded. Each tick is a trace of its own, with a span for each of its
+steps, and each run it starts, in a process of its own, is traced under the step that started it: every process canopy
+starts is given the current span as `TRACEPARENT`. A span holds canopy's own facts (ids,
 kinds, statuses, counts, cost), never text canopy read, which is untrusted and may be private (TRUST_MODEL T2). Spans
 go to `<state_dir>/traces.jsonl`, readable by the operator alone, as OTLP JSON for a collector they run to read;
 nothing leaves the machine (D132).

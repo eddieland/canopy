@@ -106,3 +106,14 @@ def test_configuring_again_alike_keeps_the_trace_and_off_stops_it(traced: Path, 
     with tracing.span("after"):
         pass
     assert [s["name"] for s in spans(traced)] == ["tool"]
+
+
+def test_a_new_trace_starts_its_own_whatever_trace_the_process_inherited(tmp_path: Path) -> None:
+    with mock.patch.dict(os.environ, {tracing.TRACEPARENT: f"00-{TRACE}-{PARENT}-01"}):
+        tracing.configure(tmp_path, "file")
+        with tracing.span("tick", new_trace=True), tracing.span("state"):
+            pass
+    state, tick = spans(tmp_path / tracing.TRACES_FILE_NAME)
+    assert tick["traceId"] != TRACE
+    assert "parentSpanId" not in tick
+    assert (state["traceId"], state["parentSpanId"]) == (tick["traceId"], tick["spanId"])

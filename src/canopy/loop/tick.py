@@ -406,7 +406,7 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
         )
         return Outcome(tick_id, status, summary, usage)
 
-    with tracing.span("tick", tick_id=tick_id, dry_run=dry_run) as traced:
+    with tracing.span("tick", new_trace=True, tick_id=tick_id, dry_run=dry_run) as traced:
         try:
             return _steps(ctx, tick_id, log, finish, dry_run=dry_run, woken_by=woken_by)
         # Closed with what it raised, so the journal keeps why it failed when the logs do not. Should closing it raise

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import threading
 from dataclasses import dataclass
 from importlib.metadata import version
 from pathlib import Path
@@ -59,8 +60,11 @@ class Span:
 
 
 @contextlib.contextmanager
-def span(name: str, **attributes: Attribute) -> Iterator[Span]:
+def span(name: str, *, new_trace: bool = False, **attributes: Attribute) -> Iterator[Span]:
     """Trace the `with` block as a span called `name`, a child of the span it runs in, if any.
+
+    With `new_trace`, it starts a trace of its own instead, whatever span it runs in, as each tick does: a `canopy
+    loop` started from a shell with a `TRACEPARENT` set would otherwise put every tick it ever runs in that one trace.
 
     Yields:
         The span, to set what the block learns. It records nothing while tracing is off.
@@ -69,10 +73,12 @@ def span(name: str, **attributes: Attribute) -> Iterator[Span]:
     if tracer is None:
         yield _OFF
         return
-    from opentelemetry.trace import StatusCode  # noqa: PLC0415  (imported only once tracing is on)
+    from opentelemetry.context import Context  # noqa: PLC0415  (imported only once tracing is on)
+    from opentelemetry.trace import StatusCode  # noqa: PLC0415
 
     with tracer.start_as_current_span(
         name,
+        context=Context() if new_trace else None,
         attributes=_named(attributes),
         record_exception=False,
         set_status_on_exception=False,
@@ -108,11 +114,13 @@ def configure(state_dir: Path, traces: Traces) -> None:
     call with the same settings, as each of `canopy _mcp`'s tool calls makes, changes nothing.
     """
     path = state_dir / TRACES_FILE_NAME if traces == "file" else None
-    if path == _tracing.path:
-        return
-    _tracing.stop()
-    if path is not None:
-        _tracing.start(path)
+    # Held across the check and the change: the web server's threads may each open a workspace at once.
+    with _CONFIGURING:
+        if path == _tracing.path:
+            return
+        _tracing.stop()
+        if path is not None:
+            _tracing.start(path)
 
 
 @dataclass
@@ -163,6 +171,7 @@ class _Tracing:
 
 
 _tracing = _Tracing()
+_CONFIGURING = threading.Lock()
 _OFF = Span(None)
 
 
