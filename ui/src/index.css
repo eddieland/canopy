@@ -245,16 +245,13 @@
     }
 }
 
-/*
- * A barber pole's stripes move one tile along, right to left, so the loop is seamless and, against a fill sweeping
- * the other way, they read as the pole turning rather than riding along with it (`animate-barber`).
- */
+/* A barber pole's stripes move one tile along, left to right, so the loop is seamless (`animate-barber`). */
 @keyframes barber {
     from {
         background-position-x: 0;
     }
     to {
-        background-position-x: calc(-1 * var(--barber-tile));
+        background-position-x: var(--barber-tile);
     }
 }
 
@@ -1468,9 +1465,10 @@
 
 /*
  * A working step's fill in a progress meter while its run runs: a barber pole, its diagonal stripes a veil of the
- * page's background over the fill, so they read lighter in light and darker in dark, turning back against the fill as
- * it sweeps across its segment, again and again. The two cycles' lengths share no short ratio, so the stripes never
- * fall in step with the sweep. At rest it stands still in the segment's left half.
+ * page's background over the fill, so they read lighter in light and darker in dark, drifting toward the work still to
+ * do as the fill sweeps across its segment, again and again. The stripes drift fast enough to outrun the slow sweep,
+ * so the pole reads as turning rather than riding along, and the two cycles' lengths share no short ratio, so they
+ * never fall in step. At rest it stands still in the segment's left half.
  */
 @utility animate-barber {
     --barber-tile: 8px;
@@ -1486,7 +1484,7 @@
         background-size: var(--barber-tile) var(--barber-tile);
         animation:
             sweep 3.2s cubic-bezier(0.4, 0, 0.6, 1) infinite,
-            barber 700ms linear infinite;
+            barber 300ms linear infinite;
     }
 }
 
