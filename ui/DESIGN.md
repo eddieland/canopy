@@ -592,6 +592,8 @@ the rules it all keeps; what each one does is written in its code. None of it is
 - **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`, `rave-dark`) or the accent,
   never a status color, so nothing in it reads as a run's state.
 - **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and its count.
+  The last one's plays out too, beside no detail, before the all clear rises in; under reduced motion, or on a page
+  that reads the list empty, the all clear is there at once, and plays nothing.
 - **A tip is true; a joke never looks like one.** The ticker's tips open with "Tip:" and name a real key, command, or
   setting in its own words; one that stops being true is fixed or dropped. Nothing else opens with "Tip:".
 - **Fun honours reduced motion** (Motion, below): it holds still, and says the same. Nothing flashes more than twice a
