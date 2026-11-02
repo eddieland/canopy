@@ -47,11 +47,49 @@ export const PALETTE_LABELS: { readonly [T in ResolvedTheme]: Readonly<Record<Pa
     },
 }
 
-/** `theme`'s palettes in order, the default first, each with its label. */
-export function paletteOptions<T extends ResolvedTheme>(theme: T): { value: Palette<T>; label: string }[] {
+/** What each palette looks like, in a line, shown on hover where the operator picks one. */
+export const PALETTE_DESCRIPTIONS: { readonly [T in ResolvedTheme]: Readonly<Record<Palette<T>, string>> } = {
+    light: {
+        lavender: "The default: a pale lavender grey canvas with white surfaces, tinted with the accent's hue.",
+        'off-white': "A warm paper, its surfaces never quite white, and a fountain pen's blue ink for an accent.",
+        sage: 'A soft green canvas with a heather accent and soft corners.',
+        solarized: "Solarized's light base tones and its blue, crisp and flat.",
+        nord: "Nord's Snow Storm and Frost's blue, soft, under a fade through Frost's blues.",
+        gruvbox: "Gruvbox's light tones and its faded purple, set in mono like an editor of the nineties.",
+        pulp: "Gruvbox's light tones, inked like a comic's page.",
+        'rose-pine': "Rosé Pine Dawn's warm cream, with its rose for an accent and soft corners.",
+        acme: "Plan 9's editor: pale yellow panels on a pale cyan canvas, square and in mono.",
+    },
+    dark: {
+        indigo: "The default: a deep indigo slate, tinted with the accent's hue.",
+        grey: 'Near-colorless greys with a steel blue accent and tight corners.',
+        black: 'A near-black canvas, kind to an OLED screen, with no edges and an ultraviolet glow.',
+        forest: 'A deep green canvas, the dark side of Sage, with a heather accent.',
+        plum: 'A dark wine purple, warmer than indigo, with an orchid accent and the softest corners.',
+        solarized: "Solarized's dark base tones and its blue, crisp and flat.",
+        gruvbox:
+            "Gruvbox's dark tones and its bright purple, in mono with hard shadows, like an editor of the nineties.",
+        pulp: "Gruvbox's dark tones, inked like a comic's page at night.",
+        monokai: "Monokai's olive grey and its pink, crisp and in mono under a neon aurora.",
+    },
+}
+
+/** One palette as a picker offers it. */
+export interface PaletteOption<T extends ResolvedTheme> {
+    /** The palette. */
+    readonly value: Palette<T>
+    /** Its name. */
+    readonly label: string
+    /** What it looks like, in a line, for the item's hover. */
+    readonly description: string
+}
+
+/** `theme`'s palettes in order, the default first, each with its label and description. */
+export function paletteOptions<T extends ResolvedTheme>(theme: T): PaletteOption<T>[] {
     const labels: Readonly<Record<Palette<T>, string>> = PALETTE_LABELS[theme]
+    const descriptions: Readonly<Record<Palette<T>, string>> = PALETTE_DESCRIPTIONS[theme]
     const values: readonly Palette<T>[] = PALETTES[theme]
-    return values.map((value) => ({ value, label: labels[value] }))
+    return values.map((value) => ({ value, label: labels[value], description: descriptions[value] }))
 }
 
 /** The palette picked for each theme. */

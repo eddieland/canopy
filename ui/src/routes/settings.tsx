@@ -52,7 +52,7 @@ import { stamp, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { balanceCents } from '@/lib/wallet'
 import { paletteOptions, usePalettes } from '@/theme/palette'
-import type { Palette } from '@/theme/palette'
+import type { Palette, PaletteOption } from '@/theme/palette'
 import type { ResolvedTheme, ThemePreference } from '@/theme/store'
 import { switchPalette, switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
@@ -169,7 +169,7 @@ function ThemePanel() {
     )
 }
 
-/** One theme's palette, beside the line that says what each is. */
+/** One theme's palette, beside the line that says what each is, each item described on hover too. */
 function PaletteRow<T extends ResolvedTheme>({
     theme,
     value,
@@ -178,7 +178,7 @@ function PaletteRow<T extends ResolvedTheme>({
 }: {
     theme: T
     value: Palette<T>
-    options: { value: Palette<T>; label: string }[]
+    options: PaletteOption<T>[]
     children: ReactNode
 }) {
     return (
@@ -189,6 +189,7 @@ function PaletteRow<T extends ResolvedTheme>({
                     <ToggleGroupItem
                         key={option.value}
                         value={option.value}
+                        title={option.description}
                         data-testid={`palette-${theme}-${option.value}`}
                         onClick={(event) => {
                             void switchPalette(theme, option.value, event.currentTarget)

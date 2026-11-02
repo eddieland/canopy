@@ -75,8 +75,8 @@ export function ThemeToggle() {
 }
 
 /**
- * The palettes `theme` can wear, laid out as the header's other cards are, the one it wears picked. A pick switches
- * with a reveal from the item pressed, handed to `onPick` until it is over.
+ * The palettes `theme` can wear, laid out as the header's other cards are, the one it wears picked, each described on
+ * hover. A pick switches with a reveal from the item pressed, handed to `onPick` until it is over.
  */
 function PalettePicker({ theme, onPick }: { theme: ResolvedTheme; onPick: (reveal: Promise<void>) => void }) {
     const palettes = usePalettes()
@@ -107,6 +107,7 @@ function PalettePicker({ theme, onPick }: { theme: ResolvedTheme; onPick: (revea
                         key={option.value}
                         value={option.value}
                         className="justify-start"
+                        title={option.description}
                         data-testid={`quick-palette-${option.value}`}
                         onClick={(event) => onPick(switchPalette(theme, option.value, event.currentTarget))}
                     >
