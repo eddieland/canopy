@@ -145,8 +145,8 @@ Rules:
   keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono.
   The defaults take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the
   nineties, and black no edges, soft corners, and the glow.
-  Gruvbox's sides also ink the page as a comic does, from a few knobs whose defaults draw nothing: each panel and
-  bubble inked and dropping a hard shadow, a halftone canvas (`--canvas-texture`), the primary action pressed into its
+  Gruvbox's sides also ink the page as a comic does, from a few knobs whose defaults draw nothing: light's panels and
+  bubbles inked (`shadow-bubble`), a halftone canvas (`--canvas-texture`), the primary action pressed into its hard
   shadow (`--press-x`, `--press-y`), and a page title dropped in its section's color (`--title-drop`). Each is a
   shadow, a transform, or a background, so it takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient

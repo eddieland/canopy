@@ -435,18 +435,18 @@
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
     --code-size: 1em;
-    /* A comic's page: panels inked in its dark fg, a line and a half thick, each dropping a hard shadow; halftone
-     * dots on the gutter between them; the primary action pressed flat into its shadow; and a bubble inked as a
-     * panel is. The extra half line is a shadow's spread, so it takes no room. */
+    /* A comic's page: panels and bubbles inked in its dark fg, a line and a half thick, lying flat on halftone dots;
+     * what floats and the primary action drop a hard shadow, and the action presses flat into it. The extra half
+     * line is a shadow's spread, so it takes no room. */
     --ink: oklch(from var(--foreground) l c h / 0.9);
     --edge: var(--ink);
-    --depth-panel: 0 0 0 0.5px var(--ink), 4px 4px 0 var(--ink);
-    --depth-float: 0 0 0 0.5px var(--ink), 6px 6px 0 var(--ink);
-    --depth-action: 0 0 0 1.5px var(--ink), 3px 3px 0 1.5px var(--ink);
-    --depth-action-pressed: 0 0 0 1.5px var(--ink);
+    --depth-panel: 0 0 0 0.5px var(--ink);
+    --depth-float: 4px 4px 0 oklch(from var(--foreground) l c h / 0.85);
+    --depth-action: 3px 3px 0 oklch(from var(--foreground) l c h / 0.85);
+    --depth-action-pressed: none;
     --press-x: 3px;
     --press-y: 3px;
-    --depth-bubble: 0 0 0 1.5px var(--ink), 3px 3px 0 1.5px var(--ink);
+    --depth-bubble: 0 0 0 1.5px var(--ink);
     --canvas-texture: radial-gradient(oklch(from var(--foreground) l c h / 0.11) 1px, transparent 1.5px) 0 0 / 6px 6px;
     --title-drop: 0.08em;
     --title-drop-alpha: 1;
@@ -698,18 +698,14 @@
     --section-chores: oklch(0.74 0.15 52);
     --section-reports: oklch(0.84 0.15 85);
     --section-memory: oklch(0.78 0.07 190);
-    /* A comic's page at night: panels outlined in its bg3, a step brighter than the hairlines inside them, drop a
-     * hard black shadow off the gutter, which is dotted in halftone, and the primary action presses flat into its
-     * shadow. */
-    --ink: oklch(0.06 0 0);
-    --edge: oklch(0.44 0.017 58);
-    --depth-panel: 5px 5px 0 var(--ink);
-    --depth-float: 0 0 0 1px var(--ink), 6px 6px 0 var(--ink);
-    --depth-action: 0 0 0 1.5px var(--ink), 3px 3px 0 1.5px var(--ink);
-    --depth-action-pressed: 0 0 0 1.5px var(--ink);
+    /* A comic's page at night: panels flat on a canvas dotted in halftone, and the primary action pressed flat into
+     * its shadow. */
+    --depth-panel: none;
+    --depth-float: 4px 4px 0 oklch(0.1 0 0);
+    --depth-action: 3px 3px 0 oklch(0.1 0 0);
+    --depth-action-pressed: none;
     --press-x: 3px;
     --press-y: 3px;
-    --depth-bubble: 3px 3px 0 var(--ink);
     --canvas-texture: radial-gradient(oklch(from var(--foreground) l c h / 0.1) 1px, transparent 1.5px) 0 0 / 6px 6px;
     --title-drop: 0.08em;
     --title-drop-alpha: 1;
