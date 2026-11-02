@@ -255,10 +255,13 @@
     }
 }
 
-/* A fill wipes in from its left edge. */
-@keyframes wipe {
+/* A fill half its track's width crosses the track, in from the left edge and out past the right (`animate-barber`). */
+@keyframes sweep {
     from {
-        clip-path: inset(0 100% 0 0);
+        translate: -100%;
+    }
+    to {
+        translate: 200%;
     }
 }
 
@@ -1463,7 +1466,7 @@
 /*
  * A working step's fill in a progress meter while its run runs: a barber pole, its diagonal stripes a veil of the
  * page's background over the fill, so they read lighter in light and darker in dark, drifting toward the work still to
- * do. It wipes in from the left as it first shows. At rest the stripes stand still where they start.
+ * do as the fill sweeps across its segment, again and again. At rest it stands still in the segment's left half.
  */
 @utility animate-barber {
     --barber-tile: 8px;
@@ -1478,7 +1481,7 @@
         );
         background-size: var(--barber-tile) var(--barber-tile);
         animation:
-            wipe 600ms cubic-bezier(0.2, 0, 0, 1) backwards,
+            sweep 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite,
             barber 900ms linear infinite;
     }
 }
