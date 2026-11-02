@@ -4,6 +4,8 @@
 //   src/styles/tokens.css: hex colors, CSS color functions, Tailwind's palette utilities (bg-zinc-800, text-white),
 //   and the dark: variant. A theme difference belongs in tokens.css, not in a component.
 // - Under src/, a corner is on the radius scale (ui/DESIGN.md, "Shape and space"): no arbitrary `rounded-[...]`.
+// - Under src/, each `@keyframes` name is defined once. CSS keeps the last of two with one name, so every animation
+//   that names it runs the other's motion, and nothing else says so.
 // - No line in ui/ is longer than 120 characters, the repository's limit for every file type (AGENTS.md). A
 //   formatter does not break a long string; split it (cn() and cva() take several).
 import { readdirSync, readFileSync } from 'node:fs'
@@ -70,6 +72,30 @@ for (const path of files(src, /\.(?:css|ts|tsx)$/u)) {
         })
 }
 
+/**
+ * Where each `@keyframes` name is first defined, as `file:line`.
+ *
+ * @type {Map<string, string>}
+ */
+const keyframes = new Map()
+for (const path of files(src, /\.css$/u)) {
+    const name = relative(ui, path)
+    readFileSync(path, 'utf8')
+        .split('\n')
+        .forEach((line, i) => {
+            const match = /^\s*@keyframes\s+([\w-]+)/u.exec(line)
+            if (match) {
+                const [, keyframe] = match
+                const first = keyframes.get(keyframe)
+                if (first) {
+                    found.push(`${name}:${i + 1}: @keyframes ${keyframe} is defined again; the first is at ${first}`)
+                } else {
+                    keyframes.set(keyframe, `${name}:${i + 1}`)
+                }
+            }
+        })
+}
+
 for (const path of files(ui, /\.(?:css|ts|tsx|mjs|json|html|md|svg)$/u)) {
     const name = relative(ui, path)
     if (GENERATED.has(name)) {
@@ -88,4 +114,7 @@ if (found.length > 0) {
     console.error(found.join('\n'))
     process.exit(1)
 }
-console.log('check-source: every color is a token, every corner on the scale, every line fits in 120 columns.')
+console.log(
+    'check-source: every color is a token, every corner on the scale, every keyframes name once, ' +
+        'every line fits in 120 columns.',
+)
