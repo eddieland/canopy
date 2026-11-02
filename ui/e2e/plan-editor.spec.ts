@@ -66,6 +66,19 @@ test('selecting text and pressing Comment adds a thread on it, highlighted in th
     await expect(page.locator(`.plan-doc [data-thread="${id}"]`)).toHaveText("Excel's own format")
 })
 
+test('a label leads a comment with its instruction, and the operator’s words follow it', async ({ page }) => {
+    await select(page, "Excel's own format")
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const form = page.getByRole('form', { name: 'Comment' })
+    await form.getByRole('group', { name: 'Labels' }).getByRole('button', { name: 'Verify this' }).click()
+    await expect(form.getByRole('textbox')).toBeFocused()
+    await page.keyboard.type('Name the customer.')
+    await expect(form.getByRole('textbox')).toHaveValue(/^Verify this: .+\n\nName the customer\.$/su)
+    await form.getByRole('button', { name: 'Comment', exact: true }).click()
+    const thread = comments(page).filter({ hasText: 'Name the customer.' })
+    await expect(thread).toContainText('Verify this: check the claim against the code')
+})
+
 test('a comment stays on its passage while the plan is edited above it', async ({ page }) => {
     const doc = plan(page)
     await clickAtEnd(doc.getByRole('heading', { level: 3 }))

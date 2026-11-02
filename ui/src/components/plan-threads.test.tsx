@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import type { ComponentProps } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { COMMENT_LABELS } from '@/lib/plan-comment-labels'
 import { changeRequest } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
 
@@ -151,6 +152,21 @@ describe('PlanThreads', () => {
         fireEvent.keyDown(field('Comment'), { key: 'Enter' })
         expect(typed.onDraftSubmit).toHaveBeenCalledWith('Retry twice.')
     })
+
+    it('offers labels on a comment being written, each leading it with its instruction, the cursor after it', () => {
+        const props = renderList({ draft: { quote: 'the retry', body: '', opened: 1 } })
+        const labels = within(screen.getByRole('group', { name: 'Labels' })).getAllByRole('button')
+        expect(labels.map((button) => button.textContent)).toEqual(COMMENT_LABELS.map((label) => label.name))
+        fireEvent.click(screen.getByRole('button', { name: 'Verify this' }))
+        expect(props.onDraftChange).toHaveBeenCalledWith(expect.stringMatching(/^Verify this: .+\.\n\n$/su))
+        expect(document.activeElement).toBe(field('Comment'))
+        cleanup()
+
+        // What the operator wrote already follows it.
+        const typed = renderList({ draft: { quote: 'the retry', body: 'Retry twice.', opened: 1 } })
+        fireEvent.click(screen.getByRole('button', { name: 'Needs tests' }))
+        expect(typed.onDraftChange).toHaveBeenCalledWith(expect.stringMatching(/^Needs tests: .+\n\nRetry twice\.$/su))
+    })
 })
 
 describe('ThreadCard', () => {
@@ -254,6 +270,15 @@ describe('ThreadCard', () => {
         fireEvent.keyDown(field('Reply'), { key: 'Enter' })
         expect(did.onReply).toHaveBeenCalledWith('t1', 'Half a thought')
         expect(screen.queryByRole('form', { name: 'Reply' })).toBeNull()
+    })
+
+    it('offers the labels on a new comment alone, not on a reply or an edit', () => {
+        renderCard()
+        fireEvent.click(screen.getByRole('button', { name: 'reply' }))
+        expect(screen.queryByRole('group', { name: 'Labels' })).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Edit comment' }))
+        expect(screen.queryByRole('group', { name: 'Labels' })).toBeNull()
     })
 
     it('keeps a comment as text, linking only its web addresses', () => {
