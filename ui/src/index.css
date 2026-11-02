@@ -203,7 +203,8 @@
     }
 }
 
-@keyframes sweep {
+/* A full turn about the element's center (`animate-turn`, `rave-beams`). */
+@keyframes turn {
     to {
         transform: rotate(1turn);
     }
@@ -608,11 +609,11 @@
     }
 }
 
-@utility animate-sweep {
+@utility animate-turn {
     transform-box: view-box;
     transform-origin: center;
     @media (prefers-reduced-motion: no-preference) {
-        animation: sweep 1.4s linear infinite;
+        animation: turn 1.4s linear infinite;
     }
 }
 
@@ -1390,7 +1391,7 @@
         transparent 314deg 360deg
     );
     @media (prefers-reduced-motion: no-preference) {
-        animation: sweep 8s linear infinite;
+        animation: turn 8s linear infinite;
     }
 }
 
