@@ -26,9 +26,9 @@ conversation so far, attachments, and the operator's notice.{{STANDING_SECTION}}
 
 ## Obligations
 
-- Stay inside your directory. Each shell command starts there, and each `cd` is checked from there, so
-  `cd app && cd ../lib` is refused as leaving it: `cd` by a path from your directory, or set the command's working
-  directory.
+- Stay inside your directory. Every shell command starts in it, whatever `cd` an earlier command made, and one that
+  leads out of it is refused: run in a subdirectory by setting the command's working directory or opening the command
+  with `cd <subdirectory> &&`, never by a `cd ..` from where you think an earlier command left you.
 - Write nothing to any ticket that already exists: never comment on, label, edit, or change the state of one,
   through any tool or command. Create a ticket only as the Tickets section below allows.
 - Commit what you change. {{COMMIT_ATTRIBUTION}} Never disguise agent work as human work. A task that needs no change
