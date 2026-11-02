@@ -16,9 +16,9 @@
   `question`, with `ask`, two to five `options`, lettered A, B, and on, and the one you `recommend`. Meanwhile, go on
   with what does not depend on it, and write the plan along the option you recommend; keep the question in each update
   until the answer comes, a line starting `[canopy]` naming one of your options by its letter. Then make the plan follow
-  that option, say under `Decisions` that it was chosen in your progress, and drop the question from your next update.
-  With no answer by the time the plan is done, `Decisions` names your recommendation as the choice and the other
-  options as its alternatives, saying you asked. A question you cannot plan around is `blocked`, below.
+  that option, mark it `(chosen)` under `Decisions`, its letters as in your question, saying it was chosen in your
+  progress, and drop the question from your next update. With no answer by the time the plan is done, mark your
+  recommendation `(chosen)`, saying you asked. A question you cannot plan around is `blocked`, below.
 - Time limit: 45 minutes, which is ample for this job: work at your usual pace, and never cut scope or
   skip a check to save time. Near the end, canopy adds the minutes left to your tool calls' results, in a line starting
   `[canopy]`; until then, the time is not yours to watch. It asks only that you wrap up: if the plan is not finished,
