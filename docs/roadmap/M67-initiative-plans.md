@@ -9,7 +9,9 @@ PRIOR_ART "Shared plans across tickets" is what it starts from.
 - **The initiative.** canopy's own subject, like a task (§36), `init:N`: the operator submits its goal in their own
   words, names its repositories, and adds or removes member tickets, each through their own channels alone and refused
   inside a tick or any run (T1). A tracker's epic, parent, or sub-issue link is data: it never makes a ticket a member
-  by itself, as the tracker skills already say of blockers and parents (§17).
+  by itself, as the tracker skills already say of blockers and parents (§17). The operator may name an epic on the
+  initiative: a ticket under it that is not a member is put to them as a suggestion (§14), which they confirm or
+  dismiss with the membership command; a suggestion makes nothing a member.
 - **Its plan.** A plan run as §25's: the planner, the desk at the repositories' bases, one file written, approved by
   the operator by hash, `proposed`, `approved`, `superseded`, in the state directory beside a ticket's plans and
   archived with them. Its outline is fixed, as a ticket's is: `Goal`; `Requirements`, each `R<n>` with an id that
@@ -24,12 +26,15 @@ PRIOR_ART "Shared plans across tickets" is what it starts from.
 - **A member's plan.** Its planner gets the initiative plan's outline and a hash-checked copy, as an `implement` gets
   its own plan (§25), and the plan's outline gains `## Initiative`: the `R`s it covers, the contracts it provides and
   uses, and the siblings its `Out of scope` names. The member's plan row records the hash of the initiative plan it was
-  written against. `policy.plan` is unchanged; whether a member may skip its own plan and follow the initiative's
-  directly is the operator's to decide.
+  written against. `policy.plan` is unchanged, save one case: a member the initiative plan's `Breakdown` marks
+  trivial, by M55's bar at the level `policy.planner_may_approve` sets, and never one touching security, credentials,
+  destructive data changes, or migrations, skips its own plan. The operator's approval of the initiative plan approves
+  it, and its `implement` follows the initiative plan's copy directly.
 - **When the initiative plan changes.** A re-approval keeps the ids. A member's plan still `proposed` is marked stale,
   naming the ids that changed, and planned again; an approved one whose ticket has no branch yet has its `implement`
   refused, `initiative_changed`, until the operator approves it again or asks for a re-plan; a run in flight, or a
-  ticket with a PR, is never touched. The operator hears once, an `initiative.changed` event (§20) naming the members
+  ticket with a PR, is never paused or touched: its next run is told which ids changed, as data, and keeps to its own
+  approved plan. The operator hears once, an `initiative.changed` event (§20) naming the members
   each way, and decides. Nothing built is rewritten.
 - **Upward.** A member's planner whose `Decisions` depart from a contract or a requirement says so in its result, and
   the harness raises `initiative_drift` (§14) naming the member, for the operator to amend the initiative or the plan.
@@ -43,19 +48,20 @@ PRIOR_ART "Shared plans across tickets" is what it starts from.
   its decomposition for the PRs it fragmented); filing or approving without the operator (the incidents in PRIOR_ART
   are where that was the default); a plan per tracker epic found by the overseer (membership would then be the
   tracker's word).
-- **Open, for the operator:** whether a member in flight pauses when the initiative changes, or only hears of it;
-  whether the plan is written by the planner or by the operator, who may know the whole better than any run; whether a
-  tracker's epic may suggest members for the operator to confirm; whether a member may skip its own plan.
+- **Settled by the operator** (2026-11-02): a member in flight is not paused when the initiative changes, only told;
+  the planner writes the initiative plan, the operator approving or asking for changes as with a ticket's; a tracker's
+  epic may suggest members for the operator to confirm; a member skips its own plan only when it is trivial.
 - **Tests with the fakes**, once designed: an initiative planned, approved, and its breakdown filed and recorded; a
   member's planner given the outline and copy, its plan carrying the hash; a changed initiative marking a proposed
-  member stale, refusing an approved one's `implement`, and leaving a running one alone; drift raised; membership and
-  approval refused inside a run; the bound; `test_prompt_sizes.py` for the prompts, `core/test_db.py` and
-  `test_records.py` for the rows.
+  member stale, refusing an approved one's `implement`, and leaving a running one alone but told; drift raised; an
+  epic's ticket suggested and a member only once confirmed; a trivial member implemented without a plan of its own,
+  and one touching a migration planned; membership and approval refused inside a run; the bound;
+  `test_prompt_sizes.py` for the prompts, `core/test_db.py` and `test_records.py` for the rows.
 
 Accept: live, on the operator's workspace, one initiative of three tickets: its plan approved once, each member's plan
 citing its `R`s and the contracts, the first member's PR providing a contract the second's uses, and a change to the
 initiative plan after the first merged leaving it alone, marking the second's proposed plan stale, and telling the
 operator once.
 
-Status: not started. Sketched 2026-11-02 from the survey in PRIOR_ART; its design, and the operator's answers to the
-open points, come before any code.
+Status: not started. Sketched 2026-11-02 from the survey in PRIOR_ART, and the open points settled by the operator the
+same day; its design comes before any code.
