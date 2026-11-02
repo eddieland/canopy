@@ -1160,10 +1160,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   least 48rem wide (a container query, `@3xl`). There the two scroll apart: the list is `sticky`, as tall as the window
   has room for, and scrolls in itself (`PanelScroll`), so the page scrolls only the item, however tall. Choosing a row
   takes the page to its top, as any new page does, so the item opens at its head and the row stays where it was
-  clicked. Under that, on half a monitor, the list and the item take turns, each the page's whole width, and the page
-  scrolls whichever shows: the list shows until an item is chosen, which opens in its place with `Back to the list`
-  (a ghost button with a left chevron) as its first stop, where the focus goes, since the row went with the list; back
-  on the list, its row is chosen and focused. An item the URL names opens so too. A reply that answers its item
+  clicked. An item the URL names whose row is out of the list's view, as on a reload or a notification's link, brings
+  it into view in the list, which alone moves. Under that, on half a monitor, the list and the item take turns, each
+  the page's whole width, and the page scrolls whichever shows: the list shows until an item is chosen,
+  which opens in its place with `Back to the list` (a ghost button with a left chevron) as its first stop, where the
+  focus goes, since the row went with the list; back on the list, its row is chosen and focused. An item the URL names
+  opens so too. A reply that answers its item
   (`awaiting_reply`, `untrusted_review`) moves on: the next item that waits on the operator's answer and is not
   answered yet, after it in the list and then from the top (`nextWaiting`), is chosen and its row focused, the list in
   view, and a toast says what the reply did, since the form that said it goes with its item; the row it left keeps
@@ -1188,7 +1190,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   list, and the rail. The list's panel header holds its count, after the longest wait when one stands
   (`oldest waiting 1h · 11`): the oldest of the nav's `waiting` part (`oldestWaiting`), past what is answered already,
   so a review's draft counts as a question does. The selection is `?item=<id>`; with none, the most severe item about a
-  ticket.
+  ticket. When the selected item leaves, the row that took its place is selected, so a long list is worked down where
+  the operator stands rather than sent back to its top.
 - **An empty attention list tells never started from all handled** (`EmptyAttention`). Before the journal holds any
   ticket, the page is the first step, an `Empty`: `no tickets yet: give one your queue label in the tracker, or start
   one privately on Tickets, then Tick now, and what needs you lands here`, with Tickets a link and Tick now the header's
