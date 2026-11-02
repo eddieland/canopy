@@ -31,6 +31,7 @@ one of these reasons itself (`loop.tools`).
 
 from __future__ import annotations
 
+import functools
 import json
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
@@ -189,7 +190,8 @@ def _from_rows(ctx: Context, subjects: _Subjects, limits: _Limits, now: datetime
         return
     observed = records.select(records.ObservedPr).all(ctx.conn)
     heads = {p.url: p.head_sha for p in observed}
-    left = passed_reviews.left(ctx.conn, ctx.config.trust, drafts.sent_by_pr(ctx.conn), subjects.keys)
+    sent_by = functools.partial(drafts.sent_by_pr, ctx.conn)
+    left = passed_reviews.left(ctx.conn, ctx.config.trust, sent_by, subjects.keys)
     for key in sorted(subjects.keys):
         units = subjects.units.get(key, ())
         for unit in units:

@@ -15,6 +15,7 @@ what a revision of the review's draft should change, and `grant` allows its draf
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import sys
 from datetime import UTC, datetime
@@ -759,7 +760,8 @@ def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> i
 def _send_left(ctx: Context, key: str, numbers: tuple[int, ...]) -> int:
     """Send feedback ticket `key` left with no worker, by its numbers, to one."""
     try:
-        sent = passed_reviews.send(ctx.conn, ctx.config.trust, drafts.sent_by_pr(ctx.conn), key, numbers, channel=CLI)
+        sent_by = functools.partial(drafts.sent_by_pr, ctx.conn)
+        sent = passed_reviews.send(ctx.conn, ctx.config.trust, sent_by, key, numbers, channel=CLI)
     except conversation.Refused as r:
         raise CliError(f"send refused ({r.guard}): {r.reason}") from None
     named = ", ".join(str(n) for n in sorted(set(numbers)))
@@ -883,7 +885,8 @@ def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:
 
 def _show_passed(ctx: Context, key: str) -> None:
     """Print the feedback on the ticket's PRs its `review` cursors passed with no worker, still left, and why."""
-    left = passed_reviews.left(ctx.conn, ctx.config.trust, drafts.sent_by_pr(ctx.conn), [key]).get(key, [])
+    sent_by = functools.partial(drafts.sent_by_pr, ctx.conn)
+    left = passed_reviews.left(ctx.conn, ctx.config.trust, sent_by, [key]).get(key, [])
     if not left:
         return
     click.echo(f"\nFeedback left with no worker ({len(left)}): unanswered, on threads not resolved")

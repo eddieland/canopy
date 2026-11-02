@@ -33,6 +33,63 @@ class Unit(Model):
     """The overseer's last derived phase for this unit, for display; never read as truth."""
 
 
+class LeftFeedback(Model):
+    """Feedback on a ticket's PR its `review` cursor passed with no worker, still left (DESIGN §7), and why."""
+
+    number: int
+    """Its journal number, what `canopy send KEY N` names it by."""
+    repo: str | None = None
+    """The repository of the unit whose PR it is on."""
+    pr_url: str
+    """The PR it is on."""
+    item: Literal["review", "comment"]
+    """A review comment, or a review with something to say."""
+    id: int
+    """GitHub's id for it."""
+    author: str | None = None
+    """Who wrote it, as the reader saw them."""
+    path: str | None = None
+    """The file a review comment is on; None for a review."""
+    line: int | None = None
+    """Its line in that file."""
+    url: str | None = None
+    """Its link on GitHub."""
+    reason: Literal[
+        "optional",
+        "would_reset_approval",
+        "question",
+        "already_done",
+        "out_of_scope",
+        "operator_said",
+        "resolved",
+    ]
+    """Why it was left (`vocab.PassReason`)."""
+    decider: Literal["overseer", "harness"]
+    """The overseer, who named it, or the harness, for one on a resolved thread."""
+    tick_id: int
+    """The tick whose cursor move passed it."""
+
+
+class LeftSendRequest(Model):
+    """Feedback a ticket left with no worker to send to one, by number, with the submission id the form drew."""
+
+    numbers: Annotated[list[Annotated[int, Field(ge=1)]], Field(min_length=1, max_length=20)]
+    """The items' journal numbers, as `left_feedback` lists them."""
+    submission: Annotated[str, Field(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")]
+    """The id the form drew when the items were picked, sent again unchanged on a retry."""
+
+
+class LeftSent(Model):
+    """What sending left feedback recorded: the operator message on the ticket that names it."""
+
+    numbers: list[int]
+    """The items sent, by number."""
+    message_id: int
+    """The message, the operator's go-ahead on them."""
+    new: bool
+    """Whether it was recorded now, rather than by an earlier submission with the same id."""
+
+
 class TicketForget(Model):
     """One time the operator forgot a ticket's work (DESIGN §22), and what it dropped."""
 
@@ -87,6 +144,9 @@ class TicketDetail(Model):
     worker runs on the same model: Spend's By model for it, at 30 days, narrowed to workers."""
     attachments: Attachments
     """The files the operator attached to it, which its runs read (DESIGN §22)."""
+    left_feedback: list[LeftFeedback] = []
+    """The feedback on its PRs its `review` cursors passed with no worker that is still left, oldest first: unanswered
+    on its thread, on a thread not resolved. `canopy send KEY N` sends one to a worker."""
 
 
 class StartRequest(Model):
