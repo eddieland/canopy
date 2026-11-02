@@ -6,6 +6,7 @@ import { signIn } from './helpers.ts'
 // read were still coming (ui/DESIGN.md, Primitives, PanelLoading). Each case: the page, the read that fails, and a
 // glob for it that matches nothing else the page reads.
 const PAGES = [
+    { page: 'plan-editor', read: '**/api/meta' },
     { page: 'workspace/runs/39', read: '**/api/runs/39' },
     { page: 'tickets/ABC-102', read: '**/api/tickets/ABC-102' },
     { page: 'tickets/ABC-105/plan', read: '**/api/tickets/ABC-105/plans' },
@@ -46,6 +47,31 @@ test('a read that gets no answer says canopy did not answer, and what serves the
     await page.goto('workspace/runs/39')
     await expect(page.getByTestId('panel-failed').getByRole('alert')).toContainText('canopy did not answer')
     await expect(page.getByTestId('panel-failed').getByRole('alert')).toContainText('canopy loop')
+})
+
+test('the attention list says its read failed while the stream sends it nothing, and reads again', async ({ page }) => {
+    // The stream sends the list too, so only with it down does a failed read leave the list unread.
+    await page.route('**/api/events', (route) => route.abort())
+    let failing = true
+    await page.route('**/api/attention', async (route) => {
+        await (failing ? route.fulfill({ status: 500, json: { detail: 'database is locked' } }) : route.fallback())
+    })
+    await page.goto('attention')
+    const failed = page.getByTestId('attention-list').getByTestId('panel-failed')
+    await expect(failed.getByRole('alert')).toHaveText('could not read it: the server answered 500: database is locked')
+    await expect(page.getByTestId('panel-skeleton')).toHaveCount(0)
+    failing = false
+    await failed.getByRole('button', { name: 'Read again' }).click()
+    await expect(page.getByTestId('attention-list').getByRole('link').first()).toBeVisible()
+})
+
+test("an attention item's pane says its read got no answer, rather than shimmer on", async ({ page }) => {
+    await page.route('**/api/chores/deps', (route) => route.abort())
+    await page.goto('attention')
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'lodash-advisory' }).click()
+    const detail = page.getByTestId('attention-detail')
+    await expect(detail.getByTestId('panel-failed').getByRole('alert')).toContainText('canopy did not answer')
+    await expect(detail.getByTestId('panel-skeleton')).toHaveCount(0)
 })
 
 test("a failed read's notice keeps the skeleton's height, so nothing moves", async ({ page }) => {
