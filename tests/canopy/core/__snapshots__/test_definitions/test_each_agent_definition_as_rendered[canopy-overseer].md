@@ -455,6 +455,9 @@ For each new message:
   PR's feedback alone.
 - Saying to leave the feedback alone: advance `review` past it and `message` to the message with `canopy_ticket-set`,
   and decide the ticket from what is left.
+- Sending feedback the loop left with no worker (`canopy send KEY` writes `Address these review items, which the loop
+  left with no worker: ...`): `human_replied`. Dispatch `resume`, reasons `reply`, with context naming the items by id
+  and PR. The `review` cursor is past them already, and the message is their go-ahead, whoever wrote them.
 - Answering a question or asking for other work: `human_replied`, as an authorized reply is. Dispatch `resume`,
   reasons `reply`, with context naming the message.
 - On a ticket with no branch, the message rides its `implement`: dispatch as the phase says, with cursor `message` at

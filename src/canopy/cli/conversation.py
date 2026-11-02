@@ -714,20 +714,23 @@ def cmd_dismiss(
 
 
 @click.command("send")
-@click.argument("ref", metavar="review:ID")
+@click.argument("ref", metavar="review:ID|KEY")
 @click.argument("findings", metavar="N...", nargs=-1, required=True, type=int)
 @click.pass_context
 def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> int:
-    """Send findings N... of a review run (`review:ID`, by their numbers) to a worker.
+    """Send findings N... of a review run (`review:ID`), or feedback N... a ticket left with no worker (KEY), to one.
 
-    It replies on the review's ticket for you, naming the findings by number and the ones it leaves alone, as you would
-    with `canopy reply KEY`: the next tick reads it as your go-ahead and resumes a worker with the review's findings,
-    which addresses the ones it names, whether or not `trust.trusted_reviewers` lists `canopy:review`. A review of a PR
-    with no ticket refuses, as does a dismissed finding.
+    It replies on the ticket for you, as you would with `canopy reply KEY`: the next tick reads it as your go-ahead and
+    resumes a worker. For a review run, the reply names its findings by number and the ones it leaves alone, and the
+    worker gets the review's findings, whether or not `trust.trusted_reviewers` lists `canopy:review`; a review of a PR
+    with no ticket refuses, as does a dismissed finding. For a ticket, N... are the numbers `canopy show KEY` lists
+    under "Feedback left with no worker", and the reply names those items, whoever wrote them.
     """
     _operator("send")
     subject = _ref(ref, "send")
     ctx = open_context(click_ctx)
+    if subject.kind == conversation.TICKET:
+        return _send_left(ctx, subject.id, findings)
     try:
         sent = conversation.send(ctx.conn, subject, findings, channel=CLI)
     except conversation.Refused as r:
@@ -750,6 +753,27 @@ def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> i
         )
     else:
         click.echo(f"{subject} findings {numbers} already went to {sent.ticket} as message {sent.replied.message_id}.")
+    return 0
+
+
+def _send_left(ctx: Context, key: str, numbers: tuple[int, ...]) -> int:
+    """Send feedback ticket `key` left with no worker, by its numbers, to one."""
+    try:
+        sent = passed_reviews.send(ctx.conn, ctx.config.trust, drafts.sent_by_pr(ctx.conn), key, numbers, channel=CLI)
+    except conversation.Refused as r:
+        raise CliError(f"send refused ({r.guard}): {r.reason}") from None
+    named = ", ".join(str(n) for n in sorted(set(numbers)))
+    logs.for_tick(None).info(
+        "left feedback sent",
+        extra={"ticket": key, "numbers": sorted(set(numbers)), "message_id": sent.replied.message_id, "channel": CLI},
+    )
+    if sent.replied.new:
+        click.echo(
+            f"{key} feedback {named} went to it as message {sent.replied.message_id}: the next tick reads it "
+            "as your go-ahead.",
+        )
+    else:
+        click.echo(f"{key} feedback {named} already went to it as message {sent.replied.message_id}.")
     return 0
 
 
