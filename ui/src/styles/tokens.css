@@ -459,8 +459,8 @@
     --nav-on-ink: var(--surface);
 }
 
-/* Pulp light: Gruvbox's light tones, its cream the newsprint, inked as a comic's page. Its colors are Gruvbox
- * light's, set again here so the two never drift into each other by accident. */
+/* Pulp light: Gruvbox's light tones, its cream the newsprint, inked as a comic's page. Its colors are a copy of
+ * Gruvbox light's, kept apart so Pulp can take its own; nothing ties them, so a change to one leaves the other. */
 :root[data-light-palette='pulp']:not(.dark) {
     --accent: oklch(0.5 0.12 344);
     --ring: oklch(0.5 0.12 344 / 0.55);
@@ -751,8 +751,8 @@
     --depth-action: 3px 3px 0 oklch(0.1 0 0);
 }
 
-/* Pulp dark: Gruvbox's dark tones, inked as a comic's page at night. Its colors are Gruvbox dark's, set again here
- * so the two never drift into each other by accident. */
+/* Pulp dark: Gruvbox's dark tones, inked as a comic's page at night. Its colors are a copy of Gruvbox dark's, kept
+ * apart so Pulp can take its own; nothing ties them, so a change to one leaves the other. */
 .dark[data-dark-palette='pulp'] {
     --accent: oklch(0.75 0.1 350);
     --ring: oklch(0.75 0.1 350 / 0.5);
