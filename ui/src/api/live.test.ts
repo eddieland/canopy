@@ -73,6 +73,21 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.spendBreakdown({ days: 7 }))?.isInvalidated).toBe(true)
     })
 
+    it("marks the day's count stale when a run starts or ends, not when a cost moves", () => {
+        const client = new QueryClient()
+        const [first] = mockRuns
+        if (!first) {
+            throw new Error('fixtures are empty')
+        }
+        const since = '2026-10-08T00:00:00.000Z'
+        client.setQueryData(keys.runs, [first])
+        client.setQueryData(keys.runsSince(since), { ended: 1, prs_opened: 0 })
+        applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...first, cost_usd: (first.cost_usd ?? 0) + 1 }] })
+        expect(client.getQueryState(keys.runsSince(since))?.isInvalidated).toBe(false)
+        applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...first, state: 'failed' }] })
+        expect(client.getQueryState(keys.runsSince(since))?.isInvalidated).toBe(true)
+    })
+
     it('marks a changed ticket stale and leaves the others alone', () => {
         const client = new QueryClient()
         const detail = { ticket: mockTickets[0], units: [], runs: [], messages: [] } as unknown as TicketDetail

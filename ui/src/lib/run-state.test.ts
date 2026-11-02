@@ -12,6 +12,7 @@ import {
     runningTasks,
     runsListed,
     subjectRuns,
+    workingCount,
     workingOn,
 } from './run-state'
 import type { RailItem, SubjectRuns } from './run-state'
@@ -145,6 +146,25 @@ describe('railWork', () => {
         expect(railWork({ runs: runs.slice(0, 4), reviews, chores }, 4).moreAt).toBe('/workspace/runs')
         const tasks = [task(6, '2026-10-08T13:00:00Z')]
         expect(railWork({ runs: runs.slice(0, 4), tasks }, 4).moreAt).toBe('/tasks')
+    })
+})
+
+describe('workingCount', () => {
+    it("is the rail's number, past its limit and across every kind of run", () => {
+        const runs = Array.from({ length: 6 }, (_, i) => at(i, 'running', `2026-10-08T12:0${i}:00Z`))
+        const every = {
+            runs,
+            reviews: [review(8, 'running', '2026-10-08T13:00:00Z')],
+            chores: [chore('deps', 3, '2026-10-08T13:00:00Z')],
+            tasks: [task(6, '2026-10-08T13:00:00Z')],
+        }
+        const { shown, more } = railWork(every, 4)
+        expect(workingCount(every)).toBe(shown.length + more)
+        expect(workingCount(every)).toBe(9)
+    })
+
+    it('is none with nothing working', () => {
+        expect(workingCount({ runs: [] })).toBe(0)
     })
 })
 
