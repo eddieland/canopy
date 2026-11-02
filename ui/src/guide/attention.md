@@ -5,8 +5,8 @@ needs you", and a little canopy swaying in a breeze.
 
 The canopy is earned. In a fresh workspace, before the journal holds a single ticket, the page says so instead,
 `no tickets yet`, and names the first step: give a ticket your queue label in the tracker, or start one privately on
-[Tickets](/tickets), then **Tick now**. A quiet inbox and one nobody has filled yet look alike from a distance, and
-only one of them is good news.
+[Tickets](/tickets), then **Tick now**, and what needs you lands here. A quiet inbox and one nobody has filled yet look
+alike from a distance, and only one of them is good news.
 
 So do a quiet inbox and a dead loop. While the loop isn't answering, an empty list grows no canopy: it says
 `Nothing needed you as of 14:05`, and that the list can't change until the loop is back. An all-clear from a loop that
@@ -48,16 +48,16 @@ The items come in four groups, in this order, and within a group the one open lo
    queue's status or a sign-off, neither of which turns green on an open PR, however long you wait; the item names the
    line to add under `[repos.<repo>.checks]` if it isn't CI. If it is, the item leaves when the build finally does.
 4. **Findings**: what your chores found. If you'd rather read them on each chore's page, **Hide chore findings** in
-   [Settings](settings#attention) leaves them off the list, its counter, and the nav's badge, and a line above the
+   [Settings](settings#attention) leaves them off the list, its count, and the nav's badge, and a line above the
    list says how many it left out.
 
 Forgot what `review late` is? Hover over a reason, or Tab to it, and its tip says what it means under the CLI's
 spelling. Nobody memorizes forty reasons, and nobody should have to.
 
-The counters above the list say how many runs are going, a task's among them, how many tickets and tasks wait on you
-(on your reply, or on your approval of a feedback plan) and how long the oldest question has waited, and how many items
-the list holds. How those items break down is the
-nav's badge, on every page, so the counters don't say it again; one page saying a number five times doesn't make it
+The list's header counts its items, and says how long the oldest one waiting on your answer has waited:
+`oldest waiting 1h · 11`. That's anything in amber, questions, plans, and drafts alike, but for what you've already
+answered, which waits on the loop now. With nothing waiting on you, it's the count alone. How the items break down is
+the nav's badge, on every page, so the page doesn't say it again; one page saying a number five times doesn't make it
 truer. The browser tab's title counts the items that block work, so a glance at the tab says whether to look.
 Findings, `needs reviewer`, and `ready to merge` don't count there: they're news, not blockers.
 
