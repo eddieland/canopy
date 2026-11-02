@@ -548,6 +548,9 @@ def test_canopy_runs_in_the_overseers_sandbox_and_records_in_the_journal(
     """
     canopy = str(Path(sys.executable).parent / "canopy")
     conn = state_as_a_tick_leaves_it(canopy_env)
+    # The ticket is in the journal, as the query's record puts it: the tool refuses one that is not.
+    db.touch_ticket(conn, "PROJ-1", str(canopy_env.root))
+    conn.commit()
     lines = mcp_lines(decides("PROJ-1", rationale="its PR is in review"))
     with in_tick(conn) as tick_id:
         version = wrap("overseer", "--", canopy, "--version", cwd=canopy_env.root)

@@ -70,7 +70,9 @@ sees them as `canopy_dispatch` and so on.
 No tool name holds an underscore: OpenCode joins server and tool with one, so `canopy_ticket_set` could also come from
 a server named `canopy_ticket`, and the later would replace the earlier. No tool reads the pool or the observations:
 the state block already holds them, and a claim on them, such as a dispatch's label or a cursor, is a field its tool
-checks (§7).
+checks (§7). A tool about a ticket refuses one the journal has no record of (`unknown`): the harness records the
+query's tickets before the overseer runs, and the operator's starts, so any other key came from nowhere, and once
+recorded every tracker read would ask for a ticket none can read.
 
 Each input refuses an unknown field and is the tool's schema, and holds the bounds §6 lists. A tool's result is text
 the model reads, and what it did as structured content, such as the id of a run it started, held to the output schema
