@@ -1,7 +1,7 @@
-"""The API's types for the checklist's counts (DESIGN §42): how worker runs answered each repository's list.
+"""The API's types for the checklists (DESIGN §42): each repository's list, and how worker runs answered it.
 
-What `canopy checklist` prints, with the runs behind each item's `held` and `fixed` answers, and the counts by week.
-Built on `schema.Model`, as every API type is (schema/__init__.py).
+The lists as the operator's files hold them now; and what `canopy checklist` prints, with the runs behind each item's
+`held` and `fixed` answers, and the counts by week. Built on `schema.Model`, as every API type is (schema/__init__.py).
 """
 
 from __future__ import annotations
@@ -124,3 +124,49 @@ class ChecklistCounts(Model):
     previous: ChecklistPrevious
     """The window before this one, as many days, `repo`'s alone when it is named, for a page to say how this one
     compares."""
+
+
+type ChecklistSeverity = Annotated[
+    Literal["blocking", "major", "minor"],
+    Field(description="How much an item that fails weighs in a checklist review, as a review's finding does."),
+]
+
+
+class ChecklistItem(Model):
+    """One item of a repository's list, as the operator wrote it: a rule asked of a worker's diff."""
+
+    id: str
+    """The item's id, unique in its list, which a run's answer names."""
+    paths: list[str]
+    """The paths from the repository's root it is about, each compared as a `high_impact_paths` entry is; empty for
+    every path."""
+    severity: ChecklistSeverity
+    """Its `severity:` line's, else `minor`."""
+    rule: str
+    """The rule in the operator's words, Markdown, with what passes and what fails."""
+
+
+class RepoChecklist(Model):
+    """A mapped repository's list, as the next worker run in it would be given it, read when the page asked."""
+
+    repo: str
+    """The repository's name, as the workspace map has it."""
+    file: str | None
+    """Where its list's file is, or would be: `<repo>.md` in `paths.checklists`; None when that is unset."""
+    items: list[ChecklistItem]
+    """Its list's items, in its order; empty when it has none, or one canopy cannot use (`error`)."""
+    error: str | None = None
+    """Why canopy cannot use its file, which refuses the repository's runs as `bad_prompt`; None when it can, or
+    there is none."""
+
+
+class ChecklistList(Model):
+    """Each mapped repository's checklist, as the operator's `paths.checklists` holds them now (DESIGN §42).
+
+    Read from the files when asked, as each run reads them, so an edit shows with no reload. Nothing here changes them.
+    """
+
+    directory: str | None
+    """`paths.checklists`: the operator's directory of lists; None when it is unset, and no repository is asked."""
+    repos: list[RepoChecklist]
+    """Each repository of the workspace map, in its order, with its list or none."""
