@@ -127,5 +127,6 @@ def thread_view(found: plan_threads.Thread) -> PlanThreadView:
         body=t.body,
         at=db.parse_time(t.created_at),
         resolved=t.resolved_at is not None,
+        read=found.read,
         replies=[PlanReplyView(id=r.id, body=r.body, at=db.parse_time(r.created_at)) for r in found.replies],
     )

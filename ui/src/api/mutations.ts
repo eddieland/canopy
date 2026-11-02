@@ -264,7 +264,10 @@ export async function replyPlanThread(key: string, thread: number, body: string)
     )
 }
 
-/** A change to one of the ticket's plan comment threads: its words, a reply's, whether resolved, or its passage. */
+/**
+ * A change to one of the ticket's plan comment threads: its words, a reply's, whether resolved, its passage, or that a
+ * request for changes just sent it to a planner (`sent`).
+ */
 export async function changePlanThread(
     key: string,
     thread: number,
@@ -273,6 +276,7 @@ export async function changePlanThread(
         reply?: number
         resolved?: boolean
         anchor?: { quote: string; prefix: string; suffix: string }
+        sent?: true
     },
 ): Promise<PlanThreadView> {
     return unwrap(

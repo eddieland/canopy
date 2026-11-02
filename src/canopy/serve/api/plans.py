@@ -235,7 +235,7 @@ def reply(key: TicketKey, thread_id: ThreadId, body: PlanReplyRequest, backend: 
     responses=REFUSED,
 )
 def change_thread(key: TicketKey, thread_id: ThreadId, body: PlanThreadChange, backend: BackendDep) -> PlanThreadView:
-    """Edit the comment's words or a reply's, resolve or reopen the thread, or move it to its passage's new words."""
+    """Edit the comment's words or a reply's, resolve or reopen the thread, move it, or mark it sent to a planner."""
     ref = ticket_ref(key, "plan")
     with backend.open() as ctx:
         try:
@@ -248,6 +248,7 @@ def change_thread(key: TicketKey, thread_id: ThreadId, body: PlanThreadChange, b
                 reply_id=body.reply,
                 resolved=body.resolved,
                 anchor=anchor,
+                sent=body.sent is True,
             )
         except conversation.Refused as r:
             raise RefusedError(r) from None

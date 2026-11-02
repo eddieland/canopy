@@ -42,7 +42,7 @@ import { PendingWork, usePending, usePendingWork } from '@/hooks/use-pending'
 import { planText } from '@/lib/outcomes'
 import { planDecisions } from '@/lib/plan-decisions'
 import { planNeededWhy, planWaits } from '@/lib/plan-state'
-import { fromServer, MAX_NOTES, movedAnchors, threadChanges } from '@/lib/plan-threads'
+import { fromServer, MAX_NOTES, movedAnchors, threadChanges, unread } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
 import { isApple } from '@/lib/send-key'
 import { ariaKeys, isPressed, keysLabel } from '@/lib/shortcut'
@@ -235,8 +235,10 @@ function NewestPlan({
     const dirty = markdown !== text
     usePending(dirty, 'edit')
     const approvable = status === 'proposed' || (status === 'approved' && (newest.changed_since_approval || dirty))
-    // Open comments go with Approve, to the implement, as notes: the foot's line says so.
+    // Open comments go with Ask for changes, to the planner. Those no planner has read go with Approve instead, to the
+    // implement, as notes: the foot's line says so.
     const open = held.filter((thread) => !thread.resolved)
+    const notable = unread(held)
 
     function refresh(): Promise<void> {
         return client.invalidateQueries({ queryKey: keys.ticketPlans(ticketKey) })
@@ -335,7 +337,7 @@ function NewestPlan({
     function decide(action: PlanChanged['action'], notes = '') {
         setConfirming(false)
         // The comments the notes carry, resolved once they are sent: the implement has them, so they ask for nothing.
-        const sent = notes === '' ? [] : open.map((thread) => thread.id)
+        const sent = notes === '' ? [] : notable.map((thread) => thread.id)
         act(async () => {
             if (dirty && action === 'approve') {
                 await save()
@@ -356,6 +358,9 @@ function NewestPlan({
     }
 
     function askForChanges(message: string) {
+        // The comments the request carries, marked sent once it is recorded: when the next plan is written from them,
+        // they are its planner's, and Approve leaves them out of its notes rather than send them to the implement too.
+        const sent = open.map((thread) => thread.id)
         act(async () => {
             // The planner reads the plan's file: an edit only in the editor would not reach it, and the new plan
             // would replace it unseen.
@@ -363,6 +368,11 @@ function NewestPlan({
                 await save()
             }
             const replied = await replyTicket(ticketKey, message, newSubmission())
+            // The request is recorded whatever the marks do: one that fails costs only that Approve sends its comment
+            // once more, where failing the request would have the operator send it again.
+            await Promise.allSettled(
+                sent.map(async (id) => changePlanThread(ticketKey, await serverId(id), { sent: true })),
+            )
             void client.invalidateQueries({ queryKey: keys.ticket(ticketKey) })
             return (
                 `Recorded message ${replied.message_id} on ${ticketKey}: the next tick asks the planner for a new ` +
@@ -437,7 +447,7 @@ function NewestPlan({
                     )}
                 </div>
             )}
-            actionsNote={actionsNote(status, open.length)}
+            actionsNote={actionsNote(status, notable.length, open.length - notable.length)}
             // Kept once the plan is read only, so a decision that ends its editing, Skip's, still says what it did.
             outcome={
                 approved && said !== null && failure === null ? (
@@ -457,15 +467,26 @@ function approveLabel(dirty: boolean, noted: boolean): string {
 }
 
 // What the line under the actions says of them, after how many comments go with Ask for changes: that Approve sends
-// them to the implement instead, or that an approved plan's edit is approved again.
-function actionsNote(status: PlanFile['plan']['status'], open: number): string | undefined {
+// the `open` ones no planner has read to the implement instead, and leaves out the ones one has (`read`), or that an
+// approved plan's edit is approved again.
+function actionsNote(status: PlanFile['plan']['status'], open: number, read: number): string | undefined {
     const them = open === 1 ? 'it' : 'them'
+    const said: string[] = []
+    if (open > 0) {
+        said.push(
+            `Approve sends ${them} to the implement${status === 'approved' ? '' : ' instead'}, and resolves ${them}.`,
+        )
+    }
+    if (read > 0) {
+        said.push(read === 1 ? 'The one a planner has read stays out.' : `The ${read} a planner has read stay out.`)
+    }
+    const line = said.join(' ')
     if (status === 'approved') {
         const again = 'Saving an edit means approving it again.'
-        return open > 0 ? `${again} Approve sends ${them} to the implement, and resolves ${them}.` : again
+        return line === '' ? again : `${again} ${line}`
     }
-    if (status === 'proposed' && open > 0) {
-        return `Approve sends ${them} to the implement instead, and resolves ${them}.`
+    if (status === 'proposed' && line !== '') {
+        return line
     }
     return undefined
 }
