@@ -23,6 +23,7 @@ from tests.canopy.helpers import (
     decides,
     in_tick,
     overseer_calls,
+    present,
     raises,
     ticket_sets,
     tracker_holds,
@@ -75,6 +76,41 @@ def test_journal_tools_need_a_running_tick(conn: sqlite3.Connection) -> None:
     assert db.get_ticket(conn, "PROJ-1") is None
 
 
+@pytest.mark.parametrize("move", list(KEYED.values()), ids=list(KEYED))
+def test_every_key_taking_tool_refuses_a_ticket_the_journal_has_no_record_of(
+    conn: sqlite3.Connection,
+    move: Callable[[str], Called],
+) -> None:
+    """A key no tracker query returned and the operator did not start never reaches the journal as a ticket."""
+    with in_tick(conn) as tick_id:
+        said = overseer_calls(move("PROJ-100"))
+    assert said.error
+    assert said.text.startswith(f"{move('PROJ-100').name.removeprefix('canopy_')} refused (unknown): ")
+    assert "canopy has no record of PROJ-100" in said.text
+    # The refusal is recorded about no ticket: only its rationale names the key.
+    rows = [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, tick_id)]
+    assert rows == [(None, "refused:unknown")]
+    assert db.get_ticket(conn, "PROJ-100") is None
+
+
+def test_decide_refuses_the_whole_call_when_one_ticket_is_unknown(conn: sqlite3.Connection) -> None:
+    tracker_holds(conn, "PROJ-1")
+    both = calls(
+        "canopy_decide",
+        decisions=[
+            {"key": "PROJ-1", "action": "wait", "rationale": "checks pending"},
+            {"key": "PROJ-1-placeholder", "action": "wait", "rationale": "a stray"},
+        ],
+    )
+    with in_tick(conn) as tick_id:
+        said = overseer_calls(both)
+    assert said.error
+    assert "no record of PROJ-1-placeholder" in said.text
+    assert said.text.endswith("and nothing else in the call: decide the rest again")
+    assert [d.action for d in db.decisions_for_tick(conn, tick_id)] == ["refused:unknown"]
+    assert db.get_ticket(conn, "PROJ-1-placeholder") is None
+
+
 def test_decide_records_and_touches_ticket(scenario: Scenario) -> None:
     conn = scenario.conn
     with scenario.ticking() as tick_id:
@@ -121,7 +157,6 @@ def test_decide_records_several_in_one_call(scenario: Scenario) -> None:
         scenario.overseer(decide(("PROJ-3", "wait", "r"), ("PROJ-4", "later", "s")), error=True)
     rows = [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(scenario.conn, tick_id)]
     assert rows == [("PROJ-1", "wait", "checks pending"), ("PROJ-2", "done", "merged")]
-    assert {row["key"] for row in scenario.conn.execute("SELECT key FROM tickets")} == {"PROJ-1", "PROJ-2"}
 
 
 def test_every_skip_is_a_tickets_own(scenario: Scenario) -> None:
@@ -285,7 +320,7 @@ def test_ticket_set_sets_several_tickets_each_its_own_or_none(scenario: Scenario
     refused = [{"key": "PROJ-3", "phase": "ready"}, {"key": "PROJ-1", "title": " \n "}]
     said = scenario.overseer(calls("canopy_ticket-set", tickets=refused), error=True)
     assert said.text == "tickets.1.title: must not be empty"
-    assert db.get_ticket(conn, "PROJ-3") is None
+    assert present(db.get_ticket(conn, "PROJ-3")).phase is None
 
 
 def test_a_ticket_is_named_on_one_line_and_renamed(scenario: Scenario, git_pool: GitPool) -> None:
@@ -321,7 +356,7 @@ def test_a_ticket_is_named_on_one_line_and_renamed(scenario: Scenario, git_pool:
 def test_bad_cursors_are_rejected(scenario: Scenario, name: str, value: str) -> None:
     said = scenario.overseer(ticket_sets("PROJ-1", repo="repo", cursors={name: value}), error=True)
     assert said.text.startswith("tickets.0.cursors")
-    assert db.get_ticket(scenario.conn, "PROJ-1") is None
+    assert db.units(scenario.conn, "PROJ-1") == []
 
 
 @pytest.mark.parametrize(

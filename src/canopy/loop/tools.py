@@ -72,6 +72,8 @@ DECIDED = "decided"
 RAISED = "raised"
 #: The guard that refuses an item the overseer keeps that names nothing that could end it (DESIGN §37).
 UNNAMED = "unnamed"
+#: The guard that refuses what the overseer records about a ticket the journal has no record of (DESIGN §30).
+UNKNOWN = "unknown"
 #: The phases the overseer sets. `split` is retired (M46): old tickets may still hold it, and nothing sets it.
 SETTABLE_PHASES = tuple(p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT)
 #: Why the overseer may say a `review` cursor passed feedback with no worker: all but `resolved`, the harness's alone.
@@ -437,6 +439,7 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
     current = running_tick(ctx)
     key, kind, repos, reasons = request.key, request.kind, request.repos, request.reasons
     tick_id = current.id
+    _refuse_unknown(ctx, tick_id, [key], "dispatch")
     _refuse_decided(ctx, tick_id, key, "dispatch")
     log = logs.for_tick(tick_id)
     db.touch_ticket(ctx.conn, key, ctx.repo)
@@ -720,11 +723,12 @@ def decide(ctx: Context, request: Decisions) -> Outcome[Decided]:
         The tool's text, and the same as fields.
 
     Raises:
-        Refused: Outside a running tick, or about a ticket the harness decided this tick, whose refusal is recorded and
-            leaves every decision of the call unrecorded.
+        Refused: Outside a running tick, or about a ticket the journal has no record of or the harness decided this
+            tick, whose refusal is recorded and leaves every decision of the call unrecorded.
     """
     current = running_tick(ctx)
     keys = [d.key for d in request.decisions]
+    _refuse_unknown(ctx, current.id, keys, "decide")
     if refused := [r for key in keys if (r := _decided_by_harness(ctx, current.id, key, "decide")) is not None]:
         recorded = "the refusal was recorded" if len(refused) == 1 else "the refusals were recorded"
         unrecorded = "" if len(request.decisions) == 1 else ", and nothing else in the call: decide the rest again"
@@ -798,13 +802,14 @@ def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
 
     Raises:
         Refused: Outside a running tick, `repo` is not a repository in this workspace, the item is about a ticket the
-            harness decided this tick, its reason is one the harness raises from its causes, or it is one the overseer
-            keeps and names nothing that could end it, each of which is recorded.
+            journal has no record of or the harness decided this tick, its reason is one the harness raises from its
+            causes, or it is one the overseer keeps and names nothing that could end it, each of which is recorded.
     """
     current = running_tick(ctx)
     key, pr, detail = request.key, request.pr, request.detail
     unit = _unit(ctx, request.repo)
     if key is not None:
+        _refuse_unknown(ctx, current.id, [key], "attention")
         _refuse_decided(ctx, current.id, key, "attention")
         db.touch_ticket(ctx.conn, key, ctx.repo)
     _refuse_raised(ctx, current.id, request.reason, key=key, repo=unit, pr=pr)
@@ -953,9 +958,10 @@ def ticket_set(ctx: Context, request: TicketSets) -> Outcome[TicketsUpdated]:
 
     Raises:
         Refused: CANOPY_TICK_ID names no running tick, or a setting is refused: its `repo` is not a repository in this
-            workspace, it sets a unit's phase or cursor with no `repo` and the ticket has no one unit, it is inside a
-            tick the harness decided the ticket in, or a cursor names no item observed or passes one the state block
-            left out, each of which is recorded. Nothing else in the call is then recorded.
+            workspace, it is about a ticket the journal has no record of, it sets a unit's phase or cursor with no
+            `repo` and the ticket has no one unit, it is inside a tick the harness decided the ticket in, or a cursor
+            names no item observed or passes one the state block left out, each of which is recorded. Nothing else in
+            the call is then recorded.
     """
     current = running_tick(ctx)
     several = len(request.tickets) > 1
@@ -1005,6 +1011,7 @@ def _check_setting(ctx: Context, current: records.Tick, setting: TicketSet) -> _
         Refused: As `ticket_set` says, for this setting.
     """
     key, phase = setting.key, setting.phase
+    _refuse_unknown(ctx, current.id, [key], "ticket-set")
     cursors: dict[str, str] = dict(setting.cursors.items())
     unit_cursor = next((name for name in cursors if name in db.UNIT_CURSORS), None)
     unit_phase = phase if phase in vocab.UNIT_PHASES else None
@@ -1129,6 +1136,32 @@ def running_tick(ctx: Context) -> records.Tick:
             f"no tick is running ({conversation.TICK_ID_ENV} is not set); the overseer's verbs run only inside one",
         )
     return row
+
+
+def _refuse_unknown(ctx: Context, tick_id: int, keys: Iterable[str], verb: str) -> None:
+    """Refuse the overseer's `verb` about any of `keys` the journal has no ticket of (DESIGN §30).
+
+    A ticket is in the journal once the tracker query returned it, which the harness records before the overseer runs,
+    or the operator started it. The overseer reads no tracker (§39), so a key it names that is neither came from
+    nowhere: recorded, it would be a ticket every tracker read asks for and none ever reads. The refusal is recorded
+    with no ticket, its rationale naming the key, so the key reaches no ticket's records.
+
+    Raises:
+        Refused: A key names no ticket in the journal.
+    """
+    unknown = [key for key in dict.fromkeys(keys) if db.get_ticket(ctx.conn, key) is None]
+    if not unknown:
+        return
+    named = ", ".join(unknown)
+    why = (
+        f"canopy has no record of {named}: the tracker query did not return "
+        f"{'it' if len(unknown) == 1 else 'them'}, and the operator did not start "
+        f"{'it' if len(unknown) == 1 else 'them'}; name only tickets the state block lists"
+    )
+    db.record_decision(ctx.conn, tick_id, None, f"refused:{UNKNOWN}", why)
+    logs.for_tick(tick_id).info("refused: unknown ticket", extra={"tickets": unknown, "verb": verb})
+    rest = ", and nothing else in the call: decide the rest again" if len(unknown) < len(set(keys)) else ""
+    raise Refused(f"{verb} refused ({UNKNOWN}): {why}; the refusal was recorded{rest}")
 
 
 def _refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
