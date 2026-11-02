@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from canopy.core import db, plans
+from canopy.core import conversation, db, plans
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.conversation import Refused
 from canopy.core.vocab import PlanStatus
@@ -195,6 +195,40 @@ def test_an_edit_after_approval_needs_approving_again(conn: sqlite3.Connection, 
     assert plans.approved_text(state_dir, again) is None
     with pytest.raises(Refused, match=f"bad_plan: plan 1's file {path} is missing, so it cannot be approved"):
         plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
+
+
+def test_an_approval_with_a_note_writes_it_on_the_ticket_for_the_implement(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+) -> None:
+    proposed(conn, state_dir)
+    lock = state_dir / DISPATCH_LOCK
+    for note, why in (
+        ("  ", "the note is empty"),
+        ("x" * (plans.MAX_NOTE + 1), "the note is 3801 characters; the most is 3800"),
+    ):
+        with pytest.raises(Refused, match=f"bad_body: {why}"):
+            plans.approve(conn, state_dir, KEY, channel="web", dispatch_lock=lock, note=note)
+    # A refused note approves nothing and says nothing.
+    assert present(plans.current(conn, KEY)).status is PlanStatus.PROPOSED
+    assert conversation.operator_messages_after(conn, KEY, 0) == []
+
+    plan = plans.approve(conn, state_dir, KEY, channel="web", dispatch_lock=lock, note=" Keep the old flag. \n")
+    assert plan.status is PlanStatus.APPROVED
+    [said] = conversation.operator_messages_after(conn, KEY, 0)
+    assert said.body == (
+        f"Plan {plan.id} is approved. Follow it with these notes, which come first where the two differ:\n\n"
+        "Keep the old flag."
+    )
+    assert said.channel == "web"
+    # The verb's instruction: it answers no question, and, after the approval, asks for no changes.
+    assert not conversation.answers_questions(said)
+    assert plans.changes_asked(conn, present(db.get_ticket(conn, KEY))) is None
+
+    # Approved again after an edit, with a note of its own.
+    plans.path_for(state_dir, KEY, plan.run_id).write_text("# Changed\n")
+    plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=lock, note="Keep the old flag.")
+    assert len(conversation.operator_messages_after(conn, KEY, 0)) == 2
 
 
 def test_approval_refuses_no_plan_and_a_file_that_is_no_longer_one(conn: sqlite3.Connection, state_dir: Path) -> None:

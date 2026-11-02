@@ -391,6 +391,28 @@ def test_a_plan_its_planner_says_needs_no_review_is_approved_as_the_planners_and
     assert (again.approved_channel, again.approved_reason) == ("cli", None)
 
 
+def test_an_approval_with_a_note_reaches_the_implement_and_asks_no_new_plan(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    scenario.configures("workspace", policy={"plan": "approve"})
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT))
+    assert run.status == RunStatus.DONE
+    approved = scenario.operator("plan", KEY, "--approve", "--message", "Name the test after the colour.")
+    assert f"Plan 1 of {KEY} is approved as" in approved.out
+    assert f"Your note is a message on {KEY}, which its implement reads beside the plan" in approved.out
+    ticket = present(db.get_ticket(scenario.conn, KEY))
+    assert plans.changes_asked(scenario.conn, ticket) is None
+
+    implement = scenario.run(dispatches(slug="work"), worker=pushes())
+    assert implement.status == RunStatus.DONE
+    assert "Follow it with these notes, which come first where the two differ:" in implement.prompt
+    assert "Name the test after the colour." in implement.prompt
+    # Only a ticket's plan or a feedback plan takes a note, and only with --approve.
+    alone = scenario.operator("plan", KEY, "--message", "More.", code=2)
+    assert "--item, --leave, and --message go with --approve" in alone.err
+
+
 @pytest.mark.parametrize(
     ("on", "result"),
     [

@@ -54,8 +54,9 @@ CLI = "cli"
     "-m",
     "words",
     metavar="TEXT",
-    help="With --approve, on a feedback plan: your own words, after the message the approval writes on the ticket, "
-    "which its resume reads beside the items.",
+    help="With --approve: your own words, written on the ticket with the approval. A plan's implement reads them "
+    "beside the plan, for small points that need no new plan; a feedback plan's resume reads them after the message "
+    "naming its items.",
 )
 @click.option("--skip", is_flag=True, help="Waive its plan: its implement goes ahead without one.")
 @click.option("--persona", metavar="NAME", help="The persona of the planner this asks for, that run alone.")
@@ -76,6 +77,8 @@ def cmd_plan(
     Without a flag, the next tick dispatches a planner, which writes down how the work will be done; nothing is
     implemented until you approve the plan. Asking again supersedes the plan it has. Read a plan with
     `canopy show KEY`, edit its file if you like, then approve it, or ask for changes with `canopy reply KEY`.
+    `--approve --message TEXT` approves it with a note its implement reads beside it, for a point too small to plan
+    again for.
 
     Under `policy.feedback_plan = "approve"`, a ticket's PR feedback is planned before its resume: while its feedback
     plan waits, `--approve` approves that plan, whole, or only the items you name by number with `--item`, or all but
@@ -180,15 +183,20 @@ def _approve(ctx: Context, key: str, *, chosen: Collection[int], leave: Collecti
     if feedback_plans.waiting(ctx.conn, key):
         _approve_feedback(ctx, key, chosen=chosen, leave=leave, words=words)
         return
-    if chosen or leave or words is not None:
+    if chosen or leave:
         raise conversation.Refused(
             "bad_plan",
-            f"--item, --leave, and --message approve a feedback plan, and none of {key}'s waits; reply to say more",
+            f"--item and --leave approve a feedback plan by item, and none of {key}'s waits",
         )
-    plan = plans.approve(ctx.conn, ctx.state_dir, key, channel=CLI, dispatch_lock=ctx.dispatch_lock_path)
-    logs.for_tick(None).info("plan approved", extra={"ticket": key, "plan": plan.id, "channel": CLI})
+    plan = plans.approve(ctx.conn, ctx.state_dir, key, channel=CLI, dispatch_lock=ctx.dispatch_lock_path, note=words)
+    logs.for_tick(None).info(
+        "plan approved",
+        extra={"ticket": key, "plan": plan.id, "noted": words is not None, "channel": CLI},
+    )
     path = plans.path_for(ctx.state_dir, key, plan.run_id)
     click.echo(f"Plan {plan.id} of {key} is approved as {path} stands now. The next tick can implement it.")
+    if words is not None:
+        click.echo(f"Your note is a message on {key}, which its implement reads beside the plan: `canopy show {key}`.")
     click.echo("Its implement refuses (plan_changed) if the file changes before then; approve it again if it does.")
 
 

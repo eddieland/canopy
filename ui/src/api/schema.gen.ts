@@ -2137,9 +2137,11 @@ export type paths = {
         put?: never;
         /**
          * Decide a ticket's plan
-         * @description `canopy plan KEY --approve`, `canopy plan KEY`, or `--skip`: approve the newest plan, ask for a new one, or skip.
+         * @description `canopy plan KEY --approve [--message TEXT]`, `canopy plan KEY`, or `--skip`: approve, ask for a plan, or skip.
          *
-         *     Approving takes the file as it stands, edits included. Asking for changes is a reply, not this.
+         *     Approving takes the file as it stands, edits included, and with `message` writes it on the ticket for the
+         *     implement, refused `bad_body` empty or over its bound. Asking for changes is a reply, not this; a `message` with
+         *     any other action is refused `bad_body`.
          */
         post: operations["changeTicketPlan"];
         delete?: never;
@@ -6665,6 +6667,12 @@ export type components = {
              * @enum {string}
              */
             action: "approve" | "request" | "skip";
+            /**
+             * Message
+             * @description With `approve`, the operator's note for its implement, written on the ticket with the approval, as `--message`.
+             *     Bounded again in code.
+             */
+            message?: string | null;
         };
         /**
          * PlanAnchor

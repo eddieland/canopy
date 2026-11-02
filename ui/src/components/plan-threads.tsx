@@ -179,7 +179,8 @@ export function AskForChanges({
     starts,
     edited,
     asked = false,
-    note: said,
+    line: said,
+    note,
     onAsk,
     onNoteChange,
 }: {
@@ -192,17 +193,15 @@ export function AskForChanges({
     /** Whether they asked already and no planner has read it, so another request is asking again. */
     asked?: boolean
     /** What the caller says of its own actions, after how many comments go with this one, on the line under them. */
-    note?: ReactNode
+    line?: ReactNode
+    /** The note on the whole plan, the caller's state, so its own actions, such as Approve, can send it too. */
+    note: string
     /** Sends the message. */
     onAsk: (message: string) => void
-    /** Called with the note on the whole plan as it changes, so the caller's own actions can say what it leaves. */
-    onNoteChange?: ((note: string) => void) | undefined
+    /** Called with the note on the whole plan as the operator writes it, and with nothing once it is sent. */
+    onNoteChange: (note: string) => void
 }) {
-    const [note, setNoteState] = useState('')
-    function setNote(next: string) {
-        setNoteState(next)
-        onNoteChange?.(next)
-    }
+    const setNote = onNoteChange
     usePending(note.trim() !== '')
     const message = changeRequest(threads, starts, note, edited)
     const open = threads.filter((thread) => !thread.resolved).length

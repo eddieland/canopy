@@ -16,6 +16,12 @@ export const MAX_COMMENT = 4000
  */
 export const MAX_REQUEST = 4000
 
+/**
+ * The most characters of notes an approval carries to the implement: the server's `plans.MAX_NOTE`, an operator
+ * message's bound less the sentence the approval puts before them.
+ */
+export const MAX_NOTES = 3800
+
 /** How much of a passage a change request quotes: enough to find it, so a long one leaves room for the comments. */
 export const MAX_QUOTE = 160
 
@@ -123,27 +129,20 @@ export function changeRequest(
     note = '',
     edited = false,
 ): string {
-    const open = inPlanOrder(threads, starts).filter((thread) => !thread.resolved)
-    const parts: string[] = []
-    if (open.length > 0) {
-        parts.push('Change the plan where I commented. Each comment quotes the passage it is on.')
-        open.forEach((thread, i) => {
-            const gone = starts.has(thread.id) ? '' : ' (no longer in the plan)'
-            const lines = [
-                `${i + 1}. On "${cut(thread.anchor.quote)}"${gone}:`,
-                indent(thread.body),
-                ...thread.replies.map((reply) => indent(`Reply: ${reply.body}`)),
-            ]
-            parts.push(lines.join('\n'))
-        })
-    }
-    if (note.trim()) {
-        parts.push(open.length > 0 ? `On the whole plan:\n${note.trim()}` : note.trim())
-    }
+    const parts = commented(threads, starts, 'Change the plan where I commented.', note)
     if (edited && parts.length > 0) {
         parts.push(EDITED)
     }
     return parts.join('\n\n')
+}
+
+/**
+ * The notes an approval carries to the implement (`canopy plan KEY --approve --message`): the open threads and the
+ * `note` on the whole plan, as `changeRequest` puts them, for small points that need no new plan. The implement reads
+ * the plan as approved, edits included, so this says nothing of them. Empty when there is nothing to send.
+ */
+export function approvalNotes(threads: PlanThread[], starts: ReadonlyMap<string, number>, note = ''): string {
+    return commented(threads, starts, 'Where I commented on the plan, do as I say.', note).join('\n\n')
 }
 
 /** The journal's threads (`GET /tickets/{key}/plans`), as the editor holds them: each id the journal's, as text. */
@@ -216,6 +215,28 @@ export function movedAnchors(saved: PlanThread[], held: PlanThread[]): PlanThrea
 
 // A passage as the planner reads it: without the placeholders its HTML tags and images stand as in the editor's text,
 // which are no characters of the plan, and cut to `MAX_QUOTE` characters, at a word when one ends near the cut.
+// Each open thread, in plan order, as the passage it is on, the comment, and its replies, after `lead`, then `note`.
+function commented(threads: PlanThread[], starts: ReadonlyMap<string, number>, lead: string, note: string): string[] {
+    const open = inPlanOrder(threads, starts).filter((thread) => !thread.resolved)
+    const parts: string[] = []
+    if (open.length > 0) {
+        parts.push(`${lead} Each comment quotes the passage it is on.`)
+        open.forEach((thread, i) => {
+            const gone = starts.has(thread.id) ? '' : ' (no longer in the plan)'
+            const lines = [
+                `${i + 1}. On "${cut(thread.anchor.quote)}"${gone}:`,
+                indent(thread.body),
+                ...thread.replies.map((reply) => indent(`Reply: ${reply.body}`)),
+            ]
+            parts.push(lines.join('\n'))
+        })
+    }
+    if (note.trim()) {
+        parts.push(open.length > 0 ? `On the whole plan:\n${note.trim()}` : note.trim())
+    }
+    return parts
+}
+
 function cut(passage: string): string {
     const quote = collapse(passage.replaceAll(ATOM, ''))
     if (quote.length <= MAX_QUOTE) {

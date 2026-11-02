@@ -57,6 +57,7 @@ import { planExtensions } from '@/lib/plan-schema'
 import {
     addReply,
     addThread,
+    approvalNotes,
     editReply,
     editThread,
     inPlanOrder,
@@ -112,8 +113,8 @@ export function PlanEditor({
     status,
     onAskForChanges,
     asked = false,
-    onNoteChange,
     actions,
+    renderActions,
     actionsNote,
     outcome,
     previous,
@@ -136,10 +137,13 @@ export function PlanEditor({
     onAskForChanges?: (message: string) => void
     /** Whether the operator asked for changes no planner has read yet, so that asking again is said as such. */
     asked?: boolean
-    /** Called with the note on the whole plan, which goes with Ask for changes, as the operator writes it. */
-    onNoteChange?: (note: string) => void
     /** The caller's own word on the plan, such as Approve, at the start of the plan's foot. */
     actions?: ReactNode
+    /**
+     * In place of `actions`, those drawn from the notes an approval would carry to the implement: the open comments
+     * and the note on the whole plan (`approvalNotes`), which goes only where it is written, beside Ask for changes.
+     */
+    renderActions?: (notes: string) => ReactNode
     /** What the caller says of those, in words, on the line under them: what they will do. */
     actionsNote?: ReactNode
     /**
@@ -184,6 +188,8 @@ export function PlanEditor({
         },
     })
     const [draft, setDraft] = useState<Draft | undefined>(undefined)
+    // The note on the whole plan, which goes with Ask for changes or with Approve, whichever the operator presses.
+    const [note, setNote] = useState('')
     // Whether the plan here says other than it did when it opened, by the editor's own Markdown for both: the planner's
     // may be written otherwise (`*` for `-`), and an edit undone can leave an empty paragraph at the end, neither of
     // which the operator wrote.
@@ -542,14 +548,17 @@ export function PlanEditor({
                             </Button>
                         </BubbleMenu>
                     )}
-                    {((editable && (actions !== undefined || onAskForChanges !== undefined)) ||
+                    {((editable &&
+                        (actions !== undefined || renderActions !== undefined || onAskForChanges !== undefined)) ||
                         outcome !== undefined) && (
                         // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so
                         // a long plan is approved or sent back from where it is read, not from under its last line.
                         <PanelFooter sticky data-testid="plan-bar">
                             {editable && (
                                 <div className="flex flex-wrap items-center gap-2">
-                                    {actions}
+                                    {renderActions === undefined
+                                        ? actions
+                                        : renderActions(approvalNotes(threads, starts, onAskForChanges ? note : ''))}
                                     {onAskForChanges !== undefined && (
                                         <AskForChanges
                                             threads={threads}
@@ -557,8 +566,9 @@ export function PlanEditor({
                                             edited={edited || changed}
                                             asked={asked}
                                             onAsk={onAskForChanges}
-                                            note={actionsNote}
-                                            onNoteChange={onNoteChange}
+                                            line={actionsNote}
+                                            note={note}
+                                            onNoteChange={setNote}
                                         />
                                     )}
                                     {onAskForChanges === undefined && actionsNote !== undefined && (

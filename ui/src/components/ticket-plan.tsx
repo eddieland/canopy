@@ -41,7 +41,7 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { PendingWork, usePending, usePendingWork } from '@/hooks/use-pending'
 import { planText } from '@/lib/outcomes'
 import { planNeededWhy, planWaits } from '@/lib/plan-state'
-import { fromServer, movedAnchors, threadChanges } from '@/lib/plan-threads'
+import { fromServer, MAX_NOTES, movedAnchors, threadChanges } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
 import { isApple } from '@/lib/send-key'
 import { ariaKeys, isPressed, keysLabel } from '@/lib/shortcut'
@@ -218,10 +218,8 @@ function NewestPlan({
     const [approved, setApproved] = useState(false)
     const [failure, setFailure] = useState<unknown>(null)
     const [busy, setBusy] = useState(0)
-    // Whether the note on the whole plan holds words, which Approve would leave unsent.
-    const [noted, setNoted] = useState(false)
-    // The decision asked about in the foot, before it is made: Skip, or Approve with a note that would not be sent.
-    const [confirming, setConfirming] = useState<'approve' | 'skip' | undefined>(undefined)
+    // Whether the foot asks before Skip, which nothing on this page undoes.
+    const [confirming, setConfirming] = useState(false)
     // A comment made here has a local id until the journal gives it one: later changes to it wait for that.
     const created = useRef(new Map<string, Promise<number>>())
     const queue = useRef<Promise<unknown>>(Promise.resolve())
@@ -236,8 +234,8 @@ function NewestPlan({
     const dirty = markdown !== text
     usePending(dirty, 'edit')
     const approvable = status === 'proposed' || (status === 'approved' && (newest.changed_since_approval || dirty))
-    // Open comments reach no one on Approve, since the implement reads the plan alone: the foot's line says so.
-    const open = held.filter((thread) => !thread.resolved).length
+    // Open comments go with Approve, to the implement, as notes: the foot's line says so.
+    const open = held.filter((thread) => !thread.resolved)
 
     function refresh(): Promise<void> {
         return client.invalidateQueries({ queryKey: keys.ticketPlans(ticketKey) })
@@ -332,13 +330,21 @@ function NewestPlan({
         return () => document.removeEventListener('keydown', listener)
     }, [])
 
-    function decide(action: PlanChanged['action']) {
-        setConfirming(undefined)
+    // `notes`, with Approve, are the open comments and the note on the whole plan (`approvalNotes`), for its implement.
+    function decide(action: PlanChanged['action'], notes = '') {
+        setConfirming(false)
+        // The comments the notes carry, resolved once they are sent: the implement has them, so they ask for nothing.
+        const sent = notes === '' ? [] : open.map((thread) => thread.id)
         act(async () => {
             if (dirty && action === 'approve') {
                 await save()
             }
-            const done = planText(ticketKey, await decidePlan(ticketKey, action))
+            const decided = await decidePlan(ticketKey, action, notes === '' ? undefined : notes)
+            await Promise.all(
+                sent.map(async (id) => changePlanThread(ticketKey, await serverId(id), { resolved: true })),
+            )
+            const done =
+                planText(ticketKey, decided) + (notes === '' ? '' : ' Your notes went with it, to its implement.')
             // Only once the journal holds it: the moment never shows for an approval that was refused.
             if (action === 'approve') {
                 setApproved(true)
@@ -386,33 +392,24 @@ function NewestPlan({
             }
             onAskForChanges={status === 'proposed' ? askForChanges : undefined}
             asked={plans.changes_asked !== null}
-            onNoteChange={(note) => setNoted(note.trim() !== '')}
-            actions={
+            renderActions={(notes) => (
                 // `contents`, so its buttons are items of the foot's line, with Ask for changes after them.
                 <div className="contents" data-testid="plan-actions">
-                    {confirming !== undefined && (
-                        <ConfirmDecision
-                            action={confirming}
-                            dirty={dirty}
-                            onConfirm={() => decide(confirming)}
-                            onKeep={() => setConfirming(undefined)}
-                        />
-                    )}
-                    {confirming === undefined && approvable && (
+                    {confirming && <ConfirmSkip onConfirm={() => decide('skip')} onKeep={() => setConfirming(false)} />}
+                    {!confirming && approvable && (
                         // The foot's one primary, whatever is open: Ask for changes, its other way out, is outlined.
-                        // A note on the whole plan goes only with Ask for changes, so Approve asks before leaving it.
+                        // The open comments and the note go with it, to the implement, as small points that need no
+                        // new plan; over an operator message's bound, they wait for some to be resolved or shortened.
                         <Button
-                            onClick={() =>
-                                noted && status === 'proposed' ? setConfirming('approve') : decide('approve')
-                            }
-                            disabled={busy > 0}
+                            onClick={() => decide('approve', notes)}
+                            disabled={busy > 0 || notes.length > MAX_NOTES}
                             title={APPROVE_TITLE}
                         >
                             <Check />
-                            {dirty ? 'Save and approve' : 'Approve'}
+                            {approveLabel(dirty, notes !== '')}
                         </Button>
                     )}
-                    {confirming === undefined && (
+                    {!confirming && (
                         <Button
                             variant="outline"
                             onClick={() => act(saveAndSay)}
@@ -424,19 +421,19 @@ function NewestPlan({
                             Save
                         </Button>
                     )}
-                    {confirming === undefined && dirty && (
+                    {!confirming && dirty && (
                         // As a document says it, so an edit not yet in the plan's file is never taken for one that is.
                         <span className="text-xs text-muted-foreground">Unsaved edits</span>
                     )}
-                    {confirming === undefined && (
-                        <Button variant="ghost" onClick={() => setConfirming('skip')} disabled={busy > 0}>
+                    {!confirming && (
+                        <Button variant="ghost" onClick={() => setConfirming(true)} disabled={busy > 0}>
                             <SkipForward />
                             Skip the plan
                         </Button>
                     )}
                 </div>
-            }
-            actionsNote={actionsNote(status, open)}
+            )}
+            actionsNote={actionsNote(status, open.length)}
             // Kept once the plan is read only, so a decision that ends its editing, Skip's, still says what it did.
             outcome={
                 approved && said !== null && failure === null ? (
@@ -449,33 +446,29 @@ function NewestPlan({
     )
 }
 
-// What the line under the actions says of them, after how many comments go with Ask for changes: that approving sends
-// none of those, since the implement reads the plan alone, or that an approved plan's edit is approved again.
+// What Approve reads: saving first when the plan has edits not yet saved, and sending notes when there are some.
+function approveLabel(dirty: boolean, noted: boolean): string {
+    const approve = dirty ? 'Save and approve' : 'Approve'
+    return noted ? `${approve} with notes` : approve
+}
+
+// What the line under the actions says of them, after how many comments go with Ask for changes: that Approve sends
+// them to the implement instead, or that an approved plan's edit is approved again.
 function actionsNote(status: PlanFile['plan']['status'], open: number): string | undefined {
+    const them = open === 1 ? 'it' : 'them'
     if (status === 'approved') {
-        return 'Saving an edit means approving it again.'
+        const again = 'Saving an edit means approving it again.'
+        return open > 0 ? `${again} Approve sends ${them} to the implement, and resolves ${them}.` : again
     }
     if (status === 'proposed' && open > 0) {
-        const sends = open === 1 ? 'does not send it' : 'sends none of them'
-        return `Approving ${sends}: the implement reads the plan alone.`
+        return `Approve sends ${them} to the implement instead, and resolves ${them}.`
     }
     return undefined
 }
 
-// A decision asked about in its place in the foot before it is made, as deleting a comment is: Skip, which nothing
-// undoes on this page, and Approve while the note on the whole plan holds words it would leave unsent. Keep, the choice
-// that loses nothing, takes the focus, and Escape keeps too.
-function ConfirmDecision({
-    action,
-    dirty,
-    onConfirm,
-    onKeep,
-}: {
-    action: 'approve' | 'skip'
-    dirty: boolean
-    onConfirm: () => void
-    onKeep: () => void
-}) {
+// Skip asked about in its place in the foot before it is made, as deleting a comment is: nothing on this page undoes
+// it. Keep, the choice that loses nothing, takes the focus, and Escape keeps too.
+function ConfirmSkip({ onConfirm, onKeep }: { onConfirm: () => void; onKeep: () => void }) {
     const keep = useRef<HTMLButtonElement>(null)
     useEffect(() => {
         keep.current?.focus()
@@ -486,27 +479,16 @@ function ConfirmDecision({
             onKeep()
         }
     }
-    const question =
-        action === 'skip'
-            ? 'Skip the plan? Its implement goes ahead without it.'
-            : 'Approve without your note? It goes only with Ask for changes.'
     return (
         <fieldset className="flex flex-wrap items-center gap-2">
-            <legend className="float-left mr-1 text-sm">{question}</legend>
+            <legend className="float-left mr-1 text-sm">Skip the plan? Its implement goes ahead without it.</legend>
             <Button ref={keep} type="button" variant="ghost" onClick={onKeep} onKeyDown={onKey}>
                 Keep
             </Button>
-            {action === 'skip' ? (
-                <Button type="button" variant="outline" onClick={onConfirm} onKeyDown={onKey}>
-                    <SkipForward />
-                    Skip the plan
-                </Button>
-            ) : (
-                <Button type="button" onClick={onConfirm} onKeyDown={onKey} title={APPROVE_TITLE}>
-                    <Check />
-                    {dirty ? 'Save and approve' : 'Approve'}
-                </Button>
-            )}
+            <Button type="button" variant="outline" onClick={onConfirm} onKeyDown={onKey}>
+                <SkipForward />
+                Skip the plan
+            </Button>
         </fieldset>
     )
 }
