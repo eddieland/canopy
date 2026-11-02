@@ -4,6 +4,7 @@ import { ATOM } from '@/lib/plan-anchors'
 import {
     addReply,
     addThread,
+    approvalNotes,
     changeRequest,
     EDITED,
     editReply,
@@ -114,6 +115,29 @@ describe('changeRequest', () => {
         const request = changeRequest(threads, new Map([['a', 0]]))
         expect(request).toContain('…"')
         expect(request.length).toBeLessThan(long.length)
+    })
+})
+
+describe('approvalNotes', () => {
+    it('carries each open comment on its passage, in plan order, then the note, and nothing of edits', () => {
+        const starts = new Map([
+            ['b', 0],
+            ['a', 20],
+        ])
+        expect(approvalNotes(setResolved(two(), 'a', true), starts, 'Keep it small.')).toBe(
+            [
+                'Where I commented on the plan, do as I say. Each comment quotes the passage it is on.',
+                '',
+                '1. On "Add a CSV export":',
+                '   Name the route.',
+                '',
+                'On the whole plan:',
+                'Keep it small.',
+            ].join('\n'),
+        )
+        expect(approvalNotes([], new Map(), ' Shorter. ')).toBe('Shorter.')
+        expect(approvalNotes(setResolved(two(), 'a', true), new Map(), '').startsWith('Where I commented')).toBe(true)
+        expect(approvalNotes([], new Map(), '  ')).toBe('')
     })
 })
 

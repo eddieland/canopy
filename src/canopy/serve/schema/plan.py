@@ -10,6 +10,7 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
+from canopy.core import plans
 from canopy.serve.schema import Model
 from canopy.serve.schema.persona import RunPersona
 
@@ -116,6 +117,9 @@ class PlanAction(Model):
 
     action: Literal["approve", "request", "skip"]
     """`approve` the newest plan as its file stands, `request` a new plan, or `skip` the plan."""
+    message: Annotated[str, Field(max_length=plans.MAX_NOTE + 1000)] | None = None
+    """With `approve`, the operator's note for its implement, written on the ticket with the approval, as `--message`.
+    Bounded again in code."""
 
 
 class PlanChanged(Model):

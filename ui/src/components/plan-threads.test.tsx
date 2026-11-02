@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { ComponentProps } from 'react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { changeRequest } from '@/lib/plan-threads'
@@ -275,19 +276,25 @@ describe('ThreadCard', () => {
     })
 })
 
+// The form with its note held as the plan editor holds it.
+function Asking(props: Omit<ComponentProps<typeof AskForChanges>, 'note' | 'onNoteChange'>) {
+    const [note, setNote] = useState('')
+    return <AskForChanges {...props} note={note} onNoteChange={setNote} />
+}
+
 describe('AskForChanges', () => {
     const starts = new Map([['a', 0]])
 
     it('asks with nothing only once there is an open comment or a note, and sends them as one message', () => {
         const onAsk = vi.fn<(message: string) => void>()
-        const { rerender } = render(<AskForChanges threads={[]} starts={starts} edited={false} onAsk={onAsk} />)
+        const { rerender } = render(<Asking threads={[]} starts={starts} edited={false} onAsk={onAsk} />)
         const ask = screen.getByRole<HTMLButtonElement>('button', { name: 'Ask for changes' })
         expect(ask.disabled).toBe(true)
         expect(screen.queryByText(/go(es)? with Ask for changes/u)).toBeNull()
 
         const threads = [thread('a', 'the cache')]
-        rerender(<AskForChanges threads={threads} starts={starts} edited note="Approving sends none." onAsk={onAsk} />)
-        expect(screen.getByText('1 open comment goes with Ask for changes. Approving sends none.')).toBeDefined()
+        rerender(<Asking threads={threads} starts={starts} edited line="Approve sends it instead." onAsk={onAsk} />)
+        expect(screen.getByText('1 open comment goes with Ask for changes. Approve sends it instead.')).toBeDefined()
         const note = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'On the whole plan' })
         fireEvent.change(note, { target: { value: 'Keep it short.' } })
         fireEvent.click(ask)
@@ -298,7 +305,7 @@ describe('AskForChanges', () => {
     it('says how far over a reply’s bound the message is, rather than cut it', () => {
         const onAsk = vi.fn<(message: string) => void>()
         const long = [thread('a', 'the cache', { body: 'x'.repeat(4000) })]
-        render(<AskForChanges threads={long} starts={starts} edited={false} onAsk={onAsk} />)
+        render(<Asking threads={long} starts={starts} edited={false} onAsk={onAsk} />)
         const over = changeRequest(long, starts).length - 4000
         expect(screen.getByText(`${over} characters over a reply's bound: resolve or shorten some.`)).toBeDefined()
         expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Ask for changes' }).disabled).toBe(true)

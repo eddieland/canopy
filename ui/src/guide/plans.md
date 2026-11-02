@@ -170,7 +170,8 @@ decided from wherever you got to. **Approve** is always its main button; everyth
 
 - **Approve**, or **Save and approve** with edits not yet saved, as `canopy plan KEY --approve`. It approves the plan
   as saved, your edits included, and the next tick can implement it. Editing an approved plan means approving it
-  again, and until you do, the ticket's implement waits.
+  again, and until you do, the ticket's implement waits. With open comments or a note on the whole plan, it reads
+  **Approve with notes**, as `canopy plan KEY --approve --message TEXT`: see below.
 - **Ask for changes**, while the plan waits on you, sends the planner back with your open comments, and an optional note
   on the whole plan, as one reply on the ticket. If you edited the plan yourself, the reply says so, and asks the
   planner to keep your edits. Resolved comments aren't sent. The reply's 4000-character bound holds, so a long round of
@@ -178,11 +179,13 @@ decided from wherever you got to. **Approve** is always its main button; everyth
 - **Skip the plan**, as `canopy plan KEY --skip`: the implement goes ahead with no plan. The current plan's file
   stays. Nothing on the page undoes it, so it asks first, right there in the foot; **Keep** (or Escape) backs out.
 
-Approving doesn't send open comments. The implement reads the plan alone, so a comment left open is a comment nobody
-acts on. While any are open, the line under the buttons counts them and says so, every time, until you resolve them
-or send them.
-The note on the whole plan travels the same way: only with Ask for changes. Press Approve with words in it and the
-foot asks whether to approve without them, rather than quietly throw away what you wrote.
+Not every comment deserves another plan. "Name the test after the bug" is a point for the worker, not a reason to
+send the planner round again, so **Approve with notes** carries your open comments and the note on the whole plan to
+the implement instead: one message on the ticket, written with the approval, each comment quoting its passage as Ask
+for changes would. The implement reads it beside the plan, and where the two disagree, your notes win, being your later
+word. The comments it sent are resolved, since the worker has them now and the planner never will. Resolve one first
+to leave it out, which is also how you approve with none; and as with Ask for changes, a reply's bound holds, so a long
+round may need trimming first.
 
 After you ask, a green band under the plan's title says "You asked for changes", and when, until the next planner
 starts or you approve the plan after all; the ticket's Plan card carries the same band, and the plan's chip reads

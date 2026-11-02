@@ -189,8 +189,8 @@ describe('TicketPlan', () => {
             renderPlan({ threads: [THREAD, { ...THREAD, id: 10 }] })
             expect(
                 screen.getByText(
-                    '2 open comments go with Ask for changes. Approving sends none of them: the implement reads the ' +
-                        'plan alone.',
+                    '2 open comments go with Ask for changes. Approve sends them to the implement instead, and ' +
+                        'resolves them.',
                 ),
             ).toBeDefined()
         })
@@ -305,20 +305,37 @@ describe('TicketPlan', () => {
         expect(screen.queryByTestId('plan-approved')).toBeNull()
     })
 
-    it('asks before approving while the note holds words, which only Ask for changes sends', async () => {
-        renderPlan()
+    it('approves with notes: the note and open comments go to the implement, and the comments resolve', async () => {
+        renderPlan({ threads: [THREAD] })
         fireEvent.change(screen.getByRole('textbox', { name: 'On the whole plan' }), {
             target: { value: 'Name the timezone.' },
         })
-        fireEvent.click(button('Approve'))
-        expect(screen.getByText('Approve without your note? It goes only with Ask for changes.')).toBeDefined()
-        expect(document.activeElement).toBe(button('Keep'))
-        expect(sent).toEqual([])
-        fireEvent.click(button('Approve'))
+        fireEvent.click(button('Approve with notes'))
         // The line under the actions gives way to the approval's moment, which says it.
         expect((await screen.findByTestId('plan-approved')).textContent).toContain(
-            'Plan 2 of ABC-1 is approved as its file stands now. The next tick can implement it.',
+            'Plan 2 of ABC-1 is approved as its file stands now. The next tick can implement it. Your notes went ' +
+                'with it, to its implement.',
         )
+        const [approved, resolved] = sent
+        expect(approved).toMatchObject({ method: 'POST', path: '/api/tickets/ABC-1/plan' })
+        expect(approved?.body).toEqual({
+            action: 'approve',
+            message: expect.stringMatching(
+                // The comment on its passage, then the note.
+                /^Where I commented.*\n\n1\. On "CSV writer":\n.*On the whole plan:\nName the timezone\.$/su,
+            ) as unknown,
+        })
+        expect(resolved).toEqual({
+            method: 'PATCH',
+            path: '/api/tickets/ABC-1/plan-threads/9',
+            body: { resolved: true },
+        })
+    })
+
+    it('approves with nothing more while there are no notes', async () => {
+        renderPlan()
+        fireEvent.click(button('Approve'))
+        await screen.findByTestId('plan-approved')
         expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
     })
 

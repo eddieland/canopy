@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from canopy.core import db, personas, plans, records
+from canopy.core import conversation, db, personas, plans, records
 from canopy.core.context import Context
 from canopy.core.vocab import PlanStatus, RunKind, RunStatus
 from tests.canopy.helpers import (
@@ -137,6 +137,22 @@ def test_the_plan_route_approves_asks_and_skips_as_canopy_plan_does(ctx: Context
     assert c.post(f"/api/tickets/{KEY}/plan", json={"action": "merge"}, headers=headers).status_code == 422
     # A write needs the session's token, as every write does.
     assert c.post(f"/api/tickets/{KEY}/plan", json={"action": "skip"}).status_code == 403
+
+
+def test_the_plan_route_approves_with_a_note_for_the_implement(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+    plan_id = proposed(ctx)
+    route = f"/api/tickets/{KEY}/plan"
+    # A note goes only with approve, and never empty.
+    assert refused(c.post(route, json={"action": "skip", "message": "x"}, headers=headers)).startswith("bad_body:")
+    assert refused(c.post(route, json={"action": "approve", "message": " "}, headers=headers)).startswith(
+        "bad_body: the note is empty",
+    )
+    assert present(plans.current(ctx.conn, KEY)).status is PlanStatus.PROPOSED
+    approved = c.post(route, json={"action": "approve", "message": "Keep the old flag."}, headers=headers)
+    assert approved.json()["plan"] == plan_id
+    [said] = conversation.operator_messages_after(ctx.conn, KEY, 0)
+    assert (said.channel, said.body.endswith("\n\nKeep the old flag.")) == ("web", True)
 
 
 def test_an_edit_saved_from_the_web_is_the_file_approve_takes(ctx: Context) -> None:
