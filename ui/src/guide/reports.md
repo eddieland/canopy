@@ -393,9 +393,9 @@ commented on it, or sent an earlier plan back; **sent back**, replaced by a newe
   planner's approval takes no time, so it shows a dash. The level is the one the planner was actually asked at: a plan
   that replaced one you had a word on was asked nothing, so it counts as `off` whatever the key said. Under the table,
   the level the key is at now, and how many plans were sent back or wait on you.
-- **Time to approve by length**: the plans you approved, by length (under a page, one to two, two to four, and four
-  and up), with the median time you took and how many went as written. If the long ones go through as fast as the
-  short ones, either the long ones are easy or you're skimming.
+- **Time to approve by length**: the plans you approved, by length (under a page, one to two, two to four, four to
+  six, and six and up), with the median time you took and how many went as written. If the long ones go through as
+  fast as the short ones, either the long ones are easy or you're skimming.
 - **Each plan**: every plan written in the window, with its run, its ticket, its level, how it went and what changed
   first, its length, its words, what of it is **not prose** (code blocks, tables, and diagrams), how long approving it
   took, and the resumes its ticket started after, their reasons on hover.
