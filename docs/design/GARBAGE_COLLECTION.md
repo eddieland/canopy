@@ -18,6 +18,7 @@ All of it is built but one row: the pass removes no memory text yet, though `can
 | `reviews/<id>.log`, `.prompt`, `.diff` | one set per review run | after `run_files_days` |
 | Any of those with no journal row | a review run that never started | after an hour |
 | `canopy.log` | every log line of every canopy process | rotated past `log_max_mib` |
+| `traces.jsonl` (§12, Traces) | every span, while traces are on | rotated as `canopy.log` is |
 | Attention items the harness raised | each open item, every tick | outside the window (below) |
 | Connector runs and derivations (§30) | each tick, and each of the loop's polls (§6) | outside the window (below) |
 | Check runs a `vcs` source keeps (§7) | each completed check run of a PR | once off its PR's head (below) |
@@ -52,9 +53,9 @@ transcript that shows what it did.
 
 Files go only by the paths the journal records, or as orphans an hour old, and only regular files inside the state
 directory, never a symlink. A tick not `ok` keeps its files as long as a run, since the operator debugs those. Reconcile
-alone rotates `canopy.log`, on every live tick: rotating in whichever process crosses the size races the others, which
-follow the log to its new file. Rejected: gzip before deleting, which gives the transcript reader two formats for
-history rarely opened after a month.
+alone rotates `canopy.log` and `traces.jsonl`, on every live tick: rotating in whichever process crosses the size
+races the others, which follow each file to its new one. Rejected: gzip before deleting, which gives the transcript
+reader two formats for history rarely opened after a month.
 
 ### The journal
 

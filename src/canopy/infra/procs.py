@@ -22,7 +22,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import IO, Protocol, cast
 
-from canopy.infra import lock
+from canopy.infra import lock, tracing
 
 #: The variable a child started with a timeout finds its deadline in, as Unix seconds: the moment `run` kills it, taken
 #: when its clock starts, so the two agree (DESIGN §33). A child started without a timeout gets none, not even one its
@@ -320,10 +320,15 @@ def _child_env(
 
     A child with a `deadline` gets `DEADLINE_ENV` naming it, in whole seconds, rounded down so it is never late; one
     without gets none, so a process canopy starts from inside an agent run does not take the run's deadline as its own.
+
+    While tracing is on, the child gets the current span as `TRACEPARENT`, so a canopy process it is continues the trace
+    (`tracing.carrier`).
     """
-    if cwd is None and env is None and not unset and deadline is None and DEADLINE_ENV not in os.environ:
+    traced = tracing.carrier()
+    inherited = cwd is None and env is None and not unset and deadline is None
+    if inherited and not traced and DEADLINE_ENV not in os.environ:
         return None
-    merged = {**os.environ, **(env or {})}
+    merged = {**os.environ, **traced, **(env or {})}
     merged.pop(DEADLINE_ENV, None)
     if deadline is not None:
         merged[DEADLINE_ENV] = str(int(deadline))

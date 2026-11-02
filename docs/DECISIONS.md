@@ -577,3 +577,11 @@ such as a shipped migration, may still cite one, and git history has its text.
 - What is shown is only ever an `<img>` of its SVG: an image runs no script, follows no link, and fetches nothing, so
   a gap in mermaid's sanitizer reaches nothing shown. While drawing, mermaid lays the SVG out off screen in the page,
   where `strict` is the guard.
+
+## D132. Traces go through OpenTelemetry behind `infra/tracing.py`, and are off until the operator turns them on
+
+- Every span is a `tracing.span`; only `infra` imports OpenTelemetry (`tests/canopy/test_layers.py`), and only once
+  `telemetry.traces` is on, so a process that traces nothing loads none of it.
+- A span holds canopy's own facts, never text it read (T2): a span that raised names its exception's type alone.
+- `procs` passes the current span to every child as `TRACEPARENT`, so a detached run is traced under its tick.
+- Spans stay on the machine, in the state directory; sending them off it would be a separate opt-in, and a T2 change.

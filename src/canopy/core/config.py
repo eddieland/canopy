@@ -50,7 +50,7 @@ from pydantic import (
 
 from canopy.core import agent_models, bash_allows, chore_result, contract, hostgit
 from canopy.core.vocab import MemoryMode, PlannerApproval, PoolKind, ReplyMode
-from canopy.infra import procs
+from canopy.infra import procs, tracing
 from canopy.runtime import agents, invocation
 from canopy.runtime.agents import McpTools
 from canopy.runtime.definitions import MAX_SKILL_NAME, SKILL_NAME_RE, TOOL_PART_RE
@@ -1117,6 +1117,17 @@ def _ui_url(value: str) -> str:
     return value if value.endswith("/") else f"{value}/"
 
 
+class Telemetry(Section):
+    """The `[telemetry]` table: traces of what canopy does, through OpenTelemetry (DESIGN §12).
+
+    Every key is private: what canopy records of the operator's machine, and where it goes, is theirs to choose.
+    """
+
+    #: `off`, or `file`: each span appended, as OTLP JSON, to `traces.jsonl` in the state directory, for a collector
+    #: the operator runs to read. Nothing leaves the machine either way.
+    traces: Annotated[tracing.Traces, Scope.PRIVATE] = "off"
+
+
 class Serve(Section):
     """The `[serve]` table: the web UI `canopy loop` serves (DESIGN §22).
 
@@ -1593,6 +1604,7 @@ class Config(Section):
     personas: Personas
     artifacts: Artifacts
     spend: Spend
+    telemetry: Telemetry
     # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
 
@@ -1633,6 +1645,7 @@ SECTIONS: dict[str, type[Section]] = {
     "personas": Personas,
     "artifacts": Artifacts,
     "spend": Spend,
+    "telemetry": Telemetry,
 }
 
 

@@ -42,7 +42,7 @@ from canopy.core import (
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import Decider, TickStatus
-from canopy.infra import lock, logs, procs, resources
+from canopy.infra import lock, logs, procs, resources, tracing
 from canopy.loop import (
     acknowledge,
     archive,
@@ -399,15 +399,21 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
         db.finish_tick(ctx.conn, tick_id, status, summary)
         spent = usage.spent() if usage is not None else {}
         log.info("tick finished", extra={"status": status, "summary": summary, **spent})
+        traced.set(
+            status=status,
+            cost_usd=usage.cost_usd if usage is not None else None,
+            new_tokens=usage.new_tokens if usage is not None else None,
+        )
         return Outcome(tick_id, status, summary, usage)
 
-    try:
-        return _steps(ctx, tick_id, log, finish, dry_run=dry_run, woken_by=woken_by)
-    # Closed with what it raised, so the journal keeps why it failed when the logs do not. Should closing it raise too,
-    # the next tick closes it `abandoned`.
-    except Exception as e:
-        log.exception("tick raised", extra={"error": str(e)})
-        return finish(TickStatus.ERROR, f"{type(e).__name__}: {e}")
+    with tracing.span("tick", tick_id=tick_id, dry_run=dry_run) as traced:
+        try:
+            return _steps(ctx, tick_id, log, finish, dry_run=dry_run, woken_by=woken_by)
+        # Closed with what it raised, so the journal keeps why it failed when the logs do not. Should closing it raise
+        # too, the next tick closes it `abandoned`.
+        except Exception as e:
+            log.exception("tick raised", extra={"error": str(e)})
+            return finish(TickStatus.ERROR, f"{type(e).__name__}: {e}")
 
 
 class _Finish(Protocol):
@@ -432,43 +438,32 @@ def _steps(
     """
     if not dry_run:
         # First, so a tick whose reconcile fails, as one on a full disk may, still frees what retention lets go.
-        gc_pass.run(ctx, tick_id, log)
-        _measure_plans(ctx, log)
-    try:
-        # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
-        review_reconcile.run(ctx, log)
-        reconciled = reconcile.run(ctx, log)
-    except pools.PoolError as e:
-        log.exception("reconcile failed", extra={"error": str(e)})
-        return finish(TickStatus.RECONCILE_FAILED, str(e))
-    chore_reconcile.run(ctx, log)
-    memory_reconcile.run(ctx, log)
+        with tracing.span("gc"):
+            gc_pass.run(ctx, tick_id, log)
+            _measure_plans(ctx, log)
+    with tracing.span("reconcile"):
+        try:
+            # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
+            review_reconcile.run(ctx, log)
+            reconciled = reconcile.run(ctx, log)
+        except pools.PoolError as e:
+            log.exception("reconcile failed", extra={"error": str(e)})
+            return finish(TickStatus.RECONCILE_FAILED, str(e))
+        chore_reconcile.run(ctx, log)
+        memory_reconcile.run(ctx, log)
     if not dry_run:
         # The operator's tasks start in code, before the overseer, which never sees one: it plans around the slots
         # their runs hold (DESIGN §36). A dry tick starts none (D036).
-        started = task_starts.start_queued(ctx, tick_id, log)
-        if started:
-            running = reconciled.capacity.running + len(started)
-            reconciled = replace(reconciled, capacity=replace(reconciled.capacity, running=running))
+        reconciled = _start_tasks(ctx, tick_id, reconciled, log)
     archive_unpushed = archive.run(ctx, log, dry_run=dry_run)
-    # After the reconcile and before the harness's items: a source that fails raises one (DESIGN §30).
-    drafted.reconcile(ctx, connectors.run(ctx, tick_id, log, dry_run=dry_run).read, log)
-    # What moved on a waiting feedback plan's PRs, first seen now: its quiet period runs from the newest (§32).
-    feedback_plans.note_moves(ctx.conn, ctx.config, ctx.workspace)
-    # Before the derivation and the block, so both read each cursor past what needs no handling (DESIGN §37).
-    _harness_cursors(ctx, tick_id, log, dry_run=dry_run)
-    derived = _derive(ctx, tick_id, log)
-    # Before anything reads a message or a run: the harness items and the state block see at least every message, and
-    # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
-    db.set_tick_read(ctx.conn, tick_id)
-    _record_harness_items(ctx, tick_id, archive_unpushed)
-    _record_from_causes(ctx, tick_id, derived, log)
-    # Before the overseer, which is then shown only the tickets left to it (DESIGN §37).
-    _harness_decides(ctx, tick_id, derived or [], log)
+    _observe(ctx, tick_id, log, dry_run=dry_run)
+    _decide_in_code(ctx, tick_id, archive_unpushed, log, dry_run=dry_run)
 
     now = datetime.now(UTC)
-    _query(ctx, tick_id, now, log)
-    rendered = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, woken_by=woken_by)
+    with tracing.span("state") as state:
+        _query(ctx, tick_id, now, log)
+        rendered = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, woken_by=woken_by)
+        state.set(left=len(rendered.left))
     # With nothing left to judge, the overseer would be handed an empty block: the tick runs none, and owes nothing.
     # The disk check still holds the harness's dispatches, which fill a disk as the overseer's do (DESIGN §39).
     overseer = bool(rendered.left)
@@ -476,10 +471,17 @@ def _steps(
     db.set_tick_overseer(ctx.conn, tick_id, ran=overseer and halted is None)
     if halted is not None:
         return finish(*halted)
-    failure, usage = _overseer(ctx, tick_id, rendered, dry_run=dry_run, log=log)
+    with tracing.span("overseer") as traced:
+        failure, usage = _overseer(ctx, tick_id, rendered, dry_run=dry_run, log=log)
+        traced.set(
+            failed=failure is not None,
+            cost_usd=usage.cost_usd if usage is not None else None,
+            new_tokens=usage.new_tokens if usage is not None else None,
+        )
     # After the overseer, whatever its run ended as, every run it recorded and the harness's own; a tick halted before
     # it starts none (DESIGN §37, §40).
-    _spawn(ctx, tick_id, log)
+    with tracing.span("spawn"):
+        _spawn(ctx, tick_id, log)
     if failure is not None:
         return finish(TickStatus.OVERSEER_FAILED, failure, usage)
     owed = rendered.owed
@@ -514,6 +516,56 @@ def _measure_plans(ctx: Context, log: logs.TickAdapter) -> None:
         return
     if measured:
         log.info("plans measured", extra={"plans": measured})
+
+
+def _start_tasks(
+    ctx: Context,
+    tick_id: int,
+    reconciled: reconcile.Reconciled,
+    log: logs.TickAdapter,
+) -> reconcile.Reconciled:
+    """Start the operator's queued tasks, each taking a slot from the capacity the overseer is shown.
+
+    Returns:
+        What reconcile left, less the capacity the tasks started now hold.
+    """
+    with tracing.span("tasks") as traced:
+        started = task_starts.start_queued(ctx, tick_id, log)
+        traced.set(started=len(started))
+    if not started:
+        return reconciled
+    running = reconciled.capacity.running + len(started)
+    return replace(reconciled, capacity=replace(reconciled.capacity, running=running))
+
+
+def _observe(ctx: Context, tick_id: int, log: logs.TickAdapter, *, dry_run: bool) -> None:
+    """Run the sources: after the reconcile, and before the harness's items, as a failing source raises one (§30)."""
+    with tracing.span("connectors"):
+        drafted.reconcile(ctx, connectors.run(ctx, tick_id, log, dry_run=dry_run).read, log)
+        # What moved on a waiting feedback plan's PRs, first seen now: its quiet period runs from the newest (§32).
+        feedback_plans.note_moves(ctx.conn, ctx.config, ctx.workspace)
+
+
+def _decide_in_code(
+    ctx: Context,
+    tick_id: int,
+    archive_unpushed: str | None,
+    log: logs.TickAdapter,
+    *,
+    dry_run: bool,
+) -> None:
+    """Derive what the journal says, record the harness's own items, and decide what it decides in code (DESIGN §37)."""
+    with tracing.span("derive"):
+        # Before the derivation and the block, so both read each cursor past what needs no handling (DESIGN §37).
+        _harness_cursors(ctx, tick_id, log, dry_run=dry_run)
+        derived = _derive(ctx, tick_id, log)
+        # Before anything reads a message or a run: the harness items and the state block see at least every message,
+        # and every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
+        db.set_tick_read(ctx.conn, tick_id)
+        _record_harness_items(ctx, tick_id, archive_unpushed)
+        _record_from_causes(ctx, tick_id, derived, log)
+        # Before the overseer, which is then shown only the tickets left to it (DESIGN §37).
+        _harness_decides(ctx, tick_id, derived or [], log)
 
 
 def _overseer(

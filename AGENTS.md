@@ -121,8 +121,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   tests in parallel (dev only), `rich` for terminal output (D043), `fastapi` and `uvicorn` for the web UI's server
   (D074, only in `canopy.serve`), `tomlkit` for its edits to the private config (D129, only in `canopy.serve`), and
   `httpx2` for its test client (D079) and, only in the workspace member `canopy-http`, for every HTTP request the
-  programs canopy ships make (D130), `syrupy` for snapshot tests (dev only), and `jsonschema` to hold an MCP tool's
-  result to its output schema (dev only).
+  programs canopy ships make (D130), `syrupy` for snapshot tests (dev only), `jsonschema` to hold an MCP tool's
+  result to its output schema (dev only), and `opentelemetry-sdk` for traces (D132, only in `canopy.infra`).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported by the harness, `src/canopy`. No Jira client, no GitHub
