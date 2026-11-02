@@ -63,10 +63,12 @@ as a line going the wrong way rather than a column of numbers you have to rememb
   how long the work that shipped waited, this asks how long anything did, so a PR still sitting in review counts the
   moment somebody looks at it.
 
-To land and review wait are GitHub's own times wherever canopy has them, and a proxy only where it doesn't: an older
-PR, read before canopy kept them, is never filled in after the fact. Hover or tap either median for how many of its
-tickets ran on GitHub's clock, and a ticket's figure under **Landed** for which clock it ran on. A month of mostly
-proxies reads a little slow, by a tick here and a worker's wrap-up there.
+To land and review wait are GitHub's own times wherever canopy has them, and a proxy only where it doesn't, which is
+an older PR read before canopy kept them. The loop never reads a merged PR again, so run `canopy backfill` once to fetch
+the times it missed; it changes nothing else canopy knows of those PRs, and `--dry-run` says how many it would read
+first.
+Hover or tap either median for how many of its tickets ran on GitHub's clock, and a ticket's figure under **Landed**
+for which clock it ran on. A month of mostly proxies reads a little slow, by a tick here and a worker's wrap-up there.
 
 Click a month in the table, or its bar in the chart, to see it in detail below; the page opens on the latest.
 
@@ -340,6 +342,7 @@ than the PR's author, bots left out. canopy posts as you, so its own replies nev
   median, and the table folded under it holds the same numbers. The median for the whole window is the **median first
   review** tile above. A PR canopy read before it kept GitHub's times, or one still a draft, has no start, so its
   reviews are counted apart rather than drag the median somewhere imaginary; the tile's tip says how many.
+  `canopy backfill` fetches those older PRs' times, after which they count.
 - **Who reviews**: each reviewer with their reviews, the ones that asked for changes and the ones that **approved**,
   comments, the PRs they reviewed, and their median wait from a PR's start to their own first review of it. Their
   reviews have a bar against the busiest reviewer's and their wait one against the slowest's, so you can tell the
