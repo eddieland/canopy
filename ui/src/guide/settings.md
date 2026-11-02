@@ -14,14 +14,15 @@ without leaving the page. The card stays put while you click through them; the o
 
 Each theme also has a palette, picked apart. The defaults tint the canvas with the accent's hue: **Lavender** in light,
 **Indigo** in dark. Light can also be **Off-white**, a warm paper, a soft green **Sage**, or the light side of
-**Solarized**, **Nord**, **Gruvbox**, or **Rosé Pine** (its Dawn variant). Dark can be a plain **Grey**, a near
-**Black** for an OLED screen, a deep green **Forest**, a wine-dark **Plum**, or the dark side of **Solarized**,
-**Gruvbox**, or **Monokai**. The background, surfaces, text, and accent change. Schemes with an accent bring it:
-Nord and Solarized their blues, Monokai its hot pink, Rosé Pine its dusty one, Gruvbox its purple, since its orange
-looked like every run was blocked. The rest get one that suits them: ink blue on Off-white, heather on Sage and
-in the Forest alike, steel blue on Grey, ultraviolet on Black, and orchid on Plum. Neither green one gets a green
-accent, for the same reason Gruvbox lost its orange, and the Forest gave up its lake blue, which kept passing for a
-ticket. Every status color stays where you learned it. Scheme purists
+**Solarized**, **Nord**, **Gruvbox**, **Rosé Pine** (its Dawn variant), or **Acme**, in the two tones of Plan 9's
+editor. Dark can be a plain **Grey**, a near **Black** for an OLED screen, a deep green **Forest**, a wine-dark
+**Plum**, or the dark side of **Solarized**, **Gruvbox**, or **Monokai**. The background, surfaces, text, and accent
+change. Schemes with an accent bring it: Nord and Solarized their blues, Monokai its hot pink, Rosé Pine its dusty one,
+Acme its dark blue, Gruvbox its purple, since its orange looked like every run was blocked. The rest get one that suits
+them: ink blue on Off-white, heather on Sage and in the Forest alike, steel blue on Grey, ultraviolet on Black, and
+orchid on Plum.
+Neither green one gets a green accent, for the same reason Gruvbox lost its orange, and the Forest gave up its lake
+blue, which kept passing for a ticket. Every status color stays where you learned it. Scheme purists
 will notice the bases and accents sit a shade off the spec, so everything stays readable on them.
 Nord's dark side didn't make it: moved far enough for that, it was Indigo with a different name. Rosé Pine's and
 Dracula's dark sides missed out the same way.
@@ -33,12 +34,14 @@ ultraviolet, because a shadow on black is a shadow nobody sees. The rest cast a 
 turns the strip under the header into a stepped status bar and sets the name on a yellow block, and its section colors
 fade to Gruvbox's own; Black makes it glow like a neon sign, and turns its section colors all the way up. The others
 have a little of the same: Gruvbox's light side matches its dark one, monospace included, Solarized is crisp and flat,
-Monokai crisp and monospaced with a neon glow, Nord's light side a calm fade through its blues, Grey one steel-blue
-rule, Off-white panels lying on the page like paper, and Sage, Rosé Pine, Forest, and Plum round their corners, Plum
-most of all. Layout and sizes never change with a palette, so nothing moves when you switch, except under Gruvbox and
-Monokai, where monospace runs wider and a long line wraps a little sooner. Their text is drawn a step smaller to make
-up some of the width; every line keeps its height, so nothing shifts up or down. This guide stays in its usual sans
-under both: monospace suits a readout, and a manual set in it reads like one long log line.
+Monokai crisp and monospaced with a neon glow, Acme square-cornered and monospaced, pale yellow panels on a pale cyan
+page under one olive rule, the way Plan 9's editor drew them, before anyone thought to ask for a dark mode, Nord's light
+side a calm fade through its blues, Grey one steel-blue rule, Off-white panels lying on the page like paper, and Sage,
+Rosé Pine, Forest, and Plum round their corners, Plum most of all. Layout and sizes never change with a palette, so
+nothing moves when you switch, except under Gruvbox, Monokai, and Acme, where monospace runs wider and a long line wraps
+a little sooner. Their text is drawn a step smaller to make up some of the width; every line keeps its height, so
+nothing shifts up or down. This guide stays in its usual sans under all three: monospace suits a readout, and a manual
+set in it reads like one long log line.
 
 ## Time
 
