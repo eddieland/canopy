@@ -91,9 +91,9 @@ test('a dialog floats in and out again, and under reduced motion only appears an
 
 test('under reduced motion, counters read their values and nothing waits on an animation', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await page.goto('attention')
+    await page.goto('workspace/worktrees')
     await settled(page)
-    await expect(page.getByTestId('counter-attention')).toContainText('11')
+    await expect(page.getByTestId('counter-working')).toContainText('4')
     const running = await page.evaluate(() => document.getAnimations().map((a) => a.constructor.name))
     expect(running).toEqual([])
 })

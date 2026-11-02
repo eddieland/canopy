@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 import { metaQuery } from '@/api/queries'
 import { Disclosure } from '@/components/disclosure'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PlanEditor } from '@/components/plan-editor'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { SAMPLE_PLAN, SAMPLE_PREVIOUS, SAMPLE_THREADS } from '@/lib/plan-sample'
@@ -19,7 +19,8 @@ export const Route = createFileRoute('/plan-editor')({
 })
 
 function PlanEditorPage() {
-    const meta = useQuery(metaQuery).data
+    const read = useQuery(metaQuery)
+    const meta = read.data
     return (
         <>
             <PageHeader root="Plans" title="Plan editor">
@@ -28,7 +29,7 @@ function PlanEditorPage() {
             </PageHeader>
             {meta === undefined && (
                 <Panel>
-                    <PanelSkeleton rows={4} className="min-h-72" />
+                    <PanelLoading query={read} rows={4} className="min-h-72" />
                 </Panel>
             )}
             {meta?.mock === false && (

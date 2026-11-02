@@ -54,7 +54,7 @@ const BUDGET_TONE: Record<BudgetState, string> = {
 /**
  * The header's readouts: the latest tick, or `no tick yet` before the first, `tick starting` from Tick now until the
  * tick it asked for starts, agent memory while a tier is on, the month against its budget while one is set, and the
- * machine the loop runs on (`HostReadout`). The counters are the attention page's.
+ * machine the loop runs on (`HostReadout`).
  */
 export function LiveReadouts() {
     const last = useQuery(tickQuery)

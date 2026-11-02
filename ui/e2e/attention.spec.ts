@@ -255,7 +255,7 @@ test("Settings hides chores' findings from the list and its counts, and the list
     const rows = page.getByTestId('attention-list').getByRole('link')
     await expect(rows).toHaveCount(10)
     await expect(rows.filter({ hasText: 'lodash-advisory' })).toHaveCount(0)
-    await expect(page.getByTestId('counter-attention')).toContainText('10')
+    await expect(page.getByTestId('attention-count')).toHaveText('10')
     const hidden = page.getByTestId('attention-findings-hidden')
     await expect(hidden).toContainText('1 chore finding hidden from this list')
 
@@ -282,22 +282,15 @@ test('an item about no ticket offers the command that fixes it, with nothing to 
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })
 
-test('the counters show the loop at a glance, and the nav counts the list by severity on every page', async ({
+test("the list's header says the longest wait and its count, and the nav counts the list by severity", async ({
     page,
 }) => {
     await page.goto('attention')
     await settled(page)
-    // ABC-101's and ABC-104's runs, and task 6's; ABC-102, and task 4, waiting on a reply, and the feedback plans of
-    // ABC-099 and ABC-133 to ABC-136 on your approval.
-    await expect(page.getByTestId('counter-running')).toContainText('3')
-    await expect(page.getByTestId('counter-waiting')).toContainText('7')
-    await expect(page.getByTestId('counter-waiting')).toContainText('oldest')
-    await expect(page.getByTestId('counter-attention')).toContainText('11')
-    // The split is the nav's, and what waits on you the counter's value: no line under them says either again.
-    await expect(page.getByTestId('counter-attention')).toHaveText('Attention11')
-    await expect(page.getByTestId('counter-running')).toHaveText('Running3')
-    // Outside the rail and the nav, the page says it once: the counter's label.
-    await expect(page.getByRole('main').getByText(/waiting on you/iu)).toHaveCount(1)
+    await expect(page.getByTestId('attention-oldest')).toHaveText(/^oldest waiting \S+ · $/u)
+    await expect(page.getByTestId('attention-count')).toHaveText('11')
+    // What every visit would repeat is the title's hover, so the list starts high on the page.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('title', /^What needs you/u)
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Workspace' }).click()
     await expect(page.getByTestId('nav-attention-failed')).toHaveText('1')
@@ -313,7 +306,6 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
             .getByRole('navigation', { name: 'Main' })
             .getByRole('link', { name: /1 broken, 6 waiting on you, 4 other/u }),
     ).toHaveCount(1)
-    await expect(page.getByTestId('counters')).toHaveCount(0)
 })
 
 test("a question's item is answered in its reply, with the ticket's own actions a quiet row under it", async ({
@@ -434,12 +426,12 @@ test.describe('on half a monitor', () => {
         const detail = page.getByTestId('attention-detail')
         await expect(detail).toBeHidden()
         const listBox = await list.boundingBox()
-        const counters = await page.getByTestId('counters').boundingBox()
-        if (listBox === null || counters === null) {
+        const header = await page.getByRole('main').locator('header').boundingBox()
+        if (listBox === null || header === null) {
             throw new Error('the list is not drawn')
         }
-        // As wide as the counters above it, within a pixel.
-        expect(Math.abs(listBox.width - counters.width)).toBeLessThanOrEqual(1)
+        // As wide as the page's header above it, within a pixel.
+        expect(Math.abs(listBox.width - header.width)).toBeLessThanOrEqual(1)
 
         await list.getByRole('link').filter({ hasText: 'awaiting reply' }).filter({ hasText: 'ABC-102' }).click()
         await expect(list).toBeHidden()

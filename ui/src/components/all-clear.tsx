@@ -35,7 +35,7 @@ export function EmptyAttention() {
                 <Link to="/tickets" className="text-accent underline-offset-4 hover:underline">
                     Tickets
                 </Link>
-                , then <TickNow inline />
+                , then <TickNow inline />, and what needs you lands here
             </Empty>
         </Panel>
     )
