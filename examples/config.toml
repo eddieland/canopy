@@ -321,6 +321,12 @@ cmd = "canopy-connect-jira --site acme.atlassian.net"
 # cmd = "canopy-connect-slack --channel C0123ABCD"
 # operators = ["U0123ABCD"]
 
+# Traces of what canopy does, as OpenTelemetry spans (DESIGN §12): each tick and its steps, and each run it starts.
+# Off by default, and private. `file` appends each span, as OTLP JSON, to .canopy/traces.jsonl, readable by you alone,
+# for a collector you run (an OpenTelemetry Collector's `otlpjsonfile` receiver) to send on. Nothing leaves the machine.
+# [telemetry]
+# traces = "off"         # or "file"
+
 # Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
 # what each kind holds and what a pass would remove. A live tick removes the files and the journal's rows once a day,
 # and rotates canopy.log; `canopy gc --vacuum`, between ticks, gives the journal's free pages back to the disk, and

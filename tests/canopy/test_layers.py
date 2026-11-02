@@ -33,6 +33,8 @@ CONFINED = {
     "anyio": "serve",
     "click": "cli",
     "fastapi": "serve",
+    # Every span goes through `infra/tracing.py` (D132).
+    "opentelemetry": "infra",
     "starlette": "serve",
     "tomlkit": "serve",
     "uvicorn": "serve",

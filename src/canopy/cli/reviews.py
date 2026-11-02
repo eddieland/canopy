@@ -24,7 +24,7 @@ from canopy.cli.params import EVAL_CASE, PERSONA
 from canopy.core import conversation, db, records, review_drafts, review_drafts_manage, review_revisions
 from canopy.core.memory_text import visible
 from canopy.core.vocab import ReviewDraftAuthor, ReviewDraftStatus
-from canopy.infra import logs
+from canopy.infra import logs, tracing
 from canopy.reviews import evals, execute, findings, noise, view
 
 if TYPE_CHECKING:
@@ -357,7 +357,9 @@ def cmd_review_process(click_ctx: click.Context, run_id: int) -> int:
     leave_the_tick()
     ctx = open_context(click_ctx)
     try:
-        outcome = execute.execute(ctx, run_id, out=sys.stdout)
+        with tracing.span("review", review_run_id=run_id) as traced:
+            outcome = execute.execute(ctx, run_id, out=sys.stdout)
+            traced.set(status=outcome.status)
     except execute.ReviewError as e:
         raise CliError(str(e)) from None
     click.echo(f"review run {run_id}: {outcome.status}")

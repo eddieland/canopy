@@ -119,9 +119,9 @@ the private file, and a workspace file that sets one is a config error naming th
 Whoever controls a shared workspace file (anyone who can push to the repository holding it) must not run commands,
 choose prompts or models, spend money, authorize anyone, decide what is said in the operator's name, or loosen a
 guard; every key that does is private (TRUST_MODEL T7). Among them are every `runtime`, `notify`, `connect`,
-`chores`, `review`, `serve`, `memory`, `paths`, `capacity`, and `loop` key, the queue labels, the repliers and trusted
-reviewers, the comment marks and commit trailer, `trust.rebase`, and `trust.max_flaky_kicks`. Unknown keys are errors
-in every file, and a removed key is an error that says what to do instead.
+`chores`, `review`, `serve`, `memory`, `paths`, `capacity`, `loop`, and `telemetry` key, the queue labels, the
+repliers and trusted reviewers, the comment marks and commit trailer, `trust.rebase`, and `trust.max_flaky_kicks`.
+Unknown keys are errors in every file, and a removed key is an error that says what to do instead.
 
 **The private file's provenance.** The private file is under the workspace root, which may be a checkout of a shared
 repository, and its keys run commands. So whenever config is loaded, canopy refuses a state directory any of whose
@@ -262,6 +262,13 @@ reaches only its own role's prompts, and a role without one has no section for t
 skill the workers load (§17). `tracker.query` finds candidates; it does not authorize them (§17). It is shared: the
 `tracker` source reads it, and a ticket it returns that is not a candidate reaches the overseer by key and why alone
 (TRUST_MODEL T7).
+
+**Traces.** canopy records what it does as OpenTelemetry spans only once the operator's `telemetry.traces` turns them on;
+off, no span is made and OpenTelemetry is not loaded. Each tick is a trace, with a span for each of its steps, and each
+run it starts, in a process of its own, is traced under the step that started it. A span holds canopy's own facts (ids,
+kinds, statuses, counts, cost), never text canopy read, which is untrusted and may be private (TRUST_MODEL T2). Spans
+go to `<state_dir>/traces.jsonl`, readable by the operator alone, as OTLP JSON for a collector they run to read;
+nothing leaves the machine (D132).
 
 ## 13. Agent runtime
 
