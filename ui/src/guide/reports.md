@@ -63,9 +63,10 @@ as a line going the wrong way rather than a column of numbers you have to rememb
   how long the work that shipped waited, this asks how long anything did, so a PR still sitting in review counts the
   moment somebody looks at it.
 
-To land and review wait are GitHub's own times wherever canopy has them, and a proxy only where it doesn't: an older
-PR, read before canopy kept them. The loop never reads a merged PR again, so run `canopy backfill` once to fetch the
-times it missed; it changes nothing else canopy knows of those PRs, and `--dry-run` says how many it would read first.
+To land and review wait are GitHub's own times wherever canopy has them, and a proxy only where it doesn't, which is
+an older PR read before canopy kept them. The loop never reads a merged PR again, so run `canopy backfill` once to fetch
+the times it missed; it changes nothing else canopy knows of those PRs, and `--dry-run` says how many it would read
+first.
 Hover or tap either median for how many of its tickets ran on GitHub's clock, and a ticket's figure under **Landed**
 for which clock it ran on. A month of mostly proxies reads a little slow, by a tick here and a worker's wrap-up there.
 

@@ -333,9 +333,9 @@ def test_canopy_backfill_fills_in_times_once_and_says_what_it_did(
 
     assert scenario.operator("backfill", "--dry-run").out.startswith("2 PRs merged or closed without GitHub's times")
     assert len(reads(github_state)) == 1, "a dry run reads nothing"
-    refused = scenario.operator("backfill", code=1)
-    assert refused.out == "Read 1 PR of 2; filled in times on 1.\n"
-    assert f"could not read {CLOSED}" in refused.err
+    partial = scenario.operator("backfill", code=1)
+    assert partial.out == "Read 1 PR of 2; filled in times on 1.\n"
+    assert f"could not read {CLOSED}" in partial.err
 
     github_holds(github_state, {CLOSED: {"pr": {"state": "closed", **TIMES}}})
     assert scenario.operator("backfill").out == "Read 1 PR of 1; filled in times on 1.\n"
