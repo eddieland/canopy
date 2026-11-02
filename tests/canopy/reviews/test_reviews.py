@@ -1256,7 +1256,7 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
         # reported instead, as after a `canopy forget` and a new PR: no worker pushes to the reviewed one any more.
         ([f"review:{query_id}", "1"], "not_ours"),
         ([ref, "1"], "not_ours"),
-        (["PROJ-1", "1"], "unsupported"),
+        (["chore:nightly", "1"], "unsupported"),
     ]:
         assert f"send refused ({guard})" in scenario.operator("send", *args, code=1).err
     # Back on the PR the review read, its findings go to PROJ-1's worker.

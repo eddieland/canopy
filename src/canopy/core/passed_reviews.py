@@ -6,7 +6,8 @@ so "seen, and chosen not to act on" is in the journal beside the cursor, not onl
 
 What `canopy show` and the attention list read (`left`) is each such item still left: not on a thread resolved since,
 nor answered on it since by a worker or the operator through canopy. An item the reader no longer sees, deleted on
-GitHub, is no longer left either.
+GitHub, is no longer left either. The operator overrules the call with `send`: a reply on the ticket naming the items,
+which the next tick reads as their go-ahead, as `canopy send review:ID` is for a review run's findings.
 """
 
 from __future__ import annotations
@@ -116,6 +117,46 @@ def summary(items: Sequence[Left]) -> str:
     return f"{len(items)} {noun} left with no worker ({reasons})"
 
 
+def send(
+    conn: sqlite3.Connection,
+    trust: Trust,
+    sent: Mapping[str, Mapping[str, Collection[int]]],
+    key: str,
+    numbers: Collection[int],
+    *,
+    channel: str,
+) -> conversation.Sent:
+    """Send feedback on ticket `key`'s PRs that is left with no worker to one: the operator's go-ahead, as a reply.
+
+    The message names each item by GitHub's id, its PR, and where it is, never quoting it: the item is the reviewer's
+    text, and the message the operator's. The next tick reads it as their go-ahead (DESIGN §7, D089), and a worker
+    addresses the items it names, whoever wrote them. Each stays left until it is answered on its thread or resolved.
+
+    Returns:
+        The ticket, and the reply it recorded.
+
+    Raises:
+        conversation.Refused: `bad_reference` for no numbers, or one that is not of feedback left on `key`, which
+            `left` reads with `trust` and `sent`; as `reply`, `unknown` for a ticket canopy has no record of.
+    """
+    wanted = sorted(set(numbers))
+    if not wanted:
+        raise conversation.Refused("bad_reference", "name one or more items by number, as `canopy show` lists them")
+    found = {p.number: p for p in left(conn, trust, sent, [key]).get(key, [])}
+    if missing := [n for n in wanted if n not in found]:
+        raise conversation.Refused(
+            "bad_reference",
+            f"{key} has no feedback left with no worker numbered {', '.join(map(str, missing))}: `canopy show {key}` "
+            "lists what is",
+        )
+    items = [found[n] for n in wanted]
+    named = "; ".join(_named(p) for p in items)
+    noun = "this review item" if len(items) == 1 else "these review items"
+    body = f"Address {noun}, which the loop left with no worker: {named}."
+    replied = conversation.reply(conn, conversation.Ref(conversation.TICKET, key), body, channel=channel)
+    return conversation.Sent(ticket=key, replied=replied)
+
+
 def record(conn: sqlite3.Connection, tick_id: int, key: str, repo: str | None, passed: Iterable[Passed]) -> None:
     """Record each of `passed`, of ticket `key`'s unit in `repo`, as passed in tick `tick_id`.
 
@@ -141,6 +182,18 @@ def record(conn: sqlite3.Connection, tick_id: int, key: str, repo: str | None, p
             decider=p.decider,
             passed_at=now,
         ).or_replace().run(conn)
+
+
+def _named(item: Left) -> str:
+    """Name a left item for a worker, as `send` writes it: by id, PR, place, author, and why it was left.
+
+    Returns:
+        Such as `review comment 4443461025 by mgilson on https://github.com/o/r/pull/7 at s3_backfill.py:378 (left
+        as optional)`.
+    """
+    what = "review comment" if item.item is ReviewItem.COMMENT else "review"
+    where = f" at {item.path}:{item.line}" if item.path is not None and item.line is not None else ""
+    return f"{what} {item.id} by {item.author or 'unknown'} on {item.pr_url}{where} (left as {item.reason.value})"
 
 
 @dataclass(frozen=True)
