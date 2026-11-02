@@ -161,6 +161,16 @@ def test_a_dash_reads_the_text_from_stdin(conn: sqlite3.Connection) -> None:
 
 
 @pytest.mark.usefixtures("canopy_env")
+@pytest.mark.parametrize("args", [["-"], []], ids=["a dash", "no text"])
+def test_a_reply_reads_its_text_from_stdin_with_a_dash_or_none(conn: sqlite3.Connection, args: list[str]) -> None:
+    submit()
+    with mock.patch.object(sys, "stdin", io.StringIO("Cache the dependencies.\n")):
+        assert operator("reply", "task:1", *args) == 0
+    replies = records.select(records.Message).where("subject_kind = 'task' AND kind = 'reply'").all(conn)
+    assert [m.body for m in replies] == ["Cache the dependencies."]
+
+
+@pytest.mark.usefixtures("canopy_env")
 @pytest.mark.parametrize(
     ("args", "said"),
     [

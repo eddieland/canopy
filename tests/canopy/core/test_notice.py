@@ -4,8 +4,10 @@ It is bounded when it is set, and heard while it is in force by every run that b
 by the loop.
 """
 
+import io
 import os
 import sqlite3
+import sys
 from datetime import UTC, datetime, timedelta, tzinfo
 from pathlib import Path
 from typing import override
@@ -152,6 +154,12 @@ def test_a_notice_is_bounded_when_it_is_set(scenario: Scenario, args: list[str],
     # So no dispatch fails on a notice's size: the operator hears it now, not from a refused run later.
     assert f"notice refused ({guard})" in scenario.operator("notice", *args, code=1).err
     assert scenario.conn.execute("SELECT count(*) FROM notices").fetchone()[0] == 0
+
+
+def test_a_dash_reads_the_notice_from_stdin(scenario: Scenario) -> None:
+    with mock.patch.object(sys, "stdin", io.StringIO(f"{OUTAGE}\n")):
+        scenario.operator("notice", "-", "--for", "2h")
+    assert present(notice.current(scenario.conn)).text == OUTAGE
 
 
 @pytest.mark.parametrize(

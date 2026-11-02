@@ -134,7 +134,8 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
 
     Workers that build, fix CI, or resume, reviews, and chores hear it in their prompts, and the overseer holds a
     failed check it explains rather than spending a resume attempt on it. A run already running keeps the prompt it
-    started with. Setting a notice replaces the one in force. Without TEXT or --clear, prints the one in force.
+    started with. Setting a notice replaces the one in force. Without TEXT or --clear, prints the one in force. TEXT
+    `-` reads the notice from stdin.
     """
     if clear and (text is not None or duration is not None):
         raise click.UsageError("--clear takes no TEXT or --for")
@@ -156,9 +157,10 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
         log.info("notice cleared", extra={"channel": CLI, "notice": ended.id})
         click.echo("Notice cleared: runs dispatched from now on hear none. The loop ticks soon.")
         return 0
+    body = sys.stdin.read() if text == "-" else text or ""
     try:
         minutes = notice.parse_duration(duration) if duration is not None else None
-        held = notice.set_notice(ctx.conn, text or "", minutes=minutes, channel=CLI)
+        held = notice.set_notice(ctx.conn, body, minutes=minutes, channel=CLI)
     except conversation.Refused as r:
         raise CliError(f"notice refused ({r.guard}): {r.reason}") from None
     log.info("notice set", extra={"channel": CLI, "notice": held.id, "lapses_at": held.lapses_at})
@@ -398,6 +400,8 @@ def _stop_review(click_ctx: click.Context, subject: Ref) -> int:
 def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     """Answer a ticket, a task, or a running agent, note to a chore, or revise a review's draft, with TEXT or stdin.
 
+    Without TEXT, or with TEXT `-`, the reply is read from stdin.
+
     On a ticket the next tick reads it and a waiting loop wakes. On a public ticket it is your word to the loop, read as
     an authorized reply is, and how you say what to do about an untrusted reviewer's comments (`untrusted_review`). It
     never reaches the ticket. On `task:N` it is your next instruction to the task, answering its run's question if one
@@ -413,7 +417,7 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
     """
     _operator("reply")
     subject = _ref(ref, "reply")
-    body = text if text is not None else sys.stdin.read()
+    body = sys.stdin.read() if text in {None, "-"} else text
     ctx = open_context(click_ctx)
     if subject.kind == conversation.RUN or (subject.kind == conversation.REVIEW and _running_review(ctx, subject)):
         return _answer(ctx, subject, body)
