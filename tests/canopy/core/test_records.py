@@ -37,7 +37,7 @@ DECISION_COLUMNS = "id, tick_id, ticket_key, action, rationale, created_at, repo
 
 def row_types() -> list[type[records.Row]]:
     # A row type a test module defines for itself is not a journal table's.
-    return [t for t in records.Row.__subclasses__() if t.__module__ == records.__name__]
+    return [t for t in records.Row.__subclasses__() if t.__module__.startswith(f"{records.__name__}.")]
 
 
 @pytest.fixture
