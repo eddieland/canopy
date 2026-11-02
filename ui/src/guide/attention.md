@@ -163,8 +163,9 @@ the flaky test is flaky. A reply holds up to 4000 characters, counted beside the
 from the CLI, a longer one is refused, not cut.
 
 The box takes the Markdown the conversation draws: **bold**, `code`, a `##` heading, bulleted and numbered lists, and
-fenced code blocks from the buttons under the text, and `*italics*`, `~~strikethrough~~`, `>` quotes, `---` rules,
-and pipe tables typed by hand. A labelled link stays as characters, so its address never hides behind friendlier
+fenced code blocks from the buttons under the text (name the language after the opening fence, as ```` ```python ````,
+and the thread colors it), and `*italics*`, `~~strikethrough~~`, `>` quotes, `---` rules, and pipe tables typed by
+hand. A labelled link stays as characters, so its address never hides behind friendlier
 words. Press ⌘B and ⌘E (Ctrl+B and Ctrl+E) for bold and code; Shift+Enter in a list starts the next item, and on an
 empty one ends the list. ⌘Z undoes a button as it undoes typing. **Preview** shows the reply as the thread will,
 which is the cheapest way to find the backtick you didn't close; ⌘⇧P switches back and forth.

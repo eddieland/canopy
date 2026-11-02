@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Code } from '@/components/code'
+import { CodeBlock } from '@/components/code-block'
 import { LinkedText } from '@/components/linked-text'
 import { MoreLines } from '@/components/more-lines'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -22,8 +23,8 @@ const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' 
 
 /**
  * Agent-written text laid out as it was written: line breaks, lists, headings, quotes, rules, tables, and code
- * (`src/lib/rich-text.ts`). It is untrusted, so every piece is React text, never HTML; a URL outside code is a link to
- * itself (`LinkedText`, D113).
+ * (`src/lib/rich-text.ts`), a fenced block colored by the language its fence names (`CodeBlock`). It is untrusted, so
+ * every piece is React text, never HTML; a URL outside code is a link to itself (`LinkedText`, D113).
  * With `lines`, text longer than that shows its first lines and a toggle for the rest; a long line counts as the lines
  * it wraps to, so one long paragraph folds too. With `prose`, a paragraph's or an item's lines join with a space, as
  * Markdown's soft breaks do, for a file wrapped at a column (a persona) rather than written a line a thought. With
@@ -186,14 +187,14 @@ function BlockView({ block, prose, look }: { block: Block; prose: boolean; look:
         }
         case 'code': {
             return (
-                <pre
+                <CodeBlock
+                    lines={block.lines}
+                    lang={block.lang}
                     className={cn(
-                        'overflow-x-auto rounded-sm border px-2 py-1.5 font-mono text-code leading-relaxed',
+                        'rounded-sm border px-2 py-1.5 text-code leading-relaxed',
                         look.raised ? 'bg-background' : 'bg-surface-raised',
                     )}
-                >
-                    {block.lines.join('\n')}
-                </pre>
+                />
             )
         }
     }
