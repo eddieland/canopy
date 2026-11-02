@@ -63,10 +63,10 @@ A harness-raised attention item is deleted only once it is older than `journal_d
 window the attention list reads, so the list, its open-since, and notifications do not change. Rejected: recording
 an item only when it opens and closes, which changes how §14 derives the list and every reader with it. Connector runs
 and derivations (§30) go under the same rule, except each source's newest run and the newest that recorded the query's
-result, which `canopy status`, `connector_failed`, and the derivation read. A kept check or status run goes after `journal_days`
-once a read shows its PR at another head, merged, or closed, since `handled` reads only those at the head. `--vacuum`
-refuses while any run is live, and when the disk has less free space than the journal, since `VACUUM` writes a whole
-copy first.
+result, which `canopy status`, `connector_failed`, and the derivation read. A kept check or status run goes after
+`journal_days` once a read shows its PR at another head, merged, or closed, since `handled` reads only those at the
+head. `--vacuum` refuses while any run is live, and when the disk has less free space than the journal, since `VACUUM`
+writes a whole copy first.
 
 ### Git in the primary clones
 
