@@ -6,7 +6,7 @@ import type { ResolvedTheme } from './store'
  * The palette each theme draws its neutrals from, chosen apart for light and for dark. Each theme's default carries
  * the accent's hue in its canvas: lavender, a pale lavender grey with white surfaces, and indigo, a deep indigo slate.
  * Light can wear off-white, a warm paper, sage, a soft green, or Solarized's, Nord's, Gruvbox's, Rosé Pine Dawn's, or
- * Catppuccin Latte's light base tones instead. Dark can wear grey, the neutral one the 2026-10-19 exploration drew for
+ * Acme's light base tones instead. Dark can wear grey, the neutral one the 2026-10-19 exploration drew for
  * Mailroom, a near black, forest, a deep green, plum, a dark wine purple, or Solarized's, Gruvbox's, or Monokai's dark
  * tones. Kept in localStorage and synced across tabs; the inline script in index.html applies it before first paint,
  * and this module afterwards.
@@ -14,7 +14,7 @@ import type { ResolvedTheme } from './store'
 
 /** Each theme's palettes, the default first. */
 export const PALETTES = {
-    light: ['lavender', 'off-white', 'sage', 'solarized', 'nord', 'gruvbox', 'rose-pine', 'catppuccin'],
+    light: ['lavender', 'off-white', 'sage', 'solarized', 'nord', 'gruvbox', 'rose-pine', 'acme'],
     dark: ['indigo', 'grey', 'black', 'forest', 'plum', 'solarized', 'gruvbox', 'monokai'],
 } as const
 
@@ -31,7 +31,7 @@ export const PALETTE_LABELS: { readonly [T in ResolvedTheme]: Readonly<Record<Pa
         nord: 'Nord',
         gruvbox: 'Gruvbox',
         'rose-pine': 'Rosé Pine',
-        catppuccin: 'Catppuccin',
+        acme: 'Acme',
     },
     dark: {
         indigo: 'Indigo',

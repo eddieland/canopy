@@ -12,7 +12,7 @@
  * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
  * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
  * others set the neutrals and the accent over the default's: off-white, Solarized, Nord, Gruvbox, sage, Rosé Pine
- * Dawn, and Catppuccin Latte for light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized,
+ * Dawn, and Acme for light; grey (the one the 2026-10-19 exploration drew for Mailroom), black, Solarized,
  * Gruvbox, forest, plum, and Monokai for dark.
  */
 
@@ -493,39 +493,35 @@
     --nav-hairline: 0;
 }
 
-/* Catppuccin Latte: base the canvas, mantle raised, surface0 the hairlines, text the text, subtext1 muted, and mauve
- * the accent. The canvas is a shade darker than Latte's own, and mauve darker still, so every hue reads at 4.5:1 and
- * white reads on mauve. */
-:root[data-light-palette='catppuccin']:not(.dark) {
-    --accent: oklch(0.515 0.22 297);
-    --ring: oklch(0.515 0.22 297 / 0.55);
-    --background: oklch(0.95 0.008 265);
-    --surface: oklch(0.99 0.003 265);
-    --surface-raised: oklch(0.962 0.009 265);
-    --border: oklch(0.9 0.014 268);
-    --foreground: oklch(0.38 0.045 279);
-    --muted-foreground: oklch(0.48 0.038 279);
-    --scrollbar: oklch(0.48 0.038 279 / 0.4);
-    --status-stopped: oklch(0.46 0.038 279);
-    --spend-dry-run: oklch(0.6 0.024 275);
-    --check-other: oklch(0.6 0.024 275);
-    --answer-na: oklch(0.6 0.024 275);
-    --context-carried: oklch(0.6 0.024 275);
+/* Acme, Plan 9's editor, in its two tones: the pale cyan of its tag lines the canvas, the pale yellow of its text
+ * panes each surface, its olive the hairlines, near-black the text, and the dark blue of its dirty-window box the
+ * accent. The cyan sits a shade darker than Acme's own, so every hue reads at 4.5:1 on it, and the blue a step
+ * lighter, so every status still reads in a selected row. */
+:root[data-light-palette='acme']:not(.dark) {
+    --accent: oklch(0.44 0.18 264);
+    --ring: oklch(0.44 0.18 264 / 0.55);
+    --background: oklch(0.955 0.03 197);
+    --surface: oklch(0.993 0.028 107);
+    --surface-raised: oklch(0.968 0.042 107);
+    --border: oklch(0.84 0.06 109);
+    --foreground: oklch(0.2 0.005 100);
+    --muted-foreground: oklch(0.46 0.035 105);
+    --scrollbar: oklch(0.666 0.1 109);
+    --status-stopped: oklch(0.44 0.035 105);
+    --spend-dry-run: oklch(0.6 0.03 105);
+    --check-other: oklch(0.6 0.03 105);
+    --answer-na: oklch(0.6 0.03 105);
+    --context-carried: oklch(0.6 0.03 105);
 
-    /* A cozy editor: softened corners, panels flat on the canvas, every line in its mono, and the aurora a pastel fade
-     * through its mauve, pink, and blue. */
-    --radius: 0.625rem;
+    /* An editor from Bell Labs: square corners, panels and the primary action flat, every line in its mono, and the
+     * aurora one rule in its olive. */
+    --radius: 0.125rem;
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
     --code-size: 1em;
     --depth-panel: none;
-    --aurora-image: linear-gradient(
-        90deg,
-        oklch(0.555 0.25 297),
-        oklch(0.726 0.174 338),
-        oklch(0.559 0.226 262),
-        oklch(0.555 0.25 297)
-    );
+    --depth-action: none;
+    --aurora-image: linear-gradient(oklch(0.666 0.1 109), oklch(0.666 0.1 109));
 }
 
 /* The dark theme's grey palette, Mailroom's neutrals, with a steel blue accent. Muted text is a step further from the
