@@ -466,6 +466,21 @@ def test_status_lists_an_open_request_and_stop_ends_it(requests_env: CanopyEnv, 
     assert "Review requests" not in scenario.operator("status").out
 
 
+def test_a_request_made_ends_the_loops_wait_and_one_changed_does_not(
+    requests_env: CanopyEnv,
+    scenario: Scenario,
+) -> None:
+    """A new request wakes the loop; new notes on an open one wait for the tick that starts its review anyway."""
+    since = db.now()
+    assert not review_requests.made_after(scenario.conn, since)
+    scenario.operator("start", PR, "--review")
+    assert review_requests.made_after(scenario.conn, since)
+
+    changed = db.now()
+    scenario.operator("start", PR, "--review", "--notes", "Look at the cache first.")
+    assert not review_requests.made_after(scenario.conn, changed)
+
+
 def test_the_state_block_carries_the_open_requests(
     requests_env: CanopyEnv,
     scenario: Scenario,
