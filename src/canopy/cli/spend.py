@@ -247,8 +247,8 @@ def _model_name(row: spend.ModelSpend) -> str:
 
 
 # Each kind's first model calls by local ISO week: the median one's size, and what they all read from the cache of what
-# they were sent, with the runtime's versions and the definitions snapshots the week's runs used and the week before's
-# did not, where the prefix the runs share may have changed.
+# they were sent, with the runtime's versions and the definitions snapshots the week's runs used and no earlier week's
+# did, where the prefix the runs share may have changed.
 def _first_call_weeks(found: Breakdown) -> list[str]:
     weeks = [w for w in found.first_call_weeks if w.by == "kind"]
     if not weeks:
@@ -278,9 +278,13 @@ def _week_line(week: str, kind: str, *counts: str) -> str:
     return f"{week:<{_DAY_WIDTH}}{kind:<{_DAY_WIDTH}}" + "".join(f"{c:>{_COST_WIDTH}}" for c in counts)
 
 
-# What a week's runs used first: a runtime's version or a definitions snapshot the series' week before did not.
+# What a week's runs used first: a runtime's version or a definitions snapshot the series' earlier weeks did not. A
+# kind renders a snapshot for each prompt, persona, and model its runs use, so a change to canopy or its config makes
+# them all at once: more than one is counted, and `--json` names them.
 def _week_changes(week: spend.FirstCallWeek) -> list[str]:
-    return [f"runtime {v}" for v in week.new_runtime_versions] + [f"snapshot {d}" for d in week.new_digests]
+    digests = week.new_digests
+    snapshots = [f"snapshot {d}" for d in digests] if len(digests) <= 1 else [f"{len(digests)} snapshots"]
+    return [f"runtime {v}" for v in week.new_runtime_versions] + snapshots
 
 
 # Every session the runtime keeps that started in the window, canopy's apart from the rest, and where the rest ran, as

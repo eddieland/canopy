@@ -25,7 +25,7 @@ function button(left = 100, top = 50): HTMLElement {
 function stubViewTransitions(ready: Promise<void>) {
     const start = vi.fn<(update: () => void) => ViewTransition>((update) => {
         update()
-        return { ready } as ViewTransition
+        return { ready, finished: ready } as ViewTransition
     })
     Object.defineProperty(document, 'startViewTransition', { configurable: true, value: start })
     return start
@@ -102,12 +102,45 @@ describe('switchPalette', () => {
         // The stubbed system is light, and nothing is stored, so the page shows light.
         const { switchPalette } = await load()
 
-        switchPalette('dark', 'grey', button())
+        const atOnce = switchPalette('dark', 'grey', button())
         expect(document.documentElement.dataset.darkPalette).toBe('grey')
         expect(start).not.toHaveBeenCalled()
+        await atOnce
 
-        switchPalette('light', 'solarized', button())
+        const revealed = switchPalette('light', 'solarized', button())
         expect(document.documentElement.dataset.lightPalette).toBe('solarized')
         expect(start).toHaveBeenCalledTimes(1)
+        await revealed
+    })
+
+    it('starts no reveal for the palette the theme already wears', async () => {
+        const start = stubViewTransitions(Promise.resolve())
+        const { switchPalette } = await load()
+
+        await switchPalette('light', 'lavender', button())
+        expect(start).not.toHaveBeenCalled()
+        expect(localStorage).toHaveLength(0)
+    })
+
+    it('settles once the reveal is over, not before', async () => {
+        let end: (() => void) | undefined
+        const over = new Promise<void>((resolve) => {
+            end = resolve
+        })
+        stubViewTransitions(over)
+        const { switchPalette } = await load()
+        let settled = false
+
+        const done = switchPalette('light', 'sage', button()).then(() => {
+            settled = true
+            return settled
+        })
+        await Promise.resolve()
+        expect(document.documentElement.dataset.lightPalette).toBe('sage')
+        expect(settled).toBe(false)
+
+        end?.()
+        await done
+        expect(settled).toBe(true)
     })
 })

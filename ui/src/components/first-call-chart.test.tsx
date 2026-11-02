@@ -57,6 +57,15 @@ describe('FirstCallChart', () => {
         ).toEqual(['Week of Sep 21: snapshot a81d2c4e9f306b17', 'Week of Sep 28: runtime 1.0.104'])
     })
 
+    it("counts a week's several new snapshots, each one named in the count's tip", () => {
+        const several = week({ week: '2026-W41', new_digests: ['a81d2c4e', 'b92e3d5f'] })
+        render(<FirstCallChart weeks={[...WEEKS, several]} fill="bg-spend-workers" />)
+        const changes = screen.getByRole('list', { name: 'What changed' })
+        const item = within(changes).getAllByRole('listitem').at(-1)
+        expect(item?.textContent).toBe('Week of Oct 5: 2 snapshots')
+        expect(tipOf(screen.getByText('2 snapshots'))).toContain('a81d2c4e\nb92e3d5f')
+    })
+
     it('lists no changes when no week made one', () => {
         render(<FirstCallChart weeks={[WEEKS[0] ?? week({})]} fill="bg-spend-workers" />)
         expect(screen.queryByRole('list', { name: 'What changed' })).toBeNull()

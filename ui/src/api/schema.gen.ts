@@ -10304,14 +10304,14 @@ export type components = {
             name: string | null;
             /**
              * New Digests
-             * @description The definitions snapshots their runs loaded that those of the series' week before did not, the same way.
+             * @description The definitions snapshots their runs loaded that no run of the series' earlier weeks did, the same way.
              * @default []
              */
             new_digests: string[];
             /**
              * New Runtime Versions
-             * @description The runtime's versions their sessions named that the runs of the series' week before did not, in the order the
-             *     runs first ran on each: the latest earlier week in the window with runs. The series' first week names none.
+             * @description The runtime's versions their sessions named that no run of the series' earlier weeks in the window did, in the
+             *     order the runs first ran on each. The series' first week names none.
              * @default []
              */
             new_runtime_versions: string[];

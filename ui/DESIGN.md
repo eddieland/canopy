@@ -269,6 +269,8 @@ Rules:
   tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), the budget's readout while a
   budget is set, the host's readout last among the readouts, and the theme toggle, in three groups with a hairline
   rule between each: the actions, the readouts, the theme. Every readout that opens a page has a hover card of it.
+  The theme toggle has one too, of the shown theme's palettes, each picked with the toggle's reveal; it stays open
+  through the reveal, so palettes can be tried in turn. Settings keeps both themes' palettes, and the keyboard's way.
 - The stream's readout sits beside the name (`StreamReadout`), not with the readouts at the end, so a drop moves
   nothing: its word hugs its text, and only the ticker's window gives way when it changes. Held to one width at the end,
   it left a hole before `live` whenever the loop was up. The word sits in a pill with a dot, as `mock` does in a pill
@@ -573,9 +575,10 @@ the rules it all keeps; what each one does is written in its code. None of it is
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
   something; its room stays, so nothing beside it moves. The fit is measured as the layout changes (`useFits` in
   `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in. Three exceptions, all the
-  operator's call: Sprig may stand over the foot of the rail's working runs by 40px rather than step out, offering tips
-  there only when clicked; the rave covers the whole page, taking no pointer, hidden from a screen reader, not printed;
-  and 2048 opens over the page as a dialog, only when typed, and Escape puts it away.
+  operator's call: Sprig may stand over the foot of the rail's working runs by 40px rather than step out, taking none
+  of their clicks and offering tips there only when clicked; the rave covers the whole page, taking no pointer, hidden
+  from a screen reader, not printed; and 2048 opens over the page as a dialog, only when typed, and Escape puts it
+  away.
 - **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`, `rave-dark`) or the accent,
   never a status color, so nothing in it reads as a run's state.
 - **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and counters.
@@ -1112,12 +1115,13 @@ sliver beside four others; and its axis names short call numbers without measuri
   bar per local ISO week of one kind's series, in the kind's spend fill, as tall as the share of the week's first calls
   the cache served, its top the whole and `HEADROOM` over it, so the axis means the same in every window, and every
   bar's rate over it, since there are six at most and the eye compares neighbours. A week whose runs recorded no cache
-  read is a stub with a dash. A week whose runs used a runtime version or definitions snapshot the week before's did
-  not has a 1px `muted-foreground` rule down the gap before its bar, and a line under the chart names what it used, in
-  `canopy spend`'s words, so a screen reader hears it beside the table of each week's runs, median first call, and
-  rate. The axis names each week's Monday. The kind filter has no `all`, since kinds' prefixes do not sum
-  (`?first_kind=`, the first kind with a week by default), and the chips over the chart pick the kind's runs, a
-  chore's, or a model's (`?first_series=`); a kind switch goes back to all its runs.
+  read is a stub with a dash. A week whose runs used a runtime version or definitions snapshot no earlier week's did
+  has a 1px `muted-foreground` rule down the gap before its bar, and a line under the chart names what it used, in
+  `canopy spend`'s words, more than one snapshot as a count whose tip names each, so a screen reader hears it beside
+  the table of each week's runs, median first call, and rate. The axis names each week's Monday. The kind filter has
+  no `all`, since kinds' prefixes do not sum (`?first_kind=`, the first kind with a week by default), and the chips
+  over the chart pick the kind's runs, a chore's, or a model's (`?first_series=`); a kind switch goes back to all its
+  runs.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.

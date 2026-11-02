@@ -17,9 +17,20 @@ export function ReadoutHover({ card, testId, children }: { card: ReactNode; test
 
 /**
  * A readout's card, as the host's sets the pattern: what it is about and, at the right, a word or two more, then
- * `children`, its rows (`CardRows`) and anything over them, and at its foot a pointer to the page the readout opens.
+ * `children`, its rows (`CardRows`) and anything over them, and at its foot a pointer to the page the readout opens,
+ * or `foot` for a card whose trigger opens none.
  */
-export function ReadoutCard({ title, aside, children }: { title: ReactNode; aside?: ReactNode; children: ReactNode }) {
+export function ReadoutCard({
+    title,
+    aside,
+    foot = 'Open it for the rest.',
+    children,
+}: {
+    title: ReactNode
+    aside?: ReactNode
+    foot?: ReactNode
+    children: ReactNode
+}) {
     return (
         <div className="flex flex-col gap-2.5 text-xs">
             <div className="flex min-w-0 items-baseline justify-between gap-3">
@@ -27,7 +38,7 @@ export function ReadoutCard({ title, aside, children }: { title: ReactNode; asid
                 {aside !== undefined && <span className="readout shrink-0 text-muted-foreground">{aside}</span>}
             </div>
             {children}
-            <span className="text-muted-foreground">Open it for the rest.</span>
+            <span className="text-muted-foreground">{foot}</span>
         </div>
     )
 }
