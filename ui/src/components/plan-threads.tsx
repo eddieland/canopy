@@ -13,6 +13,7 @@ import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { usePending } from '@/hooks/use-pending'
+import { COMMENT_LABELS, withLabel } from '@/lib/plan-comment-labels'
 import { changeRequest, MAX_COMMENT, MAX_REQUEST } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
 import { useSendKeys } from '@/lib/send-key'
@@ -258,7 +259,7 @@ export function AskForChanges({
     )
 }
 
-/** The comment being written: the passage it is on, quoted, and its form. */
+/** The comment being written: the passage it is on, quoted, and its form, which offers the one-click labels. */
 export function DraftForm({
     draft,
     onDraftChange,
@@ -284,6 +285,7 @@ export function DraftForm({
                 key={draft.opened}
                 label="Comment"
                 submit="Comment"
+                labels
                 value={draft.body}
                 onValueChange={onDraftChange}
                 onSubmit={onDraftSubmit}
@@ -596,10 +598,12 @@ function Said({
 // A comment or a reply being written. It sends on the key Settings names, as a reply to a ticket does. Escape drops it
 // while it holds nothing new; with words of the operator's own in it, Escape leaves it open, words and all, and goes
 // back to the plan (`onLeave`), so one key never loses what was typed: Cancel drops it. It keeps its own words, or the
-// caller's through `value` and `onValueChange`, which outlive the form.
+// caller's through `value` and `onValueChange`, which outlive the form. With `labels`, a new comment's, it offers the
+// one-click labels (`COMMENT_LABELS`), each writing its instruction to the planner at the comment's start.
 function CommentForm({
     label,
     submit,
+    labels = false,
     initial = '',
     value,
     onValueChange,
@@ -609,6 +613,7 @@ function CommentForm({
 }: {
     label: string
     submit: string
+    labels?: boolean
     initial?: string
     value?: string
     onValueChange?: (body: string) => void
@@ -636,6 +641,18 @@ function CommentForm({
         const frame = requestAnimationFrame(() => element.scrollIntoView({ block: 'nearest' }))
         return () => cancelAnimationFrame(frame)
     }, [])
+
+    // Counts the labels put on the comment: after each, once its words are in the field, the cursor goes back to the
+    // field's end, where the operator's own words follow the instruction.
+    const [labelled, setLabelled] = useState(0)
+    useEffect(() => {
+        const element = field.current
+        if (labelled === 0 || element === null) {
+            return
+        }
+        element.focus({ preventScroll: true })
+        element.setSelectionRange(element.value.length, element.value.length)
+    }, [labelled])
 
     function send(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -667,6 +684,27 @@ function CommentForm({
                 onKeyDown={onKey}
                 ref={field}
             />
+            {labels && (
+                // Under the field, as its toolbar is, so Tab reaches the text first. Each says on hover what it writes.
+                <fieldset aria-label="Labels" className="-ml-2 flex flex-wrap items-center">
+                    {COMMENT_LABELS.map((each) => (
+                        <Button
+                            key={each.name}
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            className="text-muted-foreground"
+                            title={each.instruction}
+                            onClick={() => {
+                                setBody(withLabel(body, each))
+                                setLabelled((count) => count + 1)
+                            }}
+                        >
+                            {each.name}
+                        </Button>
+                    ))}
+                </fieldset>
+            )}
             <div className="flex items-center justify-end gap-1">
                 <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
                     Cancel
