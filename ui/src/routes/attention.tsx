@@ -51,6 +51,7 @@ import { TicketTitle } from '@/components/ticket-title'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAttention } from '@/hooks/use-attention'
+import { useLeavingRows } from '@/hooks/use-leaving-rows'
 import { useToast } from '@/hooks/use-toast'
 import { answered } from '@/lib/acknowledged'
 import {
@@ -69,8 +70,6 @@ import {
 import type { Ask, Severity } from '@/lib/attention'
 import { useFindingsHidden } from '@/lib/attention-findings'
 import { counted } from '@/lib/descriptions'
-import { settled, withLeaving } from '@/lib/leaving'
-import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
 import { reasonMeaning } from '@/lib/meanings'
 import { pullRequestLabel } from '@/lib/pull-request-label'
@@ -105,10 +104,6 @@ const TONE: Record<Severity, Tone> = {
 // is about").
 const HELP = 'What needs you, as canopy status lists it, most severe first. An item leaves when its cause is gone.'
 
-// How long a cleared item's row plays its exit before it is let go: `animate-leave` in src/index.css, and a little
-// over, so the row is folded shut before it goes.
-const LEAVE_MS = 700
-
 // The page's width under which the list and an item take turns rather than sit side by side: Tailwind's `@3xl`, the
 // `@max-3xl:` and `@3xl:` classes below.
 const TURNS_REM = 48
@@ -131,7 +126,7 @@ function AttentionPage() {
     const tickets = useQuery(ticketsQuery).data
     const tasks = useQuery(tasksQuery).data
     const items = data === undefined ? undefined : bySeverity(data)
-    const rows = useLeavingRows(data, items)
+    const { rows, clearing, cleared } = useLeavingRows(data, items)
     // The item asked for while it is listed; else the most severe one about a ticket, which has a thread to show.
     const selected = items?.find((i) => i.id === wanted) ?? items?.find((i) => i.ticket_key !== null) ?? items?.[0]
     // Narrow, the item chosen is open in the list's place, as a page of its own, until the operator goes back to the
@@ -179,8 +174,12 @@ function AttentionPage() {
         <>
             <PageHeader title="Attention" help={HELP} />
             <HiddenFindings />
-            {items !== undefined && items.length === 0 ? (
-                <EmptyAttention />
+            {items !== undefined && items.length === 0 && !clearing ? (
+                // The page's arrival (`stagger`) brings the all clear in only after the last item's exit, which earned
+                // it: a read that finds the list empty just shows it.
+                <div className={cn(!cleared && 'animate-none!')}>
+                    <EmptyAttention />
+                </div>
             ) : (
                 // Side by side from 48rem of the page's width; under it, the list and the item take turns, full width.
                 <div ref={pane} className="@container">
@@ -255,7 +254,9 @@ function AttentionPage() {
                                 Back to the list
                             </Button>
                             {selected === undefined ? (
-                                // Only while the list is read: a list that failed says so once, in its own panel.
+                                // Only while the list is read: a list that failed says so once, in its own panel, and
+                                // one read empty, its last row on its way out, has nothing to load.
+                                items === undefined &&
                                 attention.error === null && (
                                     <Panel>
                                         <PanelSkeleton rows={1} className="min-h-72" />
@@ -297,34 +298,6 @@ function HiddenFindings() {
             ask. Each chore&apos;s page still lists its own.
         </p>
     )
-}
-
-/**
- * The list's rows as the stream changes it: an item that leaves keeps its row a moment, leaving, so it can go with a
- * small reward rather than vanish (ui/DESIGN.md, "Fun"). Each list from the query is compared once, by identity, as it
- * arrives; the leaving rows are let go together once the last to leave has played its exit.
- */
-function useLeavingRows(data: AttentionItem[] | undefined, items: AttentionItem[] | undefined) {
-    const [listed, setListed] = useState(() => ({ from: data, rows: withLeaving([], items ?? []) }))
-    if (listed.from !== data) {
-        setListed({ from: data, rows: withLeaving(listed.rows, items ?? []) })
-    }
-    // Which rows are leaving, so one more leaving starts the wait again and every exit plays in full.
-    const leaving = listed.rows
-        .filter((row) => row.leaving)
-        .map((row) => row.item.id)
-        .join(' ')
-    useEffect(() => {
-        if (leaving === '') {
-            return
-        }
-        const timer = globalThis.setTimeout(
-            () => setListed((now) => ({ from: now.from, rows: settled(now.rows) })),
-            LEAVE_MS,
-        )
-        return () => globalThis.clearTimeout(timer)
-    }, [leaving])
-    return listed.rows satisfies Listed<AttentionItem>[]
 }
 
 /**
