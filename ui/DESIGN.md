@@ -122,28 +122,29 @@ Rules:
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
 - **Palettes.** Lavender is light's default and indigo dark's. Each other palette is a rule in `tokens.css` that sets
   the neutrals and the accent over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`. A
-  scheme with an accent of its own wears it (Nord's, Solarized's, Monokai's, Rosé Pine Dawn's, and Gruvbox's purple);
-  the others take one that suits the canvas. Light has off-white, a warm paper, sage, and the light tones of Solarized,
-  Nord, Gruvbox, and Rosé Pine Dawn; dark has grey (the near-colorless neutrals the 2026-10-19 exploration drew for
-  Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox, and Monokai. A light canvas is never grey,
-  which only looks dim. Every other hue is the same in all, so a component never knows which it is on, and an accent is
-  read through its token, never assumed indigo; where a scheme's own bases would drop a hue below 4.5:1, the bases move,
-  never the hue. A palette's accent is darkened or lightened until it reads as text there, on its own tint, and under
-  `accent-foreground`, and sets `ring` with it. A scheme whose accent would pass for a status wears another of its
-  colors, as Gruvbox wears its purple, not its orange, and a green canvas never takes a green accent. A scheme whose
-  bases would have to move until it matched another palette is left out, as Nord's dark is. `tokens.test.ts` measures
-  every palette `src/theme/palette.ts` lists, and `theme-script.test.ts` checks the inline script knows each.
+  scheme with an accent of its own wears it (Nord's, Solarized's, Monokai's, Rosé Pine Dawn's, Catppuccin Latte's mauve,
+  and Gruvbox's purple); the others take one that suits the canvas. Light has off-white, a warm paper, sage, and the
+  light tones of Solarized, Nord, Gruvbox, Rosé Pine Dawn, and Catppuccin Latte; dark has grey (the near-colorless
+  neutrals the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox,
+  and Monokai. A light canvas is never grey, which only looks dim. Every other hue is the same in all, so a component
+  never knows which it is on, and an accent is read through its token, never assumed indigo; where a scheme's own bases
+  would drop a hue below 4.5:1, the bases move, never the hue. A palette's accent is darkened or lightened until it
+  reads as text there, on its own tint, and under `accent-foreground`, and sets `ring` with it. A scheme whose accent
+  would pass for a status wears another of its colors, as Gruvbox wears its purple, not its orange, and a green canvas
+  never takes a green accent. A scheme whose bases would have to move until it matched another palette is left out, as
+  Nord's dark is. `tokens.test.ts` measures every palette `src/theme/palette.ts` lists, and `theme-script.test.ts`
+  checks the inline script knows each.
   A palette sets its character too, beyond color, from a few closed choices, in the same rule, so a component still
   never knows which it is on: its corners (`--radius`: crisp, the default, or soft), its `edge` (a hairline, or none,
   where panels stand apart by their lightness alone), its depth (a soft shadow in the canvas's hue, a hard one with
   no blur, or, on black, where a shadow does nothing, the accent's glow), and its face (`--face`: interface text in
   Plex Sans, or in Plex Mono, as an editor sets it). Spacing, sizes, and layout never change with a palette, and
   neither do the status colors; only the mono face reflows text, since it runs wider, so it stays with the few palettes
-  that are an editor's own look: Gruvbox's sides and Monokai. There it draws every line a step smaller, at 15/16 of
-  the size asked for, in the same line boxes, so the wider face crowds less and no line changes height. The guide
-  keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono. The defaults
-  take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the nineties, and
-  black no edges, soft corners, and the glow.
+  that are an editor's own look: Gruvbox's sides, Monokai, and Catppuccin Latte. There it draws every line a step
+  smaller, at 15/16 of the size asked for, in the same line boxes, so the wider face crowds less and no line changes
+  height. The guide keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono.
+  The defaults take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the
+  nineties, and black no edges, soft corners, and the glow.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
@@ -154,9 +155,10 @@ Rules:
   sit a few degrees round the wheel. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
   from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage.
   Every other palette picks from the same choices, so each reads as its own place: Gruvbox's light side as its dark
-  one, Solarized's sides crisp and flat, Monokai crisp and in mono under a neon aurora, Nord's light side soft under a
-  fade through Frost's blues, grey tight under one steel rule, and sage, Rosé Pine Dawn, forest, and plum soft, plum
-  the softest. Off-white lays its panels on the canvas like paper.
+  one, Solarized's sides crisp and flat, Monokai crisp and in mono under a neon aurora, Catppuccin Latte softened, flat,
+  and in mono under a pastel fade through its mauve, pink, and blue, Nord's light side soft under a fade through Frost's
+  blues, grey tight under one steel rule, and sage, Rosé Pine Dawn, forest, and plum soft, plum the softest. Off-white
+  lays its panels on the canvas like paper.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with
