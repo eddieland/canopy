@@ -112,6 +112,9 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("personas", "planner = 'skeptic'"),
         ("personas", "reviewer = 'lenient'"),
         ("runtime", "hide_models = ['acme/*']"),
+        # Traces would leave the operator's machine for a host whoever controls the workspace file chose.
+        ("telemetry", "traces = 'otlp'"),
+        ("telemetry", "endpoint = 'https://collector.example'"),
     ],
 )
 def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:
@@ -133,6 +136,32 @@ def test_every_agent_writes_in_canopys_voice_until_the_operator_chooses(canopy_e
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert (cfg.personas.worker, cfg.personas.planner, cfg.personas.reviewer) == ("canopy", "canopy", "canopy")
     assert cfg.paths.personas is None
+
+
+def test_otlp_traces_go_to_the_endpoint_the_operator_names(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_user("\n[telemetry]\ntraces = 'otlp'\nendpoint = 'http://localhost:4318/'\n")
+    telemetry = load(canopy_env.root, canopy_env.user_file).telemetry
+    assert (telemetry.traces, telemetry.endpoint) == ("otlp", "http://localhost:4318")
+
+
+@pytest.mark.parametrize(
+    ("toml", "message"),
+    [
+        ("traces = 'otlp'\n", r"needs telemetry\.endpoint"),
+        ("endpoint = 'localhost:4318'\n", "must be an http:// or https:// URL"),
+        ("endpoint = 'ftp://collector.example'\n", "must be an http:// or https:// URL"),
+        ("endpoint = 'https://user:secret@collector.example'\n", "no user part"),
+        ("endpoint = 'https://collector.example/?x=1'\n", "no user part, query, or fragment"),
+    ],
+)
+def test_an_otlp_endpoint_canopy_cannot_send_to_plainly_is_refused(
+    canopy_env: CanopyEnv,
+    toml: str,
+    message: str,
+) -> None:
+    canopy_env.append_user(f"\n[telemetry]\n{toml}")
+    with pytest.raises(ConfigError, match=message):
+        load(canopy_env.root, canopy_env.user_file)
 
 
 #: An eval case's keys but `kind` and `lines` (DESIGN §21, Scoring the reviewer).

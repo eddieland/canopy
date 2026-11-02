@@ -211,9 +211,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - One message on stdin per tick, derived with no model; an outbox cursor per sink lets a failing sink retry alone.
 - Presentation is the sink's: canopy sends fields, and each sink renders them in its channel's native form.
-- The harness makes no network call; Slack is a separate process with its own secret file. The desktop sink, holding
-  no secret and needing no network, ships inside canopy.
-- Rejected: HTTP in the harness (T2); the overseer posting via Slack MCP; interactive Slack (needs a listener).
+- The harness makes no network call but its opt-in OTLP export (D132); Slack is a separate process with its own secret
+  file. The desktop sink, holding no secret and needing no network, ships inside canopy.
+- Rejected: HTTP in the harness for Slack (T2); the overseer posting via Slack MCP; interactive Slack (needs a listener).
   Replies read back by a connector, polled outbound, need none (M64).
 
 ## D036. A dry run runs every guard and changes nothing the next live tick reads
@@ -586,5 +586,5 @@ such as a shipped migration, may still cite one, and git history has its text.
 - It holds canopy's own facts, never text it read (T2): a failed span names its exception's type alone, and a metric's
   labels come from closed sets (statuses, kinds, steps, configured models), never a ticket key, a path, or text.
 - `procs` passes the current span to every child as `TRACEPARENT`: a tick starts its own trace, and its runs join it.
-- None of it leaves the machine unasked: canopy sending it is a separate opt-in and a T2 change, and a scrape of it
-  through a listener follows T8.
+- None of it leaves the machine unasked: canopy sends it only to the OTLP endpoint the operator names in private
+  config, from `infra/otlp.py` alone, its one network call (T2); a scrape of it through a listener follows T8.

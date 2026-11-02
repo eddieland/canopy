@@ -1122,15 +1122,34 @@ def _ui_url(value: str) -> str:
     return value if value.endswith("/") else f"{value}/"
 
 
+def _otlp_endpoint(value: str) -> str:
+    """Refuse an OTLP endpoint that is not a plain `http` or `https` URL with a host, as `_ui_url` refuses.
+
+    Returns:
+        `value`, without a trailing `/`, for `/v1/traces` to follow.
+    """
+    return _ui_url(value).rstrip("/")
+
+
 class Telemetry(Section):
     """The `[telemetry]` table: traces of what canopy does, through OpenTelemetry (DESIGN §12).
 
-    Every key is private: what canopy records of the operator's machine, and where it goes, is theirs to choose.
+    Every key is private: what canopy records of the operator's machine, and where it sends it, is theirs to choose.
     """
 
-    #: `off`, or `file`: each span appended, as OTLP JSON, to `traces.jsonl` in the state directory, for a collector
-    #: the operator runs to read. Nothing leaves the machine either way.
+    #: `off`; `file`, each span appended, as OTLP JSON, to `traces.jsonl` in the state directory, for a collector the
+    #: operator runs to read; or `otlp`, sent to `endpoint`, the harness's one network call (TRUST_MODEL T2).
     traces: Annotated[tracing.Traces, Scope.PRIVATE] = "off"
+    #: An OTLP/HTTP endpoint's base URL, such as a collector's `http://localhost:4318`: spans go to `/v1/traces` under
+    #: it. Read only while `traces` is `otlp`, which needs it.
+    endpoint: Annotated[Annotated[StrictStr, AfterValidator(_otlp_endpoint)] | None, Scope.PRIVATE] = None
+
+    @model_validator(mode="after")
+    def _otlp_needs_an_endpoint(self) -> Telemetry:
+        if self.traces == "otlp" and self.endpoint is None:
+            msg = "telemetry.traces = 'otlp' needs telemetry.endpoint, the OTLP/HTTP endpoint to send spans to"
+            raise ValueError(msg)
+        return self
 
 
 class Serve(Section):

@@ -49,8 +49,8 @@ PROGRAMS = frozenset({"notify/desktop.py", "serve/__main__.py"})
 SEPARATE = frozenset(
     {"canopy_artifacts", "canopy_github", "canopy_jira", "canopy_notify_slack", "canopy_review_bench"},
 )
-# The HTTP stack those programs share (D130), and its transport: the harness opens no connection (TRUST_MODEL T2), as
-# ruff's ban on the stdlib's network modules keeps it from doing with those.
+# The HTTP stack those programs share (D130), and its transport: the harness opens no connection but its opt-in OTLP
+# export (TRUST_MODEL T2), as ruff's ban on the stdlib's network modules keeps it from doing with those elsewhere.
 NETWORK = frozenset({"canopy_http", "httpx2"})
 # The package that alone knows the agent runtime (D009), and the name that must appear in no string outside it.
 RUNTIME = "runtime"
