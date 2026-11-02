@@ -28,8 +28,8 @@ export function WorkingNow({ ticketKey }: { ticketKey: string }) {
                 >
                     <span className="flex w-full items-center gap-2 font-mono text-xs text-muted-foreground">
                         <RunDot state="running" />
-                        <span className="text-status-running">working now</span>
-                        <RunLink id={run.id} />
+                        <span className="shrink-0 whitespace-nowrap text-status-running">working now</span>
+                        <RunLink id={run.id} className="shrink-0" />
                         <Chip word={run.kind} />
                         {run.activity && <RunDoing activity={run.activity} />}
                         <span className="ml-auto flex shrink-0 items-center gap-3">
