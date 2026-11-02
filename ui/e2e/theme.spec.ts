@@ -141,6 +141,74 @@ test.describe('palettes', () => {
         )
     })
 
+    test("the header's toggle offers the shown theme's palettes on hover, and stays open to try another", async ({
+        page,
+    }) => {
+        await storeTheme(page, 'dark')
+        await page.goto('workspace/runs')
+        await settled(page)
+        // The reveal's own animations, on the view transition's pseudo-elements; the logo's breathing never ends.
+        const revealing = () =>
+            page.evaluate(
+                () =>
+                    document
+                        .getAnimations()
+                        .filter((animation) => animation.effect instanceof KeyframeEffect)
+                        .filter((animation) => (animation.effect as KeyframeEffect).pseudoElement !== null).length,
+            )
+
+        await page.getByTestId('theme-toggle').hover()
+        const card = page.getByTestId('palette-card')
+        await card.getByRole('radio', { name: 'Forest' }).click()
+        await expect(page.locator('html')).toHaveAttribute('data-dark-palette', 'forest')
+        await expect.poll(revealing).toBe(0)
+
+        // The reveal took the pointer from the page while it ran; the card is still there for the next pick.
+        await expect(card).toBeVisible()
+        await card.getByRole('radio', { name: 'Plum' }).click()
+        await expect(page.locator('html')).toHaveAttribute('data-dark-palette', 'plum')
+        await expect(card.getByRole('radio', { name: 'Plum' })).toHaveAttribute('aria-checked', 'true')
+        await expect(page.locator('html')).toHaveClass(/\bdark\b/u)
+        await expect.poll(revealing).toBe(0)
+        await expect(card).toBeVisible()
+        // For the record: the card over the header, in the palette just picked.
+        await page.screenshot({ path: test.info().outputPath('palette-card.png') })
+
+        await page.mouse.move(10, 400)
+        await expect(card).toBeHidden()
+    })
+
+    test("a pick from the keyboard during the last pick's reveal leaves the card open", async ({ page }) => {
+        await storeTheme(page, 'dark')
+        await page.goto('workspace/runs')
+        await settled(page)
+        const revealing = () =>
+            page.evaluate(
+                () =>
+                    document
+                        .getAnimations()
+                        .filter((animation) => animation.effect instanceof KeyframeEffect)
+                        .filter((animation) => (animation.effect as KeyframeEffect).pseudoElement !== null).length,
+            )
+
+        await page.getByTestId('theme-toggle').hover()
+        const card = page.getByTestId('palette-card')
+        // The click leaves the focus on Forest; the arrow and Space pick Plum while Forest's reveal still runs, which
+        // cuts that reveal short. The pointer stirs on the card while Plum's runs, as a hand does.
+        const forest = card.getByRole('radio', { name: 'Forest' })
+        const box = await forest.boundingBox()
+        await forest.click()
+        await page.keyboard.press('ArrowDown')
+        await expect(card.getByRole('radio', { name: 'Plum' })).toBeFocused()
+        await page.keyboard.press('Space')
+        if (box !== null) {
+            await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2)
+        }
+        await expect(page.locator('html')).toHaveAttribute('data-dark-palette', 'plum')
+        await expect.poll(revealing).toBe(0)
+        await expect(card).toBeVisible()
+    })
+
     test('a reload with a palette stored has it before the body', async ({ page }) => {
         await storeTheme(page, 'light')
         await storePalette(page, 'light', 'solarized')
