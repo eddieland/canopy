@@ -1,9 +1,14 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { renderRouted } from '@/test-utils'
 
 import { InlineCode, RichText } from './rich-text'
+
+// A code block's colors, which Shiki stops giving a line it has read for too long: a busy runner's (`untimedShiki`).
+vi.mock(import('shiki/core'), async (importOriginal) =>
+    (await import('@/test-utils')).untimedShiki(await importOriginal()),
+)
 
 afterEach(() => {
     cleanup()
@@ -81,6 +86,22 @@ describe('RichText', () => {
             'https://evil.test',
             'https://ci.example.test/7',
         ])
+    })
+
+    it('colors a fenced block by the language its fence names, its characters as written', async () => {
+        const lines = ['# Retry once', 'def retry(n):', '    return "again"']
+        const { container } = render(<RichText text={['```python', ...lines, '```'].join('\n')} />)
+
+        // Once the grammar has read it, the comment is a piece of its own.
+        expect(await screen.findByText('# Retry once')).toBeDefined()
+        expect(container.textContent).toBe(lines.join('\n'))
+    })
+
+    it('leaves a fenced block in no language canopy highlights as written', () => {
+        const lines = ['lorem ipsum --dolor', 'amet']
+        const { container } = render(<RichText text={['```text', ...lines, '```'].join('\n')} />)
+
+        expect(container.textContent).toBe(lines.join('\n'))
     })
 
     it('sets code inside bold as code, in bold, without its backticks', () => {

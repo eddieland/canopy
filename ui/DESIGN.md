@@ -1399,8 +1399,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   small step, as the page's heading ladder does not apply inside a bubble), `>` quotes as their own blocks, muted on
   a stroke at their left, a
   `---` rule as a hairline, a pipe table with its head as column headers and its columns aligned by their colons,
-  scrolling sideways when wide, fenced code as a `surface-raised` block that scrolls sideways, and `code`, **strong**,
-  *emphasis*, and ~~struck~~ inline. Code, inline or fenced, is `text-code`: a step under its line on a sans palette,
+  scrolling sideways when wide, fenced code as a `surface-raised` block that scrolls sideways, colored as the guide's
+  is in the language its fence names (```` ```python ````; `CodeBlock`), and `code`, **strong**, *emphasis*, and
+  ~~struck~~ inline. Code, inline or fenced, is `text-code`: a step under its line on a sans palette,
   where the change of face sets it apart, and the line's own size on a mono one, where a smaller copy of the same face
   reads as a mistake. Inline code sits on `code-chip`, a tint of its own ink, so it stands apart on any bubble or tint
   without a tile darker than the text around it, and keeps its ends on each line it wraps to. Every code span in a

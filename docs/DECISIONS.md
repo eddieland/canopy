@@ -476,8 +476,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D121. Code is highlighted by Shiki, in the web UI alone
 
 - `shiki`, pinned, with its JavaScript regex engine (no WebAssembly) and a curated list of grammars, each loaded on
-  demand, for a diff's code and the guide's code blocks (ui/DESIGN.md, "A review", "The guide"). Its tokens are data,
-  rendered as React text with our `syntax-*` tokens, never its HTML, so a PR's text stays text.
+  demand, for a diff's code and the code blocks of the guide and rich text (ui/DESIGN.md, "A review", "The guide",
+  "Rich text"). Its tokens are data, rendered as React text with our `syntax-*` tokens, never its HTML, so a PR's
+  text stays text.
 - Why: an editor's TextMate grammars, for every language a PR touches; a tokenizer of our own per language is far
   more code and reads worse.
 - Rejected: Prism (its grammars register on a global, and are rougher than an editor's), highlight.js (returns
