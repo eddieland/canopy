@@ -214,7 +214,13 @@ convention = "google"
 # one, so what they name is imported for real (TC001): the API's models in serve are built on schema.Model, and each
 # feature's module in schema/ imports the shared ones.
 [tool.ruff.lint.flake8-type-checking]
-runtime-evaluated-base-classes = ["canopy.serve.schema.Model", "canopy.core.records.Row", "canopy.core.records.View"]
+runtime-evaluated-base-classes = [
+  "canopy.serve.schema.Model",
+  "canopy.core.orm.Row",
+  "canopy.core.orm.View",
+  "canopy.core.records.Row",
+  "canopy.core.records.View",
+]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
