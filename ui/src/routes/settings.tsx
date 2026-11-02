@@ -158,11 +158,12 @@ function ThemePanel() {
             </div>
             <PaletteRow theme="light" value={palettes.light} options={paletteOptions('light')}>
                 The light theme&apos;s palette: lavender, which tints the canvas with the accent&apos;s hue, a warm
-                off-white, a soft sage, or an editor scheme&apos;s light tones, each with an accent of its own.
+                off-white, a soft sage, an editor scheme&apos;s light tones, each with an accent of its own, or Pulp,
+                Gruvbox&apos;s inked as a comic.
             </PaletteRow>
             <PaletteRow theme="dark" value={palettes.dark} options={paletteOptions('dark')}>
                 The dark theme&apos;s: an indigo slate, a plain grey, a near black, a deep forest green, a plum, or a
-                scheme&apos;s dark tones, each with an accent of its own.
+                scheme&apos;s dark tones, each with an accent of its own, or Pulp, Gruvbox&apos;s inked as a comic.
             </PaletteRow>
         </Panel>
     )

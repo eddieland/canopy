@@ -6,16 +6,16 @@ import type { ResolvedTheme } from './store'
  * The palette each theme draws its neutrals from, chosen apart for light and for dark. Each theme's default carries
  * the accent's hue in its canvas: lavender, a pale lavender grey with white surfaces, and indigo, a deep indigo slate.
  * Light can wear off-white, a warm paper, sage, a soft green, or Solarized's, Nord's, Gruvbox's, Rosé Pine Dawn's, or
- * Acme's light base tones instead. Dark can wear grey, the neutral one the 2026-10-19 exploration drew for
- * Mailroom, a near black, forest, a deep green, plum, a dark wine purple, or Solarized's, Gruvbox's, or Monokai's dark
- * tones. Kept in localStorage and synced across tabs; the inline script in index.html applies it before first paint,
- * and this module afterwards.
+ * Acme's light base tones instead, or Pulp, Gruvbox's inked as a comic. Dark can wear grey, the neutral one the
+ * 2026-10-19 exploration drew for Mailroom, a near black, forest, a deep green, plum, a dark wine purple, or
+ * Solarized's, Gruvbox's, or Monokai's dark tones, or Pulp's. Kept in localStorage and synced across tabs; the
+ * inline script in index.html applies it before first paint, and this module afterwards.
  */
 
 /** Each theme's palettes, the default first. */
 export const PALETTES = {
-    light: ['lavender', 'off-white', 'sage', 'solarized', 'nord', 'gruvbox', 'rose-pine', 'acme'],
-    dark: ['indigo', 'grey', 'black', 'forest', 'plum', 'solarized', 'gruvbox', 'monokai'],
+    light: ['lavender', 'off-white', 'sage', 'solarized', 'nord', 'gruvbox', 'pulp', 'rose-pine', 'acme'],
+    dark: ['indigo', 'grey', 'black', 'forest', 'plum', 'solarized', 'gruvbox', 'pulp', 'monokai'],
 } as const
 
 /** A set of neutrals `T` can wear. */
@@ -30,6 +30,7 @@ export const PALETTE_LABELS: { readonly [T in ResolvedTheme]: Readonly<Record<Pa
         solarized: 'Solarized',
         nord: 'Nord',
         gruvbox: 'Gruvbox',
+        pulp: 'Pulp',
         'rose-pine': 'Rosé Pine',
         acme: 'Acme',
     },
@@ -41,6 +42,7 @@ export const PALETTE_LABELS: { readonly [T in ResolvedTheme]: Readonly<Record<Pa
         plum: 'Plum',
         solarized: 'Solarized',
         gruvbox: 'Gruvbox',
+        pulp: 'Pulp',
         monokai: 'Monokai',
     },
 }
