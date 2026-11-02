@@ -10,11 +10,13 @@ from canopy.core import observe, records, sql
 from canopy.core.config import Source
 from canopy.core.vocab import ConnectorRunStatus
 from canopy.infra import logs
+from tests.canopy.helpers import reads
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from canopy.core.context import Context
+    from tests.canopy.scenario_helpers import Scenario
 
 PR = "https://github.com/acme/api/pull/7"
 VCS = Source(kind="vcs", cmd="connector github")
@@ -224,3 +226,117 @@ def test_each_item_keeps_its_journal_number_across_reads_and_a_later_one_takes_a
     run(ctx)
     again = {r.id: r.number for r in records.fetch_all(ctx.conn, records.ObservedReview, sql.frag(REVIEWS))}
     assert again == numbers
+
+
+#: GitHub's times for a merged PR, as the reader prints them and as the journal keeps them.
+TIMES = {
+    "created_at": "2026-09-01T09:00:00Z",
+    "ready_at": "2026-09-01T10:00:00Z",
+    "review_requested_at": "2026-09-01T11:00:00Z",
+    "merged_at": "2026-09-02T15:00:00Z",
+    "closed_at": "2026-09-02T15:00:00Z",
+}
+KEPT = tuple(f"{value[:-1]}.000Z" for value in TIMES.values())
+#: PRs canopy observed merged, closed, and open.
+MERGED = "https://github.com/acme/api/pull/1"
+CLOSED = "https://github.com/acme/api/pull/2"
+OPEN = "https://github.com/acme/api/pull/3"
+
+
+def github_holds(state: Path, prs: dict[str, dict[str, Any]], **more: object) -> None:
+    """Make the fake GitHub hold each of `prs`, its value the PR's entry: `pr`, `reviews`, and `checks`."""
+    state.write_text(json.dumps({"prs": prs, **more}))
+
+
+def times_of(ctx: Context, url: str) -> tuple[str | None, ...]:
+    """The times the journal holds of the PR `url`."""
+    pr = records.select(records.ObservedPr).where("url = ?", url).one(ctx.conn)
+    assert pr is not None
+    return (pr.created_at, pr.ready_at, pr.review_requested_at, pr.merged_at, pr.closed_at)
+
+
+def observed_before_times(ctx: Context, github_state: Path) -> None:
+    """Have a tick's read observe `MERGED`, `CLOSED`, and `OPEN` as a reader that kept no times did, with a review."""
+    review = {"item": "review", "id": 11, "author": "ann", "state": "approved", "time": "2026-09-02T09:00:00Z"}
+    github_holds(
+        github_state,
+        {
+            MERGED: {"pr": {"state": "merged"}, "reviews": [review]},
+            CLOSED: {"pr": {"state": "closed"}},
+            OPEN: {},
+        },
+    )
+    assert observe.read(ctx.conn, ctx.config, ctx.runner, [MERGED, CLOSED, OPEN], logs.for_tick(None)).failure is None
+
+
+def test_a_backfill_asks_only_about_merged_and_closed_prs_without_times(ctx: Context, github_state: Path) -> None:
+    observed_before_times(ctx, github_state)
+    assert observe.missing_times(ctx.conn) == [MERGED, CLOSED], "an open PR is read again each tick"
+
+    github_holds(github_state, {MERGED: {"pr": {"state": "merged", **TIMES}}, CLOSED: {"pr": {"state": "closed"}}})
+    done = observe.backfill_times(ctx.conn, ctx.config, ctx.runner, [MERGED, CLOSED], log=logs.for_tick(None))
+
+    assert (done.asked, done.filled, done.unread, done.failures) == (2, 1, [], [])
+    assert times_of(ctx, MERGED) == KEPT
+    assert observe.missing_times(ctx.conn) == [CLOSED], "a reader that printed no times leaves the PR to ask again"
+
+
+def test_a_backfill_takes_only_the_times_and_keeps_those_held(ctx: Context, github_state: Path) -> None:
+    observed_before_times(ctx, github_state)
+    before = records.select(records.ObservedPr).where("url = ?", MERGED).one(ctx.conn)
+    reviews = records.select(records.ObservedReview).all(ctx.conn)
+    records.update(records.ObservedPr).set(merged_at="2026-09-03T00:00:00.000Z").where("url = ?", MERGED).run(ctx.conn)
+    check = {"name": "ci", "status": "completed", "conclusion": "failure", "run_id": 9}
+    github_holds(
+        github_state,
+        {MERGED: {"pr": {"state": "open", "title": "Renamed", **TIMES}, "reviews": [], "checks": [check]}},
+    )
+
+    observe.backfill_times(ctx.conn, ctx.config, ctx.runner, [MERGED], log=logs.for_tick(None))
+
+    after = records.select(records.ObservedPr).where("url = ?", MERGED).one(ctx.conn)
+    assert after is not None
+    assert before is not None
+    assert times_of(ctx, MERGED) == (*KEPT[:3], "2026-09-03T00:00:00.000Z", KEPT[4]), "a time held is kept"
+    assert (after.state, after.title, after.observed_at) == (before.state, before.title, before.observed_at)
+    assert records.select(records.ObservedReview).all(ctx.conn) == reviews, "a merged PR's reviews are not replaced"
+    assert records.select(records.ObservedCheck).all(ctx.conn) == []
+    assert records.select(records.ObservedCheckRun).all(ctx.conn) == [], "no check run is first observed today"
+
+
+def test_a_backfill_names_what_it_could_not_read_and_asks_in_batches(ctx: Context, github_state: Path) -> None:
+    observed_before_times(ctx, github_state)
+    github_holds(
+        github_state,
+        {MERGED: {"pr": {"state": "merged", **TIMES}}, CLOSED: {"pr": {"state": "closed", **TIMES}}},
+        unread=[CLOSED],
+    )
+    with mock.patch.object(observe, "BACKFILL_BATCH", 1):
+        done = observe.backfill_times(ctx.conn, ctx.config, ctx.runner, [MERGED, CLOSED], log=logs.for_tick(None))
+    assert (done.filled, done.unread) == (1, [CLOSED])
+    assert times_of(ctx, CLOSED) == (None,) * 5
+    assert [read["prs"] for read in reads(github_state)[1:]] == [[MERGED], [CLOSED]]
+
+    github_holds(github_state, {}, down=True)
+    done = observe.backfill_times(ctx.conn, ctx.config, ctx.runner, [CLOSED], log=logs.for_tick(None))
+    assert (done.filled, done.unread) == (0, [CLOSED])
+    assert done.failures == ["the reader ended without its end line"]
+
+
+def test_canopy_backfill_fills_in_times_once_and_says_what_it_did(
+    scenario: Scenario,
+    ctx: Context,
+    github_state: Path,
+) -> None:
+    observed_before_times(ctx, github_state)
+    github_holds(github_state, {MERGED: {"pr": {"state": "merged", **TIMES}}}, unread=[CLOSED])
+
+    assert scenario.operator("backfill", "--dry-run").out.startswith("2 PRs merged or closed without GitHub's times")
+    assert len(reads(github_state)) == 1, "a dry run reads nothing"
+    refused = scenario.operator("backfill", code=1)
+    assert refused.out == "Read 1 PR of 2; filled in times on 1.\n"
+    assert f"could not read {CLOSED}" in refused.err
+
+    github_holds(github_state, {CLOSED: {"pr": {"state": "closed", **TIMES}}})
+    assert scenario.operator("backfill").out == "Read 1 PR of 1; filled in times on 1.\n"
+    assert scenario.operator("backfill").out.startswith("Every merged or closed PR canopy observed has GitHub's times")

@@ -54,8 +54,9 @@ and the sessions outside canopy beside the kinds, so a month's total is all agen
 beside what each month landed: a ticket the loop marked done as merged, with its worker runs, the comments and reviews
 people other than its PR's author left, and how long it took: to its PR's merge, and its wait from when the PR was
 ready, or asked for review after, to the first review, each on GitHub's clock as the `vcs` source read it (§30). Where
-a PR has no such time, read before canopy kept them, a proxy stands in, the tick that marked the ticket done and its
-first worker run that ended `done`; the page says which a figure used, rather than pass a proxy off as GitHub's own
+a PR has no such time, read before canopy kept them and not since by `canopy backfill`, which reads them and nothing
+else of a merged or closed PR, a proxy stands in, the tick that marked the ticket done and its first worker run that
+ended `done`; the page says which a figure used, rather than pass a proxy off as GitHub's own
 clock. The spend page, by day, sits under it, and the health page, `canopy health`'s report over the same local days
 with each day's failed runs by kind, and the CI page: each check's red runs from the check runs canopy keeps (§35),
 whether a `resume` for `ci` turned them green on the next head, whether a rerun on the same head did, which tells a

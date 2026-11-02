@@ -14,6 +14,9 @@ comment, and completed check run takes its journal number when first observed, a
 An observation is a dated copy of what a connector saw, never authority (DESIGN §22): in M36 it decides which thread a
 draft answers and what the PR's page shows, and nothing the overseer or a worker is told to do. Each comment is also
 recorded in its ticket's conversation when first observed, as data (§35).
+
+A backfill asks the `vcs` source again about PRs observed before canopy kept GitHub's times, and takes only those times
+from what it prints, so the reports can time PRs a tick will never read again.
 """
 
 from __future__ import annotations
@@ -54,6 +57,8 @@ if TYPE_CHECKING:
 MAX_STDERR = 300
 #: A connector's stdout past this is cut off: the run fails and records nothing.
 MAX_OUTPUT = 16 * 1024 * 1024
+#: PRs one run of a backfill asks the `vcs` source about, so each run finishes within the source's timeout.
+BACKFILL_BATCH = 50
 #: A line longer than this is refused unread.
 MAX_LINE = 1024 * 1024
 #: A title is cut to this, on one line; a body, as a comment's is, to `conversation.MAX_COMMENT`.
@@ -338,6 +343,103 @@ def read(
         return Read(whole)
     said = f": {found.stderr}" if found.stderr else ""
     return Read(whole, f"the reader did not read it whole{said}")
+
+
+def missing_times(conn: sqlite3.Connection) -> list[str]:
+    """The merged and closed PRs observed with none of GitHub's times, as one read before canopy kept them.
+
+    An open PR is read again every tick, which fills its times in; a merged or closed one whose ticket is done is never
+    read again (§30), so only a backfill does.
+
+    Returns:
+        Their URLs, sorted.
+    """
+    found = (
+        records.select(records.ObservedPr)
+        .where("created_at IS NULL AND state IN (?, ?)", PrState.MERGED, PrState.CLOSED)
+        .order_by("url")
+        .all(conn)
+    )
+    return [pr.url for pr in found if is_pr_url(pr.url)]
+
+
+@dataclass(frozen=True)
+class Backfilled:
+    """What a backfill of PRs' times did: the PRs it asked about, those it filled in, and those it could not read."""
+
+    asked: int
+    #: The PRs given at least one time.
+    filled: int
+    #: The PRs not read whole, in the order asked.
+    unread: Sequence[str]
+    #: Why a run read nothing, once per run that failed.
+    failures: Sequence[str]
+
+
+def backfill_times(
+    conn: sqlite3.Connection,
+    config: Config,
+    runner: procs.Runner,
+    prs: Sequence[str],
+    *,
+    log: logs.TickAdapter,
+) -> Backfilled:
+    """Ask the `vcs` source about `prs` again, `BACKFILL_BATCH` at a time, and fill in only the times each PR lacks.
+
+    Nothing else the source prints is recorded: a PR's reviews, checks, state, and the time it was last observed are
+    left as they were, so a merged PR's threads are not replaced, no check run is first observed today, and no comment
+    reaches a conversation late. A time already held is kept. Each `pr` line is validated as a tick's is, and one whose
+    PR is not read whole is not used.
+
+    Returns:
+        What it asked, filled, and could not read.
+    """
+    source = config.connect.vcs()
+    filled = 0
+    unread: list[str] = []
+    failures: list[str] = []
+    for start in range(0, len(prs), BACKFILL_BATCH):
+        batch = prs[start : start + BACKFILL_BATCH]
+        ran = run(runner, source, Request(prs=batch), log=log)
+        if isinstance(ran, Observed):
+            unread.extend(batch)
+            failures.append(ran.missed or "the reader failed")
+            continue
+        found = _read(ran.stdout, SourceKind.VCS, config.trust.branch_prefix)
+        if found.end is None:
+            unread.extend(batch)
+            failures.append("the reader ended without its end line")
+            continue
+        whole = found.whole(found.end).prs & frozenset(batch)
+        unread.extend(pr for pr in batch if pr not in whole)
+        lines = {line.url: line for line in found.lines if isinstance(line, _Pr) and line.url in whole}
+        with db.transaction(conn):
+            filled += sum(_fill_times(conn, line) for line in lines.values())
+    log.info("backfilled PR times", extra={"asked": len(prs), "filled": filled, "unread": len(unread)})
+    return Backfilled(asked=len(prs), filled=filled, unread=unread, failures=failures)
+
+
+def _fill_times(conn: sqlite3.Connection, line: _Pr) -> bool:
+    """Set each time of `line`'s PR that the journal does not hold and the line carries.
+
+    Returns:
+        Whether any was set.
+    """
+    held = records.select(records.ObservedPr).where("url = ?", line.url).one(conn)
+    if held is None:
+        return False
+    pairs = (
+        ("created_at", held.created_at, line.created_at),
+        ("ready_at", held.ready_at, line.ready_at),
+        ("review_requested_at", held.review_requested_at, line.review_requested_at),
+        ("merged_at", held.merged_at, line.merged_at),
+        ("closed_at", held.closed_at, line.closed_at),
+    )
+    times: dict[str, sql.Arg] = {name: read for name, kept, read in pairs if kept is None and read is not None}
+    if not times:
+        return False
+    records.update(records.ObservedPr).set(**times).where("url = ?", line.url).run(conn)
+    return True
 
 
 class _TooMuchError(Exception):
