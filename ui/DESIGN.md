@@ -151,7 +151,9 @@ Rules:
   nineties, and black no edges, soft corners, and the glow.
   Pulp's sides take Gruvbox's character, in colors of their own, and ink the page as a comic does, from a few knobs
   whose defaults draw nothing: each panel and bubble outlined and dropping a hard shadow (`shadow-panel`,
-  `shadow-bubble`), a halftone canvas (`--canvas-texture`), the primary action pressed into its shadow (`--press-x`,
+  `shadow-bubble`), a Ben-Day tone printed on the canvas, its dots swelling toward the window's far edges and clear
+  where the rail, the header, and a title sit, so it is never under text (`--canvas-texture`, `--canvas-swell`, and
+  their masks), the primary action pressed into its shadow (`--press-x`,
   `--press-y`), and a page title dropped in its section's color (`--title-drop`). Each is a shadow, a transform, or a
   background, so it takes no room. Both sides ink by the same rings; dark's line is its cream, and its drop a color that
   reads on the night blue, where black would not.

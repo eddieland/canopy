@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 import { PALETTE_KEY, settled, signIn, STORAGE_KEY, storePalette, storeTheme } from './helpers.ts'
 
@@ -264,3 +265,38 @@ test.describe('the guide under a mono palette', () => {
         })
     }
 })
+
+test.describe("Pulp's Ben-Day tone", () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page)
+    })
+
+    for (const theme of ['dark', 'light'] as const) {
+        test(`${theme} draws no tone by default, and Pulp prints it ramped`, async ({ page }) => {
+            await storeTheme(page, theme)
+            await page.goto('workspace/runs')
+            await settled(page)
+            for (const layer of await canvasTone(page)) {
+                expect(layer).toEqual({ image: 'none', mask: 'none' })
+            }
+
+            await storePalette(page, theme, 'pulp')
+            await page.reload()
+            await settled(page)
+            for (const layer of await canvasTone(page)) {
+                expect(layer.image).toMatch(/^radial-gradient\(/u)
+                expect(layer.mask).toMatch(/^linear-gradient\(/u)
+            }
+        })
+    }
+})
+
+/** What the canvas's two tone layers paint, the dots and their swell: each one's background and mask. */
+function canvasTone(page: Page): Promise<{ image: string; mask: string }[]> {
+    return page.evaluate(() =>
+        (['::before', '::after'] as const).map((layer) => {
+            const style = getComputedStyle(document.documentElement, layer)
+            return { image: style.backgroundImage, mask: style.maskImage }
+        }),
+    )
+}

@@ -32,7 +32,8 @@ Dracula's dark sides missed out the same way.
 
 A few palettes bring more than color. Dark **Gruvbox** has the crisp corners of an editor from the nineties, sets every
 line in monospace as one would, and menus and cards cast a hard shadow with no blur. **Pulp** takes all of that and
-prints it: every panel and speech bubble is outlined and drops a hard shadow onto a page of halftone dots, a title
+prints it: every panel and speech bubble is outlined and drops a hard shadow onto a page whose far corner fades into
+cyan Ben-Day dots, clear wherever there is something to read, a title
 casts its section's color, and the primary button sinks into its shadow when you press it. At night the line is
 cream and the shadow an ultramarine plate, since black ink on a night sky is just more night. Nothing explodes,
 though not for want of trying. **Black** drops the panels'
