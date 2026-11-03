@@ -86,9 +86,9 @@ Every kind of detached run shares this lifecycle and crash rule; a new kind join
 3. Run a tick exactly as `canopy tick` does. An error the tick does not handle is logged, and the loop goes on.
 4. Print what the tick did and what the overseer cost (§13).
 5. Wait the configured interval, lengthened after idle ticks and ended at a gate (Idle pacing, below). An operator
-   message (§22), a run ending, or a poll that sees something new (below) ends the wait early, but never sooner than
-   `loop.min_gap_minutes` after the tick ended, which bounds how often the overseer runs. The operator can end the
-   wait by hand. During the wait the loop polls the connectors (Ticks and polls, below).
+   message (§22), a review request (§21), a run ending, or a poll that sees something new (below) ends the wait early,
+   but never sooner than `loop.min_gap_minutes` after the tick ended, which bounds how often the overseer runs. The
+   operator can end the wait by hand. During the wait the loop polls the connectors (Ticks and polls, below).
 6. Repeat from 3 until the operator stops the loop or a set number of ticks has run.
 
 Pausing holds the loop's ticks while the web UI and workers go on. The pause is a journal fact (§11) that outlives the
