@@ -24,7 +24,7 @@ from canopy.core.vocab import ItemAnswer, ModelsRead, Phase, PlanSetting, RunSta
 from canopy.infra import resources
 from canopy.loop import repeat, reread, tick_now, web
 from canopy.reviews import grants
-from canopy.runs import policy
+from canopy.runs import policy, worker
 from canopy.runtime.report import ModelUse, Usage
 from canopy.serve import live, secret, spend_views
 from canopy.serve.backend import Backend
@@ -996,6 +996,21 @@ def test_summaries_and_rationales_keep_their_line_breaks(ctx: Context) -> None:
     detail = c.get(f"/api/ticks/{tick_id}").json()
     assert detail["tick"]["summary"] == "One wait.\nNothing else."
     assert [d["rationale"] for d in detail["decisions"]] == ["Checks running:\n  - lint"]
+
+
+def test_a_runs_summary_is_sent_whole_up_to_what_a_worker_may_write(ctx: Context) -> None:
+    """A summary as long as a worker's result may hold reaches the runs list and the run's page uncut."""
+    c, headers = signed_in_client(ctx)
+    assert c.post(f"/api/tickets/{KEY}/start", headers=headers).status_code == 200
+    run_id = running_run(ctx, KEY)
+    run = present(db.get_run(ctx.conn, run_id))
+    summary = "\n".join(f"- step {i}: " + "x" * 40 for i in range(60))[: worker.MAX_TEXT]
+    result = {"status": "done", "summary": summary}
+    assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.DONE, json.dumps(result))
+
+    [listed] = c.get("/api/runs").json()
+    assert listed["summary"] == summary.rstrip()
+    assert c.get(f"/api/runs/{run_id}").json()["summary"] == summary.rstrip()
 
 
 def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_30_days_and_ever_cost(ctx: Context) -> None:
