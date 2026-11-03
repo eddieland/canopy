@@ -1,6 +1,5 @@
 """Tracing: off and free until configured, then each span appended to the traces file as OTLP JSON."""
 
-import json
 import os
 import stat
 import sys
@@ -11,6 +10,7 @@ from unittest import mock
 import pytest
 
 from canopy.infra import procs, tracing
+from tests.canopy.helpers import spans
 
 TRACE = "0af7651916cd43dd8448eb211c80319c"
 PARENT = "b7ad6b7169203331"
@@ -22,18 +22,6 @@ def traced(tmp_path: Path) -> Iterator[Path]:
     tracing.configure(tmp_path, "file")
     yield tmp_path / tracing.TRACES_FILE_NAME
     tracing.configure(tmp_path, "off")
-
-
-def spans(path: Path) -> list[dict[str, object]]:
-    """Each span in the traces file, in the order written, with its attributes as a plain dict."""
-    found: list[dict[str, object]] = []
-    for line in path.read_text().splitlines():
-        for resource in json.loads(line)["resourceSpans"]:
-            for scope in resource["scopeSpans"]:
-                for span in scope["spans"]:
-                    values = {a["key"]: next(iter(a["value"].values())) for a in span["attributes"]}
-                    found.append({**span, "attributes": values})
-    return found
 
 
 def test_a_span_while_tracing_is_off_records_nothing_and_loads_no_opentelemetry(tmp_path: Path) -> None:
@@ -95,8 +83,10 @@ def test_a_process_canopy_starts_carries_the_current_span(traced: Path, tmp_path
     printed = [sys.executable, "-c", "import os; print(os.environ.get('TRACEPARENT', ''))"]
     with tracing.span("spawn"):
         ran = procs.SubprocessRunner().run(printed, cwd=tmp_path, timeout=60)
-    [span] = spans(traced)
-    assert ran.stdout.strip().startswith(f"00-{span['traceId']}-{span['spanId']}-")
+    # The child is given the span of its own run, under the span that ran it.
+    ran_span, spawn = spans(traced)
+    assert ran_span["parentSpanId"] == spawn["spanId"]
+    assert ran.stdout.strip().startswith(f"00-{spawn['traceId']}-{ran_span['spanId']}-")
 
 
 def test_configuring_again_alike_keeps_the_trace_and_off_stops_it(traced: Path, tmp_path: Path) -> None:

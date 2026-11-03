@@ -497,6 +497,17 @@ def in_zone(zone: str) -> Iterator[None]:
         time.tzset()
 
 
+def spans(path: Path) -> list[dict[str, Any]]:
+    """Each span in a traces file, in the order written, with its attributes as a plain dict of their values."""
+    return [
+        {**span, "attributes": {a["key"]: next(iter(a["value"].values()), None) for a in span["attributes"]}}
+        for line in path.read_text().splitlines()
+        for resource in json.loads(line)["resourceSpans"]
+        for scope in resource["scopeSpans"]
+        for span in scope["spans"]
+    ]
+
+
 def only_tick(conn: sqlite3.Connection) -> records.Tick:
     """The one tick in the journal."""
     [tick] = records.fetch_all(conn, records.Tick, sql.frag("SELECT * FROM ticks"))

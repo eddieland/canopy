@@ -1,23 +1,11 @@
 """The web UI's server traces each request as a server span named for its route, holding nothing the client sent."""
 
-import json
 from pathlib import Path
-from typing import Any
 
 from canopy.infra import tracing
 from canopy.serve.backend import Backend
+from tests.canopy.helpers import spans
 from tests.canopy.web_helpers import client
-
-
-def spans(path: Path) -> list[dict[str, Any]]:
-    """Each span in the traces file, with its attributes as a plain dict."""
-    return [
-        {**span, "attributes": {a["key"]: next(iter(a["value"].values())) for a in span["attributes"]}}
-        for line in path.read_text().splitlines()
-        for resource in json.loads(line)["resourceSpans"]
-        for scope in resource["scopeSpans"]
-        for span in scope["spans"]
-    ]
 
 
 def test_a_request_is_a_server_span_named_for_its_route_never_its_values(tmp_path: Path, backend: Backend) -> None:

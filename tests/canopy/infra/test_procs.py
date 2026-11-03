@@ -12,8 +12,9 @@ from unittest import mock
 
 import pytest
 
-from canopy.infra import lock, procs
+from canopy.infra import lock, procs, tracing
 from canopy.infra.procs import CommandNotFoundError, ProcError, SubprocessRunner
+from tests.canopy.helpers import spans
 from tests.conftest import executable
 
 
@@ -437,3 +438,49 @@ def spawned_output(runner: SubprocessRunner, tmp_path: Path) -> str:
     with contextlib.suppress(ChildProcessError):
         os.waitpid(pid, 0)
     return log.read_text()
+
+
+@pytest.mark.parametrize(
+    ("args", "named"),
+    [
+        (["/usr/bin/git", "-C", "/slot", "-c", "core.hooksPath=/dev/null", "fetch", "origin"], ("git", "fetch")),
+        (["opencode", "--print-logs", "run", "fix PROJ-1"], ("opencode", "run")),
+        (["canopy-github", "pr-view"], ("canopy-github", "pr-view")),
+        # Nothing that is not a word a subcommand would be: a key, a hash, a path, a sentence.
+        (["git", "PROJ-12"], ("git", None)),
+        (["git", "3f9a2c1"], ("git", None)),
+        (["notify", "/home/me/secret"], ("notify", None)),
+        (["agent", "fix the login bug"], ("agent", None)),
+        (["agent"], ("agent", None)),
+    ],
+)
+def test_a_command_is_named_for_its_program_and_subcommand_alone(
+    args: list[str],
+    named: tuple[str, str | None],
+) -> None:
+    assert procs.named(args) == named
+
+
+def test_a_traced_command_is_a_span_of_its_exit_and_never_its_arguments_or_output(
+    agent_log: Path,
+    tmp_path: Path,
+) -> None:
+    tracing.configure(tmp_path, "file")
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "printed-secret", "FAKE_AGENT_EXIT": "3"}):
+        SubprocessRunner().run(["agent", "run", "argued-secret"], stdin="typed-secret")
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_SLEEP": "30"}):
+        SubprocessRunner().run(["agent"], timeout=0.5)
+    tracing.configure(tmp_path, "off")
+    exited, timed_out = spans(tmp_path / tracing.TRACES_FILE_NAME)
+    assert exited["name"] == "agent run"
+    assert exited["attributes"] == {
+        "process.executable.name": "agent",
+        "canopy.subcommand": "run",
+        "process.exit.code": "3",
+        "canopy.timed_out": False,
+    }
+    # An exit that is not 0 is the command's answer, not a failure of its span; a timeout is one.
+    assert exited["status"] == {"code": 0}
+    assert (timed_out["name"], timed_out["attributes"]["canopy.timed_out"]) == ("agent", True)
+    assert timed_out["status"] == {"code": 2, "message": "TimeoutExpired"}
+    assert "secret" not in (tmp_path / tracing.TRACES_FILE_NAME).read_text()

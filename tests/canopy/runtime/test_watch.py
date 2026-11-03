@@ -7,6 +7,7 @@ from canopy.infra import tracing
 from canopy.runtime.implementation import Version
 from canopy.runtime.report import Called
 from canopy.runtime.watch import Change, Watch
+from tests.canopy.helpers import spans
 
 TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
 
@@ -63,23 +64,17 @@ def test_each_model_call_and_tool_call_is_a_span_at_the_times_the_runtime_printe
             watch.read(line)
     tracing.configure(tmp_path, "off")
     written = (tmp_path / tracing.TRACES_FILE_NAME).read_text()
-    spans = [
-        span
-        for line in written.splitlines()
-        for resource in json.loads(line)["resourceSpans"]
-        for scope in resource["scopeSpans"]
-        for span in scope["spans"]
-    ]
-    [run] = [s for s in spans if s["name"] == "run"]
-    calls = [s for s in spans if s["name"] == "chat anthropic/claude-sonnet"]
-    tools = [s for s in spans if s["name"].startswith("execute_tool ")]
+    traced = spans(tmp_path / tracing.TRACES_FILE_NAME)
+    [run] = [s for s in traced if s["name"] == "run"]
+    calls = [s for s in traced if s["name"] == "chat anthropic/claude-sonnet"]
+    tools = [s for s in traced if s["name"].startswith("execute_tool ")]
     steps = sum(1 for e in printed if e["type"] == "step_finish")
     assert (len(calls), len(tools)) == (steps, sum(1 for e in printed if e["type"] == "tool_use"))
     assert {s["parentSpanId"] for s in calls + tools} == {run["spanId"]}
     # A model call runs from its step_start to its step_finish, as the runtime timed them.
     starts = [e["timestamp"] for e in printed if e["type"] == "step_start"]
     assert [int(c["startTimeUnixNano"]) // 1_000_000 for c in calls] == starts[: len(calls)]
-    first = {a["key"]: next(iter(a["value"].values())) for a in calls[0]["attributes"]}
+    first = calls[0]["attributes"]
     assert first["gen_ai.operation.name"] == "chat"
     assert first["gen_ai.request.model"] == "anthropic/claude-sonnet"
     assert int(str(first["gen_ai.usage.input_tokens"])) > 0

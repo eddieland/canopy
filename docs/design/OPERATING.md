@@ -264,19 +264,21 @@ skill the workers load (§17). `tracker.query` finds candidates; it does not aut
 `tracker` source reads it, and a ticket it returns that is not a candidate reaches the overseer by key and why alone
 (TRUST_MODEL T7).
 
-**Traces.** canopy records what it does as OpenTelemetry spans only once the operator's `telemetry.traces` turns them on;
-off, no span is made and OpenTelemetry is not loaded. Each tick is a trace of its own, with a span for each of its
+**Traces.** canopy records what it does as OpenTelemetry spans only once the operator's `telemetry.traces` turns them
+on; off, no span is made and OpenTelemetry is not loaded. Each tick is a trace of its own, with a span for each of its
 steps, and so is each run it starts, in a process of its own, linked to the step that started it: every process canopy
-starts is given the current span as `TRACEPARENT`. Within a run, the overseer's included, each model call and each tool
-call is a span, at the times the runtime printed, under OpenTelemetry's conventions for generative AI: a call's tokens
-and cost, or its tool's name and whether it failed, never what the model was sent or wrote, nor a tool's input or
-output. Each request the web UI's server answers is a trace of its own, a server span named for its method and its
-route as canopy spells it, with the status it was answered with, never the path's values, the query, a header, or the
-body, and never joining a trace a client names. A span holds canopy's own facts (ids,
-kinds, statuses, counts, cost), never text canopy read, which is untrusted and may be private (TRUST_MODEL T2). Spans
-go to `<state_dir>/traces.jsonl`, readable by the operator alone, as OTLP JSON for a collector they run to read, or,
-with `traces = "otlp"`, are posted to the OTLP/HTTP endpoint the operator names: in batches, following no redirect,
-and dropped when the endpoint does not take them, so a collector that is down costs a span, never a step (D132).
+starts is given the current span as `TRACEPARENT`. Each command canopy runs and waits for is a span, named for its
+program and subcommand, `git fetch`, with its exit code, never its other arguments or what it read or printed. Within a
+run, the overseer's included, each model call and each tool call is a span, at the times the runtime printed, under
+OpenTelemetry's conventions for generative AI: a call's tokens and cost, or its tool's name and whether it failed, never
+what the model was sent or wrote, nor a tool's input or output. Each request the web UI's server answers is a trace of
+its own, a server span named for its method and its route as canopy spells it, with the status it was answered with,
+never the path's values, the query, a header, or the body, and never joining a trace a client names. A span holds
+canopy's own facts (ids, kinds, statuses, counts, cost), never text canopy read, which is untrusted and may be private
+(TRUST_MODEL T2). Spans go to `<state_dir>/traces.jsonl`, readable by the operator alone, as OTLP JSON for a collector
+they run to read, or, with `traces = "otlp"`, are posted to the OTLP/HTTP endpoint the operator names: in batches,
+following no redirect, and dropped when the endpoint does not take them, so a collector that is down costs a span, never
+a step (D132).
 
 **Metrics.** `telemetry.metrics` does the same for metrics: how many runs of each role ended and how, how long they
 ran, what they cost, and their tokens, by model; each tick, and how long it took; and how many runs are at work. A run
