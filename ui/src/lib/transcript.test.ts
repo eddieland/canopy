@@ -576,28 +576,30 @@ describe('contextShape', () => {
 })
 
 describe('drawnRows', () => {
-    const { page, step: more } = TRANSCRIPT_BUDGET
+    const budget = { page: 100, step: 100 }
 
     it('draws every row of a transcript within a page, and a page of a longer one', () => {
-        expect(drawnRows(12, 0, 0)).toBe(12)
-        expect(drawnRows(2000, 0, 0)).toBe(page)
+        expect(drawnRows(12, 0, 0, budget)).toBe(12)
+        expect(drawnRows(2000, 0, 0, budget)).toBe(100)
+        expect(drawnRows(2000, 0, 0, TRANSCRIPT_BUDGET)).toBe(1000)
     })
 
     it('draws the rows a fold asked for, never more than there are', () => {
-        expect(drawnRows(2000, page + more, 0)).toBe(page + more)
-        expect(drawnRows(page + 10, page + more, 0)).toBe(page + 10)
+        expect(drawnRows(2000, 200, 0, budget)).toBe(200)
+        expect(drawnRows(110, 200, 0, budget)).toBe(110)
     })
 
     it('draws on through a row the page was asked to show, past the rows asked for', () => {
-        expect(drawnRows(2000, 0, 1500)).toBe(1500)
-        expect(drawnRows(2000, page + more, 10)).toBe(page + more)
+        expect(drawnRows(2000, 0, 1500, budget)).toBe(1500)
+        expect(drawnRows(2000, 200, 10, budget)).toBe(200)
     })
 })
 
 describe('moreLabel', () => {
     it("says how many rows or calls a fold holds back, and how many its step draws, in the diff's words", () => {
-        expect(moreLabel(1, 'rows')).toBe('Show 1 more row')
-        expect(moreLabel(60, 'calls')).toBe('Show 60 more calls')
-        expect(moreLabel(1800, 'rows')).toBe(`Show ${TRANSCRIPT_BUDGET.step} of 1,800 more rows`)
+        expect(moreLabel(1, 'rows', TRANSCRIPT_BUDGET)).toBe('Show 1 more row')
+        expect(moreLabel(60, 'calls', TRANSCRIPT_BUDGET)).toBe('Show 60 more calls')
+        expect(moreLabel(1000, 'rows', TRANSCRIPT_BUDGET)).toBe('Show 1,000 more rows')
+        expect(moreLabel(1800, 'rows', TRANSCRIPT_BUDGET)).toBe('Show 1,000 of 1,800 more rows')
     })
 })
