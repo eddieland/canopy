@@ -98,9 +98,9 @@ MAX_ERRORS_NAMED = 3
 # `error` when `canopy loop` caught the tick raising before it had one or after it closed it.
 type OutcomeStatus = TickStatus | Literal["lock_busy", "error"]
 # What ended `canopy loop`'s wait before its deadline: the operator's act (a message, a ticket started or stopped, a
-# grant, a task submitted, replied to, or stopped, a notice set or cleared), a run ending, a poll of the connectors
-# (DESIGN §39), the operator pressing the loop's tick-now key, or the operator asking from the web UI.
-type Woken = Literal["message", "starts", "grant", "task", "notice", "run", "poll", "key", "web"]
+# grant, a task submitted, replied to, or stopped, a review requested, a notice set or cleared), a run ending, a poll
+# of the connectors (DESIGN §39), the operator pressing the loop's tick-now key, or the operator asking from the web UI.
+type Woken = Literal["message", "starts", "grant", "task", "request", "notice", "run", "poll", "key", "web"]
 # What started a tick the loop ran, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its
 # length, one a gate shortened, or what ended one early.
 type WokenBy = Woken | Literal["start", "timer", "gate"]
@@ -183,7 +183,7 @@ def _woken_title(woken_by: WokenBy | None) -> str:
             return "by hand"
         case "start":
             return "loop start"
-        case "timer" | "gate" | "message" | "grant" | "task" | "notice" | "poll":
+        case "timer" | "gate" | "message" | "grant" | "task" | "request" | "notice" | "poll":
             return woken_by
         case "starts":
             return "start or stop"
@@ -382,6 +382,7 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
     applied = db.migrate(ctx.conn, resources.migrations_dir())
     abandoned = db.abandon_unfinished_ticks(ctx.conn)
     overseer_runs.close_abandoned(ctx.conn)
+    run_metrics.abandoned(ctx.conn, abandoned)
     # A run a dead tick recorded and did not start is never started: this tick decides again (DESIGN §40).
     unstarted = recorded_runs.close_unstarted(ctx.conn)
     tick_id = db.start_tick(ctx.conn, dry_run=dry_run)

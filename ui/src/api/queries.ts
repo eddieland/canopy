@@ -102,6 +102,7 @@ export const keys = {
     configModels: ['config', 'models'] as const,
     models: ['models'] as const,
     skills: ['skills'] as const,
+    checklists: ['checklists'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -634,6 +635,16 @@ export const skillsQuery = queryOptions({
     queryKey: keys.skills,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/skills', { signal })),
     staleTime: Infinity,
+})
+
+/**
+ * Each mapped repository's checklist, as the operator's `paths.checklists` holds it now. Not on the stream, since it is
+ * files the operator edits: read whenever the checklists page opens, and again when its Read again button asks.
+ */
+export const checklistsQuery = queryOptions({
+    queryKey: keys.checklists,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/checklists', { signal })),
+    staleTime: 0,
 })
 
 /** The PRs the journal knows, most recent activity first. Marked stale on every tick and every ticket change. */

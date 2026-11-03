@@ -1,6 +1,7 @@
-"""How worker and task runs answered each repository's checklist, as the API sends it (DESIGN §42).
+"""Each repository's checklist, and how worker and task runs answered it, as the API sends them (DESIGN §42).
 
-The counts by the backend's clock, as `canopy checklist` prints them, with the runs behind each item's `held` and
+The lists as the operator's files hold them now, each read and parsed as a run's would be, one canopy cannot use with
+why. The counts by the backend's clock, as `canopy checklist` prints them, with the runs behind each item's `held` and
 `fixed` answers, a held one's reason on one line, and the counts by week; and one run's answers, as `canopy show run:ID`
 and `task:N` print them, a held item's reason among them: the worker's words, made printable and sent as text.
 """
@@ -9,16 +10,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import checklist_answers, conversation, db, health, spend
+from canopy.core import checklist_answers, checklists, conversation, db, health, spend
 from canopy.core.vocab import ItemAnswer
 from canopy.serve.schema import ChecklistAnswer
 from canopy.serve.schema import ItemAnswer as AnswerWord
 from canopy.serve.schema.checklist import (
     ChecklistCounts,
+    ChecklistItem,
     ChecklistItemCounts,
+    ChecklistList,
     ChecklistPrevious,
     ChecklistRun,
     ChecklistWeek,
+    RepoChecklist,
 )
 
 if TYPE_CHECKING:
@@ -28,6 +32,27 @@ if TYPE_CHECKING:
     from canopy.core.checklist_answers import AnsweredBy, RunTable
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
+
+
+def lists(ctx: Context) -> ChecklistList:
+    """Read each mapped repository's list from `paths.checklists` now, as the next run in it would.
+
+    Returns:
+        Each repository of the map, in its order, with its list's items; with none when it has no file, or when the
+        file is one canopy would refuse a run over, with why.
+    """
+    directory = ctx.config.paths.checklists
+    found: list[RepoChecklist] = []
+    for repo in ctx.ws.repos:
+        file = None if directory is None else str(directory / f"{repo.name}{checklists.SUFFIX}")
+        try:
+            loaded = checklists.load(ctx.config, repo.name)
+        except checklists.ChecklistError as e:
+            found.append(RepoChecklist(repo=repo.name, file=file, items=[], error=str(e)))
+            continue
+        items = [] if loaded is None else [_item(item) for item in loaded.items]
+        found.append(RepoChecklist(repo=repo.name, file=file, items=items))
+    return ChecklistList(directory=None if directory is None else str(directory), repos=found)
 
 
 def checklist_counts(backend: Backend, ctx: Context, days: int, *, repo: str | None = None) -> ChecklistCounts:
@@ -103,6 +128,11 @@ def run_answers(conn: sqlite3.Connection, run_id: int, *, table: RunTable = "run
         )
         for a in checklist_answers.of_run(conn, run_id, table=table)
     ]
+
+
+def _item(item: checklists.Item) -> ChecklistItem:
+    # One item as the operator wrote it: their own text, which the parser has already held to a list's bounds.
+    return ChecklistItem(id=item.id, paths=list(item.paths), severity=item.severity, rule=item.rule)
 
 
 def _runs(found: Iterable[AnsweredBy]) -> list[ChecklistRun]:
