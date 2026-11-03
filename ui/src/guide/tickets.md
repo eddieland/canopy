@@ -124,7 +124,9 @@ reply before **Stop** or **Forget**. Hover over each to see its command.
   the history back. Forget a ticket three times and you get three of those lines, one per attempt, which is also a
   hint worth reading. Closing its PRs and deleting its branch on origin is yours to do, and until you do, the
   overseer will find them again and the ticket can't start over. canopy refuses while a run is on it, and when nothing
-  has happened since you last forgot it.
+  has happened since you last forgot it. A ticket no tracker read has ever seen, with no runs, messages, or start, is
+  the exception: forgetting it removes it whole, which is how you clear a key the tracker doesn't hold, the one a
+  `connector_failed` item keeps saying it did not read. Its decisions stay in the journal.
 
 ## Feedback left with no worker
 
