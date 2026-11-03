@@ -158,7 +158,8 @@ def add(
             else:
                 raise Refused("other_initiative", f"{key} is a member of init:{found.initiative_id}")
         held = len(members_of(conn, initiative_id))
-        if held + len(added) > bound:
+        # Only what it adds is held to the bound: a key already a member stays one after the bound is lowered.
+        if added and held + len(added) > bound:
             raise Refused(
                 "initiative_full",
                 f"init:{initiative_id} has {held} members, and policy.max_initiative_tickets lets it hold {bound}",

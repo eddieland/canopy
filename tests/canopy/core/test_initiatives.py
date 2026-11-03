@@ -178,6 +178,22 @@ def test_max_initiative_tickets_bounds_the_members(capsys: pytest.CaptureFixture
     assert members(conn) == ["PROJ-3", "PROJ-4"]
 
 
+def test_a_lowered_bound_refuses_new_members_but_not_an_existing_one(
+    capsys: pytest.CaptureFixture[str],
+    canopy_env: CanopyEnv,
+) -> None:
+    """Below its members, a lowered bound refuses an addition, and leaves a key already a member as it is."""
+    conn = canopy_env.journal()
+    submit(TEXT)
+    assert operator("initiative", "add", "init:1", "PROJ-2", "PROJ-3") == 0
+    canopy_env.configure(canopy_env.user_file, {"policy": {"max_initiative_tickets": 1}})
+    assert operator("initiative", "add", "init:1", "PROJ-3") == 0
+    assert "Already members: PROJ-3." in capsys.readouterr().out
+    assert operator("initiative", "add", "init:1", "PROJ-3", "PROJ-4") == 1
+    assert "initiative add refused (initiative_full)" in capsys.readouterr().err
+    assert members(conn) == ["PROJ-2", "PROJ-3"]
+
+
 def test_a_workspace_file_may_lower_max_initiative_tickets_but_not_raise_it(canopy_env: CanopyEnv) -> None:
     """The bound is a guard a shared file may only tighten (TRUST_MODEL T7)."""
     canopy_env.configure(canopy_env.shared_file, {"policy": {"max_initiative_tickets": 30}})
