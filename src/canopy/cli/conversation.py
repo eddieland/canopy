@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, assert_never
 import click
 
 from canopy.cli import attachments as attachments_cli
-from canopy.cli import initiatives as initiatives_cli
+from canopy.cli import epics as epics_cli
 from canopy.cli import tasks as tasks_cli
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
@@ -33,7 +33,7 @@ from canopy.core import (
     chore_view,
     conversation,
     db,
-    initiatives,
+    epics,
     notice,
     passed_reviews,
     pause,
@@ -804,11 +804,11 @@ def _send_left(ctx: Context, key: str, numbers: tuple[int, ...]) -> int:
 )
 @click.pass_context
 def cmd_show(click_ctx: click.Context, ref: str, *, every_plan: bool) -> int:
-    """Show a ticket's phase, PRs, plan, recent runs, and conversation, a run, a chore, a task, an initiative, or a PR.
+    """Show a ticket's phase, PRs, plan, recent runs, and conversation, a run, a chore, a task, an epic, or a PR.
 
     A ticket's newest plan is printed as its file stands, with its status; --plans prints every plan, oldest first, and
     the open comments on the newest. A chore is `chore:NAME`. A task, `task:N`, shows its text and each run, with its
-    branch and the head it left on origin. An initiative, `init:N`, shows its text and its members. A PR, by its URL,
+    branch and the head it left on origin. An epic, `epic:N`, shows its text and its members. A PR, by its URL,
     shows your review request on it, if you made one, and canopy's reviews of it.
     """
     subject = _ref(ref, "show")
@@ -819,8 +819,8 @@ def cmd_show(click_ctx: click.Context, ref: str, *, every_plan: bool) -> int:
         _show_run(ctx, int(subject.id))
     elif subject.kind == conversation.TASK:
         tasks_cli.show(ctx, int(subject.id))
-    elif subject.kind == conversation.INITIATIVE:
-        initiatives_cli.show(ctx, int(subject.id))
+    elif subject.kind == conversation.EPIC:
+        epics_cli.show(ctx, int(subject.id))
     elif subject.kind == conversation.CHORE:
         _show_chore(ctx, subject.id)
     elif subject.kind == conversation.PR:
@@ -883,9 +883,9 @@ def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:
     click.echo(f"{key}: {how}")
     if ticket is not None and ticket.title:
         click.echo(f"  title {one_line(ticket.title)}")
-    member = initiatives.membership(ctx.conn, key)
+    member = epics.membership(ctx.conn, key)
     if member is not None:
-        click.echo(f"  member of init:{member.initiative_id}")
+        click.echo(f"  member of epic:{member.epic_id}")
     if ticket is not None:
         done = ", done" if ticket.done else ""
         click.echo(f"  phase {phase_of(ctx.conn, ticket)}{done}; branch {ticket.branch or 'none yet'}")
