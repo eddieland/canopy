@@ -4,9 +4,10 @@ import json
 from pathlib import Path
 
 import pytest
+from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
-from canopy.core import db, initiatives, plans
+from canopy.core import config, db, initiatives, plans, prompts
 from canopy.core.context import Context
 from canopy.core.vocab import PlanStatus, RunStatus
 from canopy.infra import logs
@@ -179,3 +180,22 @@ def test_a_running_plan_run_takes_worker_capacity(scenario: Scenario, git_pool: 
     scenario.configures(capacity={"max_workers": 1})
     initiative_planning(scenario.env)
     assert scenario.refuses(dispatches()) == [("refused:capacity", "1 of 1 workers are running")]
+
+
+def test_the_initiative_planner_prompt(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
+    """The prompt an initiative's planner gets, its placeholders filled as a start fills them (DESIGN §43)."""
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    values = {
+        "INITIATIVE_ID": "1",
+        "GOAL": GOAL,
+        "DESK": "/ws/desks/init:1",
+        "REPOSITORIES": "- `api`: `/ws/desks/init:1/api`\n- `web`: `/ws/desks/init:1/web`",
+        "MEMBERS": "- PROJ-2",
+        "MAP": None,
+        "OPERATOR_MESSAGES": None,
+        "PLAN_OUT": plans.WRITTEN,
+        "PLAN_FILE": plans.REPLACED,
+        "MAX_PLAN_CHARS": str(plans.MAX_CHARS),
+        "TIMEOUT_MINUTES": "45",
+    }
+    assert prompts.render_initiative_plan(cfg, values) == markdown_snapshot
