@@ -6,7 +6,7 @@
 -- readable once superseded, as what the next approval is compared with. Rows are never deleted.
 CREATE TABLE epic_plans (
     id                INTEGER PRIMARY KEY,
-    epic_id     INTEGER NOT NULL REFERENCES epics(id),
+    epic_id           INTEGER NOT NULL REFERENCES epics(id),
     run_id            INTEGER NOT NULL UNIQUE REFERENCES epic_runs(id),
     created_at        TEXT NOT NULL,
     status            TEXT NOT NULL DEFAULT 'proposed' CHECK (status IN ('proposed', 'approved', 'superseded')),
