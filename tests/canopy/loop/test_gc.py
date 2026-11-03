@@ -69,7 +69,7 @@ def test_a_dry_run_counts_what_a_pass_would_remove_and_removes_nothing(
 
 
 def test_a_runs_kept_diffs_are_its_run_files(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
-    """A run under `approve` keeps a diff and its head per repository (DESIGN §29): its files, not unrecorded ones."""
+    """A run's diff and head (DESIGN §29), and its pushed paths (§25), kept per repository, are its files."""
     now = datetime.now(UTC)
     conn = canopy_env.journal()
     old = run_with_files(conn, canopy_env, ended_tick(conn, earlier(now, 10)), earlier(now, 40))
@@ -80,9 +80,10 @@ def test_a_runs_kept_diffs_are_its_run_files(canopy_env: CanopyEnv, capsys: pyte
     )
     write_file(old.with_name(f"{run_id}.api.diff"), 30, hours_old=2)
     write_file(old.with_name(f"{run_id}.api.head"), 41, hours_old=2)
+    write_file(old.with_name(f"{run_id}.api.paths"), 12, hours_old=2)
     conn.commit()
     kinds = dry_run(capsys)
-    assert removes(kinds["run files"]) == (4, 181, 4, 181)
+    assert removes(kinds["run files"]) == (5, 193, 5, 193)
     assert removes(kinds["unrecorded files"])[0] == 0
 
 

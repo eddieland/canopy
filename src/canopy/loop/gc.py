@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Literal
 import canopy_sandbox
 
 from canopy.chores import start as chore_start
-from canopy.core import db, hostgit, records, review_diff, sql
+from canopy.core import db, hostgit, plan_files, records, review_diff, sql
 from canopy.core.context import db_path
 from canopy.core.vocab import Decider, MemoryScope, MemoryStatus, PrState, TickStatus
 from canopy.infra import lock, logs, procs
@@ -422,10 +422,11 @@ def _logged(conn: sqlite3.Connection, table: db.RunTable, cutoff: str, *suffixes
 
 
 def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
-    """Each worker run's log, its prompt, and the diffs it kept, with the lifelock it holds while it lives.
+    """Each worker run's log, its prompt, and the diffs and paths it kept, with the lifelock it holds while it lives.
 
-    A run under `approve` keeps a diff and its head for each repository it leased (DESIGN §29). A run that wrote a
-    plan keeps its prompt as long as the plan, forever, so the plan's archive can say what its planner was given (§25).
+    A run under `approve` keeps a diff and its head for each repository it leased (DESIGN §29), and one that followed
+    its ticket's plan the paths its push touched in each (§25). A run that wrote a plan keeps its prompt as long as the
+    plan, forever, so the plan's archive can say what its planner was given (§25).
 
     Returns:
         What each run owns, oldest first.
@@ -439,15 +440,17 @@ def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
     owned: list[_Owned] = []
     for r in sql.execute(conn, sql.select("id, ended_at, log_path").from_("runs").order_by("id")):
         log = Path(r["log_path"])
-        kept = [review_diff.run_path_for(log, repo) for repo in repos.get(int(r["id"]), [])]
+        leased = repos.get(int(r["id"]), [])
+        kept = [review_diff.run_path_for(log, repo) for repo in leased]
+        kept += [p.with_suffix(".head") for p in kept] + [plan_files.path_for(log, repo) for repo in leased]
         prompt = log.with_suffix(".prompt")
         lifelock = procs.lifelock(log)
         if int(r["id"]) in planned_ids:
             # A cutoff of "" is one no time is before: kept forever.
             owned.append(_Owned((prompt,), r["ended_at"], "", lifelock=lifelock))
-            paths = (log, *kept, *(p.with_suffix(".head") for p in kept))
+            paths = (log, *kept)
         else:
-            paths = (log, prompt, *kept, *(p.with_suffix(".head") for p in kept))
+            paths = (log, prompt, *kept)
         owned.append(_Owned(paths, r["ended_at"], cutoff, lifelock=lifelock))
     return owned
 

@@ -78,7 +78,9 @@ The `implement` and `resume` prompts name the worker's copy of the plan and its 
 as long as it needs; with an approved plan, an override that leaves it out is refused (D093). Each run gets a fresh copy
 of the approved plan, checked against its hash first: a plan changed, superseded, or approved again since dispatch fails
 the run. The copy is excluded from git and removed before the slot is returned. A worker can still commit it by force,
-putting the plan in its PR; the prompt forbids it and push verification (§8) notes it.
+putting the plan in its PR; the prompt forbids it and push verification (§8) notes it. What the run pushed is set
+against the plan, in code, for the operator alone: `canopy show run:ID` lists the files the push touched that no step
+names, and each step whose files went untouched. It decides nothing.
 
 ### Where plans live
 

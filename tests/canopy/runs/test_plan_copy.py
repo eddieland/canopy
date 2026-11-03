@@ -14,6 +14,7 @@ from canopy.cli.main import main
 from canopy.core import contract, db, plans, prompts
 from canopy.core.vocab import RunKind, RunStatus, TickStatus
 from canopy.infra import logs, procs
+from canopy.loop import readback
 from canopy.runs import tidy
 from tests.canopy.helpers import (
     BRANCH,
@@ -22,6 +23,7 @@ from tests.canopy.helpers import (
     agent_runs,
     commands_run,
     commit_and_push,
+    context,
     in_tick,
     overseer_calls,
     planner_does,
@@ -36,9 +38,9 @@ PLAN = dispatches(kind=RunKind.PLAN)
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n\n```sh\n# not a heading\n```\n\n### Tests\n\nOne test.\n"
 
 
-def approved(scenario: Scenario) -> int:
-    """Plan PROJ-1 with TEXT and approve it; returns the plan run's id."""
-    run = scenario.run(PLAN, worker=planner_does(plan=TEXT))
+def approved(scenario: Scenario, text: str = TEXT) -> int:
+    """Plan PROJ-1 with `text` and approve it; returns the plan run's id."""
+    run = scenario.run(PLAN, worker=planner_does(plan=text))
     scenario.operator("plan", KEY, "--approve")
     return run.id
 
@@ -164,6 +166,48 @@ def test_a_pushed_branch_holding_the_copy_gets_a_harness_note(scenario: Scenario
     assert run.status == RunStatus.DONE
     note = contract.stored_object(run.row["result_json"]).get("harness")
     assert note == f"repo: the pushed {BRANCH} holds {plans.COPY}, the plan's copy, committed by the worker"
+
+
+STEPS = (
+    "# Plan\n\n## Steps\n\n### Step 1: Parse\n\nAdd `src/parse.py`.\n\n### Step 2: Document it\n\nIn `docs/guide.md`.\n"
+)
+# The worker's change: the first step's file, and one no step names; the second step's file it leaves alone.
+WRITES = ["sh", "-c", "mkdir -p src && echo x > src/parse.py && echo y > extra.txt && git add src extra.txt"]
+
+
+def test_show_sets_the_push_against_the_steps_of_the_plan_it_followed(scenario: Scenario, git_pool: GitPool) -> None:
+    """`canopy show run:ID` names what the push touched that no step names, and each step's files left untouched."""
+    approved(scenario, STEPS)
+    plan = present(plans.current(scenario.conn, KEY))
+    run = scenario.run(worker=worker_does(WRITES, *commit_and_push(BRANCH)))
+    assert run.status == RunStatus.DONE
+
+    shown = scenario.operator("show", f"run:{run.id}").out
+
+    assert (
+        f"\nAgainst plan {plan.id}'s steps:\n"
+        "  touched, in no step (1):\n"
+        "    extra.txt\n"
+        "  Step 2: Document it, untouched (1):\n"
+        "    docs/guide.md\n"
+    ) in shown
+    # Like a card, it is the operator's: the report an agent reads leaves it out.
+    assert "Against plan" not in readback.read_run(context(scenario.env), readback.ShowRun(run=run.id))
+
+
+def test_show_says_when_the_push_kept_to_the_plans_steps(scenario: Scenario, git_pool: GitPool) -> None:
+    approved(scenario, STEPS.replace("`docs/guide.md`", "`extra.txt`"))
+    run = scenario.run(worker=worker_does(WRITES, *commit_and_push(BRANCH)))
+
+    shown = scenario.operator("show", f"run:{run.id}").out
+
+    assert "  every path the push touched is in a step, and every file a step names was touched\n" in shown
+
+
+def test_show_compares_nothing_for_a_run_that_followed_no_plan(scenario: Scenario, git_pool: GitPool) -> None:
+    run = scenario.run(worker=worker_does(WRITES, *commit_and_push(BRANCH)))
+
+    assert "Against plan" not in scenario.operator("show", f"run:{run.id}").out
 
 
 def test_an_override_without_plan_is_refused_once_the_ticket_has_an_approved_plan(

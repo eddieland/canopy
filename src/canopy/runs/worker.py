@@ -45,6 +45,7 @@ from canopy.core import (
     memory,
     observe,
     outbox,
+    plan_files,
     plan_lengths,
     plans,
     pools,
@@ -991,7 +992,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         log=log,
     )
     committed += kicks.notes
-    _keep_diffs(ctx, run, slots, log)
+    _keep_shown(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
     checked = [found.note() for found in (filed, answered, listed) if found is not None]
     notes = "; ".join(n for n in [note, *committed, *checked] if n)
@@ -1056,12 +1057,20 @@ def _check_checklist(
     return checklist_answers.check(lists, checklist_answers.parse(text) if text else None)
 
 
-def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:
-    """Keep each slot's diff, for a run whose drafts the PR's page shows on it: one rendered under `approve`."""
+def _keep_shown(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:
+    """Keep beside the run's log what is shown of its slots after they go back.
+
+    Each slot's diff, for a run whose drafts the PR's page shows on it: one rendered under `approve` (DESIGN §29). The
+    paths each slot's push touched, for a run that followed the ticket's approved plan, which `canopy show run:ID` sets
+    against the files the plan's steps name (§25).
+    """
     rendered = replies.run_replies(ctx.conn, int(run["id"]))
-    if rendered is not None and rendered.mode is ReplyMode.APPROVE:
-        for slot in slots:
-            _keep_diff(slot, Path(run["log_path"]), log)
+    log_path = Path(run["log_path"])
+    for slot in slots:
+        if rendered is not None and rendered.mode is ReplyMode.APPROVE:
+            _keep_diff(slot, log_path, log)
+        if run["plan_id"] is not None:
+            _keep_touched(slot, str(run["branch"]), log_path, log)
 
 
 def _keep_diff(slot: _Slot, log_path: Path, log: logs.TickAdapter) -> None:
@@ -1085,6 +1094,27 @@ def _keep_diff(slot: _Slot, log_path: Path, log: logs.TickAdapter) -> None:
         review_diff.keep(path, diff.stdout)
     except (SetupError, OSError) as e:
         log.warning("run diff not kept", extra={**fields, "error": str(e)})
+
+
+def _keep_touched(slot: _Slot, branch: str, log_path: Path, log: logs.TickAdapter) -> None:
+    """Keep every path the slot's branch on origin touches, from where it leaves its base.
+
+    Best effort, as a kept diff is: the run does not need them, so any failure, git's or the disk's, is logged and the
+    show compares nothing. A branch not on origin keeps none.
+    """
+    fields = {"repo": slot.repo, "base": slot.base}
+    try:
+        head = checkpoint.remote_head(slot.git, branch)
+        if not head:
+            return
+        fork = slot.git.result("merge-base", f"refs/remotes/origin/{slot.base}", head)
+        names = slot.git.result(*review_diff.names_args(fork.stdout.strip(), head)) if fork.ok else fork
+        if not names.ok:
+            log.warning("touched paths not kept", extra={**fields, "error": names.stderr[:500]})
+            return
+        plan_files.keep(plan_files.path_for(log_path, slot.repo), names.stdout)
+    except (SetupError, OSError) as e:
+        log.warning("touched paths not kept", extra={**fields, "error": str(e)})
 
 
 def _heads(slots: Sequence[_Slot], log: logs.TickAdapter) -> str | None:

@@ -17,17 +17,33 @@ from typing import TYPE_CHECKING, Annotated
 
 from pydantic import AfterValidator, Field, StrictInt, StrictStr
 
-from canopy.core import cards, checklist_answers, chore_result, chore_view, config, contract, conversation, db, reports
+from canopy.core import (
+    cards,
+    checklist_answers,
+    chore_result,
+    chore_view,
+    config,
+    contract,
+    conversation,
+    db,
+    plan_files,
+    plans,
+    records,
+    reports,
+)
 from canopy.core.vocab import Decider, RunStatus
 from canopy.infra.text import one_line
 from canopy.loop import attention
 from canopy.loop.render import chore_line, named, prs_of, result_of, spent
 
 if TYPE_CHECKING:
+    import sqlite3
     from collections.abc import Sequence
 
-    from canopy.core import records
     from canopy.core.context import Context
+
+#: How many paths `canopy show run:ID` lists under each heading of how a run's push matched its plan.
+_MAX_LISTED = 50
 
 
 def _chore_name(value: str) -> str:
@@ -112,10 +128,11 @@ def read_decisions(ctx: Context, request: Decisions) -> str:
     return "\n".join(lines)
 
 
-def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
-    """Print a run, as `canopy show run:ID` prints it, with its agent's progress when `card` says so.
+def read_run(ctx: Context, request: ShowRun, *, operator: bool = False) -> str:
+    """Print a run, as `canopy show run:ID` prints it, with what only the `operator` reads when they do.
 
-    A run's progress is the operator's alone (DESIGN §41): the report a chore's agent reads leaves it out.
+    A run's progress is the operator's alone (DESIGN §41), and so is how its push matched its plan, which names the
+    plan's steps (§25): the report a chore's agent reads leaves both out.
 
     Returns:
         The run's lines and its messages.
@@ -134,7 +151,8 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
     ]
     if run["branch"]:
         lines.append(f"  branch {run['branch']}")
-    lines.extend(f"  {s.repo}  slot {s.slot_path}, from {s.base_branch}" for s in db.run_slots(ctx.conn, run_id))
+    slots = db.run_slots(ctx.conn, run_id)
+    lines.extend(f"  {s.repo}  slot {s.slot_path}, from {s.base_branch}" for s in slots)
     result = result_of(run)
     lines.extend(f"  PR {pr}" for pr in prs_of(result))
     said = one_line(str(result.get("harness") or ""))
@@ -148,7 +166,7 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
     # Its agent's progress, while it runs and its last once it ends (DESIGN §41).
     running = run["status"] == RunStatus.RUNNING
     standing = cards.of(run)
-    if card and (standing.card is not None or running):
+    if operator and (standing.card is not None or running):
         lines.extend(
             cards.lines(
                 standing,
@@ -158,12 +176,75 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
                 ref=f"run:{run_id}",
             ),
         )
+    if operator:
+        lines.extend(_plan_lines(ctx, run, slots))
     messages = db.run_messages(ctx.conn, run_id)
     if messages:
         lines.append("\nMessages:")
     for m in messages:
         lines.extend(message_lines(m))
     return "\n".join(lines)
+
+
+def _plan_lines(ctx: Context, run: sqlite3.Row, slots: Sequence[records.RunSlot]) -> list[str]:
+    """How a run's push matched the approved plan it followed, by the files the plan's steps name (DESIGN §25).
+
+    Read only, and none for a run that followed no plan or kept no paths: one from before canopy kept them, one that
+    pushed nothing, or one whose files were collected. A plan whose file is no longer as approved is not compared.
+
+    Returns:
+        A heading, then the paths no step names and each step with the files it names that went untouched, or why
+        nothing was compared.
+    """
+    plan_id = run["plan_id"]
+    kept = {
+        str(s.repo): found
+        for s in slots
+        if s.repo is not None and (found := plan_files.read(plan_files.path_for(run["log_path"], s.repo))) is not None
+    }
+    if plan_id is None or not kept:
+        return []
+    heading = f"\nAgainst plan {plan_id}'s steps:"
+    plan = records.select(records.Plan).where("id = ?", plan_id).one(ctx.conn)
+    reading = None if plan is None else plans.read(plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id))
+    if plan is None or reading is None or reading.text is None or reading.sha256 != plan.approved_sha256:
+        return [heading, "  not compared: the plan's file is no longer as approved"]
+    touched = [plan_files.Touched(repo, path) for repo, paths in kept.items() for path in paths]
+    return [heading, *_coverage_lines(plan_files.compare(reading.text, touched), joint=len(kept) > 1)]
+
+
+def _coverage_lines(coverage: plan_files.Coverage, *, joint: bool) -> list[str]:
+    """What `_plan_lines` says of a push's paths against a plan's steps, each touched path's repository if `joint`.
+
+    Returns:
+        The lines under its heading.
+    """
+    if not coverage.steps:
+        return ["  not compared: the plan has no `### Step N` sections"]
+    if not coverage.names_files:
+        return ["  not compared: no step names a file"]
+    if not coverage.unplanned and not coverage.untouched:
+        return ["  every path the push touched is in a step, and every file a step names was touched"]
+    lines: list[str] = []
+    if coverage.unplanned:
+        lines.append(f"  touched, in no step ({len(coverage.unplanned)}):")
+        lines.extend(_listed([f"{t.repo}  {t.path}" if joint else t.path for t in coverage.unplanned]))
+    for gap in coverage.untouched:
+        lines.append(f"  {one_line(gap.step.title)}, untouched ({len(gap.files)}):")
+        lines.extend(_listed(gap.files))
+    return lines
+
+
+def _listed(names: Sequence[str]) -> list[str]:
+    """List `names` under a heading of `_coverage_lines`.
+
+    Returns:
+        A line for each of the first `_MAX_LISTED` names, made printable, and one counting the rest.
+    """
+    lines = [f"    {one_line(name)}" for name in names[:_MAX_LISTED]]
+    if len(names) > _MAX_LISTED:
+        lines.append(f"    and {len(names) - _MAX_LISTED} more")
+    return lines
 
 
 def checklist_lines(answers: Sequence[records.ChecklistAnswer]) -> list[str]:
