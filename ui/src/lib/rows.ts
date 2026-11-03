@@ -309,6 +309,22 @@ export const ROW_COLUMNS = {
         ['state', '5.5rem'],
         ['item', FREE],
     ],
+    /**
+     * A comment on a ticket's PR its review cursors passed with no worker: why it was left first, as a state leads a
+     * row, so the left edge says whether any of it is risky; who wrote it and its first line, in the free column;
+     * where it is, linking out to it; the tick that left it; and its button to send it to a worker. The reason's
+     * column has room for the longest reason's chip, `would reset approval`. Beside a ticket's thread in a 1720px
+     * window the list is about 36rem wide, too narrow for the author in a column of its own, so it leads the free
+     * one; the tick goes first, then where it is, which the button's name still says.
+     */
+    'left-feedback': [
+        ['reason', '9.5rem'],
+        ['title', FREE],
+        // A file's name and line, `client.ts:42`, and its icon; its whole path is on hover.
+        ['where', '7rem', 2],
+        ['tick', '4rem', 1],
+        ['send', '1.5rem'],
+    ],
     /** A transcript's row: its time, its mark, and its text, under which a tool call's body opens. */
     transcript: [
         ['time', '3.5rem'],
@@ -460,20 +476,24 @@ const FROM: Record<RowColumn, string> = {
     notes: 'col-[notes/end]',
     peak: 'col-[peak/end]',
     phase: 'col-[phase/end]',
+    reason: 'col-[reason/end]',
     pr: 'col-[pr/end]',
     repo: 'col-[repo/end]',
     run: 'col-[run/end]',
+    send: 'col-[send/end]',
     severity: 'col-[severity/end]',
     slot: 'col-[slot/end]',
     state: 'col-[state/end]',
     subject: 'col-[subject/end]',
     text: 'col-[text/end]',
+    tick: 'col-[tick/end]',
     ticket: 'col-[ticket/end]',
     time: 'col-[time/end]',
     title: 'col-[title/end]',
     tokens: 'col-[tokens/end]',
     use: 'col-[use/end]',
     verdict: 'col-[verdict/end]',
+    where: 'col-[where/end]',
 }
 
 /** The classes that place any element as a `RowLine` is placed, for one that is not a `div` (a nested list). */

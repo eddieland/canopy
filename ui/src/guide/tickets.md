@@ -134,19 +134,20 @@ Sometimes the overseer reads a comment on the ticket's PR and decides it isn't w
 a question rather than a change, something the head already does, or a change whose push would dismiss the approval
 you're about to merge on. When it moves past such a comment it has to say which one and why, and canopy refuses the
 move if it skips any without a reason. Those comments are listed in the ticket's **Left feedback** panel, above its
-runs: where each one is, linking out to it on GitHub, who wrote it, why it was left (`optional`, `would reset
-approval`, `a question`, `already done`, `out of scope`, `you said to leave it`), and the tick that decided, linking to
-that tick's reasoning. A comment on a thread someone resolved needs no reason, and drops off the list. So does one a
-worker has answered on its thread.
+runs, one row each: why it was left (`optional`, `would reset approval`, `a question`, `already done`, `out of scope`,
+`you said to leave it`), who wrote it, its first line, the file and line it's on (or `review` for a review's own
+text), linking out to it on GitHub with the whole path on hover, and the tick that decided, linking to that tick's
+reasoning. In a narrow panel the tick goes first, then the file. A comment on a thread someone
+resolved needs no reason, and drops off the list. So does one a worker has answered on its thread.
 
 The attention item `ready_to_merge`, or `needs_reviewer`, counts them too, for example "2 feedback items left with no
 worker (optional, would_reset_approval)". Read them before you merge. "Optional" is the reviewer's word, and "would
 reset approval" is the overseer's guess at what you'd rather avoid, and you may see it differently.
 
-To overrule it, use **send to a worker** on the comment, or `canopy send KEY N` with the number `canopy show KEY`
-lists. canopy replies on the ticket for you, naming the comment by its id, PR, and line without quoting it, and the
-next tick reads that reply as your go-ahead and sends a worker, whoever wrote the comment. The comment stays on the
-list until the worker answers it on its thread.
+To overrule it, use the send button at the end of the comment's row, or `canopy send KEY N` with the number
+`canopy show KEY` lists. canopy replies on the ticket for you, naming the comment by its id, PR, and line without
+quoting it, and the next tick reads that reply as your go-ahead and sends a worker, whoever wrote the comment. The
+comment stays on the list until the worker answers it on its thread.
 
 ## Allowing one more run
 

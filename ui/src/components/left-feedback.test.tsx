@@ -60,16 +60,50 @@ describe('LeftFeedbackList', () => {
         expect(within(panel).getAllByRole('listitem')).toHaveLength(2)
     })
 
-    it('names where each item is, who wrote it, why it was left, and the tick that left it', async () => {
-        await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={[left()]} />)
-        const row = within(screen.getByTestId('left-feedback')).getByRole('listitem')
-        expect(within(row).getByText('src/billing/v1.ts:8')).toBeTruthy()
-        expect(within(row).getByText('by carol')).toBeTruthy()
-        expect(within(row).getByText('would reset approval')).toBeTruthy()
-        expect(within(row).getByRole('link', { name: 'tick:2' })).toBeTruthy()
-        expect(within(row).getByRole('link', { name: 'open comment 2468020037 on GitHub' }).getAttribute('href')).toBe(
-            `${PR}#discussion_r2468020037`,
+    it('names why each was left, who wrote it, its first line, where it is, and the tick that left it', async () => {
+        await renderRouted(
+            <LeftFeedbackList
+                ticketKey="ABC-103"
+                items={[left({ body: '\nCould the v1 shim go in a follow-up instead?\n\nIt is a big diff.' })]}
+            />,
         )
+        const row = within(screen.getByTestId('left-feedback')).getByRole('listitem')
+        expect(within(row).getByText('would reset approval')).toBeTruthy()
+        expect(within(row).getByText('carol')).toBeTruthy()
+        expect(within(row).getByText('Could the v1 shim go in a follow-up instead?')).toBeTruthy()
+        expect(within(row).queryByText(/big diff/u)).toBeNull()
+        expect(within(row).getByRole('link', { name: 'tick:2' })).toBeTruthy()
+        const where = within(row).getByRole('link', { name: 'src/billing/v1.ts:8 on GitHub' })
+        expect(where.getAttribute('href')).toBe(`${PR}#discussion_r2468020037`)
+        expect(where.textContent).toBe('v1.ts:8')
+        expect(within(row).queryByText(/left by/u)).toBeNull()
+    })
+
+    it('names a review by what it is, and an item GitHub gave no link as text, linking nowhere', async () => {
+        await renderRouted(
+            <LeftFeedbackList
+                ticketKey="ABC-103"
+                items={[left({ item: 'review', path: null, line: null, url: null, author: null })]}
+            />,
+        )
+        const row = within(screen.getByTestId('left-feedback')).getByRole('listitem')
+        expect(within(row).getByText('review')).toBeTruthy()
+        expect(within(row).getByText('unknown')).toBeTruthy()
+        expect(
+            within(row)
+                .getAllByRole('link')
+                .map((link) => link.textContent),
+        ).toEqual(['tick:2'])
+        expect(within(row).getByRole('button', { name: 'send review to a worker' })).toBeTruthy()
+    })
+
+    it('links what the comment links to, as text it shows rather than markup', async () => {
+        const body = 'See https://example.com/spec and <b>this</b>'
+        await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={[left({ body })]} />)
+        const row = within(screen.getByTestId('left-feedback')).getByRole('listitem')
+        expect(within(row).getByRole('link', { name: 'https://example.com/spec' })).toBeTruthy()
+        expect(row.querySelector('b')).toBeNull()
+        expect(row.textContent).toContain('<b>this</b>')
     })
 
     it('sends an item to a worker by its number, and says so in the words the CLI does', async () => {
