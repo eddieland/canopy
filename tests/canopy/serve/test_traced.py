@@ -4,8 +4,12 @@ import json
 from pathlib import Path
 from typing import Any
 
+from fastapi.testclient import TestClient
+from starlette.types import Receive, Scope, Send
+
 from canopy.infra import tracing
 from canopy.serve.backend import Backend
+from canopy.serve.traced import Traced
 from tests.canopy.web_helpers import client
 
 
@@ -46,5 +50,23 @@ def test_a_request_is_a_server_span_named_for_its_route_never_its_values(tmp_pat
 
 
 def test_a_server_that_does_not_trace_writes_no_spans(tmp_path: Path, backend: Backend) -> None:
+    tracing.configure(tmp_path, "file")
+    tracing.configure(tmp_path, "off")
     client(None, backend).get("/api/runs")
     assert not (tmp_path / tracing.TRACES_FILE_NAME).exists()
+
+
+def test_a_request_answered_with_a_server_error_is_a_failed_span_and_a_client_error_is_not(tmp_path: Path) -> None:
+    async def answers(scope: Scope, receive: Receive, send: Send) -> None:
+        status = 503 if scope["path"] == "/api/broken" else 404
+        await send({"type": "http.response.start", "status": status, "headers": []})
+        await send({"type": "http.response.body", "body": b""})
+
+    tracing.configure(tmp_path, "file")
+    browser = TestClient(Traced(answers, api_prefix="/api"))
+    browser.get("/api/broken")
+    browser.get("/api/missing")
+    tracing.configure(tmp_path, "off")
+    broken, missing = spans(tmp_path / tracing.TRACES_FILE_NAME)
+    assert broken["status"] == {"code": 2, "message": "503"}
+    assert missing["status"] == {"code": 0}

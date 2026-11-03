@@ -70,6 +70,13 @@ class Span:
         if self._inner is not None:
             self._inner.set_attributes(_standard(attributes))
 
+    def fail(self, why: str) -> None:
+        """Mark the span failed, though its block raised nothing; `why` is canopy's word, never text it read."""
+        if self._inner is not None:
+            from opentelemetry.trace import StatusCode  # noqa: PLC0415  (imported only once tracing is on)
+
+            self._inner.set_status(StatusCode.ERROR, why)
+
     def rename(self, name: str) -> None:
         """Rename the span, once its block knows a better name, as a request's span does once it is routed."""
         if self._inner is not None:
