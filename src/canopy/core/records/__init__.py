@@ -76,10 +76,10 @@ from canopy.core.records.drafts import (
     DraftVersion,
     RunReplies,
 )
-from canopy.core.records.initiatives import (
-    Initiative,
-    InitiativeMember,
-    InitiativeRepo,
+from canopy.core.records.epics import (
+    Epic,
+    EpicMember,
+    EpicRepo,
 )
 from canopy.core.records.memory import (
     Memory,
@@ -176,6 +176,9 @@ __all__ = [
     "Derivation",
     "Draft",
     "DraftVersion",
+    "Epic",
+    "EpicMember",
+    "EpicRepo",
     "FeedbackPlan",
     "FeedbackPlanCheck",
     "FeedbackPlanItem",
@@ -187,9 +190,6 @@ __all__ = [
     "FollowUp",
     "Forget",
     "GcPass",
-    "Initiative",
-    "InitiativeMember",
-    "InitiativeRepo",
     "Insert",
     "ItemNumber",
     "Memory",

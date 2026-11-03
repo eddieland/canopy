@@ -3,7 +3,7 @@
 Part of the canopy design, normative like all of it: the operator's own list of rules no linter checks, asked of a
 worker's diff before it is done, and of a PR by a second review when that is not enough. Sections are numbered across
 the whole design; the [README](README.md) has the map. Previous: [Where a running agent stands](PROGRESS.md). Next:
-[Initiatives](INITIATIVES.md).
+[Epics](EPICS.md).
 
 ## 42. The operator's checklist
 

@@ -1,6 +1,6 @@
-"""An initiative plan's ids and breakdown, read from its Markdown, and what one approval changed from the last (§43).
+"""An epic plan's ids and breakdown, read from its Markdown, and what one approval changed from the last (§43).
 
-The ids and the breakdown are the one part of an initiative's plan canopy reads, from the file as the operator approved
+The ids and the breakdown are the one part of an epic's plan canopy reads, from the file as the operator approved
 it, in the shape its outline fixes: each requirement a list item `- **R<n>.** ...` under `## Requirements`, each
 contract `- **C<n>.** ...` under `## Contracts`, and each entry a `### B<n>. Title` under `## Breakdown`, whose body
 holds one line for each field:
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
     from collections.abc import Set as AbstractSet
 
-#: The most ids of one kind a plan may name: a plan is bounded, and an initiative's breakdown is shallow by rule.
+#: The most ids of one kind a plan may name: a plan is bounded, and an epic's breakdown is shallow by rule.
 MAX_IDS = 200
 #: The longest a trivial entry's reason may be.
 MAX_REASON = 300
@@ -79,7 +79,7 @@ class Entry:
 
 @dataclass(frozen=True)
 class Outline:
-    """What canopy reads of an initiative's plan: each id with its text, and the breakdown's entries."""
+    """What canopy reads of an epic's plan: each id with its text, and the breakdown's entries."""
 
     #: Each requirement's and contract's text, whitespace collapsed, by id.
     requirements: Mapping[str, str]
@@ -112,9 +112,9 @@ class Change:
 
 
 def read(text: str, *, repos: AbstractSet[str] | None = None) -> Outline:
-    """Read an initiative plan's ids and breakdown from its Markdown `text`, in the outline's shape (DESIGN §43).
+    """Read an epic plan's ids and breakdown from its Markdown `text`, in the outline's shape (DESIGN §43).
 
-    `repos`, when given, are the initiative's repositories, the only ones an entry may name.
+    `repos`, when given, are the epic's repositories, the only ones an entry may name.
 
     Returns:
         The outline.
@@ -415,7 +415,7 @@ def _check_references(
     entries: Mapping[str, Entry],
     repos: AbstractSet[str] | None,
 ) -> None:
-    """Refuse a reference to an id the plan does not hold, or a repository not the initiative's.
+    """Refuse a reference to an id the plan does not hold, or a repository not the epic's.
 
     Raises:
         OutlineError: one names an id missing from its section, an entry comes after itself, or names a repository
@@ -436,7 +436,7 @@ def _check_references(
         if repos is not None:
             outside = sorted(entry.repos - repos)
             if outside:
-                raise OutlineError(f"{entry.id} names {', '.join(outside)}, which is not the initiative's repository")
+                raise OutlineError(f"{entry.id} names {', '.join(outside)}, which is not the epic's repository")
 
 
 def _parts(value: str) -> list[str]:
