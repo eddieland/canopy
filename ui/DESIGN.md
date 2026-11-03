@@ -146,15 +146,19 @@ Rules:
   that are an editor's own look, Gruvbox's sides, Monokai, and Acme, and Pulp, lettered as Gruvbox is. There it
   draws every line a step smaller, at 15/16
   of the size asked for, in the same line boxes, so the wider face crowds less and no line changes height. The guide
-  keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono.
+  keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono. The one other
+  face that reflows, which the operator approved, is Pulp's display face (`--face-title`), on a section's own page
+  title alone (`section-title`): a fixed name, never a title from the data, so no line it sets wraps differently.
   The defaults take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the
   nineties, and black no edges, soft corners, and the glow.
   Pulp's sides take Gruvbox's character, in colors of their own, and ink the page as a comic does, from a few knobs
   whose defaults draw nothing: each panel and bubble outlined and dropping a hard shadow (`shadow-panel`,
   `shadow-bubble`), a halftone canvas (`--canvas-texture`), the primary action pressed into its shadow (`--press-x`,
-  `--press-y`), and a page title dropped in its section's color (`--title-drop`). Each is a shadow, a transform, or a
-  background, so it takes no room. Both sides ink by the same rings; dark's line is its cream, and its drop a color that
-  reads on the night blue, where black would not.
+  `--press-y`), and a page title dropped in its section's color (`--title-drop`). A section's own title is lettered
+  too: in its display face and tracking (`--face-title`, `--title-tracking`), its drop half again as far, and a thin
+  second plate up and to its left, off register (`--title-drop-2`). Each is a shadow, a transform, a background, or a
+  face drawn in the same line box, so it takes no room. Both sides ink by the same rings; dark's line is its cream,
+  and its drop a color that reads on the night blue, where black would not.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
@@ -182,7 +186,12 @@ Rules:
   (Plex Mono has no variable build); the latin subsets are preloaded, so text never paints in a fallback face. A
   heavier mono weight needs its own import in `src/index.css` and a place in `PRELOAD_FONTS` in `vite.config.ts`.
   A palette may set interface text in Plex Mono too (Palettes, under Tokens), a step smaller, from the same files
-  (`src/styles/mono-compact.css`), so no third face is ever loaded.
+  (`src/styles/mono-compact.css`).
+- **Bangers**, a comic letterer's caps (OFL), is the one display face, Pulp's, for a section's own page title alone
+  (`section-title`), never a title from the data. Self-hosted from `@fontsource/bangers`, its latin subset alone
+  (`src/styles/title-face.css`), and preloaded with the rest. It is drawn a fifth larger than the size asked for, so
+  its caps stand as tall as a sans title's ascenders, in the same line box; it has one weight, declared for every
+  weight so the browser never fakes a bold. No other face is loaded.
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
 - `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.

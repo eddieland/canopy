@@ -275,6 +275,28 @@ describe('inline code size', () => {
     })
 })
 
+// A section's title is lettered in a display face, with a second plate off register, on Pulp alone: the defaults
+// draw neither, so every other palette's titles stay as they were.
+describe('title lettering', () => {
+    it('sets no display face and draws no second plate by default', () => {
+        const body = rule(':root')
+        expect(body).toContain('--face-title: var(--face);')
+        expect(body).toContain('--title-tracking: -0.025em;')
+        expect(body).toContain('--title-drop-2: 0 0 transparent;')
+    })
+
+    it.each(
+        (['light', 'dark'] as const).flatMap((mode) =>
+            PALETTES[mode].slice(1).map((palette) => [`${palette} ${mode}`, palette, paletteRule(mode, palette)]),
+        ),
+    )('%s letters its titles if and only if it is Pulp', (_name, palette, selector) => {
+        const body = rule(selector)
+        expect(body.includes('--face-title:')).toBe(palette === 'pulp')
+        expect(body.includes('--title-drop-2:')).toBe(palette === 'pulp')
+        expect(body.includes('--title-tracking:')).toBe(palette === 'pulp')
+    })
+})
+
 /** The strength `--code-chip` mixes its ink at, as a fraction; a chip written another way fails rather than passes. */
 function codeChip(): number {
     const percent = /--code-chip: color-mix\(in oklab, currentColor ([\d.]+)%, transparent\);/u.exec(css)?.[1]

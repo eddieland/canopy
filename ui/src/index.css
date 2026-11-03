@@ -4,6 +4,7 @@
 @import '@fontsource/ibm-plex-mono/500.css';
 @import '@fontsource/ibm-plex-mono/600.css';
 @import './styles/mono-compact.css';
+@import './styles/title-face.css';
 @import './styles/tokens.css';
 
 /*
@@ -62,11 +63,27 @@
 
 /*
  * A page title's drop in its section's color (`--section-hue`, set on its header), as a comic's lettering casts one: a
- * palette sets how far (`--title-drop`) and makes it opaque (`--title-drop-alpha`); by default it is transparent.
+ * palette sets how far (`--title-drop`) and makes it opaque (`--title-drop-alpha`); by default it is transparent. A
+ * section's title (`section-title`) sets the two vars it falls back from.
  */
 @utility title-drop {
-    text-shadow: var(--title-drop) var(--title-drop) 0
-        color-mix(in oklab, var(--section-hue, var(--accent)) calc(var(--title-drop-alpha) * 100%), transparent);
+    text-shadow:
+        var(--title-drop-at, var(--title-drop)) var(--title-drop-at, var(--title-drop)) 0
+            color-mix(in oklab, var(--section-hue, var(--accent)) calc(var(--title-drop-alpha) * 100%), transparent),
+        var(--title-drop-plate, 0 0 transparent);
+}
+
+/*
+ * The title of a section's own page (Attention, Tickets, ...), lettered as a palette letters its display type: in its
+ * face (`--face-title`) and tracking (`--title-tracking`), its drop half again as far, and a second plate printed off
+ * register (`--title-drop-2`). By default it is the interface face, tracked tight, with no second plate. Only a
+ * section's name wears it, never a ticket's or a run's title, so a title from the data never wraps differently.
+ */
+@utility section-title {
+    font-family: var(--face-title);
+    letter-spacing: var(--title-tracking);
+    --title-drop-at: calc(var(--title-drop) * 1.5);
+    --title-drop-plate: var(--title-drop-2);
 }
 
 /*

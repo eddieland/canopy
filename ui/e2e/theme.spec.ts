@@ -264,3 +264,30 @@ test.describe('the guide under a mono palette', () => {
         })
     }
 })
+
+test.describe("Pulp's lettering", () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page)
+    })
+
+    for (const theme of ['dark', 'light'] as const) {
+        test(`${theme} pulp letters only a section's title in its own face, in the same line box`, async ({ page }) => {
+            await storeTheme(page, theme)
+            await page.goto('attention')
+            await settled(page)
+            const title = page.getByRole('heading', { level: 1, name: 'Attention' })
+            await expect(title).not.toHaveCSS('font-family', /Bangers/u)
+            const before = await title.boundingBox()
+
+            await storePalette(page, theme, 'pulp')
+            await page.reload()
+            await settled(page)
+
+            await expect(title).toHaveCSS('font-family', /^"Bangers Title"/u)
+            expect((await title.boundingBox())?.height).toBe(before?.height)
+            await page.goto('workspace/runs/39')
+            await settled(page)
+            await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-family', /^"IBM Plex Mono Compact"/u)
+        })
+    }
+})
