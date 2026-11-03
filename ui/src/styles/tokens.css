@@ -489,7 +489,7 @@
     --section-memory: oklch(0.5 0.085 195);
 
     /* As its dark side: crisp corners, every line in its mono as a letterer's caps would be, the stepped aurora,
-     * the name on a block of its yellow, and the nav's highlight a solid block. */
+     * the name on a block of the ochre Reports wears, and the nav's highlight a solid block. */
     --radius: 0.1875rem;
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
@@ -790,8 +790,8 @@
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
     --code-size: 1em;
-    /* Its aurora is a stepped bar of solid blocks; its name sits on a block of its yellow; the nav's highlight is a
-     * solid block, the active item inked in the canvas's color, with no hairline. */
+    /* Its aurora is a stepped bar of solid blocks; its name sits on a block of its process yellow; the nav's highlight
+     * is a solid block, the active item inked in the canvas's color, with no hairline. */
     --aurora-height: 0.25rem;
     --aurora-image: linear-gradient(
         90deg,
