@@ -7,6 +7,7 @@ is worked only once a label or a start says so, as any ticket is.
 
 from __future__ import annotations
 
+import json
 import sys
 from typing import TYPE_CHECKING
 
@@ -14,10 +15,11 @@ import click
 
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
-from canopy.core import conversation, initiatives
+from canopy.core import conversation, initiatives, plans
 from canopy.core.items import age
 from canopy.infra import logs
 from canopy.infra.text import one_line, printable
+from canopy.runs import initiative_runs
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -183,6 +185,28 @@ def show(ctx: Context, initiative_id: int) -> None:
         click.echo(f"  {member.ticket_key}  added {age(member.added_at)} ago via {member.added_channel}")
     if not members:
         click.echo(f"  none yet: `canopy initiative add init:{found.id} KEY` adds one")
+    _show_plan(ctx, found.id)
+
+
+def _show_plan(ctx: Context, initiative_id: int) -> None:
+    """Print the initiative's plan runs, each with how it ended, and its current plan's status and file (DESIGN §43)."""
+    runs = initiative_runs.runs_of(ctx.conn, initiative_id)
+    click.echo(f"\nPlan runs ({len(runs)} of at most {ctx.config.policy.max_plan_attempts}):")
+    for run in runs:
+        said = ""
+        if run.result_json:
+            result = json.loads(run.result_json)
+            said = one_line(str(result.get("harness") or result.get("question") or result.get("summary") or ""))
+        click.echo(f"  {run.id}  {run.status}  {age(run.started_at)} ago" + (f"  {printable(said)}" if said else ""))
+    if not runs:
+        click.echo("  none yet: the next tick starts one")
+    plan = initiatives.current_plan(ctx.conn, initiative_id)
+    if plan is None:
+        return
+    path = initiatives.plan_path(ctx.state_dir, initiative_id, plan.run_id)
+    reading = plans.read(path)
+    where = path if reading.text is not None else f"{path} ({reading.problem})"
+    click.echo(f"\nPlan: {plan.status}, written {age(plan.created_at)} ago by run {plan.run_id}\n  {where}")
 
 
 def _initiative(ref: str, verb: str) -> int:

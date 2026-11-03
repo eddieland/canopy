@@ -161,6 +161,15 @@ def test_a_rewrap_changes_nothing_and_an_edit_changes_its_id() -> None:
     assert initiative_outline.compare(before, removed).removed == {"C1"}
 
 
+def test_an_edit_inside_a_code_block_changes_the_id_it_sits_under() -> None:
+    """A code block is never structure, but it is part of its entry's text: a sketch that changes reaches its member."""
+    before = read()
+    after = read(edited("- **R9.** Nor a requirement.", "- **R9.** Nor a requirement, still."))
+    assert initiative_outline.compare(before, after) == Change(changed={"B2"})
+    assert "B9" not in after.entries
+    assert "R9" not in after.requirements
+
+
 def test_an_id_an_earlier_approval_removed_is_never_used_again() -> None:
     """A plan that holds an id retired by an earlier approval names it."""
     assert initiative_outline.reused(read(), frozenset({"R2", "C4", "B1"})) == ["B1", "R2"]

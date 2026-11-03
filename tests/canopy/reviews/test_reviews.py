@@ -43,6 +43,7 @@ from tests.canopy.helpers import (
     has_deadline,
     in_run,
     in_tick,
+    initiative_planning,
     lifelock_left,
     logged,
     messages,
@@ -462,6 +463,19 @@ def test_a_running_review_takes_worker_capacity(reviewing: CanopyEnv, scenario: 
     held = scenario.starts_review(reviews(head(git_pool)), reviewer=reviewer_reports(CLEAN))
     assert scenario.refuses(dispatches()) == [("refused:capacity", "1 of 1 workers are running")]
     assert held.finishes().status == "done"
+
+
+def test_a_running_initiative_plan_takes_worker_capacity(
+    reviewing: CanopyEnv,
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """A review waits while an initiative's plan run holds the one worker `max_workers` allows (DESIGN §43)."""
+    scenario.configures(capacity={"max_workers": 1, "max_reviews": 2})
+    initiative_planning(reviewing)
+    assert scenario.refuses(reviews(head(git_pool), f"{PR}0")) == [
+        ("refused:capacity", "1 of 1 workers, reviews, and tasks are running"),
+    ]
 
 
 def test_a_dry_run_counts_its_reviews(reviewing: CanopyEnv, scenario: Scenario) -> None:

@@ -7,7 +7,7 @@ map. Previous: [The operator's checklist](CHECKLIST.md).
 ## 43. Initiatives
 
 Being built (REQUIREMENTS R28, ROADMAP M67). Built: the initiative and its members, of no entry yet, and their bound,
-from the CLI.
+from the CLI; its plan runs, which record a plan `proposed`.
 
 §25 plans one ticket. Work that spans several has no plan of its own, so each ticket's planner settles the shared
 questions again and the operator approves them again. An **initiative** is that work as canopy's own subject: the

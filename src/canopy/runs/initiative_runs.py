@@ -105,6 +105,42 @@ def insert_run(
     return run_id
 
 
+def due(conn: sqlite3.Connection, max_attempts: int) -> list[records.Initiative]:
+    """Return the initiatives a tick starts a plan run for now, the oldest first (DESIGN §43).
+
+    One is due once after its submission, and once after each reply of the operator's newer than its latest run: each
+    run follows an operator's word, so one that failed waits for the next. None is due while a run of it runs, or once
+    it has had `max_attempts` runs, a bound never reset (D030).
+
+    Returns:
+        The initiatives, by when they were submitted.
+    """
+    never_run = sql.frag("NOT EXISTS (SELECT 1 FROM initiative_runs r WHERE r.initiative_id = initiatives.id)")
+    # Past the newest message the latest run's prompt carried: a reply no run has taken yet.
+    replied = sql.frag(
+        "EXISTS (SELECT 1 FROM messages m WHERE m.subject_kind = ? AND m.subject_id = CAST(initiatives.id AS TEXT)"
+        " AND m.source = 'operator' AND m.id > coalesce((SELECT r.message_id FROM initiative_runs r"
+        " WHERE r.initiative_id = initiatives.id ORDER BY r.id DESC LIMIT 1), 0))",
+        conversation.INITIATIVE,
+    )
+    query = (
+        records.select(records.Initiative)
+        .where(
+            "NOT EXISTS (SELECT 1 FROM initiative_runs r WHERE r.initiative_id = initiatives.id AND r.status = ?)",
+            RunStatus.RUNNING,
+        )
+        .where("(SELECT count(*) FROM initiative_runs r WHERE r.initiative_id = initiatives.id) < ?", max_attempts)
+        .where("{} OR {}", never_run, replied)
+        .order_by("id")
+    )
+    return query.all(conn)
+
+
+def runs_of(conn: sqlite3.Connection, initiative_id: int) -> list[records.InitiativeRun]:
+    """Return every plan run of initiative `initiative_id`, the oldest first."""
+    return records.select(records.InitiativeRun).where("initiative_id = ?", initiative_id).order_by("id").all(conn)
+
+
 def get_run(conn: sqlite3.Connection, run_id: int) -> records.InitiativeRun | None:
     """Return plan run `run_id`, or None if there is none."""
     return records.select(records.InitiativeRun).where("id = ?", run_id).one(conn)

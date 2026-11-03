@@ -1,6 +1,6 @@
 """Initiatives: work spanning several tickets, the operator's own subject (DESIGN §43).
 
-Each initiative, the repositories its plan reads, its member tickets, and its plan runs and their slots.
+Each initiative, the repositories its plan reads, its member tickets, its plan runs and their slots, and its plans.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import ClassVar, LiteralString
 from canopy.core.orm import Row
 
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
-from canopy.core.vocab import PoolKind, RunStatus
+from canopy.core.vocab import PlanStatus, PoolKind, RunStatus
 
 
 @dataclass(frozen=True)
@@ -112,3 +112,25 @@ class InitiativeRunSlot(Row):
     pool: PoolKind
     #: What the slot's `.git` file held when the run started; None until the run reads it, or when it was no file.
     git_link: bytes | None
+
+
+@dataclass(frozen=True)
+class InitiativePlan(Row):
+    """A plan an initiative's plan run wrote (DESIGN §43): its hashes and status, never its text, which is a file."""
+
+    TABLE: ClassVar[LiteralString] = "initiative_plans"
+
+    id: int
+    initiative_id: int
+    #: The plan run that wrote it.
+    run_id: int
+    created_at: str
+    status: PlanStatus
+    #: The file's hash and size as its planner wrote it.
+    sha256: str
+    size: int
+    #: The file's hash when the operator approved it, their edits included; None until approved.
+    approved_sha256: str | None
+    approved_at: str | None
+    #: `cli` or `web`: where the operator approved it.
+    approved_channel: str | None
