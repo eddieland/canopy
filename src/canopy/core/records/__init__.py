@@ -80,6 +80,8 @@ from canopy.core.records.epics import (
     Epic,
     EpicMember,
     EpicRepo,
+    EpicRun,
+    EpicRunSlot,
 )
 from canopy.core.records.memory import (
     Memory,
@@ -179,6 +181,8 @@ __all__ = [
     "Epic",
     "EpicMember",
     "EpicRepo",
+    "EpicRun",
+    "EpicRunSlot",
     "FeedbackPlan",
     "FeedbackPlanCheck",
     "FeedbackPlanItem",

@@ -36,10 +36,11 @@ if TYPE_CHECKING:
 Outcome = Literal["emptied", "skipped", "failed"]
 
 #: The run tables whose runs start in the wrapper as each role (DESIGN §24): a worker or plan run's agent as `worker`
-#: and its `setup_cmd` as `setup`, a task's agent as `worker`, a chore's as `chore`, and a review's as `review`. The
+#: and its `setup_cmd` as `setup`, a task's or an epic plan's agent as `worker`, a chore's as `chore`, and a
+#: review's as `review`. The
 #: overseer's runs are ticks, in no run table: `TICK_ROLES` says how its cache is held.
 ROLE_TABLES: Mapping[str, tuple[RunTable, ...]] = {
-    "worker": ("runs", "task_runs"),
+    "worker": ("runs", "task_runs", "epic_runs"),
     "setup": ("runs",),
     "chore": ("chore_runs",),
     "review": ("review_runs",),

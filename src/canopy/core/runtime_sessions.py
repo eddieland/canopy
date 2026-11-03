@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 #: How many directories `spend` lists of the sessions outside canopy, the costliest first.
 DIRECTORIES = 10
 #: The tables of this journal's agent runs, each with the session its run ran in.
-_RUN_TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs")
+_RUN_TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs", "epic_runs")
 
 
 @dataclass(frozen=True)
