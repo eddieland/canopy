@@ -4,7 +4,7 @@
 -- prompt carried, so a reply after it asks for the next plan. A plan run pushes nothing, so it has no branch or head.
 CREATE TABLE epic_runs (
     id                        INTEGER PRIMARY KEY,
-    epic_id             INTEGER NOT NULL REFERENCES epics(id),
+    epic_id                   INTEGER NOT NULL REFERENCES epics(id),
     tick_id                   INTEGER NOT NULL REFERENCES ticks(id),
     desk_path                 TEXT NOT NULL,
     pid                       INTEGER,
