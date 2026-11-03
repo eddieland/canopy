@@ -71,6 +71,9 @@ ASKING_RUN_ID_RE = re.compile(r"(?:review-)?[0-9]{1,18}")
 #: The variable that names a run's answers directory, and the file in it that holds the operator's latest answer.
 ANSWERS_ENV = "CANOPY_ANSWERS"
 ANSWER_FILE = "answer.json"
+#: The variable that names a worker's copy of the approved plan it follows, set only when it follows one: canopy's
+#: plugin names the file, and the steps the worker last reported, when it asks for an update (DESIGN §41, Staleness).
+PLAN_ENV = "CANOPY_PLAN"
 #: The run tables whose runs keep a card: a worker's and a planner's, a review's, and a one-off task's.
 type CardTable = Literal["runs", "review_runs", "task_runs"]
 #: Each card table's status of a run still running.

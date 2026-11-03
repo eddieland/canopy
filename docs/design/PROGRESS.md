@@ -57,9 +57,11 @@ canopy's plugin (§33) has a job for it: in a run whose `CANOPY_RUN_ID` names a 
 run, it counts each session's tool calls since its last `status` call, and after a number of them adds one `[canopy]`
 line to that call's result asking for an update, so the agent is asked between calls and never mid-thought. It asks
 sooner before a session's first update than after, so the operator learns early what the work is, and asks again each
-time as many calls go by unanswered, so one ask ignored does not leave the run silent. It keeps the count, whether the
-session has updated, and when it last asked, and nothing else, as the clock keeps whether it has warned. A forged line
-can only ask for an update, so it fails safe, as the clock's do (§33).
+time as many calls go by unanswered, so one ask ignored does not leave the run silent. In a worker's run that follows
+an approved plan, which `CANOPY_PLAN` names, the line also names the plan's file and the steps the session's last update
+reported working and next, so the plan is restated through a long run rather than read once. It keeps the count,
+whether the session has updated, when it last asked, and those two titles, and nothing else, as the clock keeps whether
+it has warned. A forged line can only ask for an update or restate a step, so it fails safe, as the clock's do (§33).
 
 The harness counts each time a run's progress goes stale, by the measure it is shown stale by, once from fresh to
 stale, as a tool call or the run's end finds it; `canopy cards` counts those lapses per role over the last days.
