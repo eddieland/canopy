@@ -503,6 +503,9 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
     Its runs and conversation stay in the journal for `canopy show`, and its runs still count toward the attempt limits.
     A persona override from `canopy persona` stays too, as does a model override from `canopy model`; `--clear` on
     either removes it. Close its PRs and delete its branch yourself: canopy never does.
+
+    A ticket no source ever observed, with no run, start, message, or branch, such as a key the overseer named that
+    no tracker holds, is removed whole, its decisions kept, so no tracker read asks for it again.
     """
     _operator("forget")
     subject = _ref(ref, "forget")
@@ -513,8 +516,14 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
         raise CliError(f"forget refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info(
         "ticket forgotten",
-        extra={"ticket": subject.id, "branch": forgot.branch, "prs": forgot.prs},
+        extra={"ticket": subject.id, "branch": forgot.branch, "prs": forgot.prs, "removed": forgot.removed},
     )
+    if forgot.removed:
+        click.echo(
+            f"{subject} is forgotten whole: no source ever observed it, and canopy held nothing of it but decisions, "
+            "which stay in the journal. No tracker read asks for it again.",
+        )
+        return 0
     click.echo(f"{subject} is forgotten: its next implement starts over on a new branch.")
     if forgot.branch is not None or forgot.prs:
         untracked = [*([f"branch {forgot.branch}"] if forgot.branch is not None else []), *forgot.prs]

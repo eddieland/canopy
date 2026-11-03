@@ -72,7 +72,8 @@ so no agent can lift a limit that bounds it (TRUST_MODEL T1).
 
 `canopy forget` drops a ticket's work, public or private, so it reads to the overseer as never dispatched (D086). It
 keeps every run, so attempt limits and the CI cooldown still hold (D030), and touches nothing outside the journal: the
-old PR and branch are the operator's to close.
+old PR and branch are the operator's to close. A ticket no source ever observed and the journal holds nothing of but
+decisions, a key the overseer named from nowhere, is removed whole instead, its decisions kept: nothing else clears it.
 
 ### Granting attempts
 
