@@ -16,6 +16,12 @@ export interface LeavingRows<T> {
     clearing: boolean
     /** Whether the page watched the list empty, rather than opening on it empty. */
     cleared: boolean
+    /**
+     * The id of the leaving row that may go off with a flash (a palette's starburst), if any: one at a time, and the
+     * next not until the list has rested `LEAVE_MS` since, so a burst of clears is never a strobe. None under reduced
+     * motion.
+     */
+    burst: string | undefined
 }
 
 /**
@@ -33,26 +39,35 @@ export function useLeavingRows<T extends { id: string }>(
         from: data,
         rows: withLeaving<T>([], items ?? []),
         cleared: false,
+        burst: undefined as string | undefined,
     }))
     if (listed.from !== data) {
         const rows = withLeaving(listed.rows, items ?? [])
-        setListed({ from: data, rows, cleared: listed.cleared || (items?.length === 0 && rows.length > 0) })
+        // The flash goes to the first row to leave while none is spent, and stays spent until the wait below frees it,
+        // even if its item comes back, so two flashes are always at least `LEAVE_MS` apart.
+        const burst = listed.burst ?? (still ? undefined : rows.find((row) => row.leaving)?.item.id)
+        setListed({ from: data, rows, cleared: listed.cleared || (items?.length === 0 && rows.length > 0), burst })
     }
     // Which rows are leaving, so one more leaving starts the wait again and every exit plays in full.
     const leaving = listed.rows
         .filter((row) => row.leaving)
         .map((row) => row.item.id)
         .join(' ')
+    const spent = listed.burst
     useEffect(() => {
-        if (leaving === '') {
+        if (leaving === '' && spent === undefined) {
             return
         }
-        const timer = globalThis.setTimeout(() => setListed((now) => ({ ...now, rows: settled(now.rows) })), LEAVE_MS)
+        const timer = globalThis.setTimeout(
+            () => setListed((now) => ({ ...now, rows: settled(now.rows), burst: undefined })),
+            LEAVE_MS,
+        )
         return () => globalThis.clearTimeout(timer)
-    }, [leaving])
+    }, [leaving, spent])
     return {
         rows: listed.rows,
         clearing: items?.length === 0 && listed.rows.length > 0 && !still,
         cleared: listed.cleared,
+        burst: listed.burst,
     }
 }

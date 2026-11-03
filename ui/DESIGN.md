@@ -159,7 +159,8 @@ Rules:
   (`shadow-selected`, `--lift-x`, `--lift-y`), and a field's and an outline or secondary button's line in ink
   (`border-control`, `border-control-quiet`). Each is a shadow, a transform, or a
   background, so it takes no room. Both sides ink by the same rings; dark's line is its cream, and its drop a color that
-  reads on the night blue, where black would not.
+  reads on the night blue, where black would not. Pulp shows a starburst where a cleared item drops its leaf
+  (`--burst-plate`, `--burst-leaf`), absolutely placed, so it too takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
@@ -1387,14 +1388,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`min-h-40`, only then). A transcript with no events, its log gone, its runtime naming no session, or its run yet to
   print one, is its header alone, the session and then why in a few words as its readout (`log gone`, `no session`,
   `no events yet`, `no events`), the whole reason on hover.
-  A transcript over 100 rows draws the first 100 (`TRANSCRIPT_BUDGET`, `src/lib/transcript.ts`), in order or By call,
-  since one at the server's bounds (2,000 entries) drawn whole is 80,000 elements, and every key typed in its search
-  waited on all of them; 100 keeps the page under 10,000 elements even when a search opens every call it draws. After
-  them a fold, a row on `surface-raised/50` with a ghost `xs` button in a diff's fold's words (below), `Show 60 more
-  rows` or `Show 100 of 1,900 more rows` (`more calls` By call), draws the next 100; it only adds. A search still
-  reads every entry, drawn or not, and draws the first 100 of the rows it keeps, the fold counting the rest; a new
-  search, By call turned on or off, or another session starts again at 100. The search redraws the rows in a
-  transition behind the field (`inPage`, `src/lib/in-page.ts`), which the outlet does not cross-fade (Motion, above).
+  A transcript over 1,000 rows draws the first 1,000 (`TRANSCRIPT_BUDGET`, `src/lib/transcript.ts`), in order or By
+  call, since one at the server's bounds (2,000 entries) drawn whole is 80,000 elements. The rows sit in a
+  `PanelScroll` of most of the window's height (`max(24rem,80dvh)`), under the counts, the search, and the chart, so the
+  panels after the transcript stay in reach. After them a fold, a row on `surface-raised/50` with a ghost `xs` button in
+  a diff's fold's words (below), `Show 600 more rows` (`more calls` By call), draws the next 1,000; it only adds. A
+  search still reads every entry, drawn or not, and draws the first 1,000 of the rows it keeps, the fold counting the
+  rest; a new search, By call turned on or off, or another session starts again at 1,000.
+  The search redraws the rows in a transition behind the field (`inPage`, `src/lib/in-page.ts`), so a key typed never
+  waits on them, and the outlet does not cross-fade it (Motion, above).
   All open opens the rows drawn. A row shown from the chart or `ended on` is drawn first, with every row before it.
 - **A transcript's context** (`ContextChart`, `contextShape` in `src/lib/transcript.ts`) sits between the counts and
   the rows, in either view, once a model call has its tokens. Its line, in the counts' band as their second line: a

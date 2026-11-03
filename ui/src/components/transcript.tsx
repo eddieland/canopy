@@ -19,7 +19,7 @@ import { JsonTokens } from '@/components/json-text'
 import { MarkedText } from '@/components/marked-text'
 import { MoreLines } from '@/components/more-lines'
 import { OrderToggle } from '@/components/order-toggle'
-import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { RowGrid, RowLine } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -83,7 +83,8 @@ const NO_MODELS: ReadonlyMap<number, string> = new Map()
  * did. A run more than one model served names the model on its first call's line, and on each later call's whose
  * model is not the call before's (`namedModels`), so the switch shows where it happened. In order, a search keeps the
  * rows with a line that holds it, its matches marked, and opens a tool call whose input or output holds it. A long
- * transcript draws a page of its rows, or of its calls By call, and a fold after them draws more (`TRANSCRIPT_BUDGET`).
+ * transcript draws a page of its rows, or of its calls By call, and a fold after them draws more (`TRANSCRIPT_BUDGET`),
+ * in a region that scrolls inside the panel past most of the window's height.
  * All of it is agent output, rendered as text. `running` says the session has not ended: its events reach the log as
  * the runtime prints them, so it is what the agent has done so far. Its header names the session, on every page that
  * shows one. With no events, it is its header alone, which says why in a few words (`log gone`), the whole reason on
@@ -145,7 +146,10 @@ export function TranscriptPanel({
     if (fresh) {
         setAsked({ budget, round, rows, through })
     }
-    const drawn = callView ? drawnRows(callRows, rows, 0) : drawnRows(shown.length, rows, through)
+    // The budget is read here, where a test can set its own (`TRANSCRIPT_BUDGET`).
+    const drawn = callView
+        ? drawnRows(callRows, rows, 0, TRANSCRIPT_BUDGET)
+        : drawnRows(shown.length, rows, through, TRANSCRIPT_BUDGET)
     const more = () => setAsked({ budget, round, rows: drawn + TRANSCRIPT_BUDGET.step, through })
     // A search opens a call whose input or output holds it, until All open is turned on or off under it.
     const searchOpens = (hits: { body: number } | null) => hits !== null && hits.body > 0 && opened.query !== query
@@ -257,53 +261,73 @@ export function TranscriptPanel({
                         open={chartOpen}
                         onOpenChange={(open) => setContextChartOpen(page, open)}
                     />
-                    {callView ? (
-                        <ol className="divide-y" data-testid="transcript-calls">
-                            {ordered('transcript', order, [
-                                ...calls.before.map((entry, i) => (
-                                    <Entry key={`before-${i}`} entry={entry} start={startOf(entries)} open={false} />
-                                )),
-                                ...calls.calls.map((call) => (
-                                    <CallRow
-                                        key={`${call.n}-${opened.round}`}
-                                        call={call}
-                                        model={models.get(call.n) ?? null}
-                                        step={shape.calls.find((c) => c.n === call.n)?.step ?? null}
-                                        prompt={transcript.prompt}
-                                        start={startOf(entries)}
-                                        open={opened.open}
+                    <PanelScroll
+                        label="transcript rows"
+                        // Most of the window, so a page of rows scrolls under the header, its counts, and its search.
+                        className="max-h-[max(24rem,80dvh)]"
+                        data-testid="transcript-scroll"
+                    >
+                        {callView ? (
+                            <ol className="divide-y" data-testid="transcript-calls">
+                                {ordered('transcript', order, [
+                                    ...calls.before.map((entry, i) => (
+                                        <Entry
+                                            key={`before-${i}`}
+                                            entry={entry}
+                                            start={startOf(entries)}
+                                            open={false}
+                                        />
+                                    )),
+                                    ...calls.calls.map((call) => (
+                                        <CallRow
+                                            key={`${call.n}-${opened.round}`}
+                                            call={call}
+                                            model={models.get(call.n) ?? null}
+                                            step={shape.calls.find((c) => c.n === call.n)?.step ?? null}
+                                            prompt={transcript.prompt}
+                                            start={startOf(entries)}
+                                            open={opened.open}
+                                        />
+                                    )),
+                                ]).slice(0, drawn)}
+                                {drawn < callRows && (
+                                    <Fold
+                                        label={moreLabel(callRows - drawn, 'calls', TRANSCRIPT_BUDGET)}
+                                        onShow={more}
                                     />
-                                )),
-                            ]).slice(0, drawn)}
-                            {drawn < callRows && <Fold label={moreLabel(callRows - drawn, 'calls')} onShow={more} />}
-                        </ol>
-                    ) : shown.length === 0 ? (
-                        <Empty>no line holds “{query}”</Empty>
-                    ) : (
-                        <ol className="divide-y" data-testid="transcript-entries">
-                            {shown.slice(0, drawn).map(({ entry, i, hits }) => {
-                                const targeted = target?.i === i
-                                // A row whose place changes remounts to it, as does the one the chart shows.
-                                const open = opened.open || searchOpens(hits) || targeted
-                                return (
-                                    <Entry
-                                        key={`${i}-${opened.round}-${open}-${targeted ? target.round : ''}`}
-                                        entry={entry}
-                                        start={startOf(entries)}
-                                        open={open}
-                                        words={words}
-                                        targeted={targeted}
-                                        calls={calls.calls}
-                                        models={models}
-                                        prompt={transcript.prompt}
+                                )}
+                            </ol>
+                        ) : shown.length === 0 ? (
+                            <Empty>no line holds “{query}”</Empty>
+                        ) : (
+                            <ol className="divide-y" data-testid="transcript-entries">
+                                {shown.slice(0, drawn).map(({ entry, i, hits }) => {
+                                    const targeted = target?.i === i
+                                    // A row whose place changes remounts to it, as does the one the chart shows.
+                                    const open = opened.open || searchOpens(hits) || targeted
+                                    return (
+                                        <Entry
+                                            key={`${i}-${opened.round}-${open}-${targeted ? target.round : ''}`}
+                                            entry={entry}
+                                            start={startOf(entries)}
+                                            open={open}
+                                            words={words}
+                                            targeted={targeted}
+                                            calls={calls.calls}
+                                            models={models}
+                                            prompt={transcript.prompt}
+                                        />
+                                    )
+                                })}
+                                {drawn < shown.length && (
+                                    <Fold
+                                        label={moreLabel(shown.length - drawn, 'rows', TRANSCRIPT_BUDGET)}
+                                        onShow={more}
                                     />
-                                )
-                            })}
-                            {drawn < shown.length && (
-                                <Fold label={moreLabel(shown.length - drawn, 'rows')} onShow={more} />
-                            )}
-                        </ol>
-                    )}
+                                )}
+                            </ol>
+                        )}
+                    </PanelScroll>
                 </>
             )}
         </Panel>

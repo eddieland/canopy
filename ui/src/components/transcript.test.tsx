@@ -9,6 +9,12 @@ import { TRANSCRIPT_BUDGET } from '@/lib/transcript'
 
 import { TranscriptPanel } from './transcript'
 
+// A small budget, so a transcript past a page and a fold's step draws in happy-dom in a second, not a minute.
+vi.mock(import('@/lib/transcript'), async (importOriginal) => ({
+    ...(await importOriginal()),
+    TRANSCRIPT_BUDGET: { page: 100, step: 100 },
+}))
+
 afterEach(() => {
     cleanup()
     setListOrder('transcript', 'oldest')
@@ -560,6 +566,14 @@ describe('TranscriptPanel', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Show 50 more rows' }))
         expect(rows().getByText(`said ${LONG}`)).toBeDefined()
         expect(screen.queryByRole('button', { name: /more rows/u })).toBeNull()
+    })
+
+    it('keeps its rows in a region that scrolls inside the panel, its fold at their end', () => {
+        render(<TranscriptPanel transcript={transcript({ entries: said(LONG) })} running={false} page="run" />)
+        const region = screen.getByRole('region', { name: 'transcript rows' })
+        expect(within(region).getByText(`said ${PAGE}`)).toBeDefined()
+        expect(within(region).getByRole('button', { name: `Show ${STEP} of ${STEP + 50} more rows` })).toBeDefined()
+        expect(within(region).queryByRole('searchbox')).toBeNull()
     })
 
     it('searches every entry, drawn or not, and draws what it keeps within the same budget', () => {
