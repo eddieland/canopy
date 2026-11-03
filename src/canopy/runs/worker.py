@@ -538,6 +538,7 @@ def _run_agent(
     template: str,
     desk_files: Mapping[str, str] | None = None,
     marks: commit_hooks.Marks = commit_hooks.NONE,
+    follows_plan: bool = False,
 ) -> tuple[procs.Result, str]:
     """Check the places the agent reads config from, make the run's desk if it has one, and run `template` in it.
 
@@ -546,6 +547,7 @@ def _run_agent(
     A private run's places and a plan's must also name none of the tracker server's tools (DESIGN §22, §25).
     `desk_files` are written into the desk, by name, readable only by the operator, before the agent starts.
     `marks` are what canopy's git hooks put on every commit the agent makes (`commit_hooks`).
+    `follows_plan` says the run has its copy of an approved plan where it starts, which canopy's plugin names to it.
 
     The session and cost the runtime reported are recorded on the run at once, so a git step after the agent that
     fails does not lose them (DESIGN §13).
@@ -614,6 +616,8 @@ def _run_agent(
         conversation.RUN_ID_ENV: str(run_id),
         tidy.OBJECTS_ENV: str(_objects(ctx, run)),
         cards.ANSWERS_ENV: str(_answers(ctx, run)),
+        # Its copy of the plan, which the plugin names when it asks for an update, with the steps last reported.
+        **({cards.PLAN_ENV: str((cwd / plans.COPY).absolute())} if follows_plan else {}),
     }
     # A public worker that may publish names its ticket to the store through canopy, not its own word (DESIGN §38).
     publishing = ctx.config.artifacts.publishing()
@@ -925,7 +929,17 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     # As the prompt names them: the run's model, and its planner's when it follows a plan (DESIGN §25).
     planner = plan_guards.planner_model(ctx, run["plan_id"], run["feedback_plan_id"])
     marks = commit_hooks.marks(ctx.config, key=str(run["ticket_key"]), model=run["model"], planner_model=planner)
-    result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files, marks=marks)
+    result, text = _run_agent(
+        ctx,
+        run,
+        slots,
+        out,
+        log,
+        template=template,
+        desk_files=desk_files,
+        marks=marks,
+        follows_plan=copy is not None,
+    )
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
 
     parsed = parse_result(text)
