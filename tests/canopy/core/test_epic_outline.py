@@ -1,9 +1,9 @@
-"""An initiative plan's ids and breakdown, read in the outline's shape, and what an approval changed (DESIGN §43)."""
+"""An epic plan's ids and breakdown, read in the outline's shape, and what an approval changed (DESIGN §43)."""
 
 import pytest
 
-from canopy.core import initiative_outline
-from canopy.core.initiative_outline import Change, Outline, OutlineError
+from canopy.core import epic_outline
+from canopy.core.epic_outline import Change, Outline, OutlineError
 
 PLAN = """\
 # Sessions in the new store
@@ -60,7 +60,7 @@ The store moves behind C1.
 
 
 def read(text: str = PLAN, **kwargs: frozenset[str]) -> Outline:
-    return initiative_outline.read(text, **kwargs)
+    return epic_outline.read(text, **kwargs)
 
 
 def edited(old: str, new: str, text: str = PLAN) -> str:
@@ -121,9 +121,9 @@ def test_a_plan_canopy_cannot_read_in_the_outline_s_shape_is_refused_whole(old: 
     assert said in caught.value.reason
 
 
-def test_an_entry_in_a_repository_not_the_initiative_s_is_refused() -> None:
-    """Given the initiative's repositories, an entry naming another is refused."""
-    with pytest.raises(OutlineError, match="B2 names web, which is not the initiative's repository"):
+def test_an_entry_in_a_repository_not_the_epic_s_is_refused() -> None:
+    """Given the epic's repositories, an entry naming another is refused."""
+    with pytest.raises(OutlineError, match="B2 names web, which is not the epic's repository"):
         read(repos=frozenset({"api"}))
 
 
@@ -141,7 +141,7 @@ def test_a_rewrap_changes_nothing_and_an_edit_changes_its_id() -> None:
     """Whitespace is no change; an id whose text changed, one added, and one removed are each named."""
     before = read()
     rewrapped = read(edited("from the new store,\n  never", "from the new store, never"))
-    assert initiative_outline.compare(before, rewrapped) == Change()
+    assert epic_outline.compare(before, rewrapped) == Change()
     after = read(
         edited(
             "- **R1.** Sessions survive a restart of the API.\n",
@@ -149,7 +149,7 @@ def test_a_rewrap_changes_nothing_and_an_edit_changes_its_id() -> None:
             edited("- Uses: C1\n", "- Uses: none\n", edited("Provided by B1; used by B2.", "Provided by B1.")),
         ),
     )
-    change = initiative_outline.compare(before, after)
+    change = epic_outline.compare(before, after)
     assert change == Change(added={"R3"}, changed={"R1", "C1", "B2"})
     removed = read(
         edited(
@@ -158,22 +158,22 @@ def test_a_rewrap_changes_nothing_and_an_edit_changes_its_id() -> None:
             edited("- Provides: C1\n", "- Provides: none\n", edited("- Uses: C1\n", "- Uses: none\n")),
         ),
     )
-    assert initiative_outline.compare(before, removed).removed == {"C1"}
+    assert epic_outline.compare(before, removed).removed == {"C1"}
 
 
 def test_an_edit_inside_a_code_block_changes_the_id_it_sits_under() -> None:
     """A code block is never structure, but it is part of its entry's text: a sketch that changes reaches its member."""
     before = read()
     after = read(edited("- **R9.** Nor a requirement.", "- **R9.** Nor a requirement, still."))
-    assert initiative_outline.compare(before, after) == Change(changed={"B2"})
+    assert epic_outline.compare(before, after) == Change(changed={"B2"})
     assert "B9" not in after.entries
     assert "R9" not in after.requirements
 
 
 def test_an_id_an_earlier_approval_removed_is_never_used_again() -> None:
     """A plan that holds an id retired by an earlier approval names it."""
-    assert initiative_outline.reused(read(), frozenset({"R2", "C4", "B1"})) == ["B1", "R2"]
-    assert initiative_outline.reused(read(), frozenset({"R3"})) == []
+    assert epic_outline.reused(read(), frozenset({"R2", "C4", "B1"})) == ["B1", "R2"]
+    assert epic_outline.reused(read(), frozenset({"R3"})) == []
 
 
 @pytest.mark.parametrize(
@@ -204,7 +204,7 @@ def test_a_change_reaches_a_member_whose_entries_cite_what_changed(
 ) -> None:
     """A member is reached by its entries, and a member of no entry by every change (DESIGN §43)."""
     outline = read()
-    assert initiative_outline.reaches(touched, entries, before=outline, after=outline) is reached
+    assert epic_outline.reaches(touched, entries, before=outline, after=outline) is reached
 
 
 def test_a_change_reaches_a_member_by_what_its_entry_cited_before() -> None:
@@ -212,7 +212,7 @@ def test_a_change_reaches_a_member_by_what_its_entry_cited_before() -> None:
     before = read()
     after = read(edited("- Uses: C1\n", "- Uses: none\n", edited("Provided by B1; used by B2.", "Provided by B1.")))
     change = Change(changed={"C1"})
-    assert initiative_outline.reaches(change, frozenset({"B2"}), before=before, after=after)
+    assert epic_outline.reaches(change, frozenset({"B2"}), before=before, after=after)
 
 
 @pytest.mark.parametrize(
@@ -231,4 +231,4 @@ def test_a_member_is_trivial_only_when_every_entry_it_fulfils_is(
     trivial: bool,  # noqa: FBT001  (a parametrized case)
 ) -> None:
     """A trivial member skips its own plan only when every entry it fulfils is marked trivial (DESIGN §43)."""
-    assert initiative_outline.trivial(read(), entries) is trivial
+    assert epic_outline.trivial(read(), entries) is trivial

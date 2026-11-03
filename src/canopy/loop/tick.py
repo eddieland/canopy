@@ -71,9 +71,9 @@ from canopy.runs import (
     artifact_authority,
     drafted,
     drafts,
+    epic_starts,
     feedback_plans,
     follow_ups,
-    initiative_starts,
     policy,
     reconcile,
     task_starts,
@@ -475,10 +475,10 @@ def _steps(
         chore_reconcile.run(ctx, log)
         memory_reconcile.run(ctx, log)
     if not dry_run:
-        # The operator's tasks, and initiatives' plans, start in code, before the overseer, which never sees one: it
+        # The operator's tasks, and epics' plans, start in code, before the overseer, which never sees one: it
         # plans around the slots their runs hold (DESIGN §36, §43). A dry tick starts none (D036).
         reconciled = _start_tasks(ctx, tick_id, reconciled, log)
-        reconciled = _start_initiative_plans(ctx, tick_id, reconciled, log)
+        reconciled = _start_epic_plans(ctx, tick_id, reconciled, log)
     archive_unpushed = archive.run(ctx, log, dry_run=dry_run)
     _observe(ctx, tick_id, log, dry_run=dry_run)
     _decide_in_code(ctx, tick_id, archive_unpushed, log, dry_run=dry_run)
@@ -562,19 +562,19 @@ def _start_tasks(
     return replace(reconciled, capacity=replace(reconciled.capacity, running=running))
 
 
-def _start_initiative_plans(
+def _start_epic_plans(
     ctx: Context,
     tick_id: int,
     reconciled: reconcile.Reconciled,
     log: logs.TickAdapter,
 ) -> reconcile.Reconciled:
-    """Start the plan runs initiatives are due, each taking a slot from the capacity the overseer is shown (§43).
+    """Start the plan runs epics are due, each taking a slot from the capacity the overseer is shown (§43).
 
     Returns:
         What reconcile left, less the capacity the plan runs started now hold.
     """
-    with tracing.span("initiatives") as traced:
-        started = initiative_starts.start_due(ctx, tick_id, log)
+    with tracing.span("epics") as traced:
+        started = epic_starts.start_due(ctx, tick_id, log)
         traced.set(started=len(started))
     if not started:
         return reconciled

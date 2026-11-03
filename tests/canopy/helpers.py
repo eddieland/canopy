@@ -55,7 +55,7 @@ from canopy.core.vocab import (
 )
 from canopy.infra import logs, procs, resources
 from canopy.loop import connectors, mcp, spawns
-from canopy.runs import drafted, initiative_starts
+from canopy.runs import drafted, epic_starts
 from tests.conftest import FAKES_DIR, TRACKER_CMD, TRACKER_SOURCE, CanopyEnv, Journals, git
 
 KEY = "PROJ-1"
@@ -306,15 +306,15 @@ def operator(*args: str) -> int:
         return main(list(args))
 
 
-def initiative_planning(env: CanopyEnv) -> int:
-    """Submit an initiative and start its plan run, left running, as the tick starts one: return the run's id.
+def epic_planning(env: CanopyEnv) -> int:
+    """Submit an epic and start its plan run, left running, as the tick starts one: return the run's id.
 
     The run is claimed by this process, so it reads as running, and holds a slot of `repo`, until the test ends.
     """
-    assert operator("initiative", "submit", "Move sessions to the new store.") == 0
+    assert operator("epic", "submit", "Move sessions to the new store.") == 0
     ctx = inline_context(env)
     with in_tick(ctx.conn) as tick_id:
-        [started] = initiative_starts.start_due(ctx, tick_id, logs.for_tick(tick_id))
+        [started] = epic_starts.start_due(ctx, tick_id, logs.for_tick(tick_id))
     return started.run_id
 
 

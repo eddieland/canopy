@@ -270,15 +270,15 @@ Controls:
   forced push. Under `trust.rebase` the private worker's definition still allows its one leased push, so a steered task
   worker can replace its own branch's history; the run's note then says the branch no longer holds the head it started
   from, and each earlier run's head stays in the journal.
-- An initiative (DESIGN §43, ROADMAP M67) and its members are the operator's word alone, written only through
-  `core/initiatives.py` by `canopy initiative` in the operator's shell, each refused as `inside_run` when
+- An epic (DESIGN §43, ROADMAP M67) and its members are the operator's word alone, written only through
+  `core/epics.py` by `canopy epic` in the operator's shell, each refused as `inside_run` when
   `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. Its text is the operator's. Membership authorizes no work: a member is
   worked only once a label or a start says so, as any ticket is, and a tracker's epic or parent link never makes a
-  ticket a member. The overseer never reads an initiative: the submission, or the operator's reply, authorizes its
+  ticket a member. The overseer never reads an epic: the submission, or the operator's reply, authorizes its
   plan runs, which a tick starts in code before the overseer runs. Its planner is `canopy-planner`, which reads and
-  writes only its plan, in a desk of the initiative's repositories at their bases. canopy reads the plan's ids and
-  breakdown as data (`core/initiative_outline.py`), keeps a plan only when they read in the outline's shape, and records
-  it `proposed`: no agent approves an initiative's plan.
+  writes only its plan, in a desk of the epic's repositories at their bases. canopy reads the plan's ids and
+  breakdown as data (`core/epic_outline.py`), keeps a plan only when they read in the outline's shape, and records
+  it `proposed`: no agent approves an epic's plan.
 - Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
   authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's
@@ -535,8 +535,8 @@ Controls in code, not prompts:
   task runs at once (1 by default, and the workspace file may only lower it), within `capacity.max_workers`, which
   counts task runs with workers' and reviews'; each with the worker's timeout. A task the guards hold waits for a
   later tick. Each run follows an operator's word, so a run that fails is never retried: the task stays as it ended.
-- Initiatives (DESIGN §43): at most `policy.max_initiative_tickets` members each (8 by default, and the workspace file
-  may only lower it); an addition past it is refused whole. One plan run per initiative at a time, started only by a
+- Epics (DESIGN §43): at most `policy.max_epic_tickets` members each (8 by default, and the workspace file
+  may only lower it); an addition past it is refused whole. One plan run per epic at a time, started only by a
   live tick, in code, and only after the submission or an operator's reply newer than its latest run, so a run that
   fails is never retried on its own; at most `policy.max_plan_attempts` of them, never reset; within
   `capacity.max_workers`, which counts plan runs with every other run holding a slot; each with the worker's timeout.
@@ -589,9 +589,11 @@ Controls now:
   leading `cd` into its working directory, and, under OpenCode 2, holding a session's first prompt until its MCP tools
   are registered (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is
   written, the operator's included, so no run changes it through its permissions or its sandbox, and the runtime
-  installs nothing into it. The plugin reads three variables,
-  `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, and `CANOPY_ANSWERS`, the clock, the system prompt the runtime hands it, which it
-  cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its session,
+  installs nothing into it. The plugin reads four variables,
+  `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, `CANOPY_ANSWERS`, and `CANOPY_PLAN`, the clock, the system prompt the runtime hands
+  it, which it cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its
+  session, the step titles of a `status` call in a run that follows a plan, which the nudge restates with the plan's
+  path, so its line carries only canopy's words and the worker's own,
   one file, the answer canopy writes in the run's answers directory, through the runtime's own `node:fs`, and under
   OpenCode 2 the runtime's MCP servers' states and its tools' names; it writes no file, refuses no call, grants no
   tool, and catches its own errors. The one call it changes is a shell command that opens with `cd <dir> &&`, whose
@@ -639,10 +641,13 @@ Controls now:
   and canopy starts their worker runs, setup, and reviews in the wrapper itself, by its absolute path, refusing a joint
   run whose repositories disagree. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
-  files: not `~/.ssh`, other repositories, `~/.config/canopy`, or the workspace's `.canopy/`. It writes only its
-  worktrees, its slot's own HEAD, index, reflog, and checklist marker, a per-run object directory and temp directory,
-  and the runtime's data: no ref another slot shares, and no hook, git config, `.git` link, or `commondir` that git on
-  the host later reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
+  files: not `~/.ssh`, other repositories, `~/.config/canopy`, the workspace's `.canopy/`, or the operator's OpenCode
+  data. It writes only its worktrees, its slot's own HEAD, index, reflog, and checklist marker, a per-run object
+  directory and temp directory, and its role's own cache and data directories: no ref another slot shares, no hook,
+  git config, `.git` link, or `commondir` that git on the host later reads, and none of the operator's caches or
+  OpenCode data, which the host's OpenCode, the overseer's included, acts on. Its OpenCode starts with a copy of the
+  operator's logins, and only a refreshed token of a login the operator has is copied back (DESIGN §24). A review
+  writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
   permissions stay as defense in depth.
 - The overseer has a role of its own, `overseer`, for `overseer_cmd` and the server of canopy's tools its runtime
   starts inside the same sandbox (DESIGN §24, §27). Every run the overseer asks for starts outside that sandbox,
@@ -672,7 +677,9 @@ give the snapshot its write permission back, as it could do anything else the op
 shares the kernel, so code written to escape it is not contained. `notify.cmd` and the harness's own git and treehouse
 calls run outside it. A sandboxed overseer writes the journal itself, not only through canopy's commands, so a
 steered one can write any row there, as an unsandboxed one can (T5). Every process `srt` sandboxes can write
-`/tmp/claude`, so two runs can pass files through it. A filter
+`/tmp/claude`, so two runs can pass files through it. A run can hand back, as a refresh, a token of another account
+for a login the operator has, or a bad one, so that the operator's OpenCode works as that account or fails until they
+log in again; it runs no code on the host. A filter
 driver the operator's own git config defines still runs on whatever a branch's `.gitattributes` selects, on a slot's
 return as on any checkout. A template the operator edits can allow anything; canopy checks only that it denies some
 reads and lists an allowlist.

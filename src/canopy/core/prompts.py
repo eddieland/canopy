@@ -115,7 +115,7 @@ _EXCLUDED = (
     "Whatever else holds, a plan needs review when any of it touches security, credentials, a change that could "
     "destroy or lose data, or migrations."
 )
-# What no level waives for an initiative's breakdown entry (DESIGN §43), as `_EXCLUDED` is for a plan.
+# What no level waives for an epic's breakdown entry (DESIGN §43), as `_EXCLUDED` is for a plan.
 _TRIVIAL_EXCLUDED = (
     "Whatever else holds, no entry is trivial when any of its work touches security, credentials, a change that "
     "could destroy or lose data, or migrations."
@@ -179,10 +179,10 @@ REQUIRED_REVIEWER = ("PR_URL", "SHA", "CHECKOUT")
 #: A one-off task's prompt (DESIGN §36). An override must still carry the operator's text and the branch it may push.
 TASK = "task.md"
 REQUIRED_TASK = ("TASK", "BRANCH")
-#: An initiative's plan's prompt (DESIGN §43), and the placeholders it must use: the operator's goal, the repositories
+#: An epic's plan's prompt (DESIGN §43), and the placeholders it must use: the operator's goal, the repositories
 #: it covers, and the file it writes, without which canopy finds no plan.
-INITIATIVE_PLAN = "initiative-plan.md"
-REQUIRED_INITIATIVE_PLAN = ("GOAL", "REPOSITORIES", "PLAN_OUT")
+EPIC_PLAN = "epic-plan.md"
+REQUIRED_EPIC_PLAN = ("GOAL", "REPOSITORIES", "PLAN_OUT")
 #: The reviser's prompt (DESIGN §34): a revision of a review's draft on the operator's notes. An override must still
 #: name the PR, the commit, and the checkout, and carry the draft it revises and the notes, its only instructions.
 REVISER = "reviser.md"
@@ -445,10 +445,10 @@ def plan_review(level: PlannerApproval, *, feedback: bool) -> str:
     return f"\n\n## Whether the operator reviews this plan\n\n{body}"
 
 
-def initiative_trivial(level: PlannerApproval) -> str:
-    """Return an initiative planner's `{{TRIVIAL}}`: when an entry may be marked trivial, at `planner_may_approve`.
+def epic_trivial(level: PlannerApproval) -> str:
+    """Return an epic planner's `{{TRIVIAL}}`: when an entry may be marked trivial, at `planner_may_approve`.
 
-    A member whose every entry is marked trivial skips its own plan once the operator approves the initiative's, which
+    A member whose every entry is marked trivial skips its own plan once the operator approves the epic's, which
     they read with the mark (DESIGN §43). With the key off no entry is trivial; at no level is one touching security,
     credentials, data, or migrations.
 
@@ -457,9 +457,7 @@ def initiative_trivial(level: PlannerApproval) -> str:
     """
     match level:
         case PlannerApproval.OFF:
-            return (
-                "Mark every entry `Trivial: no`: each ticket of this initiative is planned on its own before its work."
-            )
+            return "Mark every entry `Trivial: no`: each ticket of this epic is planned on its own before its work."
         case PlannerApproval.STRICT:
             bar = (
                 "only when its work is small and plain, your plan and the code settle every choice in it, and none of "
@@ -484,16 +482,16 @@ def initiative_trivial(level: PlannerApproval) -> str:
     )
 
 
-def render_initiative_plan(config: Config, values: Mapping[str, str | None]) -> str:
-    """Return an initiative planner's prompt (DESIGN §43) with every `{{NAME}}` replaced from `values`.
+def render_epic_plan(config: Config, values: Mapping[str, str | None]) -> str:
+    """Return an epic planner's prompt (DESIGN §43) with every `{{NAME}}` replaced from `values`.
 
-    It must carry `REQUIRED_INITIATIVE_PLAN`.
+    It must carry `REQUIRED_EPIC_PLAN`.
 
     Returns:
         The rendered prompt.
     """
-    trivial = initiative_trivial(config.policy.planner_may_approve)
-    return render(config, INITIATIVE_PLAN, {**values, "TRIVIAL": trivial}, required=REQUIRED_INITIATIVE_PLAN)
+    trivial = epic_trivial(config.policy.planner_may_approve)
+    return render(config, EPIC_PLAN, {**values, "TRIVIAL": trivial}, required=REQUIRED_EPIC_PLAN)
 
 
 def reasons_note(reasons: Sequence[str], *, private: bool) -> str:
