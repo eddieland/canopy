@@ -1380,9 +1380,9 @@ sliver beside four others; and its axis names short call numbers without measuri
   call, since one at the server's bounds (2,000 entries) drawn whole is 80,000 elements. The rows sit in a
   `PanelScroll` of most of the window's height (`max(24rem,80dvh)`), under the counts, the search, and the chart, so the
   panels after the transcript stay in reach. After them a fold, a row on `surface-raised/50` with a ghost `xs` button in
-  a diff's fold's words (below), `Show 60 more rows` or `Show 1,000 of 1,800 more rows` (`more calls` By call), draws
-  the next 1,000; it only adds. A search still reads every entry, drawn or not, and draws the first 1,000 of the rows it
-  keeps, the fold counting the rest; a new search, By call turned on or off, or another session starts again at 1,000.
+  a diff's fold's words (below), `Show 600 more rows` (`more calls` By call), draws the next 1,000; it only adds. A
+  search still reads every entry, drawn or not, and draws the first 1,000 of the rows it keeps, the fold counting the
+  rest; a new search, By call turned on or off, or another session starts again at 1,000.
   The search redraws the rows in a transition behind the field (`inPage`, `src/lib/in-page.ts`), so a key typed never
   waits on them, and the outlet does not cross-fade it (Motion, above).
   All open opens the rows drawn. A row shown from the chart or `ended on` is drawn first, with every row before it.

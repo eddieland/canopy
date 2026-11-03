@@ -75,7 +75,6 @@ test('a transcript as long as the server sends draws a page of rows, and a fold 
     await expect(rows).toHaveCount(PAGE_ROWS + 1)
     expect(await page.evaluate(() => document.querySelectorAll('*').length)).toBeLessThan(MAX_ELEMENTS)
 
-    // The fold says how many rows it holds back, and shows the next of them.
     // The rows scroll inside the panel, so the page under it stays in reach.
     const region = transcript.getByRole('region', { name: 'transcript rows' })
     const box = await region.boundingBox()
