@@ -278,7 +278,8 @@ Controls:
   plan runs, which a tick starts in code before the overseer runs. Its planner is `canopy-planner`, which reads and
   writes only its plan, in a desk of the epic's repositories at their bases. canopy reads the plan's ids and
   breakdown as data (`core/epic_outline.py`), keeps a plan only when they read in the outline's shape, and records
-  it `proposed`: no agent approves an epic's plan.
+  it `proposed`: no agent approves an epic's plan. Only the operator approves one, by `canopy plan epic:N
+  --approve`, replies to ask for the next, and registers members against its entries, each refused as `inside_run`.
 - Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
   authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's

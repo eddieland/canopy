@@ -132,7 +132,7 @@ def test_members_are_added_once_and_shown(capsys: pytest.CaptureFixture[str], co
     assert "Already members: PROJ-3." in out
     assert members(conn) == ["PROJ-2", "PROJ-3", "PROJ-4"]
     assert operator("show", "epic:1") == 0
-    assert "Members (3 of at most 8):\n  PROJ-2  added" in capsys.readouterr().out
+    assert "Members (3 of at most 8):\n  PROJ-2  no entry  added" in capsys.readouterr().out
     db.touch_ticket(conn, "PROJ-2", "repo")
     assert operator("show", "PROJ-2") == 0
     assert "  member of epic:1" in capsys.readouterr().out

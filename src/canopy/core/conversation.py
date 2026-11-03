@@ -137,8 +137,9 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     # Submitted with `canopy task submit`; a reply queues its next run, and stopping one ends it, and drops it while it
     # waits (DESIGN §36). A ticket's or a task's attachments are text its runs read (§22, `runs/attachments.py`).
     TASK: ("stop", "reply", "show", "attach", "detach"),
-    # Submitted with `canopy epic submit`, its members added and removed there (DESIGN §43).
-    EPIC: ("show",),
+    # Submitted with `canopy epic submit`, its members added and removed there; a reply asks for its next plan,
+    # and `plan --approve` approves its plan (DESIGN §43).
+    EPIC: ("show", "reply", "plan"),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
 _PR_WORK = (
@@ -382,14 +383,15 @@ def reply(
 ) -> Replied:
     """Record the operator's reply to a ticket canopy knows or a task, or a note to a chore in `chores` (§19, §22, §36).
 
-    A started ticket's reply is its conversation. A public ticket's is the operator's word to the loop, beside its
-    authorized repliers' comments on the ticket, and how the operator answers an untrusted reviewer's feedback (DESIGN
-    §7, D089). It answers the ticket's latest question when there is one. A task's is the operator's next instruction
-    to it, answering its waiting question, if any, and it queues the task's next run. A chore's is a note its next
-    runs read. A channel whose form draws a submission id passes it, and it is stored as `<channel>:<id>`; without one
-    the id is derived from the subject, the message it answers, and the body. Either way the same reply sent again
-    after an uncertain result records nothing new. `event` builds, from a new message's id, the event a channel tells
-    the sinks it with (§20), recorded in the same transaction.
+    An epic's asks for its next plan, which carries it (§43). A started ticket's reply is its conversation. A
+    public ticket's is the operator's word to the loop, beside its authorized repliers' comments on the ticket, and how
+    the operator answers an untrusted reviewer's feedback (DESIGN §7, D089). It answers the ticket's latest question
+    when there is one. A task's is the operator's next instruction to it, answering its waiting question, if any, and it
+    queues the task's next run. A chore's is a note its next runs read. A channel whose form draws a submission id
+    passes it, and it is stored as `<channel>:<id>`; without one the id is derived from the subject, the message it
+    answers, and the body. Either way the same reply sent again after an uncertain result records nothing new. `event`
+    builds, from a new message's id, the event a channel tells the sinks it with (§20), recorded in the same
+    transaction.
 
     Returns:
         The message's id, the question it answers, if any, and whether it was new. A repeated submission returns the
@@ -409,8 +411,9 @@ def reply(
     if ref.kind == RUN:
         # A reply on a running run answers the question it asks (`answer`), a fact of the run's, not a message.
         raise Refused("unsupported", f"a reply on {ref} answers the question it asks you, and is recorded on the run")
-    if ref.kind == TASK:
-        # A task's guards are in core, as its submission's are: a reply authorizes its next run (TRUST_MODEL T1).
+    if ref.kind in (TASK, EPIC):
+        # A task's and an epic's guards are in core, as their submissions' are: a reply authorizes the next run
+        # (TRUST_MODEL T1).
         check_operator()
     if submission is not None and not SUBMISSION_RE.fullmatch(submission):
         raise Refused("bad_submission", f"a submission id is {SUBMISSION_RE.pattern}")
@@ -538,11 +541,13 @@ def write_reply(
 
 
 def check_subject(conn: sqlite3.Connection, ref: Ref) -> None:
-    """Check that a subject can take a reply or an attachment: a ticket canopy knows, a task not stopped, or a chore.
+    """Check that a subject can take a reply or an attachment: a ticket canopy knows, a task not stopped, an epic.
+
+    A chore takes either too.
 
     Raises:
-        Refused: (`unknown`) a ticket that was neither started nor seen by a tick, or a task canopy has no record of;
-            (`stopped`) a task the operator stopped.
+        Refused: (`unknown`) a ticket that was neither started nor seen by a tick, or a task or an epic canopy has
+            no record of; (`stopped`) a task the operator stopped.
     """
     if ref.kind == TICKET:
         if db.get_start(conn, TICKET, ref.id) is None and db.get_ticket(conn, ref.id) is None:
@@ -556,6 +561,10 @@ def check_subject(conn: sqlite3.Connection, ref: Ref) -> None:
             raise Refused("unknown", f"canopy has no {ref}")
         if row[0] is not None:
             raise Refused("stopped", f"{ref} is stopped, and nothing starts it again; submit a new task instead")
+    elif ref.kind == EPIC:
+        found = sql.execute(conn, sql.select("1").from_("epics").where("id = ?", int(ref.id))).fetchone()
+        if found is None:
+            raise Refused("unknown", f"canopy has no {ref}")
 
 
 def _waiting_question(conn: sqlite3.Connection, ref: Ref) -> int | None:
