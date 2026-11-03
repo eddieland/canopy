@@ -62,6 +62,21 @@ the file and what's wrong with it, such as text before the first heading, an ite
 The list is read again for every run, so a fixed file counts from the next one, with no reload. A run already going
 keeps the list it started with, and its answers are held to that one.
 
+## The checklists page
+
+**Checklists**, under [Workspace](/workspace), shows each repository's list as the next worker run in it
+would hear it: a panel per repository in the workspace map, its file's name in the header, and each item in order with
+its id, its severity, the paths it's about (or **every path**), and its rule laid out as you wrote it. Hover the
+severity for what it means. **Answers** beside an item opens [its counts](reports#the-checklist-page) under Reports.
+
+The line above the panels says where the lists are read from, with a button to copy the path. A repository with no file
+says **no list**, and one whose file canopy can't use says why in the failure color, in the same words its runs' refusal
+uses, so you can find the broken list before a worker does.
+
+It's read only. The page reads the files when it opens, and again when you press **Read again**, so it shows what you
+just saved without a reload; to change an item, edit its file. With `paths.checklists` unset, the page says so and
+shows no panels, since no repository is asked anything.
+
 ## The held push
 
 Workers that may push hear the list: `implement` and `resume` runs, on public and private tickets alike, and a

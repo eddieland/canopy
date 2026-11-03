@@ -41,6 +41,7 @@ interface SubPage {
         | '/workspace/runs'
         | '/workspace/ticks'
         | '/workspace/worktrees'
+        | '/workspace/checklists'
         | '/pull-requests/reviews'
         | '/reports/spend'
         | '/reports/checklist'
@@ -83,8 +84,8 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
         to: '/workspace',
         icon: Activity,
         hint:
-            "What the loop does in the workspace: its runs, the overseer's ticks, and each repository's pool of " +
-            'worktrees',
+            "What the loop does in the workspace: its runs, the overseer's ticks, each repository's pool of " +
+            'worktrees, and its checklist',
         pages: [
             {
                 to: '/workspace/runs',
@@ -100,6 +101,11 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string; pages?: SubPage[] }[
                 to: '/workspace/worktrees',
                 label: 'Worktrees',
                 hint: "Each repository's pool of worktrees, and what holds them",
+            },
+            {
+                to: '/workspace/checklists',
+                label: 'Checklists',
+                hint: "Each repository's checklist, item by item, as the next worker run in it hears it",
             },
         ],
     },
@@ -141,10 +147,10 @@ const SECTION_ACTIVE_INK: Record<Section, string> = {
  * active item in the canvas's color, drop the bar, or light the active icon (`--nav-block`, `--nav-hairline`,
  * `--nav-on-ink`, `--nav-on-glow` in `tokens.css`); a ticket's page keeps Tickets active, a PR's Pull requests, a
  * chore's Chores, and a run's Runs, under Workspace.
- * While the section shown has pages under it (Workspace: Runs, Ticks, and Worktrees; Pull requests: Reviews; Reports:
- * Spend, Checklist, and Health), they open under its item, indented to its label, on a hairline in its color;
- * elsewhere they stay folded. On one of them, or a page under it, such as a tick's, the highlight is on that page's
- * item, and the section's label stays in `foreground`, untinted.
+ * While the section shown has pages under it (Workspace: Runs, Ticks, Worktrees, and Checklists; Pull requests:
+ * Reviews; Reports: Spend, Checklist, and Health), they open under its item, indented to its label, on a hairline in
+ * its color; elsewhere they stay folded. On one of them, or a page under it, such as a tick's, the highlight is on
+ * that page's item, and the section's label stays in `foreground`, untinted.
  * Attention shows how many items it lists, on every page, split by severity, Pull requests how many review results the
  * operator has not opened, and Memory how many proposals wait on the operator, while proposals are on. Hovering an item
  * says what its page holds.

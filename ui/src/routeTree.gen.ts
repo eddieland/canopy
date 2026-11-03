@@ -46,6 +46,7 @@ import { Route as TicketsKeyRouteImport } from './routes/tickets.$key'
 import { Route as TicksIndexRouteImport } from './routes/ticks.index'
 import { Route as TicksIdRouteImport } from './routes/ticks.$id'
 import { Route as WorkspaceIndexRouteImport } from './routes/workspace.index'
+import { Route as WorkspaceChecklistsRouteImport } from './routes/workspace.checklists'
 import { Route as WorkspaceWorktreesRouteImport } from './routes/workspace.worktrees'
 import { Route as PullRequestsReviewsIndexRouteImport } from './routes/pull-requests.reviews.index'
 import { Route as PullRequestsReviewsIdRouteImport } from './routes/pull-requests.reviews.$id'
@@ -246,6 +247,11 @@ const WorkspaceIndexRoute = WorkspaceIndexRouteImport.update({
   path: '/workspace/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkspaceChecklistsRoute = WorkspaceChecklistsRouteImport.update({
+  id: '/workspace/checklists',
+  path: '/workspace/checklists',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WorkspaceWorktreesRoute = WorkspaceWorktreesRouteImport.update({
   id: '/workspace/worktrees',
   path: '/workspace/worktrees',
@@ -347,6 +353,7 @@ export interface FileRoutesByFullPath {
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
+  '/workspace/checklists': typeof WorkspaceChecklistsRoute
   '/workspace/worktrees': typeof WorkspaceWorktreesRoute
   '/chores/': typeof ChoresIndexRoute
   '/guide/': typeof GuideIndexRoute
@@ -400,6 +407,7 @@ export interface FileRoutesByTo {
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
+  '/workspace/checklists': typeof WorkspaceChecklistsRoute
   '/workspace/worktrees': typeof WorkspaceWorktreesRoute
   '/chores': typeof ChoresIndexRoute
   '/guide': typeof GuideIndexRoute
@@ -454,6 +462,7 @@ export interface FileRoutesById {
   '/tasks/$id': typeof TasksIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
+  '/workspace/checklists': typeof WorkspaceChecklistsRoute
   '/workspace/worktrees': typeof WorkspaceWorktreesRoute
   '/chores/': typeof ChoresIndexRoute
   '/guide/': typeof GuideIndexRoute
@@ -509,6 +518,7 @@ export interface FileRouteTypes {
     | '/tasks/$id'
     | '/tickets/$key'
     | '/ticks/$id'
+    | '/workspace/checklists'
     | '/workspace/worktrees'
     | '/chores/'
     | '/guide/'
@@ -562,6 +572,7 @@ export interface FileRouteTypes {
     | '/tasks/$id'
     | '/tickets/$key'
     | '/ticks/$id'
+    | '/workspace/checklists'
     | '/workspace/worktrees'
     | '/chores'
     | '/guide'
@@ -615,6 +626,7 @@ export interface FileRouteTypes {
     | '/tasks/$id'
     | '/tickets/$key'
     | '/ticks/$id'
+    | '/workspace/checklists'
     | '/workspace/worktrees'
     | '/chores/'
     | '/guide/'
@@ -669,6 +681,7 @@ export interface RootRouteChildren {
   TasksIdRoute: typeof TasksIdRoute
   TicketsKeyRoute: typeof TicketsKeyRoute
   TicksIdRoute: typeof TicksIdRoute
+  WorkspaceChecklistsRoute: typeof WorkspaceChecklistsRoute
   WorkspaceWorktreesRoute: typeof WorkspaceWorktreesRoute
   ChoresIndexRoute: typeof ChoresIndexRoute
   GuideIndexRoute: typeof GuideIndexRoute
@@ -956,6 +969,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workspace/checklists': {
+      id: '/workspace/checklists'
+      path: '/workspace/checklists'
+      fullPath: '/workspace/checklists'
+      preLoaderRoute: typeof WorkspaceChecklistsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/workspace/worktrees': {
       id: '/workspace/worktrees'
       path: '/workspace/worktrees'
@@ -1085,6 +1105,7 @@ const rootRouteChildren: RootRouteChildren = {
   TasksIdRoute: TasksIdRoute,
   TicketsKeyRoute: TicketsKeyRoute,
   TicksIdRoute: TicksIdRoute,
+  WorkspaceChecklistsRoute: WorkspaceChecklistsRoute,
   WorkspaceWorktreesRoute: WorkspaceWorktreesRoute,
   ChoresIndexRoute: ChoresIndexRoute,
   GuideIndexRoute: GuideIndexRoute,
