@@ -33,7 +33,7 @@
       "~/.gitconfig",
       "~/.config/git",
       "~/.config/opencode",
-      "~/.local/share/opencode",
+      "@DATA@",
       "~/.local/state/opencode",
       "@CACHE@",
       "~/.opencode",
@@ -41,7 +41,7 @@
     ],
     "allowWrite": [
       "@TMPDIR@",
-      "~/.local/share/opencode",
+      "@DATA@",
       "~/.local/state/opencode",
       "@CACHE@"
     ],

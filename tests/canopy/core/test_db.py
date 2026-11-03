@@ -29,6 +29,15 @@ HASH = re.compile(r"-- sha256 of (\S+): ([0-9a-f]{64})\n")
 #: The tables a migration means to delete rows of, by its version: 0069 deletes the found reads, to read them again,
 #: and 0088 those of the runs more than one model served.
 DELETES: Mapping[int, AbstractSet[str]] = {69: frozenset({"run_model_reads"}), 88: frozenset({"run_model_reads"})}
+#: The tables a migration renames, by its version: each old name to its new one and its renamed columns. 0125 names
+#: initiatives epics, and their tracker epic `tracker_epic`.
+RENAMES: Mapping[int, Mapping[str, tuple[str, Mapping[str, str]]]] = {
+    125: {
+        "initiatives": ("epics", {"epic": "tracker_epic"}),
+        "initiative_repos": ("epic_repos", {"initiative_id": "epic_id"}),
+        "initiative_members": ("epic_members", {"initiative_id": "epic_id"}),
+    },
+}
 
 
 def companion(number: int) -> str:
@@ -97,9 +106,9 @@ def test_each_migration_keeps_every_row_and_value_it_finds(tmp_path: Path, journ
     """Applied one at a time to a journal with a row in every table, no migration loses a row, a column, or a value.
 
     A migration may add rows, as 0003's backfill does, and columns. One that means to drop or rewrite what it finds
-    says so in `DELETES`. Each table is seeded from the companion of the migration that creates it, so each later
-    migration runs against a journal with something in it: a rebuilt table or a new constraint fails on rows, not on an
-    empty journal.
+    says so in `DELETES`, and one that renames a table or a column in `RENAMES`. Each table is seeded from the companion
+    of the migration that creates it, so each later migration runs against a journal with something in it: a rebuilt
+    table or a new constraint fails on rows, not on an empty journal.
     """
     migrations = tmp_path / "migrations"
     migrations.mkdir()
@@ -109,8 +118,10 @@ def test_each_migration_keeps_every_row_and_value_it_finds(tmp_path: Path, journ
         (migrations / m.path.name).write_text(m.path.read_text())
         assert db.migrate(conn, migrations) == [m.version]
         after = contents(conn)
-        for table, (columns, rows) in before.items():
-            assert table in after, f"{m.path.name} dropped {table}"
+        for old_table, (old_columns, rows) in before.items():
+            table, renamed = RENAMES.get(m.version, {}).get(old_table, (old_table, {}))
+            columns = [renamed.get(c, c) for c in old_columns]
+            assert table in after, f"{m.path.name} dropped {old_table}"
             now_columns, now_rows = after[table]
             assert set(columns) <= set(now_columns), f"{m.path.name} dropped columns of {table}"
             kept = Counter(tuple(row[now_columns.index(c)] for c in columns) for row in now_rows.elements())

@@ -1,10 +1,10 @@
--- An initiative's plan runs (DESIGN §43): each started by a tick in code, before its overseer, in a desk of a slot per
--- repository the initiative names, leased as `canopy:init:<id>`. An initiative has no ticket, so its runs are not
--- `runs` rows; its slots are `initiative_run_slots` rows. `message_id` is the newest message about the initiative its
+-- An epic's plan runs (DESIGN §43): each started by a tick in code, before its overseer, in a desk of a slot per
+-- repository the epic names, leased as `canopy:epic:<id>`. An epic has no ticket, so its runs are not
+-- `runs` rows; its slots are `epic_run_slots` rows. `message_id` is the newest message about the epic its
 -- prompt carried, so a reply after it asks for the next plan. A plan run pushes nothing, so it has no branch or head.
-CREATE TABLE initiative_runs (
+CREATE TABLE epic_runs (
     id                        INTEGER PRIMARY KEY,
-    initiative_id             INTEGER NOT NULL REFERENCES initiatives(id),
+    epic_id             INTEGER NOT NULL REFERENCES epics(id),
     tick_id                   INTEGER NOT NULL REFERENCES ticks(id),
     desk_path                 TEXT NOT NULL,
     pid                       INTEGER,
@@ -32,13 +32,13 @@ CREATE TABLE initiative_runs (
     model                     TEXT,
     tool_calls                INTEGER NOT NULL DEFAULT 0
 );
-CREATE INDEX initiative_runs_of ON initiative_runs(initiative_id, id);
-CREATE INDEX initiative_runs_running ON initiative_runs(status) WHERE status = 'running';
+CREATE INDEX epic_runs_of ON epic_runs(epic_id, id);
+CREATE INDEX epic_runs_running ON epic_runs(status) WHERE status = 'running';
 
--- The slots an initiative's plan run leased, one per repository, each returned when the run ends or reconcile finds it
+-- The slots an epic's plan run leased, one per repository, each returned when the run ends or reconcile finds it
 -- dead. `git_link` is what the slot's `.git` file held when the run started, as `run_slots.git_link`.
-CREATE TABLE initiative_run_slots (
-    run_id        INTEGER NOT NULL REFERENCES initiative_runs(id),
+CREATE TABLE epic_run_slots (
+    run_id        INTEGER NOT NULL REFERENCES epic_runs(id),
     repo          TEXT NOT NULL,
     slot_path     TEXT NOT NULL,
     lease_id      TEXT NOT NULL,
@@ -50,11 +50,11 @@ CREATE TABLE initiative_run_slots (
 );
 
 -- Their models, tool calls, and replies are read as every other agent run's are (DESIGN §13). SQLite cannot change a
--- CHECK in place, so each table naming a run table is rebuilt with every row it had, `initiative_runs` added; nothing
+-- CHECK in place, so each table naming a run table is rebuilt with every row it had, `epic_runs` added; nothing
 -- references them.
 CREATE TABLE run_model_reads_0125 (
     run_table        TEXT NOT NULL CHECK (
-        run_table IN ('ticks', 'runs', 'chore_runs', 'review_runs', 'task_runs', 'initiative_runs')
+        run_table IN ('ticks', 'runs', 'chore_runs', 'review_runs', 'task_runs', 'epic_runs')
     ),
     run_id           INTEGER NOT NULL,
     status           TEXT NOT NULL CHECK (status IN ('found', 'missing', 'failed')),
@@ -72,7 +72,7 @@ ALTER TABLE run_model_reads_0125 RENAME TO run_model_reads;
 
 CREATE TABLE run_models_0125 (
     run_table  TEXT NOT NULL CHECK (
-        run_table IN ('ticks', 'runs', 'chore_runs', 'review_runs', 'task_runs', 'initiative_runs')
+        run_table IN ('ticks', 'runs', 'chore_runs', 'review_runs', 'task_runs', 'epic_runs')
     ),
     run_id     INTEGER NOT NULL,
     model      TEXT NOT NULL,
@@ -87,7 +87,7 @@ ALTER TABLE run_models_0125 RENAME TO run_models;
 
 CREATE TABLE run_tools_0125 (
     run_table     TEXT NOT NULL CHECK (
-        run_table IN ('ticks', 'runs', 'chore_runs', 'review_runs', 'task_runs', 'initiative_runs')
+        run_table IN ('ticks', 'runs', 'chore_runs', 'review_runs', 'task_runs', 'epic_runs')
     ),
     run_id        INTEGER NOT NULL,
     tool          TEXT NOT NULL,
@@ -103,7 +103,7 @@ ALTER TABLE run_tools_0125 RENAME TO run_tools;
 
 CREATE TABLE run_reply_models_0125 (
     run_table  TEXT NOT NULL CHECK (
-        run_table IN ('ticks', 'runs', 'chore_runs', 'review_runs', 'task_runs', 'initiative_runs')
+        run_table IN ('ticks', 'runs', 'chore_runs', 'review_runs', 'task_runs', 'epic_runs')
     ),
     run_id     INTEGER NOT NULL,
     message    TEXT NOT NULL,

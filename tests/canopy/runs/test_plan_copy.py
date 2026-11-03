@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import contract, db, plans, prompts
+from canopy.core import cards, contract, db, plans, prompts
 from canopy.core.vocab import RunKind, RunStatus, TickStatus
 from canopy.infra import logs, procs
 from canopy.runs import tidy
@@ -61,6 +61,8 @@ def test_an_implement_finds_the_approved_plan_ignored_and_it_is_gone_after(
     prompt = run.prompt
     assert f"`{slot / plans.COPY}` is the plan the operator approved" in prompt
     assert "```text\n# Plan for PROJ-1\n## repo\n### Tests\n```" in prompt
+    # canopy's plugin names the copy when it asks for an update (DESIGN §41, Staleness).
+    assert worker["env"][cards.PLAN_ENV] == str(slot / plans.COPY)
     # The outline, never the text.
     assert "Add the button." not in prompt
     # Gone before the slot went back, and the exclude line stays, once.
@@ -78,6 +80,7 @@ def test_without_an_approved_plan_the_prompt_has_no_plan_section(scenario: Scena
     *_, [exists, *_] = commands_run(scenario.agent_log)
     assert exists["returncode"] == 1
     assert "## The plan" not in run.prompt
+    assert cards.PLAN_ENV not in agent_runs(scenario.agent_log)[-1]["env"]
 
 
 def dispatched_then(scenario: Scenario, between: Callable[[], object], *commands: list[str]) -> Ran:

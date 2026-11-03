@@ -105,8 +105,8 @@ REVIEW = "review"
 _REASONS = ", ".join(f"`{r}`" for r in DismissalReason)
 #: A one-off task the operator submitted (DESIGN §36), `task:N`.
 TASK = "task"
-#: An initiative the operator submitted (DESIGN §43), `init:N`.
-INITIATIVE = "init"
+#: An epic the operator submitted (DESIGN §43), `epic:N`.
+EPIC = "epic"
 # The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review`, `stop`, and
 # `persona` (a review request and its persona, `reviews/review_requests.py`), and `show`; working one is PR-scoped work
 # (ROADMAP M14).
@@ -137,8 +137,8 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     # Submitted with `canopy task submit`; a reply queues its next run, and stopping one ends it, and drops it while it
     # waits (DESIGN §36). A ticket's or a task's attachments are text its runs read (§22, `runs/attachments.py`).
     TASK: ("stop", "reply", "show", "attach", "detach"),
-    # Submitted with `canopy initiative submit`, its members added and removed there (DESIGN §43).
-    INITIATIVE: ("show",),
+    # Submitted with `canopy epic submit`, its members added and removed there (DESIGN §43).
+    EPIC: ("show",),
 }
 # What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
 _PR_WORK = (
@@ -175,16 +175,16 @@ class Ref:
 
 
 def parse_ref(text: str) -> Ref:
-    """Read a reference: a ticket key, `repo#N` or a PR's URL, `chore:NAME`, `run:ID`, `review:ID`, `task:N`, `init:N`.
+    """Read a reference: a ticket key, `repo#N` or a PR's URL, `chore:NAME`, `run:ID`, `review:ID`, `task:N`, `epic:N`.
 
     Returns:
-        The subject, its kind read from the reference's shape. A run's, task's, or initiative's id is normalized to
+        The subject, its kind read from the reference's shape. A run's, task's, or epic's id is normalized to
         plain digits.
 
     Raises:
         Refused: (`bad_ref`) it is none of them.
     """
-    if text.startswith(("run:", "review:", "task:", "init:")):
+    if text.startswith(("run:", "review:", "task:", "epic:")):
         kind, run_id = text.split(":", 1)
         if run_id.isascii() and run_id.isdigit() and 0 < len(run_id) <= 18 and int(run_id) > 0:  # noqa: PLR2004
             return Ref(kind, str(int(run_id)))
@@ -203,7 +203,7 @@ def parse_ref(text: str) -> Ref:
     raise Refused(
         "bad_ref",
         f"{text[:MAX_KEY]!r} is not a reference: a ticket key, REPO#N or a PR's URL, chore:NAME, run:ID, review:ID, "
-        "task:N, or init:N",
+        "task:N, or epic:N",
     )
 
 

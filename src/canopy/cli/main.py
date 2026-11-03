@@ -63,7 +63,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "draft": ("drafts", "draft_group"),
     "_run": ("runs", "cmd_run"),
     "task": ("tasks", "task_group"),
-    "initiative": ("initiatives", "initiative_group"),
+    "epic": ("epics", "epic_group"),
     "_task": ("runs", "cmd_task"),
     "workspace": ("workspace", "workspace_group"),
     "chore": ("chores", "chore_group"),

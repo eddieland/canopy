@@ -10,15 +10,17 @@
 // (TRUST_MODEL T4). So it is plain JavaScript that imports nothing but the runtime's own `node:fs`, and that only when
 // the answer reads its file, so it loads with no network; and each job does as little as it can: it reads only what it
 // is handed for that job (the clock, CANOPY_DEADLINE and the time; the split, the system prompt; the nudge,
-// CANOPY_RUN_ID and each call's tool and session; the answer, CANOPY_RUN_ID and the one file canopy writes in the
-// directory CANOPY_ANSWERS names; the directory, a shell call's command and working directory), changes only what its
+// CANOPY_RUN_ID and each call's tool and session, and in a run that follows a plan, CANOPY_PLAN and the steps of each
+// `status` call; the answer, CANOPY_RUN_ID and the one file canopy writes in the directory CANOPY_ANSWERS names; the
+// directory, a shell call's command and working directory), changes only what its
 // hook is handed, writes no file, refuses no call, and grants no tool. Each job's hooks run in its own try, in the
 // order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the jobs after it from
 // theirs.
 //
 // Its third is the nudge (DESIGN §41): in a worker's, planner's, reviewer's, or one-off task's run, after a number of
 // tool calls with no call of canopy's `status` tool, one line on the next tool call's result asks the agent to post an
-// update of its progress.
+// update of its progress; in a worker's run that follows an approved plan, the line also names the plan's file and the
+// steps the worker last reported working and next.
 //
 // Its fourth is the answer (DESIGN §41): in a run that keeps its progress, when the operator has answered the question
 // it asks, one line on the next tool call's result tells the agent the letter and the option it names, once.
@@ -74,6 +76,11 @@ const FIRST_CALLS = 8;
 /** How many tool calls a session makes with no `status` call after its first, and after each time the nudge asked,
  * before the nudge asks again. */
 const STALE_CALLS = 20;
+/** The path of a worker's copy of its plan, as CANOPY_PLAN names it: absolute, on one line, and not too long. */
+const PLAN_PATH = /^\/[^\x00-\x1f\x7f]{0,4095}$/;
+/** The most steps a `status` call may carry, and the longest title one may have, as canopy's server holds them. */
+const MOST_STEPS = 40;
+const MOST_TITLE = 200;
 /** The file in a run's answers directory that holds the operator's latest answer, and the most of it read. */
 const ANSWER_FILE = "answer.json";
 const ANSWER_BYTES = 4096;
@@ -426,6 +433,12 @@ function split() {
 }
 
 /**
+ * The steps a session last reported working and next, by the titles it gave them, either null when it reported none.
+ *
+ * @typedef {{ working: string | null, next: string | null }} Reported
+ */
+
+/**
  * The nudge's hooks: the one that asks for an update once a session has gone a while without one.
  *
  * A worker, a planner, a reviewer, or a task's worker keeps its progress, where its work stands, for the operator
@@ -435,7 +448,14 @@ function split() {
  * hears it between calls and never mid-thought: at `FIRST_CALLS` for a session that has posted none yet, so the
  * operator hears early what the work is, and at `STALE_CALLS` after its last. An agent that goes on without one is
  * asked again each `STALE_CALLS` calls after. It keeps, per session, the count, whether it has updated, and when it
- * last asked, and nothing else; in any other run, as CANOPY_RUN_ID names it, it has no hook.
+ * last asked, and in a run that follows a plan the two steps below, and nothing else; in any other run, as
+ * CANOPY_RUN_ID names it, it has no hook.
+ *
+ * A worker that follows an approved plan is told once, in its prompt, to take its steps from it (DESIGN §25); canopy
+ * names its copy of the plan in CANOPY_PLAN. There the line also names that file, and the steps the session's last
+ * successful `status` call reported working and next, by the titles it gave them, so the plan is restated through a
+ * long run rather than read once. The line carries canopy's own words and the titles the worker itself reported, and a
+ * forged one could only restate a step, so it fails safe as the ask does.
  *
  * @returns {Hooks} The nudge's hooks.
  */
@@ -450,6 +470,10 @@ function nudge() {
     const updated = new Set();
     /** @type {Map<string | undefined, number>} */
     const askedAt = new Map();
+    const raw = process.env.CANOPY_PLAN;
+    const plan = typeof raw === "string" && PLAN_PATH.test(raw) ? raw : null;
+    /** @type {Map<string | undefined, Reported>} */
+    const reported = new Map();
     return {
         /**
          * @param {AfterInput | undefined} input
@@ -462,6 +486,9 @@ function nudge() {
                 since.delete(session);
                 askedAt.delete(session);
                 updated.add(session);
+                if (plan !== null) {
+                    reported.set(session, stepsOf(input.args));
+                }
                 return;
             }
             const calls = (since.get(session) ?? 0) + 1;
@@ -469,7 +496,7 @@ function nudge() {
             const first = !updated.has(session);
             const last = askedAt.get(session);
             const due = last === undefined ? calls >= (first ? FIRST_CALLS : STALE_CALLS) : calls - last >= STALE_CALLS;
-            if (due && tell(output, stale(calls, first))) {
+            if (due && tell(output, stale(calls, first) + planned(plan, reported.get(session)))) {
                 askedAt.set(session, calls);
             }
         },
@@ -486,6 +513,71 @@ function nudge() {
 function stale(calls, first) {
     const lapse = first ? `${calls} tool calls and no update yet` : `${calls} tool calls since your last update`;
     return `${MARK} ${lapse}: call ${STATUS_TOOL} with where your work stands now, then go on.`;
+}
+
+/**
+ * What the nudge's line adds in a run that follows a plan: the plan's file, and the steps last reported, if any; in
+ * any other run, nothing.
+ *
+ * @param {string | null} plan
+ * @param {Reported | undefined} steps
+ * @returns {string}
+ */
+function planned(plan, steps) {
+    if (plan === null) {
+        return "";
+    }
+    const said = [];
+    if (steps?.working) {
+        said.push(`step "${steps.working}" working`);
+    }
+    if (steps?.next) {
+        said.push(`step "${steps.next}" next`);
+    }
+    if (said.length === 0) {
+        return ` Your plan is \`${plan}\`: take your steps from it.`;
+    }
+    return ` Your plan is \`${plan}\`; your last update had ${said.join(" and ")}.`;
+}
+
+/**
+ * The steps a `status` call's arguments report working and next: the first step working, and the first not started
+ * after it, or the first not started when none is working. A call whose steps canopy's server would refuse, too many
+ * or a title too long, reports none, and a title is one line, as the server makes it.
+ *
+ * @param {unknown} args
+ * @returns {Reported}
+ */
+function stepsOf(args) {
+    /** @type {Reported} */
+    const none = { working: null, next: null };
+    const steps = args !== null && typeof args === "object" && "steps" in args ? args.steps : undefined;
+    if (!Array.isArray(steps) || steps.length > MOST_STEPS) {
+        return none;
+    }
+    /** @type {Array<{ title: string, status: unknown }>} */
+    const found = [];
+    for (const step of steps) {
+        const title = step !== null && typeof step === "object" ? step.title : undefined;
+        if (typeof title !== "string" || title.length > MOST_TITLE) {
+            return none;
+        }
+        found.push({ title: oneLine(title), status: step.status });
+    }
+    const at = found.findIndex((step) => step.status === "working");
+    const next = found.find((step, index) => index > at && step.status === "not_started");
+    return { working: found[at]?.title || null, next: next?.title || null };
+}
+
+/**
+ * A title as one line, as canopy's server makes each line of an update: what is not printable made a space, and the
+ * spaces collapsed.
+ *
+ * @param {string} title
+ * @returns {string}
+ */
+function oneLine(title) {
+    return title.replace(/\p{C}/gu, " ").split(/\s+/u).filter(Boolean).join(" ");
 }
 
 /**

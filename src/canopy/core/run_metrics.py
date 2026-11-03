@@ -81,7 +81,7 @@ ROLES: Mapping[RunTable, Role] = {
     "review_runs": Role.REVIEW,
     "chore_runs": Role.CHORE,
     # A planner's, as a ticket's plan run in `runs` is.
-    "initiative_runs": Role.WORKER,
+    "epic_runs": Role.WORKER,
 }
 
 

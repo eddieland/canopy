@@ -349,8 +349,8 @@ repository's: a workspace's repositories differ in language and team, so each ha
 
 ### R28. One plan shared by many tickets, each with its own plan pointing back to it
 
-Planned (M67). Written down 2026-11-02. A ticket's plan (R18) serves one ticket. Work that spans several, an epic or an
-initiative, has no plan of its own in canopy: each ticket's planner settles the shared questions again, in a fresh
+Planned (M67). Written down 2026-11-02. A ticket's plan (R18) serves one ticket. Work that spans several, an epic, has no
+plan of its own in canopy: each ticket's planner settles the shared questions again, in a fresh
 session, and the operator approves the same choice several times, or a different one each time. The operator wants one
 plan for the whole, approved once, that holds the goal, the requirements, the contracts between the tickets, and their
 order, and for each ticket a simpler plan of its own that points back to it and covers its part, so a ticket's planner
@@ -358,7 +358,8 @@ reads the shared plan rather than rediscovering it, and a change to the shared p
 reaches. The shared plan often comes first, before the tickets exist: the operator plans the whole to decide which
 tickets to file, files them as they choose, and adds each to the shared plan later. Today's nearest substitute is a
 planning task's report (R25) attached to each ticket (M63): a copy per ticket, with no single source and nothing that
-notices a copy went stale.
+notices a copy went stale. 2026-11-03: canopy calls it an epic, its own and not the tracker's, which is always a
+tracker epic.
 
 ## Nice to have
 
