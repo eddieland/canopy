@@ -2,11 +2,14 @@
 # ruff: noqa: TID251
 import sqlite3
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
 from canopy.core import db, records, sql
 from canopy.core.vocab import RunStatus, TickStatus
+from canopy.infra import tracing
+from tests.canopy.helpers import spans
 from tests.conftest import Journals
 
 
@@ -280,3 +283,25 @@ def test_a_clause_read_once_is_filled_anew_each_time() -> None:
 
     assert rendered(ticks_of(TickStatus.OK)) == ("SELECT id FROM ticks WHERE status = ? AND summary != '?'", ("ok",))
     assert rendered(ticks_of(TickStatus.RUNNING))[1] == (TickStatus.RUNNING,)
+
+
+def test_a_traced_statement_adds_to_its_span_and_a_slow_one_is_a_span_of_its_text_alone(
+    conn: sqlite3.Connection,
+    tmp_path: Path,
+) -> None:
+    tracing.configure(tmp_path, "file")
+    with tracing.span("state"):
+        sql.execute(conn, sql.select("count(*)").from_("ticks").where("status = ?", "bound-secret")).fetchone()
+        with mock.patch.object(sql, "SLOW_SECONDS", 0):
+            sql.execute(conn, sql.select("id").from_("runs").where("branch = ?", "bound-secret")).fetchall()
+    tracing.configure(tmp_path, "off")
+    slow, state = spans(tmp_path / tracing.TRACES_FILE_NAME)
+    assert state["attributes"]["canopy.journal_queries"] == "2"
+    assert float(state["attributes"]["canopy.journal_seconds"]) > 0
+    assert (slow["name"], slow["parentSpanId"]) == ("SELECT", state["spanId"])
+    assert slow["attributes"] == {
+        "db.system.name": "sqlite",
+        "db.operation.name": "SELECT",
+        "db.query.text": "SELECT id FROM runs WHERE branch = ?",
+    }
+    assert "bound-secret" not in (tmp_path / tracing.TRACES_FILE_NAME).read_text()

@@ -18,18 +18,31 @@ finished by each caller. A statement run once per row, by `execute_many`, takes 
 
 A clause's text is read for its slots once, the first time it is used, and kept: canopy writes each in its code, so
 there are a few hundred, and a query built on every call pays for its values alone.
+
+While traces are on, each statement is timed, to its first row: every span open adds up how many ran under it and how
+long they took, and one slower than `SLOW_SECONDS` is a span of its own, holding its SQL text, which is canopy's code
+alone, never a value bound to it (D132).
 """
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import re
 import sqlite3
+import time
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import Field, dataclass
 from enum import Enum
-from typing import Any, ClassVar, LiteralString, Self, override
+from typing import TYPE_CHECKING, Any, ClassVar, LiteralString, Self, override
 
+from canopy.infra import tracing
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+#: How long a statement takes, to its first row, for it to be a span of its own while traces are on.
+SLOW_SECONDS = 0.05
 #: A value sqlite3 binds to a `?`. A `StrEnum` member is a `str`, and a `bool` an `int`.
 type Value = str | int | float | bytes | None
 
@@ -227,7 +240,7 @@ def delete(table: LiteralString) -> Delete:
 
 
 def execute(conn: sqlite3.Connection, statement: Composable) -> sqlite3.Cursor:
-    """Run `statement` on `conn`.
+    """Run `statement` on `conn`, timed while traces are on (`_timed`).
 
     Returns:
         The cursor, to read its rows from.
@@ -239,7 +252,10 @@ def execute(conn: sqlite3.Connection, statement: Composable) -> sqlite3.Cursor:
     if ROW in built.params:
         msg = "a statement with a ROW in it runs once per row, through execute_many"
         raise ValueError(msg)
-    return conn.execute(built.text, built.params)
+    if not tracing.enabled():
+        return conn.execute(built.text, built.params)
+    with _timed(built.text):
+        return conn.execute(built.text, built.params)
 
 
 def execute_many(conn: sqlite3.Connection, statement: Composable, rows: Iterable[Sequence[Value]]) -> sqlite3.Cursor:
@@ -258,7 +274,32 @@ def execute_many(conn: sqlite3.Connection, statement: Composable, rows: Iterable
     if not wanted:
         msg = "a statement run for many rows needs a ROW where a value differs per row"
         raise ValueError(msg)
-    return conn.executemany(built.text, (_filled(built.params, row, wanted) for row in rows))
+    filled = (_filled(built.params, row, wanted) for row in rows)
+    if not tracing.enabled():
+        return conn.executemany(built.text, filled)
+    with _timed(built.text):
+        return conn.executemany(built.text, filled)
+
+
+@contextlib.contextmanager
+def _timed(text: str) -> Iterator[None]:
+    """Time the statement `text` the block runs: add it to the open span's totals, and, if slow, record a span of it."""
+    start = time.time_ns()
+    try:
+        yield
+    finally:
+        end = time.time_ns()
+        seconds = (end - start) / 1e9
+        tracing.tally(journal_queries=1, journal_seconds=seconds)
+        if seconds >= SLOW_SECONDS:
+            operation = text.split(None, 1)[0].upper() if text.strip() else "SQL"
+            tracing.interval(
+                operation,
+                tracing.here(),
+                start_ns=start,
+                end_ns=end,
+                standard={"db.system.name": "sqlite", "db.operation.name": operation, "db.query.text": text},
+            )
 
 
 class _Statement(Composable):

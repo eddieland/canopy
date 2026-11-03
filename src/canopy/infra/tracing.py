@@ -19,6 +19,7 @@ nothing pays nothing for it. A child process carries its parent's span in `TRACE
 from __future__ import annotations
 
 import contextlib
+import contextvars
 import os
 import threading
 from dataclasses import dataclass
@@ -40,9 +41,10 @@ type Attribute = str | int | float | bool | None
 
 #: The file spans are appended to, as OTLP JSON, a line per span, in the state directory.
 TRACES_FILE_NAME = "traces.jsonl"
-#: The semantic conventions whose attributes a span may carry by their own names: generative AI's, for model calls,
-#: HTTP's, for the web UI's requests, and process's, for the commands canopy runs.
-STANDARD_PREFIXES = ("gen_ai.", "http.", "process.")
+#: The semantic conventions whose attributes a span may carry by their own names: the database's, for slow journal
+#: queries, generative AI's, for model calls, HTTP's, for the web UI's requests, and process's, for the commands canopy
+#: runs.
+STANDARD_PREFIXES = ("db.", "gen_ai.", "http.", "process.")
 #: Where an OTLP/HTTP endpoint takes spans, under its base URL.
 TRACES_PATH = "/v1/traces"
 #: The variable a child process finds its parent's span in, as OpenTelemetry names it for an environment.
@@ -55,6 +57,14 @@ class Span:
     def __init__(self, inner: OtelSpan | None) -> None:
         """Wrap `inner`, OpenTelemetry's span, or None for one that records nothing."""
         self._inner = inner
+        #: What `tally` added up while the span was open, its own and its children's, set on it as it ends.
+        self.tallies: dict[str, float] = {}
+
+    def tally(self, **amounts: float) -> None:
+        """Add each amount to the span's total of that name, set on it as `canopy.<keyword>` as it ends."""
+        if self._inner is not None:
+            for key, amount in amounts.items():
+                self.tallies[key] = self.tallies.get(key, 0) + amount
 
     def set(self, **attributes: Attribute) -> None:
         """Set each attribute, named `canopy.<keyword>`; one that is None is left as it was."""
@@ -109,6 +119,7 @@ def span(name: str, *, new_trace: bool = False, server: bool = False, **attribut
     # A new trace still points back at the span it would have been a child of, as a detached run's does at the tick's
     # step that started it.
     was_in = get_current_span().get_span_context()
+    outer = _OPEN.get()
     with tracer.start_as_current_span(
         name,
         context=Context() if new_trace else None,
@@ -118,11 +129,35 @@ def span(name: str, *, new_trace: bool = False, server: bool = False, **attribut
         record_exception=False,
         set_status_on_exception=False,
     ) as inner:
+        traced = Span(inner)
+        opened = _OPEN.set(traced)
         try:
-            yield Span(inner)
+            yield traced
         except BaseException as e:
             inner.set_status(StatusCode.ERROR, type(e).__name__)
             raise
+        finally:
+            _OPEN.reset(opened)
+            inner.set_attributes(_named(traced.tallies))
+            # A span's totals are its parent's too, so a tick's hold what each of its steps did; a new trace's are not.
+            if outer is not None and not new_trace:
+                outer.tally(**traced.tallies)
+
+
+def enabled() -> bool:
+    """Whether this process traces: for what costs something to measure, measured only when a span would hold it.
+
+    Returns:
+        Whether `configure` turned tracing on.
+    """
+    return _tracing.tracer is not None
+
+
+def tally(**amounts: float) -> None:
+    """Add each amount to the span open now, as `Span.tally` does, and so to every span it is under in this process."""
+    traced = _OPEN.get()
+    if traced is not None:
+        traced.tally(**amounts)
 
 
 def here() -> Here | None:
@@ -275,6 +310,8 @@ class _Tracing:
 
 
 _tracing = _Tracing()
+#: The span of canopy's open now in this thread or task, for `tally`.
+_OPEN: contextvars.ContextVar[Span | None] = contextvars.ContextVar("canopy_span", default=None)
 _CONFIGURING = threading.Lock()
 _OFF = Span(None)
 
