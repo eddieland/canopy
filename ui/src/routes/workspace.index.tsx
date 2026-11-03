@@ -56,8 +56,9 @@ function WorkspacePage() {
             >
                 What the loop does in this workspace, at a glance: the worktree pools, the runs working in them now, and
                 the overseer&apos;s latest ticks, each on a page of its own under Workspace:{' '}
-                <Under to="/workspace/runs">Runs</Under>, <Under to="/workspace/ticks">Ticks</Under>, and{' '}
-                <Under to="/workspace/worktrees">Worktrees</Under>.
+                <Under to="/workspace/runs">Runs</Under>, <Under to="/workspace/ticks">Ticks</Under>,{' '}
+                <Under to="/workspace/worktrees">Worktrees</Under>, and each repository&apos;s{' '}
+                <Under to="/workspace/checklists">Checklists</Under>.
             </PageHeader>
             <PoolCounters pools={pools.data} />
             {/* The counters wait on the pools' read; one that failed says why under them, as on the worktrees page. */}
@@ -126,4 +127,4 @@ function PanelLink({ to, children }: { to: UnderWorkspace; children: ReactNode }
 }
 
 /** A page under Workspace. */
-type UnderWorkspace = '/workspace/runs' | '/workspace/ticks' | '/workspace/worktrees'
+type UnderWorkspace = '/workspace/runs' | '/workspace/ticks' | '/workspace/worktrees' | '/workspace/checklists'

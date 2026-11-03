@@ -6,7 +6,8 @@ After the n-th idle tick in a row the wait is `base * 2^n`, up to the cap and ne
 or a chore's `due_at` still ahead, a PR head's settle time, or the lapse of the operator's notice to workers, ends it
 sooner (`gate`). While the loop waits, a run that ends after the tick read the journal (`read_at`) wakes it, as the
 operator's own acts do. With the cap not above `base`, idle pacing is off: the wait is `base`, no gate shortens it,
-and only the operator's acts wake it: a message, a start or stop, a grant, or a notice set or cleared.
+and only the operator's acts wake it: a message, a start or stop, a grant, a task, a review requested, or a notice
+set or cleared.
 
 The count lives in the loop, not the journal, so a restarted loop starts at `base`.
 """
@@ -20,7 +21,7 @@ from canopy.core import chore_view, db, notice
 from canopy.core.items import subject
 from canopy.core.vocab import TickStatus
 from canopy.loop import attention
-from canopy.reviews import settle
+from canopy.reviews import review_requests, settle
 from canopy.runs import policy, tasks
 
 if TYPE_CHECKING:
@@ -171,6 +172,7 @@ def _nothing_since(ctx: Context, read_at: str, message_id: int) -> bool:
         and not db.granted_after(ctx.conn, read_at)
         and not notice.moved_after(ctx.conn, read_at)
         and not tasks.moved_after(ctx.conn, read_at)
+        and not review_requests.made_after(ctx.conn, read_at)
     )
 
 

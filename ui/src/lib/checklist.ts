@@ -1,8 +1,16 @@
 // The checklist page: how worker runs answered each repository's checklist, item by item, over a window of local days.
 // The counts are the server's (`canopy checklist`'s, `canopy.core.checklist_answers.counts`); this lays them out. And
-// one run's answers, on its page, as `canopy show run:ID` prints them.
+// one run's answers, on its page, as `canopy show run:ID` prints them; and the lists themselves, on the checklists
+// page under Workspace.
 
-import type { ChecklistAnswer, ChecklistItemCounts, ChecklistWeek, ItemAnswer } from '@/api/types'
+import type {
+    ChecklistAnswer,
+    ChecklistItem,
+    ChecklistItemCounts,
+    ChecklistList,
+    ChecklistWeek,
+    ItemAnswer,
+} from '@/api/types'
 import type { DayBar } from '@/lib/chart'
 import { counted } from '@/lib/descriptions'
 import { inRepos } from '@/lib/repo-filter'
@@ -321,4 +329,31 @@ export function answersLine(answers: readonly ChecklistAnswer[]): string {
     const where = repos.size === 1 ? [...repos] : [`${repos.size} repositories`]
     const counts = ANSWER_COLUMNS.map((c) => [c.label, answers.filter((a) => a.answer === c.label).length] as const)
     return [...where, ...counts.filter(([, n]) => n > 0).map(([label, n]) => `${n} ${label}`)].join(' · ')
+}
+
+/** What each severity an item may name means, on its chip's hover: the reminder asks every item alike. */
+export const SEVERITY_MEANING: Record<ChecklistItem['severity'], string> = {
+    blocking: 'A review that asks the list would call a failing diff broken. The reminder asks it as it asks any item',
+    major: 'A review that asks the list would weigh it as a major finding. The reminder asks it as it asks any item',
+    minor: 'The default: a minor finding in a review that asks the list. The reminder asks it as it asks any item',
+}
+
+/**
+ * What the checklists page's lists hold, its description: `2 of 3 repositories keep a list · 8 items`, then how many
+ * canopy cannot use; that none is asked when `paths.checklists` is unset.
+ */
+export function checklistsLine(list: ChecklistList): string {
+    if (list.directory === null) {
+        return 'no repository is asked: paths.checklists is not set'
+    }
+    const kept = list.repos.filter((r) => r.error === null && r.items.length > 0)
+    const items = kept.reduce((sum, r) => sum + r.items.length, 0)
+    const broken = list.repos.filter((r) => r.error !== null).length
+    const n = list.repos.length
+    const parts = [
+        `${kept.length} of ${n} ${n === 1 ? 'repository keeps' : 'repositories keep'} a list`,
+        counted(items, 'item'),
+        broken === 0 ? '' : `${broken} cannot be read`,
+    ]
+    return parts.filter((p) => p !== '').join(' · ')
 }

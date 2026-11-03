@@ -6,8 +6,12 @@ import json
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
+from unittest import mock
 
+from canopy.core import overseer_runs
+from canopy.core.vocab import TickStatus
 from canopy.infra import metrics
+from tests.canopy.helpers import KEY, in_tick, waits
 from tests.canopy.scenario_helpers import dispatches
 
 if TYPE_CHECKING:
@@ -65,3 +69,24 @@ def test_a_workspace_that_does_not_meter_writes_no_metrics(scenario: Scenario) -
     scenario.seen()
     scenario.tick(dispatches())
     assert not (scenario.env.state_dir / metrics.METRICS_FILE_NAME).exists()
+
+
+def test_a_tick_a_dead_process_left_is_counted_as_the_next_closes_it(scenario: Scenario) -> None:
+    scenario.configures("private", telemetry={"metrics": "file"})
+    with in_tick(scenario.conn) as dead:
+        overseer_runs.start(scenario.conn, dead)
+    scenario.tick(*waits(KEY))
+    metrics.configure(Path(), "off")
+    found = [(n, labels) for n, labels, _ in points(scenario.env.state_dir / metrics.METRICS_FILE_NAME)]
+    assert ("canopy.ticks", {"status": "abandoned", "dry_run": False}) in found
+    assert ("canopy.runs", {"role": "overseer", "status": "abandoned"}) in found
+
+
+def test_a_metric_that_fails_is_logged_and_never_fails_the_tick(scenario: Scenario) -> None:
+    scenario.configures("private", telemetry={"metrics": "file"})
+    scenario.seen()
+    with mock.patch.object(metrics, "gauge", autospec=True, side_effect=OSError("disk full")):
+        ticked = scenario.tick(dispatches())
+    metrics.configure(Path(), "off")
+    assert ticked.tick.status == TickStatus.OK
+    assert "a metric was not recorded" in (scenario.env.state_dir / "canopy.log").read_text()

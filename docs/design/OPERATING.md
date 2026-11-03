@@ -276,12 +276,13 @@ go to `<state_dir>/traces.jsonl`, readable by the operator alone, as OTLP JSON f
 with `traces = "otlp"`, are posted to the OTLP/HTTP endpoint the operator names: in batches, following no redirect,
 and dropped when the endpoint does not take them, so a collector that is down costs a span, never a step (D132).
 
-**Metrics.** `telemetry.metrics` does the same for metrics: how many runs of each role ended and how, how long they
-ran, what they cost, and their tokens, by model; each tick, and how long it took; and how many runs are at work. A run
-is counted where its row is closed, in whatever process closes it, a tick's reconcile for one whose process died, so
-what is counted is what the journal holds. A label is a word of one of canopy's closed vocabularies or a configured
-model, never a key or text, so series stay few. Counts and times go as deltas, which a collector adds up across
-canopy's many short processes, to `<state_dir>/metrics.jsonl` or the same endpoint (D132).
+**Metrics.** `telemetry.metrics` does the same for metrics: how many runs of each role ended and how, how long they ran,
+what they cost, and their tokens, by model; each tick, and how long it took; and how many runs are at work. A run is
+counted where its row is closed, in whatever process closes it, a tick's reconcile for one whose process died, and a
+tick whose process died is counted as the next closes it, so what is counted is what the journal holds. A metric that
+cannot be recorded is logged and lost, never failing what closed the row. A label is a word of one of canopy's closed
+vocabularies or a configured model, never a key or text, so series stay few. Counts and times go as deltas, which a
+collector adds up across canopy's many short processes, to `<state_dir>/metrics.jsonl` or the same endpoint (D132).
 
 ## 13. Agent runtime
 

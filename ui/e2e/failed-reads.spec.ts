@@ -18,6 +18,7 @@ const PAGES = [
     { page: 'reports/checklist', read: '**/api/reports/checklist*' },
     { page: 'search?q=web', read: '**/api/search*' },
     { page: 'workspace/worktrees', read: '**/api/worktrees' },
+    { page: 'workspace/checklists', read: '**/api/checklists' },
 ] as const
 
 test.beforeEach(async ({ page }) => {

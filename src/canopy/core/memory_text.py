@@ -24,6 +24,12 @@ KEY_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
 # takes in the zero-width characters, the bidi controls, and the tag characters, each a way to hide text from a person
 # that a model still reads.
 HIDDEN_CATEGORIES = frozenset({"Cc", "Cf", "Cs", "Co", "Cn", "Zl", "Zp"})
+#: The zero-width joiner, which joins emoji into one, such as 👩 and 💻 into 👩‍💻: hidden, but for an emoji's.
+_ZWJ = "\u200d"
+#: The five skin tone modifiers, which follow an emoji such as 👍 to make 👍🏽.
+_SKIN_TONES = frozenset(chr(c) for c in range(0x1F3FB, 0x1F400))
+#: The variation selector that asks for a character's emoji form, as in ❤️.
+_EMOJI_PRESENTATION = "\ufe0f"
 # Known shapes of credentials: a private key, cloud and VCS tokens, chat and model API keys, a JWT, a bearer header,
 # and a password or key assigned a value that is not a placeholder (`$VAR`, `<token>`, `{secret}`).
 _SECRET_RES = tuple(
@@ -131,10 +137,16 @@ def normalized(text: str) -> str:
 def visible(text: str) -> str:
     """Return `text` with every hidden character named, `<U+200B>`, so a person sees all a model would read.
 
+    A zero-width joiner inside an emoji sequence, such as 👩🏽‍💻, is kept: it hides no text, only joins two emoji into
+    one, and naming it breaks every such emoji in a coworker's comment. A joiner anywhere else is named.
+
     Returns:
-        `text`, each character of `HIDDEN_CATEGORIES` replaced by its code point in angle brackets.
+        `text`, each character of `HIDDEN_CATEGORIES` but an emoji's joiner replaced by its code point in angle
+        brackets.
     """
-    return "".join(f"<U+{ord(c):04X}>" if hidden_char(c) else c for c in text)
+    return "".join(
+        f"<U+{ord(c):04X}>" if hidden_char(c) and not _emoji_joiner(text, i) else c for i, c in enumerate(text)
+    )
 
 
 def quoted(text: str, prefix: str) -> str:
@@ -146,6 +158,19 @@ def quoted(text: str, prefix: str) -> str:
         Each line of `text`, split at its line feeds alone, after `prefix`, each run between tabs through `visible`.
     """
     return "\n".join(prefix + "\t".join(map(visible, line.split("\t"))) for line in text.split("\n"))
+
+
+def _emoji_joiner(text: str, i: int) -> bool:
+    """Whether `text[i]` is a zero-width joiner between two emoji.
+
+    Returns:
+        True when it comes after an emoji, its skin tone, or its emoji presentation selector, and before an emoji.
+    """
+    if text[i] != _ZWJ or i == 0 or i + 1 == len(text):
+        return False
+    before, after = text[i - 1], text[i + 1]
+    ends_emoji = unicodedata.category(before) == "So" or before == _EMOJI_PRESENTATION or before in _SKIN_TONES
+    return ends_emoji and unicodedata.category(after) == "So"
 
 
 def _random(word: str) -> bool:

@@ -22,6 +22,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/checklists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the checklists
+         * @description Each mapped repository's list, its items in order, or why canopy cannot use its file.
+         */
+        get: operations["listChecklists"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chores": {
         parameters: {
             query?: never;
@@ -2863,6 +2883,30 @@ export type components = {
             weeks: components["schemas"]["ChecklistWeek"][];
         };
         /**
+         * ChecklistItem
+         * @description One item of a repository's list, as the operator wrote it: a rule asked of a worker's diff.
+         */
+        ChecklistItem: {
+            /**
+             * Id
+             * @description The item's id, unique in its list, which a run's answer names.
+             */
+            id: string;
+            /**
+             * Paths
+             * @description The paths from the repository's root it is about, each compared as a `high_impact_paths` entry is; empty for
+             *     every path.
+             */
+            paths: string[];
+            /**
+             * Rule
+             * @description The rule in the operator's words, Markdown, with what passes and what fails.
+             */
+            rule: string;
+            /** @description Its `severity:` line's, else `minor`. */
+            severity: components["schemas"]["ChecklistSeverity"];
+        };
+        /**
          * ChecklistItemCounts
          * @description How the worker runs of a window answered one item of one repository's checklist, by answer.
          *
@@ -2919,6 +2963,24 @@ export type components = {
              * @description How many said nothing of it in their result.
              */
             unanswered: number;
+        };
+        /**
+         * ChecklistList
+         * @description Each mapped repository's checklist, as the operator's `paths.checklists` holds them now (DESIGN §42).
+         *
+         *     Read from the files when asked, as each run reads them, so an edit shows with no reload. Nothing here changes them.
+         */
+        ChecklistList: {
+            /**
+             * Directory
+             * @description `paths.checklists`: the operator's directory of lists; None when it is unset, and no repository is asked.
+             */
+            directory: string | null;
+            /**
+             * Repos
+             * @description Each repository of the workspace map, in its order, with its list or none.
+             */
+            repos: components["schemas"]["RepoChecklist"][];
         };
         /**
          * ChecklistPrevious
@@ -2983,6 +3045,11 @@ export type components = {
              */
             task_id: number | null;
         };
+        /**
+         * @description How much an item that fails weighs in a checklist review, as a review's finding does.
+         * @enum {string}
+         */
+        ChecklistSeverity: "blocking" | "major" | "minor";
         /**
          * ChecklistWeek
          * @description How the runs that started in one local ISO week of the window answered one item, by answer.
@@ -7763,6 +7830,33 @@ export type components = {
             submission: string;
         };
         /**
+         * RepoChecklist
+         * @description A mapped repository's list, as the next worker run in it would be given it, read when the page asked.
+         */
+        RepoChecklist: {
+            /**
+             * Error
+             * @description Why canopy cannot use its file, which refuses the repository's runs as `bad_prompt`; None when it can, or
+             *     there is none.
+             */
+            error: string | null;
+            /**
+             * File
+             * @description Where its list's file is, or would be: `<repo>.md` in `paths.checklists`; None when that is unset.
+             */
+            file: string | null;
+            /**
+             * Items
+             * @description Its list's items, in its order; empty when it has none, or one canopy cannot use (`error`).
+             */
+            items: components["schemas"]["ChecklistItem"][];
+            /**
+             * Repo
+             * @description The repository's name, as the workspace map has it.
+             */
+            repo: string;
+        };
+        /**
          * ReportKind
          * @description What one kind of run cost in a month.
          */
@@ -11661,8 +11755,8 @@ export type components = {
             summary: string | null;
             /**
              * Woken By
-             * @description What ended the loop's wait before it: start | timer | gate | message | starts | grant | notice | run | key |
-             *     web. None when `idle` is.
+             * @description What ended the loop's wait before it: start | timer | gate | message | starts | grant | task | request | notice |
+             *     run | poll | key | web. None when `idle` is.
              */
             woken_by: string | null;
         };
@@ -12506,6 +12600,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AttentionItem"][];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listChecklists: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChecklistList"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */
