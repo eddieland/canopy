@@ -786,7 +786,8 @@ def _live_runs(conn: sqlite3.Connection) -> list[str]:
     """Every table's running runs whose own process is alive, as the operator reads them.
 
     Returns:
-        A label for each run, workers first, then chores, then reviews, then tasks, oldest first within each.
+        A label for each run, workers first, then chores, reviews, tasks, and epics' plans, oldest first within
+        each.
     """
     return [
         _run_label(table, r)
@@ -806,6 +807,8 @@ def _run_label(table: db.RunTable, row: sqlite3.Row) -> str:
             return f"review {row['ticket_key'] or row['pr_url']}"
         case "task_runs":
             return f"task:{row['task_id']}"
+        case "epic_runs":
+            return f"epic:{row['epic_id']} plan"
         case _:
             assert_never(table)
 

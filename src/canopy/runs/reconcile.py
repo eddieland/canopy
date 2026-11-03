@@ -2,7 +2,8 @@
 
 In a workspace, every repository with a clone has its own pool, and each is read and cleaned up in turn. A joint run
 holds a slot in several pools, and all of them are returned, and its desk removed, when its process is gone
-(DESIGN §18). A one-off task's run is closed as a worker's is, and its slot returned (DESIGN §36).
+(DESIGN §18). A one-off task's run is closed as a worker's is, and its slot returned (DESIGN §36), and so is an
+epic's plan run, its slots returned and its desk removed (§43).
 
 While treehouse makes the pools, reconcile also classifies each idle treehouse slot with canopy's own pool's checks and
 logs a `pool_shadow_mismatch` line wherever the two disagree (ROADMAP M45, stage 2). The shadow changes nothing.
@@ -18,7 +19,7 @@ from typing import TYPE_CHECKING, assert_never
 from canopy.core import cards, conversation, db, dead_runs, definitions, pool, pools, workspace
 from canopy.core.vocab import PoolKind, RunStatus
 from canopy.infra import cwds, logs, procs
-from canopy.runs import desks, dispatch, task_run, tasks, tidy
+from canopy.runs import desks, dispatch, epic_runs, task_run, tasks, tidy
 
 if TYPE_CHECKING:
     import sqlite3
@@ -71,7 +72,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     if ctx.config.pools.backend is PoolKind.TREEHOUSE:
         shadow(ctx.runner, ws, log, {name: slots for name, _, slots in found})
     found += _other_pools(ctx, log)
-    returned = _close_dead_runs(ctx, log) | _close_dead_task_runs(ctx, log)
+    returned = _close_dead_runs(ctx, log) | _close_dead_task_runs(ctx, log) | _close_dead_epic_runs(ctx, log)
     running = db.running_runs(ctx.conn, "runs")
     running_slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     held = {s.lease_id for slots in running_slots.values() for s in slots}
@@ -81,16 +82,20 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     # So does a task's run (DESIGN §36).
     task_runs = tasks.running(ctx.conn)
     held |= {r.lease_id for r in task_runs}
+    # And an epic's plan run, one per repository it names (DESIGN §43).
+    plan_runs = epic_runs.running(ctx.conn)
+    held |= {s.lease_id for r in plan_runs for s in epic_runs.slots_of(ctx.conn, r.id)}
     leased: dict[str, list[pools.Slot]] = {}
     for name, pool_, slots in found:
         still = _return_stale(log, name, pool_, slots, held=held, returned=returned)
         leased.setdefault(name, []).extend(still)
-    for desk in desks.prune(ws.root, {str(r["ticket_key"]) for r in running}):
+    in_use = {str(r["ticket_key"]) for r in running} | {epic_runs.desk_key(r.epic_id) for r in plan_runs}
+    for desk in desks.prune(ws.root, in_use):
         log.warning("desk with no running run; removed", extra={"desk": str(desk)})
     if not running:
         # No run is live, so no run of an earlier canopy is still loading its snapshot.
         _prune_definitions(ctx, log)
-    busy = len(running) + len(reviews) + len(task_runs)
+    busy = len(running) + len(reviews) + len(task_runs) + len(plan_runs)
     capacity = Capacity(max_workers=ctx.config.capacity.max_workers, running=busy)
     log.info("reconciled", extra={"running": capacity.running, "available": capacity.available})
     return Reconciled(capacity, leased)
@@ -163,6 +168,20 @@ def _close_dead_task_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
         run = tasks.get_run(ctx.conn, int(row["id"]))
         if run is not None:
             returned |= task_run.end(ctx, run, RunStatus.CRASHED, "the task's process is gone", log)
+    return returned
+
+
+def _close_dead_epic_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
+    """Mark running epic plan runs whose process is gone `crashed`, and return their slots (DESIGN §43).
+
+    Returns:
+        The lease ids returned, or kept for the operator.
+    """
+    returned: set[str] = set()
+    for row in dead_runs.find(ctx.conn, "epic_runs"):
+        run = epic_runs.get_run(ctx.conn, int(row["id"]))
+        if run is not None:
+            returned |= epic_runs.end(ctx, run, RunStatus.CRASHED, "the plan run's process is gone", log)
     return returned
 
 
