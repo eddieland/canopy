@@ -264,6 +264,26 @@ class Printed:
     #: The same call as the agent made it, its tool's name and input as printed, for the harness to read a call of a
     #: tool of canopy's own from (DESIGN §41); None where `did` is.
     call: Called | None = None
+    #: When the runtime printed the line, in milliseconds since the epoch; None when it did not say.
+    at_ms: int | None = None
+    #: The line started a model call.
+    started_call: bool = False
+    #: The model call the line ended, what it took in and cost; None for any other line, or one canopy cannot read.
+    step: Call | None = None
+    #: The tool call the line ended, as its span records it; None for any other line.
+    tool: ToolEnded | None = None
+
+
+@dataclass(frozen=True)
+class ToolEnded:
+    """A tool call a running agent's line ended: which tool, whether it failed, and when it ran, for its span."""
+
+    #: The tool's name, as `Tools` rolls it up: `skill:<name>` for a skill's.
+    tool: str
+    failed: bool
+    #: When it started and ended, in milliseconds since the epoch, as the runtime printed them; None when it did not.
+    start_ms: int | None
+    end_ms: int | None
 
 
 @dataclass(frozen=True)

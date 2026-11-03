@@ -48,6 +48,7 @@ from canopy.core import (
     plan_lengths,
     plans,
     pools,
+    records,
     replies,
     review_answers,
     review_diff,
@@ -80,7 +81,6 @@ from canopy.runtime import agents, project_config, servers, stdout
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
-    from canopy.core import records
     from canopy.core.context import Context
 
 MAX_TEXT = 2000
@@ -694,7 +694,8 @@ class _Progress:
         self.run_id = run_id
         self.out = out
         self.log = log
-        self.watch = Watch(version=ctx.config.runtime.version)
+        run = records.select(records.Run).where("id = ?", run_id).one(ctx.conn)
+        self.watch = Watch(version=ctx.config.runtime.version, model=run.model if run is not None else None)
 
     def __call__(self, line: str) -> None:
         self.out.write(line)

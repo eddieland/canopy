@@ -19,7 +19,7 @@ def cmd_run(click_ctx: click.Context, run_id: int) -> int:
     leave_the_tick()
     ctx = open_context(click_ctx)
     try:
-        with tracing.span("run", run_id=run_id) as traced:
+        with tracing.span("run", new_trace=True, run_id=run_id) as traced:
             outcome = worker.execute(ctx, run_id, out=sys.stdout)
             traced.set(status=outcome.status)
     except worker.WorkerError as e:
@@ -36,7 +36,7 @@ def cmd_task(click_ctx: click.Context, run_id: int) -> int:
     leave_the_tick()
     ctx = open_context(click_ctx)
     try:
-        with tracing.span("task", task_run_id=run_id) as traced:
+        with tracing.span("task", new_trace=True, task_run_id=run_id) as traced:
             outcome = task_run.execute(ctx, run_id, out=sys.stdout)
             traced.set(status=outcome.status)
     except task_run.TaskRunError as e:
