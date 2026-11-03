@@ -79,6 +79,7 @@ from canopy.core.records.drafts import (
 from canopy.core.records.epics import (
     Epic,
     EpicMember,
+    EpicPlan,
     EpicRepo,
     EpicRun,
     EpicRunSlot,
@@ -180,6 +181,7 @@ __all__ = [
     "DraftVersion",
     "Epic",
     "EpicMember",
+    "EpicPlan",
     "EpicRepo",
     "EpicRun",
     "EpicRunSlot",

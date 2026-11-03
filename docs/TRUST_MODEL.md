@@ -274,7 +274,11 @@ Controls:
   `core/epics.py` by `canopy epic` in the operator's shell, each refused as `inside_run` when
   `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. Its text is the operator's. Membership authorizes no work: a member is
   worked only once a label or a start says so, as any ticket is, and a tracker's epic or parent link never makes a
-  ticket a member. The overseer never reads an epic.
+  ticket a member. The overseer never reads an epic: the submission, or the operator's reply, authorizes its
+  plan runs, which a tick starts in code before the overseer runs. Its planner is `canopy-planner`, which reads and
+  writes only its plan, in a desk of the epic's repositories at their bases. canopy reads the plan's ids and
+  breakdown as data (`core/epic_outline.py`), keeps a plan only when they read in the outline's shape, and records
+  it `proposed`: no agent approves an epic's plan.
 - Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
   authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's
@@ -532,7 +536,10 @@ Controls in code, not prompts:
   counts task runs with workers' and reviews'; each with the worker's timeout. A task the guards hold waits for a
   later tick. Each run follows an operator's word, so a run that fails is never retried: the task stays as it ended.
 - Epics (DESIGN §43): at most `policy.max_epic_tickets` members each (8 by default, and the workspace file
-  may only lower it); an addition past it is refused whole.
+  may only lower it); an addition past it is refused whole. One plan run per epic at a time, started only by a
+  live tick, in code, and only after the submission or an operator's reply newer than its latest run, so a run that
+  fails is never retried on its own; at most `policy.max_plan_attempts` of them, never reset; within
+  `capacity.max_workers`, which counts plan runs with every other run holding a slot; each with the worker's timeout.
 - Attachments (DESIGN §22): only UTF-8 text with no NUL, at most `policy.max_attachments` files on one ticket or task
   (5 by default), each at most `policy.max_attachment_kib` (512) and all together at most
   `policy.max_attachments_total_kib` (1024), each under a ceiling in code (20 files, 1024 and 4096 KiB), and the

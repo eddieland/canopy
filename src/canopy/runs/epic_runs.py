@@ -105,6 +105,42 @@ def insert_run(
     return run_id
 
 
+def due(conn: sqlite3.Connection, max_attempts: int) -> list[records.Epic]:
+    """Return the epics a tick starts a plan run for now, the oldest first (DESIGN §43).
+
+    One is due once after its submission, and once after each reply of the operator's newer than its latest run: each
+    run follows an operator's word, so one that failed waits for the next. None is due while a run of it runs, or once
+    it has had `max_attempts` runs, a bound never reset (D030).
+
+    Returns:
+        The epics, by when they were submitted.
+    """
+    never_run = sql.frag("NOT EXISTS (SELECT 1 FROM epic_runs r WHERE r.epic_id = epics.id)")
+    # Past the newest message the latest run's prompt carried: a reply no run has taken yet.
+    replied = sql.frag(
+        "EXISTS (SELECT 1 FROM messages m WHERE m.subject_kind = ? AND m.subject_id = CAST(epics.id AS TEXT)"
+        " AND m.source = 'operator' AND m.id > coalesce((SELECT r.message_id FROM epic_runs r"
+        " WHERE r.epic_id = epics.id ORDER BY r.id DESC LIMIT 1), 0))",
+        conversation.EPIC,
+    )
+    query = (
+        records.select(records.Epic)
+        .where(
+            "NOT EXISTS (SELECT 1 FROM epic_runs r WHERE r.epic_id = epics.id AND r.status = ?)",
+            RunStatus.RUNNING,
+        )
+        .where("(SELECT count(*) FROM epic_runs r WHERE r.epic_id = epics.id) < ?", max_attempts)
+        .where("{} OR {}", never_run, replied)
+        .order_by("id")
+    )
+    return query.all(conn)
+
+
+def runs_of(conn: sqlite3.Connection, epic_id: int) -> list[records.EpicRun]:
+    """Return every plan run of epic `epic_id`, the oldest first."""
+    return records.select(records.EpicRun).where("epic_id = ?", epic_id).order_by("id").all(conn)
+
+
 def get_run(conn: sqlite3.Connection, run_id: int) -> records.EpicRun | None:
     """Return plan run `run_id`, or None if there is none."""
     return records.select(records.EpicRun).where("id = ?", run_id).one(conn)
