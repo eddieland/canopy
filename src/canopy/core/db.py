@@ -1787,6 +1787,38 @@ def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: s
     )
 
 
+def holds_nothing_of(conn: sqlite3.Connection, key: str) -> bool:
+    """Return whether the journal holds nothing of ticket `key` but its row, its decisions, and empty forgets.
+
+    No source observed it, and it has no run, unit, branch, start, message, plan setting, or forget that dropped a
+    branch or PR: a key the overseer named from nowhere before its tools refused one (DESIGN §22). A forget from before
+    forgets were recorded dropped what is unknown, so it counts as one that dropped something.
+    """
+    held = sql.union(
+        sql.select("1").from_("observed_tickets").where("key = ?", key),
+        sql.select("1").from_("runs").where("ticket_key = ?", key),
+        sql.select("1").from_("ticket_units").where("ticket_key = ?", key),
+        sql.select("1").from_("starts").where("subject_kind = ? AND subject_id = ?", SUBJECT_TICKET, key),
+        sql.select("1").from_("messages").where("subject_kind = ? AND subject_id = ?", SUBJECT_TICKET, key),
+        sql.select("1")
+        .from_("forgets")
+        .where("ticket_key = ? AND (branch IS NOT NULL OR prs IS NULL OR prs != '[]')", key),
+        sql.select("1").from_("tickets").where("key = ? AND (branch IS NOT NULL OR plan_setting IS NOT NULL)", key),
+        every=True,
+    )
+    return sql.execute(conn, sql.select("NOT EXISTS ({})", held)).fetchone()[0] == 1
+
+
+def remove_ticket(conn: sqlite3.Connection, key: str) -> None:
+    """Delete ticket `key`'s row and its forgets, keeping its decisions, which name it by key alone (DESIGN §22).
+
+    Call inside a transaction, on a ticket `holds_nothing_of`. Any other row that references the ticket fails the
+    delete with `sqlite3.IntegrityError`, and the transaction rolls back.
+    """
+    records.delete(records.Forget).where("ticket_key = ?", key).run(conn)
+    records.delete(records.Ticket).where("key = ?", key).run(conn)
+
+
 def forgets_of(conn: sqlite3.Connection, key: str) -> list[records.Forget]:
     """Return each time the operator forgot ticket `key`'s work, oldest first; the last is the one its row holds."""
     return records.select(records.Forget).where("ticket_key = ?", key).order_by("id").all(conn)
