@@ -40,8 +40,9 @@ type Attribute = str | int | float | bool | None
 
 #: The file spans are appended to, as OTLP JSON, a line per span, in the state directory.
 TRACES_FILE_NAME = "traces.jsonl"
-#: The semantic conventions whose attributes a span may carry by their own names: generative AI's, for model calls.
-STANDARD_PREFIXES = ("gen_ai.",)
+#: The semantic conventions whose attributes a span may carry by their own names: generative AI's, for model calls, and
+#: HTTP's, for the web UI's requests.
+STANDARD_PREFIXES = ("gen_ai.", "http.")
 #: Where an OTLP/HTTP endpoint takes spans, under its base URL.
 TRACES_PATH = "/v1/traces"
 #: The variable a child process finds its parent's span in, as OpenTelemetry names it for an environment.
@@ -60,13 +61,35 @@ class Span:
         if self._inner is not None:
             self._inner.set_attributes(_named(attributes))
 
+    def set_standard(self, attributes: Mapping[str, Attribute]) -> None:
+        """Set each attribute a semantic convention names, by its own name; one that is None is left as it was.
+
+        Raises:
+            ValueError: An attribute is of no convention canopy records (`STANDARD_PREFIXES`).
+        """
+        if self._inner is not None:
+            self._inner.set_attributes(_standard(attributes))
+
+    def fail(self, why: str) -> None:
+        """Mark the span failed, though its block raised nothing; `why` is canopy's word, never text it read."""
+        if self._inner is not None:
+            from opentelemetry.trace import StatusCode  # noqa: PLC0415  (imported only once tracing is on)
+
+            self._inner.set_status(StatusCode.ERROR, why)
+
+    def rename(self, name: str) -> None:
+        """Rename the span, once its block knows a better name, as a request's span does once it is routed."""
+        if self._inner is not None:
+            self._inner.update_name(name)
+
 
 @contextlib.contextmanager
-def span(name: str, *, new_trace: bool = False, **attributes: Attribute) -> Iterator[Span]:
+def span(name: str, *, new_trace: bool = False, server: bool = False, **attributes: Attribute) -> Iterator[Span]:
     """Trace the `with` block as a span called `name`, a child of the span it runs in, if any.
 
     With `new_trace`, it starts a trace of its own instead, whatever span it runs in, as each tick does: a `canopy
     loop` started from a shell with a `TRACEPARENT` set would otherwise put every tick it ever runs in that one trace.
+    With `server`, it is a server's span, as the web UI's server records each request it answers.
 
     Yields:
         The span, to set what the block learns. It records nothing while tracing is off.
@@ -78,6 +101,7 @@ def span(name: str, *, new_trace: bool = False, **attributes: Attribute) -> Iter
     from opentelemetry.context import Context  # noqa: PLC0415  (imported only once tracing is on)
     from opentelemetry.trace import (  # noqa: PLC0415
         Link,
+        SpanKind,
         StatusCode,
         get_current_span,
     )
@@ -89,6 +113,7 @@ def span(name: str, *, new_trace: bool = False, **attributes: Attribute) -> Iter
         name,
         context=Context() if new_trace else None,
         links=[Link(was_in)] if new_trace and was_in.is_valid else None,
+        kind=SpanKind.SERVER if server else SpanKind.INTERNAL,
         attributes=_named(attributes),
         record_exception=False,
         set_status_on_exception=False,
@@ -136,11 +161,7 @@ def interval(
         return
     from opentelemetry.trace import StatusCode  # noqa: PLC0415
 
-    unknown = [key for key in standard or {} if not key.startswith(STANDARD_PREFIXES)]
-    if unknown:
-        msg = f"not an attribute of a convention canopy records: {', '.join(unknown)}"
-        raise ValueError(msg)
-    named = {**_named(attributes), **{k: v for k, v in (standard or {}).items() if v is not None}}
+    named = {**_named(attributes), **_standard(standard or {})}
     inner = tracer.start_span(name, context=under.context, start_time=start_ns, attributes=named)  # pyrefly: ignore[bad-argument-type]
     if failed:
         inner.set_status(StatusCode.ERROR)
@@ -256,6 +277,22 @@ class _Tracing:
 _tracing = _Tracing()
 _CONFIGURING = threading.Lock()
 _OFF = Span(None)
+
+
+def _standard(attributes: Mapping[str, Attribute]) -> dict[str, str | int | float | bool]:
+    """`attributes`, by the names their convention gives them, less any that is None.
+
+    Returns:
+        The attributes, as OpenTelemetry takes them.
+
+    Raises:
+        ValueError: An attribute is of no convention canopy records (`STANDARD_PREFIXES`).
+    """
+    unknown = [key for key in attributes if not key.startswith(STANDARD_PREFIXES)]
+    if unknown:
+        msg = f"not an attribute of a convention canopy records: {', '.join(unknown)}"
+        raise ValueError(msg)
+    return {key: value for key, value in attributes.items() if value is not None}
 
 
 def _named(attributes: Mapping[str, Attribute]) -> dict[str, str | int | float | bool]:

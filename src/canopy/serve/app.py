@@ -19,6 +19,7 @@ from canopy.serve.audit import Audit
 from canopy.serve.guard import Guard
 from canopy.serve.spa import SinglePageApp
 from canopy.serve.sse import QuietLeaving
+from canopy.serve.traced import Traced
 
 if TYPE_CHECKING:
     from canopy.serve.auth import Sessions
@@ -79,4 +80,6 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
     # Inside the guard: what it refuses is never recorded.
     app.add_middleware(Audit, backend=backend)
     app.add_middleware(Guard, api_prefix=f"{base}/api", hosts=options.hosts)
+    # Outermost, so a request's span holds all of its answer, what the guard refused included.
+    app.add_middleware(Traced, api_prefix=f"{base}/api")
     return app
