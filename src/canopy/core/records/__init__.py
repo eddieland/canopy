@@ -79,6 +79,7 @@ from canopy.core.records.drafts import (
 from canopy.core.records.initiatives import (
     Initiative,
     InitiativeMember,
+    InitiativeMemberEntry,
     InitiativePlan,
     InitiativeRepo,
     InitiativeRun,
@@ -192,6 +193,7 @@ __all__ = [
     "GcPass",
     "Initiative",
     "InitiativeMember",
+    "InitiativeMemberEntry",
     "InitiativePlan",
     "InitiativeRepo",
     "InitiativeRun",

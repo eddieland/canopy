@@ -439,6 +439,8 @@ def cmd_reply(click_ctx: click.Context, ref: str, text: str | None) -> int:
         click.echo(f"Message {replied.message_id} on {subject} already says this{answered}; nothing new recorded.")
     if subject.kind == conversation.TASK:
         tasks_cli.replied(ctx, int(subject.id))
+    if subject.kind == conversation.INITIATIVE:
+        initiatives_cli.replied(ctx, int(subject.id))
     return 0
 
 

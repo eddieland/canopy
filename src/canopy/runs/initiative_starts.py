@@ -156,8 +156,11 @@ def _spawn(ctx: Context, initiative: records.Initiative, run_id: int, names: Seq
         # None leaves the section out: an initiative may be planned before any ticket of it exists.
         "MEMBERS": "\n".join(f"- {key}" for key in members) or None,
         "MAP": dispatch.map_note(ctx),
-        # The operator's replies come with replies to an initiative (DESIGN §43); none reaches a run yet.
-        "OPERATOR_MESSAGES": None,
+        # The operator's replies, each an instruction, the oldest first: what the next plan changes (DESIGN §43).
+        "OPERATOR_MESSAGES": "\n\n".join(
+            f"Message {m.id}, {m.at}:\n\n{m.body}" for m in initiatives.messages_of(ctx.conn, initiative.id)
+        )
+        or None,
         "PLAN_OUT": plans.WRITTEN,
         "PLAN_FILE": plans.REPLACED,
         "MAX_PLAN_CHARS": str(plans.MAX_CHARS),

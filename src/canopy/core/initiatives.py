@@ -15,12 +15,13 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, plans, records
+from canopy.core import conversation, db, initiative_outline, plans, records
 from canopy.core.conversation import Refused
-from canopy.core.vocab import PlanStatus
+from canopy.core.vocab import PlanStatus, RunStatus
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+    from collections.abc import Set as AbstractSet
     from pathlib import Path
 
     from canopy.core.workspace import Workspace
@@ -30,6 +31,9 @@ MAX_TEXT = conversation.MAX_OPERATOR
 #: A tracker project's key, or an epic's, as a ticket key spells it (DESIGN §18).
 KEY_RE = conversation.KEY_RE
 MAX_KEY = conversation.MAX_KEY
+#: The copy of an approved plan's text, kept beside its file when the operator approves it: what the next approval is
+#: compared with, whatever later becomes of the file.
+APPROVED_SUFFIX = ".approved.md"
 #: Where an initiative's plans are kept, `<state_dir>/initiatives/<id>/<run_id>.md`, readable only by the operator, as a
 #: ticket's plans are (DESIGN §25, §43).
 PLANS_DIR = "initiatives"
@@ -41,6 +45,17 @@ class Added:
 
     added: Sequence[str]
     already: Sequence[str]
+    #: The entries each key was registered against, when the call named some; None when it left them as they were.
+    entries: AbstractSet[str] | None = None
+
+
+@dataclass(frozen=True)
+class Approved:
+    """What an approval did: the plan approved, and what it changed from the one approved before it, if any."""
+
+    plan: records.InitiativePlan
+    #: None for the initiative's first approved plan.
+    change: initiative_outline.Change | None
 
 
 def submit(
@@ -134,11 +149,16 @@ def add(
     *,
     bound: int,
     channel: str,
+    entries: Iterable[str] | None = None,
+    state_dir: Path | None = None,
 ) -> Added:
     """Make tickets `keys` members of initiative `initiative_id`, the operator's word alone (DESIGN §43).
 
     Every key is added or none is: a refusal leaves the members as they were. A key already a member of this initiative
-    is left as it is. `bound` is `policy.max_initiative_tickets`, the most members the initiative may then hold.
+    stays one. `bound` is `policy.max_initiative_tickets`, the most members the initiative may then hold. `entries`,
+    when given, registers every key against those breakdown entries of the initiative's approved plan, read from
+    `state_dir`, in place of any it had; an empty one registers them against none. None leaves a member's entries as
+    they were, and a new member with none.
 
     Returns:
         The keys it added, in the order given, and those already members.
@@ -146,13 +166,15 @@ def add(
     Raises:
         Refused: `inside_run` inside a tick or a run, `unknown_initiative` for no such initiative, `bad_key` for a key
             that is not a ticket key, `other_initiative` for a ticket already a member of another, and
-            `initiative_full` when the members would then be more than `bound`.
+            `initiative_full` when the members would then be more than `bound`; `no_plan` for entries named before
+            any plan was approved, and `unknown_entry` for one the approved plan does not hold.
     """
     conversation.check_operator()
     _check_initiative(conn, initiative_id)
     wanted = list(dict.fromkeys(keys))
     for key in wanted:
         _check_key(key, "a ticket key")
+    named = _entries(conn, state_dir, initiative_id, entries) if entries is not None else None
     with db.transaction(conn):
         added: list[str] = []
         already: list[str] = []
@@ -178,7 +200,28 @@ def add(
                 ("initiative_id", "ticket_key", "added_at", "added_channel"),
             )
             rows.many(conn, [(initiative_id, key, now, channel) for key in added])
-    return Added(added=tuple(added), already=tuple(already))
+        if named is not None:
+            for key in wanted:
+                _register(conn, present_member(conn, key), named)
+    return Added(added=tuple(added), already=tuple(already), entries=named)
+
+
+def present_member(conn: sqlite3.Connection, key: str) -> records.InitiativeMember:
+    """Return ticket `key`'s membership, which the caller knows it has.
+
+    Raises:
+        DatabaseError: it has none, which nothing but a broken journal makes so.
+    """
+    found = membership(conn, key)
+    if found is None:
+        raise sqlite3.DatabaseError(f"{key}'s membership was not recorded")
+    return found
+
+
+def entries_of(conn: sqlite3.Connection, member_id: int) -> list[str]:
+    """Return the breakdown entries member `member_id` fulfils, as the operator registered them, by number."""
+    rows = records.select(records.InitiativeMemberEntry).where("member_id = ?", member_id).all(conn)
+    return sorted((r.entry for r in rows), key=lambda e: int(e[1:]))
 
 
 def remove(conn: sqlite3.Connection, initiative_id: int, keys: Iterable[str], *, channel: str) -> list[str]:
@@ -279,6 +322,164 @@ def current_plan(conn: sqlite3.Connection, initiative_id: int) -> records.Initia
 def plans_of(conn: sqlite3.Connection, initiative_id: int) -> list[records.InitiativePlan]:
     """Return every plan initiative `initiative_id` has had, the oldest first."""
     return records.select(records.InitiativePlan).where("initiative_id = ?", initiative_id).order_by("id").all(conn)
+
+
+def approve(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    initiative_id: int,
+    *,
+    repos: AbstractSet[str],
+    channel: str,
+) -> Approved:
+    """Approve initiative `initiative_id`'s waiting plan, as its file stands, the operator's edits included (§43).
+
+    Only the operator approves one, and only a `proposed` plan whose ids and breakdown read in the outline's shape, in
+    `repos`, and that uses no id an earlier approved plan dropped. A copy of the approved text is kept beside its file,
+    as what the next approval is compared with.
+
+    Returns:
+        The plan approved, and what it changed from the plan approved before it.
+
+    Raises:
+        Refused: `inside_run` inside a tick or a run, `unknown_initiative` for no such initiative, `planning` while a
+            plan run of it runs, `no_plan` when no plan waits on the operator, `unreadable_plan` when its file is not
+            a plan, `bad_outline` when its ids or breakdown cannot be read, `approved_changed` when an earlier
+            approved plan's copy is not what was approved, and `reused_id` for an id an earlier approval dropped.
+        PlanFileError: the approved copy could not be written: the initiative's directory is not the operator's own.
+        DatabaseError: the approval was not recorded, which nothing but a broken journal does.
+    """
+    conversation.check_operator()
+    _check_initiative(conn, initiative_id)
+    with db.transaction(conn):
+        running = records.select(records.InitiativeRun).where(
+            "initiative_id = ? AND status = ?",
+            initiative_id,
+            RunStatus.RUNNING,
+        )
+        if running.all(conn):
+            raise Refused("planning", f"init:{initiative_id} is being planned; approve the plan once its run ends")
+        current = current_plan(conn, initiative_id)
+        if current is None or current.status is not PlanStatus.PROPOSED:
+            raise Refused("no_plan", f"no plan of init:{initiative_id} waits on you; reply to it to ask for one")
+        reading = plans.read(plan_path(state_dir, initiative_id, current.run_id))
+        if reading.text is None or reading.sha256 is None:
+            raise Refused("unreadable_plan", f"init:{initiative_id}'s plan file is {reading.problem}")
+        try:
+            outline = initiative_outline.read(reading.text, repos=repos)
+        except initiative_outline.OutlineError as e:
+            raise Refused("bad_outline", f"init:{initiative_id}'s plan cannot be read: {e.reason}") from None
+        earlier = _approved_outlines(conn, state_dir, initiative_id)
+        change = initiative_outline.compare(earlier[-1], outline) if earlier else None
+        if earlier:
+            retired = frozenset().union(*(o.ids() for o in earlier)) - earlier[-1].ids()
+            reused = initiative_outline.reused(outline, retired)
+            if reused:
+                ids = ", ".join(reused)
+                raise Refused("reused_id", f"the plan uses {ids}, which an earlier approved plan dropped: never again")
+        name = f"{current.run_id}{APPROVED_SUFFIX}"
+        plans.write_new(state_dir / PLANS_DIR, str(initiative_id), name, reading.text)
+        update = records.update(records.InitiativePlan).set(
+            status=PlanStatus.APPROVED,
+            approved_sha256=reading.sha256,
+            approved_at=db.now(),
+            approved_channel=channel,
+        )
+        update.where("id = ?", current.id).run(conn)
+    approved = records.select(records.InitiativePlan).where("id = ?", current.id).one(conn)
+    if approved is None:
+        raise sqlite3.DatabaseError("the initiative plan's approval was not recorded")
+    return Approved(plan=approved, change=change)
+
+
+def approved_outline(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    initiative_id: int,
+) -> initiative_outline.Outline | None:
+    """Return the outline of initiative `initiative_id`'s latest approved plan, from its approved copy.
+
+    Returns:
+        The outline, or None while no plan of it has been approved.
+
+    Raises:
+        Refused: (`approved_changed`) its copy is not what the operator approved.
+    """
+    earlier = _approved_outlines(conn, state_dir, initiative_id)
+    return earlier[-1] if earlier else None
+
+
+def messages_of(conn: sqlite3.Connection, initiative_id: int) -> list[records.Message]:
+    """Return the operator's messages to initiative `initiative_id`, the oldest first: each its next plan's to read."""
+    query = records.select(records.Message).where(
+        "subject_kind = ? AND subject_id = ? AND source = 'operator'",
+        conversation.INITIATIVE,
+        str(initiative_id),
+    )
+    return query.order_by("id").all(conn)
+
+
+def _approved_outlines(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    initiative_id: int,
+) -> list[initiative_outline.Outline]:
+    """Read every plan of the initiative the operator approved, the oldest first, from each one's approved copy.
+
+    Returns:
+        Their outlines.
+
+    Raises:
+        Refused: (`approved_changed`) a copy is missing or not what was approved, so no approval can be compared.
+    """
+    found: list[initiative_outline.Outline] = []
+    for plan in plans_of(conn, initiative_id):
+        if plan.approved_sha256 is None:
+            continue
+        path = plan_path(state_dir, initiative_id, plan.run_id).with_name(f"{plan.run_id}{APPROVED_SUFFIX}")
+        reading = plans.read(path)
+        if reading.text is None or reading.sha256 != plan.approved_sha256:
+            raise Refused("approved_changed", f"{path} is not the plan approved by run {plan.run_id}")
+        try:
+            found.append(initiative_outline.read(reading.text))
+        except initiative_outline.OutlineError as e:
+            raise Refused("approved_changed", f"{path} no longer reads: {e.reason}") from None
+    return found
+
+
+def _entries(
+    conn: sqlite3.Connection,
+    state_dir: Path | None,
+    initiative_id: int,
+    entries: Iterable[str],
+) -> frozenset[str]:
+    """Check `entries` against the initiative's approved plan's breakdown.
+
+    Returns:
+        The entries, each once.
+
+    Raises:
+        Refused: `no_plan` when an entry is named and no plan has been approved, `unknown_entry` for one the approved
+            plan does not hold.
+    """
+    named = frozenset(entries)
+    if not named:
+        return named
+    outline = approved_outline(conn, state_dir, initiative_id) if state_dir is not None else None
+    if outline is None:
+        raise Refused("no_plan", f"init:{initiative_id} has no approved plan, so no entry to register against")
+    unknown = sorted(named - frozenset(outline.entries))
+    if unknown:
+        raise Refused("unknown_entry", f"the approved plan of init:{initiative_id} has no {', '.join(unknown)}")
+    return named
+
+
+def _register(conn: sqlite3.Connection, member: records.InitiativeMember, entries: AbstractSet[str]) -> None:
+    """Replace `member`'s entries with `entries`."""
+    records.delete(records.InitiativeMemberEntry).where("member_id = ?", member.id).run(conn)
+    if entries:
+        rows = records.insert_rows(records.InitiativeMemberEntry, ("member_id", "entry"))
+        rows.many(conn, [(member.id, entry) for entry in sorted(entries)])
 
 
 def _repositories(workspace: Workspace, repos: Sequence[str]) -> list[str]:

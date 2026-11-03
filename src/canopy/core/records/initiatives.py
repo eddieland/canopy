@@ -134,3 +134,14 @@ class InitiativePlan(Row):
     approved_at: str | None
     #: `cli` or `web`: where the operator approved it.
     approved_channel: str | None
+
+
+@dataclass(frozen=True)
+class InitiativeMemberEntry(Row):
+    """A breakdown entry a member of an initiative fulfils, as the operator registered it (DESIGN §43)."""
+
+    TABLE: ClassVar[LiteralString] = "initiative_member_entries"
+
+    member_id: int
+    #: The entry's id, `B<n>`, in the plan approved when the operator registered it.
+    entry: str

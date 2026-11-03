@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import click
 
+from canopy.cli import initiatives as initiatives_cli
 from canopy.cli.common import CliError, open_context
 from canopy.core import conversation, personas, plan_export, plans, prompts
 from canopy.infra import logs
@@ -102,6 +103,9 @@ def cmd_plan(
         conversation.check_verb(subject, "plan")
     except conversation.Refused as r:
         raise CliError(f"plan refused ({r.guard}): {r.reason}") from None
+    if subject.kind == conversation.INITIATIVE:
+        others = (chosen, leave, words, persona)
+        return _plan_initiative(click_ctx, int(subject.id), alone=approve and not skip and not any(others))
     ctx = open_context(click_ctx)
     try:
         if approve:
@@ -116,6 +120,21 @@ def cmd_plan(
             _ask(ctx, subject.id, skip=skip)
     except conversation.Refused as r:
         raise CliError(f"plan refused ({r.guard}): {r.reason}") from None
+    return 0
+
+
+def _plan_initiative(click_ctx: click.Context, initiative_id: int, *, alone: bool) -> int:
+    """Approve an initiative's plan, which is asked for by its submission and replies, and approved whole (§43).
+
+    Returns:
+        0, once approved.
+
+    Raises:
+        UsageError: anything but `--approve` alone was passed (`alone` is False).
+    """
+    if not alone:
+        raise click.UsageError("an initiative's plan takes --approve alone; `canopy reply init:N` asks for changes")
+    initiatives_cli.approve(open_context(click_ctx), initiative_id)
     return 0
 
 

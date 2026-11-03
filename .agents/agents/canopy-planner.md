@@ -8,7 +8,7 @@
 # directory with the tracker's MCP server and tools from the operator's config (`tracker.mcp_server`,
 # `tracker.read_tools`), at the marked line below, as for canopy-worker-private. As shipped it names none, and
 # dispatch refuses a plan then (`no_read_tools`).
-description: canopy planner. Writes a plan for one ticket before it is implemented; reads, and writes only its plan.
+description: canopy planner. Writes a ticket's or an initiative's plan before its work; reads, and writes only its plan.
 mode: primary
 # canopy: model
 permission:
