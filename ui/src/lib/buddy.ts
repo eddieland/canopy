@@ -262,6 +262,14 @@ export const TIPS = {
         'Hot take: a clean worktree is just a worktree nobody has used yet.',
         'Did you know? Every worktree gets its own copy of the bugs. Fair is fair.',
     ],
+    '/workspace/checklists': [
+        "It looks like you're reading a checklist. I made one too. It says: be a sprig. Pass.",
+        'Unhelpful tip: an item that always passes is either a great rule or a great worker. Never both.',
+        'Fun fact: this page cannot change a list. Neither can I. We have that in common.',
+        'Dear diary, asked to add an item called no-sprigs. Was told it had no rule. Correct.',
+        'Hot take: every review comment you have written twice is a checklist item in disguise.',
+        'Did you know? A held push is not a rejected push. It is a push that was asked a question.',
+    ],
     '/components': [
         "It looks like you're looking at buttons. Would you like me to press one? I can't. No hands.",
         'Unhelpful tip: every chip here is a different color, and none of them is green. I asked.',

@@ -355,8 +355,10 @@ session, and the operator approves the same choice several times, or a different
 plan for the whole, approved once, that holds the goal, the requirements, the contracts between the tickets, and their
 order, and for each ticket a simpler plan of its own that points back to it and covers its part, so a ticket's planner
 reads the shared plan rather than rediscovering it, and a change to the shared plan is noticed by the tickets it
-reaches. Today's nearest substitute is a planning task's report (R25) attached to each ticket (M63): a copy per ticket,
-with no single source and nothing that notices a copy went stale.
+reaches. The shared plan often comes first, before the tickets exist: the operator plans the whole to decide which
+tickets to file, files them as they choose, and adds each to the shared plan later. Today's nearest substitute is a
+planning task's report (R25) attached to each ticket (M63): a copy per ticket, with no single source and nothing that
+notices a copy went stale.
 
 ## Nice to have
 

@@ -30,6 +30,8 @@ the item says), and the rule in plain words with what passes and what fails. Eac
 hidden characters as a persona is (§31). A run whose list cannot be read is refused as `bad_prompt`, never run without
 it. Rejected: the list read from the repository's checkout, a file of its own included, which a PR could rewrite and a
 shared workspace cannot vouch for (T1, T7); the team's copy stays with its docs, and the operator's file is what runs.
+The web UI's Checklists page under Workspace (§22) reads each list as a run would, and changes none: a list canopy
+cannot use shows why before a run is refused over it.
 
 ### The reminder
 

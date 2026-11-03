@@ -668,8 +668,8 @@ class Tick(Model):
     """Whether `canopy loop` found it idle (DESIGN §6, Idle pacing); None on a tick no loop ran, and until the loop
     records it, just after the tick ends. Its change is sent on the stream, which marks the spend page stale."""
     woken_by: str | None = None
-    """What ended the loop's wait before it: start | timer | gate | message | starts | grant | notice | run | key |
-    web. None when `idle` is."""
+    """What ended the loop's wait before it: start | timer | gate | message | starts | grant | task | request | notice |
+    run | poll | key | web. None when `idle` is."""
     canopy_version: str | None = None
     """The version of canopy that ran it, and so recorded its decisions; None on a tick from before that was kept."""
     activity: RunActivity | None = None

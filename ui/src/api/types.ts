@@ -175,6 +175,12 @@ export type ReportModel = Schemas['ReportModel']
 export type ReportTicket = Schemas['ReportTicket']
 /** The tokens a month's runs reported, by kind, and the share of what was sent read from the cache. */
 export type ReportTokens = Schemas['ReportTokens']
+/** Each mapped repository's checklist, as the operator's `paths.checklists` holds it now. */
+export type ChecklistList = Schemas['ChecklistList']
+/** One repository's checklist: its file, its items in order, or why canopy cannot use it. */
+export type RepoChecklist = Schemas['RepoChecklist']
+/** One item of a checklist: its id, the paths it is about, its severity, and its rule. */
+export type ChecklistItem = Schemas['ChecklistItem']
 /** How the worker runs of a window of local days answered each repository's checklist, as `canopy checklist` counts. */
 export type ChecklistCounts = Schemas['ChecklistCounts']
 /** One item of one repository's checklist: the runs reminded of it, and how many gave each answer. */

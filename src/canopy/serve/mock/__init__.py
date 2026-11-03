@@ -138,6 +138,10 @@ authorized_repliers = ["mock-operator"]
 # Whose review feedback a worker addresses unasked; the settings page may only remove one.
 trusted_reviewers = ["canopy:review", "lint-bot"]
 
+[paths]
+# `web`'s and `api`'s lists; `mobile` keeps none.
+checklists = "{checklists}"
+
 [runtime.models]
 # Only the agents no ticket's page shows, so the settings page has models to name and each ticket keeps the default.
 overseer = "anthropic/claude-sonnet-4-5"
@@ -315,7 +319,10 @@ def seed(directory: Path) -> Backend:
     prompts.mkdir(parents=True)
     for name, title in ((CHORE, "Dependency advisories"), ("build-health", "Build health")):
         (prompts / f"{name}.md").write_text(f"# {title}\n\nCheck {name} for the mock workspace.\n")
-    user_file.write_text(_USER_TOML.replace("{chores}", str(prompts)))
+    checklists.write(user_file.parent / "checklists")
+    user_file.write_text(
+        _USER_TOML.replace("{chores}", str(prompts)).replace("{checklists}", str(user_file.parent / "checklists")),
+    )
     ws = workspace.load(root)
     cfg = config.load(root, user_file)
     workspace.ensure_state_dir(ws.state_dir)

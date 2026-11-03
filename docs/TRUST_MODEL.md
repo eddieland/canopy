@@ -457,9 +457,11 @@ Controls:
   Worker stdout goes to a log file under the workspace's `.canopy/`, readable only by the
   operator.
 - Listeners follow T8. No outbound calls from the harness except through the
-  configured commands, and one the operator turns on in their own config: `telemetry.traces = "otlp"` posts canopy's
-  spans, which hold its own facts and never text it read (D132), to the OTLP/HTTP endpoint they name, from
-  `infra/otlp.py` alone, following no redirect and carrying no credential; a shared workspace file can set neither key.
+  configured commands, and one the operator turns on in their own config: `telemetry.traces` or `telemetry.metrics`
+  set to `"otlp"` posts canopy's spans or metrics, which hold its own facts and never text it read, a metric's labels
+  only words of its closed vocabularies and configured models (D132), to the OTLP/HTTP endpoint they name, from
+  `infra/otlp.py` alone, through no proxy, following no redirect and carrying no credential; a shared workspace file
+  can set none of these keys.
   canopy ships programs that make the others, each a separate distribution it runs only as a command.
   The Slack sink (DESIGN §20) runs only as a sink the operator configured, and reads its webhook or bot token from an
   operator-only file of its own, never from canopy's config, argv, journal, or logs; `canopy-connect-slack`, which

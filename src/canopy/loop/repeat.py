@@ -74,6 +74,7 @@ from canopy.loop import (
     tick_now,
     tick_report,
 )
+from canopy.reviews import review_requests
 from canopy.runs import tasks
 
 if TYPE_CHECKING:
@@ -96,6 +97,14 @@ _WAIT_STEP_SECONDS = 0.5
 # SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
 # again aborts it" and pressing it again takes longer than this.
 SAME_SIGNAL_SECONDS = 1.0
+#: The log line for each of the operator's acts after a time that ends the wait (`_operator_acted`), but a message.
+_ACTS_SINCE: dict[Woken, str] = {
+    "starts": "a ticket started or stopped ended the wait",
+    "grant": "a grant ended the wait",
+    "task": "a task submitted, replied to, or stopped ended the wait",
+    "request": "a review requested ended the wait",
+    "notice": "a notice to workers set or cleared ended the wait",
+}
 
 
 @dataclass
@@ -639,8 +648,8 @@ def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
     """What the operator did that ends a wait, if anything: every channel records it the same way (DESIGN §22).
 
     A message to a ticket newer than `seen`; a ticket started or stopped, attempts or reviews granted, a task submitted,
-    replied to, or stopped (DESIGN §36), or a notice to workers set or cleared, after `since`. A note to a chore waits
-    for the chore's next run, and a config reload waits for the next tick.
+    replied to, or stopped (DESIGN §36), a review requested (DESIGN §21), or a notice to workers set or cleared, after
+    `since`. A note to a chore waits for the chore's next run, and a config reload waits for the next tick.
 
     Returns:
         The first of those that happened, or None.
@@ -654,6 +663,8 @@ def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
         return "grant"
     if tasks.moved_after(conn, since):
         return "task"
+    if review_requests.made_after(conn, since):
+        return "request"
     return "notice" if notice.moved_after(conn, since) else None
 
 
@@ -709,16 +720,10 @@ def _log_woken(
 ) -> None:
     if woken is not None and not console.is_terminal:
         loop_view.record(console, "wait ended", by=woken)
-    if woken == "message":
+    if woken in _ACTS_SINCE:
+        log.info(_ACTS_SINCE[woken], extra={"after": since})
+    elif woken == "message":
         log.info("an operator message ended the wait", extra={"after_message": seen})
-    elif woken == "starts":
-        log.info("a ticket started or stopped ended the wait", extra={"after": since})
-    elif woken == "grant":
-        log.info("a grant ended the wait", extra={"after": since})
-    elif woken == "task":
-        log.info("a task submitted, replied to, or stopped ended the wait", extra={"after": since})
-    elif woken == "notice":
-        log.info("a notice to workers set or cleared ended the wait", extra={"after": since})
     elif woken == "run":
         log.info("a run ending ended the wait", extra={"after": read_at})
     elif woken == "key":

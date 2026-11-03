@@ -581,8 +581,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D132. Telemetry goes through OpenTelemetry in `infra` alone, and is off until the operator turns it on
 
-- Only `infra` imports OpenTelemetry (`tests/canopy/test_layers.py`): every span is a `tracing.span`, and a later
-  signal, such as metrics, is a module beside it. Each loads only once its `[telemetry]` key turns it on.
+- Only `infra` imports OpenTelemetry (`tests/canopy/test_layers.py`): every span is a `tracing.span`, every metric a
+  call of `metrics`, typed to take only a vocabulary's word as a label. Each loads only once its key turns it on.
 - It holds canopy's own facts, never text it read (T2): a failed span names its exception's type alone, and a metric's
   labels come from closed sets (statuses, kinds, steps, configured models), never a ticket key, a path, or text.
 - `procs` passes the current span to every child as `TRACEPARENT`: a tick starts its own trace, and its runs join it.
