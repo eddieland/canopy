@@ -75,5 +75,5 @@ citing its `R`s and the contracts, the first member's PR providing a contract th
 initiative plan after the first merged leaving it alone, marking the second's proposed plan stale, and telling the
 operator once.
 
-Status: not started. Sketched 2026-11-02 from the survey in PRIOR_ART, and the open points settled by the operator the
-same day; its design comes before any code.
+Status: in progress. Sketched 2026-11-02 from the survey in PRIOR_ART, and the open points settled by the operator
+the same day; designed in §43, before any code.

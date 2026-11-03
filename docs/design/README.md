@@ -125,6 +125,9 @@ not go in the middle of the sequence.
 - [The operator's checklist](CHECKLIST.md): the operator's rules no linter checks, asked of a worker's diff before
   it finishes, and of a PR by a second review when that is not enough.
   - [42. The operator's checklist](CHECKLIST.md#42-the-operators-checklist)
+- [Initiatives](INITIATIVES.md): one plan for work that spans several tickets, approved once, and a plan per ticket
+  that points back to it.
+  - [43. Initiatives](INITIATIVES.md#43-initiatives)
 
 ## 1. Problem
 
