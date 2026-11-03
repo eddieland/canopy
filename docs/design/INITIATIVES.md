@@ -6,11 +6,14 @@ map. Previous: [The operator's checklist](CHECKLIST.md).
 
 ## 43. Initiatives
 
-Proposed (REQUIREMENTS R28, ROADMAP M67). §25 plans one ticket. Work that spans several has no plan of its own, so each
-ticket's planner settles the shared questions again and the operator approves them again. An **initiative** is that work
-as canopy's own subject: the operator's goal, its plan, approved once, and its member tickets, each planned against it.
-It starts from PRIOR_ART's "Shared plans across tickets": a shallow plan for the whole with ids that never change, a
-thin entry per ticket pointing back to it, and each ticket's own plan written just before it is built.
+Being built (REQUIREMENTS R28, ROADMAP M67). Built: the initiative and its members, of no entry yet, and their bound,
+from the CLI.
+
+§25 plans one ticket. Work that spans several has no plan of its own, so each ticket's planner settles the shared
+questions again and the operator approves them again. An **initiative** is that work as canopy's own subject: the
+operator's goal, its plan, approved once, and its member tickets, each planned against it. It starts from PRIOR_ART's
+"Shared plans across tickets": a shallow plan for the whole with ids that never change, a thin entry per ticket pointing
+back to it, and each ticket's own plan written just before it is built.
 
 ### The initiative and its members
 

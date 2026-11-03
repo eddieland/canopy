@@ -596,6 +596,8 @@ class Policy(Section):
     #: The most follow-up tickets one run's result has recorded, the first in its order (DESIGN §18). At 0 workers are
     #: told to file none, and none is recorded.
     max_follow_ups: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 5
+    #: The most member tickets one initiative holds at once (DESIGN §43): the operator's additions are refused past it.
+    max_initiative_tickets: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 8
     # Plan runs per ticket (DESIGN §25): a plan covers every repository the ticket will touch.
     max_plan_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     #: Feedback plan runs per unit (DESIGN §32), whatever they ended as, never reset.
