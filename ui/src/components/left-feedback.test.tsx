@@ -144,4 +144,18 @@ describe('LeftFeedbackList', () => {
             { numbers: Array.from({ length: 20 }, (_, at) => at + 1), submission: expect.any(String) as unknown },
         ])
     })
+
+    it('says to read them before you merge while the ticket waits on your merge', async () => {
+        await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={[left()]} merging />)
+        const panel = screen.getByRole('region', { name: 'Left feedback' })
+        expect(within(panel).getByText(/^Read these before you merge/u)).toBeTruthy()
+    })
+
+    it('says nothing of merging while the ticket does not wait on it, or with nothing left', async () => {
+        await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={[left()]} />)
+        expect(screen.queryByText(/before you merge/u)).toBeNull()
+        cleanup()
+        await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={[]} merging />)
+        expect(screen.queryByText(/before you merge/u)).toBeNull()
+    })
 })

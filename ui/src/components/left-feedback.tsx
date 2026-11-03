@@ -47,17 +47,20 @@ const LEFT_TONE: Record<LeftFeedback['reason'], Tone> = {
  * it, the tick that left it, and a button that sends it to a worker, as `canopy send KEY N` does: a reply on the ticket
  * naming it, which the next tick reads as your go-ahead. With two or more, its header sends them all in one reply, as
  * `canopy send KEY N M ...` does, or the oldest 20 past the most one send takes. With none, its header alone, as every
- * list's (`ListPanel`).
+ * list's (`ListPanel`). While the ticket waits on your merge, a line above them says to read them first.
  */
 export function LeftFeedbackList({
     ticketKey,
     items,
+    merging = false,
     className,
 }: {
     /** The ticket the items are on. */
     ticketKey: string
     /** What is left, oldest first, as the ticket's page reads it. */
     items: LeftFeedback[]
+    /** Whether the ticket waits on your merge, its phase or a unit's `approved`, as `ready_to_merge` reads it. */
+    merging?: boolean
     /** Classes for the panel, such as its place in the page's grid. */
     className?: string
 }) {
@@ -100,6 +103,11 @@ export function LeftFeedbackList({
             className={className}
             data-testid="ticket-left-feedback"
         >
+            {merging && (
+                <p className="border-b px-3 py-2 text-xs text-muted-foreground">
+                    Read these before you merge: leaving them was the overseer&apos;s call, not the reviewer&apos;s.
+                </p>
+            )}
             <ul className="divide-y" data-testid="left-feedback">
                 {items.map((item) => (
                     <LeftRow
