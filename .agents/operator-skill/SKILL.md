@@ -260,6 +260,35 @@ When the operator asks you to look into findings or turn them into tickets:
    `canopy reply chore:NAME 'ID is tracked in KEY'` to tell the chore's next runs, `canopy dismiss review:ID N` for a
    wrong review finding.
 
+## Checklists
+
+A checklist is the operator's rules for one repository that no linter checks, each a question asked of a diff. A
+worker's first push is held (`[canopy] Push held, not rejected`) while it holds its diff to the list, and its result
+answers each item `pass`, `fixed`, `held` with a reason, or `n/a`. Lists live in `paths.checklists`, a private
+directory of one file per repository named as the workspace map names it (`api.md`); a repository with no file is never
+asked. Each item is a `## <id>` heading, optional `paths:` and `severity:` lines, then the rule with what passes and
+what fails:
+
+```markdown
+## general-types
+paths: src/**/*.py
+
+A parameter takes the most general type its body needs: `Iterable` for one pass, `Mapping` for a dict it only reads.
+Passes: `def total(xs: Iterable[int])` over a body that loops once. Fails: `def total(xs: list[int])` over the same.
+
+## migration-companion
+paths: migrations/
+severity: major
+
+A new migration has its companion under `tests/migrations/`, of the same number. Passes: both files in the diff.
+Fails: a migration alone.
+```
+
+When helping the operator write one: a rule a reviewer keeps repeating makes a good item; anything a machine can check
+belongs in a linter; ten to fifteen items is plenty. A list canopy cannot read refuses the run as `bad_prompt`, naming
+the file. `canopy show run:ID` prints a run's answers, and `canopy checklist --days 14` counts them per item: drop an
+item that is always `pass` or `n/a`, and read the reasons of one often `held`.
+
 ## Reading memory
 
 Workers may remember what they learn, in two tiers. **Ticket notes** are keyed entries a ticket's runs write for its
