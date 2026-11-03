@@ -118,9 +118,12 @@ CHECK_STUCK = "check_stuck"
 #: A unit of a held ticket whose PR URL names no PR, so no source reads it and the harness waits on the ticket for good:
 #: the harness raises it from its cause beside `FROM_CAUSES` (`loop.harness_items`, DESIGN §39).
 UNOBSERVED_PR = "unobserved_pr"
+#: A ticket whose title or description, as observed, changed since its current plan was approved: the harness warns of
+#: it from its cause beside `FROM_CAUSES` and refuses nothing on it (`loop.harness_items`, DESIGN §25).
+TICKET_CHANGED = "ticket_changed"
 #: What the harness raises from its causes beside `FROM_CAUSES`, which the overseer never recorded: its attention tool
 #: refuses each as it does those.
-ONLY_FROM_CAUSES: frozenset[str] = frozenset({CHECK_STUCK, UNOBSERVED_PR})
+ONLY_FROM_CAUSES: frozenset[str] = frozenset({CHECK_STUCK, UNOBSERVED_PR, TICKET_CHANGED})
 #: What the harness raises from its causes in the journal (`loop.harness_items`, DESIGN §14, §37), which the overseer
 #: recorded until the harness held them: its attention tool refuses each.
 FROM_CAUSES: frozenset[str] = frozenset(

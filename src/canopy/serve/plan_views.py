@@ -49,7 +49,7 @@ def plan_file(ctx: Context, plan: records.Plan) -> PlanFile:
 
     Returns:
         The plan, the persona its planner wrote in, its path, its text or why it is not a plan any more, its hash,
-        and whether it was edited.
+        whether it was edited, and what of its ticket's text changed since its approval.
     """
     path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
     reading = plans.read(path)
@@ -62,6 +62,7 @@ def plan_file(ctx: Context, plan: records.Plan) -> PlanFile:
         sha256=reading.sha256,
         edited=reading.sha256 != plan.sha256,
         changed_since_approval=plan.status is PlanStatus.APPROVED and reading.sha256 != plan.approved_sha256,
+        ticket_changed=plans.ticket_changed(ctx.conn, plan),
     )
 
 
