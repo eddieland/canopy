@@ -148,7 +148,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 className={cn(
                     'stagger flex flex-col gap-6',
                     '2xl:grid 2xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] 2xl:items-start',
-                    memoryOn ? '2xl:grid-rows-[auto_auto_auto_1fr]' : '2xl:grid-rows-[auto_auto_1fr]',
+                    memoryOn ? '2xl:grid-rows-[auto_auto_auto_auto_1fr]' : '2xl:grid-rows-[auto_auto_auto_1fr]',
                 )}
             >
                 <Panel className="2xl:col-start-1 2xl:row-start-1">
@@ -177,8 +177,6 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             </Fields>
                         </PanelScroll>
                     )}
-                    {/* What its review cursors passed with no worker, yours to overrule, by the PRs it is on. */}
-                    <LeftFeedbackList ticketKey={ticket.key} items={detail.left_feedback} className="pb-0" />
                     <Fields className="pt-1.5">
                         <CostTotalRow cost={cost} />
                     </Fields>
@@ -202,7 +200,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
                     reply before Stop or Forget, as on its attention item. */}
                 <Panel
-                    className={cn('2xl:col-start-2 2xl:row-start-1', memoryOn ? '2xl:row-span-4' : '2xl:row-span-3')}
+                    className={cn('2xl:col-start-2 2xl:row-start-1', memoryOn ? '2xl:row-span-5' : '2xl:row-span-4')}
                     data-testid="ticket-conversation"
                 >
                     <TicketAnswer
@@ -223,11 +221,17 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     />
                 </Panel>
                 {/* Each list is its header alone while it holds nothing (ListPanel): the count says so. */}
+                {/* First what its review cursors passed with no worker, yours to overrule, by the PRs it is on. */}
+                <LeftFeedbackList
+                    ticketKey={ticket.key}
+                    items={detail.left_feedback}
+                    className="2xl:col-start-1 2xl:row-start-2"
+                />
                 <ListPanel
                     label="Runs"
                     count={runs.length}
                     list="ticket-runs"
-                    className="2xl:col-start-1 2xl:row-start-2"
+                    className="2xl:col-start-1 2xl:row-start-3"
                     data-testid="ticket-runs"
                 >
                     <PanelScroll label="Runs">
@@ -238,7 +242,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     label="Decisions"
                     count={decisions.length}
                     list="ticket-decisions"
-                    className="2xl:col-start-1 2xl:row-start-3"
+                    className="2xl:col-start-1 2xl:row-start-4"
                     data-testid="ticket-decisions"
                 >
                     <PanelScroll label="Decisions">
@@ -246,7 +250,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     </PanelScroll>
                 </ListPanel>
                 {/* The least read, so last; wide, in the left column under the lists rather than across the page. */}
-                {memoryOn && <TicketMemoryPanel ticketKey={ticket.key} className="2xl:col-start-1 2xl:row-start-4" />}
+                {memoryOn && <TicketMemoryPanel ticketKey={ticket.key} className="2xl:col-start-1 2xl:row-start-5" />}
             </div>
             {/* What its runs would have said on it, waiting on the operator to send (DESIGN §29). */}
             <TicketDrafts ticketKey={ticket.key} drafts={detail.drafts} />
