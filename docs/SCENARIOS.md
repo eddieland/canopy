@@ -125,6 +125,11 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   `opencode models` lists, then take that model's provider out of OpenCode's config. Expect the ticket's next dispatch
   refused `model_missing`, with its attention item, no slot leased and no attempt spent, and no run on the default.
   Put the provider back: expect the next tick to dispatch it on the chosen model, and its session's record to agree.
+- **S73. A stop that wraps up** (taken on request 2026-11-03). Start a toy ticket whose work takes a worker several
+  commits, once unsandboxed and once under `canopy-sandbox`, and run `canopy stop KEY --wrap-up` after its first
+  commit. Expect canopy's wrap-up line once in its transcript, on the next tool call; the worker to push what it has,
+  start nothing new, and print a result line naming what remains; and the run to end on its own, well before its
+  timeout, with no attention item while the ticket stays stopped. Note how many tool calls it took to end.
 
 ### Several repositories
 
