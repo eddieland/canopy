@@ -247,6 +247,22 @@ describe.each(Object.entries(THEMES))('%s theme', (themeName, colors) => {
     })
 })
 
+// A palette that inks its drop in a color of its own (`--ink-drop`), as Pulp's dark does where black would vanish into
+// its canvas: the drop is no text, but it must still read on the canvas and on a panel, under a bubble.
+const DROP = 1.5
+describe.each(Object.entries(THEMES).filter(([, colors]) => colors['ink-drop'] !== undefined))(
+    "%s theme's drop",
+    (_name, colors) => {
+        it.each(['background', 'surface', 'surface-raised'])('reads on %s', (base) => {
+            const [drop, ground] = [colors['ink-drop'], colors[base]]
+            if (drop === undefined || ground === undefined) {
+                throw new Error(`tokens.css sets no --ink-drop or --${base} in this theme`)
+            }
+            expect(contrast(srgb(...drop), srgb(...ground))).toBeGreaterThanOrEqual(DROP)
+        })
+    },
+)
+
 // A palette whose every line is mono sets code at its line's size: a smaller copy of the same face reads as a mistake.
 describe('inline code size', () => {
     it.each(
