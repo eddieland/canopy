@@ -1,4 +1,4 @@
--- sha256 of 0126_epic_runs.sql: 92839dd87095ad68ea8636e7923dad1399b44c9fce02a1268c11aabbd5c63a41
+-- sha256 of 0126_epic_runs.sql: e8a27a98d243fa56048e9e12c06385b8c35c0d806b5e4eb955fd4918ede49efc
 
 INSERT INTO epic_runs (id, epic_id, tick_id, desk_path, started_at, status, log_path)
 VALUES (1, 1, 1, '/w/desks/init-1', 'x', 'done', '/s/epic-runs/1.log');
