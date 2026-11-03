@@ -40,9 +40,9 @@ type Attribute = str | int | float | bool | None
 
 #: The file spans are appended to, as OTLP JSON, a line per span, in the state directory.
 TRACES_FILE_NAME = "traces.jsonl"
-#: The semantic conventions whose attributes a span may carry by their own names: generative AI's, for model calls, and
-#: HTTP's, for the web UI's requests.
-STANDARD_PREFIXES = ("gen_ai.", "http.")
+#: The semantic conventions whose attributes a span may carry by their own names: generative AI's, for model calls,
+#: HTTP's, for the web UI's requests, and process's, for the commands canopy runs.
+STANDARD_PREFIXES = ("gen_ai.", "http.", "process.")
 #: Where an OTLP/HTTP endpoint takes spans, under its base URL.
 TRACES_PATH = "/v1/traces"
 #: The variable a child process finds its parent's span in, as OpenTelemetry names it for an environment.

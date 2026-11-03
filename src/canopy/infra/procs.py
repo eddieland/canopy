@@ -3,6 +3,10 @@
 Every external process canopy runs (`treehouse`, `git`, the agent runtime, `notify`) goes through a `Runner`. Nothing
 else in the package imports `subprocess`; ruff's banned-api rule enforces that. Code that needs to run a process takes
 a `Runner` argument, so tests can pass a fake one.
+
+While traces are on, each process `run` waits for is a span, `git fetch`, named for its program and its subcommand, with
+its exit code and whether it timed out: never its other arguments, its input, or its output, which may hold text canopy
+read (D132). A process `spawn` detaches is not: it outlives the span, and starts a trace of its own.
 """
 
 from __future__ import annotations
@@ -11,6 +15,7 @@ import contextlib
 import errno
 import os
 import queue
+import re
 import signal
 import subprocess
 import tempfile
@@ -28,6 +33,13 @@ from canopy.infra import lock, tracing
 #: when its clock starts, so the two agree (DESIGN §33). A child started without a timeout gets none, not even one its
 #: parent had: a deadline is for the process it was set for alone.
 DEADLINE_ENV = "CANOPY_DEADLINE"
+#: What a subcommand looks like, `fetch` or `pr-view`, for a span to be named for it: a short word of lowercase letters
+#: and hyphens, so a key, a path, a hash, a URL, or a sentence is never one.
+SUBCOMMAND = re.compile(r"[a-z][a-z-]{0,23}")
+#: The options canopy puts before a subcommand, git's, that take the next argument as their value.
+_OPTIONS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"})
+#: The options canopy puts before a subcommand that take no value.
+_FLAGS = frozenset({"--no-pager", "--no-replace-objects", "--literal-pathspecs", "--no-optional-locks", "--bare"})
 
 
 class ProcError(Exception):
@@ -159,10 +171,47 @@ class SubprocessRunner:
         """
         if on_line is not None and stdout_to_file:
             raise ValueError("on_line reads stdout from a pipe, which stdout_to_file replaces")
+        program, subcommand = named(args)
+        with tracing.span(f"{program} {subcommand}" if subcommand else program) as traced:
+            traced.set_standard({"process.executable.name": program})
+            traced.set(subcommand=subcommand)
+            result = self._captured(
+                tuple(args),
+                cwd=cwd,
+                env=env,
+                stdin=stdin,
+                timeout=timeout,
+                on_start=on_start,
+                on_line=on_line,
+                stdout_to_file=stdout_to_file,
+            )
+            traced.set_standard({"process.exit.code": result.returncode})
+            traced.set(timed_out=result.timed_out)
+            if result.timed_out:
+                traced.fail("TimeoutExpired")
+            return result
+
+    def _captured(
+        self,
+        argv: tuple[str, ...],
+        *,
+        cwd: Path | None,
+        env: Mapping[str, str] | None,
+        stdin: str | None,
+        timeout: float | None,
+        on_start: Callable[[int], None] | None,
+        on_line: Callable[[str], None] | None,
+        stdout_to_file: bool,
+    ) -> Result:
+        """Run `argv` as `run` does, its stdout through a temporary file when `stdout_to_file`.
+
+        Returns:
+            The exit code and captured output.
+        """
         # Text, in the encoding and with the newlines `text=True` decodes a pipe with.
         with tempfile.TemporaryFile("w+") if stdout_to_file else contextlib.nullcontext() as out:
             result = self._run(
-                tuple(args),
+                argv,
                 cwd=cwd,
                 env=env,
                 stdin=stdin,
@@ -304,6 +353,26 @@ class SubprocessRunner:
             os.close(held)
         # The child is detached on purpose. Popen reaps it later if it exits while this process still runs.
         return proc.pid
+
+
+def named(args: Sequence[str]) -> tuple[str, str | None]:
+    """What a span of running `args` is named for: its program, and its subcommand when it has one.
+
+    The program is the executable's file name, never its directory. The subcommand is its first argument after the
+    options canopy puts before one, git's, whose values it knows, and only when it looks like one (`SUBCOMMAND`). Any
+    other option ends the search with none: what follows it may be its value, text canopy read.
+
+    Returns:
+        The program, and the subcommand or None.
+    """
+    program = Path(args[0]).name if args else ""
+    rest = iter(args[1:])
+    word = next(rest, None)
+    while word in _OPTIONS_WITH_VALUE or word in _FLAGS:
+        if word in _OPTIONS_WITH_VALUE:
+            next(rest, None)
+        word = next(rest, None)
+    return program, word if word is not None and SUBCOMMAND.fullmatch(word) else None
 
 
 def _child_env(
