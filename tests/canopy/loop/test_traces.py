@@ -2,29 +2,14 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 from canopy.infra import tracing
-from tests.canopy.helpers import KEY
+from tests.canopy.helpers import KEY, spans
 from tests.canopy.scenario_helpers import dispatches
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from tests.canopy.scenario_helpers import Scenario
-
-
-def spans(path: Path) -> dict[str, dict[str, object]]:
-    """Each span in the traces file, by name: the last of a name, with its attributes as a plain dict."""
-    found: dict[str, dict[str, object]] = {}
-    for line in path.read_text().splitlines():
-        for resource in json.loads(line)["resourceSpans"]:
-            for scope in resource["scopeSpans"]:
-                for span in scope["spans"]:
-                    values = {a["key"]: next(iter(a["value"].values())) for a in span["attributes"]}
-                    found[span["name"]] = {**span, "attributes": values}
-    return found
 
 
 def test_a_run_is_a_trace_of_its_own_linked_to_the_tick_that_started_it(scenario: Scenario) -> None:
@@ -32,7 +17,8 @@ def test_a_run_is_a_trace_of_its_own_linked_to_the_tick_that_started_it(scenario
     scenario.seen()
     ticked = scenario.tick(dispatches())
     [ran] = ticked.runs
-    traced = spans(scenario.env.state_dir / tracing.TRACES_FILE_NAME)
+    # The last span of each name.
+    traced = {s["name"]: s for s in spans(scenario.env.state_dir / tracing.TRACES_FILE_NAME)}
     tick = traced["tick"]
     assert tick["attributes"] == {
         "canopy.tick_id": str(ticked.tick.id),
