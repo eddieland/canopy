@@ -137,8 +137,9 @@ move if it skips any without a reason. Those comments are listed in the ticket's
 runs, one row each: why it was left (`optional`, `would reset approval`, `a question`, `already done`, `out of scope`,
 `you said to leave it`), who wrote it, its first line, the file and line it's on (or `review` for a review's own
 text), linking out to it on GitHub with the whole path on hover, and the tick that decided, linking to that tick's
-reasoning. In a narrow panel the tick goes first, then the file. A comment on a thread someone
-resolved needs no reason, and drops off the list. So does one a worker has answered on its thread.
+reasoning. `would reset approval` stands out, in the color of what waits on you. In a narrow panel the tick goes
+first, then the file. A comment on a thread someone resolved needs no reason, and drops off the list. So does one a
+worker has answered on its thread.
 
 The attention item `ready_to_merge`, or `needs_reviewer`, counts them too, for example "2 feedback items left with no
 worker (optional, would_reset_approval)". Read them before you merge. "Optional" is the reviewer's word, and "would
