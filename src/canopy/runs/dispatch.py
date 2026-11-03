@@ -1013,7 +1013,7 @@ def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[s
             `reserved` workers the harness's dispatches to come hold ahead of it (DESIGN §37).
     """
     max_workers = ctx.config.capacity.max_workers
-    others = sum(len(db.running_runs(ctx.conn, t)) for t in ("review_runs", "task_runs", "initiative_runs"))
+    others = sum(len(db.running_runs(ctx.conn, t)) for t in ("review_runs", "task_runs", "epic_runs"))
     busy = len(running) + others + len(planned)
     if busy >= max_workers:
         held = sum(p.startswith(RECORDED_PREFIX) for p in planned)

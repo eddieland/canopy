@@ -1,6 +1,6 @@
-"""Initiatives: work spanning several tickets, the operator's own subject (DESIGN §43).
+"""Epics: work spanning several tickets, the operator's own subject (DESIGN §43).
 
-Each initiative, the repositories its plan reads, its member tickets, its plan runs and their slots, and its plans.
+Each epic, the repositories its plan reads, its member tickets, its plan runs and their slots, and its plans.
 """
 
 from __future__ import annotations
@@ -15,10 +15,10 @@ from canopy.core.vocab import PlanStatus, PoolKind, RunStatus
 
 
 @dataclass(frozen=True)
-class Initiative(Row):
-    """An initiative the operator submitted (DESIGN §43): their goal, and where its tickets come from."""
+class Epic(Row):
+    """An epic the operator submitted (DESIGN §43): their goal, and where its tickets come from."""
 
-    TABLE: ClassVar[LiteralString] = "initiatives"
+    TABLE: ClassVar[LiteralString] = "epics"
 
     id: int
     #: The operator's words: the goal its plan is written for.
@@ -26,30 +26,30 @@ class Initiative(Row):
     #: The tracker project its breakdown's tickets are filed in; None for none.
     project: str | None
     #: A tracker key whose children are put to the operator as suggestions; None for none.
-    epic: str | None
+    tracker_epic: str | None
     #: `cli` or `web`: where the operator submitted it.
     channel: str
     submitted_at: str
 
 
 @dataclass(frozen=True)
-class InitiativeRepo(Row):
-    """A repository an initiative's plan reads, by its name in the map."""
+class EpicRepo(Row):
+    """A repository an epic's plan reads, by its name in the map."""
 
-    TABLE: ClassVar[LiteralString] = "initiative_repos"
+    TABLE: ClassVar[LiteralString] = "epic_repos"
 
-    initiative_id: int
+    epic_id: int
     repo: str
 
 
 @dataclass(frozen=True)
-class InitiativeMember(Row):
-    """A ticket the operator made a member of an initiative, and, once they removed it, when (DESIGN §43)."""
+class EpicMember(Row):
+    """A ticket the operator made a member of an epic, and, once they removed it, when (DESIGN §43)."""
 
-    TABLE: ClassVar[LiteralString] = "initiative_members"
+    TABLE: ClassVar[LiteralString] = "epic_members"
 
     id: int
-    initiative_id: int
+    epic_id: int
     ticket_key: str
     added_at: str
     #: `cli` or `web`: where the operator added it.
@@ -60,13 +60,13 @@ class InitiativeMember(Row):
 
 
 @dataclass(frozen=True)
-class InitiativeRun(Row):
-    """A run of an initiative's planner (DESIGN §43): its desk, how it ended, and what it spent."""
+class EpicRun(Row):
+    """A run of an epic's planner (DESIGN §43): its desk, how it ended, and what it spent."""
 
-    TABLE: ClassVar[LiteralString] = "initiative_runs"
+    TABLE: ClassVar[LiteralString] = "epic_runs"
 
     id: int
-    initiative_id: int
+    epic_id: int
     #: The tick that started it.
     tick_id: int
     #: The desk of links to its slots, one per repository, that it runs in.
@@ -90,7 +90,7 @@ class InitiativeRun(Row):
     tokens_first_cache_write: int | None
     tokens_first_cache_read: int | None
     definitions_digest: str | None
-    #: The newest message about the initiative its prompt carried: a reply after it asks for the next plan.
+    #: The newest message about the epic its prompt carried: a reply after it asks for the next plan.
     message_id: int | None
     #: The model canopy chose for it, written into its definition; None when the runtime's default serves it.
     model: str | None
@@ -98,10 +98,10 @@ class InitiativeRun(Row):
 
 
 @dataclass(frozen=True)
-class InitiativeRunSlot(Row):
-    """A slot an initiative's plan run leased, one per repository, returned when the run ends (DESIGN §43)."""
+class EpicRunSlot(Row):
+    """A slot an epic's plan run leased, one per repository, returned when the run ends (DESIGN §43)."""
 
-    TABLE: ClassVar[LiteralString] = "initiative_run_slots"
+    TABLE: ClassVar[LiteralString] = "epic_run_slots"
 
     run_id: int
     repo: str
@@ -115,13 +115,13 @@ class InitiativeRunSlot(Row):
 
 
 @dataclass(frozen=True)
-class InitiativePlan(Row):
-    """A plan an initiative's plan run wrote (DESIGN §43): its hashes and status, never its text, which is a file."""
+class EpicPlan(Row):
+    """A plan an epic's plan run wrote (DESIGN §43): its hashes and status, never its text, which is a file."""
 
-    TABLE: ClassVar[LiteralString] = "initiative_plans"
+    TABLE: ClassVar[LiteralString] = "epic_plans"
 
     id: int
-    initiative_id: int
+    epic_id: int
     #: The plan run that wrote it.
     run_id: int
     created_at: str
@@ -137,10 +137,10 @@ class InitiativePlan(Row):
 
 
 @dataclass(frozen=True)
-class InitiativeMemberEntry(Row):
-    """A breakdown entry a member of an initiative fulfils, as the operator registered it (DESIGN §43)."""
+class EpicMemberEntry(Row):
+    """A breakdown entry a member of an epic fulfils, as the operator registered it (DESIGN §43)."""
 
-    TABLE: ClassVar[LiteralString] = "initiative_member_entries"
+    TABLE: ClassVar[LiteralString] = "epic_member_entries"
 
     member_id: int
     #: The entry's id, `B<n>`, in the plan approved when the operator registered it.
