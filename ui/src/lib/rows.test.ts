@@ -100,6 +100,13 @@ describe('rowTiers', () => {
         )
     })
 
+    it("keeps left feedback's reason, text, and button, letting its tick go first, then where it is", () => {
+        const left = rowTiers('left-feedback')
+        expect(left.get('tick')).toBe('xl')
+        expect(left.get('where')).toBe('lg')
+        expect(['reason', 'title', 'send'].filter((name) => left.has(name))).toEqual([])
+    })
+
     it('fits every column a list shows at a tier in that tier, the free one at its floor', () => {
         // A kind with an `auto` column cannot be summed, so none of its columns may give way.
         const giving = KINDS.filter((kind) => rowTiers(kind).size > 0)

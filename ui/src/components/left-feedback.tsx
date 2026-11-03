@@ -4,11 +4,14 @@ import { useState } from 'react'
 
 import { newSubmission, refreshTicket, sendLeftFeedback } from '@/api/mutations'
 import type { LeftFeedback } from '@/api/types'
-import { LinkOut } from '@/components/link-out-icon'
+import { LinkOutIcon } from '@/components/link-out-icon'
+import { LinkedText } from '@/components/linked-text'
 import { ListPanel } from '@/components/list-panel'
 import { Notice } from '@/components/notice'
+import { ListRow } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
+import { Clipped } from '@/components/tip'
 import { Button } from '@/components/ui/button'
 import { leftSentText } from '@/lib/outcomes'
 
@@ -25,9 +28,9 @@ const LEFT_REASONS: Record<LeftFeedback['reason'], string> = {
 
 /**
  * The feedback on a ticket's PRs its review cursors passed with no worker, still left (DESIGN §7), in a list panel of
- * its own, `Left feedback`: each item's author, where it is, linking out to it, why it was left and the tick that left
- * it, and a button that sends it to a worker, as `canopy send KEY N` does: a reply on the ticket naming it, which the
- * next tick reads as your go-ahead. With none, its header alone, as every list's (`ListPanel`).
+ * its own, `Left feedback`: each item a row of why it was left, its author, its first line, where it is, linking out to
+ * it, the tick that left it, and a button that sends it to a worker, as `canopy send KEY N` does: a reply on the ticket
+ * naming it, which the next tick reads as your go-ahead. With none, its header alone, as every list's (`ListPanel`).
  */
 export function LeftFeedbackList({
     ticketKey,
@@ -61,7 +64,7 @@ export function LeftFeedbackList({
             className={className}
             data-testid="ticket-left-feedback"
         >
-            <ul className="flex flex-col gap-2 p-3" data-testid="left-feedback">
+            <ul className="divide-y" data-testid="left-feedback">
                 {items.map((item) => (
                     <LeftRow
                         key={`${item.pr_url}-${item.id}`}
@@ -78,30 +81,74 @@ export function LeftFeedbackList({
     )
 }
 
-/** One item: who wrote it and where, why it was left and by which tick, and its button. */
+/**
+ * One item, in the columns of its kind (`left-feedback`): why it was left, who wrote it and its first line, where it
+ * is, linking out to it, the tick that left it, and its button. The comment is the reviewer's text, never markup.
+ */
 function LeftRow({ item, pending, onSend }: { item: LeftFeedback; pending: boolean; onSend: () => void }) {
     const where = item.path !== null && item.line !== null ? `${item.path}:${item.line}` : item.item
+    const author = item.author ?? 'unknown'
     return (
-        <li className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-            <span className="min-w-0 truncate font-mono text-xs">{where}</span>
-            {item.url !== null && <LinkOut href={item.url} label={`open ${item.item} ${item.id} on GitHub`} />}
-            <span className="text-xs text-muted-foreground">by {item.author ?? 'unknown'}</span>
-            <Chip>{LEFT_REASONS[item.reason]}</Chip>
-            <span className="text-xs text-muted-foreground">
-                left by <TickLink id={item.tick_id} />
+        <ListRow kind="left-feedback" className="text-sm">
+            <span>
+                <Chip className="whitespace-nowrap">{LEFT_REASONS[item.reason]}</Chip>
+            </span>
+            {/* Its author leads its text, as a message's does in a conversation, so every width shows both. */}
+            <span className="flex min-w-0 items-baseline gap-2">
+                <span className="shrink-0 text-xs text-muted-foreground">{author}</span>
+                <Clipped text={item.body.trim()}>
+                    <LinkedText text={firstLine(item.body)} />
+                </Clipped>
+            </span>
+            <Where item={item} where={where} />
+            <span className="text-right">
+                <TickLink id={item.tick_id} />
             </span>
             <Button
-                size="sm"
-                variant="outline"
-                className="ml-auto"
+                size="icon-xs"
+                variant="ghost"
+                className="-my-1 justify-self-end"
                 onClick={onSend}
                 disabled={pending}
-                title="Reply on the ticket naming it: the next tick reads it as your go-ahead"
+                title="Send to a worker: a reply on the ticket naming it, which the next tick reads as your go-ahead"
                 aria-label={`send ${where} to a worker`}
             >
-                <Send />
-                send to a worker
+                <Send aria-hidden />
             </Button>
-        </li>
+        </ListRow>
     )
+}
+
+/**
+ * Where an item is, in a column too narrow for a whole path: its file's name and line (`client.ts:42`), or `review`
+ * for a review's own text, linking out to it on GitHub, the whole path on hover and to a screen reader.
+ */
+function Where({ item, where }: { item: LeftFeedback; where: string }) {
+    const shown = item.path !== null && item.line !== null ? `${baseName(item.path)}:${item.line}` : item.item
+    if (item.url === null) {
+        return <Clipped text={where} mono className="font-mono text-xs text-muted-foreground" />
+    }
+    return (
+        <a
+            href={item.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            title={`${where} on GitHub`}
+            aria-label={`${where} on GitHub`}
+            className="flex min-w-0 items-center gap-1 font-mono text-xs text-accent underline-offset-4 hover:underline"
+        >
+            <span className="truncate">{shown}</span>
+            <LinkOutIcon href={item.url} className="shrink-0" />
+        </a>
+    )
+}
+
+/** A comment's first line with any text, as its row shows it. */
+function firstLine(body: string): string {
+    return body.split('\n').find((line) => line.trim() !== '') ?? ''
+}
+
+/** A path's last part, the file's own name. */
+function baseName(path: string): string {
+    return path.slice(path.lastIndexOf('/') + 1)
 }
