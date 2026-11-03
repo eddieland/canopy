@@ -26,10 +26,10 @@ const buttonVariants = cva(
                 default:
                     'bg-accent text-accent-foreground shadow-action hover:bg-accent/85 active:shadow-action-pressed',
                 outline: [
-                    'border-border bg-surface-raised hover:bg-surface hover:text-foreground',
+                    'border-control bg-surface-raised hover:bg-surface hover:text-foreground',
                     'aria-expanded:bg-surface aria-expanded:text-foreground',
                 ],
-                secondary: 'bg-surface-raised text-foreground hover:bg-surface-raised/70',
+                secondary: 'border-control-quiet bg-surface-raised text-foreground hover:bg-surface-raised/70',
                 ghost: [
                     'text-muted-foreground hover:bg-surface-raised hover:text-foreground',
                     'aria-expanded:bg-surface-raised aria-expanded:text-foreground',

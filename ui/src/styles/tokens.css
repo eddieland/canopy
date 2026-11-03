@@ -192,6 +192,17 @@
     --canvas-texture: none;
     --title-drop: 0;
     --title-drop-alpha: 0;
+    /* The same ink carried inside a panel, which only Pulp draws either: a chip ringed and dropped (`--depth-chip`),
+     * the selected row of a list inked and lifted off it (`--depth-selected`, nudged by `--lift-x` and `--lift-y`),
+     * and a field's or an outline or secondary button's line in ink (`--control-line`, `--control-line-quiet`). The
+     * defaults draw none of it: no shadow, no nudge, a field's and an outline button's line the border, and a
+     * secondary button's none. */
+    --depth-chip: none;
+    --depth-selected: none;
+    --lift-x: 0px;
+    --lift-y: 0px;
+    --control-line: var(--border);
+    --control-line-quiet: transparent;
 
     /* The face interface text is set in: Plex Sans, or the mono data is set in (`--face-mono`), for an editor that
      * sets everything in it. Both are bundled and preloaded, so a palette that switches never paints in a fallback
@@ -528,6 +539,15 @@
     --nav-block: 1;
     --nav-hairline: 0;
     --nav-on-ink: var(--surface);
+    /* The ink goes on inside a panel at a lighter hand: a chip ringed at one line with a drop of two, so a row of them
+     * does not crowd; the selected row inked as a panel is and lifted a pixel up and left off the list, the one thing
+     * on the page drawn as standing out of it; and a field's and a quiet button's line inked as the panel's. */
+    --depth-chip: 0 0 0 1px var(--ink), 2px 2px 0 1px var(--ink);
+    --depth-selected: 0 0 0 1.5px var(--ink), 3px 3px 0 1.5px var(--ink);
+    --lift-x: -1px;
+    --lift-y: -1px;
+    --control-line: var(--ink);
+    --control-line-quiet: var(--ink);
 }
 
 /* Sage: a soft green canvas, the light side of Forest, with heather for an accent, since a green one would
@@ -840,6 +860,14 @@
     --canvas-texture: radial-gradient(oklch(from var(--foreground) l c h / 0.1) 1px, transparent 1.5px) 0 0 / 6px 6px;
     --title-drop: 0.08em;
     --title-drop-alpha: 1;
+    /* Inside a panel, as light's: a chip ringed in the cream and dropped two pixels in the ultramarine, the selected
+     * row inked and lifted off the list onto its drop, and a field's and a quiet button's line in the cream. */
+    --depth-chip: 0 0 0 1px var(--ink), 2px 2px 0 1px var(--ink-drop);
+    --depth-selected: 0 0 0 1px var(--ink), 4px 4px 0 1px var(--ink-drop);
+    --lift-x: -1px;
+    --lift-y: -1px;
+    --control-line: var(--ink);
+    --control-line-quiet: var(--ink);
 }
 
 /* Forest: a deep green canvas, the dark side of Sage, and heather for an accent, as Sage wears: a lake blue read as
@@ -1030,6 +1058,10 @@
     --shadow-action: var(--depth-action);
     --shadow-action-pressed: var(--depth-action-pressed);
     --shadow-bubble: var(--depth-bubble);
+    --shadow-chip: var(--depth-chip);
+    --shadow-selected: var(--depth-selected);
+    --color-control: var(--control-line);
+    --color-control-quiet: var(--control-line-quiet);
 
     /*
      * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names

@@ -10,7 +10,8 @@ import { readable } from '@/lib/words'
 
 // Every chip's color, the one map of them (ui/DESIGN.md, "Chips"): its color's hairline at 40% over the same color at
 // 10%, so it holds its edge on a selected row's tint too. Plain is muted-foreground's, and so is a `leave` proposal's,
-// which does nothing. Written out so Tailwind finds them.
+// which does nothing. Written out so Tailwind finds them. A palette that inks its chips (`shadow-chip`) rings and drops
+// them outside this hairline, so their colors stay these.
 const PLAIN = 'border-muted-foreground/40 bg-muted-foreground/10 text-muted-foreground'
 const TONE: Record<Tone | ProposalTone, string> = {
     plain: PLAIN,
@@ -66,6 +67,7 @@ export function Chip({
             <span
                 className={cn(
                     'inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1.5 font-mono text-2xs',
+                    'shadow-chip',
                     TONE[tone],
                     className,
                 )}

@@ -35,6 +35,21 @@ const TONE: Record<BreakdownPart['kind'], string> = {
     other: 'text-muted-foreground',
 }
 
+// A count on its active item sits on a plate in the ink a palette that draws the highlight as a block sets
+// (`--nav-on-ink`), since a status color would not read on a section's solid color, and on the plate it keeps its own.
+// The plate is a background and a ring's spread, so it takes no room, and a palette that draws no block sets no ink,
+// so it draws none. Written out so Tailwind finds them: a wider ring beside the label, a narrower one on the corner.
+const ON_BLOCK = {
+    wide: [
+        'rounded-xs group-data-[status=active]:bg-(--nav-on-ink)',
+        'group-data-[status=active]:shadow-[0_0_0_3px_var(--nav-on-ink)]',
+    ],
+    compact: [
+        'rounded-xs group-data-[status=active]:bg-(--nav-on-ink)',
+        'group-data-[status=active]:shadow-[0_0_0_2px_var(--nav-on-ink)]',
+    ],
+}
+
 // A page under a section, which opens under its item while the section is shown.
 interface SubPage {
     to:
@@ -317,7 +332,11 @@ function AttentionCount({ counts, compact }: { counts: Record<Severity, number>;
         const total = parts.reduce((sum, { count }) => sum + count, 0)
         return (
             <span
-                className={cn('absolute top-0 right-0.5 readout text-2xs', parts[0] && TONE[parts[0].kind])}
+                className={cn(
+                    'absolute top-0 right-0.5 readout text-2xs',
+                    ON_BLOCK.compact,
+                    parts[0] && TONE[parts[0].kind],
+                )}
                 title={said}
                 data-testid="nav-attention-count"
             >
@@ -327,7 +346,11 @@ function AttentionCount({ counts, compact }: { counts: Record<Severity, number>;
         )
     }
     return (
-        <span className="ml-auto flex gap-1.5 readout text-xs" title={said} data-testid="nav-attention-count">
+        <span
+            className={cn('ml-auto flex gap-1.5 readout text-xs', ON_BLOCK.wide)}
+            title={said}
+            data-testid="nav-attention-count"
+        >
             {parts.map(({ kind, count }) => (
                 <span key={kind} aria-hidden className={TONE[kind]} data-testid={`nav-attention-${kind}`}>
                     {count}
@@ -352,7 +375,7 @@ function ReviewCount({ unseen, compact }: { unseen: ReviewSummary[]; compact: bo
             className={cn(
                 'readout',
                 tone === '' ? 'text-muted-foreground' : tone,
-                compact ? 'absolute top-0 right-0.5 text-2xs' : 'ml-auto text-xs',
+                compact ? ['absolute top-0 right-0.5 text-2xs', ON_BLOCK.compact] : ['ml-auto text-xs', ON_BLOCK.wide],
             )}
             title={said}
             data-testid="nav-reviews-count"
@@ -374,7 +397,7 @@ function ProposalCount({ waiting, compact }: { waiting: number; compact: boolean
         <span
             className={cn(
                 'readout text-status-blocked',
-                compact ? 'absolute top-0 right-0.5 text-2xs' : 'ml-auto text-xs',
+                compact ? ['absolute top-0 right-0.5 text-2xs', ON_BLOCK.compact] : ['ml-auto text-xs', ON_BLOCK.wide],
             )}
             title={said}
             data-testid="nav-memory-count"
