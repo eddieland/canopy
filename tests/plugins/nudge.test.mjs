@@ -191,3 +191,76 @@ test("under OpenCode 2, a failed call counts toward the nudge, and a refused sta
         { type: "text", text: "ok" },
     ]);
 });
+
+/** A worker's update that reports `steps`, each `[title, status]`. */
+async function reports(hooks, steps, session = "ses_1") {
+    const args = { summary: "s", now: "n", steps: steps.map(([title, status]) => ({ title, status })) };
+    await hooks["tool.execute.after"]({ tool: STATUS, sessionID: session, callID: "call_1", args }, mcp());
+}
+
+const COPY = "/work/slot/.canopy-plan.md";
+const ONLY_FILE = ` Your plan is \`${COPY}\`: take your steps from it.`;
+
+test("following a plan, the line names its file, and the steps last reported working and next", async () => {
+    process.env.CANOPY_PLAN = COPY;
+    try {
+        const hooks = await canopy.server({});
+        await calls(hooks, 7);
+        assert.equal((await after(hooks, builtin())).output, `ok\n${FIRST}${ONLY_FILE}`);
+        await reports(hooks, [
+            ["Add the endpoint", "done"],
+            ["Wire the  button\n", "working"],
+            ["Old tests", "skipped"],
+            ["Write the tests", "not_started"],
+            ["Docs", "not_started"],
+        ]);
+        await calls(hooks, 19);
+        assert.equal(
+            (await after(hooks, builtin())).output,
+            `ok\n${ASKED} Your plan is \`${COPY}\`; your last update had step "Wire the button" working and step` +
+                ` "Write the tests" next.`,
+        );
+        // An update with none working names the first not started; one with no steps, the file alone.
+        await reports(hooks, [["Write the tests", "not_started"]]);
+        await calls(hooks, 19);
+        const next = (await after(hooks, builtin())).output;
+        assert.equal(next, `ok\n${ASKED} Your plan is \`${COPY}\`; your last update had step "Write the tests" next.`);
+        await reports(hooks, []);
+        await calls(hooks, 19);
+        assert.equal((await after(hooks, builtin())).output, `ok\n${ASKED}${ONLY_FILE}`);
+    } finally {
+        delete process.env.CANOPY_PLAN;
+    }
+});
+
+test("each session's steps are its own, and steps the server would refuse are none", async () => {
+    process.env.CANOPY_PLAN = COPY;
+    try {
+        const hooks = await canopy.server({});
+        await reports(hooks, [["Mine", "working"]], "ses_1");
+        await reports(hooks, [["x".repeat(201), "working"]], "ses_2");
+        await calls(hooks, 19, "ses_1");
+        await calls(hooks, 19, "ses_2");
+        const mine = (await after(hooks, builtin(), { session: "ses_1" })).output;
+        assert.equal(mine, `ok\n${ASKED} Your plan is \`${COPY}\`; your last update had step "Mine" working.`);
+        const other = (await after(hooks, builtin(), { session: "ses_2" })).output;
+        assert.equal(other, `ok\n${ASKED}${ONLY_FILE}`);
+    } finally {
+        delete process.env.CANOPY_PLAN;
+    }
+});
+
+test("with no plan, or a path that is not one, the line names no plan and no steps", async () => {
+    for (const plan of [undefined, "", "relative/.canopy-plan.md", "/two\nlines"]) {
+        if (plan === undefined) {
+            delete process.env.CANOPY_PLAN;
+        } else {
+            process.env.CANOPY_PLAN = plan;
+        }
+        const hooks = await canopy.server({});
+        await reports(hooks, [["Mine", "working"]]);
+        await calls(hooks, 19);
+        assert.equal((await after(hooks, builtin())).output, `ok\n${ASKED}`, String(plan));
+    }
+    delete process.env.CANOPY_PLAN;
+});

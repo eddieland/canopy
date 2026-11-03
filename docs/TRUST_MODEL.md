@@ -582,9 +582,11 @@ Controls now:
   leading `cd` into its working directory, and, under OpenCode 2, holding a session's first prompt until its MCP tools
   are registered (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is
   written, the operator's included, so no run changes it through its permissions or its sandbox, and the runtime
-  installs nothing into it. The plugin reads three variables,
-  `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, and `CANOPY_ANSWERS`, the clock, the system prompt the runtime hands it, which it
-  cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its session,
+  installs nothing into it. The plugin reads four variables,
+  `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, `CANOPY_ANSWERS`, and `CANOPY_PLAN`, the clock, the system prompt the runtime hands
+  it, which it cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its
+  session, the step titles of a `status` call in a run that follows a plan, which the nudge restates with the plan's
+  path, so its line carries only canopy's words and the worker's own,
   one file, the answer canopy writes in the run's answers directory, through the runtime's own `node:fs`, and under
   OpenCode 2 the runtime's MCP servers' states and its tools' names; it writes no file, refuses no call, grants no
   tool, and catches its own errors. The one call it changes is a shell command that opens with `cd <dir> &&`, whose
