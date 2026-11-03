@@ -20,6 +20,10 @@ def test_a_run_is_a_trace_of_its_own_linked_to_the_tick_that_started_it(scenario
     # The last span of each name.
     traced = {s["name"]: s for s in spans(scenario.env.state_dir / tracing.TRACES_FILE_NAME)}
     tick = traced["tick"]
+    # The tick's journal totals hold each of its steps'.
+    queries = int(tick["attributes"].pop("canopy.journal_queries"))
+    assert float(tick["attributes"].pop("canopy.journal_seconds")) > 0
+    assert queries > int(traced["state"]["attributes"]["canopy.journal_queries"]) > 0
     assert tick["attributes"] == {
         "canopy.tick_id": str(ticked.tick.id),
         "canopy.dry_run": False,
@@ -36,6 +40,8 @@ def test_a_run_is_a_trace_of_its_own_linked_to_the_tick_that_started_it(scenario
     assert isinstance(links, list)
     [link] = links
     assert (link["traceId"], link["spanId"]) == (tick["traceId"], traced["spawn"]["spanId"])
+    assert int(run["attributes"].pop("canopy.journal_queries")) > 0
+    assert run["attributes"].pop("canopy.journal_seconds")
     assert run["attributes"] == {"canopy.run_id": str(ran.row["id"]), "canopy.status": ran.row["status"]}
 
 

@@ -25,11 +25,13 @@ def test_a_request_is_a_server_span_named_for_its_route_never_its_values(tmp_pat
     assert transcript["kind"] == 2
     assert transcript["traceId"] != "a" * 32
     assert "parentSpanId" not in transcript
-    assert transcript["attributes"] == {
+    assert {k: v for k, v in transcript["attributes"].items() if k.startswith("http.")} == {
         "http.request.method": "GET",
         "http.route": "/api/runs/{run_id}/transcript",
         "http.response.status_code": "200",
     }
+    # What the request asked of the journal, run on the server's worker threads.
+    assert int(transcript["attributes"]["canopy.journal_queries"]) > 0
     # A method HTTP does not name is `_OTHER`; nothing the client sent beyond it is kept.
     assert brewed["attributes"]["http.request.method"] == "_OTHER"
     assert "BREW" not in written

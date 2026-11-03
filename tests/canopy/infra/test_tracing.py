@@ -107,3 +107,24 @@ def test_a_new_trace_starts_its_own_whatever_trace_the_process_inherited(tmp_pat
     assert tick["traceId"] != TRACE
     assert "parentSpanId" not in tick
     assert (state["traceId"], state["parentSpanId"]) == (tick["traceId"], tick["spanId"])
+
+
+def test_a_tally_adds_up_on_its_span_and_every_span_above_it_in_its_trace(traced: Path) -> None:
+    tracing.tally(lost=1)
+    with tracing.span("tick"):
+        tracing.tally(queries=1)
+        with tracing.span("state"):
+            tracing.tally(queries=2, seconds=0.5)
+            with tracing.span("run", new_trace=True):
+                tracing.tally(queries=7)
+    run, state, tick = spans(traced)
+    assert state["attributes"] == {"canopy.queries": "2", "canopy.seconds": 0.5}
+    assert tick["attributes"] == {"canopy.queries": "3", "canopy.seconds": 0.5}
+    # A new trace's totals are its own.
+    assert run["attributes"] == {"canopy.queries": "7"}
+
+
+def test_a_tally_while_tracing_is_off_is_kept_nowhere() -> None:
+    with tracing.span("tick") as tick:
+        tracing.tally(queries=1)
+    assert not tick.tallies
