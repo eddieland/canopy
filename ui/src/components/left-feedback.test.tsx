@@ -33,8 +33,9 @@ function left(over: Partial<LeftFeedback> = {}): LeftFeedback {
 const sent: unknown[] = []
 const server: Middleware = {
     async onRequest({ request }) {
-        sent.push(await request.clone().json())
-        return Response.json({ numbers: [7], message_id: 41, new: true })
+        const body = (await request.clone().json()) as { numbers: number[] }
+        sent.push(body)
+        return Response.json({ numbers: body.numbers, message_id: 41, new: true })
     },
 }
 
@@ -115,5 +116,32 @@ describe('LeftFeedbackList', () => {
             'ABC-103 feedback 7 went to it as message 41: the next tick reads it as your go-ahead.',
         )
         expect(sent).toEqual([{ numbers: [7], submission: expect.any(String) as unknown }])
+    })
+
+    it('sends every item in one reply from its header, and says so in the words the CLI does', async () => {
+        api.use(server)
+        await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={[left(), left({ number: 8, id: 9 })]} />)
+        fireEvent.click(screen.getByRole('button', { name: 'send all 2' }))
+        const said = await screen.findByRole('status')
+        expect(said.textContent).toBe(
+            'ABC-103 feedback 7, 8 went to it as message 41: the next tick reads it as your go-ahead.',
+        )
+        expect(sent).toEqual([{ numbers: [7, 8], submission: expect.any(String) as unknown }])
+    })
+
+    it('offers no send-all for a single item', async () => {
+        await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={[left()]} />)
+        expect(screen.queryByRole('button', { name: /^send all/u })).toBeNull()
+    })
+
+    it('sends the oldest 20 past the most one reply names, and says so on its button', async () => {
+        api.use(server)
+        const items = Array.from({ length: 22 }, (_, at) => left({ number: at + 1, id: at + 1 }))
+        await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={items} />)
+        fireEvent.click(screen.getByRole('button', { name: 'send oldest 20' }))
+        await screen.findByRole('status')
+        expect(sent).toEqual([
+            { numbers: Array.from({ length: 20 }, (_, at) => at + 1), submission: expect.any(String) as unknown },
+        ])
     })
 })

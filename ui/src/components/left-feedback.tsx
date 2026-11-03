@@ -16,6 +16,9 @@ import { Button } from '@/components/ui/button'
 import { leftSentText } from '@/lib/outcomes'
 import type { Tone } from '@/lib/tone'
 
+// The most numbers one send takes (`LeftSendRequest`): past it, sending all sends the oldest this many.
+const SEND_CAP = 20
+
 // Why the loop left an item, in the words a row shows, by the reason canopy records (`vocab.PassReason`).
 const LEFT_REASONS: Record<LeftFeedback['reason'], string> = {
     optional: 'optional',
@@ -42,7 +45,9 @@ const LEFT_TONE: Record<LeftFeedback['reason'], Tone> = {
  * The feedback on a ticket's PRs its review cursors passed with no worker, still left (DESIGN §7), in a list panel of
  * its own, `Left feedback`: each item a row of why it was left, its author, its first line, where it is, linking out to
  * it, the tick that left it, and a button that sends it to a worker, as `canopy send KEY N` does: a reply on the ticket
- * naming it, which the next tick reads as your go-ahead. With none, its header alone, as every list's (`ListPanel`).
+ * naming it, which the next tick reads as your go-ahead. With two or more, its header sends them all in one reply, as
+ * `canopy send KEY N M ...` does, or the oldest 20 past the most one send takes. With none, its header alone, as every
+ * list's (`ListPanel`).
  */
 export function LeftFeedbackList({
     ticketKey,
@@ -61,17 +66,36 @@ export function LeftFeedbackList({
     const [submission, setSubmission] = useState(newSubmission)
     const [said, setSaid] = useState<string | null>(null)
     const send = useMutation({
-        mutationFn: (number: number) => sendLeftFeedback(ticketKey, [number], submission),
+        mutationFn: (numbers: number[]) => sendLeftFeedback(ticketKey, numbers, submission),
         onSuccess: (sent) => {
             setSaid(leftSentText(ticketKey, sent))
             setSubmission(newSubmission())
             void refreshTicket(client, ticketKey)
         },
     })
+    // Oldest first, so past the cap these are the oldest.
+    const all = items.slice(0, SEND_CAP).map((item) => item.number)
+    const capped = items.length > SEND_CAP
+    const naming = capped ? `the oldest ${SEND_CAP}, the most one reply names` : 'them all'
+    const sendAllTitle = `Send to a worker: one reply on the ticket naming ${naming}, read next tick as your go-ahead`
     return (
         <ListPanel
             label="Left feedback"
             count={items.length}
+            actions={
+                items.length > 1 && (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => send.mutate(all)}
+                        disabled={send.isPending}
+                        title={sendAllTitle}
+                    >
+                        <Send aria-hidden />
+                        {capped ? `send oldest ${SEND_CAP}` : `send all ${items.length}`}
+                    </Button>
+                )
+            }
             aria-label="Left feedback"
             className={className}
             data-testid="ticket-left-feedback"
@@ -82,7 +106,7 @@ export function LeftFeedbackList({
                         key={`${item.pr_url}-${item.id}`}
                         item={item}
                         pending={send.isPending}
-                        onSend={() => send.mutate(item.number)}
+                        onSend={() => send.mutate([item.number])}
                     />
                 ))}
             </ul>
