@@ -58,7 +58,7 @@ class TaskRun(Model):
     head: str | None = None
     """The commit its branch was at on origin when it ended; None when nothing was pushed, or while it runs."""
     summary: str | None = None
-    """The harness's note or the agent's summary, line breaks kept, cut at 300 characters: untrusted."""
+    """The harness's note or the agent's summary, line breaks kept, cut at 2000 characters: untrusted."""
     prs: list[str] = []
     """The PRs its result names, each a plain https:// URL."""
     reported: bool = False
