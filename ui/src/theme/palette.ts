@@ -6,10 +6,10 @@ import type { ResolvedTheme } from './store'
  * The palette each theme draws its neutrals from, chosen apart for light and for dark. Each theme's default carries
  * the accent's hue in its canvas: lavender, a pale lavender grey with white surfaces, and indigo, a deep indigo slate.
  * Light can wear off-white, a warm paper, sage, a soft green, or Solarized's, Nord's, Gruvbox's, Rosé Pine Dawn's, or
- * Acme's light base tones instead, or Pulp, Gruvbox's inked as a comic. Dark can wear grey, the neutral one the
- * 2026-10-19 exploration drew for Mailroom, a near black, forest, a deep green, plum, a dark wine purple, or
- * Solarized's, Gruvbox's, or Monokai's dark tones, or Pulp's. Kept in localStorage and synced across tabs; the
- * inline script in index.html applies it before first paint, and this module afterwards.
+ * Acme's light base tones instead, or Pulp, a comic printed in four colors on newsprint. Dark can wear grey, the
+ * neutral one the 2026-10-19 exploration drew for Mailroom, a near black, forest, a deep green, plum, a dark wine
+ * purple, or Solarized's, Gruvbox's, or Monokai's dark tones, or Pulp's night blue. Kept in localStorage and synced
+ * across tabs; the inline script in index.html applies it before first paint, and this module afterwards.
  */
 
 /** Each theme's palettes, the default first. */
@@ -56,7 +56,7 @@ export const PALETTE_DESCRIPTIONS: { readonly [T in ResolvedTheme]: Readonly<Rec
         solarized: "Solarized's light base tones and its blue, crisp and flat.",
         nord: "Nord's Snow Storm and Frost's blue, soft, under a fade through Frost's blues.",
         gruvbox: "Gruvbox's light tones and its faded purple, set in mono like an editor of the nineties.",
-        pulp: "Gruvbox's light tones, inked like a comic's page.",
+        pulp: 'Newsprint cream in four-color print, process magenta for an accent, inked like a comic.',
         'rose-pine': "Rosé Pine Dawn's warm cream, with its rose for an accent and soft corners.",
         acme: "Plan 9's editor: pale yellow panels on a pale cyan canvas, square and in mono.",
     },
@@ -69,7 +69,7 @@ export const PALETTE_DESCRIPTIONS: { readonly [T in ResolvedTheme]: Readonly<Rec
         solarized: "Solarized's dark base tones and its blue, crisp and flat.",
         gruvbox:
             "Gruvbox's dark tones and its bright purple, in mono with hard shadows, like an editor of the nineties.",
-        pulp: "Gruvbox's dark tones, inked like a comic's page at night.",
+        pulp: "A night-blue comic's page in four-color print, process magenta for an accent, inked.",
         monokai: "Monokai's olive grey and its pink, crisp and in mono under a neon aurora.",
     },
 }

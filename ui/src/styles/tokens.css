@@ -459,23 +459,34 @@
     --nav-on-ink: var(--surface);
 }
 
-/* Pulp light: Gruvbox's light tones, its cream the newsprint, inked as a comic's page. Its colors are a copy of
- * Gruvbox light's, kept apart so Pulp can take its own; nothing ties them, so a change to one leaves the other. */
+/* Pulp light: a comic printed in four colors on newsprint. The paper is a pale, faintly yellowed cream, the panels a
+ * fresher sheet; the text is the key plate, a black with a little of the night's blue in it, as dark's canvas is; and
+ * the accent is process magenta, the one loud ink on the page, at 345 or above so it stays apart from failed's red. */
 :root[data-light-palette='pulp']:not(.dark) {
-    --accent: oklch(0.5 0.12 344);
-    --ring: oklch(0.5 0.12 344 / 0.55);
-    --background: oklch(0.958 0.05 96);
-    --surface: oklch(0.985 0.035 101);
-    --surface-raised: oklch(0.968 0.05 96);
-    --border: oklch(0.904 0.057 89);
-    --foreground: oklch(0.3 0.008 50);
-    --muted-foreground: oklch(0.5 0.023 63);
-    --scrollbar: oklch(0.5 0.023 63 / 0.4);
-    --status-stopped: oklch(0.47 0.023 63);
-    --spend-dry-run: oklch(0.59 0.02 70);
-    --check-other: oklch(0.59 0.02 70);
-    --answer-na: oklch(0.59 0.02 70);
-    --context-carried: oklch(0.59 0.02 70);
+    --accent: oklch(0.51 0.17 350);
+    --ring: oklch(0.51 0.17 350 / 0.55);
+    --background: oklch(0.955 0.03 88);
+    --surface: oklch(0.99 0.014 92);
+    --surface-raised: oklch(0.965 0.028 88);
+    --border: oklch(0.9 0.035 85);
+    --foreground: oklch(0.22 0.02 265);
+    --muted-foreground: oklch(0.48 0.03 260);
+    --scrollbar: oklch(0.48 0.03 260 / 0.4);
+    --status-stopped: oklch(0.47 0.03 260);
+    --spend-dry-run: oklch(0.6 0.02 260);
+    --check-other: oklch(0.6 0.02 260);
+    --answer-na: oklch(0.6 0.02 260);
+    --context-carried: oklch(0.6 0.02 260);
+    /* Its own sections, flat and as loud as a dark enough ink allows: each a process color or two overprinted, in its
+     * section's hue family. Yellow cannot be both dark and bright, so Reports prints as an ochre. */
+    --section-attention: oklch(0.53 0.21 8);
+    --section-tickets: oklch(0.5 0.105 235);
+    --section-tasks: oklch(0.51 0.13 125);
+    --section-pull-requests: oklch(0.5 0.22 302);
+    --section-workspace: oklch(0.45 0.2 264);
+    --section-chores: oklch(0.53 0.14 50);
+    --section-reports: oklch(0.52 0.105 88);
+    --section-memory: oklch(0.5 0.085 195);
 
     /* As its dark side: crisp corners, every line in its mono as a letterer's caps would be, the stepped aurora,
      * the name on a block of its yellow, and the nav's highlight a solid block. */
@@ -751,24 +762,27 @@
     --depth-action: 3px 3px 0 oklch(0.1 0 0);
 }
 
-/* Pulp dark: Gruvbox's dark tones, inked as a comic's page at night. Its colors are a copy of Gruvbox dark's, kept
- * apart so Pulp can take its own; nothing ties them, so a change to one leaves the other. */
+/* Pulp dark: a comic's page at night, shaded in blue as comics shade the night. The canvas is a night blue, light
+ * enough that a black ink drop still reads on it, the panels a step brighter; the text is the newsprint cream light
+ * wears as its paper; and the accent is process magenta, hotter than light's, at 345 or above so it stays apart from
+ * failed's red, and purer than Monokai's pink, which leans toward the rose. The bases are as light as failed's tints
+ * and the accent's own allow. */
 .dark[data-dark-palette='pulp'] {
-    --accent: oklch(0.75 0.1 350);
-    --ring: oklch(0.75 0.1 350 / 0.5);
-    --background: oklch(0.171 0.005 220);
-    --surface: oklch(0.207 0 90);
-    --surface-raised: oklch(0.274 0.007 49);
-    --border: oklch(0.341 0.012 52);
-    --foreground: oklch(0.894 0.057 89);
-    --muted-foreground: oklch(0.69 0.035 76);
-    --accent-foreground: oklch(0.171 0.005 220);
-    --scrollbar: oklch(0.69 0.035 76 / 0.4);
-    --status-stopped: oklch(0.74 0.035 76);
-    --spend-dry-run: oklch(0.62 0.02 70);
-    --check-other: oklch(0.62 0.02 70);
-    --answer-na: oklch(0.62 0.02 70);
-    --context-carried: oklch(0.62 0.02 70);
+    --accent: oklch(0.71 0.23 346);
+    --ring: oklch(0.71 0.23 346 / 0.5);
+    --background: oklch(0.215 0.048 262);
+    --surface: oklch(0.23 0.05 262);
+    --surface-raised: oklch(0.255 0.054 262);
+    --border: oklch(0.32 0.058 262);
+    --foreground: oklch(0.95 0.03 90);
+    --muted-foreground: oklch(0.76 0.04 250);
+    --accent-foreground: oklch(0.215 0.048 262);
+    --scrollbar: oklch(0.76 0.04 250 / 0.4);
+    --status-stopped: oklch(0.78 0.04 250);
+    --spend-dry-run: oklch(0.64 0.03 255);
+    --check-other: oklch(0.64 0.03 255);
+    --answer-na: oklch(0.64 0.03 255);
+    --context-carried: oklch(0.64 0.03 255);
 
     /* Crisp corners, a hard shadow with no blur under what floats and the primary action, and every line of text in
      * its mono, as a letterer's caps would be. */
@@ -797,20 +811,21 @@
     --nav-block: 1;
     --nav-hairline: 0;
     --nav-on-ink: var(--background);
-    /* Its section colors are Gruvbox dark's: its faded set, each in its section's hue family. */
-    --section-attention: oklch(0.72 0.13 5);
-    --section-tickets: oklch(0.72 0.06 230);
-    --section-tasks: oklch(0.78 0.15 115);
-    --section-pull-requests: oklch(0.72 0.09 320);
-    --section-workspace: oklch(0.68 0.06 260);
-    --section-chores: oklch(0.74 0.15 52);
-    --section-reports: oklch(0.84 0.15 85);
-    --section-memory: oklch(0.78 0.07 190);
-    /* A comic's page at night: panels outlined in its bg3, a step brighter than the hairlines inside them, drop a
-     * hard black shadow off the gutter, which is dotted in halftone, as a bubble does, and the primary action presses
-     * flat into its shadow. */
+    /* Its own sections, flat and at full chroma, as a comic prints them: each a process color or two overprinted,
+     * in its section's hue family, at as much chroma as the screen can show. */
+    --section-attention: oklch(0.74 0.165 4);
+    --section-tickets: oklch(0.78 0.135 232);
+    --section-tasks: oklch(0.86 0.2 120);
+    --section-pull-requests: oklch(0.74 0.155 300);
+    --section-workspace: oklch(0.72 0.145 264);
+    --section-chores: oklch(0.8 0.13 55);
+    --section-reports: oklch(0.9 0.18 98);
+    --section-memory: oklch(0.82 0.135 188);
+    /* A comic's page at night: panels outlined a step brighter than the hairlines inside them, in the night's blue,
+     * drop a hard black shadow off the gutter, which is dotted in halftone, as a bubble does, and the primary action
+     * presses flat into its shadow. */
     --ink: oklch(0.06 0 0);
-    --edge: oklch(0.44 0.017 58);
+    --edge: oklch(0.46 0.06 262);
     --depth-panel: 5px 5px 0 var(--ink);
     --depth-float: 0 0 0 1px var(--ink), 6px 6px 0 var(--ink);
     --depth-action: 0 0 0 1.5px var(--ink), 3px 3px 0 1.5px var(--ink);
