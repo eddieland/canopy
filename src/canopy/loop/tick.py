@@ -382,6 +382,7 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
     applied = db.migrate(ctx.conn, resources.migrations_dir())
     abandoned = db.abandon_unfinished_ticks(ctx.conn)
     overseer_runs.close_abandoned(ctx.conn)
+    run_metrics.abandoned(ctx.conn, abandoned)
     # A run a dead tick recorded and did not start is never started: this tick decides again (DESIGN §40).
     unstarted = recorded_runs.close_unstarted(ctx.conn)
     tick_id = db.start_tick(ctx.conn, dry_run=dry_run)
