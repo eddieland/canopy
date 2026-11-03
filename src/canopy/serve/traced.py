@@ -5,6 +5,8 @@ A request is a trace of its own, named for its method and its route as canopy's 
 with. Nothing the client sent beyond a method HTTP names: never the path's values, the query, a header, the cookie, or
 the body, which may hold the operator's words or credentials; a `traceparent` it sent is not read, so no client starts
 or joins a trace of canopy's. A request no route matched, such as one the guard refused, is named for its method alone.
+One answered with a 5xx is failed, as the conventions have a server's span. A span lasts until the answer's last byte,
+so one of a stream the page holds open is as long as the page kept it.
 """
 
 from __future__ import annotations
@@ -18,6 +20,8 @@ if TYPE_CHECKING:
 
 #: The methods HTTP names; any other a client sends is recorded as `_OTHER`, as the convention has it.
 METHODS = frozenset({"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "CONNECT", "TRACE"})
+#: The least status that fails a server's span: a 4xx is the client's error, not the server's.
+SERVER_ERROR = 500
 
 
 class Traced:
@@ -52,6 +56,8 @@ class Traced:
                 traced.set_standard(
                     {"http.request.method": method, "http.route": route, "http.response.status_code": code},
                 )
+                if code is not None and code >= SERVER_ERROR:
+                    traced.fail(str(code))
 
     def _route(self, scope: Scope) -> str | None:
         """The template of the route the request took, as canopy's code spells it, its mount's prefix included.
@@ -64,5 +70,6 @@ class Traced:
         route = getattr(scope.get("route"), "path", None)
         if not isinstance(route, str):
             return None
-        under_api = str(scope["path"]).startswith(f"{self.api_prefix}/") and not route.startswith(self.api_prefix)
+        prefixed = route == self.api_prefix or route.startswith(f"{self.api_prefix}/")
+        under_api = str(scope["path"]).startswith(f"{self.api_prefix}/") and not prefixed
         return f"{self.api_prefix}{route}" if under_api else route

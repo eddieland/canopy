@@ -444,7 +444,11 @@ def spawned_output(runner: SubprocessRunner, tmp_path: Path) -> str:
     ("args", "named"),
     [
         (["/usr/bin/git", "-C", "/slot", "-c", "core.hooksPath=/dev/null", "fetch", "origin"], ("git", "fetch")),
-        (["opencode", "--print-logs", "run", "fix PROJ-1"], ("opencode", "run")),
+        (["opencode", "run", "--print-logs", "fix PROJ-1"], ("opencode", "run")),
+        (["/usr/bin/git", "--no-pager", "--git-dir", "/slot/.git", "log"], ("git", "log")),
+        # Another program's option may take what follows as its value, which is not read past.
+        (["agent", "--prompt", "hello", "run"], ("agent", None)),
+        (["notify", "--message", "done"], ("notify", None)),
         (["canopy-github", "pr-view"], ("canopy-github", "pr-view")),
         # Nothing that is not a word a subcommand would be: a key, a hash, a path, a sentence.
         (["git", "PROJ-12"], ("git", None)),

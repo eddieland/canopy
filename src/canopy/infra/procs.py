@@ -36,8 +36,8 @@ DEADLINE_ENV = "CANOPY_DEADLINE"
 #: What a subcommand looks like, `fetch` or `pr-view`, for a span to be named for it: a short word of lowercase letters
 #: and hyphens, so a key, a path, a hash, a URL, or a sentence is never one.
 SUBCOMMAND = re.compile(r"[a-z][a-z-]{0,23}")
-#: The options that take the next argument as their value, before a subcommand: git's `-C <dir>` and `-c <key=value>`.
-_OPTIONS_WITH_VALUE = frozenset({"-C", "-c"})
+#: git's options before its subcommand that take the next argument as their value; git's others take none.
+_GIT_OPTIONS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"})
 
 
 class ProcError(Exception):
@@ -356,20 +356,21 @@ class SubprocessRunner:
 def named(args: Sequence[str]) -> tuple[str, str | None]:
     """What a span of running `args` is named for: its program, and its subcommand when it has one.
 
-    The program is the executable's file name, never its directory. The subcommand is the first argument that is not an
-    option, or an option's value, and only when it looks like one (`SUBCOMMAND`).
+    The program is the executable's file name, never its directory. The subcommand is its first argument, or git's
+    first after the options it takes before one, whose values canopy knows, and only when it looks like one
+    (`SUBCOMMAND`). Another program's options are not read past: what follows one may be its value, text canopy read.
 
     Returns:
         The program, and the subcommand or None.
     """
     program = Path(args[0]).name if args else ""
     rest = iter(args[1:])
-    for arg in rest:
-        if arg in _OPTIONS_WITH_VALUE:
+    word = next(rest, None)
+    while program == "git" and word is not None and word.startswith("-"):
+        if word in _GIT_OPTIONS_WITH_VALUE:
             next(rest, None)
-        elif not arg.startswith("-"):
-            return program, arg if SUBCOMMAND.fullmatch(arg) else None
-    return program, None
+        word = next(rest, None)
+    return program, word if word is not None and SUBCOMMAND.fullmatch(word) else None
 
 
 def _child_env(
