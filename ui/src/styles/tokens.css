@@ -192,6 +192,9 @@
     --canvas-texture: none;
     --title-drop: 0;
     --title-drop-alpha: 0;
+    /* A bubble's balloon tail (`bubble-tail` in src/index.css): how far it reaches and the line it is inked in. */
+    --bubble-tail: 0px;
+    --bubble-tail-line: 0px;
 
     /* The face interface text is set in: Plex Sans, or the mono data is set in (`--face-mono`), for an editor that
      * sets everything in it. Both are bundled and preloaded, so a palette that switches never paints in a fallback
@@ -528,6 +531,9 @@
     --nav-block: 1;
     --nav-hairline: 0;
     --nav-on-ink: var(--surface);
+    /* A bubble's balloon tail out of its square corner, inked as its ring is. */
+    --bubble-tail: 7px;
+    --bubble-tail-line: 1.5px;
 }
 
 /* Sage: a soft green canvas, the light side of Forest, with heather for an accent, since a green one would
@@ -840,6 +846,10 @@
     --canvas-texture: radial-gradient(oklch(from var(--foreground) l c h / 0.1) 1px, transparent 1.5px) 0 0 / 6px 6px;
     --title-drop: 0.08em;
     --title-drop-alpha: 1;
+    /* A bubble's balloon tail out of its square corner, inked as its ring is, the operator's dropping its shadow
+     * outward. */
+    --bubble-tail: 7px;
+    --bubble-tail-line: 1px;
 }
 
 /* Forest: a deep green canvas, the dark side of Sage, and heather for an accent, as Sage wears: a lake blue read as
