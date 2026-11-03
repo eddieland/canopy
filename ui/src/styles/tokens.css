@@ -821,18 +821,22 @@
     --section-chores: oklch(0.8 0.13 55);
     --section-reports: oklch(0.9 0.18 98);
     --section-memory: oklch(0.82 0.135 188);
-    /* A comic's page at night: panels outlined a step brighter than the hairlines inside them, in the night's blue,
-     * drop a hard black shadow off the gutter, which is dotted in halftone, as a bubble does, and the primary action
-     * presses flat into its shadow. */
-    --ink: oklch(0.06 0 0);
-    --edge: oklch(0.46 0.06 262);
-    --depth-panel: 5px 5px 0 var(--ink);
-    --depth-float: 0 0 0 1px var(--ink), 6px 6px 0 var(--ink);
-    --depth-action: 0 0 0 1.5px var(--ink), 3px 3px 0 1.5px var(--ink);
-    --depth-action-pressed: 0 0 0 1.5px var(--ink);
+    /* A comic's page at night, inked as light's is but with a light line on dark fields: panels, what floats, the
+     * primary action, and a bubble outlined in the cream, by the same rings, at one line where light draws a line and
+     * a half, for a page read all day. Each drops a hard shadow in an ultramarine plate (`--ink-drop`): black would
+     * vanish into the night blue, and this reads on it at 1.85:1 and on a panel at 1.78:1, at a hue far from
+     * failed's red and the magenta accent. The gutter is dotted in halftone, and the primary action presses flat into
+     * its shadow. */
+    --ink: oklch(from var(--foreground) l c h / 0.85);
+    --ink-drop: oklch(0.4 0.11 280);
+    --edge: var(--ink);
+    --depth-panel: 5px 5px 0 var(--ink-drop);
+    --depth-float: 6px 6px 0 var(--ink-drop);
+    --depth-action: 0 0 0 1px var(--ink), 3px 3px 0 1px var(--ink-drop);
+    --depth-action-pressed: 0 0 0 1px var(--ink);
     --press-x: 3px;
     --press-y: 3px;
-    --depth-bubble: 3px 3px 0 var(--ink);
+    --depth-bubble: 0 0 0 1px var(--ink), 3px 3px 0 1px var(--ink-drop);
     --canvas-texture: radial-gradient(oklch(from var(--foreground) l c h / 0.1) 1px, transparent 1.5px) 0 0 / 6px 6px;
     --title-drop: 0.08em;
     --title-drop-alpha: 1;

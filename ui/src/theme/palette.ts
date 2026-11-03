@@ -69,7 +69,7 @@ export const PALETTE_DESCRIPTIONS: { readonly [T in ResolvedTheme]: Readonly<Rec
         solarized: "Solarized's dark base tones and its blue, crisp and flat.",
         gruvbox:
             "Gruvbox's dark tones and its bright purple, in mono with hard shadows, like an editor of the nineties.",
-        pulp: "A night-blue comic's page in four-color print, process magenta for an accent, inked.",
+        pulp: "A night-blue comic's page in four-color print, process magenta for an accent, inked in cream.",
         monokai: "Monokai's olive grey and its pink, crisp and in mono under a neon aurora.",
     },
 }
