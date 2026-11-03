@@ -318,6 +318,20 @@ def epic_planning(env: CanopyEnv) -> int:
     return started.run_id
 
 
+def epic_planned(env: CanopyEnv, plan: str, epic_id: int = 1) -> int:
+    """Have epic `epic_id`'s next plan run, as a live tick starts one, write `plan`: return the run's id.
+
+    The epic is already submitted, and due a plan run: just submitted, or replied to since its last.
+    """
+    ctx = inline_context(env)
+    with in_tick(ctx.conn) as tick_id:
+        started = epic_starts.start_due(ctx, tick_id, logs.for_tick(tick_id))
+    [run_id] = [s.run_id for s in started if s.epic_id == epic_id]
+    with planner_does(plan=plan):
+        assert main(["_epic", str(run_id)], runner=InlineRunner()) == 0
+    return run_id
+
+
 def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
     """Record a run of `key` that is still running, in a tick of its own, and return its id."""
     tick_id = db.start_tick(ctx.conn, dry_run=False)

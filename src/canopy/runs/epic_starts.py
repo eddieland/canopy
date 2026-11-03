@@ -156,8 +156,11 @@ def _spawn(ctx: Context, epic: records.Epic, run_id: int, names: Sequence[str]) 
         # None leaves the section out: an epic may be planned before any ticket of it exists.
         "MEMBERS": "\n".join(f"- {key}" for key in members) or None,
         "MAP": dispatch.map_note(ctx),
-        # The operator's replies come with replies to an epic (DESIGN §43); none reaches a run yet.
-        "OPERATOR_MESSAGES": None,
+        # The operator's replies, each an instruction, the oldest first: what the next plan changes (DESIGN §43).
+        "OPERATOR_MESSAGES": "\n\n".join(
+            f"Message {m.id}, {m.at}:\n\n{m.body}" for m in epics.messages_of(ctx.conn, epic.id)
+        )
+        or None,
         "PLAN_OUT": plans.WRITTEN,
         "PLAN_FILE": plans.REPLACED,
         "MAX_PLAN_CHARS": str(plans.MAX_CHARS),
