@@ -122,7 +122,8 @@ The **Transcript** is the run's session, from its log, oldest first:
 - its text, with its reasoning set in italics and marked `thinking`. Long thinking shows its first four lines and
   **show N more lines** for the rest, since a model that thinks out loud rarely thinks briefly. **All open**, or a
   search that finds a line in the folded part, shows it whole;
-- each tool call, with what it did and how long it took; click one to see its input and output. A canopy command the
+- each tool call, with what it did and how long it took; click one to see its input and output. A shell command that
+  ran somewhere other than the agent's directory shows that directory first, `app $ make test`. A canopy command the
   harness refused is marked `refused`, with the guard. An overseer's `decide` names each ticket and its action on its
   row, and opens to every decision on a line of its own with its rationale, so a tick that decided twelve tickets in
   one call doesn't leave you reading them out of a JSON array. Its `ticket-set` does the same: each ticket, or
