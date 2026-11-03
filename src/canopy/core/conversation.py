@@ -803,6 +803,8 @@ class Forgot:
 
     branch: str | None
     prs: Sequence[str]
+    #: Whether the ticket itself was removed: the journal held nothing of it but its decisions (`db.holds_nothing_of`).
+    removed: bool = False
 
 
 def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: Path) -> Forgot:
@@ -814,12 +816,18 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
     cursors stay, so what was handled stays handled. Each forget is recorded, from `channel`, with what it dropped. It
     holds the dispatch lock, so a dispatch that read the old branch cannot record it again afterwards.
 
+    A ticket the journal holds nothing of but its decisions, which no source ever observed, such as a key the overseer
+    named from nowhere, is removed instead, its decisions kept: no tracker read asks for it again, and no tick decides
+    it. Nothing of it was ever more than a key.
+
     Returns:
-        The ticket's branch and its units' PRs, as the journal had them before they were cleared.
+        The ticket's branch and its units' PRs, as the journal had them before they were cleared, and whether the
+        ticket itself was removed.
 
     Raises:
         Refused: `unsupported` for a subject that is not a ticket, `unknown` for a ticket canopy has no record of,
-            `running` while a run works it, `already_forgotten` for one with nothing new since its last forget.
+            `running` while a run works it, `already_forgotten` for one with nothing new since its last forget, `held`
+            for one to remove that another record of the journal names.
     """
     check_verb(ref, "forget")
     with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
@@ -833,6 +841,15 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: P
                 f"run {running.id} ({running.kind}) is working {ref}; wait for it to end, or on a started "
                 f"ticket end it with `canopy stop {ref} --now`",
             )
+        if db.holds_nothing_of(conn, ref.id):
+            try:
+                db.remove_ticket(conn, ref.id)
+            except sqlite3.IntegrityError:
+                raise Refused(
+                    "held",
+                    f"no source ever observed {ref}, but the journal holds records that name it, so it is kept",
+                ) from None
+            return Forgot(branch=None, prs=[], removed=True)
         if not db.worked_since_forget(conn, ticket):
             raise Refused(
                 "already_forgotten",
