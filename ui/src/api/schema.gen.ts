@@ -5738,6 +5738,11 @@ export type components = {
              */
             author: string | null;
             /**
+             * Body
+             * @description What it says, as the reader last saw it: the reviewer's text, shown, never acted on.
+             */
+            body: string;
+            /**
              * Decider
              * @description The overseer, who named it, or the harness, for one on a resolved thread.
              * @enum {string}

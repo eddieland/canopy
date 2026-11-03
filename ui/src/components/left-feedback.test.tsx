@@ -21,6 +21,7 @@ function left(over: Partial<LeftFeedback> = {}): LeftFeedback {
         path: 'src/billing/v1.ts',
         line: 8,
         url: `${PR}#discussion_r2468020037`,
+        body: 'Could the v1 shim go in a follow-up instead?',
         reason: 'would_reset_approval',
         decider: 'overseer',
         tick_id: 2,
