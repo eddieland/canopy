@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { PALETTE_KEY, settled, signIn, STORAGE_KEY, storePalette, storeTheme } from './helpers.ts'
+import { PALETTE_KEY, settled, signIn, STORAGE_KEY, storePalette, storeTheme, windowWidth } from './helpers.ts'
 
 declare global {
     // A `var` in `declare global` is a property of globalThis, where the page's scripts set these.
@@ -300,3 +300,49 @@ function canvasTone(page: Page): Promise<{ image: string; mask: string }[]> {
         }),
     )
 }
+
+// Pulp tilts its name's plate (`--wordmark-tilt`), a transform, which moves nothing; the plate, its ring, and its drop
+// are shadows, which take no room. So what they draw has to fit in the room the name had: clear of the logo, of the
+// stream's pills, and of the header's edges and its aurora, at the operator's width and at the narrow strip's.
+test.describe("Pulp's name plate", () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page)
+    })
+
+    test('the default palette draws the name untilted', async ({ page }) => {
+        await storeTheme(page, 'dark')
+        await page.goto('attention')
+        await settled(page)
+        await expect(page.getByTestId('wordmark')).toHaveCSS('transform', 'none')
+    })
+
+    for (const theme of ['light', 'dark'] as const) {
+        for (const width of [1720, 820]) {
+            test(`${theme} at ${width}px tilts the plate and it clears what is beside it`, async ({ page }) => {
+                await storeTheme(page, theme)
+                await storePalette(page, theme, 'pulp')
+                await page.goto('attention')
+                await settled(page)
+                await windowWidth(page, width)
+                const wordmark = page.getByTestId('wordmark')
+                await expect(wordmark).not.toHaveCSS('transform', 'none')
+                const box = (locator: typeof wordmark) =>
+                    locator.evaluate((element) => {
+                        const { top, right, bottom, left } = element.getBoundingClientRect()
+                        return { top, right, bottom, left, font: Number.parseFloat(getComputedStyle(element).fontSize) }
+                    })
+                const name = await box(wordmark)
+                const mark = await box(page.getByTestId('mark'))
+                const pills = await box(page.getByTestId('stream-status'))
+                const header = await box(page.getByTestId('app-header'))
+                // The frame's block, its ring at a line and a half at most, and the drop's 3px past them; the aurora's
+                // 4px strip along the header's foot.
+                const reach = 0.25 * name.font + 1.5
+                expect(name.left - reach).toBeGreaterThan(mark.right)
+                expect(name.right + reach + 3).toBeLessThan(pills.left)
+                expect(name.top - reach).toBeGreaterThan(header.top)
+                expect(name.bottom + reach + 3).toBeLessThan(header.bottom - 4)
+            })
+        }
+    }
+})
