@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.core import db, records, spend
+from canopy.core import db, records, review_report, spend
 from canopy.core.vocab import (
     CheckConclusion,
     DismissalReason,
@@ -355,3 +355,18 @@ def reviewed_by(
 
 def _iso(stamp: str) -> str:
     return db.parse_time(stamp).isoformat().replace("+00:00", "Z")
+
+
+def test_windows_read_together_are_each_as_read_alone(backend: Backend) -> None:
+    """Each window of several read at once, as the monthly report reads its months, is the report of it alone."""
+    now = backend.clock()
+    # Each of the mock's last two weeks' days, its months since April, and the window a page compares with.
+    spans = [spend.window(now - timedelta(days=n), 1) for n in range(14)]
+    spans += [(datetime(2026, m, 1, tzinfo=UTC), datetime(2026, m + 1, 1, tzinfo=UTC)) for m in range(4, 10)]
+    spans += [spend.window(now, 30), spend.window_before(db.format_time(spend.window(now, 30)[0]), 30)]
+    with backend.open() as ctx:
+        found = review_report.windows(ctx.conn, spans)
+        assert found == [review_report.between(ctx.conn, *span) for span in spans]
+        assert review_report.windows(ctx.conn, []) == []
+    # The mock's reviews are in them: a window's PRs are not cut to nothing.
+    assert sum(len(r.prs) for r in found) > len(spans)

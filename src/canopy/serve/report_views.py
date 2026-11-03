@@ -7,6 +7,7 @@ CI did on the PRs canopy observed, where their review feedback came from, and ho
 from __future__ import annotations
 
 from dataclasses import dataclass
+from itertools import starmap
 from typing import TYPE_CHECKING, Literal, cast
 
 from canopy.core import ci, db, health, plan_metrics, plan_report, review_report, runtime_sessions, spend
@@ -70,7 +71,7 @@ from canopy.serve.schema.review_report import (
 from canopy.serve.schema.spend import SpendUnpriced
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Mapping, Sequence
     from datetime import datetime, timedelta
 
     from canopy.core.context import Context
@@ -94,7 +95,7 @@ def monthly_report(backend: Backend, ctx: Context, months: int) -> MonthlyReport
         found = monthly.months(ctx.conn, backend.clock(), months, state_dir=ctx.state_dir)
         read = runtime_sessions.last_read(ctx.conn)
         # Each month over the day pages' own reads, so a month and its days agree by construction.
-        rows = [_month(m, _figures(ctx, m)) for m in found]
+        rows = list(starmap(_month, zip(found, _figures(ctx, found), strict=True)))
     return MonthlyReport(
         months=rows,
         sessions_read_at=db.parse_time(read.read_at) if read is not None else None,
@@ -150,12 +151,11 @@ def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
     Returns:
         The report, with `trust.max_flaky_kicks` and what the `cooldown` guard refused beside it.
     """
-    now = backend.clock()
+    window = spend.window(backend.clock(), days)
     # One snapshot, so a check run observed between the two reads is in both or neither.
     with db.read_snapshot(ctx.conn):
-        found = ci.report(ctx.conn, now, days)
+        found, before = ci.windows(ctx.conn, [window, spend.window_before(db.format_time(window[0]), days)])
         refused = health.refusals(ctx.conn, found.since, found.until)
-        before = ci.between(ctx.conn, *spend.window_before(found.since, days))
     cooldown = next((r for r in refused if r.guard == _COOLDOWN), None)
     return CiReport(
         days=found.days,
@@ -232,10 +232,12 @@ def reviews_report(backend: Backend, ctx: Context, days: int) -> ReviewsReport:
     Returns:
         The report, each reviewer marked trusted or not by `trust.trusted_reviewers`.
     """
-    # One snapshot, so a review observed between the two reads is in the window or the one before, never both.
-    with db.read_snapshot(ctx.conn):
-        found = review_report.report(ctx.conn, backend.clock(), days)
-        before = review_report.between(ctx.conn, *spend.window_before(found.since, days))
+    window = spend.window(backend.clock(), days)
+    # Read together, so a review observed between two reads is in the window or the one before, never both.
+    found, before = review_report.windows(
+        ctx.conn,
+        [window, spend.window_before(db.format_time(window[0]), days)],
+    )
     trusted = set(ctx.config.trust.trusted_reviewers)
     return ReviewsReport(
         days=found.days,
@@ -348,13 +350,13 @@ class _Figures:
     reviews: review_report.Reviews
 
 
-def _figures(ctx: Context, found: monthly.Month) -> _Figures:
-    start, end = db.parse_time(found.since), db.parse_time(found.until)
-    return _Figures(
-        health=health.between(ctx.conn, start, end),
-        ci=ci.between(ctx.conn, start, end),
-        reviews=review_report.between(ctx.conn, start, end),
-    )
+# Each month's figures, the CI and Reviews pages' read once for every month, as each reads the journal from its start.
+def _figures(ctx: Context, found: Sequence[monthly.Month]) -> list[_Figures]:
+    spans = [(db.parse_time(m.since), db.parse_time(m.until)) for m in found]
+    return [
+        _Figures(health=health.between(ctx.conn, *span), ci=c, reviews=r)
+        for span, c, r in zip(spans, ci.windows(ctx.conn, spans), review_report.windows(ctx.conn, spans), strict=True)
+    ]
 
 
 def _month(found: monthly.Month, figures: _Figures) -> ReportMonth:
