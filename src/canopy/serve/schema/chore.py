@@ -27,7 +27,7 @@ class ChoreRun(Model):
     ended_at: datetime | None = None
     """When it ended; None while it runs."""
     summary: str | None = None
-    """The harness's note or the agent's summary, line breaks kept, cut at 300 characters."""
+    """The harness's note or the agent's summary, line breaks kept, cut at 2000 characters."""
     findings: int = 0
     """How many findings an `ok` run reported."""
     more_findings: int = 0

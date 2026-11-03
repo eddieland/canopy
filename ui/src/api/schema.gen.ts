@@ -3267,7 +3267,7 @@ export type components = {
             status: string;
             /**
              * Summary
-             * @description The harness's note or the agent's summary, line breaks kept, cut at 300 characters.
+             * @description The harness's note or the agent's summary, line breaks kept, cut at 2000 characters.
              */
             summary: string | null;
         };
@@ -9768,7 +9768,7 @@ export type components = {
             status: string;
             /**
              * Summary
-             * @description The worker's summary or the harness's note, line breaks kept, cut at 300 characters.
+             * @description The worker's summary or the harness's note, line breaks kept, cut at 2000 characters.
              */
             summary: string | null;
             /**
@@ -11342,7 +11342,7 @@ export type components = {
             status: string;
             /**
              * Summary
-             * @description The harness's note or the agent's summary, line breaks kept, cut at 300 characters: untrusted.
+             * @description The harness's note or the agent's summary, line breaks kept, cut at 2000 characters: untrusted.
              */
             summary: string | null;
         };

@@ -354,7 +354,7 @@ class Run(Model):
     ended_at: datetime | None = None
     """When it ended; None while it runs."""
     summary: str | None = None
-    """The worker's summary or the harness's note, line breaks kept, cut at 300 characters."""
+    """The worker's summary or the harness's note, line breaks kept, cut at 2000 characters."""
     prs: list[str] = []
     """The PRs its result names, each an https:// URL."""
     session_id: str | None = None
