@@ -119,6 +119,9 @@ are the one part a run needs, and you keep them where they are:
   login, no API key, and no field that says where a token is sent or whose account it is. A run killed at its timeout
   hands its token back at the role's next run.
 
+Each role's sessions stay in its own data directory too, so `opencode session list` on your machine does not show
+them. canopy reads them there, read-only, for `canopy spend` and each run's models, as it reads your own sessions.
+
 uv's Pythons and tools stay where you keep them: the wrapper sets `UV_PYTHON_INSTALL_DIR` and `UV_TOOL_DIR` to them
 unless you have.
 
