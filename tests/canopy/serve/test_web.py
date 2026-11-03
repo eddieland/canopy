@@ -26,7 +26,7 @@ from canopy.loop import repeat, reread, tick_now, web
 from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.runtime.report import ModelUse, Usage
-from canopy.serve import live, secret, spend_views
+from canopy.serve import live, secret, spend_views, views
 from canopy.serve.backend import Backend
 from canopy.serve.schema.event import LoopUpdated
 from tests.canopy.helpers import (
@@ -979,6 +979,27 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     reply = {"body": "Blue.", "submission": "form-0004"}
     assert c.post(f"/api/tickets/{KEY}/replies", json=reply, headers=headers).json()["answers"] == question["id"]
     assert c.get(f"/api/tickets/{KEY}").json()["ticket"]["awaiting"] is None
+
+
+def test_a_runs_page_keeps_its_whole_summary_where_the_list_cuts_it(ctx: Context) -> None:
+    """A long summary is cut, marked, in the runs list, and whole on the run's own page."""
+    c, headers = signed_in_client(ctx)
+    assert c.post(f"/api/tickets/{KEY}/start", headers=headers).status_code == 200
+    run_id = running_run(ctx, KEY)
+    summary = "Checks pass.\n" + "evidence " * 150
+    result = {"status": "done", "summary": summary}
+    assert conversation.close_run(
+        ctx.conn,
+        ctx.config,
+        present(db.get_run(ctx.conn, run_id)),
+        RunStatus.DONE,
+        json.dumps(result),
+    )
+
+    [listed] = c.get("/api/runs").json()
+    assert len(listed["summary"]) <= views.SUMMARY_LENGTH
+    assert listed["summary"].endswith("…")
+    assert c.get(f"/api/runs/{run_id}").json()["summary"] == summary.rstrip()
 
 
 def test_summaries_and_rationales_keep_their_line_breaks(ctx: Context) -> None:

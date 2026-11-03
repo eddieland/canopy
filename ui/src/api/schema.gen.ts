@@ -9780,7 +9780,8 @@ export type components = {
             status: string;
             /**
              * Summary
-             * @description The worker's summary or the harness's note, line breaks kept, cut at 300 characters.
+             * @description The worker's summary or the harness's note, line breaks kept: in a list cut at 300 characters, ending in "…" when
+             *     cut, and on the run's own page whole, as its result bounded it.
              */
             summary: string | null;
             /**

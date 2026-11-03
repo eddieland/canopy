@@ -34,7 +34,7 @@ from canopy.core import (
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunKind, RunStatus
-from canopy.runs import attachments, drafts
+from canopy.runs import attachments, drafts, worker
 from canopy.serve import checklist_views, draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,
@@ -93,6 +93,7 @@ TICKETS = 200
 TICKET_RUNS = 10
 TICKET_MESSAGES = 100
 TICKET_DECISIONS = 20
+#: The most of a run's summary a list carries; a run's own page carries it whole, as its result bounded it.
 SUMMARY_LENGTH = 300
 # The windows the spend figures and a chore's spend cover: the last day and the last 30.
 SPEND_DAY_HOURS = 24
@@ -245,7 +246,7 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
     limit = ctx.config.runtime.worker_timeout_minutes
     worktrees = [shown_path(str(s.slot_path), root) for s in held]
     answers = checklist_views.run_answers(ctx.conn, run_id)
-    return run(row, root, worktrees, served, wrote, checklist=answers, timeout_minutes=limit)
+    return run(row, root, worktrees, served, wrote, checklist=answers, timeout_minutes=limit, whole=True)
 
 
 def models_served(
@@ -397,12 +398,14 @@ def run(
     *,
     checklist: Sequence[ChecklistAnswer] = (),
     timeout_minutes: int | None = None,
+    whole: bool = False,
 ) -> Run:
     """One run's row, with the worktrees it holds if it is running, its paths from the workspace `root`.
 
     On the run's own page it carries `models`, the models that served it, for a `feedback-plan` run `feedback_plan`,
-    the plan it wrote, and `checklist`, what it answered of its repositories' lists. `timeout_minutes`, a worker's
-    time limit, says when a step in its progress is stuck; with None, none is.
+    the plan it wrote, `checklist`, what it answered of its repositories' lists, and, with `whole`, its summary as the
+    result contract bounded it rather than a list's cut. `timeout_minutes`, a worker's time limit, says when a step in
+    its progress is stuck; with None, none is.
 
     Returns:
         The run as the API sends it. A status it does not know reads as `failed`.
@@ -422,7 +425,7 @@ def run(
         branch=str(row["branch"]) or None,
         started_at=db.parse_time(str(row["started_at"])),
         ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
-        summary=said(row),
+        summary=said(row, worker.MAX_TEXT if whole else SUMMARY_LENGTH),
         prs=contract.stored_prs(result),
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
@@ -602,14 +605,18 @@ def new_tokens(row: sqlite3.Row | records.Row) -> int | None:
     return sum(int(t) for t in found if t is not None) if any(t is not None for t in found) else None
 
 
-def said(row: sqlite3.Row | records.Row) -> str | None:
+def said(row: sqlite3.Row | records.Row, limit: int = SUMMARY_LENGTH) -> str | None:
     """What a run's or a chore run's result says, the harness's note first, with its line breaks, and cut.
 
+    Args:
+        row: The run's row, whose `result_json` is read.
+        limit: The most characters kept; a longer text is cut to fit and ends in "…", so a reader sees it was cut.
+
     Returns:
-        At most `SUMMARY_LENGTH` characters, or None when the result says nothing.
+        At most `limit` characters, or None when the result says nothing.
     """
-    note = contract.stored_note(contract.stored_object(records.columns(row)["result_json"]))
-    return lines(note)[:SUMMARY_LENGTH].rstrip() or None
+    note = lines(contract.stored_note(contract.stored_object(records.columns(row)["result_json"])))
+    return (note if len(note) <= limit else note[: limit - 1].rstrip() + "…") or None
 
 
 def lines(text: str) -> str:
