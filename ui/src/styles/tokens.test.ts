@@ -236,6 +236,12 @@ describe.each(Object.entries(THEMES))('%s theme', (themeName, colors) => {
         expect(low).toEqual([])
     })
 
+    // A cleared item's starburst letters its word on its own plate, and inks the plate apart from what it bangs over.
+    it("reads the starburst's word on its plate", () => {
+        expect(contrast(token('flair-burst-letter'), token('flair-burst'))).toBeGreaterThanOrEqual(AA)
+        expect(contrast(token('flair-burst-line'), token('flair-burst'))).toBeGreaterThanOrEqual(AA)
+    })
+
     // The approved band, a live readout, and the newer-build notice set accent text on the accent's own 14%.
     it('reads the accent on its own tint', () => {
         const low = ['surface', 'surface-raised']

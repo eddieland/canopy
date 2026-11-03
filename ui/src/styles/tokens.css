@@ -130,6 +130,12 @@
     --flair-cyan: oklch(0.58 0.11 205);
     --flair-blue: oklch(0.5 0.2 262);
     --flair-purple: oklch(0.52 0.2 315);
+    /* A cleared attention item's starburst (src/components/starburst.tsx): a process-yellow plate, its word in a
+     * deep magenta that reads on it, and the ink of its outline and drop. Flair, never state, and the same in both
+     * themes, since the plate is its own ground. Only a palette that shows it (`--burst-plate`) draws it. */
+    --flair-burst: oklch(0.91 0.18 100);
+    --flair-burst-letter: oklch(0.5 0.23 352);
+    --flair-burst-line: oklch(0.24 0.05 265);
 
     /* Sprig, the helper at the foot of the side rail: its googly eyes, white and black in both themes, and its leaf. */
     --buddy-eye: oklch(0.99 0 0);
@@ -193,6 +199,11 @@
     --canvas-texture: none;
     --title-drop: 0px;
     --title-drop-alpha: 0;
+    /* What a cleared attention item drops (src/routes/attention.tsx): a leaf by default, or, where a palette shows
+     * the plate, a comic's starburst in its place. Each is a `display`, so a palette picks one without a component
+     * knowing which it is on. */
+    --burst-leaf: block;
+    --burst-plate: none;
     --title-drop-2: 0 0 transparent;
 
     /* The face interface text is set in: Plex Sans, or the mono data is set in (`--face-mono`), for an editor that
@@ -301,6 +312,10 @@
     --flair-cyan: oklch(0.85 0.13 200);
     --flair-blue: oklch(0.65 0.18 262);
     --flair-purple: oklch(0.72 0.2 315);
+
+    --flair-burst: oklch(0.91 0.18 100);
+    --flair-burst-letter: oklch(0.5 0.23 352);
+    --flair-burst-line: oklch(0.24 0.05 265);
 
     --buddy-eye: oklch(0.97 0.005 260);
     --buddy-pupil: oklch(0.163 0.012 261);
@@ -535,6 +550,9 @@
     --nav-block: 1;
     --nav-hairline: 0;
     --nav-on-ink: var(--surface);
+    /* A cleared item goes off with a bang, as a comic's panel would letter it, where the others drop a leaf. */
+    --burst-leaf: none;
+    --burst-plate: block;
     /* Its section titles lettered as a comic's are: in Bangers's caps (`--face-title`), tracked open so no two
      * touch, each dropped in its section's ink with a thin cyan plate printed up and to the left of it, off register,
      * as a cheap press prints. */
@@ -853,6 +871,8 @@
     --canvas-texture: radial-gradient(oklch(from var(--foreground) l c h / 0.1) 1px, transparent 1.5px) 0 0 / 6px 6px;
     --title-drop: 0.08em;
     --title-drop-alpha: 1;
+    --burst-leaf: none;
+    --burst-plate: block;
     /* Its section titles lettered as light's are, the plate up and to the left a paler cyan, which reads on the
      * night. */
     --face-title: 'Bangers Title', var(--face);
@@ -1013,6 +1033,9 @@
     --color-flair-cyan: var(--flair-cyan);
     --color-flair-blue: var(--flair-blue);
     --color-flair-purple: var(--flair-purple);
+    --color-flair-burst: var(--flair-burst);
+    --color-flair-burst-letter: var(--flair-burst-letter);
+    --color-flair-burst-line: var(--flair-burst-line);
 
     --color-buddy-eye: var(--buddy-eye);
     --color-buddy-pupil: var(--buddy-pupil);
