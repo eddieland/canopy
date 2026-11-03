@@ -150,7 +150,7 @@ def cmd_chore_process(click_ctx: click.Context, run_id: int) -> int:
     leave_the_tick()
     ctx = open_context(click_ctx)
     try:
-        with tracing.span("chore", chore_run_id=run_id) as traced:
+        with tracing.span("chore", new_trace=True, chore_run_id=run_id) as traced:
             outcome = execute.execute(ctx, run_id, out=sys.stdout)
             traced.set(status=outcome.status)
     except execute.ChoreError as e:

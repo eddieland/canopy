@@ -585,6 +585,7 @@ such as a shipped migration, may still cite one, and git history has its text.
   call of `metrics`, typed to take only a vocabulary's word as a label. Each loads only once its key turns it on.
 - It holds canopy's own facts, never text it read (T2): a failed span names its exception's type alone, and a metric's
   labels come from closed sets (statuses, kinds, steps, configured models), never a ticket key, a path, or text.
-- `procs` passes the current span to every child as `TRACEPARENT`: a tick starts its own trace, and its runs join it.
+- `procs` passes the current span to every child as `TRACEPARENT`: a tick and each run start their own traces, a run's
+  linked to the tick's step that started it.
 - None of it leaves the machine unasked: canopy sends it only to the OTLP endpoint the operator names in private
   config, from `infra/otlp.py` alone, its one network call (T2); a scrape of it through a listener follows T8.

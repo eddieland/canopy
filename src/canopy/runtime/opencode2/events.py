@@ -37,7 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, Stric
 
 from canopy.runtime import entries, report
 from canopy.runtime.opencode2.definitions import MAX_SKILL_NAME, SKILL_NAME_RE
-from canopy.runtime.report import MAX_COST_USD, SKILL_PREFIX, AgentOutput, Call, Count, ToolUse, Usage
+from canopy.runtime.report import MAX_COST_USD, SKILL_PREFIX, AgentOutput, Call, Count, ToolEnded, ToolUse, Usage
 
 #: The event that starts a model call, the one that ends it, and the one that ends a tool call.
 STEP_START = "step_start"
@@ -78,6 +78,13 @@ class _StepFinish(BaseModel):
     tokens: _Tokens
 
 
+class _Times(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    start: StrictInt
+    end: StrictInt
+
+
 class _ToolState(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
@@ -88,6 +95,8 @@ class _ToolState(BaseModel):
     #: What the call was given, and what the runtime said of it besides its output; read only for a skill's name.
     input: object = None
     metadata: object = None
+    #: When it started and ended, in milliseconds since the epoch; read only for its span.
+    time: _Times | None = None
 
 
 class _Named(BaseModel):
@@ -175,6 +184,9 @@ class Tally:
     def __init__(self) -> None:
         """Start with no event: no session, nothing spent, no tool called, and no error."""
         self.session_id: str | None = None
+        #: The model call and the tool call the last event added ended, if it ended one canopy could read.
+        self.step: Call | None = None
+        self.tool: ToolEnded | None = None
         self._calls: list[Call] = []
         self._errors: list[str] = []
         self._complete = True
@@ -187,6 +199,8 @@ class Tally:
         The session is the first valid one an event names.
         """
         self.session_id = self.session_id or report.session_id(event["sessionID"])
+        self.step = None
+        self.tool = None
         kind = event["type"]
         if kind == STEP_START:
             self._open = True
@@ -226,7 +240,8 @@ class Tally:
             self._complete = False
             return
         t = step.tokens
-        self._calls.append(Call(float(step.cost), t.input, t.output, t.reasoning, t.cache.read, t.cache.write))
+        self.step = Call(float(step.cost), t.input, t.output, t.reasoning, t.cache.read, t.cache.write)
+        self._calls.append(self.step)
 
     def _add_error(self, event: Mapping[str, object]) -> None:
         try:
@@ -250,6 +265,18 @@ class Tally:
             skill = _skill_name(state)
             tool = f"{SKILL_PREFIX}{skill}" if skill is not None else tool
         self._tools.add(tool, error=error, said=state.error if error else state.output)
+        times = state.time
+        self.tool = ToolEnded(tool, error, times.start if times else None, times.end if times else None)
+
+
+def timestamp(event: Mapping[str, object]) -> int | None:
+    """When the runtime printed `event`, in milliseconds since the epoch.
+
+    Returns:
+        Its `timestamp`, or None when it has none that is a whole number.
+    """
+    at = event.get("timestamp")
+    return at if isinstance(at, int) and not isinstance(at, bool) else None
 
 
 def parse_event(line: str) -> dict[str, object] | None:

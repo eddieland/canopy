@@ -1,4 +1,4 @@
-"""A traced tick: its steps under it, and the runs it starts under its `spawn`, each in a process of its own."""
+"""A traced tick: its steps under it, and each run it starts a trace of its own, linked to its `spawn`."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ def spans(path: Path) -> dict[str, dict[str, object]]:
     return found
 
 
-def test_a_tick_and_the_run_it_starts_are_one_trace(scenario: Scenario) -> None:
+def test_a_run_is_a_trace_of_its_own_linked_to_the_tick_that_started_it(scenario: Scenario) -> None:
     scenario.configures("private", telemetry={"traces": "file"})
     scenario.seen()
     ticked = scenario.tick(dispatches())
@@ -42,9 +42,14 @@ def test_a_tick_and_the_run_it_starts_are_one_trace(scenario: Scenario) -> None:
     for step in ("gc", "reconcile", "tasks", "connectors", "derive", "state", "overseer", "spawn"):
         assert traced[step]["parentSpanId"] == tick["spanId"], step
         assert traced[step]["traceId"] == tick["traceId"], step
-    # The worker's run, in its detached `canopy _run`, is under the step that started it.
+    # The worker's run, in its detached `canopy _run`, is a trace of its own, linked to the step that started it.
     run = traced["run"]
-    assert (run["traceId"], run["parentSpanId"]) == (tick["traceId"], traced["spawn"]["spanId"])
+    assert run["traceId"] != tick["traceId"]
+    assert "parentSpanId" not in run
+    links = run["links"]
+    assert isinstance(links, list)
+    [link] = links
+    assert (link["traceId"], link["spanId"]) == (tick["traceId"], traced["spawn"]["spanId"])
     assert run["attributes"] == {"canopy.run_id": str(ran.row["id"]), "canopy.status": ran.row["status"]}
 
 

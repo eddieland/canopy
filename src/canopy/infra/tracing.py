@@ -40,6 +40,8 @@ type Attribute = str | int | float | bool | None
 
 #: The file spans are appended to, as OTLP JSON, a line per span, in the state directory.
 TRACES_FILE_NAME = "traces.jsonl"
+#: The semantic conventions whose attributes a span may carry by their own names: generative AI's, for model calls.
+STANDARD_PREFIXES = ("gen_ai.",)
 #: Where an OTLP/HTTP endpoint takes spans, under its base URL.
 TRACES_PATH = "/v1/traces"
 #: The variable a child process finds its parent's span in, as OpenTelemetry names it for an environment.
@@ -74,11 +76,19 @@ def span(name: str, *, new_trace: bool = False, **attributes: Attribute) -> Iter
         yield _OFF
         return
     from opentelemetry.context import Context  # noqa: PLC0415  (imported only once tracing is on)
-    from opentelemetry.trace import StatusCode  # noqa: PLC0415
+    from opentelemetry.trace import (  # noqa: PLC0415
+        Link,
+        StatusCode,
+        get_current_span,
+    )
 
+    # A new trace still points back at the span it would have been a child of, as a detached run's does at the tick's
+    # step that started it.
+    was_in = get_current_span().get_span_context()
     with tracer.start_as_current_span(
         name,
         context=Context() if new_trace else None,
+        links=[Link(was_in)] if new_trace and was_in.is_valid else None,
         attributes=_named(attributes),
         record_exception=False,
         set_status_on_exception=False,
@@ -88,6 +98,60 @@ def span(name: str, *, new_trace: bool = False, **attributes: Attribute) -> Iter
         except BaseException as e:
             inner.set_status(StatusCode.ERROR, type(e).__name__)
             raise
+
+
+def here() -> Here | None:
+    """The span open now, for spans of what happens elsewhere, such as on a reader's thread, to be recorded under.
+
+    Returns:
+        It, or None while tracing is off.
+    """
+    if _tracing.tracer is None:
+        return None
+    from opentelemetry.context import get_current  # noqa: PLC0415
+
+    return Here(get_current())
+
+
+def interval(
+    name: str,
+    under: Here | None,
+    *,
+    start_ns: int,
+    end_ns: int,
+    failed: bool = False,
+    standard: Mapping[str, Attribute] | None = None,
+    **attributes: Attribute,
+) -> None:
+    """Record a span of what already happened, from `start_ns` to `end_ns`, under the span `here` gave.
+
+    `standard` holds attributes OpenTelemetry's semantic conventions name, such as `gen_ai.usage.input_tokens`, which
+    keep their names; the rest are named `canopy.<keyword>`, as `span`'s are. Nothing is recorded while tracing is off.
+
+    Raises:
+        ValueError: A `standard` attribute is of no convention canopy records.
+    """
+    tracer = _tracing.tracer
+    if tracer is None or under is None:
+        return
+    from opentelemetry.trace import StatusCode  # noqa: PLC0415
+
+    unknown = [key for key in standard or {} if not key.startswith(STANDARD_PREFIXES)]
+    if unknown:
+        msg = f"not an attribute of a convention canopy records: {', '.join(unknown)}"
+        raise ValueError(msg)
+    named = {**_named(attributes), **{k: v for k, v in (standard or {}).items() if v is not None}}
+    inner = tracer.start_span(name, context=under.context, start_time=start_ns, attributes=named)  # pyrefly: ignore[bad-argument-type]
+    if failed:
+        inner.set_status(StatusCode.ERROR)
+    inner.end(end_time=end_ns)
+
+
+@dataclass(frozen=True)
+class Here:
+    """A span `here` captured, to record later spans under: OpenTelemetry's context, opaque to its holder."""
+
+    context: object
 
 
 def carrier() -> dict[str, str]:

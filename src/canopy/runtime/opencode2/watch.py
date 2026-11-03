@@ -36,6 +36,10 @@ class Lines:
             ended_call=event["type"] == events.STEP_FINISH,
             did=transcript.did(event),
             call=transcript.called(event),
+            at_ms=events.timestamp(event),
+            started_call=event["type"] == events.STEP_START,
+            step=self._tally.step,
+            tool=self._tally.tool,
         )
 
     @property

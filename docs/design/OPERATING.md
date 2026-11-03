@@ -266,8 +266,11 @@ skill the workers load (§17). `tracker.query` finds candidates; it does not aut
 
 **Traces.** canopy records what it does as OpenTelemetry spans only once the operator's `telemetry.traces` turns them on;
 off, no span is made and OpenTelemetry is not loaded. Each tick is a trace of its own, with a span for each of its
-steps, and each run it starts, in a process of its own, is traced under the step that started it: every process canopy
-starts is given the current span as `TRACEPARENT`. A span holds canopy's own facts (ids,
+steps, and so is each run it starts, in a process of its own, linked to the step that started it: every process canopy
+starts is given the current span as `TRACEPARENT`. Within a run, the overseer's included, each model call and each tool
+call is a span, at the times the runtime printed, under OpenTelemetry's conventions for generative AI: a call's tokens
+and cost, or its tool's name and whether it failed, never what the model was sent or wrote, nor a tool's input or
+output. A span holds canopy's own facts (ids,
 kinds, statuses, counts, cost), never text canopy read, which is untrusted and may be private (TRUST_MODEL T2). Spans
 go to `<state_dir>/traces.jsonl`, readable by the operator alone, as OTLP JSON for a collector they run to read, or,
 with `traces = "otlp"`, are posted to the OTLP/HTTP endpoint the operator names: in batches, following no redirect,
