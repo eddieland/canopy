@@ -125,7 +125,7 @@ def test_the_plan_route_approves_asks_and_skips_as_canopy_plan_does(ctx: Context
     plan = present(plans.current(ctx.conn, KEY))
     assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, "web")
     assert refused(c.post(f"/api/tickets/{KEY}/plan", json={"action": "approve"}, headers=headers)).startswith(
-        "bad_plan: plan 1 of PROJ-1 is approved, and its file has not changed since",
+        "bad_plan: plan 1 of PROJ-1 is approved, and neither its file nor the ticket's text has changed since",
     )
 
     asked = c.post(f"/api/tickets/{KEY}/plan", json={"action": "request"}, headers=headers)

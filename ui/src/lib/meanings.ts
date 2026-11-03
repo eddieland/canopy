@@ -12,7 +12,7 @@ export const REASON_MEANINGS: Readonly<Record<string, string>> = {
     awaiting_reply: 'A worker, a planner, or a task asked a question and waits on your answer.',
     plan_review: 'A plan waits on you: approve it, or reply with what to change.',
     run_question: 'A running worker, planner, or reviewer asks you a question it works around: answer by letter.',
-    plan_changed: 'An approved plan’s file changed: approve it again, plan anew, or skip the plan.',
+    plan_changed: 'An approved plan’s file, or its ticket’s text, changed: approve it again, plan anew, or skip it.',
     drafts_waiting: 'A run drafted replies for you: edit, drop, or send each.',
     review_waiting: 'A review you asked for is done: read its draft, then publish or discard it.',
     review_unsettled: 'A review you staged waits for you to submit or delete it on GitHub, or its publish is unknown.',

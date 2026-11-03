@@ -91,7 +91,8 @@ def planned_refusal(
     """Refuse work a plan the operator approved should govern, but does not (DESIGN §25, §32).
 
     A guard in code, whatever the overseer asks for: an `implement` waits on an approved plan when the ticket needs
-    one, and an `implement` or `resume` never follows a plan whose file is no longer the text the operator approved.
+    one, and an `implement` or `resume` never follows a plan whose file is no longer the text the operator approved. Nor
+    does a ticket's first `implement`, before it has a branch, follow a plan approved while the ticket read otherwise.
     Under `policy.feedback_plan = "approve"`, a `resume` but one for `no_pr` alone waits on an approved feedback plan no
     `resume` has spent, and follows it in place of the ticket's plan.
 
@@ -99,7 +100,8 @@ def planned_refusal(
         The guard and reason that refuse it, or None: an `implement` for a ticket that needs a plan and has none
         approved, or a `resume` that needs a feedback plan and has none approved and unspent over its repositories
         (`unplanned`); an `implement` or `resume` whose approved plan's file is missing, unreadable, or no longer has
-        its approved hash (`plan_changed`).
+        its approved hash, or an `implement` of a ticket with no branch yet whose title or description, as observed,
+        changed since its plan was approved (`plan_changed`).
     """
     if kind not in (RunKind.IMPLEMENT, RunKind.RESUME):
         return None
@@ -125,6 +127,17 @@ def planned_refusal(
         return "plan_changed", (
             f"plan {plan.id} of {key}, {path}, is no longer the text the operator approved; they approve it again, "
             f"or ask for a new one or skip it"
+        )
+    started = ticket is not None and bool(ticket.branch)
+    if (
+        kind == RunKind.IMPLEMENT
+        and plan is not None
+        and not started
+        and (changed := plans.ticket_changed(ctx.conn, plan))
+    ):
+        return "plan_changed", (
+            f"{key}'s {' and '.join(changed)} changed since plan {plan.id} was approved, so the plan may no longer fit "
+            f"it; they approve it again, or ask for a new one or skip it"
         )
     return None
 

@@ -216,7 +216,10 @@ def _approve(ctx: Context, key: str, *, chosen: Collection[int], leave: Collecti
     click.echo(f"Plan {plan.id} of {key} is approved as {path} stands now. The next tick can implement it.")
     if words is not None:
         click.echo(f"Your note is a message on {key}, which its implement reads beside the plan: `canopy show {key}`.")
-    click.echo("Its implement refuses (plan_changed) if the file changes before then; approve it again if it does.")
+    click.echo(
+        "Its implement refuses (plan_changed) if the file, or the ticket's title or description, changes before then; "
+        "approve it again if it does.",
+    )
 
 
 def _approve_feedback(

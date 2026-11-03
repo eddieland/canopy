@@ -6,6 +6,7 @@ as its file stands, by its hash.
 
 import hashlib
 import os
+import re
 import sqlite3
 from pathlib import Path
 
@@ -182,7 +183,12 @@ def test_approval_takes_the_file_as_the_operator_left_it(conn: sqlite3.Connectio
 def test_an_edit_after_approval_needs_approving_again(conn: sqlite3.Connection, state_dir: Path) -> None:
     run_id = proposed(conn, state_dir)
     plan = plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
-    with pytest.raises(Refused, match="bad_plan: plan 1 of PROJ-1 is approved, and its file has not changed since"):
+    with pytest.raises(
+        Refused,
+        match=re.escape(
+            "bad_plan: plan 1 of PROJ-1 is approved, and neither its file nor the ticket's text has changed since",
+        ),
+    ):
         plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
 
     path = plans.path_for(state_dir, KEY, run_id)

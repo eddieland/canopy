@@ -32,7 +32,9 @@ lettered options and its own choice marked, so the operator answers it on the pl
 of the approval's notes, or of a request for changes. The approval authorizes the `implement`, not the plan's text as
 an instruction (TRUST_MODEL T1). Two guards hold it in code (§4, principle 2):
 `unplanned` refuses an `implement` while the ticket needs a plan and has none approved;
-`plan_changed` refuses an `implement` or `resume` when the approved plan's file is missing or changed since approval.
+`plan_changed` refuses an `implement` or `resume` when the approved plan's file is missing or changed since approval,
+and a ticket's first `implement` when its title or description, as observed (§30), differs from the hashes its approval
+recorded, so no worker follows a plan written for a ticket that no longer reads so until the operator approves again.
 
 **The planner's word.** Under `policy.planner_may_approve`, private (T7) and off by default, a planner may say its plan
 needs no review, with a one-line reason; the harness then records the plan approved as written, the planner's approval
@@ -113,9 +115,7 @@ commits what it wrote there alone (at the top level, each
 planned ticket's directory and its own index, never the operator's files beside them), and pushes to the clone's
 upstream, never forcing: an upstream that refuses it for commits another clone pushed has them fetched and this clone's
 commits rebased onto them, so the push is a fast-forward, and a rebase that cannot finish is aborted. `archive_unpushed`
-stays open while the archive is not all there, so a failed push is retried each tick. A tick writes at most a thousand
-files, so a long history goes in over several, each push bounded, and reads again only the plans whose row or files
-changed, and the conversations with a new message, since it last found them as they stand. It archives at most once
+stays open while the archive is not all there, so a failed push is retried each tick. It archives at most once
 each `paths.plan_archive_every_minutes`, timed from the archive's last commit in the clone, so the remote is pushed to
 a few times a day, except while `archive_unpushed` is open; a tick that waits, and a dry run, only read the clone
 (TRUST_MODEL T6).

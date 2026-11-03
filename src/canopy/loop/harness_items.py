@@ -11,7 +11,7 @@ the derivation's rows and the journal, and records it marked as its own, so no i
   latest review run failed, until a newer one starts or the PR is seen merged or closed;
 - `attempt_limit`, for a unit, or a ticket's plan, whose next run, as the rows say, is past its limit (§8);
 - `plan_review`, while a plan waits on the operator, and `plan_changed`, while an approved plan's file is no longer the
-  text they approved (§25, §32).
+  text they approved, or, before its ticket's first `implement`, the ticket's observed text is not (§25, §32).
 
 Beside them it raises two the overseer never recorded (`attention.ONLY_FROM_CAUSES`): `check_stuck`, for a unit
 `ci_running` on one check alone, still pending `STUCK_AFTER` past every other check at its head finishing, which may not
@@ -518,6 +518,12 @@ def _plans(ctx: Context, ticket: records.Ticket) -> Iterator[Raised]:
     elif plan is not None and plan.status is PlanStatus.APPROVED and plans.approved_text(state_dir, plan) is None:
         path = plans.path_for(state_dir, key, plan.run_id)
         detail = f"plan {plan.id} of {key}, {path}, is no longer the text you approved: approve it again, or skip it"
+        yield Raised(key, PLAN_CHANGED, detail)
+    elif plan is not None and not ticket.branch and (changed := plans.ticket_changed(conn, plan)):
+        detail = (
+            f"{key}'s {' and '.join(changed)} changed since you approved plan {plan.id}: canopy show {key}, then "
+            f"canopy plan {key} --approve if it still fits, or canopy plan {key} for a new one, or --skip"
+        )
         yield Raised(key, PLAN_CHANGED, detail)
     if ctx.config.policy.feedback_plan != "approve":
         return

@@ -2,8 +2,9 @@
 
 A plan's text is a markdown file of its own, `<state_dir>/plans/<KEY>/<run>.md`, named for the plan run that wrote it,
 so the operator reads, greps, and edits it with their own tools. The journal's `plans` row holds what canopy decides
-by: the plan's status, the file's hash as written, and the hash the operator approved. A ticket has at most one plan
-that is not superseded, its current plan, waiting (`proposed`) or `approved`.
+by: the plan's status, the file's hash as written, and the hash the operator approved, with the hashes of the ticket's
+title and description as the tracker connector observed them then. A ticket has at most one plan that is not
+superseded, its current plan, waiting (`proposed`) or `approved`.
 
 Whether a ticket needs a plan is its own setting, set only by the operator (`ask`, `skip`), or with none
 `policy.plan` (`needed`). The operator's verbs here, asking for a plan, skipping it, and approving one, are every
@@ -554,6 +555,7 @@ def record(
         supersede(conn, key)
         approved = reason is not None
         now = db.now()
+        seen = ticket_text(conn, key) if approved else None
         [plan] = records.insert(
             records.Plan,
             ticket_key=key,
@@ -567,6 +569,8 @@ def record(
             approved_channel=PLANNER if approved else None,
             approved_reason=reason,
             effort=effort,
+            approved_title_sha256=seen.title_sha256 if seen is not None else None,
+            approved_body_sha256=seen.body_sha256 if seen is not None else None,
         ).returned(conn)
         built = event(plan.id, reason) if event is not None else None
         if built is not None:
@@ -614,6 +618,9 @@ def approve(
 ) -> records.Plan:
     """Approve the ticket's current plan as its file stands now, the operator's edits included, recording its hash.
 
+    Beside it goes the hash of the ticket's title and of its description as last observed, so an `implement` is refused
+    while either differs (`ticket_changed`), and approving again is how the operator says the plan still fits.
+
     An operator message newer than the plan, asking for changes, does not stop it: an approval before the new plan run
     starts is the operator's later word (DESIGN §25, Approving a plan). With a `note`, the approval writes it on the
     ticket as an operator message, in the same transaction, after a sentence naming the plan: the message is the
@@ -625,9 +632,9 @@ def approve(
 
     Raises:
         Refused: `inside_run` inside one of canopy's own ticks or runs; `bad_plan` while a plan run for the ticket is
-            running, when it has no current plan, when that plan is approved and its file has not changed since, or
-            when its file is missing, not a regular file, unreadable, or no longer a plan; `bad_body` for a `note`
-            empty or over `MAX_NOTE`.
+            running, when it has no current plan, when that plan is approved and neither its file nor the ticket's
+            text has changed since, or when its file is missing, not a regular file, unreadable, or no longer a plan;
+            `bad_body` for a `note` empty or over `MAX_NOTE`.
     """
     conversation.check_operator()
     said = _note(note)
@@ -638,10 +645,18 @@ def approve(
             raise Refused("bad_plan", f"{key} has no plan waiting to be approved")
         path = path_for(state_dir, key, plan.run_id)
         reading = read(path)
-        if plan.status is PlanStatus.APPROVED and reading.sha256 == plan.approved_sha256:
-            raise Refused("bad_plan", f"plan {plan.id} of {key} is approved, and its file has not changed since")
+        if (
+            plan.status is PlanStatus.APPROVED
+            and reading.sha256 == plan.approved_sha256
+            and not ticket_changed(conn, plan)
+        ):
+            raise Refused(
+                "bad_plan",
+                f"plan {plan.id} of {key} is approved, and neither its file nor the ticket's text has changed since",
+            )
         if reading.problem is not None:
             raise Refused("bad_plan", f"plan {plan.id}'s file {path} is {reading.problem}, so it cannot be approved")
+        seen = ticket_text(conn, key)
         [approved] = (
             records.update(records.Plan)
             .set(
@@ -650,6 +665,8 @@ def approve(
                 approved_at=db.now(),
                 approved_channel=channel,
                 approved_reason=None,
+                approved_title_sha256=seen.title_sha256 if seen is not None else None,
+                approved_body_sha256=seen.body_sha256 if seen is not None else None,
             )
             .where("id = ?", plan.id)
             .returned(conn)
@@ -766,6 +783,58 @@ def approved_of(conn: sqlite3.Connection, key: str) -> records.Plan | None:
     """
     plan = current(conn, key)
     return plan if plan is not None and plan.status is PlanStatus.APPROVED else None
+
+
+@dataclass(frozen=True)
+class TicketText:
+    """A ticket's text as the tracker connector last observed it, hashed, as an approval records it (DESIGN §25)."""
+
+    #: The SHA-256, hex, of its title, stripped.
+    title_sha256: str
+    #: The same of its description, the body the tracker gives it, acceptance criteria and all.
+    body_sha256: str
+
+
+def ticket_text(conn: sqlite3.Connection, key: str) -> TicketText | None:
+    """The ticket's title and description as the tracker connector last observed them, hashed.
+
+    Returns:
+        Their hashes, or None when no source has observed the ticket.
+    """
+    seen = records.select(records.ObservedTicket).where("key = ?", key).one(conn)
+    if seen is None:
+        return None
+    return TicketText(title_sha256=_text_digest(seen.title), body_sha256=_text_digest(seen.body))
+
+
+def ticket_changed(conn: sqlite3.Connection, plan: records.Plan) -> list[str]:
+    """What of the ticket's text differs, as last observed, from what it was when its approved plan was approved.
+
+    An approval that recorded no text, from before canopy recorded it or of a ticket not observed then, is never
+    stale, nor is one whose ticket is not observed now: only two observations that differ say the ticket changed. An
+    `implement` on the plan is refused while it has (`plan_changed`), so no worker follows a plan written for a ticket
+    that no longer reads so, until the operator approves it again (DESIGN §25, Approving a plan).
+
+    Returns:
+        `title`, `description`, or both, in that order, as a refusal names them; empty when neither changed, or the
+        plan is not approved.
+    """
+    if plan.status is not PlanStatus.APPROVED or plan.approved_title_sha256 is None:
+        return []
+    seen = ticket_text(conn, plan.ticket_key)
+    if seen is None:
+        return []
+    changed: list[str] = []
+    if seen.title_sha256 != plan.approved_title_sha256:
+        changed.append("title")
+    if seen.body_sha256 != plan.approved_body_sha256:
+        changed.append("description")
+    return changed
+
+
+def _text_digest(text: str) -> str:
+    # Stripped, so a connector that trims what another keeps, or a trailing newline, is no change of the ticket's.
+    return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
 
 
 def outline(text: str) -> list[str]:

@@ -110,6 +110,9 @@ _FRONT_MATTER = "---\n"
 # Bumped whenever `document` or `name` changes, or what `_Seen` keeps of a plan, so every plan exported before is read
 # and compared again.
 _FORMAT = 9
+# A plan's columns its front matter leaves out: the hashes of its ticket's text at approval, which tell a reader of the
+# archive nothing the plan does not, and would bury the plan's own lines, so an approval no longer reads as a rename.
+_UNEXPORTED = frozenset({"approved_title_sha256", "approved_body_sha256"})
 # The decimal places of a cost in a front matter: a millionth of a dollar, below what any run's cost is reported to.
 _COST_DIGITS = 6
 # The most characters of a title a file's name carries.
@@ -394,7 +397,7 @@ def document(
     lines = [_FRONT_MATTER, f"kind: {json.dumps(kind)}\n"]
     for field in dataclasses.fields(row):
         value: object = getattr(row, field.name)
-        if value is not None:
+        if value is not None and field.name not in _UNEXPORTED:
             lines.append(f"{field.name}: {json.dumps(value)}\n")
     if planner is not None:
         if planner.persona is not None:
