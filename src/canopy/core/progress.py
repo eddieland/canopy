@@ -12,7 +12,7 @@ from __future__ import annotations
 import sqlite3
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import cards, db
+from canopy.core import cards, db, sql
 from canopy.runtime.watch import Watch
 
 if TYPE_CHECKING:
@@ -52,7 +52,8 @@ class Progress:
         self.log = log
         self.agent = agent
         self.fields = fields
-        self.watch = Watch(version=version)
+        model = sql.execute(conn, sql.select("model").from_("{}", sql.name(table)).where("id = ?", row_id)).fetchone()
+        self.watch = Watch(version=version, model=None if model is None else model[0])
 
     def __call__(self, line: str) -> None:
         """Write `line` to the log, and record the session at its first event and the spend at each model call's end.
