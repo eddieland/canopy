@@ -5,14 +5,14 @@ import { useState } from 'react'
 import { newSubmission, refreshTicket, sendLeftFeedback } from '@/api/mutations'
 import type { LeftFeedback } from '@/api/types'
 import { LinkOut } from '@/components/link-out-icon'
+import { ListPanel } from '@/components/list-panel'
 import { Notice } from '@/components/notice'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { Button } from '@/components/ui/button'
 import { leftSentText } from '@/lib/outcomes'
-import { cn } from '@/lib/utils'
+
 // Why the loop left an item, in the words a row shows, by the reason canopy records (`vocab.PassReason`).
-// Why the loop left an item, in the words a row shows, by the reason canopy records (`vocab.PassReason`). */
 const LEFT_REASONS: Record<LeftFeedback['reason'], string> = {
     optional: 'optional',
     would_reset_approval: 'would reset approval',
@@ -24,10 +24,10 @@ const LEFT_REASONS: Record<LeftFeedback['reason'], string> = {
 }
 
 /**
- * The feedback on a ticket's PRs its review cursors passed with no worker, still left (DESIGN §7): each item's author,
- * where it is, linking out to it, why it was left and the tick that left it, and a button that sends it to a worker,
- * as `canopy send KEY N` does: a reply on the ticket naming it, which the next tick reads as your go-ahead. Nothing
- * when there is none.
+ * The feedback on a ticket's PRs its review cursors passed with no worker, still left (DESIGN §7), in a list panel of
+ * its own, `Left feedback`: each item's author, where it is, linking out to it, why it was left and the tick that left
+ * it, and a button that sends it to a worker, as `canopy send KEY N` does: a reply on the ticket naming it, which the
+ * next tick reads as your go-ahead. With none, its header alone, as every list's (`ListPanel`).
  */
 export function LeftFeedbackList({
     ticketKey,
@@ -38,7 +38,7 @@ export function LeftFeedbackList({
     ticketKey: string
     /** What is left, oldest first, as the ticket's page reads it. */
     items: LeftFeedback[]
-    /** Classes for the section. */
+    /** Classes for the panel, such as its place in the page's grid. */
     className?: string
 }) {
     const client = useQueryClient()
@@ -53,15 +53,15 @@ export function LeftFeedbackList({
             void refreshTicket(client, ticketKey)
         },
     })
-    if (items.length === 0) {
-        return null
-    }
     return (
-        <section aria-label="Feedback left with no worker" className={cn('flex flex-col gap-2 p-3', className)}>
-            <h3 className="text-xs text-muted-foreground">
-                Feedback left with no worker <span className="readout">{items.length}</span>
-            </h3>
-            <ul className="flex flex-col gap-2" data-testid="left-feedback">
+        <ListPanel
+            label="Left feedback"
+            count={items.length}
+            aria-label="Left feedback"
+            className={className}
+            data-testid="ticket-left-feedback"
+        >
+            <ul className="flex flex-col gap-2 p-3" data-testid="left-feedback">
                 {items.map((item) => (
                     <LeftRow
                         key={`${item.pr_url}-${item.id}`}
@@ -71,8 +71,10 @@ export function LeftFeedbackList({
                     />
                 ))}
             </ul>
-            <Notice error={send.error}>{said}</Notice>
-        </section>
+            <Notice error={send.error} className="mx-3 mb-3">
+                {said}
+            </Notice>
+        </ListPanel>
     )
 }
 

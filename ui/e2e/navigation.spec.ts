@@ -370,6 +370,7 @@ test("a ticket's page puts its reply before its runs and decisions in a narrow w
         .getByTestId('ticket-conversation')
         .getByRole('textbox', { name: /^Reply/u })
         .boundingBox()
+    const left = await box('ticket-left-feedback')
     const runs = await box('ticket-runs')
     const decisions = await box('ticket-decisions')
     const memory = await box('ticket-memory')
@@ -377,7 +378,8 @@ test("a ticket's page puts its reply before its runs and decisions in a narrow w
     expect(reply).not.toBeNull()
     expect(conversation.y).toBeLessThan(reply?.y ?? 0)
     expect((reply?.y ?? Infinity) + (reply?.height ?? 0)).toBeLessThan(actions.y)
-    expect(actions.y).toBeLessThan(runs.y)
+    expect(actions.y).toBeLessThan(left.y)
+    expect(left.y).toBeLessThan(runs.y)
     expect(runs.y).toBeLessThan(decisions.y)
     expect(decisions.y).toBeLessThan(memory.y)
 
@@ -387,6 +389,10 @@ test("a ticket's page puts its reply before its runs and decisions in a narrow w
     await windowWidth(page, 1600)
     const wide = await box('ticket-conversation')
     const runsWide = await box('ticket-runs')
+    // The left feedback heads the lists, in the column under Work, over the runs.
+    const leftWide = await box('ticket-left-feedback')
+    expect(Math.abs(leftWide.x - runsWide.x)).toBeLessThanOrEqual(1)
+    expect(leftWide.y).toBeLessThan(runsWide.y)
     expect(wide.x).toBeGreaterThan(runsWide.x)
     expect(wide.y).toBeLessThan((await box('ticket-actions')).y)
     const memoryWide = await box('ticket-memory')
