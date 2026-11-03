@@ -225,6 +225,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 <LeftFeedbackList
                     ticketKey={ticket.key}
                     items={detail.left_feedback}
+                    merging={ticket.phase === 'approved' || units.some((unit) => unit.phase === 'approved')}
                     className="2xl:col-start-1 2xl:row-start-2"
                 />
                 <ListPanel
