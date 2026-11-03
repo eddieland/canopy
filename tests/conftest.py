@@ -20,7 +20,7 @@ import pytest
 from click.testing import CliRunner, Result
 
 from canopy.core import db
-from canopy.infra import resources, tracing
+from canopy.infra import metrics, resources, tracing
 from canopy.infra.procs import SubprocessRunner
 
 if TYPE_CHECKING:
@@ -79,10 +79,11 @@ def hermetic_agent_env() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
-def tracing_off() -> Iterator[None]:
-    """Turn tracing off when the test ends: a workspace configured to trace turns it on for the whole process."""
+def telemetry_off() -> Iterator[None]:
+    """Turn tracing and metrics off when the test ends: a workspace configured for one turns it on for the process."""
     yield
     tracing.configure(Path(), "off")
+    metrics.configure(Path(), "off")
 
 
 @pytest.fixture

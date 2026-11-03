@@ -17,7 +17,7 @@ from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, LiteralString, assert_never
 
-from canopy.core import item_numbers, records, sql
+from canopy.core import item_numbers, records, run_metrics, sql
 from canopy.core.vocab import (
     Decider,
     NumberedItem,
@@ -790,6 +790,9 @@ def finish_run(
             record_event(conn, event)
         if closed and then is not None:
             then()
+    if closed:
+        # After the transaction commits, so a run is counted only once its close is in the journal.
+        run_metrics.ended(conn, table, run_id)
     return closed
 
 
@@ -999,6 +1002,7 @@ def finish_ticket_run(
             record_event(conn, built)
         if then is not None:
             then()
+    run_metrics.ended(conn, "runs", run_id)
     return True
 
 

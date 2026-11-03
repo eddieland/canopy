@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import time
 from collections import Counter
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -36,13 +37,14 @@ from canopy.core import (
     pools,
     progress,
     recorded_runs,
+    run_metrics,
     run_models,
     run_offers,
 )
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import Decider, TickStatus
-from canopy.infra import lock, logs, procs, resources, tracing
+from canopy.infra import lock, logs, metrics, procs, resources, tracing
 from canopy.loop import (
     acknowledge,
     archive,
@@ -383,6 +385,7 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
     # A run a dead tick recorded and did not start is never started: this tick decides again (DESIGN §40).
     unstarted = recorded_runs.close_unstarted(ctx.conn)
     tick_id = db.start_tick(ctx.conn, dry_run=dry_run)
+    began = time.monotonic()
     log = logs.for_tick(tick_id)
     log.info("tick started", extra={"dry_run": dry_run, "repo": ctx.repo, "migrations_applied": applied})
     if abandoned:
@@ -397,6 +400,7 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
         # An overseer run still running when its tick closes, because the tick raised, failed with it.
         overseer_runs.close_running(ctx.conn, tick_id, summary)
         db.finish_tick(ctx.conn, tick_id, status, summary)
+        _meter(ctx, tick_id, status, dry_run=dry_run, seconds=time.monotonic() - began)
         spent = usage.spent() if usage is not None else {}
         log.info("tick finished", extra={"status": status, "summary": summary, **spent})
         traced.set(
@@ -414,6 +418,14 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
         except Exception as e:
             log.exception("tick raised", extra={"error": str(e)})
             return finish(TickStatus.ERROR, f"{type(e).__name__}: {e}")
+
+
+def _meter(ctx: Context, tick_id: int, status: TickStatus, *, dry_run: bool, seconds: float) -> None:
+    """Record tick `tick_id`'s metrics as it closes: it, its overseer's runs, and the runs at work (D132)."""
+    metrics.count("canopy.ticks", status=status, dry_run=dry_run)
+    metrics.record("canopy.tick.duration", seconds, unit="s", status=status)
+    run_metrics.overseer_ended(ctx.conn, tick_id)
+    run_metrics.active(ctx.conn)
 
 
 class _Finish(Protocol):

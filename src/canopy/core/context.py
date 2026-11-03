@@ -12,7 +12,7 @@ from canopy.core import chore_view, config, db, pools, treehouse, workspace
 from canopy.core.pool import CanopyPool
 from canopy.core.vocab import PoolKind
 from canopy.core.workspace import REPOS_DIR
-from canopy.infra import lock, logs, procs, resources, tracing
+from canopy.infra import lock, logs, metrics, procs, resources, tracing
 
 # Held by every command that may start a detached run, so two cannot both pass a capacity check (DESIGN §8, §19).
 DISPATCH_LOCK = "dispatch.lock"
@@ -36,6 +36,7 @@ def open_at(start: Path, runner: procs.Runner, *, migrate: bool = True) -> Conte
     workspace.ensure_state_dir(ws.state_dir)
     logs.configure(ws.state_dir)
     tracing.configure(ws.state_dir, cfg.telemetry.traces, cfg.telemetry.endpoint)
+    metrics.configure(ws.state_dir, cfg.telemetry.metrics, cfg.telemetry.endpoint)
     conn = db.connect(db_path(ws))
     if migrate:
         # The tick migrates under its lock; everything else migrates on open, which is a no-op inside a tick.

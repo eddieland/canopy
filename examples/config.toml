@@ -325,10 +325,13 @@ cmd = "canopy-connect-jira --site acme.atlassian.net"
 # Off by default, and private. `file` appends each span, as OTLP JSON, to .canopy/traces.jsonl, readable by you alone,
 # for a collector running as you to read. `otlp` posts them to an OTLP/HTTP endpoint, such as an OpenTelemetry
 # Collector's or Grafana Alloy's, the one network call canopy itself makes. A span holds ids, statuses, counts, and
-# cost, never text canopy read.
+# cost, never text canopy read. `metrics` sends counts of runs and ticks, their times, cost, and tokens the same way,
+# labelled only by canopy's own words and your configured models, as deltas for a collector to add up (an
+# OpenTelemetry Collector's `deltatocumulative` processor, before Prometheus).
 # [telemetry]
 # traces = "off"                         # or "file", or "otlp"
-# endpoint = "http://localhost:4318"     # for "otlp": spans go to /v1/traces under it
+# metrics = "off"                        # or "file" (.canopy/metrics.jsonl), or "otlp"
+# endpoint = "http://localhost:4318"     # for "otlp": spans go to /v1/traces under it, metrics to /v1/metrics
 
 # Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
 # what each kind holds and what a pass would remove. A live tick removes the files and the journal's rows once a day,
