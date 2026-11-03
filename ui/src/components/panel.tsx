@@ -129,7 +129,15 @@ export function PageHeader({
                     </ol>
                 </nav>
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words title-drop" title={help}>
+                    {/* A section's own name may be lettered in a palette's display face; a title from the data never
+                        is, so it never wraps differently (DESIGN.md, Type). */}
+                    <h1
+                        className={cn(
+                            'min-w-0 text-xl font-semibold break-words title-drop',
+                            atSection ? 'section-title' : 'tracking-tight',
+                        )}
+                        title={help}
+                    >
                         {isBlank(subject) ? (
                             title
                         ) : (
