@@ -93,9 +93,38 @@ def test_repeats_compare_casefolded_with_whitespace_collapsed() -> None:
 def test_visible_text_holds_no_hidden_character_and_names_each(text: str) -> None:
     assume("<U+" not in text)
     shown = visible(text)
-    assert not any(hidden_char(c) for c in shown)
+    # Only a joiner between two emoji is kept.
+    assert all(not hidden_char(c) or (c == "\u200d" and 0 < i < len(shown) - 1) for i, c in enumerate(shown))
     # Each name reads back as the character it stands for, so nothing is lost or changed.
     assert re.sub(r"<U\+([0-9A-F]{4,6})>", lambda m: chr(int(m.group(1), 16)), shown) == text
+
+
+@pytest.mark.parametrize(
+    "emoji",
+    [
+        "\U0001f469\U0001f3fd\u200d\U0001f4bb",  # woman technologist, medium skin tone
+        "\U0001f926\U0001f3fd\u200d\u2642\ufe0f",  # man facepalming, medium skin tone
+        "\u2764\ufe0f\u200d\U0001f525",  # heart on fire
+        "\U0001f9d1\u200d\U0001f91d\u200d\U0001f9d1",  # people holding hands
+    ],
+)
+def test_an_emoji_sequence_shows_as_written(emoji: str) -> None:
+    assert visible(f"thanks {emoji}!") == f"thanks {emoji}!"
+
+
+@pytest.mark.parametrize(
+    ("text", "shown"),
+    [
+        ("pass\u200dword", "pass<U+200D>word"),
+        ("\U0001f44d\u200dx", "\U0001f44d<U+200D>x"),
+        ("a\u200d\U0001f44d", "a<U+200D>\U0001f44d"),
+        ("\u200d\U0001f44d", "<U+200D>\U0001f44d"),
+        ("\U0001f44d\u200d", "\U0001f44d<U+200D>"),
+        ("\U0001f44d\u200d\u200d\U0001f44d", "\U0001f44d<U+200D><U+200D>\U0001f44d"),
+    ],
+)
+def test_a_joiner_outside_an_emoji_sequence_is_named(text: str, shown: str) -> None:
+    assert visible(text) == shown
 
 
 @given(st.text())
@@ -103,7 +132,7 @@ def test_quoted_text_puts_the_prefix_before_each_line_and_names_the_rest(text: s
     assume("<U+" not in text)
     shown = quoted(text, "> ")
     assert all(line.startswith("> ") for line in shown.split("\n"))
-    assert not any(hidden_char(c) and c not in "\n\t" for c in shown)
+    assert not any(hidden_char(c) and c not in "\n\t\u200d" for c in shown)
     lines = [line.removeprefix("> ") for line in shown.split("\n")]
     assert re.sub(r"<U\+([0-9A-F]{4,6})>", lambda m: chr(int(m.group(1), 16)), "\n".join(lines)) == text
 
