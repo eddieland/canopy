@@ -130,6 +130,12 @@
     --flair-cyan: oklch(0.58 0.11 205);
     --flair-blue: oklch(0.5 0.2 262);
     --flair-purple: oklch(0.52 0.2 315);
+    /* A cleared attention item's starburst (src/components/starburst.tsx): a process-yellow plate, its word in a
+     * deep magenta that reads on it, and the ink of its outline and drop. Flair, never state, and the same in both
+     * themes, since the plate is its own ground. Only a palette that shows it (`--burst-plate`) draws it. */
+    --flair-burst: oklch(0.91 0.18 100);
+    --flair-burst-letter: oklch(0.5 0.23 352);
+    --flair-burst-line: oklch(0.24 0.05 265);
 
     /* Sprig, the helper at the foot of the side rail: its googly eyes, white and black in both themes, and its leaf. */
     --buddy-eye: oklch(0.99 0 0);
@@ -196,6 +202,11 @@
     --canvas-swell-mask: none;
     --title-drop: 0;
     --title-drop-alpha: 0;
+    /* What a cleared attention item drops (src/routes/attention.tsx): a leaf by default, or, where a palette shows
+     * the plate, a comic's starburst in its place. Each is a `display`, so a palette picks one without a component
+     * knowing which it is on. */
+    --burst-leaf: block;
+    --burst-plate: none;
     /* The Ben-Day screen a palette may print its canvas with, in its ink (`--ben-day-ink`), which none does by
      * default: dots on a lattice turned 45°, as a printer's screen is, each grown by a ring where the tone deepens.
      * The pitch and the dots are in rem, so the screen grows with the type, and the pitch is rounded to an even
@@ -334,6 +345,10 @@
     --flair-cyan: oklch(0.85 0.13 200);
     --flair-blue: oklch(0.65 0.18 262);
     --flair-purple: oklch(0.72 0.2 315);
+
+    --flair-burst: oklch(0.91 0.18 100);
+    --flair-burst-letter: oklch(0.5 0.23 352);
+    --flair-burst-line: oklch(0.24 0.05 265);
 
     --buddy-eye: oklch(0.97 0.005 260);
     --buddy-pupil: oklch(0.163 0.012 261);
@@ -567,6 +582,9 @@
     --nav-block: 1;
     --nav-hairline: 0;
     --nav-on-ink: var(--surface);
+    /* A cleared item goes off with a bang, as a comic's panel would letter it, where the others drop a leaf. */
+    --burst-leaf: none;
+    --burst-plate: block;
     /* The gutter's tone, printed Ben-Day in process cyan on the newsprint, as a comic's sky is: clear where a page is
      * read, deepening to the window's far edges. */
     --ben-day-ink: oklch(0.7 0.13 225 / 0.42);
@@ -885,6 +903,8 @@
     --depth-bubble: 0 0 0 1px var(--ink), 3px 3px 0 1px var(--ink-drop);
     --title-drop: 0.08em;
     --title-drop-alpha: 1;
+    --burst-leaf: none;
+    --burst-plate: block;
     /* The gutter's tone, printed Ben-Day as light's is, in a cyan that glows faintly on the night blue. */
     --ben-day-ink: oklch(0.78 0.135 232 / 0.3);
     --canvas-texture: var(--ben-day-dots);
@@ -1046,6 +1066,9 @@
     --color-flair-cyan: var(--flair-cyan);
     --color-flair-blue: var(--flair-blue);
     --color-flair-purple: var(--flair-purple);
+    --color-flair-burst: var(--flair-burst);
+    --color-flair-burst-letter: var(--flair-burst-letter);
+    --color-flair-burst-line: var(--flair-burst-line);
 
     --color-buddy-eye: var(--buddy-eye);
     --color-buddy-pupil: var(--buddy-pupil);

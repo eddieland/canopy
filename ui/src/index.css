@@ -383,6 +383,56 @@
     }
 }
 
+/*
+ * A cleared attention item's starburst (src/components/starburst.tsx), where a palette shows it in place of the leaf
+ * (`--burst-plate`, `--burst-leaf`): it bangs open, rocking back a few degrees, holds while the row fades, and goes as
+ * the row folds shut over it. One flash, under 700ms, and none under reduced motion.
+ */
+@keyframes burst {
+    0% {
+        opacity: 1;
+        transform: scale(0.2) rotate(-28deg);
+    }
+    18% {
+        transform: scale(1.14) rotate(-5deg);
+    }
+    30% {
+        transform: scale(1) rotate(-8deg);
+    }
+    55% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.04) rotate(-8deg);
+    }
+}
+
+@utility burst-plate {
+    display: var(--burst-plate);
+}
+
+@utility burst-leaf {
+    display: var(--burst-leaf);
+}
+
+@utility animate-burst {
+    transform-origin: center;
+    opacity: 0;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: burst 520ms cubic-bezier(0.2, 0, 0, 1);
+    }
+}
+
+/* The starburst's plate drops a hard shadow in its own ink, and its word one a hair's width, as a letterer's would. */
+@utility burst-drop {
+    filter: drop-shadow(3px 3px 0 var(--color-flair-burst-line));
+}
+
+@utility burst-word {
+    text-shadow: 1.5px 1.5px 0 var(--color-flair-burst-line);
+}
+
 /* One digit of a rolling readout (src/components/rolling-number.tsx): a strip of 0 to 9 behind a one-line window. */
 @utility roll-window {
     display: inline-block;
