@@ -156,17 +156,22 @@ for (const theme of THEMES) {
 }
 
 // A palette that gives the shell a form of its own, its aurora, name, and nav highlight: the whole page, so the header
-// and the rail show.
-for (const palette of ['gruvbox', 'black'] as const) {
-    test(`the shell in ${palette} dark`, async ({ page }) => {
+// and the rail show. Pulp's in light as well, whose name plate and aurora are inked otherwise.
+for (const [theme, palette] of [
+    ['dark', 'gruvbox'],
+    ['dark', 'black'],
+    ['dark', 'pulp'],
+    ['light', 'pulp'],
+] as const) {
+    test(`the shell in ${palette} ${theme}`, async ({ page }) => {
         await page.clock.setFixedTime(NOW)
-        await storeTheme(page, 'dark')
-        await storePalette(page, 'dark', palette)
+        await storeTheme(page, theme)
+        await storePalette(page, theme, palette)
         await signIn(page)
         await page.goto('tickets/ABC-102')
         await settled(page)
-        await expect(page.locator('html')).toHaveAttribute('data-dark-palette', palette)
-        await screenshotWhole(page, `shell-${palette}-dark.png`)
+        await expect(page.locator('html')).toHaveAttribute(`data-${theme}-palette`, palette)
+        await screenshotWhole(page, `shell-${palette}-${theme}.png`)
     })
 }
 
