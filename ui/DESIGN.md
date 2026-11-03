@@ -154,7 +154,8 @@ Rules:
   `shadow-bubble`), a halftone canvas (`--canvas-texture`), the primary action pressed into its shadow (`--press-x`,
   `--press-y`), and a page title dropped in its section's color (`--title-drop`). Each is a shadow, a transform, or a
   background, so it takes no room. Both sides ink by the same rings; dark's line is its cream, and its drop a color that
-  reads on the night blue, where black would not.
+  reads on the night blue, where black would not. Pulp shows a starburst where a cleared item drops its leaf
+  (`--burst-plate`, `--burst-leaf`), absolutely placed, so it too takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
