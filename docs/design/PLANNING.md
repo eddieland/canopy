@@ -32,9 +32,9 @@ lettered options and its own choice marked, so the operator answers it on the pl
 of the approval's notes, or of a request for changes. The approval authorizes the `implement`, not the plan's text as
 an instruction (TRUST_MODEL T1). Two guards hold it in code (§4, principle 2):
 `unplanned` refuses an `implement` while the ticket needs a plan and has none approved;
-`plan_changed` refuses an `implement` or `resume` when the approved plan's file is missing or changed since approval,
-and a ticket's first `implement` when its title or description, as observed (§30), differs from the hashes its approval
-recorded, so no worker follows a plan written for a ticket that no longer reads so until the operator approves again.
+`plan_changed` refuses an `implement` or `resume` when the approved plan's file is missing or changed since approval.
+An approval records hashes of the ticket's title and description as observed (§30); while either differs, the harness
+warns with `ticket_changed`, refusing nothing, until the operator approves the plan again, asks for a new one, or skips.
 
 **The planner's word.** Under `policy.planner_may_approve`, private (T7) and off by default, a planner may say its plan
 needs no review, with a one-line reason; the harness then records the plan approved as written, the planner's approval

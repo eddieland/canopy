@@ -13,7 +13,7 @@ import pytest
 
 from canopy.core import conversation, db, personas, plans, records
 from canopy.core.context import Context
-from canopy.core.vocab import PlanStatus, RunKind, RunStatus
+from canopy.core.vocab import PlanStatus, RunKind, RunStatus, TicketState
 from tests.canopy.helpers import (
     KEY,
     dispatch_and_run,
@@ -110,6 +110,41 @@ def test_a_plan_carries_the_persona_its_planner_wrote_in_and_the_instructions_it
     gone = ran_in("lenient", "1" * 64)
     assert gone["text"] is None
     assert str(gone["problem"]).startswith("canopy kept no text, and persona lenient has no file")
+
+
+def test_a_plan_whose_ticket_changed_since_says_what_and_is_approved_again_on_the_web(ctx: Context) -> None:
+    """The warning refuses nothing; the plan's page offers Approve again, which says the plan still fits (§25)."""
+    c, headers = signed_in_client(ctx)
+    plan_id = proposed(ctx)
+    observed(ctx.conn, title="Add a button", body="Red.")
+    c.post(f"/api/tickets/{KEY}/plan", json={"action": "approve"}, headers=headers)
+    assert c.get(f"/api/tickets/{KEY}/plans").json()["newest"]["ticket_changed"] == []
+
+    observed(ctx.conn, title="Add a button", body="Blue, not red.")
+    newest = c.get(f"/api/tickets/{KEY}/plans").json()["newest"]
+    assert (newest["ticket_changed"], newest["changed_since_approval"]) == (["description"], False)
+    observed(ctx.conn, title="Add two buttons", body="Blue, not red.")
+    assert c.get(f"/api/tickets/{KEY}/plans").json()["newest"]["ticket_changed"] == ["title", "description"]
+
+    again = c.post(f"/api/tickets/{KEY}/plan", json={"action": "approve"}, headers=headers)
+    assert again.json() == {"action": "approve", "plan": plan_id, "superseded": None, "already": False}
+    assert c.get(f"/api/tickets/{KEY}/plans").json()["newest"]["ticket_changed"] == []
+
+
+def observed(conn: sqlite3.Connection, *, title: str, body: str) -> None:
+    """The tracker connector reads KEY now, titled `title` with the description `body`."""
+    records.insert(
+        records.ObservedTicket,
+        key=KEY,
+        title=title,
+        body=body,
+        state=TicketState.OPEN,
+        labels="[]",
+        updated_at=None,
+        blockers="[]",
+        observed_at=db.now(),
+    ).or_replace().run(conn)
+    conn.commit()
 
 
 def test_the_plan_route_approves_asks_and_skips_as_canopy_plan_does(ctx: Context) -> None:

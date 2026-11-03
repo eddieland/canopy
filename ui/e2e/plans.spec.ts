@@ -215,6 +215,39 @@ test("a plan review on the attention list shows the plan's card, which approves 
     await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
 })
 
+test("a ticket changed since its plan was approved shows the plan's card, which approves it again", async ({
+    page,
+}) => {
+    await listTicketChanged(page)
+    // The root server's journal never changes: ABC-105's plan reads here as approved, its ticket edited since.
+    await page.route('**/api/tickets/ABC-105/plans', async (route) => {
+        const plans = (await (await route.fetch()).json()) as {
+            newest: { plan: { status: string; approved_at: string | null }; ticket_changed: string[] }
+        }
+        plans.newest.plan.status = 'approved'
+        plans.newest.plan.approved_at = '2026-10-08T11:55:00Z'
+        plans.newest.ticket_changed = ['description']
+        await route.fulfill({ json: plans })
+    })
+    const approvals: unknown[] = []
+    await page.route('**/api/tickets/ABC-105/plan', async (route) => {
+        approvals.push(route.request().postDataJSON())
+        await route.fulfill({ json: { action: 'approve', already: false, plan: 2, superseded: null } })
+    })
+    await page.goto('attention')
+    const card = page.getByTestId('attention-detail').getByTestId('plan-card')
+    await expect(card).toContainText(
+        'Its ticket’s description changed since you approved it: approve it again if it still fits.',
+    )
+    await card.getByRole('button', { name: 'Approve' }).click()
+    await expect(card.getByRole('status')).toHaveText(
+        'Plan 2 of ABC-105 is approved as its file stands now. The next tick can implement it.',
+    )
+    expect(approvals).toEqual([{ action: 'approve' }])
+    await card.getByRole('link', { name: 'Open plan' }).click()
+    await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
+})
+
 test('a plan review you answered since its tick says so until the next one', async ({ page }) => {
     await listPlanReview(page)
     // The root server's journal never changes: the plan is answered here, as asking for changes would answer it.
@@ -321,16 +354,26 @@ test('writing a note on the whole plan never scrolls the page under it', async (
 // The stream would send the list as the journal has it, which has no review of a ticket's plan: the list here is the
 // test's, ABC-105's.
 async function listPlanReview(page: Page) {
+    await listItem(page, 'plan_review', 'plan 2 waits on your approval')
+}
+
+// The same, with ABC-105's ticket edited since its plan was approved, which the journal has not either.
+async function listTicketChanged(page: Page) {
+    await listItem(page, 'ticket_changed', "ABC-105's description changed since you approved plan 2: read the ticket")
+}
+
+// The attention list as one item of ABC-105's, of `reason`, saying `detail`.
+async function listItem(page: Page, reason: string, detail: string) {
     await page.route('**/api/events', (route) => route.abort())
     await page.route('**/api/attention', (route) =>
         route.fulfill({
             json: [
                 {
-                    id: 'ABC-105:plan_review',
+                    id: `ABC-105:${reason}`,
                     ticket_key: 'ABC-105',
                     ticket_title: 'Schedule report exports',
-                    reason: 'plan_review',
-                    detail: 'plan 2 waits on your approval',
+                    reason,
+                    detail,
                     since: '2026-10-08T11:52:00Z',
                     chore: null,
                     pr: null,

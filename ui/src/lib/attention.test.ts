@@ -39,7 +39,7 @@ const item = (id: string, reason: string, since: string, finding = false): Atten
 })
 
 describe('blocking', () => {
-    it('is anything that holds work up, not a PR waiting on a reviewer or its merge, nor a finding', () => {
+    it('is anything that holds work up, not a PR waiting on a reviewer or its merge, a finding, nor a warning', () => {
         expect(blocking(item('a', 'worker_failed', '2026-10-08T12:00:00Z'))).toBe(true)
         expect(blocking(item('a', 'awaiting_reply', '2026-10-08T12:00:00Z'))).toBe(true)
         expect(blocking(item('a', 'needs_author', '2026-10-08T12:00:00Z'))).toBe(true)
@@ -47,6 +47,8 @@ describe('blocking', () => {
         expect(blocking(item('a', 'needs_reviewer', '2026-10-08T12:00:00Z'))).toBe(false)
         expect(blocking(item('a', 'ready_to_merge', '2026-10-08T12:00:00Z'))).toBe(false)
         expect(blocking(item('a', 'lodash-advisory', '2026-10-08T12:00:00Z', true))).toBe(false)
+        // A warning holds nothing up: the implement goes ahead on the plan approved.
+        expect(blocking(item('a', 'ticket_changed', '2026-10-08T12:00:00Z'))).toBe(false)
     })
 })
 
@@ -192,6 +194,8 @@ describe('ask', () => {
         expect(ask(item('a', 'untrusted_review', at))).toBe('reply')
         expect(ask(item('a', 'untrusted_artifact_comment', at))).toBe('reply')
         expect(ask(item('a', 'plan_review', at))).toBe('plan')
+        // A ticket changed since its plan was approved is answered on the plan's card, by approving it again.
+        expect(ask(item('a', 'ticket_changed', at))).toBe('plan')
         expect(ask(item('a', 'drafts_waiting', at))).toBe('drafts')
         expect(ask(item('a', 'memory_proposal', at))).toBe('memory')
         expect(ask({ ...item('a', 'lesson_review', at), ticket_key: null })).toBe('memory')

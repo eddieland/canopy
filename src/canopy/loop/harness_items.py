@@ -11,9 +11,11 @@ the derivation's rows and the journal, and records it marked as its own, so no i
   latest review run failed, until a newer one starts or the PR is seen merged or closed;
 - `attempt_limit`, for a unit, or a ticket's plan, whose next run, as the rows say, is past its limit (§8);
 - `plan_review`, while a plan waits on the operator, and `plan_changed`, while an approved plan's file is no longer the
-  text they approved, or, before its ticket's first `implement`, the ticket's observed text is not (§25, §32).
+  text they approved (§25, §32).
 
-Beside them it raises two the overseer never recorded (`attention.ONLY_FROM_CAUSES`): `check_stuck`, for a unit
+Beside them it raises three the overseer never recorded (`attention.ONLY_FROM_CAUSES`): `ticket_changed`, a warning
+that refuses nothing, while a ticket's title or description as observed is not what it was when its current plan was
+approved, until the plan is approved again, superseded, or skipped (§25); `check_stuck`, for a unit
 `ci_running` on one check alone, still pending `STUCK_AFTER` past every other check at its head finishing, which may not
 be CI, until it completes, the head moves, or its repository's map gives it a role (§30); and `unobserved_pr`, for a
 unit whose PR URL names no PR, which no source reads, so the harness waits on its ticket (§39), until the unit names a
@@ -66,6 +68,7 @@ PLAN_REVIEW = "plan_review"
 PLAN_CHANGED = "plan_changed"
 CHECK_STUCK = attention.CHECK_STUCK
 UNOBSERVED_PR = attention.UNOBSERVED_PR
+TICKET_CHANGED = attention.TICKET_CHANGED
 #: Every reason this module raises: those of `attention.FROM_CAUSES`, and those only the harness has ever recorded.
 REASONS: frozenset[str] = attention.FROM_CAUSES | attention.ONLY_FROM_CAUSES
 #: The reasons whose cause rests on what a connector observed, so a stale observation keeps their item.
@@ -505,7 +508,7 @@ def _from_journal(ctx: Context, subjects: _Subjects, now: datetime) -> Iterator[
 
 
 def _plans(ctx: Context, ticket: records.Ticket) -> Iterator[Raised]:
-    """A ticket's `plan_review` and `plan_changed`: its plan, or its feedback plan, waiting or changed (§25, §32).
+    """A ticket's `plan_review`, `plan_changed`, and `ticket_changed`: its plans waiting or changed, or it (§25, §32).
 
     Yields:
         Each.
@@ -519,12 +522,14 @@ def _plans(ctx: Context, ticket: records.Ticket) -> Iterator[Raised]:
         path = plans.path_for(state_dir, key, plan.run_id)
         detail = f"plan {plan.id} of {key}, {path}, is no longer the text you approved: approve it again, or skip it"
         yield Raised(key, PLAN_CHANGED, detail)
-    elif plan is not None and not ticket.branch and (changed := plans.ticket_changed(conn, plan)):
+    changed = plans.ticket_changed(conn, plan) if plan is not None else []
+    if plan is not None and changed:
         detail = (
-            f"{key}'s {' and '.join(changed)} changed since you approved plan {plan.id}: canopy show {key}, then "
-            f"canopy plan {key} --approve if it still fits, or canopy plan {key} for a new one, or --skip"
+            f"{key}'s {' and '.join(changed)} changed since you approved plan {plan.id}: read the ticket, then approve "
+            f"the plan again if it still fits (canopy plan {key} --approve), ask for a new one (canopy plan {key}), "
+            "or skip it (--skip)"
         )
-        yield Raised(key, PLAN_CHANGED, detail)
+        yield Raised(key, TICKET_CHANGED, detail)
     if ctx.config.policy.feedback_plan != "approve":
         return
     found = feedback_plans.current(conn, key)

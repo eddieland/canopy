@@ -31,6 +31,7 @@ const NEWEST: PlanFile = {
     sha256: 'read-hash',
     edited: false,
     changed_since_approval: false,
+    ticket_changed: [],
     persona: null,
 }
 const PLANS: TicketPlans = {
@@ -251,6 +252,14 @@ describe('TicketPlan', () => {
                         'it was approved\\. $',
                     'u',
                 ),
+            )
+        })
+
+        it("says what of the plan's ticket changed since it was approved", async () => {
+            const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
+            const newest = { ...NEWEST, plan: { ...approved, approved_channel: 'web' } }
+            expect(await state({ newest: { ...newest, ticket_changed: ['title', 'description'] } })).toMatch(
+                /^Written by run:50, approved \S+ ago via web, its ticket’s title and description changed since\. $/u,
             )
         })
 
@@ -507,6 +516,12 @@ describe('TicketPlan', () => {
         unmount()
 
         renderPlan({ newest: { ...NEWEST, plan: approved, changed_since_approval: true } })
+        expect(button('Approve')).toBeDefined()
+    })
+
+    it('offers Approve again for a plan whose ticket changed since it was approved', () => {
+        const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
+        renderPlan({ newest: { ...NEWEST, plan: approved, ticket_changed: ['description'] } })
         expect(button('Approve')).toBeDefined()
     })
 

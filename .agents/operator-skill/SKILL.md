@@ -174,7 +174,8 @@ The overseer may record other reasons; the detail says what it wants.
 | `needs_author` | A review comment needs a person (design pushback, scope), or a stacked-on PR closed: decide. |
 | `untrusted_review` | Feedback from a reviewer not in `trust.trusted_reviewers`: say what to do with `canopy reply`. |
 | `plan_review` | A plan waits: `canopy show KEY`, then `canopy plan KEY --approve` or `canopy reply KEY`. |
-| `plan_changed` | An approved plan's file, or its ticket's text, changed: approve it again, `canopy plan KEY` for a new one, or `--skip`. |
+| `plan_changed` | An approved plan's file changed: approve it again, `canopy plan KEY` for a new one, or `--skip`. |
+| `ticket_changed` | The ticket's title or description changed since you approved its plan, whose work goes ahead anyway: if the plan still fits, approve it again; else `canopy plan KEY` for a new one, or `--skip`. |
 | `attempt_limit` | The ticket used up its attempts of one kind: take it over, or `canopy grant KEY KIND`. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong: read the run log the detail names. |
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |

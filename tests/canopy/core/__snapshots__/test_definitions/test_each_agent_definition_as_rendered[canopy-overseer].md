@@ -568,9 +568,9 @@ Take the first row that fits, with `newest`, `blocked`, and `changes_asked` read
 | `newest.status` `approved` | the phase from the table; `ready` dispatches `implement`, whose worker reads the plan. A newer operator message does not undo it: it rides the `implement` | the `resume` the table says, with its reasons, over the plan's `repos`: it follows the plan and spends it, so the next round needs a new plan |
 
 At `plan.limit`, or a unit's limit for feedback plans, record `wait` instead (step 4). If `canopy_dispatch` refuses an
-`implement` or `resume` as `plan_changed`, because the approved plan's file, or its ticket's text, changed, the harness
-raises `plan_changed` until the operator approves it again: dispatch nothing else for the ticket meanwhile. A
-`feedback-plan` refused `quiet` is recorded as its plan still waiting.
+`implement` or `resume` as `plan_changed`, because the approved plan's file changed, the harness raises `plan_changed`
+until the operator approves it again: dispatch nothing else for the ticket meanwhile. A `feedback-plan` refused `quiet`
+is recorded as its plan still waiting.
 
 ## Private tickets
 

@@ -74,6 +74,9 @@ MAX_NOTE = conversation.MAX_OPERATOR - 200
 #: under `policy.planner_may_approve`: the planner's approval, never the operator's (DESIGN §25).
 PLANNER = "planner"
 
+#: What of a ticket's text can change since its plan was approved, as the harness's warning names it (`ticket_changed`).
+type TicketPart = Literal["title", "description"]
+
 # Why a file is not a plan, as `canopy show` and the refusals say it.
 type Problem = Literal["missing", "not a regular file", "unreadable", "not UTF-8", "empty", "over the bound"]
 
@@ -618,8 +621,8 @@ def approve(
 ) -> records.Plan:
     """Approve the ticket's current plan as its file stands now, the operator's edits included, recording its hash.
 
-    Beside it goes the hash of the ticket's title and of its description as last observed, so an `implement` is refused
-    while either differs (`ticket_changed`), and approving again is how the operator says the plan still fits.
+    Beside it goes the hash of the ticket's title and of its description as last observed, so the harness warns while
+    either differs (`ticket_changed`), and approving again is how the operator says the plan still fits.
 
     An operator message newer than the plan, asking for changes, does not stop it: an approval before the new plan run
     starts is the operator's later word (DESIGN §25, Approving a plan). With a `note`, the approval writes it on the
@@ -807,16 +810,17 @@ def ticket_text(conn: sqlite3.Connection, key: str) -> TicketText | None:
     return TicketText(title_sha256=_text_digest(seen.title), body_sha256=_text_digest(seen.body))
 
 
-def ticket_changed(conn: sqlite3.Connection, plan: records.Plan) -> list[str]:
+def ticket_changed(conn: sqlite3.Connection, plan: records.Plan) -> list[TicketPart]:
     """What of the ticket's text differs, as last observed, from what it was when its approved plan was approved.
 
     An approval that recorded no text, from before canopy recorded it or of a ticket not observed then, is never
-    stale, nor is one whose ticket is not observed now: only two observations that differ say the ticket changed. An
-    `implement` on the plan is refused while it has (`plan_changed`), so no worker follows a plan written for a ticket
-    that no longer reads so, until the operator approves it again (DESIGN §25, Approving a plan).
+    stale, nor is one whose ticket is not observed now: only two observations that differ say the ticket changed. The
+    harness raises `ticket_changed` while it has, warning the operator that the plan was written for a ticket that no
+    longer reads so, until they approve it again, plan anew, or skip it (DESIGN §25, Approving a plan). Nothing is
+    refused on it: the `implement` goes ahead on the plan they approved.
 
     Returns:
-        `title`, `description`, or both, in that order, as a refusal names them; empty when neither changed, or the
+        `title`, `description`, or both, in that order, as the warning names them; empty when neither changed, or the
         plan is not approved.
     """
     if plan.status is not PlanStatus.APPROVED or plan.approved_title_sha256 is None:
@@ -824,7 +828,7 @@ def ticket_changed(conn: sqlite3.Connection, plan: records.Plan) -> list[str]:
     seen = ticket_text(conn, plan.ticket_key)
     if seen is None:
         return []
-    changed: list[str] = []
+    changed: list[TicketPart] = []
     if seen.title_sha256 != plan.approved_title_sha256:
         changed.append("title")
     if seen.body_sha256 != plan.approved_body_sha256:
