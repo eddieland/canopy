@@ -15,6 +15,7 @@ from canopy.core import contract, records, sql
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Mapping, Sequence
 
     from canopy.core.vocab import Phase
 
@@ -43,9 +44,77 @@ def tracked(conn: sqlite3.Connection, since: str, until: str) -> dict[str, Track
     Returns:
         Each PR by URL, the first named first.
     """
-    first: dict[str, tuple[str, str]] = {}
-    last: dict[str, str] = {}
-    seen: set[str] = set()
+    return read(conn, until).tracked(since, until)
+
+
+@dataclass(frozen=True)
+class Naming:
+    """A run whose result named PRs."""
+
+    ticket: str
+    #: When it started, a journal time.
+    started_at: str
+    #: The PRs its result named, by URL.
+    prs: Sequence[str]
+
+
+@dataclass(frozen=True)
+class Namings:
+    """Every run that started before a time and named PRs, read once, for the PRs any window ending by then tracked.
+
+    A report of many windows reads this once rather than every run's result for each window.
+    """
+
+    #: The time it was read to, a journal time: no window it answers for ends after it.
+    until: str
+    #: The runs, the earliest started first.
+    runs: Sequence[Naming]
+    #: The unit that holds each PR the runs named, by URL.
+    units: Mapping[str, records.TicketUnit]
+
+    def tracked(self, since: str, until: str) -> dict[str, TrackedPr]:
+        """The PRs a run that started in `[since, until)` named, as the module's `tracked` gives them.
+
+        Returns:
+            Each PR by URL, the first named first.
+
+        Raises:
+            ValueError: When `until` is after the time it was read to.
+        """
+        if until > self.until:
+            msg = f"read to {self.until}, asked to {until}"
+            raise ValueError(msg)
+        first: dict[str, tuple[str, str]] = {}
+        last: dict[str, str] = {}
+        seen: set[str] = set()
+        for run in self.runs:
+            if run.started_at >= until:
+                break
+            for url in run.prs:
+                first.setdefault(url, (run.ticket, run.started_at))
+                last[url] = run.started_at
+                if run.started_at >= since:
+                    seen.add(url)
+        return {
+            url: TrackedPr(
+                url=url,
+                first_named=started,
+                last_named=last[url],
+                ticket=unit.ticket_key if (unit := self.units.get(url)) is not None else key,
+                phase=None if unit is None else unit.phase,
+            )
+            for url, (key, started) in first.items()
+            if url in seen
+        }
+
+
+def read(conn: sqlite3.Connection, until: str) -> Namings:
+    """Every run that started before `until`, a journal time, and named PRs in its result, and the units holding them.
+
+    Returns:
+        Them, to ask `tracked` of for any window that ends by `until`.
+    """
+    runs: list[Naming] = []
     pushed = (
         sql.select("ticket_key, started_at, result_json")
         .from_("runs")
@@ -53,25 +122,13 @@ def tracked(conn: sqlite3.Connection, since: str, until: str) -> dict[str, Track
         .order_by("started_at, id")
     )
     for key, started, result in sql.execute(conn, pushed):
-        for url in contract.stored_prs(contract.stored_object(result)):
-            first.setdefault(url, (str(key), str(started)))
-            last[url] = str(started)
-            if str(started) >= since:
-                seen.add(url)
-    urls = [url for url in first if url in seen]
+        named = tuple(contract.stored_prs(contract.stored_object(result)))
+        if named:
+            runs.append(Naming(ticket=str(key), started_at=str(started), prs=named))
+    urls = sorted({url for run in runs for url in run.prs})
     units = (
         records.select(records.TicketUnit)
         .where("pr_url IN (SELECT value FROM json_each(?))", json.dumps(urls))
         .all(conn)
     )
-    owned = {u.pr_url: u for u in units if u.pr_url is not None}
-    return {
-        url: TrackedPr(
-            url=url,
-            first_named=first[url][1],
-            last_named=last[url],
-            ticket=owned[url].ticket_key if url in owned else first[url][0],
-            phase=owned[url].phase if url in owned else None,
-        )
-        for url in urls
-    }
+    return Namings(until=until, runs=runs, units={u.pr_url: u for u in units if u.pr_url is not None})

@@ -4,7 +4,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from canopy.core import ci, records
+from canopy.core import ci, db, records, spend
 from canopy.core.vocab import CheckConclusion, ResumeReason, RunKind, RunStatus
 from tests.canopy.helpers import check_ran, earlier, in_zone, kicked, worker_ran
 from tests.conftest import Journals
@@ -315,3 +315,23 @@ def test_an_empty_window_lists_each_day_at_nothing(tmp_path: Path, journals: Jou
     ]
     assert (list(found.fixes), list(found.kicks), list(found.kicked_prs)) == ([], [], [])
     assert (list(found.pull_requests), found.median_to_green) == ([], None)
+
+
+def test_windows_read_together_are_each_as_read_alone(tmp_path: Path, journals: Journals) -> None:
+    """Each window of several read at once, as the monthly report reads its months, is the report of it alone."""
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_checks(conn)
+    # A fix and a kick on PR 3, whose runs span the windows: each window reads the runs before and after its own.
+    worker_ran(conn, RunKind.IMPLEMENT, earlier(NOW, 6), prs={"web": PR_3})
+    check_ran(conn, PR_3, "c1", "unit", F, earlier(NOW, 6, -1))
+    fix = worker_ran(conn, RunKind.RESUME, earlier(NOW, 4), prs={"web": PR_3}, reasons=(ResumeReason.CI,))
+    kicked(conn, fix, "c1", "c2", earlier(NOW, 4, -1))
+    check_ran(conn, PR_3, "c2", "unit", F, earlier(NOW, 2, 1))
+    worker_ran(conn, RunKind.FIX_CI, earlier(NOW, 1), prs={"web": PR_3})
+    check_ran(conn, PR_3, "c3", "unit", S, earlier(NOW, 0, 3))
+    # Each of the last ten days, the fix-ci's among them, on which PR 3 had no check run but the fix's; then weeks.
+    found = ci.report(conn, NOW, 10)
+    spans = [(db.parse_time(d.start), db.parse_time(d.start) + timedelta(days=1)) for d in found.per_day]
+    spans += [spend.window(NOW, n) for n in (10, 7, 3)]
+    assert ci.windows(conn, spans) == [ci.between(conn, *span) for span in spans]
+    assert ci.windows(conn, []) == []
