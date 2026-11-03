@@ -126,14 +126,15 @@ Rules:
   Gruvbox's purple); the others take one that suits the canvas. Light has off-white, a warm paper, sage, and the light
   tones of Solarized, Nord, Gruvbox, Rosé Pine Dawn, and Acme, Plan 9's editor; dark has grey (the near-colorless
   neutrals the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox,
-  and Monokai. Pulp, on both sides, is Gruvbox's tones inked as a comic. A light canvas is never grey, which only
+  and Monokai. Pulp, on both sides, is a comic in four-color print: newsprint cream in light, a night blue in dark,
+  process magenta its accent. A light canvas is never grey, which only
   looks dim. Every other hue is the same in all, so a component
   never knows which it is on, and an accent is read through its token, never assumed indigo; where a scheme's own bases
   would drop a hue below 4.5:1, the bases move, never the hue. A palette's accent is darkened or lightened until it
   reads as text there, on its own tint, and under `accent-foreground`, and sets `ring` with it. A scheme whose accent
   would pass for a status wears another of its colors, as Gruvbox wears its purple, not its orange, and a green canvas
   never takes a green accent. A scheme whose bases would have to move until it matched another palette is left out, as
-  Nord's dark is; Pulp alone shares another's colors, Gruvbox's, set apart by its character. `tokens.test.ts`
+  Nord's dark is. `tokens.test.ts`
   measures every palette `src/theme/palette.ts` lists, and `theme-script.test.ts`
   checks the inline script knows each.
   A palette sets its character too, beyond color, from a few closed choices, in the same rule, so a component still
@@ -148,10 +149,11 @@ Rules:
   keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono.
   The defaults take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the
   nineties, and black no edges, soft corners, and the glow.
-  Pulp's sides take Gruvbox's character and ink the page as a comic does, from a few knobs whose defaults draw
-  nothing: each panel and bubble outlined and dropping a hard shadow (`shadow-panel`, `shadow-bubble`), a halftone
-  canvas (`--canvas-texture`), the primary action pressed into its shadow (`--press-x`, `--press-y`), and a page title
-  dropped in its section's color (`--title-drop`). Each is a shadow, a transform, or a background, so it takes no room.
+  Pulp's sides take Gruvbox's character, in colors of their own, and ink the page as a comic does, from a few knobs
+  whose defaults draw nothing: each panel and bubble outlined and dropping a hard shadow (`shadow-panel`,
+  `shadow-bubble`), a halftone canvas (`--canvas-texture`), the primary action pressed into its shadow (`--press-x`,
+  `--press-y`), and a page title dropped in its section's color (`--title-drop`). Each is a shadow, a transform, or a
+  background, so it takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
   or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
@@ -160,7 +162,8 @@ Rules:
   A palette may tune its section colors too, muted toward a scheme's own set or turned up, but each keeps its hue's
   family, which says what its page is for: a rose stays a rose, a gold a gold, though a scheme's own shade of it may
   sit a few degrees round the wheel. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
-  from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage.
+  from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage, and
+  Pulp's sides a flat, full-chroma set, as a comic prints its colors.
   Every other palette picks from the same choices, so each reads as its own place: Gruvbox's light side as its dark
   one, Solarized's sides crisp and flat, Monokai crisp and in mono under a neon aurora, Acme square and in mono, its
   panels pale yellow on a pale cyan canvas, the one palette in two hues, under one olive rule, Nord's light side soft
