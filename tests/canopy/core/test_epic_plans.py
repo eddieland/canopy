@@ -6,7 +6,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import conversation, epics
+from canopy.core import conversation, epics, plans
 from canopy.core.vocab import PlanStatus
 from canopy.infra import logs
 from canopy.runs import epic_starts
@@ -82,7 +82,7 @@ def test_the_operator_approves_the_plan_as_its_file_stands(
     ctx = inline_context(planned)
     plan = present(epics.current_plan(ctx.conn, 1))
     assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, "cli")
-    assert path.with_name(f"1{epics.APPROVED_SUFFIX}").read_text() == edited
+    assert epics.approved_path(ctx.state_dir, 1, 1, present(plan.approved_sha256)).read_text() == edited
     assert present(epics.approved_outline(ctx.conn, ctx.state_dir, 1)).requirements["R1"].endswith("deploy.")
     assert operator("plan", "epic:1", "--approve") == 1
     assert "plan refused (no_plan)" in capsys.readouterr().err
@@ -204,3 +204,62 @@ def test_an_approval_refuses_while_a_plan_run_runs(planned: CanopyEnv) -> None:
         assert epic_starts.start_due(ctx, tick_id, logs.for_tick(tick_id))
     with pytest.raises(conversation.Refused, match="planning"):
         epics.approve(ctx.conn, ctx.state_dir, 1, repos=frozenset({"repo"}), channel="cli")
+
+
+def test_an_approval_retried_after_its_copy_was_written_goes_through(planned: CanopyEnv) -> None:
+    """A copy left by an approval that failed after writing it is found, not refused, when the same text is approved."""
+    ctx = inline_context(planned)
+    reading = plans.read(plan_file(planned))
+    copy = epics.approved_path(ctx.state_dir, 1, 1, present(reading.sha256))
+    copy.write_text(present(reading.text))
+    assert operator("plan", "epic:1", "--approve") == 0
+    assert present(epics.current_plan(ctx.conn, 1)).status is PlanStatus.APPROVED
+
+
+def test_an_approved_copy_edited_after_is_refused_where_it_is_read(
+    capsys: pytest.CaptureFixture[str],
+    planned: CanopyEnv,
+) -> None:
+    """The kept copy is what the next approval is compared with: one no longer as approved is refused, not trusted."""
+    assert operator("plan", "epic:1", "--approve") == 0
+    ctx = inline_context(planned)
+    plan = present(epics.current_plan(ctx.conn, 1))
+    epics.approved_path(ctx.state_dir, 1, 1, present(plan.approved_sha256)).write_text(PLAN.replace("R1.", "R1:"))
+    with pytest.raises(conversation.Refused, match="approved_changed"):
+        epics.approved_outline(ctx.conn, ctx.state_dir, 1)
+    assert operator("epic", "add", "epic:1", "PROJ-2", "--entry", "B1") == 1
+    assert "epic add refused (approved_changed)" in capsys.readouterr().err
+
+
+def test_entries_take_one_flag_and_only_the_operator_registers_them(
+    capsys: pytest.CaptureFixture[str],
+    planned: CanopyEnv,
+) -> None:
+    """--entry and --no-entry are each a registration of their own; inside a run either is refused (T1)."""
+    assert operator("plan", "epic:1", "--approve") == 0
+    assert operator("epic", "add", "epic:1", "PROJ-2", "--entry", "B1", "--no-entry") == 2
+    assert "--entry names the entries each KEY fulfils, and --no-entry none; pass one" in capsys.readouterr().err
+    with mock.patch.dict("os.environ", {"CANOPY_RUN_ID": "7"}):
+        assert main(["epic", "add", "epic:1", "PROJ-2", "--entry", "B1"]) == 1
+    assert "epic add refused (inside_run)" in capsys.readouterr().err
+    assert epics.membership(inline_context(planned).conn, "PROJ-2") is None
+
+
+def test_a_member_whose_entry_a_later_plan_dropped_is_named(
+    capsys: pytest.CaptureFixture[str],
+    planned: CanopyEnv,
+) -> None:
+    """A registration names the plan approved when it was made; show names one whose entry is gone since."""
+    assert operator("plan", "epic:1", "--approve") == 0
+    assert operator("epic", "add", "epic:1", "PROJ-3", "--entry", "B2") == 0
+    dropped = PLAN.split("### B2.", maxsplit=1)[0] + "## Decisions\n\n## Out of scope\n"
+    dropped = dropped.replace("- **R2.** The web app reads the new store.\n", "").replace(
+        " Provided by B1; used by B2.",
+        " Provided by B1.",
+    )
+    assert operator("reply", "epic:1", "Drop the web app's part.") == 0
+    epic_planned(planned, dropped)
+    assert operator("plan", "epic:1", "--approve") == 0
+    capsys.readouterr()
+    assert operator("show", "epic:1") == 0
+    assert "Registered against entries the approved plan no longer holds: PROJ-3 (B2)" in capsys.readouterr().out

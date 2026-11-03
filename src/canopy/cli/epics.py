@@ -260,6 +260,12 @@ def _show_breakdown(ctx: Context, epic_id: int) -> None:
         members = ", ".join(fulfilling.get(entry.id, [])) or "none yet"
         trivial = "  trivial" if entry.trivial is not None else ""
         click.echo(f"  {entry.id}. {printable(one_line(entry.title))}  {members}{trivial}")
+    # A registration names the plan approved when it was made; a later approval may have dropped its entry.
+    gone = sorted(
+        f"{key} ({entry})" for entry, keys in fulfilling.items() if entry not in outline.entries for key in keys
+    )
+    if gone:
+        click.echo(f"  Registered against entries the approved plan no longer holds: {', '.join(gone)}")
 
 
 def replied(ctx: Context, epic_id: int) -> None:

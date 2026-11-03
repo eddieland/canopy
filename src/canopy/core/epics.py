@@ -32,7 +32,9 @@ MAX_TEXT = conversation.MAX_OPERATOR
 KEY_RE = conversation.KEY_RE
 MAX_KEY = conversation.MAX_KEY
 #: The copy of an approved plan's text, kept beside its file when the operator approves it: what the next approval is
-#: compared with, whatever later becomes of the file.
+#: compared with, whatever later becomes of the file. Named for the run and the text's hash,
+#: `<run>.<sha256>.approved.md`, so an approval retried after one that wrote its copy and then failed finds the copy it
+#: would write already there.
 APPROVED_SUFFIX = ".approved.md"
 #: Where an epic's plans are kept, `<state_dir>/epics/<id>/<run_id>.md`, readable only by the operator, as a
 #: ticket's plans are (DESIGN §25, §43).
@@ -377,8 +379,7 @@ def approve(
             if reused:
                 ids = ", ".join(reused)
                 raise Refused("reused_id", f"the plan uses {ids}, which an earlier approved plan dropped: never again")
-        name = f"{current.run_id}{APPROVED_SUFFIX}"
-        plans.write_new(state_dir / PLANS_DIR, str(epic_id), name, reading.text)
+        _keep_approved(state_dir, epic_id, current.run_id, reading.text, reading.sha256)
         update = records.update(records.EpicPlan).set(
             status=PlanStatus.APPROVED,
             approved_sha256=reading.sha256,
@@ -409,6 +410,15 @@ def approved_outline(
     return earlier[-1] if earlier else None
 
 
+def approved_path(state_dir: Path, epic_id: int, run_id: int, sha256: str) -> Path:
+    """Where the copy of the plan run `run_id` wrote, as the operator approved it with hash `sha256`, is kept.
+
+    Returns:
+        `<state_dir>/epics/<epic_id>/<run_id>.<sha256>.approved.md`. The file may not exist.
+    """
+    return plan_path(state_dir, epic_id, run_id).with_name(f"{run_id}.{sha256}{APPROVED_SUFFIX}")
+
+
 def messages_of(conn: sqlite3.Connection, epic_id: int) -> list[records.Message]:
     """Return the operator's messages to epic `epic_id`, the oldest first: each its next plan's to read."""
     query = records.select(records.Message).where(
@@ -417,6 +427,18 @@ def messages_of(conn: sqlite3.Connection, epic_id: int) -> list[records.Message]
         str(epic_id),
     )
     return query.order_by("id").all(conn)
+
+
+def _keep_approved(state_dir: Path, epic_id: int, run_id: int, text: str, sha256: str) -> None:
+    """Keep the copy of an approved plan's `text`, or find it kept already by an approval that failed after writing it.
+
+    Raises:
+        PlanFileError: the copy could not be written, or a file of its name holds something else.
+    """
+    path = approved_path(state_dir, epic_id, run_id, sha256)
+    if path.exists() and plans.read(path).sha256 == sha256:
+        return
+    plans.write_new(state_dir / PLANS_DIR, str(epic_id), path.name, text)
 
 
 def _approved_outlines(
@@ -436,7 +458,7 @@ def _approved_outlines(
     for plan in plans_of(conn, epic_id):
         if plan.approved_sha256 is None:
             continue
-        path = plan_path(state_dir, epic_id, plan.run_id).with_name(f"{plan.run_id}{APPROVED_SUFFIX}")
+        path = approved_path(state_dir, epic_id, plan.run_id, plan.approved_sha256)
         reading = plans.read(path)
         if reading.text is None or reading.sha256 != plan.approved_sha256:
             raise Refused("approved_changed", f"{path} is not the plan approved by run {plan.run_id}")
