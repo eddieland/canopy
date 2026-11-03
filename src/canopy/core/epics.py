@@ -1,10 +1,12 @@
-"""Epics (DESIGN §43): the operator's submissions, the repositories each one's plan reads, and its members.
+"""Epics (DESIGN §43): the operator's submissions, the repositories each one's plan reads, its members, its plans.
 
-Only the operator's channels write here, and every write refuses inside a tick or any agent's run (`inside_run`,
-TRUST_MODEL T1): the submission is what will authorize an epic's plan runs, and membership is the operator's
-word alone. A tracker's epic, parent, or sub-issue link never makes a ticket a member, and membership authorizes no work
-on it: a member is worked only once a label or a start says so, as any ticket is. The overseer never reads an
-epic. `policy.max_epic_tickets` bounds the members of one, a guard in code (§4).
+Only the operator's channels submit an epic or change its members, each refusing inside a tick or any agent's run
+(`inside_run`, TRUST_MODEL T1): the submission is what authorizes an epic's plan runs, and membership is the
+operator's word alone. A plan run records the plan it wrote here, as a file in the state directory and a row of its
+hashes, `proposed`, never approved: only the operator approves one. A tracker's epic, parent, or sub-issue link never
+makes a ticket a member, and membership authorizes no work on it: a member is worked only once a label or a start says
+so, as any ticket is. The overseer never reads an epic. `policy.max_epic_tickets` bounds the members of one,
+a guard in code (§4).
 """
 
 from __future__ import annotations
@@ -13,11 +15,13 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, records
+from canopy.core import conversation, db, plans, records
 from canopy.core.conversation import Refused
+from canopy.core.vocab import PlanStatus
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+    from pathlib import Path
 
     from canopy.core.workspace import Workspace
 
@@ -26,6 +30,9 @@ MAX_TEXT = conversation.MAX_OPERATOR
 #: A tracker project's key, or a tracker epic's, as a ticket key spells it (DESIGN §18).
 KEY_RE = conversation.KEY_RE
 MAX_KEY = conversation.MAX_KEY
+#: Where an epic's plans are kept, `<state_dir>/epics/<id>/<run_id>.md`, readable only by the operator, as a
+#: ticket's plans are (DESIGN §25, §43).
+PLANS_DIR = "epics"
 
 
 @dataclass(frozen=True)
@@ -202,6 +209,76 @@ def remove(conn: sqlite3.Connection, epic_id: int, keys: Iterable[str], *, chann
             update = records.update(records.EpicMember).set(removed_at=now, removed_channel=channel)
             update.where("epic_id = ? AND ticket_key = ? AND removed_at IS NULL", epic_id, key).run(conn)
     return wanted
+
+
+def plan_path(state_dir: Path, epic_id: int, run_id: int) -> Path:
+    """Where the plan that run `run_id` of epic `epic_id` wrote is kept: built from the ids, never a row.
+
+    Returns:
+        `<state_dir>/epics/<epic_id>/<run_id>.md`. The file may not exist.
+    """
+    return state_dir / PLANS_DIR / str(epic_id) / plans.file_name(run_id)
+
+
+def write_plan(state_dir: Path, epic_id: int, run_id: int, text: str) -> plans.Written:
+    """Write the plan run `run_id` wrote to its file, once, readable only by the operator (DESIGN §43).
+
+    Returns:
+        The file's hash and size, for its row.
+
+    Raises:
+        PlanFileError: `epics/` or the epic's directory is not the operator's own, or the name is taken.
+    """
+    return plans.write_new(state_dir / PLANS_DIR, str(epic_id), plans.file_name(run_id), text)
+
+
+def record_plan(
+    conn: sqlite3.Connection,
+    epic_id: int,
+    run_id: int,
+    written: plans.Written,
+) -> records.EpicPlan:
+    """Record the plan run `run_id` wrote as epic `epic_id`'s newest, `proposed`, superseding its last.
+
+    An approved plan it supersedes stays readable, as what the next approval is compared with (DESIGN §43).
+
+    Returns:
+        The plan, as recorded.
+
+    Raises:
+        DatabaseError: the row was not recorded, which nothing but a broken journal does.
+    """
+    with db.transaction(conn):
+        superseded = records.update(records.EpicPlan).set(status=PlanStatus.SUPERSEDED)
+        superseded.where("epic_id = ? AND status != ?", epic_id, PlanStatus.SUPERSEDED).run(conn)
+        insert = records.insert(
+            records.EpicPlan,
+            epic_id=epic_id,
+            run_id=run_id,
+            created_at=db.now(),
+            sha256=written.sha256,
+            size=written.size,
+        )
+        plan_id = int(insert.run(conn).lastrowid or 0)
+    found = records.select(records.EpicPlan).where("id = ?", plan_id).one(conn)
+    if found is None:
+        raise sqlite3.DatabaseError("the epic plan's row was not recorded")
+    return found
+
+
+def current_plan(conn: sqlite3.Connection, epic_id: int) -> records.EpicPlan | None:
+    """Return epic `epic_id`'s plan waiting on the operator or approved, or None while it has neither."""
+    query = records.select(records.EpicPlan).where(
+        "epic_id = ? AND status != ?",
+        epic_id,
+        PlanStatus.SUPERSEDED,
+    )
+    return query.one(conn)
+
+
+def plans_of(conn: sqlite3.Connection, epic_id: int) -> list[records.EpicPlan]:
+    """Return every plan epic `epic_id` has had, the oldest first."""
+    return records.select(records.EpicPlan).where("epic_id = ?", epic_id).order_by("id").all(conn)
 
 
 def _repositories(workspace: Workspace, repos: Sequence[str]) -> list[str]:
