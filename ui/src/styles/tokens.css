@@ -506,8 +506,8 @@
     --section-reports: oklch(0.52 0.105 88);
     --section-memory: oklch(0.5 0.085 195);
 
-    /* As its dark side: crisp corners, every line in its mono as a letterer's caps would be, the stepped aurora,
-     * the name on a block of the ochre Reports wears, and the nav's highlight a solid block. */
+    /* As its dark side: crisp corners, every line in its mono as a letterer's caps would be, the aurora a print
+     * strip, the name on a tilted plate of the ochre Reports wears, and the nav's highlight a solid block. */
     --radius: 0.1875rem;
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
@@ -528,21 +528,28 @@
     --title-drop: 0.08em;
     --title-drop-alpha: 1;
     --aurora-height: 0.25rem;
-    --aurora-image: linear-gradient(
-        90deg,
-        var(--section-attention) 0 12.5%,
-        var(--section-tickets) 0 25%,
-        var(--section-tasks) 0 37.5%,
-        var(--section-pull-requests) 0 50%,
-        var(--section-workspace) 0 62.5%,
-        var(--section-chores) 0 75%,
-        var(--section-reports) 0 87.5%,
-        var(--section-memory) 0
-    );
+    /* A print strip: the stepped blocks, each between ink gutters, as a comic's panels stand on a page. */
+    --aurora-image:
+        repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 0 calc(12.5% - 1px), var(--ink) 0 12.5%),
+        linear-gradient(
+            90deg,
+            var(--section-attention) 0 12.5%,
+            var(--section-tickets) 0 25%,
+            var(--section-tasks) 0 37.5%,
+            var(--section-pull-requests) 0 50%,
+            var(--section-workspace) 0 62.5%,
+            var(--section-chores) 0 75%,
+            var(--section-reports) 0 87.5%,
+            var(--section-memory) 0
+        );
     --wordmark-image: linear-gradient(var(--section-reports), var(--section-reports));
     --wordmark-clip: border-box;
     --wordmark-ink: var(--surface);
-    --wordmark-frame: 0 0 0 0.25em var(--section-reports);
+    /* The name as a sound effect's plate: the block inked as a panel is, dropping its shadow, and tilted. */
+    --wordmark-frame:
+        0 0 0 0.25em var(--section-reports), 0 0 0 calc(0.25em + 1.5px) var(--ink),
+        3px 3px 0 calc(0.25em + 1.5px) var(--ink);
+    --wordmark-tilt: rotate(-3deg);
     --nav-block: 1;
     --nav-hairline: 0;
     --nav-on-ink: var(--surface);
@@ -814,24 +821,32 @@
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
     --code-size: 1em;
-    /* Its aurora is a stepped bar of solid blocks; its name sits on a block of its process yellow; the nav's highlight
-     * is a solid block, the active item inked in the canvas's color, with no hairline. */
+    /* Its aurora is a print strip, a block of each section's color between ink gutters; its name is a sound effect's
+     * plate of its process yellow, inked and tilted; the nav's highlight is a solid block, the active item inked in
+     * the canvas's color, with no hairline. */
     --aurora-height: 0.25rem;
-    --aurora-image: linear-gradient(
-        90deg,
-        var(--section-attention) 0 12.5%,
-        var(--section-tickets) 0 25%,
-        var(--section-tasks) 0 37.5%,
-        var(--section-pull-requests) 0 50%,
-        var(--section-workspace) 0 62.5%,
-        var(--section-chores) 0 75%,
-        var(--section-reports) 0 87.5%,
-        var(--section-memory) 0
-    );
+    /* A print strip: the stepped blocks, each between ink gutters, as a comic's panels stand on a page. */
+    --aurora-image:
+        repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 0 calc(12.5% - 1px), var(--ink) 0 12.5%),
+        linear-gradient(
+            90deg,
+            var(--section-attention) 0 12.5%,
+            var(--section-tickets) 0 25%,
+            var(--section-tasks) 0 37.5%,
+            var(--section-pull-requests) 0 50%,
+            var(--section-workspace) 0 62.5%,
+            var(--section-chores) 0 75%,
+            var(--section-reports) 0 87.5%,
+            var(--section-memory) 0
+        );
     --wordmark-image: linear-gradient(var(--section-reports), var(--section-reports));
     --wordmark-clip: border-box;
     --wordmark-ink: var(--background);
-    --wordmark-frame: 0 0 0 0.25em var(--section-reports);
+    /* The name as a sound effect's plate: the block inked as a panel is, dropping its shadow, and tilted. */
+    --wordmark-frame:
+        0 0 0 0.25em var(--section-reports), 0 0 0 calc(0.25em + 1px) var(--ink),
+        3px 3px 0 calc(0.25em + 1px) var(--ink-drop);
+    --wordmark-tilt: rotate(-3deg);
     --nav-block: 1;
     --nav-hairline: 0;
     --nav-on-ink: var(--background);

@@ -159,10 +159,13 @@ Rules:
   that reads on the night blue, where black would not. Pulp shows a starburst where a cleared item drops its leaf
   (`--burst-plate`, `--burst-leaf`), absolutely placed, so it too takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
-  hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
-  or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
-  color, or a tint with the icon lit). Each form takes the room the default does, so a switch moves nothing; the
-  defaults keep the first of each, Gruvbox's dark the second, and black the third.
+  hairline, a stepped bar of solid blocks, a print strip of those blocks between ink gutters, or a line that blooms),
+  the name (the aurora's gradient, on a solid block, on a plate inked as a panel and tilted a few degrees by a
+  transform, `--wordmark-tilt`, or glowing), and the nav's highlight (a tint and a bar, a solid block with the active
+  item inked in the canvas's color, or a tint with the icon lit). Each form takes the room the default does, so a
+  switch moves nothing, and what a form draws past its box (a frame, a drop, a tilt) stays clear of what is beside it;
+  the defaults keep the first of each, Gruvbox's dark the second, Pulp's sides the print strip, the plate, and the
+  block, and black the last of each.
   A palette may tune its section colors too, muted toward a scheme's own set or turned up, but each keeps its hue's
   family, which says what its page is for: a rose stays a rose, a gold a gold, though a scheme's own shade of it may
   sit a few degrees round the wheel. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart

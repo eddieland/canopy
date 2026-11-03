@@ -35,9 +35,10 @@ line in monospace as one would, and menus and cards cast a hard shadow with no b
 prints it: every panel and speech bubble is outlined and drops a hard shadow onto a page of halftone dots, each bubble
 grows a balloon tail from its square corner, pointing out to its speaker's side, a title casts its section's color, and
 the primary button sinks into its shadow when you press it. At night the line is cream and the shadow an ultramarine
-plate, since black ink on a night sky is just more night. One thing does explode: an attention item that clears while
-you watch goes off in a starburst with a sound effect, where the other palettes drop a leaf. A run of clears gets one
-bang, not a fireworks show. **Black** drops the panels'
+plate, since black ink on a night sky is just more night. The header gets the treatment too: the name sits on an inked
+plate tilted like a sound effect, and the strip under it prints each section's block between ink gutters. One thing
+does explode: an attention item that clears while you watch goes off in a starburst with a sound effect, where the
+other palettes drop a leaf. A run of clears gets one bang, not a fireworks show. **Black** drops the panels'
 outlines, since a step of lightness does the job on an OLED screen, rounds its corners, and lights what floats with its
 ultraviolet, because a shadow on black is a shadow nobody sees. The rest cast a soft shadow under what floats. Gruvbox
 turns the strip under the header into a stepped status bar and sets the name on a yellow block, and its section colors
