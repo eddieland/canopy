@@ -28,6 +28,7 @@ CRASHED: Mapping[RunTable, AnyRunStatus] = {
     "chore_runs": ChoreRunStatus.CRASHED,
     "review_runs": ReviewRunStatus.CRASHED,
     "task_runs": RunStatus.CRASHED,
+    "initiative_runs": RunStatus.CRASHED,
 }
 
 

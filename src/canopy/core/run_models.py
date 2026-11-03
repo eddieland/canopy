@@ -27,9 +27,9 @@ if TYPE_CHECKING:
     from canopy.runtime.report import ModelUse
 
 #: A table of agent runs, each with a session: a tick's overseer, a worker or plan run, a chore run, a review run, a
-#: task's run.
-type RunTable = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
-_TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs")
+#: task's run, an initiative's plan run.
+type RunTable = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs", "initiative_runs"]
+_TABLES: tuple[RunTable, ...] = ("ticks", "runs", "chore_runs", "review_runs", "task_runs", "initiative_runs")
 #: No reply's model, for a read that found none, or that did not find the session.
 _NO_REPLIES: Mapping[str, str] = MappingProxyType({})
 #: How long a failed read waits before it is tried again, and how many reads a run gets in all.
@@ -367,7 +367,7 @@ def _ticket_unread(table: Literal["runs", "review_runs"], key: str) -> sql.Selec
 
 def _table(name: str) -> RunTable:
     match name:
-        case "ticks" | "runs" | "chore_runs" | "review_runs" | "task_runs":
+        case "ticks" | "runs" | "chore_runs" | "review_runs" | "task_runs" | "initiative_runs":
             return name
         case _:
             msg = f"not a run table: {name}"

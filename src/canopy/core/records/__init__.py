@@ -80,6 +80,8 @@ from canopy.core.records.initiatives import (
     Initiative,
     InitiativeMember,
     InitiativeRepo,
+    InitiativeRun,
+    InitiativeRunSlot,
 )
 from canopy.core.records.memory import (
     Memory,
@@ -190,6 +192,8 @@ __all__ = [
     "Initiative",
     "InitiativeMember",
     "InitiativeRepo",
+    "InitiativeRun",
+    "InitiativeRunSlot",
     "Insert",
     "ItemNumber",
     "Memory",
