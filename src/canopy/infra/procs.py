@@ -36,8 +36,10 @@ DEADLINE_ENV = "CANOPY_DEADLINE"
 #: What a subcommand looks like, `fetch` or `pr-view`, for a span to be named for it: a short word of lowercase letters
 #: and hyphens, so a key, a path, a hash, a URL, or a sentence is never one.
 SUBCOMMAND = re.compile(r"[a-z][a-z-]{0,23}")
-#: git's options before its subcommand that take the next argument as their value; git's others take none.
-_GIT_OPTIONS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"})
+#: The options canopy puts before a subcommand, git's, that take the next argument as their value.
+_OPTIONS_WITH_VALUE = frozenset({"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"})
+#: The options canopy puts before a subcommand that take no value.
+_FLAGS = frozenset({"--no-pager", "--no-replace-objects", "--literal-pathspecs", "--no-optional-locks", "--bare"})
 
 
 class ProcError(Exception):
@@ -356,9 +358,9 @@ class SubprocessRunner:
 def named(args: Sequence[str]) -> tuple[str, str | None]:
     """What a span of running `args` is named for: its program, and its subcommand when it has one.
 
-    The program is the executable's file name, never its directory. The subcommand is its first argument, or git's
-    first after the options it takes before one, whose values canopy knows, and only when it looks like one
-    (`SUBCOMMAND`). Another program's options are not read past: what follows one may be its value, text canopy read.
+    The program is the executable's file name, never its directory. The subcommand is its first argument after the
+    options canopy puts before one, git's, whose values it knows, and only when it looks like one (`SUBCOMMAND`). Any
+    other option ends the search with none: what follows it may be its value, text canopy read.
 
     Returns:
         The program, and the subcommand or None.
@@ -366,8 +368,8 @@ def named(args: Sequence[str]) -> tuple[str, str | None]:
     program = Path(args[0]).name if args else ""
     rest = iter(args[1:])
     word = next(rest, None)
-    while program == "git" and word is not None and word.startswith("-"):
-        if word in _GIT_OPTIONS_WITH_VALUE:
+    while word in _OPTIONS_WITH_VALUE or word in _FLAGS:
+        if word in _OPTIONS_WITH_VALUE:
             next(rest, None)
         word = next(rest, None)
     return program, word if word is not None and SUBCOMMAND.fullmatch(word) else None
