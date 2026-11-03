@@ -349,7 +349,7 @@ repository's: a workspace's repositories differ in language and team, so each ha
 
 ### R28. One plan shared by many tickets, each with its own plan pointing back to it
 
-Gap (M67). Written down 2026-11-02. A ticket's plan (R18) serves one ticket. Work that spans several, an epic or an
+Planned (M67). Written down 2026-11-02. A ticket's plan (R18) serves one ticket. Work that spans several, an epic or an
 initiative, has no plan of its own in canopy: each ticket's planner settles the shared questions again, in a fresh
 session, and the operator approves the same choice several times, or a different one each time. The operator wants one
 plan for the whole, approved once, that holds the goal, the requirements, the contracts between the tickets, and their
