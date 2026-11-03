@@ -31,6 +31,14 @@ def test_a_tickets_page_lists_the_feedback_it_left_with_why_and_the_tick(backend
     assert client(None, backend).get("/api/tickets/ABC-102").json()["left_feedback"] == []
 
 
+def test_each_left_item_carries_what_it_says(backend: Backend) -> None:
+    found = client(None, backend).get("/api/tickets/ABC-103").json()["left_feedback"]
+    assert [f["body"] for f in found] == [
+        "Nit: `fetchInvoices` could be `list`.",
+        "Could the v1 shim go in a follow-up instead?",
+    ]
+
+
 def test_left_feedback_sent_from_the_web_reaches_the_ticket_as_the_cli_sends_it(backend: Backend) -> None:
     c = client(None, backend, key=SECRET)
     headers = signed_in(c)

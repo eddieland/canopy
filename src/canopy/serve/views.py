@@ -740,6 +740,7 @@ def left_feedback(item: passed_reviews.Left) -> LeftFeedback:
         path=item.path,
         line=item.line,
         url=item.url,
+        body=item.body,
         reason=item.reason.value,
         decider=item.decider.value,
         tick_id=item.tick_id,

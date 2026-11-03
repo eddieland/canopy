@@ -58,6 +58,8 @@ class Left(records.View):
     path: str | None
     line: int | None
     url: str | None
+    #: What it says, as the reader last saw it: the reviewer's text, never instructions.
+    body: str
 
 
 def left(
@@ -77,7 +79,7 @@ def left(
     query = (
         sql.select(
             "p.ticket_key, p.pr_url, p.repo, p.item, p.id, p.number, p.reason, p.decider, p.tick_id, r.author, r.path, "
-            "r.line, r.url, r.thread_id, r.resolved",
+            "r.line, r.url, r.body, r.thread_id, r.resolved",
         )
         .from_("passed_reviews p")
         .join("observed_reviews r ON r.pr_url = p.pr_url AND r.item = p.item AND r.id = p.id")
@@ -108,6 +110,7 @@ def left(
                 path=r.path,
                 line=r.line,
                 url=r.url,
+                body=r.body,
             ),
         )
     return found
@@ -223,6 +226,7 @@ class _Read(records.View):
     path: str | None
     line: int | None
     url: str | None
+    body: str
     thread_id: str | None
     resolved: bool | None
 
