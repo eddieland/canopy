@@ -236,6 +236,10 @@ def reviews_granted(conn: sqlite3.Connection, _tick_id: int) -> None:
     conn.execute("INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)", (PR, db.now()))
 
 
+def review_requested(_conn: sqlite3.Connection, _tick_id: int) -> None:
+    assert main(["start", "https://github.com/acme/other/pull/12", "--review"]) == 0
+
+
 def notice_set(conn: sqlite3.Connection, _tick_id: int) -> None:
     notice.set_notice(conn, "Artifactory is down.", minutes=60, channel="cli")
 
@@ -262,6 +266,7 @@ def notice_cleared(conn: sqlite3.Connection, _tick_id: int) -> None:
         pytest.param(Case(setup=started_long_ago, during=ticket_stopped), id="ticket stopped"),
         pytest.param(Case(during=attempts_granted), id="attempts granted"),
         pytest.param(Case(during=reviews_granted), id="reviews granted"),
+        pytest.param(Case(during=review_requested), id="review requested"),
         pytest.param(Case(during=notice_set), id="notice set"),
         pytest.param(Case(setup=notice_set_long_ago, during=notice_cleared), id="notice cleared"),
         pytest.param(Case(status=TickStatus.OVERSEER_FAILED), id="not ok"),
@@ -671,6 +676,7 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
         ("stop", "starts", "a ticket started or stopped ended the wait"),
         ("grant attempts", "grant", "a grant ended the wait"),
         ("grant reviews", "grant", "a grant ended the wait"),
+        ("request a review", "request", "a review requested ended the wait"),
         ("set a notice", "notice", "a notice to workers set or cleared ended the wait"),
         ("clear a notice", "notice", "a notice to workers set or cleared ended the wait"),
     ],
@@ -700,6 +706,8 @@ def test_the_operators_acts_end_the_wait(
             assert main([act, KEY]) == 0
         elif act == "grant attempts":
             attempts_granted(ctx.conn, 0)
+        elif act == "request a review":
+            review_requested(ctx.conn, 0)
         elif act == "set a notice":
             assert main(["notice", "CI is down."]) == 0
         elif act == "clear a notice":

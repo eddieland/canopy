@@ -11755,8 +11755,8 @@ export type components = {
             summary: string | null;
             /**
              * Woken By
-             * @description What ended the loop's wait before it: start | timer | gate | message | starts | grant | notice | run | key |
-             *     web. None when `idle` is.
+             * @description What ended the loop's wait before it: start | timer | gate | message | starts | grant | task | request | notice |
+             *     run | poll | key | web. None when `idle` is.
              */
             woken_by: string | null;
         };
