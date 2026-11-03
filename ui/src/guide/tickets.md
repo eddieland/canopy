@@ -74,11 +74,11 @@ Below:
   runs on. See [Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model). Once more than
   one model has served the ticket, a line under its total cost splits it by model, then `unread` for runs whose
   sessions canopy hasn't read yet and `none` for runs it read that named no model: the override's bill, itemized.
-  When the loop read a reviewer's comments and chose not to send a worker, Work lists them under **Feedback left with
-  no worker**. See [Feedback left with no worker](#feedback-left-with-no-worker).
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
+- **Left feedback**: the reviewers' comments the loop read and chose not to send a worker, with how many. See
+  [Feedback left with no worker](#feedback-left-with-no-worker).
 - **Runs**: every run on the ticket, each linking to its transcript ([Runs](runs#a-runs-page)), and naming the model
   that served it beside its session.
 - **Decisions**: what each tick decided about the ticket, and why, in the overseer's words. A `refused` decision names
@@ -133,11 +133,11 @@ reply before **Stop** or **Forget**. Hover over each to see its command.
 Sometimes the overseer reads a comment on the ticket's PR and decides it isn't worth a worker: a nit marked optional,
 a question rather than a change, something the head already does, or a change whose push would dismiss the approval
 you're about to merge on. When it moves past such a comment it has to say which one and why, and canopy refuses the
-move if it skips any without a reason. Those comments are listed in **Work** under **Feedback left with no worker**:
-where each one is, linking out to it on GitHub, who wrote it, why it was left (`optional`, `would reset approval`,
-`a question`, `already done`, `out of scope`, `you said to leave it`), and the tick that decided, linking to that tick's
-reasoning. A comment on a thread someone resolved needs no reason, and drops off the list. So does one a worker has
-answered on its thread.
+move if it skips any without a reason. Those comments are listed in the ticket's **Left feedback** panel, above its
+runs: where each one is, linking out to it on GitHub, who wrote it, why it was left (`optional`, `would reset
+approval`, `a question`, `already done`, `out of scope`, `you said to leave it`), and the tick that decided, linking to
+that tick's reasoning. A comment on a thread someone resolved needs no reason, and drops off the list. So does one a
+worker has answered on its thread.
 
 The attention item `ready_to_merge`, or `needs_reviewer`, counts them too, for example "2 feedback items left with no
 worker (optional, would_reset_approval)". Read them before you merge. "Optional" is the reviewer's word, and "would

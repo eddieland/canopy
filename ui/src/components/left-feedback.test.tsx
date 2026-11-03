@@ -45,9 +45,19 @@ afterEach(() => {
 })
 
 describe('LeftFeedbackList', () => {
-    it('shows nothing for a ticket that left nothing', async () => {
+    it('is its header alone, counting none, for a ticket that left nothing', async () => {
         await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={[]} />)
-        expect(screen.queryByRole('region', { name: 'Feedback left with no worker' })).toBeNull()
+        const panel = screen.getByRole('region', { name: 'Left feedback' })
+        expect(within(panel).getByRole('heading', { name: 'Left feedback' })).toBeTruthy()
+        expect(within(panel).getByText('0')).toBeTruthy()
+        expect(within(panel).queryByRole('list')).toBeNull()
+    })
+
+    it('heads its panel with how many are left', async () => {
+        await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={[left(), left({ number: 8, id: 9 })]} />)
+        const panel = screen.getByRole('region', { name: 'Left feedback' })
+        expect(within(panel).getByText('2')).toBeTruthy()
+        expect(within(panel).getAllByRole('listitem')).toHaveLength(2)
     })
 
     it('names where each item is, who wrote it, why it was left, and the tick that left it', async () => {
