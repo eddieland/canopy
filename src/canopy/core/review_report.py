@@ -312,43 +312,89 @@ def between(conn: sqlite3.Connection, start: datetime, end: datetime) -> Reviews
     Returns:
         The report, as `report` gives it for any such window: a calendar month's, or the one before a page's.
     """
-    since, until = db.format_time(start), db.format_time(end)
-    days = spend.days_between(start, end)
-    starts = spend.day_starts(start, days)
+    return windows(conn, [(start, end)])[0]
+
+
+def windows(conn: sqlite3.Connection, spans: Sequence[tuple[datetime, datetime]]) -> list[Reviews]:
+    """Where review feedback came from in each of `spans`, each from one local midnight to another, read together.
+
+    Each is the report `between` gives for it; the PRs and their feedback, which any window may read, are read once.
+
+    Returns:
+        Each window's report, in the order of `spans`.
+    """
+    bounds = [(db.format_time(start), db.format_time(end)) for start, end in spans]
+    if not bounds:
+        return []
     with db.read_snapshot(conn):
-        tracked = tracked_prs.tracked(conn, "", until)
+        namings = tracked_prs.read(conn, max(until for _, until in bounds))
+        every = namings.tracked("", namings.until)
         # Every PR a run ever named, which may be many: one parameter, not one each.
         named = records.select(records.ObservedPr).where(
             "url IN (SELECT value FROM json_each(?))",
-            json.dumps(list(tracked)),
+            json.dumps(list(every)),
         )
         observed = {p.url: p for p in named.all(conn)}
         said = pr_feedback.feedback(conn, observed)
-        plans = (
-            records.select(records.FeedbackPlan)
-            .where("created_at >= ? AND created_at < ?", since, until)
-            .order_by("created_at DESC, id DESC")
-            .all(conn)
-        )
-        plan_prs = records.select(records.FeedbackPlanPr).where_in("plan_id", [p.id for p in plans]).all(conn)
-        plan_runs = _plan_runs(conn, plans)
         pr_plans = _pr_plans(conn, observed)
-        checked = (
-            records.select(records.ObservedCheckRun)
-            .where_in("pr_url", sorted({row.pr_url for row in plan_prs}))
-            .order_by("observed_at, run_id")
-            .all(conn)
-        )
-        review_runs = _review_runs(conn, since, until)
-        dismissals = _dismissals(conn, since, until)
-        drafts = _drafts(conn, since, until)
+        return [
+            _window(
+                conn,
+                since,
+                until,
+                namings.tracked("", until),
+                every_pr=observed,
+                every_said=said,
+                pr_plans=pr_plans,
+            )
+            for since, until in bounds
+        ]
+
+
+def _window(
+    conn: sqlite3.Connection,
+    since: str,
+    until: str,
+    tracked: Mapping[str, tracked_prs.TrackedPr],
+    *,
+    every_pr: Mapping[str, records.ObservedPr],
+    every_said: Mapping[str, Sequence[pr_feedback.Feedback]],
+    pr_plans: Iterable[_PrPlan],
+) -> Reviews:
+    """One window's report, from the PRs, feedback, and plans read for every window, cut to the PRs it tracked.
+
+    Returns:
+        The report `between` gives for the window.
+    """
+    start, end = db.parse_time(since), db.parse_time(until)
+    days = spend.days_between(start, end)
+    starts = spend.day_starts(start, days)
+    observed = {url: pr for url, pr in every_pr.items() if url in tracked}
+    said = {url: found for url, found in every_said.items() if url in observed}
+    plans = (
+        records.select(records.FeedbackPlan)
+        .where("created_at >= ? AND created_at < ?", since, until)
+        .order_by("created_at DESC, id DESC")
+        .all(conn)
+    )
+    plan_prs = records.select(records.FeedbackPlanPr).where_in("plan_id", [p.id for p in plans]).all(conn)
+    plan_runs = _plan_runs(conn, plans)
+    checked = (
+        records.select(records.ObservedCheckRun)
+        .where_in("pr_url", sorted({row.pr_url for row in plan_prs}))
+        .order_by("observed_at, run_id")
+        .all(conn)
+    )
+    review_runs = _review_runs(conn, since, until)
+    dismissals = _dismissals(conn, since, until)
+    drafts = _drafts(conn, since, until)
     in_window = {url: [f for f in found if _within(f.created_at, since, until)] for url, found in said.items()}
     read_by: dict[int, list[records.FeedbackPlanPr]] = {}
     for row in plan_prs:
         read_by.setdefault(row.plan_id, []).append(row)
     gone_ahead: dict[str, list[_PrPlan]] = {}
     for row in pr_plans:
-        if row.approved_at is not None:
+        if row.approved_at is not None and row.pr_url in observed:
             gone_ahead.setdefault(row.pr_url, []).append(row)
     checks: dict[str, list[records.ObservedCheckRun]] = {}
     for run in checked:

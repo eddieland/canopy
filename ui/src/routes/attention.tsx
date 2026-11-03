@@ -41,6 +41,7 @@ import { InlineCode } from '@/components/rich-text'
 import { RunLink } from '@/components/run-link'
 import { ProgressQuestion } from '@/components/run-progress'
 import { RunsTable } from '@/components/runs-table'
+import { Starburst } from '@/components/starburst'
 import { Chip } from '@/components/status'
 import { TaskLink } from '@/components/task-link'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
@@ -126,7 +127,7 @@ function AttentionPage() {
     const tickets = useQuery(ticketsQuery).data
     const tasks = useQuery(tasksQuery).data
     const items = data === undefined ? undefined : bySeverity(data)
-    const { rows, clearing, cleared } = useLeavingRows(data, items)
+    const { rows, clearing, cleared, burst } = useLeavingRows(data, items)
     const selected = useSelected(items, wanted)
     // Narrow, the item chosen is open in the list's place, as a page of its own, until the operator goes back to the
     // list, which then shows it chosen: `listFor` is the item they went back from.
@@ -228,6 +229,7 @@ function AttentionPage() {
                                                         key={item.id}
                                                         item={item}
                                                         done={answered(item, tickets, tasks)}
+                                                        burst={item.id === burst}
                                                     />
                                                 ) : (
                                                     <Row
@@ -378,10 +380,12 @@ function useFocusOnce(wanted: string | undefined): (item: string, id: string) =>
 
 /**
  * A cleared item's row on its way out: the row as it was, fading and folding shut, while one of the empty inbox's
- * leaves drifts off it. It is only for the eye: no link, out of the tab order, hidden from a screen reader, which hears
- * the list's count change instead. Under reduced motion it is not shown at all, and the item is simply gone.
+ * leaves drifts off it. The row given the list's one `burst` may go off instead, where the palette shows a starburst
+ * in the leaf's place, inside the row's own room, which folds shut over it. It is only for the eye: no link, out of the
+ * tab order, hidden from a screen reader, which hears the list's count change instead. Under reduced motion it is not
+ * shown at all, and the item is simply gone.
  */
-function Leaving({ item, done }: { item: AttentionItem; done: boolean }) {
+function Leaving({ item, done, burst }: { item: AttentionItem; done: boolean; burst: boolean }) {
     return (
         // Not the list's arrival (`stagger`), which would hold a new element hidden through its delay: it is leaving.
         <li aria-hidden inert data-leaving className="relative animate-none! motion-reduce:hidden">
@@ -392,7 +396,18 @@ function Leaving({ item, done }: { item: AttentionItem; done: boolean }) {
                     </div>
                 </div>
             </div>
-            <Leaf className="top-2 right-10" />
+            {burst ? (
+                <>
+                    <span className="burst-leaf">
+                        <Leaf className="top-2 right-10" />
+                    </span>
+                    <span className="pointer-events-none absolute inset-0 overflow-hidden">
+                        <Starburst id={item.id} className="top-2.5 right-8" />
+                    </span>
+                </>
+            ) : (
+                <Leaf className="top-2 right-10" />
+            )}
         </li>
     )
 }
