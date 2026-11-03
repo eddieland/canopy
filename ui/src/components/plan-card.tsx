@@ -15,7 +15,7 @@ import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { planText } from '@/lib/outcomes'
-import { planApprovable, planNeededWhy, planWaits } from '@/lib/plan-state'
+import { planApprovable, planNeededWhy, planWaits, ticketChangedNote } from '@/lib/plan-state'
 import { planRef } from '@/lib/refs'
 import { cn } from '@/lib/utils'
 
@@ -198,6 +198,10 @@ function cardNote(plans: TicketPlans, open: number): string | null {
     }
     if (!planApprovable(plans)) {
         return 'Read it and its earlier plans on its page.'
+    }
+    const ticketChanged = ticketChangedNote(plans.newest)
+    if (ticketChanged !== null) {
+        return ticketChanged
     }
     if (open > 0) {
         const comments = open === 1 ? 'comment' : 'comments'

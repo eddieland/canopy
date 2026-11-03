@@ -57,6 +57,10 @@ class PlanFile(Model):
     changed_since_approval: bool
     """For an approved plan, whether it differs from the text the operator approved, which then needs approving again
     before its implement (`plan_changed`)."""
+    ticket_changed: list[Literal["title", "description"]]
+    """For an approved plan, what of its ticket's text, as last observed, differs from when it was approved: `title`,
+    `description`, or both; empty when neither, or for a plan not approved. A warning, which refuses nothing: approving
+    the plan again says it still fits (`ticket_changed`)."""
 
 
 class PlanReplyView(Model):

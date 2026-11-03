@@ -41,7 +41,7 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { PendingWork, usePending, usePendingWork } from '@/hooks/use-pending'
 import { planText } from '@/lib/outcomes'
 import { planDecisions } from '@/lib/plan-decisions'
-import { planNeededWhy, planWaits } from '@/lib/plan-state'
+import { approvedChanged, planNeededWhy, planWaits } from '@/lib/plan-state'
 import { fromServer, MAX_NOTES, movedAnchors, threadChanges, unread } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
 import { isApple } from '@/lib/send-key'
@@ -174,7 +174,9 @@ export function PlanState({ plans }: { plans: TicketPlans }) {
                 </>
             )}
             {newest.edited && ', edited since the planner wrote it'}
-            {newest.changed_since_approval && ', changed since it was approved'}.{' '}
+            {newest.changed_since_approval && ', changed since it was approved'}
+            {newest.ticket_changed.length > 0 &&
+                `, its ticket’s ${newest.ticket_changed.join(' and ')} changed since`}.{' '}
             {/* How much work it is, and what comes next, a sentence each, apart by a space. */}
             {next.map(([key, sentence], i) => (
                 <Fragment key={key}>
@@ -234,7 +236,7 @@ function NewestPlan({
     const editable = plans.planning === null && (status === 'proposed' || status === 'approved')
     const dirty = markdown !== text
     usePending(dirty, 'edit')
-    const approvable = status === 'proposed' || (status === 'approved' && (newest.changed_since_approval || dirty))
+    const approvable = status === 'proposed' || (status === 'approved' && (approvedChanged(newest) || dirty))
     // Open comments go with Ask for changes, to the planner. Those no planner has read go with Approve instead, to the
     // implement, as notes: the foot's line says so.
     const open = held.filter((thread) => !thread.resolved)

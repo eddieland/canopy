@@ -188,8 +188,12 @@ decided from wherever you got to. **Approve** is always its main button; everyth
 
 - **Approve**, or **Save and approve** with edits not yet saved, as `canopy plan KEY --approve`. It approves the plan
   as saved, your edits included, and the next tick can implement it. Editing an approved plan means approving it
-  again, and until you do, the ticket's implement waits. With open comments, an answered decision, or a note on the
-  whole plan, it reads **Approve with notes**, as `canopy plan KEY --approve --message TEXT`: see below.
+  again, and until you do, the ticket's implement waits. Someone else editing the ticket holds nothing up: if its
+  title or description changes after you approve, a `ticket_changed` item says which, and the plan's card, on that
+  item and on the ticket's page, offers **Approve** again. Approving says the plan still fits the new words; or ask
+  for a new plan, or skip it. Meanwhile the work goes ahead on the plan you approved, which is a fine way to build
+  the wrong thing carefully. With open comments, an answered decision, or a note on the whole plan, it reads
+  **Approve with notes**, as `canopy plan KEY --approve --message TEXT`: see below.
 - **Ask for changes**, while the plan waits on you, sends the planner back with your open comments, your answers to
   its decisions, and an optional note on the whole plan, as one reply on the ticket. If you edited the plan yourself,
   the reply says so, and asks the planner to keep your edits. Resolved comments aren't sent. The reply's

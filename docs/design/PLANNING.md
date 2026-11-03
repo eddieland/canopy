@@ -33,6 +33,8 @@ of the approval's notes, or of a request for changes. The approval authorizes th
 an instruction (TRUST_MODEL T1). Two guards hold it in code (§4, principle 2):
 `unplanned` refuses an `implement` while the ticket needs a plan and has none approved;
 `plan_changed` refuses an `implement` or `resume` when the approved plan's file is missing or changed since approval.
+An approval records hashes of the ticket's title and description as observed (§30); while either differs, the harness
+warns with `ticket_changed`, refusing nothing, until the operator approves the plan again, asks for a new one, or skips.
 
 **The planner's word.** Under `policy.planner_may_approve`, private (T7) and off by default, a planner may say its plan
 needs no review, with a one-line reason; the harness then records the plan approved as written, the planner's approval
@@ -113,9 +115,7 @@ commits what it wrote there alone (at the top level, each
 planned ticket's directory and its own index, never the operator's files beside them), and pushes to the clone's
 upstream, never forcing: an upstream that refuses it for commits another clone pushed has them fetched and this clone's
 commits rebased onto them, so the push is a fast-forward, and a rebase that cannot finish is aborted. `archive_unpushed`
-stays open while the archive is not all there, so a failed push is retried each tick. A tick writes at most a thousand
-files, so a long history goes in over several, each push bounded, and reads again only the plans whose row or files
-changed, and the conversations with a new message, since it last found them as they stand. It archives at most once
+stays open while the archive is not all there, so a failed push is retried each tick. It archives at most once
 each `paths.plan_archive_every_minutes`, timed from the archive's last commit in the clone, so the remote is pushed to
 a few times a day, except while `archive_unpushed` is open; a tick that waits, and a dry run, only read the clone
 (TRUST_MODEL T6).

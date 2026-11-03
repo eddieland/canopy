@@ -383,6 +383,8 @@ def test_a_name_carries_a_slug_of_the_title(heading: str, slug: str) -> None:
         approved_channel=None,
         approved_reason=None,
         effort=None,
+        approved_title_sha256=None,
+        approved_body_sha256=None,
     )
     assert plan_export.name("plan", plan, f"{heading}\n\n## Goal\n") == f"7-PROPOSED{slug}.md"
 

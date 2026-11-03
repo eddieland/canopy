@@ -1,6 +1,6 @@
 """The attention items the harness raises from their causes (DESIGN §14, §37, ROADMAP M38).
 
-Each of the ten reasons over a journal written by hand, its observations fresh at `NOW`: raised while its cause
+Each of the eleven reasons over a journal written by hand, its observations fresh at `NOW`: raised while its cause
 holds, and gone once the journal or a fresh observation shows the cause gone. One that rests on an observation is kept
 while that observation is stale, or when the derivation could not run. Then through ticks: kept across a `skipped`
 tick, an `overseer_failed` one, and an outage, and gone once a read shows its cause gone; and the overseer refused one
@@ -212,6 +212,13 @@ def plan_changed(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     plans.path_for(env.state_dir, KEY, plan.run_id).write_text(f"{PLAN}\nAnd a second thing.\n")
 
 
+def ticket_edited(env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    """The operator approved the plan, and the tracker reads the ticket's description otherwise after."""
+    plan_waits(env, conn)
+    plan_approved(env, conn)
+    records.update(records.ObservedTicket).set(body="Retry twice, not three times.").where("key = ?", KEY).run(conn)
+
+
 def queue_stuck(env: CanopyEnv, conn: sqlite3.Connection) -> None:
     """The PR's build passed two hours ago, and its merge queue's status still waits, as CI."""
     green(env, conn)
@@ -250,6 +257,7 @@ CAUSES: dict[str, tuple[Callable[[CanopyEnv, sqlite3.Connection], None], Found, 
     "review_failed": (review_failed, (KEY, "review_failed", "repo"), reviewed_again),
     "plan_review": (plan_waits, (KEY, "plan_review", None), plan_approved),
     "plan_changed": (plan_changed, (KEY, "plan_changed", None), plan_approved),
+    "ticket_changed": (ticket_edited, (KEY, "ticket_changed", None), plan_approved),
     "check_stuck": (queue_stuck, (KEY, "check_stuck", "repo"), queue_given_a_role),
     "unobserved_pr": (names_no_pr, (KEY, "unobserved_pr", "repo"), forgotten),
 }
