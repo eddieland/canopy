@@ -270,7 +270,9 @@ steps, and so is each run it starts, in a process of its own, linked to the step
 starts is given the current span as `TRACEPARENT`. Within a run, the overseer's included, each model call and each tool
 call is a span, at the times the runtime printed, under OpenTelemetry's conventions for generative AI: a call's tokens
 and cost, or its tool's name and whether it failed, never what the model was sent or wrote, nor a tool's input or
-output. A span holds canopy's own facts (ids,
+output. Each request the web UI's server answers is a trace of its own, a server span named for its method and its
+route as canopy spells it, with the status it was answered with, never the path's values, the query, a header, or the
+body, and never joining a trace a client names. A span holds canopy's own facts (ids,
 kinds, statuses, counts, cost), never text canopy read, which is untrusted and may be private (TRUST_MODEL T2). Spans
 go to `<state_dir>/traces.jsonl`, readable by the operator alone, as OTLP JSON for a collector they run to read, or,
 with `traces = "otlp"`, are posted to the OTLP/HTTP endpoint the operator names: in batches, following no redirect,
