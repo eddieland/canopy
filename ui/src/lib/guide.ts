@@ -149,6 +149,7 @@ export const PAGE_GUIDES = {
     '/workspace/runs/': 'runs',
     '/workspace/runs/$id': 'runs#a-runs-page',
     '/workspace/worktrees': 'runs#worktrees',
+    '/workspace/checklists': 'checklists#the-checklists-page',
     '/chores/': 'chores',
     '/chores/$name': 'chores#a-chores-page',
     '/chores/$name_/runs/$id': 'chores#a-chores-page',

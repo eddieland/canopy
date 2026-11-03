@@ -73,6 +73,18 @@ def waiting_requests(conn: sqlite3.Connection) -> list[records.ReviewRequest]:
     )
 
 
+def made_after(conn: sqlite3.Connection, since: str) -> bool:
+    """Whether the operator made a request after `since`, a time the journal wrote (DESIGN §6, §21).
+
+    Changing an open request's notes, personas, or model is not one: its review starts with them either way.
+
+    Returns:
+        True if one was made: it ends the loop's wait, so its review starts at the next tick, not the one after the
+        wait.
+    """
+    return records.select(records.ReviewRequest).where("created_at > ?", since).limit(1).one(conn) is not None
+
+
 def open_request(conn: sqlite3.Connection, pr_url: str) -> records.ReviewRequest | None:
     """Return the PR's open request, or None when it has none."""
     return records.select(records.ReviewRequest).where("pr_url = ? AND ended_at IS NULL", pr_url).one(conn)
