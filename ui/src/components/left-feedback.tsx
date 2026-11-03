@@ -14,6 +14,7 @@ import { TickLink } from '@/components/tick-link'
 import { Clipped } from '@/components/tip'
 import { Button } from '@/components/ui/button'
 import { leftSentText } from '@/lib/outcomes'
+import type { Tone } from '@/lib/tone'
 
 // Why the loop left an item, in the words a row shows, by the reason canopy records (`vocab.PassReason`).
 const LEFT_REASONS: Record<LeftFeedback['reason'], string> = {
@@ -24,6 +25,17 @@ const LEFT_REASONS: Record<LeftFeedback['reason'], string> = {
     out_of_scope: 'out of scope',
     operator_said: 'you said to leave it',
     resolved: 'resolved',
+}
+// A reason in its chip's color: `would reset approval` is the overseer's guess about the merge you're about to make,
+// so it waits on your judgment; every other reason plain.
+const LEFT_TONE: Record<LeftFeedback['reason'], Tone> = {
+    optional: 'plain',
+    would_reset_approval: 'blocked',
+    question: 'plain',
+    already_done: 'plain',
+    out_of_scope: 'plain',
+    operator_said: 'plain',
+    resolved: 'plain',
 }
 
 /**
@@ -91,7 +103,9 @@ function LeftRow({ item, pending, onSend }: { item: LeftFeedback; pending: boole
     return (
         <ListRow kind="left-feedback" className="text-sm">
             <span>
-                <Chip className="whitespace-nowrap">{LEFT_REASONS[item.reason]}</Chip>
+                <Chip tone={LEFT_TONE[item.reason]} className="whitespace-nowrap">
+                    {LEFT_REASONS[item.reason]}
+                </Chip>
             </span>
             {/* Its author leads its text, as a message's does in a conversation, so every width shows both. */}
             <span className="flex min-w-0 items-baseline gap-2">
