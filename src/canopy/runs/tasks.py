@@ -15,7 +15,18 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, cast
 
-from canopy.core import checklist_answers, contract, conversation, db, outbox, plans, pools, records, sql
+from canopy.core import (
+    checklist_answers,
+    contract,
+    conversation,
+    db,
+    outbox,
+    plans,
+    pools,
+    records,
+    run_metrics,
+    sql,
+)
 from canopy.core.conversation import Refused
 from canopy.core.vocab import RunStatus
 from canopy.runs import task_tickets
@@ -481,6 +492,7 @@ def close_run(
         event = outbox.task_ended(config, run, status, result_json, head=head, message=last, tickets=recorded)
         if event is not None:
             db.record_event(conn, event)
+    run_metrics.ended(conn, "task_runs", run_id)
     return True
 
 

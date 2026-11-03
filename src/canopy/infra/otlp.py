@@ -1,11 +1,12 @@
-"""Spans in OTLP's JSON encoding, and the exporters that append them to a file or post them to an OTLP/HTTP endpoint.
+"""Spans in OTLP's JSON encoding, their exporters, and how any signal is appended to a file or posted to an endpoint.
 
-The encoding is OTLP/JSON's `ExportTraceServiceRequest`: what an OpenTelemetry Collector's `otlpjsonfile` receiver reads
-from a file, a request per line, and what an OTLP/HTTP endpoint takes as `application/json`. Only `tracing` imports
-this module, and only once tracing is on, since importing it loads OpenTelemetry's SDK.
+The encoding is OTLP/JSON's export request: what an OpenTelemetry Collector's `otlpjsonfile` receiver reads from a file,
+a request per line, and what an OTLP/HTTP endpoint takes as `application/json`. `otlp_metrics` encodes metrics the same
+way, through `append_line` and `Poster`. Only `tracing` and `metrics` import these modules, and only once their signal
+is on, since importing them loads OpenTelemetry's SDK.
 
-`HttpExporter` is the harness's one network call (TRUST_MODEL T2): made only to the endpoint the operator names in their
-own config, carrying canopy's spans and nothing else, through no proxy and following no redirect, so the spans reach
+`Poster` is the harness's one network call (TRUST_MODEL T2): made only to the endpoint the operator names in their own
+config, carrying canopy's spans and metrics and nothing else, through no proxy and following no redirect, so they reach
 that endpoint or none.
 """
 
@@ -15,20 +16,24 @@ import json
 import logging
 import os
 from collections.abc import Mapping, Sequence
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, override
 
 # The harness's one network call: this module alone may make it (TRUST_MODEL T2).
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener  # noqa: TID251
 
+from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 
 if TYPE_CHECKING:
     from opentelemetry.sdk.trace import ReadableSpan
     from opentelemetry.util.types import AttributeValue
 
-#: Who may read the traces file: the operator alone, as the log (TRUST_MODEL T2).
+#: Who may read a telemetry file: the operator alone, as the log (TRUST_MODEL T2).
 FILE_MODE = 0o600
+#: The service every signal's resource names.
+SERVICE = "canopy"
 #: How long a post may take: the longest an endpoint that is down delays a process's exit, which sends what is left.
 TIMEOUT_SECONDS = 5
 
@@ -47,19 +52,7 @@ class FileExporter(SpanExporter):
         Returns:
             Whether the whole line was written.
         """
-        line = (json.dumps(encoded(spans), separators=(",", ":")) + "\n").encode()
-        try:
-            fd = os.open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, FILE_MODE)
-        except OSError:
-            return SpanExportResult.FAILURE
-        try:
-            # One write of the whole line: appended so, another process's line never lands inside it.
-            written = os.write(fd, line)
-        except OSError:
-            return SpanExportResult.FAILURE
-        finally:
-            os.close(fd)
-        return SpanExportResult.SUCCESS if written == len(line) else SpanExportResult.FAILURE
+        return SpanExportResult.SUCCESS if append_line(self.path, encoded(spans)) else SpanExportResult.FAILURE
 
     @override
     def shutdown(self) -> None:
@@ -71,8 +64,7 @@ class HttpExporter(SpanExporter):
 
     def __init__(self, url: str) -> None:
         """Post to `url`, `<endpoint>/v1/traces`, which config held to `http` or `https`."""
-        self.url = url
-        self._failing = False
+        self.poster = Poster(url, "traces")
 
     @override
     def export(self, spans: Sequence[ReadableSpan]) -> SpanExportResult:
@@ -81,36 +73,86 @@ class HttpExporter(SpanExporter):
         Returns:
             Whether the endpoint took them, with a 2xx.
         """
-        request = Request(  # noqa: S310  (config holds the URL to http or https)
-            self.url,
-            data=json.dumps(encoded(spans), separators=(",", ":")).encode(),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with _OPENER.open(request, timeout=TIMEOUT_SECONDS) as response:
-                took = 200 <= response.status < 300  # noqa: PLR2004  (HTTP's success range)
-                why = f"HTTP {response.status}"
-        # Whatever the network or the endpoint does, a span never fails what canopy was doing.
-        except Exception as e:  # noqa: BLE001
-            took, why = False, type(e).__name__
-        self._note(took=took, why=why)
-        return SpanExportResult.SUCCESS if took else SpanExportResult.FAILURE
+        return SpanExportResult.SUCCESS if self.poster.post(encoded(spans)) else SpanExportResult.FAILURE
 
     @override
     def shutdown(self) -> None:
         """Nothing to close: each post opens and closes its own connection."""
 
+
+def resource() -> Resource:
+    """What every signal canopy sends says it came from: canopy, at the version installed.
+
+    Returns:
+        The resource, for a provider of spans or of metrics.
+    """
+    return Resource.create({"service.name": SERVICE, "service.version": version("canopy")})
+
+
+def append_line(path: Path, request: Mapping[str, object]) -> bool:
+    """Append `request`, an OTLP/JSON export request, to `path` as one line, made readable by the operator alone.
+
+    The file is opened anew each time, so it follows a rotation, and written in one write, so a line another process
+    appends never lands inside it.
+
+    Returns:
+        Whether the whole line was written.
+    """
+    line = (json.dumps(request, separators=(",", ":")) + "\n").encode()
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, FILE_MODE)
+    except OSError:
+        return False
+    try:
+        written = os.write(fd, line)
+    except OSError:
+        return False
+    finally:
+        os.close(fd)
+    return written == len(line)
+
+
+class Poster:
+    """Posts OTLP/JSON export requests to one of an endpoint's URLs: the harness's one network call (TRUST_MODEL T2)."""
+
+    def __init__(self, url: str, signal: str) -> None:
+        """Post to `url`, which config held to `http` or `https`; `signal`, `traces` or `metrics`, names it in logs."""
+        self.url = url
+        self.signal = signal
+        self._failing = False
+
+    def post(self, request: Mapping[str, object]) -> bool:
+        """Post `request` once, never again: one the endpoint did not take is dropped.
+
+        Returns:
+            Whether the endpoint took it, with a 2xx.
+        """
+        posted = Request(  # noqa: S310  (config holds the URL to http or https)
+            self.url,
+            data=json.dumps(request, separators=(",", ":")).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with _OPENER.open(posted, timeout=TIMEOUT_SECONDS) as response:
+                took = 200 <= response.status < 300  # noqa: PLR2004  (HTTP's success range)
+                why = f"HTTP {response.status}"
+        # Whatever the network or the endpoint does, telemetry never fails what canopy was doing.
+        except Exception as e:  # noqa: BLE001
+            took, why = False, type(e).__name__
+        self._note(took=took, why=why)
+        return took
+
     def _note(self, *, took: bool, why: str) -> None:
-        """Log when posts start failing, and when they recover: once each, not once per batch."""
+        """Log when posts start failing, and when they recover: once each, not once per request."""
         if took == (not self._failing):
             return
         self._failing = not took
         if took:
-            _LOG.info("traces sent again", extra={"endpoint": self.url})
+            _LOG.info(f"{self.signal} sent again", extra={"endpoint": self.url})
         else:
             _LOG.warning(
-                "traces not sent; spans are dropped until the endpoint takes them",
+                f"{self.signal} not sent; they are dropped until the endpoint takes them",
                 extra={"endpoint": self.url, "error": why},
             )
 
@@ -144,7 +186,7 @@ def encoded(spans: Sequence[ReadableSpan]) -> dict[str, object]:
     return {
         "resourceSpans": [
             {
-                "resource": {"attributes": _attributes(first.resource.attributes)},
+                "resource": {"attributes": attributes(first.resource.attributes)},
                 "scopeSpans": [
                     {"scope": {"name": name, **({"version": v} if v else {})}, "spans": encoded_spans}
                     for (name, v), encoded_spans in scopes.items()
@@ -173,7 +215,7 @@ def _span(span: ReadableSpan) -> dict[str, object]:
         "kind": span.kind.value + _KIND_OFFSET,
         "startTimeUnixNano": str(span.start_time or 0),
         "endTimeUnixNano": str(span.end_time or 0),
-        "attributes": _attributes(span.attributes),
+        "attributes": attributes(span.attributes),
         "status": {
             "code": span.status.status_code.value,
             **({"message": span.status.description} if span.status.description else {}),
@@ -183,7 +225,7 @@ def _span(span: ReadableSpan) -> dict[str, object]:
         out["parentSpanId"] = f"{span.parent.span_id:016x}"
     if span.events:
         out["events"] = [
-            {"timeUnixNano": str(e.timestamp), "name": e.name, "attributes": _attributes(e.attributes)}
+            {"timeUnixNano": str(e.timestamp), "name": e.name, "attributes": attributes(e.attributes)}
             for e in span.events
         ]
     if span.links:
@@ -191,20 +233,20 @@ def _span(span: ReadableSpan) -> dict[str, object]:
             {
                 "traceId": f"{link.context.trace_id:032x}",
                 "spanId": f"{link.context.span_id:016x}",
-                "attributes": _attributes(link.attributes),
+                "attributes": attributes(link.attributes),
             }
             for link in span.links
         ]
     return out
 
 
-def _attributes(attributes: Mapping[str, AttributeValue] | None) -> list[dict[str, object]]:
+def attributes(values: Mapping[str, AttributeValue] | None) -> list[dict[str, object]]:
     """Attributes as OTLP's list of key and typed value.
 
     Returns:
         The list, empty for none.
     """
-    return [{"key": key, "value": _value(value)} for key, value in (attributes or {}).items()]
+    return [{"key": key, "value": _value(value)} for key, value in (values or {}).items()]
 
 
 def _value(value: AttributeValue) -> dict[str, object]:

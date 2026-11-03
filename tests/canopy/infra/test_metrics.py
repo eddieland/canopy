@@ -1,0 +1,75 @@
+"""Metrics: off and free until configured, then appended to the metrics file as OTLP JSON, sums as deltas."""
+
+import json
+from collections.abc import Iterator
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from canopy.core.run_metrics import Role
+from canopy.core.vocab import RunStatus
+from canopy.infra import metrics
+
+
+@pytest.fixture
+def metered(tmp_path: Path) -> Iterator[Path]:
+    """Metrics on, to the metrics file in `tmp_path`, which it yields; the test turns them off to send them."""
+    metrics.configure(tmp_path, "file")
+    yield tmp_path / metrics.METRICS_FILE_NAME
+    metrics.configure(tmp_path, "off")
+
+
+def exported(path: Path) -> dict[str, dict[str, Any]]:
+    """Each metric in the metrics file, by name: the last of a name."""
+    found: dict[str, dict[str, Any]] = {}
+    for line in path.read_text().splitlines():
+        for resource in json.loads(line)["resourceMetrics"]:
+            for scope in resource["scopeMetrics"]:
+                for metric in scope["metrics"]:
+                    found[metric["name"]] = metric
+    return found
+
+
+def labels(point: dict[str, Any]) -> dict[str, object]:
+    """A point's labels, as a plain dict."""
+    return {a["key"]: next(iter(a["value"].values())) for a in point["attributes"]}
+
+
+def test_a_metric_while_metrics_are_off_records_nothing(tmp_path: Path) -> None:
+    assert not metrics.enabled()
+    metrics.count("canopy.runs", role=Role.WORKER, status=RunStatus.DONE)
+    metrics.record("canopy.run.duration", 1.0, unit="s", role=Role.WORKER)
+    metrics.gauge("canopy.runs.active", 1, role=Role.WORKER)
+    assert not (tmp_path / metrics.METRICS_FILE_NAME).exists()
+
+
+def test_counts_histograms_and_gauges_are_written_as_otlp_json(metered: Path, tmp_path: Path) -> None:
+    metrics.count("canopy.runs", role=Role.WORKER, status=RunStatus.DONE)
+    metrics.count("canopy.runs", role=Role.WORKER, status=RunStatus.DONE)
+    metrics.count("canopy.cost", 0.25, unit="USD", model="anthropic/sonnet", role=Role.WORKER)
+    metrics.record("canopy.run.duration", 12.5, unit="s", role=Role.WORKER, status=RunStatus.DONE)
+    metrics.gauge("canopy.runs.active", 3, role=Role.WORKER)
+    # Turning metrics off sends what is left, as a process's exit does.
+    metrics.configure(tmp_path, "off")
+    found = exported(metered)
+    runs = found["canopy.runs"]["sum"]
+    # A delta, a monotonic count, added up within the export.
+    assert (runs["aggregationTemporality"], runs["isMonotonic"]) == (1, True)
+    [point] = runs["dataPoints"]
+    assert (labels(point), point["asInt"]) == ({"role": "worker", "status": "done"}, "2")
+    [cost] = found["canopy.cost"]["sum"]["dataPoints"]
+    assert (labels(cost), cost["asDouble"], found["canopy.cost"]["unit"]) == (
+        {"role": "worker", "model": "anthropic/sonnet"},
+        0.25,
+        "USD",
+    )
+    [duration] = found["canopy.run.duration"]["histogram"]["dataPoints"]
+    assert (duration["count"], duration["sum"], found["canopy.run.duration"]["unit"]) == ("1", 12.5, "s")
+    [active] = found["canopy.runs.active"]["gauge"]["dataPoints"]
+    assert (labels(active), active["asInt"]) == ({"role": "worker"}, "3")
+
+
+def test_otlp_metrics_without_an_endpoint_are_refused(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match=r"needs telemetry\.endpoint"):
+        metrics.configure(tmp_path, "otlp")

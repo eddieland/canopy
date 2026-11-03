@@ -22,7 +22,6 @@ import contextlib
 import os
 import threading
 from dataclasses import dataclass
-from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -45,8 +44,6 @@ TRACES_FILE_NAME = "traces.jsonl"
 TRACES_PATH = "/v1/traces"
 #: The variable a child process finds its parent's span in, as OpenTelemetry names it for an environment.
 TRACEPARENT = "TRACEPARENT"
-#: The service a span's resource names.
-SERVICE = "canopy"
 
 
 class Span:
@@ -158,7 +155,6 @@ class _Tracing:
         """Send this process's spans to `target`, continuing the trace in `TRACEPARENT` if there is one."""
         # Imported here, never at import time: a process that traces nothing never loads OpenTelemetry.
         from opentelemetry import context  # noqa: PLC0415
-        from opentelemetry.sdk.resources import Resource  # noqa: PLC0415
         from opentelemetry.sdk.trace import TracerProvider  # noqa: PLC0415
         from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor  # noqa: PLC0415
         from opentelemetry.sdk.trace.sampling import ALWAYS_ON  # noqa: PLC0415
@@ -166,10 +162,9 @@ class _Tracing:
 
         from canopy.infra import otlp  # noqa: PLC0415
 
-        resource = Resource.create({"service.name": SERVICE, "service.version": version("canopy")})
         # Every span, whatever the parent says: the operator turned tracing on, and a `TRACEPARENT` canopy did not set,
         # from whatever started it, may say its trace is not sampled.
-        provider = TracerProvider(resource=resource, sampler=ALWAYS_ON)
+        provider = TracerProvider(resource=otlp.resource(), sampler=ALWAYS_ON)
         if traces == "otlp":
             # Sent in batches, by a thread of the SDK's, so no step waits on the network; what is left is sent as the
             # process exits, within the exporter's timeout, so an endpoint that is down delays an exit by that alone.
