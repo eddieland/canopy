@@ -364,16 +364,20 @@ export function startOf(entries: TranscriptEntry[]): string | null {
 
 /**
  * What a tool call did, on one line: a shell call's command, since its title is only what the agent said it was
- * for; else a `decide` call's decisions, each its ticket and action (`ABC-1 wait, ABC-2 done`); else a `ticket-set`
- * call's settings, each its ticket and what it sets (`ABC-1 approved, ABC-2 (web) merged done, ABC-3 cursors`); else
- * the runtime's title; else its input's short values as `key=value`, as `{"repo": "web", "pullNumber": 88}` reads
- * `repo=web pullNumber=88`. Empty when the input has none, or was cut and no longer parses.
+ * for, after the directory it ran in when the call names one (`app $ make test`), as canopy's plugin moves a leading
+ * `cd app &&` there; else a `decide` call's decisions, each its ticket and action (`ABC-1 wait, ABC-2 done`); else a
+ * `ticket-set` call's settings, each its ticket and what it sets (`ABC-1 approved, ABC-2 (web) merged done, ABC-3
+ * cursors`); else the runtime's title; else its input's short values as `key=value`, as
+ * `{"repo": "web", "pullNumber": 88}` reads `repo=web pullNumber=88`. Empty when the input has none, or was cut and
+ * no longer parses.
  */
 export function summary(entry: TranscriptTool): string {
     const input = parsed(entry.input)
     const command = input?.['command']
     if (typeof command === 'string') {
-        return oneLine(command)
+        const workdir = input?.['workdir']
+        const dir = typeof workdir === 'string' ? oneLine(workdir) : ''
+        return dir === '' ? oneLine(command) : `${dir} $ ${oneLine(command)}`
     }
     const decisions = decisionsIn(input)
     if (decisions !== null) {
