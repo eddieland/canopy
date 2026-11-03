@@ -32,7 +32,8 @@ about is settled: a comment that `needs author` until it's handled or you reply 
 repositories (`multi repo`) until you reply, a check a notice held (`notice rerun`) until it runs again. You can't clear
 an item by hand, only its cause, and chore findings are the one exception. A running agent's question doesn't wait for a
 tick at all: it's read as the list is, so it arrives with the update that asks it and leaves the moment you answer, the
-agent drops it, or the run ends. When an item leaves while you're looking, it folds shut and a leaf drifts off, and
+agent drops it, or the run ends. When an item leaves while you're looking, it folds shut and a leaf drifts off (under
+Pulp, it goes off in a starburst instead; see [Settings](settings#theme)), and
 if it was the one you had open, the row that took its place opens, so dismissing your way down a list of findings
 doesn't send you back to the top each time.
 

@@ -4,17 +4,16 @@ import type { Page } from '@playwright/test'
 import { settled, signIn } from './helpers.ts'
 
 // A transcript at the server's bounds is the longest the page is ever sent: 2,000 entries and 2,000,000 characters
-// (canopy/core/transcript.py), a month-long worker's or overseer's session. Drawn whole, its rows were 80,000 elements,
-// and each key typed in Find waited on all of them; the page draws 100 rows at first and a fold shows 100 more a click
+// (canopy/core/transcript.py), a month-long worker's or overseer's session. Drawn whole, its rows are 80,000 elements;
+// the page draws 1,000 rows at first, in a region that scrolls inside the panel, and a fold shows 1,000 more a click
 // (TRANSCRIPT_BUDGET in src/lib/transcript.ts).
 const MAX_ENTRIES = 2000
 const CALLS = 100
 const TOOLS_PER_CALL = MAX_ENTRIES / CALLS - 2
-const PAGE_ROWS = 100
-const STEP = 100
+const PAGE_ROWS = 1000
 // The elements the whole page may hold before a fold is opened: the rail, the header, the Run panel, the context
 // chart, and the rows drawn.
-const MAX_ELEMENTS = 10_000
+const MAX_ELEMENTS = 50_000
 
 const START = Date.parse('2026-10-08T09:00:00Z')
 
@@ -76,18 +75,24 @@ test('a transcript as long as the server sends draws a page of rows, and a fold 
     await expect(rows).toHaveCount(PAGE_ROWS + 1)
     expect(await page.evaluate(() => document.querySelectorAll('*').length)).toBeLessThan(MAX_ELEMENTS)
 
-    // The fold says how many rows it holds back, and shows the next of them.
-    const fold = transcript.getByTestId('transcript-fold')
-    await expect(fold).toHaveText(`Show ${STEP} of 1,900 more rows`)
-    await fold.getByRole('button').click()
-    await expect(rows).toHaveCount(PAGE_ROWS + STEP + 1)
-    await expect(fold).toHaveText(`Show ${STEP} of 1,800 more rows`)
+    // The rows scroll inside the panel, so the page under it stays in reach.
+    const region = transcript.getByRole('region', { name: 'transcript rows' })
+    const box = await region.boundingBox()
+    expect(box?.height ?? Infinity).toBeLessThanOrEqual(page.viewportSize()?.height ?? 0)
 
-    // All open opens the tool calls drawn, the first ten model calls' 18 each, and no more.
-    const drawnTools = ((PAGE_ROWS + STEP) / (TOOLS_PER_CALL + 2)) * TOOLS_PER_CALL
+    // All open opens the tool calls drawn, the first fifty model calls' 18 each, and no more.
+    const drawnTools = (PAGE_ROWS / (TOOLS_PER_CALL + 2)) * TOOLS_PER_CALL
     await expect(transcript.getByTestId('transcript-tool')).toHaveCount(drawnTools)
     await transcript.getByRole('button', { name: 'All open' }).click()
     await expect(transcript.locator('details[open]')).toHaveCount(drawnTools)
+    await transcript.getByRole('button', { name: 'All open' }).click()
+
+    // The fold says how many rows it holds back, and shows them.
+    const fold = transcript.getByTestId('transcript-fold')
+    await expect(fold).toHaveText('Show 1,000 more rows')
+    await fold.getByRole('button').click()
+    await expect(rows).toHaveCount(MAX_ENTRIES)
+    await expect(fold).toHaveCount(0)
 })
 
 test('Find finds a row the page has not drawn', async ({ page }) => {
@@ -108,7 +113,7 @@ test('Find finds a row the page has not drawn', async ({ page }) => {
     await find.fill('passes in 3ms')
     await expect(transcript.getByTestId('transcript-found')).toHaveText('1800 lines, 1800 rows')
     await expect(rows).toHaveCount(PAGE_ROWS + 1)
-    await expect(transcript.getByTestId('transcript-fold')).toHaveText(`Show ${STEP} of 1,700 more rows`)
+    await expect(transcript.getByTestId('transcript-fold')).toHaveText('Show 800 more rows')
 })
 
 test("the context chart's row is drawn before it is shown, wherever the budget left it", async ({ page }) => {

@@ -9,6 +9,7 @@ interface Item {
 
 const a: Item = { id: 'a' }
 const b: Item = { id: 'b' }
+const c: Item = { id: 'c' }
 
 // The list as the query holds it: undefined until it is read.
 function render(list: Item[] | undefined) {
@@ -104,6 +105,63 @@ describe('useLeavingRows', () => {
 
         leaveTime()
         expect(result.current.rows).toEqual([{ item: b, leaving: false }])
+    })
+
+    it('lets the first row to leave go off with a flash', () => {
+        const { result, rerender } = render([a, b])
+        rerender([b])
+        expect(result.current.burst).toBe('a')
+    })
+
+    it('flashes for one row of a burst of clears, not each', () => {
+        const { result, rerender } = render([a, b, c])
+        rerender([c])
+        expect(result.current.burst).toBe('a')
+        act(() => {
+            vi.advanceTimersByTime(300)
+        })
+        rerender([])
+        expect(result.current.burst).toBe('a')
+    })
+
+    it('flashes again only once the list has rested', () => {
+        const { result, rerender } = render([a, b, c])
+        rerender([b, c])
+        act(() => {
+            vi.advanceTimersByTime(699)
+        })
+        rerender([c])
+        expect(result.current.burst).toBe('a')
+        // The wait starts over with each row that leaves, so the slot frees a full exit after the last.
+        act(() => {
+            vi.advanceTimersByTime(699)
+        })
+        expect(result.current.burst).toBe('a')
+        leaveTime()
+        expect(result.current.burst).toBeUndefined()
+        rerender([])
+        expect(result.current.burst).toBe('c')
+    })
+
+    it('keeps the flash spent when its item comes back, so a second cannot follow at once', () => {
+        const { result, rerender } = render([a, b])
+        rerender([b])
+        rerender([a, b])
+        rerender([a])
+        expect(result.current.burst).toBe('a')
+        expect(result.current.rows).toEqual([
+            { item: a, leaving: false },
+            { item: b, leaving: true },
+        ])
+        leaveTime()
+        expect(result.current.burst).toBeUndefined()
+    })
+
+    it('flashes nothing under reduced motion', () => {
+        stubReducedMotion()
+        const { result, rerender } = render([a, b])
+        rerender([b])
+        expect(result.current.burst).toBeUndefined()
     })
 
     it('does not clear while items are still listed', () => {
