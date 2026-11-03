@@ -14,6 +14,7 @@ from canopy.core import cards, gc_passes, run_models
 from canopy.core.run_models import Due
 from canopy.core.vocab import ModelsRead
 from canopy.runtime import transcript
+from canopy.serve import views
 from canopy.serve.backend import Backend
 from tests.canopy.web_helpers import client, signed_in
 
@@ -290,8 +291,9 @@ def test_a_chore_runs_page_is_its_row_and_the_whole_of_what_it_reported(backend:
     assert [f["id"] for f in page["findings"]] == ["lodash-advisory"]
     assert page["findings"][0]["link"] == "https://github.com/advisories/GHSA-35jh-r3h4-6jhm"
 
-    # The row's summary is cut for a list; the page's is the whole of it, and the harness's note is apart from it.
-    summary = "\n".join(f"- repository {i}: {' '.join(['clean'] * 20)}" for i in range(12))
+    # A summary longer than a row carries is cut there; the page's is the whole of it, and the harness's note is apart.
+    summary = "\n".join(f"- repository {i}: {' '.join(['clean'] * 20)}" for i in range(20))
+    assert len(summary) > views.SUMMARY_LENGTH
     note = "the chore's last line was not a valid result; its findings are not recorded"
     with backend.open() as ctx:
         ctx.conn.execute(
