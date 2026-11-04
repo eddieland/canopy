@@ -53,11 +53,9 @@ and 2 are stage 1's.
   (stage 0 may reopen it; T4 until then). The system prompt changed per call (the cache). Killing the agent and
   continuing its session with `opencode run --session`: it can cut an edit or a test run in half, and the pushed
   branch is the checkpoint, not the session.
-- **Design and TRUST_MODEL.** DESIGN §44 states the promise, written ahead of the code; stage 1's PR changes it only
-  where stage 0 or the build makes it. TRUST_MODEL, in that PR: T1 (operator text reaches a running agent for the
-  first time, only through canopy's own tool; a forged line can only prompt a fetch); T4 (the plugin's new job reads
-  one more file and writes nothing); T8 (unchanged: no new listener, the web UI writes through the same function the
-  CLI does).
+- **TRUST_MODEL**, in the PR that builds stage 1: T1 (operator text reaches a running agent for the first time, only
+  through canopy's own tool; a forged line can only prompt a fetch); T4 (the plugin's new job reads one more file and
+  writes nothing); T8 (unchanged: no new listener, the web UI writes through the same function the CLI does).
 - Tests with the fakes: a fake worker that calls `messages` after a message was sent to its run gets the text and the
   run's journal records the fetch; a run that ends with the message unfetched, and one that fetches it and then
   fails, each leave it for the next run's prompt, as the scenario's `resume` shows, where one that fetches it and ends
