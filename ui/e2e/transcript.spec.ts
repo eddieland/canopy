@@ -185,6 +185,27 @@ test("a failed run's Run panel names the error it ended on, and a running one's 
     await expect(tools.last()).toContainText('npm test -- login')
 })
 
+test("a run's page names the worktrees it worked in, and a shell call's line its directory from them", async ({
+    page,
+}) => {
+    await page.goto('workspace/runs/39')
+    await settled(page)
+    // Ended, it still names its slot, which the pool may have leased again since.
+    const slot = page.getByText('.treehouse/web-3f9c2a1b/3/web', { exact: true })
+    await expect(slot).toHaveAttribute('title', /may hold other work since/u)
+    const meta = (await (await page.request.get('api/meta')).json()) as { workspace_root: string }
+    const whole = `${meta.workspace_root}/.treehouse/web-3f9c2a1b/3/web`
+    // A call in the run's own worktree reads its command alone, the whole line and the agent's words on hover.
+    const command = 'git push origin HEAD:refs/heads/agent/ABC-099-search'
+    const push = page.getByTestId('transcript').getByTestId('transcript-tool').filter({ hasText: 'git push' })
+    await expect(push.getByTitle(`${whole} $ ${command}\nPush the branch`, { exact: true })).toHaveText(command)
+
+    // A joint run's names the repository it ran in.
+    await page.goto('workspace/runs/43')
+    await settled(page)
+    await expect(page.getByTestId('transcript')).toContainText('mobile $ cat .github/workflows/ci.yml')
+})
+
 test("a run's output is its log as written: what its setup commands and the runtime printed, read when shown", async ({
     page,
 }) => {

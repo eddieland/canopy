@@ -183,6 +183,41 @@ function before(a: string, b: string): boolean {
 }
 
 describe('TranscriptPanel', () => {
+    it("shortens a shell call's directory against a run's worktrees, the whole line on hover", () => {
+        const slot = '/home/op/acme/.treehouse/web-3f9c2a1b/3/web'
+        const worktree = { repo: 'web', path: '.treehouse/web-3f9c2a1b/3/web', absolute: slot }
+        const push: TranscriptEntry = {
+            kind: 'tool',
+            call: 1,
+            at: AT,
+            tool: 'bash',
+            title: 'Push the branch',
+            input: JSON.stringify({ command: 'git push', workdir: `${slot}/src` }),
+            output: '',
+            status: 'completed',
+            duration_ms: 300,
+            cut: false,
+        }
+        const { unmount } = render(
+            <TranscriptPanel transcript={transcript({ entries: [push] })} running={false} page="run" />,
+        )
+        expect(rows().getByText(`${slot}/src $ git push`)).toBeDefined()
+        unmount()
+
+        render(
+            <TranscriptPanel
+                transcript={transcript({ entries: [push] })}
+                running={false}
+                page="run"
+                worktrees={[worktree]}
+            />,
+        )
+        const line = rows().getByText('src $ git push')
+        expect(line.closest('[title]')?.getAttribute('title')).toBe(`${slot}/src $ git push\nPush the branch`)
+        // The input stays as the call wrote it.
+        expect(call('src $ git push').textContent).toContain(`${slot}/src`)
+    })
+
     it('shows a skeleton, with no search and no empty words, until the transcript arrives', () => {
         render(<TranscriptPanel transcript={undefined} running={false} page="run" />)
         expect(screen.getByTestId('panel-skeleton')).toBeDefined()

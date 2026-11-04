@@ -11,6 +11,8 @@ export type Session = Schemas['Session']
 export type AttentionItem = Schemas['AttentionItem']
 /** One worker or split run (`run:ID`). */
 export type Run = Schemas['Run']
+/** A pool slot a run leased: its repository, its path as a page shows it, and its whole path. */
+export type RunWorktree = Schemas['RunWorktree']
 /** What the runs did since a moment: how many ended, and how many PRs they opened first. */
 export type RunsSince = Schemas['RunsSince']
 /** A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8). */

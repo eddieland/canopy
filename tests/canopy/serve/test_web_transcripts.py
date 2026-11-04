@@ -6,6 +6,7 @@ A run's and a chore run's pages, and a run's, chore run's, or tick's session rea
 import dataclasses
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest import mock
 
 import pytest
@@ -27,12 +28,25 @@ def test_a_run_page_is_the_run_as_the_runs_list_shows_it(backend: Backend) -> No
         # The checklist's answers are the page's alone: the list sends none.
         assert listed[run_id].pop("checklist") == []
         page.pop("checklist")
+        # So are an ended run's worktrees: the list names a run's only while it holds them.
+        if listed[run_id]["ended_at"] is not None:
+            assert listed[run_id].pop("worktrees") == []
+            page.pop("worktrees")
         assert page == listed[run_id]
     run = c.get("/api/runs/43").json()
     # A path inside the workspace is shown from its root: the run's log, and the worktrees a running run holds.
     assert run["log_path"] == ".canopy/runs/43.log"
-    assert run["worktrees"] == [".treehouse/mobile-8e41d0c7/1/mobile", ".treehouse/web-3f9c2a1b/2/web"]
-    assert c.get("/api/runs/39").json()["worktrees"] == []
+    shown = [(w["repo"], w["path"]) for w in run["worktrees"]]
+    assert shown == [("mobile", ".treehouse/mobile-8e41d0c7/1/mobile"), ("web", ".treehouse/web-3f9c2a1b/2/web")]
+    assert all(w["absolute"].endswith(w["path"]) and Path(w["absolute"]).is_absolute() for w in run["worktrees"])
+
+
+def test_an_ended_runs_page_still_names_the_worktrees_it_worked_in(backend: Backend) -> None:
+    """The journal keeps a run's slots once it ends, so its page says where it worked, though the slot moved on."""
+    c = client(None, backend)
+    ended = c.get("/api/runs/39").json()
+    assert ended["ended_at"] is not None
+    assert [(w["repo"], w["path"]) for w in ended["worktrees"]] == [("web", ".treehouse/web-3f9c2a1b/3/web")]
 
 
 def test_no_such_run_is_a_404_and_a_run_id_is_a_positive_integer(backend: Backend) -> None:
