@@ -1,9 +1,9 @@
 """The API's shared types: the base model, and what more than one feature's routes serve (DESIGN §22).
 
 The UI's TypeScript types are generated from the OpenAPI schema these produce, with each feature's own types in a
-module of this package (ui/AGENTS.md). Change a model where it is defined, then regenerate the UI's types
-with `npm run gen:api` in ui/. Every text field that comes from the journal is untrusted: the UI renders it as text,
-never as HTML (DESIGN §22).
+module of this package (ui/AGENTS.md). Change a model where it is defined; the UI's lint and type check regenerate
+its types (`make ui-gen`), which are not committed. Every text field that comes from the journal is untrusted: the UI
+renders it as text, never as HTML (DESIGN §22).
 
 A model's docstring is its description in the schema, and so is each field's: the string below it. Every model and
 field has one, and so does every named type; a test checks (test_serve.py). They reach the UI as JSDoc comments on

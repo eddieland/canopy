@@ -44,11 +44,11 @@ From `ui/` (or `make ui-check`, `make ui-e2e`, `make ui-fmt` from the root):
 | Command | Does |
 |---|---|
 | `npm run dev` | Vite on 127.0.0.1:5173, proxying `/api` to `npm run dev:api` (FastAPI over a mock journal on :8765) |
-| `npm run check` | format check, lint, typecheck, generated types current, unit tests, build: what CI runs |
-| `npm run fmt:check`, `lint`, `typecheck`, `check:api` | its pieces, one at a time |
+| `npm run check` | format check, lint, typecheck, unit tests, build: what CI runs |
+| `npm run fmt:check`, `lint`, `typecheck` | its pieces, one at a time; `lint` and `typecheck` run `gen` first |
 | `npm test -- <files>` | the Vitest files named |
 | `npm run fmt` | remove unused imports (oxlint), then format and sort imports with oxfmt |
-| `npm run gen:api` | regenerate `src/api/schema.gen.ts` from `canopy.serve`'s OpenAPI schema |
+| `npm run gen` | write the uncommitted route tree and API types (from `canopy.serve`'s schema) where stale |
 | `npm run test:e2e -- <specs>` | build, then Playwright against it, served by FastAPI; every spec when none is named |
 
 With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to a local Chromium. It tests behavior,
@@ -78,7 +78,8 @@ dozen. When every screenshot differs, check the browser before the change.
   Follow the compiler's rules (no setState directly in an effect body, no reading refs during render, ...).
 - **Types come from the server.** API types are generated from the pydantic models in `src/canopy/serve/schema/`:
   the shared ones in its `__init__.py`, and each feature's in a module of its own. To change a shape, change the
-  pydantic model, run `npm run gen:api`, and commit both. Import types from `src/api/types.ts`.
+  pydantic model; `npm run gen` writes the types from it, and they are not committed. Import types from
+  `src/api/types.ts`.
 - **One place per query.** Keys and fetchers live in `src/api/queries.ts`; components call `useQuery(xQuery)`.
 - **Live data comes from the stream, not polling.** No `refetchInterval`, but for the worktrees and the host's
   resources. Server pushes arrive through
@@ -190,7 +191,7 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
 ## Done for a UI pull request
 
 - The checks pass, run as the repository's `AGENTS.md` says (Toolchain): every formatter and linter (`make fmt`,
-  `make lint`, `npm run lint`, `npm run typecheck`), `check:api` when a pydantic model behind the API changed,
+  `make lint`, `npm run lint`, `npm run typecheck`, which regenerate the API's types from the pydantic models),
   `npm test` for the unit tests of what changed, and `npm run test:e2e` for the Playwright specs that cover it. CI runs
   the rest.
 - New behavior has a unit test or a Playwright test; a new route has its screenshots.
