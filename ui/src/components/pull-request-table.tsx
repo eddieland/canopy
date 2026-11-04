@@ -1,19 +1,13 @@
 import type { ReactNode } from 'react'
 
-import { CellBar, CellBarHead } from '@/components/cell-bar'
 import { None } from '@/components/none'
-import { PanelScroll } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { ReportTable } from '@/components/report-table'
+import type { ReportColumn } from '@/components/report-table'
 import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
-import { Hinted, Tipped } from '@/components/tip'
 import { phaseMeaning } from '@/lib/meanings'
-import { cn } from '@/lib/utils'
 import { NO_TICKET } from '@/lib/words'
-
-// The column names of a table in a padded scrolling region. A sticky head sticks inside the region's padding, so the
-// rows scrolling under it would show in a strip above it: the region's top padding is the head's cells' instead.
-const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
 
 /** A PR as a report's per-PR table lists it: the PR, and the ticket and phase of the unit that holds it. */
 export interface PullRequestRow {
@@ -44,10 +38,10 @@ export interface PullRequestColumn<T> {
 }
 
 /**
- * A report's table of PRs (ui/DESIGN.md, "A table of figures"), one row each: the PR, linked, with its unit's phase
- * beside it; its ticket, or none for a PR canopy only reviewed; then each of `columns`. It scrolls in its panel under a
- * sticky head, named `label` for a screen reader. The table's test id is `testId`'s, then `-pull-request-table`; each
- * row's, then `-pull-request`. A page shows its own `Empty` in its place when it has no rows.
+ * A report's table of PRs (ui/DESIGN.md, "A table of PRs"), a `ReportTable` with a row each: the PR, linked, with its
+ * unit's phase beside it; its ticket, or none for a PR canopy only reviewed; then each of `columns`. Named `label` for
+ * a screen reader. The table's test id is `testId`'s, then `-pull-request-table`; each row's, then `-pull-request`. A
+ * page shows its own `Empty` in its place when it has no rows.
  */
 export function PullRequestTable<T extends PullRequestRow>({
     rows,
@@ -60,68 +54,54 @@ export function PullRequestTable<T extends PullRequestRow>({
     label: string
     testId: string
 }) {
+    const all: ReportColumn<T>[] = [
+        ...leadingColumns<T>(),
+        ...columns.map((column): ReportColumn<T> => ({
+            key: column.key,
+            kind: column.bar === undefined ? 'figure' : 'bar',
+            label: column.label,
+            hint: column.hint,
+            cell: column.cell,
+            tip: column.title,
+            muted: column.muted,
+            bar: column.bar,
+        })),
+    ]
     return (
-        <PanelScroll label={label} className="max-h-96 px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid={`${testId}-pull-request-table`}>
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">pull request</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">ticket</th>
-                        {columns.map((column) =>
-                            column.bar === undefined ? (
-                                <th key={column.key} className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
-                                    <Hinted hint={column.hint}>{column.label}</Hinted>
-                                </th>
-                            ) : (
-                                <CellBarHead key={column.key}>
-                                    <Hinted hint={column.hint}>{column.label}</Hinted>
-                                </CellBarHead>
-                            ),
-                        )}
-                    </tr>
-                </thead>
-                <tbody className="text-xs">
-                    {rows.map((pr) => (
-                        <tr key={pr.url} className="text-right" data-testid={`${testId}-pull-request`}>
-                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
-                                <span className="flex min-w-0 items-center gap-2">
-                                    <PullRequestLink url={pr.url} className="min-w-0" />
-                                    {pr.phase !== null && pr.phase !== undefined && (
-                                        <Word
-                                            word={pr.phase}
-                                            meaning={phaseMeaning(pr.phase)}
-                                            className="truncate text-muted-foreground"
-                                        />
-                                    )}
-                                </span>
-                            </th>
-                            <td className="pl-3 text-left whitespace-nowrap">
-                                {pr.ticket_key === null || pr.ticket_key === undefined ? (
-                                    <None reason={NO_TICKET} brief className="font-mono text-xs" />
-                                ) : (
-                                    <TicketLink ticketKey={pr.ticket_key} />
-                                )}
-                            </td>
-                            {columns.map((column) => {
-                                const className = cn(
-                                    'readout pl-3 whitespace-nowrap',
-                                    column.muted === true && 'text-muted-foreground',
-                                )
-                                const figure = <Tipped fact={column.title?.(pr)}>{column.cell(pr)}</Tipped>
-                                return column.bar === undefined ? (
-                                    <td key={column.key} className={className}>
-                                        {figure}
-                                    </td>
-                                ) : (
-                                    <CellBar key={column.key} percent={column.bar(pr)} className={className}>
-                                        {figure}
-                                    </CellBar>
-                                )
-                            })}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={rows}
+            columns={all}
+            rowKey={(pr) => pr.url}
+            label={label}
+            testId={`${testId}-pull-request-table`}
+            rowTestId={`${testId}-pull-request`}
+        />
+    )
+}
+
+/** The columns every per-PR table opens with: the PR and its phase, then its ticket. */
+function leadingColumns<T extends PullRequestRow>(): ReportColumn<T>[] {
+    return [
+        { key: 'pull-request', kind: 'free', label: 'pull request', cell: (pr) => <PullRequestCell pr={pr} /> },
+        { key: 'ticket', kind: 'word', label: 'ticket', cell: (pr) => <TicketCell ticketKey={pr.ticket_key} /> },
+    ]
+}
+
+function PullRequestCell({ pr }: { pr: PullRequestRow }) {
+    return (
+        <span className="flex min-w-0 items-center gap-2">
+            <PullRequestLink url={pr.url} className="min-w-0" />
+            {pr.phase !== null && pr.phase !== undefined && (
+                <Word word={pr.phase} meaning={phaseMeaning(pr.phase)} className="truncate text-muted-foreground" />
+            )}
+        </span>
+    )
+}
+
+function TicketCell({ ticketKey }: { ticketKey: string | null | undefined }) {
+    return ticketKey === null || ticketKey === undefined ? (
+        <None reason={NO_TICKET} brief className="font-mono text-xs" />
+    ) : (
+        <TicketLink ticketKey={ticketKey} />
     )
 }
