@@ -23,6 +23,8 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, Panel
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReadoutTiles } from '@/components/readout-tiles'
 import type { ReadoutTile } from '@/components/readout-tiles'
+import { ReportTable } from '@/components/report-table'
+import type { ReportColumn } from '@/components/report-table'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
@@ -33,6 +35,7 @@ import { TicketLink } from '@/components/ticket-link'
 import { Clipped, Hinted, Tipped } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
 import { useClock } from '@/lib/clock'
+import type { Clock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
 import {
     binsText,
@@ -339,43 +342,15 @@ function ByDay({ days, span }: { days: HealthDay[]; span: string }) {
             <DayChart key={days.length} bars={healthBars(days, clock)} testId="health" />
             <DayChartLegend series={HEALTH_SERIES} testId="health" />
             <ChartTable what={counted(days.length, 'day')} label="Failures by day" className="max-h-60 overflow-x-auto">
-                <table className="border-collapse text-sm" data-testid="health-table">
-                    <thead className="sticky top-0 bg-surface">
-                        <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">day</th>
-                            {HEALTH_SERIES.map((series) => (
-                                <th key={series.key} className="panel-label pb-1.5 pl-3 font-normal">
-                                    {series.label}
-                                </th>
-                            ))}
-                            <th className="panel-label pb-1.5 pl-3 font-normal">failed</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">ended</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">rate</th>
-                        </tr>
-                    </thead>
-                    <tbody className="font-mono text-xs">
-                        {days.toReversed().map((day) => {
-                            const failedRuns = countSum(day.failed)
-                            return (
-                                <tr key={day.day} className="text-right" data-testid={`health-day-${day.day}`}>
-                                    <th scope="row" className="readout py-0.5 text-left font-normal">
-                                        {dayName(day, clock)}
-                                    </th>
-                                    {HEALTH_SERIES.map((series) => (
-                                        <td key={series.key} className="readout pl-3 text-muted-foreground">
-                                            {day.failed[series.key]}
-                                        </td>
-                                    ))}
-                                    <td className={cn('readout pl-3', failedRuns > 0 && 'text-status-failed')}>
-                                        {failedRuns}
-                                    </td>
-                                    <td className="readout pl-3 text-muted-foreground">{countSum(day.ended)}</td>
-                                    <td className="readout pl-3 text-muted-foreground">{dayRateText(day)}</td>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </table>
+                <ReportTable
+                    rows={days.toReversed()}
+                    columns={dayColumns(clock)}
+                    rowKey={(day) => day.day}
+                    label="Failures by day"
+                    scroll={false}
+                    testId="health-table"
+                    rowTestId={(day) => `health-day-${day.day}`}
+                />
             </ChartTable>
         </div>
     )
@@ -462,60 +437,88 @@ function Causes({ causes, span }: { causes: HealthCause[]; span: string }) {
         return <Empty size="panel">no run failed in these {span}</Empty>
     }
     return (
-        <PanelScroll label="Failures by cause" className="max-h-96 overflow-x-auto px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="health-cause-table">
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-left whitespace-nowrap">
-                        <th className="panel-label pb-1.5 font-normal">cause</th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">runs</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">kinds</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">latest</th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">failed</th>
-                    </tr>
-                </thead>
-                <tbody className="text-xs">
-                    {causes.map((c) => (
-                        <tr key={c.note ?? ''} className="align-top" data-testid="health-cause">
-                            {/* The cause takes the slack, cut to a line, so the figures after it keep their places. */}
-                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
-                                {c.note === null ? (
-                                    <span className="text-muted-foreground">
-                                        <Hinted hint={OTHER_HINT}>other</Hinted>
-                                    </span>
-                                ) : (
-                                    <Clipped text={c.note} className="block">
-                                        <LinkedText text={c.note} />
-                                    </Clipped>
-                                )}
-                            </th>
-                            <td
-                                className={cn(
-                                    'readout pl-3 text-right',
-                                    c.note !== null && c.runs > 1 && 'text-status-failed',
-                                )}
-                            >
-                                {c.runs}
-                            </td>
-                            <td className="pl-3 whitespace-nowrap">
-                                <span className="flex gap-1">
-                                    {c.kinds.map((k) => (
-                                        <Chip key={k}>{KIND_NAME[k]}</Chip>
-                                    ))}
-                                </span>
-                            </td>
-                            <td className="pl-3 whitespace-nowrap">
-                                <OwnLink failure={c.latest} />
-                            </td>
-                            <td className="pl-3 text-right whitespace-nowrap">
-                                <Age at={c.latest.started_at} variant="ago" />
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={causes}
+            columns={CAUSE_COLUMNS}
+            rowKey={(c) => c.note ?? ''}
+            label="Failures by cause"
+            top
+            testId="health-cause-table"
+            rowTestId="health-cause"
+        />
     )
 }
+
+/** The failures-by-day table's columns: the day, a column per kind, the day's failed runs, its ended ones, the rate. */
+function dayColumns(clock: Clock): ReportColumn<HealthDay>[] {
+    return [
+        {
+            key: 'day',
+            kind: 'name',
+            label: 'day',
+            cell: (day) => <span className="readout">{dayName(day, clock)}</span>,
+        },
+        ...HEALTH_SERIES.map((series): ReportColumn<HealthDay> => ({
+            key: series.key,
+            kind: 'figure',
+            label: series.label,
+            cell: (day) => day.failed[series.key],
+            muted: true,
+        })),
+        {
+            key: 'failed',
+            kind: 'figure',
+            label: 'failed',
+            cell: (day) => countSum(day.failed),
+            tone: (day) => countSum(day.failed) > 0 && 'text-status-failed',
+        },
+        { key: 'ended', kind: 'figure', label: 'ended', cell: (day) => countSum(day.ended), muted: true },
+        { key: 'rate', kind: 'figure', label: 'rate', cell: dayRateText, muted: true },
+    ]
+}
+
+/**
+ * The causes table's columns: the harness's note, cut to a line, or `other`; how many runs it explained, in the failed
+ * color past one; their kinds; and the newest of them, and when it started.
+ */
+const CAUSE_COLUMNS: ReportColumn<HealthCause>[] = [
+    {
+        key: 'cause',
+        kind: 'free',
+        label: 'cause',
+        cell: (c) =>
+            c.note === null ? (
+                <span className="text-muted-foreground">
+                    <Hinted hint={OTHER_HINT}>other</Hinted>
+                </span>
+            ) : (
+                <Clipped text={c.note} className="block">
+                    <LinkedText text={c.note} />
+                </Clipped>
+            ),
+    },
+    {
+        key: 'runs',
+        kind: 'figure',
+        label: 'runs',
+        cell: (c) => c.runs,
+        tone: (c) => c.note !== null && c.runs > 1 && 'text-status-failed',
+    },
+    {
+        key: 'kinds',
+        kind: 'word',
+        label: 'kinds',
+        cell: (c) => (
+            <span className="flex gap-1">
+                {c.kinds.map((k) => (
+                    <Chip key={k}>{KIND_NAME[k]}</Chip>
+                ))}
+            </span>
+        ),
+    },
+    { key: 'latest', kind: 'word', label: 'latest', cell: (c) => <OwnLink failure={c.latest} /> },
+    { key: 'failed', kind: 'age', label: 'failed', cell: (c) => <Age at={c.latest.started_at} variant="ago" /> },
+]
 
 /**
  * Each guard that refused the overseer something, the most often first: how often, in how many ticks, and the latest,

@@ -551,9 +551,9 @@ whole either side.
   it waits on the operator, a header of its `panel-label` and what names it, its text, then its verbs in a row under
   it, `sm` buttons with the CLI's command on hover, `Edit` outline and `Drop` ghost. `Edit` opens a `Textarea` with its
   count against the bound, `Save` disabled past it, and `Cancel`.
-- **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel where its rows name
-  something that wants the room; one with a short name and a few figures sizes to its content at the panel's left, so
-  a row reads in one glance. Its column heads are in `panel-label` type, its figures right-aligned readouts. A row head
+- **A table of figures** (a chore's spend, the Spend page's) is as wide as its content and never wider than its panel,
+  so a row's figures sit by what it names and the row reads in one glance; a column of text that wants the room grows
+  to its text up to a cap and is cut past it, never stretched across the panel. Its column heads are in `panel-label` type, its figures right-aligned readouts. A row head
   that names something is its name in medium weight, as `TicketTitle` sets a ticket's title, after its reference in its
   monospace link. Its panel's header repeats none of its rows. A report's table is a `ReportTable`
   (`src/components/report-table.tsx`, on `ui/table`), its columns each of a kind, which sets how its head and cells sit:
