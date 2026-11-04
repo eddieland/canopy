@@ -8,9 +8,9 @@ import { cn } from '@/lib/utils'
 
 /**
  * What a column of a `ReportTable` holds, which sets how its head and its cells sit (ui/DESIGN.md, "A table of
- * figures"): `name`, what the row names, as its row head; `free`, text that wants the room, which grows to its text up
- * to a cap and is cut past it; `figure`, a readout, right-aligned, never wrapped; `bar`, a figure with a bar of its
- * share after it (`CellBar`); `word`, a short word, a link, or a chip, left-aligned, never wrapped; `age`, when,
+ * figures"): `name`, what the row names, as its row head; `free`, text that wants the room, which grows to its text and
+ * is cut only where the panel runs out; `figure`, a readout, right-aligned, never wrapped; `bar`, a figure with a bar
+ * of its share after it (`CellBar`); `word`, a short word, a link, or a chip, left-aligned, never wrapped; `age`, when,
  * right-aligned, never wrapped, in the interface's face.
  */
 export type ReportColumnKind = 'name' | 'free' | 'figure' | 'bar' | 'word' | 'age'
@@ -68,11 +68,11 @@ const CELL: Record<Exclude<ReportColumnKind, 'bar'>, string> = {
  * A report's table (ui/DESIGN.md, "A table of figures"), one row of `rows` each, in `columns`: the first column is the
  * row's head, so it names the row (a `name`, `free`, or `word` column), never a figure or a bar. It is as wide as its
  * content and never wider than its panel, so a row's figures sit by what it names; its `free` column grows to its text
- * up to a cap, then is cut. It scrolls in its panel under a sticky head, named `label` for a screen reader, in a region
- * of `className` (`max-h-96 px-3 pb-3` unless given); with `scroll` false it is bare, for a region of someone else's
- * (`ChartTable`). `rowKey` keys a row; the table's test id is `testId`, each row's `rowTestId`'s, or what it makes of
- * the row. `top` sets each row's cells at its top, for a row whose free cell stacks rows of its own. A page shows its
- * own `Empty` in its place when it has no rows.
+ * and takes the panel's room, cut only past it. It scrolls in its panel under a sticky head, named `label` for a screen
+ * reader, in a region of `className` (`max-h-96 px-3 pb-3` unless given); with `scroll` false it is bare, for a region
+ * of someone else's (`ChartTable`). `rowKey` keys a row; the table's test id is `testId`, each row's `rowTestId`'s, or
+ * what it makes of the row. `top` sets each row's cells at its top, for a row whose free cell stacks rows of its own. A
+ * page shows its own `Empty` in its place when it has no rows.
  */
 export function ReportTable<T>({
     rows,
@@ -161,13 +161,13 @@ function ColumnCell<T>({ column, row, first }: { column: ReportColumn<T>; row: T
 }
 
 /**
- * A free cell's content, as wide as it is up to the cap, past which, or past the panel's width, it is cut: a grid
- * whose one item may shrink under its text, which a table's cell alone never lets it. Text is cut to a line; other
- * content cuts its own, as `Clipped` does.
+ * A free cell's content, as wide as its text, and cut only past the panel's width: a grid whose one item may shrink
+ * under its text, which a table's cell alone never lets it. Text is cut to a line; other content cuts its own, as
+ * `Clipped` does.
  */
 function Free({ children }: { children: ReactNode }) {
     return (
-        <div className="grid max-w-[60ch]">
+        <div className="grid">
             <div className="min-w-0 truncate">{children}</div>
         </div>
     )
