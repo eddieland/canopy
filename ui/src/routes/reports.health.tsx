@@ -247,7 +247,7 @@ function Outcomes({ found, span }: { found: HealthReport; span: string }) {
                     <thead className={PADDED_HEAD}>
                         <tr className="text-right">
                             <th className="panel-label pb-1.5 text-left font-normal">kind</th>
-                            <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                            <th colSpan={2} className="panel-label pb-1.5 pl-3 text-left font-normal">
                                 <Hinted hint={ENDED_HINT}>ended</Hinted>
                             </th>
                             <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
@@ -278,15 +278,14 @@ function OutcomeGroup({ kind, first }: { kind: OutcomeKind; first: boolean }) {
                 >
                     {KIND_NAME[kind.kind]}
                 </th>
-                <td className={cn('pl-3 text-left', !first && 'pt-3')}>
-                    <CellBar
-                        percent={(share ?? 0) * 100}
-                        fill="bg-status-failed"
-                        valueClassName={cn('readout w-10 text-right', kind.failed > 0 && 'text-status-failed')}
-                    >
-                        {shareText(share)}
-                    </CellBar>
-                </td>
+                <CellBar
+                    percent={(share ?? 0) * 100}
+                    fill="bg-status-failed"
+                    className={cn('readout', !first && 'pt-3', kind.failed > 0 && 'text-status-failed')}
+                    barClassName={cn(!first && 'pt-3')}
+                >
+                    {shareText(share)}
+                </CellBar>
                 <td className={cn('readout pl-3', !first && 'pt-3')}>{kind.runs}</td>
                 <td className={cn('readout pl-3 text-muted-foreground', !first && 'pt-3')}>
                     <Cost usd={kind.costUsd} />
@@ -306,7 +305,7 @@ function SortRow({ sort }: { sort: OutcomeSort }) {
             <th scope="row" className="py-0.5 pl-4 text-left font-normal">
                 <Word word={sort.what} />
             </th>
-            <td className="py-0.5 pl-3 text-left">
+            <td colSpan={2} className="py-0.5 pl-3 text-left">
                 <span className="flex flex-wrap gap-1">
                     {sort.statuses.map((st) => (
                         <Chip key={st.status} tone={st.failed ? 'failed' : 'plain'} className="gap-1.5">

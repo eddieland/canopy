@@ -158,7 +158,13 @@ describe('the health page', () => {
         const workers = within(table).getByTestId('health-kind-workers')
         // The kind's row: its name, its failed share, its runs, and what they cost.
         expect(within(workers).getByRole('rowheader', { name: 'workers' })).toBeTruthy()
-        expect(cells(within(workers).getAllByRole('row')[0] as HTMLElement)).toEqual(['workers', '50%', '4', '$4.00'])
+        expect(cells(within(workers).getAllByRole('row')[0] as HTMLElement)).toEqual([
+            'workers',
+            '50%',
+            '',
+            '4',
+            '$4.00',
+        ])
         // A row per sort, the most runs first, so one line holds every way it ended.
         expect(
             within(workers)
