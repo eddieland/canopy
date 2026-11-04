@@ -19,6 +19,10 @@ import type { Tone } from '@/lib/tone'
 // The most numbers one send takes (`LeftSendRequest`): past it, sending all sends the oldest this many.
 const SEND_CAP = 20
 
+// What sending all leaves out: the PR's head already does what these ask, so a worker would have nothing to change.
+// Each still has its own row's button, for the one you judge otherwise.
+const NOT_SENT_ALL: ReadonlySet<LeftFeedback['reason']> = new Set(['already_done'])
+
 // Why the loop left an item, in the words a row shows, by the reason canopy records (`vocab.PassReason`).
 const LEFT_REASONS: Record<LeftFeedback['reason'], string> = {
     optional: 'optional',
@@ -45,9 +49,10 @@ const LEFT_TONE: Record<LeftFeedback['reason'], Tone> = {
  * The feedback on a ticket's PRs its review cursors passed with no worker, still left (DESIGN §7), in a list panel of
  * its own, `Left feedback`: each item a row of why it was left, its author, its first line, where it is, linking out to
  * it, the tick that left it, and a button that sends it to a worker, as `canopy send KEY N` does: a reply on the ticket
- * naming it, which the next tick reads as your go-ahead. With two or more, its header sends them all in one reply, as
- * `canopy send KEY N M ...` does, or the oldest 20 past the most one send takes. With none, its header alone, as every
- * list's (`ListPanel`). While the ticket waits on your merge, a line above them says to read them first.
+ * naming it, which the next tick reads as your go-ahead. With two or more to send, its header sends them all in one
+ * reply, as `canopy send KEY N M ...` does, or the oldest 20 past the most one send takes: every item but those the
+ * head already does, which only their own rows send. With none, its header alone, as every list's (`ListPanel`). While
+ * the ticket waits on your merge, a line above them says to read them first.
  */
 export function LeftFeedbackList({
     ticketKey,
@@ -77,8 +82,9 @@ export function LeftFeedbackList({
         },
     })
     // Oldest first, so past the cap these are the oldest.
-    const all = items.slice(0, SEND_CAP).map((item) => item.number)
-    const capped = items.length > SEND_CAP
+    const sendable = items.filter((item) => !NOT_SENT_ALL.has(item.reason))
+    const all = sendable.slice(0, SEND_CAP).map((item) => item.number)
+    const capped = sendable.length > SEND_CAP
     const naming = capped ? `the oldest ${SEND_CAP}, the most one reply names` : 'them all'
     const sendAllTitle = `Send to a worker: one reply on the ticket naming ${naming}, read next tick as your go-ahead`
     return (
@@ -86,7 +92,7 @@ export function LeftFeedbackList({
             label="Left feedback"
             count={items.length}
             actions={
-                items.length > 1 && (
+                sendable.length > 1 && (
                     <Button
                         size="sm"
                         variant="outline"
@@ -95,7 +101,7 @@ export function LeftFeedbackList({
                         title={sendAllTitle}
                     >
                         <Send aria-hidden />
-                        {capped ? `send oldest ${SEND_CAP}` : `send all ${items.length}`}
+                        {capped ? `send oldest ${SEND_CAP}` : `send all ${sendable.length}`}
                     </Button>
                 )
             }

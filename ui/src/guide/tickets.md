@@ -147,9 +147,11 @@ worker (optional, would_reset_approval)". Read them before you merge. "Optional"
 reset approval" is the overseer's guess at what you'd rather avoid, and you may see it differently.
 
 To overrule it, use the send button at the end of the comment's row, or `canopy send KEY N` with the number
-`canopy show KEY` lists. With two or more left, **send all N** in the panel's header sends every one in a single
-reply, as `canopy send KEY N M ...` does; past 20, the most one reply names, it reads **send oldest 20**, and the rest
-wait for the next. canopy replies on the ticket for you, naming the comment by its id, PR, and line without
+`canopy show KEY` lists. With two or more left to send, **send all N** in the panel's header sends every one in a
+single reply, as `canopy send KEY N M ...` does; past 20, the most one reply names, it reads **send oldest 20**, and
+the rest wait for the next. It skips the ones marked `already done`: a worker sent to make a change the head already
+has tends to find something else to change. If you think the overseer misread one, its own row's button still sends
+it. canopy replies on the ticket for you, naming the comment by its id, PR, and line without
 quoting it, and the next tick reads that reply as your go-ahead and sends a worker, whoever wrote the comment. The
 comment stays on the list until the worker answers it on its thread.
 
