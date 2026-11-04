@@ -421,7 +421,7 @@ function RunBody({
                     {prs.map((pr) => (
                         <PullRequestLink key={pr} url={pr} />
                     ))}
-                    <RunWorktrees paths={run.worktrees} />
+                    <RunWorktrees paths={run.worktrees.map((w) => w.path)} />
                     <RunModel run={run} names={names} />
                     {run.session_id && (
                         <Copyable text={run.session_id} label="session id" reveal className="text-muted-foreground">

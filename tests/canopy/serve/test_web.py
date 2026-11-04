@@ -81,7 +81,7 @@ def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journ
     assert root.is_absolute()
     assert not Path(run["log_path"]).is_absolute()
     assert root / run["log_path"] == Path(stored["log_path"])
-    assert [root / w for w in run["worktrees"]] == [slot]
+    assert [(w["repo"], root / w["path"], w["absolute"]) for w in run["worktrees"]] == [("repo", slot, str(slot))]
 
 
 def test_a_runs_spend_is_its_new_tokens_and_its_peak_context(ctx: Context) -> None:

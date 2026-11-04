@@ -326,6 +326,17 @@ class RunCard(Model):
     """A question it asks the operator, with the answer they gave; None when it asks none."""
 
 
+class RunWorktree(Model):
+    """A pool slot a run leased (DESIGN §8), one per repository it works in."""
+
+    repo: str
+    """The repository it is a worktree of."""
+    path: str
+    """Its path as a page shows it: from the workspace root when under it, else whole."""
+    absolute: str
+    """Its whole path, which a shell call's `workdir` names."""
+
+
 class Run(Model):
     """One worker or split run (`run:ID`)."""
 
@@ -367,8 +378,9 @@ class Run(Model):
     peak_context: int | None = None
     """The most tokens one of its model calls was sent, from the cache or not; None when the runtime reported nothing,
     or recorded it before canopy kept it."""
-    worktrees: list[str] = []
-    """The worktrees a running run holds, from the workspace root when under it."""
+    worktrees: list[RunWorktree] = []
+    """The worktrees it leased, by repository: the ones it holds while it runs, and once it ends the ones it held,
+    which may hold other work since. The runs list names them for running runs alone."""
     log_path: str
     """Where its log is: from the workspace root when under it, as a worktree's path is."""
     activity: RunActivity | None = None

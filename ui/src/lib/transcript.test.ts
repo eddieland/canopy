@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/types'
+import type { RunWorktree, TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/types'
 
 import {
     byCall,
@@ -22,10 +22,13 @@ import {
     sentTokens,
     settingSets,
     settingsOf,
+    shellCall,
+    shownDir,
     shownOutput,
     signed,
     startOf,
     summary,
+    summaryTitle,
     tally,
     tokenCount,
     tokensCell,
@@ -127,6 +130,24 @@ const runtimeError = (message: string): TranscriptEntry => ({
     call: 2,
 })
 
+describe('summaryTitle', () => {
+    it("is a shell call's whole line, its directory as written, then what the agent said it was for", () => {
+        const push = tool('completed', {
+            title: 'Push the branch',
+            input: JSON.stringify({ command: 'git push', workdir: WEB.absolute }),
+        })
+        expect(summaryTitle(push)).toBe(`${WEB.absolute} $ git push\nPush the branch`)
+        expect(summaryTitle(shellIn(WEB.absolute, 'ls'))).toBe(`${WEB.absolute} $ ls`)
+    })
+
+    it("is any other call's runtime title, else its line", () => {
+        expect(summaryTitle(tool('completed', { title: 'src/a.ts', input: '{"filePath": "/r/src/a.ts"}' }))).toBe(
+            'src/a.ts',
+        )
+        expect(summaryTitle(tool('completed', { input: '{"repo": "web"}' }))).toBe('repo=web')
+    })
+})
+
 describe('endedOn', () => {
     const refused = shell('canopy decide ABC-1 implement', 'Error: decide refused (capacity): every slot is taken')
 
@@ -153,6 +174,56 @@ describe('endedOn', () => {
     })
 })
 
+// A run's slot of `repo`'s pool, as the server sends it.
+const slotOf = (repo: string, n: number): RunWorktree => ({
+    repo,
+    path: `.treehouse/${repo}-3f9c2a1b/${n}/${repo}`,
+    absolute: `/home/op/acme/.treehouse/${repo}-3f9c2a1b/${n}/${repo}`,
+})
+const WEB = slotOf('web', 3)
+const MOBILE = slotOf('mobile', 1)
+
+describe('shownDir', () => {
+    it("names a run's worktree by its repository, and a directory under it from there", () => {
+        expect(shownDir(WEB.absolute, [WEB])).toBe('web')
+        expect(shownDir(`${WEB.absolute}/`, [WEB])).toBe('web')
+        expect(shownDir(`${WEB.absolute}/src/search`, [WEB])).toBe('web/src/search')
+        expect(shownDir(MOBILE.absolute, [MOBILE, WEB])).toBe('mobile')
+        expect(shownDir(`${WEB.absolute}/src`, [MOBILE, WEB])).toBe('web/src')
+    })
+
+    it('is null for any other directory, a sibling whose name starts the same included', () => {
+        expect(shownDir('/tmp', [WEB])).toBeNull()
+        expect(shownDir(`${WEB.absolute}-old/src`, [WEB])).toBeNull()
+        expect(shownDir('src', [WEB])).toBeNull()
+        expect(shownDir(WEB.absolute, [])).toBeNull()
+    })
+})
+
+describe('shellCall', () => {
+    it("is a shell call's directory and command, the directory marked when it is outside the run's worktrees", () => {
+        expect(shellCall(shellIn(WEB.absolute, 'git push'), [WEB])).toEqual({
+            dir: 'web',
+            outside: false,
+            command: 'git push',
+        })
+        expect(shellCall(shellIn('/tmp/scratch', 'ls'), [WEB])).toEqual({
+            dir: '/tmp/scratch',
+            outside: true,
+            command: 'ls',
+        })
+    })
+
+    it('keeps a directory whole and unmarked with no worktrees, and names none when the call names none', () => {
+        expect(shellCall(shellIn('/tmp/scratch', 'ls'))).toEqual({ dir: '/tmp/scratch', outside: false, command: 'ls' })
+        expect(shellCall(shellIn('', 'ls'), [WEB])).toEqual({ dir: null, outside: false, command: 'ls' })
+    })
+
+    it('is null for any other call', () => {
+        expect(shellCall(tool('completed', { input: '{"filePath": "/r/a.ts"}' }), [WEB])).toBeNull()
+    })
+})
+
 describe('summary', () => {
     it("is a shell call's command, on one line, whatever its title says", () => {
         const call = shell('canopy decide ABC-1 wait\n  --rationale "PR 8 waits"', '')
@@ -165,6 +236,15 @@ describe('summary', () => {
         expect(summary(shellIn('repo/app', 'make test'))).toBe('repo/app $ make test')
         expect(summary(shellIn('', 'ls'))).toBe('ls')
         expect(summary(shellIn(7, 'ls'))).toBe('ls')
+    })
+
+    it("reads the directory against the run's worktrees when given them, and keeps it whole without", () => {
+        const push = shellIn(WEB.absolute, 'git push')
+        expect(summary(push, [WEB])).toBe('web $ git push')
+        expect(summary(push)).toBe(`${WEB.absolute} $ git push`)
+        expect(summary(shellIn(`${WEB.absolute}/src`, 'ls'), [WEB])).toBe('web/src $ ls')
+        expect(summary(shellIn(MOBILE.absolute, 'make test'), [MOBILE, WEB])).toBe('mobile $ make test')
+        expect(summary(shellIn('/tmp', 'ls'), [WEB])).toBe('/tmp $ ls')
     })
 
     it("is the runtime's title for any other call that has one", () => {

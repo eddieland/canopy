@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, getDefaultNormalizer, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Transcript, TranscriptEntry, TranscriptTokens } from '@/api/types'
@@ -23,6 +23,8 @@ afterEach(() => {
 })
 
 const AT = '2026-10-08T12:00:00Z'
+// Matches text as written, its line breaks kept: a title says the line, then on its own line the agent's words.
+const WHOLE = getDefaultNormalizer({ collapseWhitespace: false })
 
 function tokens(fields: Partial<TranscriptTokens>): TranscriptTokens {
     return { input: 0, cache_read: 0, cache_write: 0, output: 0, reasoning: 0, ...fields }
@@ -138,6 +140,22 @@ function transcript(fields: Partial<Transcript> = {}): Transcript {
     }
 }
 
+// A shell call the agent ran in `workdir`, said to push the branch.
+function shellAt(workdir: string, command: string): TranscriptEntry {
+    return {
+        kind: 'tool',
+        call: 1,
+        at: AT,
+        tool: 'bash',
+        title: 'Push the branch',
+        input: JSON.stringify({ command, workdir }),
+        output: '',
+        status: 'completed',
+        duration_ms: 300,
+        cut: false,
+    }
+}
+
 // The transcript's search field.
 function find(): HTMLElement {
     return screen.getByRole('searchbox', { name: 'Find lines in the transcript' })
@@ -183,6 +201,33 @@ function before(a: string, b: string): boolean {
 }
 
 describe('TranscriptPanel', () => {
+    it("names a shell call's directory from the run's worktrees, apart from its command, all of it on hover", () => {
+        const slot = '/home/op/acme/.treehouse/web-3f9c2a1b/3/web'
+        const worktree = { repo: 'web', path: '.treehouse/web-3f9c2a1b/3/web', absolute: slot }
+        const entries = [shellAt(`${slot}/src`, 'git push'), shellAt('/tmp/scratch', 'ls')]
+        const { unmount } = render(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" />)
+        // With no worktrees, as on a tick's page, each directory is whole and none is marked.
+        expect(
+            rows()
+                .getAllByTestId('shell-dir')
+                .map((d) => d.textContent),
+        ).toEqual([`${slot}/src`, '/tmp/scratch'])
+        unmount()
+
+        render(
+            <TranscriptPanel transcript={transcript({ entries })} running={false} page="run" worktrees={[worktree]} />,
+        )
+        const [inside, outside] = rows().getAllByTestId('shell-dir')
+        expect(inside?.textContent).toBe('web/src')
+        expect(outside?.textContent).toBe('/tmp/scratch')
+        // The line reads short, and says it whole, with what the agent said it was for, on hover.
+        expect(rows().getByTitle(`${slot}/src $ git push\nPush the branch`, { normalizer: WHOLE }).textContent).toBe(
+            'web/src $ git push',
+        )
+        // The input stays as the call wrote it.
+        expect(call('web/src $ git push').textContent).toContain(`${slot}/src`)
+    })
+
     it('shows a skeleton, with no search and no empty words, until the transcript arrives', () => {
         render(<TranscriptPanel transcript={undefined} running={false} page="run" />)
         expect(screen.getByTestId('panel-skeleton')).toBeDefined()

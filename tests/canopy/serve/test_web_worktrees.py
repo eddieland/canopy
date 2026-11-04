@@ -146,7 +146,10 @@ def test_the_mock_is_a_workspace_with_a_joint_run_and_a_pool_past_its_size(tmp_p
     joint = [w for pool in (mobile, web) for w in pool["worktrees"] if w["run"] and w["run"]["id"] == 43]
     assert [w["path"] for w in joint] == [".treehouse/mobile-8e41d0c7/1/mobile", ".treehouse/web-3f9c2a1b/2/web"]
     [running] = [r for r in c.get("/api/runs").json() if r["id"] == 43]
-    assert running["worktrees"] == [".treehouse/mobile-8e41d0c7/1/mobile", ".treehouse/web-3f9c2a1b/2/web"]
+    assert [w["path"] for w in running["worktrees"]] == [
+        ".treehouse/mobile-8e41d0c7/1/mobile",
+        ".treehouse/web-3f9c2a1b/2/web",
+    ]
     # mobile's second slot is the running task's: the slot names the task and its run, and the run's branch.
     task = mobile["worktrees"][1]
     assert (task["state"], task["run"], task["review"]) == ("working", None, None)
