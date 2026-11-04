@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, getDefaultNormalizer, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Transcript, TranscriptEntry, TranscriptTokens } from '@/api/types'
@@ -23,6 +23,8 @@ afterEach(() => {
 })
 
 const AT = '2026-10-08T12:00:00Z'
+// Matches text as written, its line breaks kept: a title says the line, then on its own line the agent's words.
+const WHOLE = getDefaultNormalizer({ collapseWhitespace: false })
 
 function tokens(fields: Partial<TranscriptTokens>): TranscriptTokens {
     return { input: 0, cache_read: 0, cache_write: 0, output: 0, reasoning: 0, ...fields }
@@ -218,9 +220,10 @@ describe('TranscriptPanel', () => {
         const [inside, outside] = rows().getAllByTestId('shell-dir')
         expect(inside?.textContent).toBe('web/src')
         expect(outside?.textContent).toBe('/tmp/scratch')
-        const line = inside?.closest('[title]')
-        expect(line?.textContent).toBe('web/src $ git push')
-        expect(line?.getAttribute('title')).toBe(`${slot}/src $ git push\nPush the branch`)
+        // The line reads short, and says it whole, with what the agent said it was for, on hover.
+        expect(rows().getByTitle(`${slot}/src $ git push\nPush the branch`, { normalizer: WHOLE }).textContent).toBe(
+            'web/src $ git push',
+        )
         // The input stays as the call wrote it.
         expect(call('web/src $ git push').textContent).toContain(`${slot}/src`)
     })
