@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: the operator's message to a worker, a planner, or a one-off task's
 worker while it runs, and how it reaches the agent. Sections are numbered across the whole design; the
-[README](README.md) has the map. Previous: [Epics](EPICS.md).
+[README](README.md) has the map. Previous: [Epics](EPICS.md). Next: [What a run changed](RUN_CHANGES.md).
 
 ## 44. Messages to running agents
 
