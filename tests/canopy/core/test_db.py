@@ -188,8 +188,10 @@ def test_a_journal_through_the_squashed_migrations_is_taken_as_having_applied_00
         "VALUES (1, 'OLD-1', 'implement', 'agent/OLD-1-a', 'x', 'l', 'running', ?)",
         (os.getpid(),),
     )
+    before = contents(conn)
     assert db.migrate(conn, resources.migrations_dir()) == []
     assert [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")] == [(1, "init")]
+    assert contents(conn) == before
 
 
 def test_a_journal_short_of_the_last_squashed_migration_is_unknown(tmp_path: Path, journals: Journals) -> None:

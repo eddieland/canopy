@@ -14,8 +14,8 @@ the map. Previous: [The loop](LOOP.md). Next: [Trackers and workspaces](WORKSPAC
 ## 11. State model
 
 The journal records the loop's own facts (§4 principle 1): what each tick saw, decided, and dispatched, and what came
-back. The schema is in `migrations/`, squashed for v0.1 and again at 0129; a journal at 0129 is taken as having applied
-the squash, and one from before either squash is not upgraded (D068).
+back. The schema is in `migrations/`. A journal at the last migration squashed into 0001 is taken as having applied
+0001, and an older one is not upgraded (D068).
 
 What it records, and why:
 
