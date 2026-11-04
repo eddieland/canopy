@@ -129,6 +129,22 @@ describe('LeftFeedbackList', () => {
         expect(sent).toEqual([{ numbers: [7, 8], submission: expect.any(String) as unknown }])
     })
 
+    it('leaves out of send-all what the head already does, which its own row still sends', async () => {
+        api.use(server)
+        const items = [left(), left({ number: 8, id: 8, reason: 'already_done' }), left({ number: 9, id: 9 })]
+        await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={items} />)
+        fireEvent.click(screen.getByRole('button', { name: 'send all 2' }))
+        await screen.findByRole('status')
+        expect(sent).toEqual([{ numbers: [7, 9], submission: expect.any(String) as unknown }])
+    })
+
+    it('offers no send-all when one item at most is not already done', async () => {
+        const items = [left(), left({ number: 8, id: 8, reason: 'already_done' })]
+        await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={items} />)
+        expect(screen.queryByRole('button', { name: /^send all/u })).toBeNull()
+        expect(screen.getAllByRole('button', { name: /to a worker$/u })).toHaveLength(2)
+    })
+
     it('offers no send-all for a single item', async () => {
         await renderRouted(<LeftFeedbackList ticketKey="ABC-103" items={[left()]} />)
         expect(screen.queryByRole('button', { name: /^send all/u })).toBeNull()
