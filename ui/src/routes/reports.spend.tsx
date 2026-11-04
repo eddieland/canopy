@@ -17,19 +17,20 @@ import type {
     SpendShare,
     SpendTicket,
 } from '@/api/types'
-import { CellBar } from '@/components/cell-bar'
 import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
 import { FirstCallChart } from '@/components/first-call-chart'
-import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } from '@/components/panel'
 import { PullRequestTable } from '@/components/pull-request-table'
 import type { PullRequestColumn } from '@/components/pull-request-table'
 import { ReadoutTiles } from '@/components/readout-tiles'
 import type { ReadoutTile } from '@/components/readout-tiles'
+import { ReportTable } from '@/components/report-table'
+import type { ReportColumn } from '@/components/report-table'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { Clipped, Hinted, Tip, Tipped } from '@/components/tip'
+import { Clipped, Hinted, Tip } from '@/components/tip'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { UnnamedModel } from '@/components/unnamed-model'
 import { WindowToggle } from '@/components/window-toggle'
@@ -113,6 +114,23 @@ interface PitchRow {
     done: number
 }
 
+// A row of a Ticks table: its test id's end, its label and what that means on hover, its ticks, their overseers' cost,
+// and how many ran no overseer.
+interface CountRow {
+    key: string
+    label: string
+    hint?: string | undefined
+    ticks: number
+    usd: number | null
+    without: number
+}
+
+// The runs page's kind for By model's kind: undefined for every kind, null for one it lists no run of by model.
+type RunsKind = (typeof RUNS_KIND)[SpendKind] | undefined
+
+// One directory's sessions outside canopy, a row of Every session's table.
+type Directory = SpendSessions['directories'][number]
+
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP =
     'What agent runs cost each day, or each hour of the last 24, as the runtime reported it: the overseer, idle ' +
@@ -150,10 +168,6 @@ const UNLISTED_HINT = 'The runs page lists no overseer tick by model: Ticks, und
 
 // The Totals panel's tiles: two to a row on a phone, three on a tablet, every one in a row on a wide pane.
 const TOTALS_GRID = 'grid grid-cols-2 gap-x-6 gap-y-3 @md:grid-cols-3 @4xl:grid-cols-10'
-
-// The column names of a table in a padded scrolling region. A sticky head sticks inside the region's padding, so the
-// rows scrolling under it would show in a strip above it: the region's top padding is the head's cells' instead.
-const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
 
 // Where the month stands against its budget, as its color and the budget bar's fill: a state's, never a spend
 // series'.
@@ -669,43 +683,40 @@ function ByDay({ days, span, pitch }: { days: SpendDay[]; span: string; pitch: P
                 className="max-h-60 overflow-x-auto"
                 testId="spend-table-scroll"
             >
-                <table className="w-full border-collapse text-sm" data-testid="spend-table">
-                    <thead className="sticky top-0 bg-surface">
-                        <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">{pitch}</th>
-                            {SERIES.map((series) => (
-                                <th key={series.key} className="panel-label pb-1.5 pl-3 font-normal">
-                                    {series.label}
-                                </th>
-                            ))}
-                            <th className="panel-label pb-1.5 pl-3 font-normal">total</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">done</th>
-                        </tr>
-                    </thead>
-                    <tbody className="font-mono text-xs">
-                        {rows.toReversed().map((row) => (
-                            <tr key={row.key} className="text-right" data-testid={`spend-${row.key}`}>
-                                <th scope="row" className="readout py-0.5 text-left font-normal whitespace-nowrap">
-                                    {row.name}
-                                </th>
-                                {SERIES.map((series) => (
-                                    <td key={series.key} className="readout pl-3 text-muted-foreground">
-                                        <Cost usd={row.costs[series.key] ?? null} />
-                                    </td>
-                                ))}
-                                <td className="readout pl-3 text-foreground">
-                                    <Cost usd={row.costs.total ?? null} />
-                                </td>
-                                <td className={cn('readout pl-3', row.done === 0 && 'text-muted-foreground')}>
-                                    {row.done}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <ReportTable
+                    rows={rows.toReversed()}
+                    columns={pitchColumns(pitch)}
+                    rowKey={(row) => row.key}
+                    label={`Spend by ${pitch}`}
+                    scroll={false}
+                    testId="spend-table"
+                    rowTestId={(row) => `spend-${row.key}`}
+                />
             </ChartTable>
         </div>
     )
+}
+
+/** By day's table's columns: the day, hour, or week, what each series cost in it, its total, and the tickets done. */
+function pitchColumns(pitch: Pitch): ReportColumn<PitchRow>[] {
+    return [
+        { key: 'name', kind: 'name', label: pitch, cell: (row) => <span className="readout">{row.name}</span> },
+        ...SERIES.map((series): ReportColumn<PitchRow> => ({
+            key: series.key,
+            kind: 'figure',
+            label: series.label,
+            cell: (row) => <Cost usd={row.costs[series.key] ?? null} />,
+            muted: true,
+        })),
+        { key: 'total', kind: 'figure', label: 'total', cell: (row) => <Cost usd={row.costs.total ?? null} /> },
+        {
+            key: 'done',
+            kind: 'figure',
+            label: 'done',
+            cell: (row) => row.done,
+            tone: (row) => row.done === 0 && 'text-muted-foreground',
+        },
+    ]
 }
 
 /**
@@ -718,50 +729,54 @@ function Tickets({ tickets, span }: { tickets: SpendTicket[]; span: string }) {
         return <Empty size="panel">no ticket had a run in these {span}</Empty>
     }
     return (
-        <PanelScroll label="Spend by ticket" className="max-h-96 px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="spend-ticket-table">
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">ticket</th>
-                        <th className="panel-label pb-1.5 font-normal">runs</th>
-                        <th className="panel-label pb-1.5 font-normal">spent</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">done</th>
-                    </tr>
-                </thead>
-                <tbody className="text-xs">
-                    {tickets.map((ticket) => (
-                        <tr key={ticket.key} className="text-right" data-testid={`spend-ticket-${ticket.key}`}>
-                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
-                                <span className="flex min-w-0 items-center gap-2">
-                                    <TicketLink ticketKey={ticket.key} className="shrink-0" />
-                                    <TicketTitle title={ticket.title} className="text-xs" />
-                                </span>
-                            </th>
-                            <td className="readout pl-3">
-                                <Tipped fact={`${ticket.runs} runs, ${ticket.reviews} reviews`}>
-                                    {ticket.runs + ticket.reviews}
-                                </Tipped>
-                            </td>
-                            <td className="pl-3">
-                                <CellBar
-                                    percent={barPercent(
-                                        ticket.cost_usd,
-                                        tickets.map((t) => t.cost_usd),
-                                    )}
-                                    valueClassName="w-16 text-right"
-                                >
-                                    <Cost usd={ticket.cost_usd} />
-                                </CellBar>
-                            </td>
-                            <td className="readout pl-3 text-left whitespace-nowrap text-muted-foreground">
-                                {doneText(ticket)}
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={tickets}
+            columns={ticketColumns(tickets)}
+            rowKey={(ticket) => ticket.key}
+            label="Spend by ticket"
+            testId="spend-ticket-table"
+            rowTestId={(ticket) => `spend-ticket-${ticket.key}`}
+        />
     )
+}
+
+/** By ticket's columns: the ticket, its runs and reviews, their cost with a bar of the dearest's, when it was done. */
+function ticketColumns(tickets: readonly SpendTicket[]): ReportColumn<SpendTicket>[] {
+    const spent = tickets.map((t) => t.cost_usd)
+    return [
+        {
+            key: 'ticket',
+            kind: 'free',
+            label: 'ticket',
+            cell: (ticket) => (
+                <span className="flex min-w-0 items-center gap-2">
+                    <TicketLink ticketKey={ticket.key} className="shrink-0" />
+                    <TicketTitle title={ticket.title} className="text-xs" />
+                </span>
+            ),
+        },
+        {
+            key: 'runs',
+            kind: 'figure',
+            label: 'runs',
+            cell: (ticket) => ticket.runs + ticket.reviews,
+            tip: (ticket) => `${ticket.runs} runs, ${ticket.reviews} reviews`,
+        },
+        {
+            key: 'spent',
+            kind: 'bar',
+            label: 'spent',
+            cell: (ticket) => <Cost usd={ticket.cost_usd} />,
+            bar: (ticket) => barPercent(ticket.cost_usd, spent),
+        },
+        {
+            key: 'done',
+            kind: 'word',
+            label: 'done',
+            cell: (ticket) => <span className="readout">{doneText(ticket)}</span>,
+            muted: true,
+        },
+    ]
 }
 
 /**
@@ -795,11 +810,8 @@ function pullRequestColumns(rows: readonly SpendPullRequest[]): PullRequestColum
         {
             key: 'spent',
             label: 'spent',
-            cell: (pr) => (
-                <CellBar percent={barPercent(pr.cost_usd, spent)} valueClassName="w-16 text-right">
-                    <Cost usd={pr.cost_usd} />
-                </CellBar>
-            ),
+            cell: (pr) => <Cost usd={pr.cost_usd} />,
+            bar: (pr) => barPercent(pr.cost_usd, spent),
         },
     ]
 }
@@ -1017,80 +1029,92 @@ function Models({
         )
     }
     return (
-        <PanelScroll label="Spend by model" className="max-h-96 px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="spend-model-table">
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">model</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">
-                            <Hinted hint={MODEL_RUNS_HINT}>runs</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">replies</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">spent</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
-                            <Hinted hint={PER_RUN_HINT}>per run</Hinted>
-                        </th>
-                        {ticket !== undefined && (
-                            <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
-                                <Hinted hint={WORKSPACE_HINT}>workspace per run</Hinted>
-                            </th>
-                        )}
-                    </tr>
-                </thead>
-                <tbody className="font-mono text-xs">
-                    {models.map((m) => (
-                        <tr key={modelKey(m)} className="text-right" data-testid="spend-model">
-                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
-                                {m.model === null ? (
-                                    <Tip fact={unnamedHint(m.unread)}>
-                                        <span className="block truncate">
-                                            <UnnamedModel unread={m.unread} />
-                                        </span>
-                                    </Tip>
-                                ) : of === null || !listed.has(m.model) ? (
-                                    <Tip fact={m.model} mono detail={UNLISTED_HINT}>
-                                        <span className="block truncate readout" data-testid="spend-model-unlisted">
-                                            {m.model}
-                                        </span>
-                                    </Tip>
-                                ) : (
-                                    <Link
-                                        to="/workspace/runs"
-                                        search={{ model: m.model, kind: of }}
-                                        className="block text-accent underline-offset-4 hover:underline"
-                                    >
-                                        <Clipped text={m.model} className="block readout" />
-                                    </Link>
-                                )}
-                            </th>
-                            <td className="readout pl-3">{m.runs}</td>
-                            <td className={cn('readout pl-3', m.model === null && 'text-muted-foreground')}>
-                                {m.model === null ? '–' : m.replies}
-                            </td>
-                            <td className="pl-3">
-                                <CellBar
-                                    percent={barPercent(
-                                        m.cost_usd,
-                                        models.map((n) => n.cost_usd),
-                                    )}
-                                    valueClassName="w-16 text-right"
-                                >
-                                    <Cost usd={m.cost_usd} />
-                                </CellBar>
-                            </td>
-                            <td className="readout pl-3">
-                                <Cost usd={perRun(m)} />
-                            </td>
-                            {ticket !== undefined && (
-                                <td className="readout pl-3 text-muted-foreground">
-                                    <Cost usd={workspacePerRun(m)} />
-                                </td>
-                            )}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={models}
+            columns={modelColumns(models, of, listed, ticket)}
+            rowKey={modelKey}
+            label="Spend by model"
+            testId="spend-model-table"
+            rowTestId="spend-model"
+        />
+    )
+}
+
+/**
+ * By model's columns: the model, a link to the runs page's runs on it of kind `of` where it lists them (`listed`), its
+ * runs and replies, what it spent with a bar of the dearest's, per run, and, narrowed to a ticket, the workspace's per
+ * run beside it.
+ */
+function modelColumns(
+    models: readonly ModelRow[],
+    of: RunsKind,
+    listed: ReadonlySet<string>,
+    ticket: string | undefined,
+): ReportColumn<ModelRow>[] {
+    const spent = models.map((m) => m.cost_usd)
+    const columns: ReportColumn<ModelRow>[] = [
+        { key: 'model', kind: 'free', label: 'model', cell: (m) => <ModelName model={m} of={of} listed={listed} /> },
+        { key: 'runs', kind: 'figure', label: 'runs', hint: MODEL_RUNS_HINT, cell: (m) => m.runs },
+        {
+            key: 'replies',
+            kind: 'figure',
+            label: 'replies',
+            cell: (m) => (m.model === null ? '–' : m.replies),
+            tone: (m) => m.model === null && 'text-muted-foreground',
+        },
+        {
+            key: 'spent',
+            kind: 'bar',
+            label: 'spent',
+            cell: (m) => <Cost usd={m.cost_usd} />,
+            bar: (m) => barPercent(m.cost_usd, spent),
+        },
+        { key: 'per-run', kind: 'figure', label: 'per run', hint: PER_RUN_HINT, cell: (m) => <Cost usd={perRun(m)} /> },
+    ]
+    if (ticket !== undefined) {
+        columns.push({
+            key: 'workspace',
+            kind: 'figure',
+            label: 'workspace per run',
+            hint: WORKSPACE_HINT,
+            cell: (m) => <Cost usd={workspacePerRun(m)} />,
+            muted: true,
+        })
+    }
+    return columns
+}
+
+/**
+ * A model's name in By model: the runs no session named one for (`UnnamedModel`), why on hover; a model the runs page
+ * lists no run of, plain, why on hover; else a link to its runs of kind `of`.
+ */
+function ModelName({ model: m, of, listed }: { model: ModelRow; of: RunsKind; listed: ReadonlySet<string> }) {
+    if (m.model === null) {
+        return (
+            <Tip fact={unnamedHint(m.unread)}>
+                <span className="block truncate">
+                    <UnnamedModel unread={m.unread} />
+                </span>
+            </Tip>
+        )
+    }
+    if (of === null || !listed.has(m.model)) {
+        return (
+            <Tip fact={m.model} mono detail={UNLISTED_HINT}>
+                <span className="block truncate readout" data-testid="spend-model-unlisted">
+                    {m.model}
+                </span>
+            </Tip>
+        )
+    }
+    return (
+        <Link
+            to="/workspace/runs"
+            search={{ model: m.model, kind: of }}
+            className="block text-accent underline-offset-4 hover:underline"
+        >
+            <Clipped text={m.model} className="block readout" />
+        </Link>
     )
 }
 
@@ -1131,52 +1155,58 @@ function Tools({ tools, kind, span }: { tools: ToolRow[]; kind: SpendKind | unde
         )
     }
     return (
-        <PanelScroll label="Spend by tool" className="max-h-96 px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="spend-tool-table">
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">tool</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">calls</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">errors</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">
-                            <Hinted hint={RETURNED_HINT}>returned</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">
-                            <Hinted hint={EST_TOKENS_HINT}>~tokens</Hinted>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody className="font-mono text-xs">
-                    {tools.map((tool) => (
-                        <tr key={tool.tool} className="text-right" data-testid="spend-tool">
-                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
-                                {/* The row's name, as the ticket table's title reads: medium weight, cut to fit. */}
-                                <Clipped text={tool.tool} className="block font-sans font-medium" />
-                            </th>
-                            <td className="readout pl-3">
-                                <Tipped fact={`in ${tool.runs} runs`}>{tool.calls}</Tipped>
-                            </td>
-                            <td className={cn('readout pl-3', tool.errors === 0 && 'text-muted-foreground')}>
-                                {tool.errors}
-                            </td>
-                            <td className="pl-3">
-                                <CellBar
-                                    percent={barPercent(
-                                        tool.result_chars,
-                                        tools.map((t) => t.result_chars),
-                                    )}
-                                    valueClassName="readout w-12 text-right"
-                                >
-                                    {tokenCount(tool.result_chars)}
-                                </CellBar>
-                            </td>
-                            <td className="readout pl-3">{tokenCount(tool.est_tokens)}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={tools}
+            columns={toolColumns(tools)}
+            rowKey={(tool) => tool.tool}
+            label="Spend by tool"
+            testId="spend-tool-table"
+            rowTestId="spend-tool"
+        />
     )
+}
+
+/** By tool's columns: the tool, its calls and errors, what they returned with a bar of the most's, and its tokens. */
+function toolColumns(tools: readonly ToolRow[]): ReportColumn<ToolRow>[] {
+    const returned = tools.map((t) => t.result_chars)
+    return [
+        {
+            key: 'tool',
+            kind: 'free',
+            label: 'tool',
+            // The row's name, as the ticket table's title reads: medium weight, cut to fit.
+            cell: (tool) => <Clipped text={tool.tool} className="block font-medium" />,
+        },
+        {
+            key: 'calls',
+            kind: 'figure',
+            label: 'calls',
+            cell: (tool) => tool.calls,
+            tip: (tool) => `in ${tool.runs} runs`,
+        },
+        {
+            key: 'errors',
+            kind: 'figure',
+            label: 'errors',
+            cell: (tool) => tool.errors,
+            tone: (tool) => tool.errors === 0 && 'text-muted-foreground',
+        },
+        {
+            key: 'returned',
+            kind: 'bar',
+            label: 'returned',
+            hint: RETURNED_HINT,
+            cell: (tool) => tokenCount(tool.result_chars),
+            bar: (tool) => barPercent(tool.result_chars, returned),
+        },
+        {
+            key: 'tokens',
+            kind: 'figure',
+            label: '~tokens',
+            hint: EST_TOKENS_HINT,
+            cell: (tool) => tokenCount(tool.est_tokens),
+        },
+    ]
 }
 
 /**
@@ -1284,41 +1314,49 @@ function Sessions({ sessions, span }: { sessions: SpendSessions | null; span: st
             value: <SessionsShare share={sessions.outside} />,
         },
     ]
-    const spent = sessions.directories.map((d) => d.cost_usd)
     return (
         <div className="flex flex-col gap-3 p-3">
             <ReadoutTiles tiles={tiles} testId="spend-sessions" />
+            {/* A block of its own, so the column's flex never stretches the table past its content. */}
             {sessions.directories.length > 0 && (
-                <table className="w-full border-collapse text-sm" data-testid="spend-sessions-table">
-                    <thead>
-                        <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">outside canopy, by directory</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">sessions</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">spent</th>
-                        </tr>
-                    </thead>
-                    <tbody className="font-mono text-xs">
-                        {sessions.directories.map((d) => (
-                            <tr key={d.directory} className="text-right" data-testid="spend-sessions-directory">
-                                <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
-                                    <Clipped text={d.directory} mono className="block" />
-                                </th>
-                                <td className="readout pl-3">{d.sessions}</td>
-                                <td className="pl-3">
-                                    <CellBar percent={barPercent(d.cost_usd, spent)} valueClassName="w-16 text-right">
-                                        <Cost usd={d.cost_usd} />
-                                    </CellBar>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div>
+                    <ReportTable
+                        rows={sessions.directories}
+                        columns={directoryColumns(sessions.directories)}
+                        rowKey={(d) => d.directory}
+                        label="Outside canopy, by directory"
+                        scroll={false}
+                        testId="spend-sessions-table"
+                        rowTestId="spend-sessions-directory"
+                    />
+                </div>
             )}
             <p className="text-xs text-muted-foreground">
                 A subagent&apos;s session counts with the session it ran for; another workspace&apos;s runs are outside.
             </p>
         </div>
     )
+}
+
+/** The sessions table's columns: where they ran, how many, and what they cost, a bar of the dearest's. */
+function directoryColumns(directories: readonly Directory[]): ReportColumn<Directory>[] {
+    const spent = directories.map((d) => d.cost_usd)
+    return [
+        {
+            key: 'directory',
+            kind: 'free',
+            label: 'outside canopy, by directory',
+            cell: (d) => <Clipped text={d.directory} mono className="block" />,
+        },
+        { key: 'sessions', kind: 'figure', label: 'sessions', cell: (d) => d.sessions },
+        {
+            key: 'spent',
+            kind: 'bar',
+            label: 'spent',
+            cell: (d) => <Cost usd={d.cost_usd} />,
+            bar: (d) => barPercent(d.cost_usd, spent),
+        },
+    ]
 }
 
 /** A share of the sessions as its tile says it: what they cost, then how many there were, muted. */
@@ -1343,39 +1381,40 @@ function CountTable({
 }: {
     name: string
     hint: string
-    rows: { key: string; label: string; hint?: string; ticks: number; usd: number | null; without: number }[]
+    rows: readonly CountRow[]
     testId: string
 }) {
     return (
         <div className="p-3">
-            <table className="border-collapse text-sm" data-testid={testId}>
-                <thead>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">
-                            <Hinted hint={hint}>{name}</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-6 font-normal">ticks</th>
-                        <th className="panel-label pb-1.5 pl-6 font-normal">spent</th>
-                        <th className="panel-label pb-1.5 pl-6 font-normal whitespace-nowrap">
-                            <Hinted hint={NO_OVERSEER_HINT}>no overseer</Hinted>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody className="font-mono text-xs">
-                    {rows.map((row) => (
-                        <tr key={row.key} className="text-right" data-testid={`${testId}-${row.key}`}>
-                            <th scope="row" className="py-0.5 text-left font-normal">
-                                <Hinted hint={row.hint}>{row.label}</Hinted>
-                            </th>
-                            <td className="readout pl-6">{row.ticks}</td>
-                            <td className="readout pl-6">
-                                <Cost usd={row.usd} />
-                            </td>
-                            <td className="readout pl-6">{row.without}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+            <ReportTable
+                rows={rows}
+                columns={countColumns(name, hint)}
+                rowKey={(row) => row.key}
+                label={name}
+                scroll={false}
+                testId={testId}
+                rowTestId={(row) => `${testId}-${row.key}`}
+            />
         </div>
     )
+}
+
+/** A ticks table's columns: its label under `name`, what `hint` says, its ticks, their cost, and those without. */
+function countColumns(name: string, hint: string): ReportColumn<CountRow>[] {
+    return [
+        {
+            key: 'label',
+            kind: 'name',
+            label: name,
+            hint,
+            cell: (row) => (
+                <span className="font-mono">
+                    <Hinted hint={row.hint}>{row.label}</Hinted>
+                </span>
+            ),
+        },
+        { key: 'ticks', kind: 'figure', label: 'ticks', cell: (row) => row.ticks },
+        { key: 'spent', kind: 'figure', label: 'spent', cell: (row) => <Cost usd={row.usd} /> },
+        { key: 'without', kind: 'figure', label: 'no overseer', hint: NO_OVERSEER_HINT, cell: (row) => row.without },
+    ]
 }

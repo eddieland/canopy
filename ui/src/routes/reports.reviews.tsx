@@ -9,17 +9,19 @@ import type {
     ReviewsReport,
     ReviewsReviewer,
     ReviewsRound,
+    ReviewsRunCount,
 } from '@/api/types'
 import { Age } from '@/components/age'
-import { CellBar } from '@/components/cell-bar'
 import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
-import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } from '@/components/panel'
 import { PullRequestTable } from '@/components/pull-request-table'
 import type { PullRequestColumn } from '@/components/pull-request-table'
 import { ReadoutTiles } from '@/components/readout-tiles'
 import type { ReadoutTile } from '@/components/readout-tiles'
+import { ReportTable } from '@/components/report-table'
+import type { ReportColumn } from '@/components/report-table'
 import { RunLink } from '@/components/run-link'
 import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
@@ -27,6 +29,7 @@ import { Clipped, Hinted, Tipped } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
 import { barPercent } from '@/lib/chart'
 import { useClock } from '@/lib/clock'
+import type { Clock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
 import { hoursChange, readoutDelta, wholeChange } from '@/lib/readout-delta'
 import { windowBefore, windowName } from '@/lib/report-window'
@@ -92,8 +95,8 @@ const TRUSTED_MEANING = 'In trust.trusted_reviewers: a worker addresses their fe
 // What the estimates' resumes per plan counts, in its name's tip.
 const PER_PLAN_HINT = 'The resumes that went ahead on each plan of the estimate; the bar against the most'
 
-// The column names of a table in a padded scrolling region, as the per-PR table's: the head's cells take the padding.
-const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
+// A reason canopy's review findings were dismissed for, and how many were.
+type Dismissal = ReviewsReport['dismissals'][number]
 
 /**
  * Where the last days' review feedback on canopy's PRs came from: each first review's wait by day, the reviewers,
@@ -279,43 +282,47 @@ function Waits({ found, span }: { found: ReviewsReport; span: string }) {
                         label="First reviews by day"
                         className="max-h-60 overflow-x-auto"
                     >
-                        <table className="w-full border-collapse text-sm" data-testid="reviews-table">
-                            <thead className="sticky top-0 bg-surface">
-                                <tr className="text-right">
-                                    <th className="panel-label pb-1.5 text-left font-normal">day</th>
-                                    {WAIT_SERIES.map((s) => (
-                                        <th key={s.key} className="panel-label pb-1.5 pl-3 font-normal">
-                                            {s.label}
-                                        </th>
-                                    ))}
-                                    <th className="panel-label pb-1.5 pl-3 font-normal">first reviews</th>
-                                    <th className="panel-label pb-1.5 pl-3 font-normal">median</th>
-                                </tr>
-                            </thead>
-                            <tbody className="font-mono text-xs">
-                                {found.per_day.toReversed().map((day: ReviewsDay) => (
-                                    <tr key={day.day} className="text-right" data-testid={`reviews-day-${day.day}`}>
-                                        <th scope="row" className="readout py-0.5 text-left font-normal">
-                                            {dayName(day, clock)}
-                                        </th>
-                                        {WAIT_SERIES.map((s, i) => (
-                                            <td key={s.key} className="readout pl-3 text-muted-foreground">
-                                                {day.first_reviews[i] ?? 0}
-                                            </td>
-                                        ))}
-                                        <td className="readout pl-3">{firstReviewSum(day)}</td>
-                                        <td className="readout pl-3 text-muted-foreground">
-                                            {hoursText(day.median_wait_hours)}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <ReportTable
+                            rows={found.per_day.toReversed()}
+                            columns={dayColumns(clock)}
+                            rowKey={(day) => day.day}
+                            label="First reviews by day"
+                            scroll={false}
+                            testId="reviews-table"
+                            rowTestId={(day) => `reviews-day-${day.day}`}
+                        />
                     </ChartTable>
                 </>
             )}
         </div>
     )
+}
+
+/** The first-reviews-by-day table's columns: the day, its first reviews by wait, their sum, and its median wait. */
+function dayColumns(clock: Clock): ReportColumn<ReviewsDay>[] {
+    return [
+        {
+            key: 'day',
+            kind: 'name',
+            label: 'day',
+            cell: (day) => <span className="readout">{dayName(day, clock)}</span>,
+        },
+        ...WAIT_SERIES.map((series, i): ReportColumn<ReviewsDay> => ({
+            key: series.key,
+            kind: 'figure',
+            label: series.label,
+            cell: (day) => day.first_reviews[i] ?? 0,
+            muted: true,
+        })),
+        { key: 'first', kind: 'figure', label: 'first reviews', cell: firstReviewSum },
+        {
+            key: 'median',
+            kind: 'figure',
+            label: 'median',
+            cell: (day) => hoursText(day.median_wait_hours),
+            muted: true,
+        },
+    ]
 }
 
 /**
@@ -330,72 +337,70 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
         return <Empty size="panel">nobody left feedback on canopy&apos;s PRs in these {span}</Empty>
     }
     return (
-        <PanelScroll label="Who reviews" className="max-h-96 overflow-x-auto px-3 pb-3">
-            <table className="border-collapse text-sm" data-testid="reviews-reviewer-table">
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">reviewer</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">
-                            <Hinted hint={REVIEWS_HINT}>reviews</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">changes</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">approved</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">comments</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">PRs</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">
-                            <Hinted hint={REVIEWER_WAIT_HINT}>median wait</Hinted>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody className="text-xs">
-                    {reviewers.map((r) => (
-                        <tr key={r.author} className="text-right" data-testid="reviews-reviewer">
-                            <th scope="row" className="py-0.5 text-left font-normal">
-                                <span className="flex min-w-0 items-center gap-2">
-                                    <Clipped text={r.author} mono className="font-mono" />
-                                    {r.trusted && (
-                                        <Word
-                                            word="trusted"
-                                            meaning={TRUSTED_MEANING}
-                                            className="text-muted-foreground"
-                                        />
-                                    )}
-                                </span>
-                            </th>
-                            <td className="readout pl-3 text-left">
-                                <CellBar
-                                    percent={barPercent(
-                                        r.reviews,
-                                        reviewers.map((x) => x.reviews),
-                                    )}
-                                    valueClassName="w-6 text-right"
-                                >
-                                    {r.reviews}
-                                </CellBar>
-                            </td>
-                            <td className={cn('readout pl-3', r.changes_requested > 0 && 'text-status-blocked')}>
-                                {r.changes_requested}
-                            </td>
-                            <td className={cn('readout pl-3', r.approved > 0 && 'text-status-done')}>{r.approved}</td>
-                            <td className="readout pl-3 text-muted-foreground">{r.comments}</td>
-                            <td className="readout pl-3 text-muted-foreground">{r.pull_requests}</td>
-                            <td className="readout pl-3 text-left">
-                                <CellBar
-                                    percent={barPercent(
-                                        r.median_wait_hours,
-                                        reviewers.map((x) => x.median_wait_hours),
-                                    )}
-                                    valueClassName="w-12 text-right"
-                                >
-                                    {hoursText(r.median_wait_hours)}
-                                </CellBar>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={reviewers}
+            columns={reviewerColumns(reviewers)}
+            rowKey={(r) => r.author}
+            label="Who reviews"
+            testId="reviews-reviewer-table"
+            rowTestId="reviews-reviewer"
+        />
     )
+}
+
+/**
+ * The reviewer table's columns: the login, marked when trusted; their reviews, with a bar against the busiest; the
+ * reviews that asked for changes and that approved; comments; PRs; and their median wait, with a bar against the
+ * slowest.
+ */
+function reviewerColumns(reviewers: readonly ReviewsReviewer[]): ReportColumn<ReviewsReviewer>[] {
+    const reviews = reviewers.map((r) => r.reviews)
+    const waits = reviewers.map((r) => r.median_wait_hours)
+    return [
+        {
+            key: 'reviewer',
+            kind: 'name',
+            label: 'reviewer',
+            cell: (r) => (
+                <span className="flex min-w-0 items-center gap-2">
+                    <Clipped text={r.author} mono className="font-mono" />
+                    {r.trusted && <Word word="trusted" meaning={TRUSTED_MEANING} className="text-muted-foreground" />}
+                </span>
+            ),
+        },
+        {
+            key: 'reviews',
+            kind: 'bar',
+            label: 'reviews',
+            hint: REVIEWS_HINT,
+            cell: (r) => r.reviews,
+            bar: (r) => barPercent(r.reviews, reviews),
+        },
+        {
+            key: 'changes',
+            kind: 'figure',
+            label: 'changes',
+            cell: (r) => r.changes_requested,
+            tone: (r) => r.changes_requested > 0 && 'text-status-blocked',
+        },
+        {
+            key: 'approved',
+            kind: 'figure',
+            label: 'approved',
+            cell: (r) => r.approved,
+            tone: (r) => r.approved > 0 && 'text-status-done',
+        },
+        { key: 'comments', kind: 'figure', label: 'comments', cell: (r) => r.comments, muted: true },
+        { key: 'prs', kind: 'figure', label: 'PRs', cell: (r) => r.pull_requests, muted: true },
+        {
+            key: 'wait',
+            kind: 'bar',
+            label: 'median wait',
+            hint: REVIEWER_WAIT_HINT,
+            cell: (r) => hoursText(r.median_wait_hours),
+            bar: (r) => barPercent(r.median_wait_hours, waits),
+        },
+    ]
 }
 
 /**
@@ -407,60 +412,59 @@ function Rounds({ rounds, span }: { rounds: ReviewsRound[]; span: string }) {
         return <Empty size="panel">no feedback plan was written in these {span}</Empty>
     }
     return (
-        <PanelScroll label="Feedback plans" className="max-h-96 overflow-x-auto px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="reviews-round-table">
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-left">
-                        <th className="panel-label pb-1.5 font-normal">plan</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">ticket</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">approved by</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">effort</th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">resumes</th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">spent</th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">
-                            <Hinted hint={ROUND_TURNAROUND_HINT}>turnaround</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">written</th>
-                    </tr>
-                </thead>
-                <tbody className="text-xs">
-                    {rounds.map((r) => (
-                        <Round key={r.plan_id} round={r} />
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={rounds}
+            columns={ROUND_COLUMNS}
+            rowKey={(r) => String(r.plan_id)}
+            label="Feedback plans"
+            testId="reviews-round-table"
+            rowTestId={(r) => `reviews-round-${r.plan_id}`}
+        />
     )
 }
 
 /**
- * A feedback plan's row: its run, its ticket, how it went ahead, its estimate, the resumes after it, what it cost, and
- * its turnaround, with its parts or why it has none in the time's tip.
+ * A feedback plan's columns: its run, its ticket, how it went ahead, its estimate, the resumes after it, what it cost,
+ * and its turnaround, with its parts or why it has none in the time's tip, and when it was written.
  */
-function Round({ round }: { round: ReviewsRound }) {
+const ROUND_COLUMNS: ReportColumn<ReviewsRound>[] = [
+    { key: 'plan', kind: 'name', label: 'plan', cell: (r) => <RunLink id={r.run_id} /> },
+    { key: 'ticket', kind: 'word', label: 'ticket', cell: (r) => <TicketLink ticketKey={r.ticket_key} /> },
+    {
+        key: 'approved',
+        kind: 'free',
+        label: 'approved by',
+        cell: (r) => <Clipped text={approvedText(r)} className="block" />,
+        muted: true,
+    },
+    {
+        key: 'effort',
+        kind: 'word',
+        label: 'effort',
+        cell: (r) => <span className="font-mono">{r.effort ?? '–'}</span>,
+        muted: true,
+    },
+    { key: 'resumes', kind: 'figure', label: 'resumes', cell: (r) => r.resumes },
+    { key: 'spent', kind: 'figure', label: 'spent', cell: roundCost, muted: true },
+    {
+        key: 'turnaround',
+        kind: 'figure',
+        label: 'turnaround',
+        hint: ROUND_TURNAROUND_HINT,
+        // The cell's own test id, so a test finds the time a round took.
+        cell: (r) => (
+            <span data-testid="reviews-round-turnaround">
+                <Tipped fact={roundTurnaroundTitle(r)}>{hoursText(r.turnaround_hours)}</Tipped>
+            </span>
+        ),
+    },
+    { key: 'written', kind: 'age', label: 'written', cell: (r) => <Age at={r.created_at} variant="ago" /> },
+]
+
+/** What a feedback plan and the resumes after it cost; null when neither reported a cost. */
+function roundCost(round: ReviewsRound) {
     const spent = [round.plan_cost_usd, round.resume_cost_usd].filter((c) => c !== null)
-    return (
-        <tr className="align-top" data-testid={`reviews-round-${round.plan_id}`}>
-            <th scope="row" className="py-0.5 text-left font-normal whitespace-nowrap">
-                <RunLink id={round.run_id} />
-            </th>
-            <td className="pl-3 whitespace-nowrap">
-                <TicketLink ticketKey={round.ticket_key} />
-            </td>
-            <td className="w-full pl-3 text-muted-foreground">{approvedText(round)}</td>
-            <td className="pl-3 font-mono whitespace-nowrap text-muted-foreground">{round.effort ?? '–'}</td>
-            <td className="readout pl-3 text-right">{round.resumes}</td>
-            <td className="readout pl-3 text-right text-muted-foreground">
-                <Cost usd={spent.length === 0 ? null : spent.reduce((sum, c) => sum + c, 0)} />
-            </td>
-            <td className="readout pl-3 text-right" data-testid="reviews-round-turnaround">
-                <Tipped fact={roundTurnaroundTitle(round)}>{hoursText(round.turnaround_hours)}</Tipped>
-            </td>
-            <td className="pl-3 text-right whitespace-nowrap">
-                <Age at={round.created_at} variant="ago" />
-            </td>
-        </tr>
-    )
+    return <Cost usd={spent.length === 0 ? null : spent.reduce((sum, c) => sum + c, 0)} />
 }
 
 /**
@@ -472,47 +476,45 @@ function Efforts({ efforts, span }: { efforts: ReviewsEffort[]; span: string }) 
         return <Empty size="panel">no feedback plan was written in these {span}</Empty>
     }
     return (
-        <div className="px-3 pb-3">
-            <table className="border-collapse text-sm" data-testid="reviews-effort-table">
-                <thead>
-                    <tr className="text-right [&_th]:pt-3">
-                        <th className="panel-label pb-1.5 text-left font-normal">planner&apos;s estimate</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">plans</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">resumes</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">
-                            <Hinted hint={PER_PLAN_HINT}>per plan</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">resumes cost</th>
-                    </tr>
-                </thead>
-                <tbody className="font-mono text-xs">
-                    {efforts.map((e) => (
-                        <tr key={e.effort ?? 'none'} className="text-right" data-testid="reviews-effort">
-                            <th scope="row" className="py-0.5 text-left font-normal">
-                                {e.effort ?? 'no estimate'}
-                            </th>
-                            <td className="readout pl-3">{e.plans}</td>
-                            <td className="readout pl-3">{e.resumes}</td>
-                            <td className="readout pl-3 text-left">
-                                <CellBar
-                                    percent={barPercent(
-                                        resumesPerPlan(e),
-                                        efforts.map((x) => resumesPerPlan(x)),
-                                    )}
-                                    valueClassName="w-8 text-right"
-                                >
-                                    {resumesPerPlan(e).toFixed(1)}
-                                </CellBar>
-                            </td>
-                            <td className="readout pl-3 text-muted-foreground">
-                                <Cost usd={e.resume_cost_usd} />
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+        <ReportTable
+            rows={efforts}
+            columns={effortColumns(efforts)}
+            rowKey={(e) => e.effort ?? 'none'}
+            label="Estimates"
+            testId="reviews-effort-table"
+            rowTestId="reviews-effort"
+        />
     )
+}
+
+/** The estimates table's columns: the effort, its plans, their resumes, the resumes per plan, and what they cost. */
+function effortColumns(efforts: readonly ReviewsEffort[]): ReportColumn<ReviewsEffort>[] {
+    const perPlan = efforts.map((e) => resumesPerPlan(e))
+    return [
+        {
+            key: 'effort',
+            kind: 'name',
+            label: "planner's estimate",
+            cell: (e) => <span className="font-mono">{e.effort ?? 'no estimate'}</span>,
+        },
+        { key: 'plans', kind: 'figure', label: 'plans', cell: (e) => e.plans },
+        { key: 'resumes', kind: 'figure', label: 'resumes', cell: (e) => e.resumes },
+        {
+            key: 'per-plan',
+            kind: 'bar',
+            label: 'per plan',
+            hint: PER_PLAN_HINT,
+            cell: (e) => resumesPerPlan(e).toFixed(1),
+            bar: (e) => barPercent(resumesPerPlan(e), perPlan),
+        },
+        {
+            key: 'cost',
+            kind: 'figure',
+            label: 'resumes cost',
+            cell: (e) => <Cost usd={e.resume_cost_usd} />,
+            muted: true,
+        },
+    ]
 }
 
 /**
@@ -544,62 +546,26 @@ function CanopyReviewer({ found, span }: { found: ReviewsReport; span: string })
             {found.review_runs.length === 0 ? (
                 <Empty size="panel">canopy reviewed nothing in these {span}</Empty>
             ) : (
-                <table className="self-start border-collapse text-sm" data-testid="reviews-run-table">
-                    <thead>
-                        <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">purpose</th>
-                            <th className="panel-label pb-1.5 pl-3 text-left font-normal">ended</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">spent</th>
-                        </tr>
-                    </thead>
-                    <tbody className="font-mono text-xs">
-                        {found.review_runs.map((r) => (
-                            <tr key={`${r.purpose}:${r.status}`} className="text-right" data-testid="reviews-run">
-                                <th scope="row" className="py-0.5 text-left font-normal">
-                                    <Hinted hint={PURPOSE_HINT[r.purpose]}>{r.purpose}</Hinted>
-                                </th>
-                                <td className="pl-3 text-left text-muted-foreground">
-                                    <Word word={r.status} />
-                                </td>
-                                <td className="readout pl-3">{r.runs}</td>
-                                <td className="readout pl-3 text-muted-foreground">
-                                    <Cost usd={r.cost_usd} />
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <ReportTable
+                    rows={found.review_runs}
+                    columns={RUN_COLUMNS}
+                    rowKey={(r) => `${r.purpose}:${r.status}`}
+                    label="canopy's review runs"
+                    className="self-start"
+                    testId="reviews-run-table"
+                    rowTestId="reviews-run"
+                />
             )}
             {found.dismissals.length > 0 && (
-                <table className="self-start border-collapse text-sm" data-testid="reviews-dismissal-table">
-                    <thead>
-                        <tr>
-                            <th className="panel-label pb-1.5 text-left font-normal">dismissed as</th>
-                            <th className="panel-label pb-1.5 pl-3 text-left font-normal">findings</th>
-                        </tr>
-                    </thead>
-                    <tbody className="text-xs">
-                        {found.dismissals.map((d) => (
-                            <tr key={d.reason ?? 'none'} data-testid="reviews-dismissal">
-                                <th scope="row" className="py-0.5 text-left font-normal text-muted-foreground">
-                                    {dismissalText(d.reason)}
-                                </th>
-                                <td className="readout w-40 pl-3">
-                                    <CellBar
-                                        percent={barPercent(
-                                            d.findings,
-                                            found.dismissals.map((x) => x.findings),
-                                        )}
-                                        valueClassName="w-6 text-right"
-                                    >
-                                        {d.findings}
-                                    </CellBar>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <ReportTable
+                    rows={found.dismissals}
+                    columns={dismissalColumns(found.dismissals)}
+                    rowKey={(d) => d.reason ?? 'none'}
+                    label="Findings dismissed"
+                    className="self-start"
+                    testId="reviews-dismissal-table"
+                    rowTestId="reviews-dismissal"
+                />
             )}
             <p className="text-xs text-muted-foreground" data-testid="reviews-canopy-trust">
                 {found.canopy_trusted
@@ -608,6 +574,48 @@ function CanopyReviewer({ found, span }: { found: ReviewsReport; span: string })
             </p>
         </div>
     )
+}
+
+/** canopy's review runs' columns: their purpose, how they ended, how many, and what they cost. */
+const RUN_COLUMNS: ReportColumn<ReviewsRunCount>[] = [
+    {
+        key: 'purpose',
+        kind: 'name',
+        label: 'purpose',
+        cell: (r) => (
+            <span className="font-mono">
+                <Hinted hint={PURPOSE_HINT[r.purpose]}>{r.purpose}</Hinted>
+            </span>
+        ),
+    },
+    {
+        key: 'ended',
+        kind: 'word',
+        label: 'ended',
+        cell: (r) => (
+            <span className="font-mono">
+                <Word word={r.status} />
+            </span>
+        ),
+        muted: true,
+    },
+    { key: 'runs', kind: 'figure', label: 'runs', cell: (r) => r.runs },
+    { key: 'spent', kind: 'figure', label: 'spent', cell: (r) => <Cost usd={r.cost_usd} />, muted: true },
+]
+
+/** The dismissals' columns: the reason, and its findings with a bar against the most. */
+function dismissalColumns(dismissals: readonly Dismissal[]): ReportColumn<Dismissal>[] {
+    const findings = dismissals.map((d) => d.findings)
+    return [
+        { key: 'reason', kind: 'name', label: 'dismissed as', cell: (d) => dismissalText(d.reason), muted: true },
+        {
+            key: 'findings',
+            kind: 'bar',
+            label: 'findings',
+            cell: (d) => d.findings,
+            bar: (d) => barPercent(d.findings, findings),
+        },
+    ]
 }
 
 // What the per-PR table counts of each PR: how soon its first review came, with a bar against the slowest PR's, its
@@ -620,11 +628,8 @@ function prColumns(rows: readonly ReviewsPullRequest[]): PullRequestColumn<Revie
             key: 'first',
             label: 'first review',
             hint: `${PR_FIRST_HINT}; the bar against the slowest PR's`,
-            cell: (pr) => (
-                <CellBar percent={barPercent(pr.first_review_hours, waits)} valueClassName="w-12 text-right">
-                    {hoursText(pr.first_review_hours)}
-                </CellBar>
-            ),
+            cell: (pr) => hoursText(pr.first_review_hours),
+            bar: (pr) => barPercent(pr.first_review_hours, waits),
             title: (pr) =>
                 pr.waiting_since === null ? 'No ready time from GitHub: read before canopy kept them, or a draft' : '',
         },
