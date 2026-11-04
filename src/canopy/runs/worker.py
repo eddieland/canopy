@@ -35,6 +35,7 @@ from canopy.core import (
     cards,
     checklist_answers,
     checklists,
+    ci,
     commit_hooks,
     contract,
     conversation,
@@ -857,7 +858,7 @@ def _feedback_plan(
     if not prs or read.failure is not None:
         raise SetupError(f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}")
     reviews = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
-    not_ci = feedback_items.not_ci(ctx.conn, ctx.workspace, prs)
+    not_ci = ci.not_ci(ctx.conn, ctx.workspace.check_roles, prs)
     snapshot = feedback_items.take(ctx.conn, prs, reviews, not_ci)
     offered = [*reviews, *feedback_items.raised(ctx.conn, key, prs, not_ci)]
     desk_files = _feedback_desk(ctx, key, offered) | _place_attachments(run, slots, _attachment_copies(ctx, run))

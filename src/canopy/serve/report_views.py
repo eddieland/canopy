@@ -154,7 +154,8 @@ def ci_report(backend: Backend, ctx: Context, days: int) -> CiReport:
     window = spend.window(backend.clock(), days)
     # One snapshot, so a check run observed between the two reads is in both or neither.
     with db.read_snapshot(ctx.conn):
-        found, before = ci.windows(ctx.conn, [window, spend.window_before(db.format_time(window[0]), days)])
+        spans = [window, spend.window_before(db.format_time(window[0]), days)]
+        found, before = ci.windows(ctx.conn, spans, ctx.workspace.check_roles)
         refused = health.refusals(ctx.conn, found.since, found.until)
     cooldown = next((r for r in refused if r.guard == _COOLDOWN), None)
     return CiReport(
@@ -355,7 +356,12 @@ def _figures(ctx: Context, found: Sequence[monthly.Month]) -> list[_Figures]:
     spans = [(db.parse_time(m.since), db.parse_time(m.until)) for m in found]
     return [
         _Figures(health=health.between(ctx.conn, *span), ci=c, reviews=r)
-        for span, c, r in zip(spans, ci.windows(ctx.conn, spans), review_report.windows(ctx.conn, spans), strict=True)
+        for span, c, r in zip(
+            spans,
+            ci.windows(ctx.conn, spans, ctx.workspace.check_roles),
+            review_report.windows(ctx.conn, spans),
+            strict=True,
+        )
     ]
 
 

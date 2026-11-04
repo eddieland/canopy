@@ -615,7 +615,8 @@ def test_a_check_pending_long_after_the_others_finished_names_the_key_to_set(
     detail = stuck(scenario)
     assert detail.startswith(f"`merge-queue` is still pending on {PR} at abc1234, over 60 minutes after")
     assert detail.endswith(
-        '`[repos.repo.checks]`: `"merge-queue" = "merge"` for a merge queue, `"human"` for a sign-off, or `"ignore"`',
+        '`[repos.repo.checks]`: `"merge-queue" = "merge"` for a merge queue, `"human"` for a sign-off, `"rollup"` for '
+        'a job that only waits on the others, or `"ignore"`',
     )
     # Given its role, it holds the PR no longer, and its reviewer is asked for instead.
     scenario.configures("workspace", repos={"repo": {"checks": {"merge-queue": "merge"}}})

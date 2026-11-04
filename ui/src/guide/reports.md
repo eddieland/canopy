@@ -293,6 +293,9 @@ and the median time to green.
 
 Red means `failure`, `error`, `timed_out`, or `startup_failure`; green means `success`. `cancelled`, `skipped`,
 `neutral`, `stale`, and `action_required` count as neither, so a check you cancelled never passes for one that broke.
+A check your workspace map gives a role other than CI under `[repos.<repo>.checks]` is in no count here, as it holds no
+PR in the loop: a sign-off (`human`), a merge queue's status (`merge`), a job that only waits on the others and goes
+red when one of them does (`rollup`), or one you ignore. So a rollup's red counts once, in the job that failed.
 
 - **Checks by name**: each check, the worst first, with its failure rate (red out of red and green) as a red bar, its
   red runs and its runs, and how often the next run on a new head of the same PR passed after a red one. **Same-head
