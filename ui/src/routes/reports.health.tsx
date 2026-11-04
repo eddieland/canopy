@@ -13,7 +13,6 @@ import type {
     HealthReport,
 } from '@/api/types'
 import { Age } from '@/components/age'
-import { CellBar } from '@/components/cell-bar'
 import { ChartTable } from '@/components/chart-table'
 import { ChoreLink, ChoreRunLink } from '@/components/chore-link'
 import { Cost } from '@/components/cost'
@@ -83,9 +82,6 @@ const OTHER_HINT = "Failures an agent's own summary explained, which never repea
 const MEDIAN_HINT = 'The median run, in the warning color once it takes three quarters of its timeout'
 const LIMIT_HINT = "The timeout the sort is held to, from [runtime], or the chore's own"
 const SPREAD_HINT = "Its runs by their length's share of the timeout"
-
-// The column names of a table in a padded scrolling region: the head's cells take the padding.
-const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
 
 // Each kind as the outcomes table heads its rows: the series' names, so a kind reads alike in the table and the chart.
 const KIND_NAME = Object.fromEntries(HEALTH_SERIES.map((s) => [s.key, s.label])) as Record<
@@ -245,23 +241,20 @@ function Outcomes({ found, span }: { found: HealthReport; span: string }) {
     }
     return (
         <div className="flex flex-col gap-3 px-3 pb-3">
-            <PanelScroll label="How runs ended" className="max-h-[28rem] overflow-x-auto">
-                <table className="border-collapse text-sm" data-testid="health-outcome-table">
-                    <thead className={PADDED_HEAD}>
-                        <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">kind</th>
-                            <th colSpan={2} className="panel-label pb-1.5 pl-3 text-left font-normal">
-                                <Hinted hint={ENDED_HINT}>ended</Hinted>
-                            </th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">spent</th>
-                        </tr>
-                    </thead>
-                    {outcomeTree(found.outcomes).map((kind, i) => (
-                        <OutcomeGroup key={kind.kind} kind={kind} first={i === 0} />
-                    ))}
-                </table>
-            </PanelScroll>
+            <ReportTable
+                groups={outcomeTree(found.outcomes).map((kind) => ({
+                    key: kind.kind,
+                    headRow: kind,
+                    rows: kind.sorts,
+                    testId: `health-kind-${kind.kind}`,
+                }))}
+                columns={OUTCOME_COLUMNS}
+                rowKey={(line) => ('sorts' in line ? line.kind : line.what)}
+                label="How runs ended"
+                className="max-h-[28rem]"
+                testId="health-outcome-table"
+                rowTestId="health-outcome"
+            />
             <p className="text-xs text-muted-foreground" data-testid="health-unpriced">
                 {unpricedText(found.unpriced)}
             </p>
@@ -269,61 +262,55 @@ function Outcomes({ found, span }: { found: HealthReport; span: string }) {
     )
 }
 
-/** A kind's rows of the outcomes tree: its own, with its failed share, runs, and spend, then a row per sort. */
-function OutcomeGroup({ kind, first }: { kind: OutcomeKind; first: boolean }) {
-    const share = kind.runs === 0 ? null : kind.failed / kind.runs
-    return (
-        <tbody className="font-mono text-xs" data-testid={`health-kind-${kind.kind}`}>
-            <tr className="text-right">
-                <th
-                    scope="rowgroup"
-                    className={cn('pb-0.5 text-left font-sans font-medium text-foreground', !first && 'pt-3')}
-                >
-                    {KIND_NAME[kind.kind]}
-                </th>
-                <CellBar
-                    percent={(share ?? 0) * 100}
-                    fill="bg-status-failed"
-                    className={cn('readout', !first && 'pt-3', kind.failed > 0 && 'text-status-failed')}
-                    barClassName={cn(!first && 'pt-3')}
-                >
-                    {shareText(share)}
-                </CellBar>
-                <td className={cn('readout pl-3', !first && 'pt-3')}>{kind.runs}</td>
-                <td className={cn('readout pl-3 text-muted-foreground', !first && 'pt-3')}>
-                    <Cost usd={kind.costUsd} />
-                </td>
-            </tr>
-            {kind.sorts.map((sort) => (
-                <SortRow key={sort.what} sort={sort} />
-            ))}
-        </tbody>
-    )
-}
-
-/** One sort's row: its name, how its runs ended as chips, the most first, then its runs and what they cost. */
-function SortRow({ sort }: { sort: OutcomeSort }) {
-    return (
-        <tr className="text-right" data-testid="health-outcome">
-            <th scope="row" className="py-0.5 pl-4 text-left font-normal">
-                <Word word={sort.what} />
-            </th>
-            <td colSpan={2} className="py-0.5 pl-3 text-left">
+/**
+ * The outcomes table's columns, for a kind's row and its sorts': the kind, or the sort; the kind's failed runs' share
+ * of its ended ones, or how the sort's runs ended as chips, a failed ending in the failed state's tone; the runs; and
+ * what they cost.
+ */
+const OUTCOME_COLUMNS: ReportColumn<OutcomeKind | OutcomeSort>[] = [
+    {
+        key: 'kind',
+        kind: 'name',
+        label: 'kind',
+        cell: (line) =>
+            'sorts' in line ? (
+                KIND_NAME[line.kind]
+            ) : (
+                <span className="font-mono">
+                    <Word word={line.what} />
+                </span>
+            ),
+    },
+    {
+        key: 'ended',
+        kind: 'bar',
+        label: 'ended',
+        hint: ENDED_HINT,
+        cell: (line) =>
+            'sorts' in line ? (
+                shareText(failedShare(line))
+            ) : (
                 <span className="flex flex-wrap gap-1">
-                    {sort.statuses.map((st) => (
+                    {line.statuses.map((st) => (
                         <Chip key={st.status} tone={st.failed ? 'failed' : 'plain'} className="gap-1.5">
                             <Word word={st.status} />
                             <span className="readout">{st.runs}</span>
                         </Chip>
                     ))}
                 </span>
-            </td>
-            <td className="readout pl-3">{sort.runs}</td>
-            <td className="readout pl-3 text-muted-foreground">
-                <Cost usd={sort.costUsd} />
-            </td>
-        </tr>
-    )
+            ),
+        bar: (line) => ('sorts' in line ? (failedShare(line) ?? 0) * 100 : 0),
+        fill: 'bg-status-failed',
+        tone: (line) => 'sorts' in line && line.failed > 0 && 'text-status-failed',
+        across: (line) => !('sorts' in line),
+    },
+    { key: 'runs', kind: 'figure', label: 'runs', cell: (line) => line.runs },
+    { key: 'spent', kind: 'figure', label: 'spent', cell: (line) => <Cost usd={line.costUsd} />, muted: true },
+]
+
+/** A kind's failed runs' share of its ended ones; null for a kind with none ended. */
+function failedShare(kind: OutcomeKind): number | null {
+    return kind.runs === 0 ? null : kind.failed / kind.runs
 }
 
 /**
@@ -530,64 +517,59 @@ function Refusals({ refusals, span }: { refusals: HealthRefusal[]; span: string 
         return <Empty size="panel">no guard refused anything in these {span}</Empty>
     }
     return (
-        <div className="px-3 pb-3">
-            <table className="border-collapse text-sm" data-testid="health-refusal-table">
-                <thead className="[&_th]:pt-3">
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">guard</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">
-                            <Hinted hint="The kind of run a dispatch asked for">kind</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">refused</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">latest</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">
-                            <Hinted hint="In how many ticks the guard refused something">ticks</Hinted>
-                        </th>
-                    </tr>
-                </thead>
-                {refusals.map((r, i) => (
-                    <tbody key={r.guard} className="font-mono text-xs" data-testid="health-refusal">
-                        <tr className="text-right">
-                            <th
-                                scope="rowgroup"
-                                colSpan={2}
-                                className={cn(
-                                    'pb-0.5 text-left font-sans font-medium text-foreground',
-                                    i > 0 && 'pt-3',
-                                )}
-                            >
-                                <Word word={r.guard} />
-                            </th>
-                            <td className={cn('readout pl-3', i > 0 && 'pt-3')}>{r.decisions}</td>
-                            <td className={cn('pl-3 text-left', i > 0 && 'pt-3')}>
-                                <TickLink id={r.last_tick} />
-                            </td>
-                            <td className={cn('readout pl-3 text-muted-foreground', i > 0 && 'pt-3')}>{r.ticks}</td>
-                        </tr>
-                        {r.asks.map((a) => (
-                            <tr
-                                key={`${a.ticket ?? ''}:${a.chore ?? ''}:${a.pr ?? ''}:${a.kind ?? ''}`}
-                                className="text-right"
-                                data-testid="health-ask"
-                            >
-                                <th scope="row" className="py-0.5 pl-4 text-left font-normal">
-                                    <AskSubject ask={a} />
-                                </th>
-                                <td className="pl-3 text-left text-muted-foreground">
-                                    {a.kind === null ? '–' : <Word word={a.kind} />}
-                                </td>
-                                <td className="readout pl-3">{a.decisions}</td>
-                                <td colSpan={2} className="pl-3 text-left">
-                                    <TickLink id={a.last_tick} />
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                ))}
-            </table>
-        </div>
+        <ReportTable
+            groups={refusals.map((r) => ({ key: r.guard, headRow: r, rows: r.asks, testId: 'health-refusal' }))}
+            columns={REFUSAL_COLUMNS}
+            rowKey={(line) =>
+                'asks' in line
+                    ? line.guard
+                    : `${line.ticket ?? ''}:${line.chore ?? ''}:${line.pr ?? ''}:${line.kind ?? ''}`
+            }
+            label="What the guards refused"
+            className="px-3 pb-3"
+            testId="health-refusal-table"
+            rowTestId="health-ask"
+        />
     )
 }
+
+/**
+ * The refusals table's columns, for a guard's row and its asks': the guard, or what the ask named; the run's kind it
+ * asked for; how often it was refused; the latest tick that asked; and, for a guard, in how many ticks it refused.
+ */
+const REFUSAL_COLUMNS: ReportColumn<HealthRefusal | HealthAsk>[] = [
+    {
+        key: 'guard',
+        kind: 'name',
+        label: 'guard',
+        cell: (line) => ('asks' in line ? <Word word={line.guard} /> : <AskSubject ask={line} />),
+    },
+    {
+        key: 'kind',
+        kind: 'word',
+        label: 'kind',
+        hint: 'The kind of run a dispatch asked for',
+        cell: (line) =>
+            'asks' in line ? null : line.kind === null ? (
+                '–'
+            ) : (
+                <span className="font-mono">
+                    <Word word={line.kind} />
+                </span>
+            ),
+        muted: true,
+    },
+    { key: 'refused', kind: 'figure', label: 'refused', cell: (line) => line.decisions },
+    { key: 'latest', kind: 'word', label: 'latest', cell: (line) => <TickLink id={line.last_tick} /> },
+    {
+        key: 'ticks',
+        kind: 'figure',
+        label: 'ticks',
+        hint: 'In how many ticks the guard refused something',
+        cell: (line) => ('asks' in line ? line.ticks : null),
+        muted: true,
+    },
+]
 
 /** What a refused ask named: its ticket, its chore, or its PR; a muted dash for an ask that named none. */
 function AskSubject({ ask }: { ask: HealthAsk }) {
@@ -615,84 +597,87 @@ function Durations({ durations, span }: { durations: HealthDuration[]; span: str
     }
     return (
         <div className="flex flex-col gap-3 px-3 pb-3">
-            <PanelScroll label="How long runs take" className="max-h-[28rem] overflow-x-auto">
-                <table className="border-collapse text-sm" data-testid="health-duration-table">
-                    <thead className={PADDED_HEAD}>
-                        <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">kind</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">
-                                <Hinted hint={MEDIAN_HINT}>median</Hinted>
-                            </th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">
-                                <Hinted hint="Nine in ten of its runs took this long or less">p90</Hinted>
-                            </th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">longest</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">
-                                <Hinted hint={LIMIT_HINT}>timeout</Hinted>
-                            </th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">
-                                <Hinted hint="Its runs that ended timeout">timed out</Hinted>
-                            </th>
-                            <th className="panel-label pb-1.5 pl-3 text-left font-normal">
-                                <Hinted hint={SPREAD_HINT}>spread</Hinted>
-                            </th>
-                        </tr>
-                    </thead>
-                    {durationsByKind(durations).map((group, i) => (
-                        <tbody key={group.kind} className="font-mono text-xs" data-testid={`health-took-${group.kind}`}>
-                            <tr>
-                                <th
-                                    scope="rowgroup"
-                                    colSpan={8}
-                                    className={cn(
-                                        'pb-0.5 text-left font-sans font-medium text-foreground',
-                                        i > 0 && 'pt-3',
-                                    )}
-                                >
-                                    {KIND_NAME[group.kind]}
-                                </th>
-                            </tr>
-                            {group.sorts.map((d) => (
-                                <DurationRow key={d.what} duration={d} />
-                            ))}
-                        </tbody>
-                    ))}
-                </table>
-            </PanelScroll>
+            <ReportTable
+                groups={durationsByKind(durations).map((group) => ({
+                    key: group.kind,
+                    head: KIND_NAME[group.kind],
+                    rows: group.sorts,
+                    testId: `health-took-${group.kind}`,
+                }))}
+                columns={DURATION_COLUMNS}
+                rowKey={(d) => d.what}
+                label="How long runs take"
+                className="max-h-[28rem]"
+                testId="health-duration-table"
+                rowTestId="health-duration"
+            />
             <DayChartLegend series={DURATION_BANDS} testId="health-spread" />
         </div>
     )
 }
 
-/** One sort's row of the durations table: its lengths against its timeout, and its spread as a stacked bar. */
-function DurationRow({ duration: d }: { duration: HealthDuration }) {
-    const limit = d.limit_minutes ?? null
-    return (
-        <tr className="text-right" data-testid="health-duration">
-            <th scope="row" className="py-0.5 pl-4 text-left font-normal">
+/**
+ * The durations table's columns, a sort's lengths against its timeout: its runs, the median, in the warning color
+ * near the timeout, the nine-in-ten, the longest, the timeout, how many timed out, and its spread as a stacked bar.
+ */
+const DURATION_COLUMNS: ReportColumn<HealthDuration>[] = [
+    {
+        key: 'kind',
+        kind: 'name',
+        label: 'kind',
+        cell: (d) => (
+            <span className="font-mono">
                 <Word word={d.what} />
-            </th>
-            <td className="readout pl-3">{d.runs}</td>
-            <td className={cn('readout pl-3', nearLimit(d) && 'text-status-blocked')}>
-                {minutesText(d.median_minutes)}
-            </td>
-            <td className="readout pl-3 text-muted-foreground">{minutesText(d.p90_minutes)}</td>
-            <td className="readout pl-3 text-muted-foreground">{minutesText(d.longest_minutes)}</td>
-            <td className="readout pl-3 text-muted-foreground">{limit === null ? '–' : minutesText(limit)}</td>
-            <td className={cn('readout pl-3', d.timeouts > 0 ? 'text-status-failed' : 'text-muted-foreground')}>
-                {d.timeouts}
-            </td>
-            <td className="pl-3 text-left">
-                {d.bins === null ? (
-                    <span className="text-muted-foreground">no timeout</span>
-                ) : (
-                    <Spread bins={d.bins} runs={d.runs} />
-                )}
-            </td>
-        </tr>
-    )
-}
+            </span>
+        ),
+    },
+    { key: 'runs', kind: 'figure', label: 'runs', cell: (d) => d.runs },
+    {
+        key: 'median',
+        kind: 'figure',
+        label: 'median',
+        hint: MEDIAN_HINT,
+        cell: (d) => minutesText(d.median_minutes),
+        tone: (d) => nearLimit(d) && 'text-status-blocked',
+    },
+    {
+        key: 'p90',
+        kind: 'figure',
+        label: 'p90',
+        hint: 'Nine in ten of its runs took this long or less',
+        cell: (d) => minutesText(d.p90_minutes),
+        muted: true,
+    },
+    { key: 'longest', kind: 'figure', label: 'longest', cell: (d) => minutesText(d.longest_minutes), muted: true },
+    {
+        key: 'timeout',
+        kind: 'figure',
+        label: 'timeout',
+        hint: LIMIT_HINT,
+        cell: (d) => (d.limit_minutes === null ? '–' : minutesText(d.limit_minutes)),
+        muted: true,
+    },
+    {
+        key: 'timed-out',
+        kind: 'figure',
+        label: 'timed out',
+        hint: 'Its runs that ended timeout',
+        cell: (d) => d.timeouts,
+        tone: (d) => (d.timeouts > 0 ? 'text-status-failed' : 'text-muted-foreground'),
+    },
+    {
+        key: 'spread',
+        kind: 'word',
+        label: 'spread',
+        hint: SPREAD_HINT,
+        cell: (d) =>
+            d.bins === null ? (
+                <span className="text-muted-foreground">no timeout</span>
+            ) : (
+                <Spread bins={d.bins} runs={d.runs} />
+            ),
+    },
+]
 
 /**
  * A sort's runs by their length's share of its timeout, as a bar of segments, the quickest first, each as wide as its

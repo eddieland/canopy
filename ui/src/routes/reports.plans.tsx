@@ -4,11 +4,13 @@ import { createFileRoute } from '@tanstack/react-router'
 import { plansReportQuery } from '@/api/queries'
 import type { PlansGroup, PlansLength, PlansReport, PlansRow } from '@/api/types'
 import { Age } from '@/components/age'
-import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } from '@/components/panel'
+import { ReportTable } from '@/components/report-table'
+import type { ReportColumn } from '@/components/report-table'
 import { RunLink } from '@/components/run-link'
 import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
-import { Hinted, Tipped } from '@/components/tip'
+import { Clipped, Hinted, Tipped } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
 import { counted } from '@/lib/descriptions'
 import { grouped } from '@/lib/fold'
@@ -34,7 +36,6 @@ import {
 import { windowName } from '@/lib/report-window'
 import type { ReportWindow } from '@/lib/report-window'
 import { hoursText } from '@/lib/reports'
-import { cn } from '@/lib/utils'
 
 interface PlansSearch {
     days?: number | undefined
@@ -56,9 +57,6 @@ const PAGE_HINT = 'in pages of the plan editor, about a screen each, as its plan
 
 // What a plan whose file as its planner wrote it could not be read shows, on its dash's hover.
 const UNMEASURED = 'Its file as its planner wrote it could not be read'
-
-// The column names of a table in a padded scrolling region: the head's cells take the padding.
-const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
 
 /**
  * How the last days' plans were approved, by the level their planners were offered, and what their PRs needed after:
@@ -139,46 +137,21 @@ function PlansPage() {
  */
 function Levels({ found, span }: { found: PlansReport; span: string }) {
     return (
-        <div className="flex flex-col gap-3 p-3">
+        <div className="flex flex-col gap-3 px-3 pb-3">
             {found.groups.length === 0 ? (
-                <Empty size="panel">no plan was approved in these {span}</Empty>
+                <Empty size="panel" className="mt-3">
+                    no plan was approved in these {span}
+                </Empty>
             ) : (
-                <PanelScroll label="Approvals by level" className="overflow-x-auto">
-                    <table className="w-full border-collapse text-sm" data-testid="plans-group-table">
-                        <thead>
-                            <tr className="text-right">
-                                <th className="panel-label pb-1.5 text-left font-normal">level</th>
-                                <th className="panel-label pb-1.5 pl-3 text-left font-normal">approved</th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">plans</th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">
-                                    <Hinted hint="From when each was written to its approval, the median">
-                                        to approve
-                                    </Hinted>
-                                </th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">
-                                    <Hinted hint={`The median of their lengths, ${PAGE_HINT}`}>length</Hinted>
-                                </th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">
-                                    <Hinted hint="The median of their words, outside code and diagrams">words</Hinted>
-                                </th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">
-                                    <Hinted hint={RESUMED_HINT}>needed a resume</Hinted>
-                                </th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">
-                                    <Hinted hint="Every resume after them">resumes</Hinted>
-                                </th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">
-                                    <Hinted hint="Those whose ticket is done, so their resumes are all in">done</Hinted>
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="text-xs">
-                            {found.groups.map((g) => (
-                                <Group key={`${g.level ?? ''}:${g.outcome}`} group={g} pageLines={found.page_lines} />
-                            ))}
-                        </tbody>
-                    </table>
-                </PanelScroll>
+                <ReportTable
+                    rows={found.groups}
+                    columns={groupColumns(found.page_lines)}
+                    rowKey={(g) => `${g.level ?? ''}:${g.outcome}`}
+                    label="Approvals by level"
+                    className="max-h-96"
+                    testId="plans-group-table"
+                    rowTestId="plans-group"
+                />
             )}
             <p className="text-sm" data-testid="plans-key">
                 <span className="text-muted-foreground">policy.planner_may_approve is</span>{' '}
@@ -195,37 +168,85 @@ function Levels({ found, span }: { found: PlansReport; span: string }) {
     )
 }
 
-/** One level's plans that went ahead one way: how many, how quickly, how long, and what their PRs needed after. */
-function Group({ group, pageLines }: { group: PlansGroup; pageLines: number }) {
-    return (
-        <tr className="text-right" data-testid="plans-group">
-            <th scope="row" className="py-0.5 text-left font-mono font-normal">
-                <Hinted hint={LEVEL_HINT[group.level ?? '']}>{levelText(group.level)}</Hinted>
-            </th>
-            <td className="pl-3 text-left text-muted-foreground">
-                <Hinted hint={OUTCOME_HINT[group.outcome]}>{OUTCOME_WORD[group.outcome]}</Hinted>
-            </td>
-            <td className="readout pl-3">{group.plans}</td>
-            <td className="readout pl-3">
-                {group.outcome === 'planner' ? '–' : hoursText(group.median_hours_to_approve)}
-            </td>
-            <td className="readout pl-3 whitespace-nowrap text-muted-foreground">
-                {group.median_lines === null ? (
+/**
+ * The approvals table's columns, a level's plans that went ahead one way: the level, how they went ahead, how many,
+ * how quickly, how long, and what their PRs needed after.
+ */
+function groupColumns(pageLines: number): ReportColumn<PlansGroup>[] {
+    return [
+        {
+            key: 'level',
+            kind: 'name',
+            label: 'level',
+            cell: (g) => (
+                <span className="font-mono">
+                    <Hinted hint={LEVEL_HINT[g.level ?? '']}>{levelText(g.level)}</Hinted>
+                </span>
+            ),
+        },
+        {
+            key: 'approved',
+            kind: 'word',
+            label: 'approved',
+            cell: (g) => <Hinted hint={OUTCOME_HINT[g.outcome]}>{OUTCOME_WORD[g.outcome]}</Hinted>,
+            muted: true,
+        },
+        { key: 'plans', kind: 'figure', label: 'plans', cell: (g) => g.plans },
+        {
+            key: 'to-approve',
+            kind: 'figure',
+            label: 'to approve',
+            hint: 'From when each was written to its approval, the median',
+            cell: (g) => (g.outcome === 'planner' ? '–' : hoursText(g.median_hours_to_approve)),
+        },
+        {
+            key: 'length',
+            kind: 'figure',
+            label: 'length',
+            hint: `The median of their lengths, ${PAGE_HINT}`,
+            cell: (g) =>
+                g.median_lines === null ? (
                     '–'
                 ) : (
-                    <Tipped fact={counted(group.median_lines, 'line')} mono>
-                        {pagesText(group.median_lines, pageLines)}
+                    <Tipped fact={counted(g.median_lines, 'line')} mono>
+                        {pagesText(g.median_lines, pageLines)}
                     </Tipped>
-                )}
-            </td>
-            <td className="readout pl-3 text-muted-foreground">
-                {group.median_words === null ? '–' : grouped(group.median_words)}
-            </td>
-            <td className={cn('readout pl-3', group.with_resume > 0 && 'text-status-blocked')}>{resumedText(group)}</td>
-            <td className="readout pl-3 text-muted-foreground">{group.resumes}</td>
-            <td className="readout pl-3 text-muted-foreground">{group.done}</td>
-        </tr>
-    )
+                ),
+            muted: true,
+        },
+        {
+            key: 'words',
+            kind: 'figure',
+            label: 'words',
+            hint: 'The median of their words, outside code and diagrams',
+            cell: (g) => (g.median_words === null ? '–' : grouped(g.median_words)),
+            muted: true,
+        },
+        {
+            key: 'resumed',
+            kind: 'figure',
+            label: 'needed a resume',
+            hint: RESUMED_HINT,
+            cell: resumedText,
+            tone: (g) => g.with_resume > 0 && 'text-status-blocked',
+        },
+        {
+            key: 'resumes',
+            kind: 'figure',
+            label: 'resumes',
+            hint: 'Every resume after them',
+            cell: (g) => g.resumes,
+            muted: true,
+        },
+        {
+            key: 'done',
+            kind: 'figure',
+            label: 'done',
+            hint: 'Those whose ticket is done, so their resumes are all in',
+            cell: (g) => g.done,
+            muted: true,
+        },
+    ]
 }
 
 /**
@@ -237,35 +258,42 @@ function Lengths({ lengths, pageLines, span }: { lengths: PlansLength[]; pageLin
         return <Empty size="panel">you approved no plan in these {span}</Empty>
     }
     return (
-        <div className="px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="plans-length-table">
-                <thead>
-                    <tr className="text-right [&_th]:pt-3">
-                        <th className="panel-label pb-1.5 text-left font-normal">
-                            <Hinted hint={`Their lengths, ${PAGE_HINT}`}>length</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">plans</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">median to approve</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">as written</th>
-                    </tr>
-                </thead>
-                <tbody className="font-mono text-xs">
-                    {lengths.map((n) => (
-                        <tr key={n.low} className="text-right" data-testid="plans-length">
-                            <th scope="row" className="py-0.5 text-left font-normal">
-                                <Tipped fact={lengthLinesText(n)} mono>
-                                    {lengthText(n, pageLines)}
-                                </Tipped>
-                            </th>
-                            <td className="readout pl-3">{n.plans}</td>
-                            <td className="readout pl-3">{hoursText(n.median_hours_to_approve)}</td>
-                            <td className="readout pl-3 text-muted-foreground">{n.as_written}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+        <ReportTable
+            rows={lengths}
+            columns={lengthColumns(pageLines)}
+            rowKey={(n) => String(n.low)}
+            label="Time to approve by length"
+            testId="plans-length-table"
+            rowTestId="plans-length"
+        />
     )
+}
+
+/** The lengths table's columns: the length, its plans, the median time to approve them, and how many as written. */
+function lengthColumns(pageLines: number): ReportColumn<PlansLength>[] {
+    return [
+        {
+            key: 'length',
+            kind: 'name',
+            label: 'length',
+            hint: `Their lengths, ${PAGE_HINT}`,
+            cell: (n) => (
+                <span className="font-mono">
+                    <Tipped fact={lengthLinesText(n)} mono>
+                        {lengthText(n, pageLines)}
+                    </Tipped>
+                </span>
+            ),
+        },
+        { key: 'plans', kind: 'figure', label: 'plans', cell: (n) => n.plans },
+        {
+            key: 'median',
+            kind: 'figure',
+            label: 'median to approve',
+            cell: (n) => hoursText(n.median_hours_to_approve),
+        },
+        { key: 'as-written', kind: 'figure', label: 'as written', cell: (n) => n.as_written, muted: true },
+    ]
 }
 
 /** Each plan written in the window, the newest first. */
@@ -274,85 +302,95 @@ function Plans({ plans, pageLines, span }: { plans: PlansRow[]; pageLines: numbe
         return <Empty size="panel">no plan was written in these {span}</Empty>
     }
     return (
-        <PanelScroll label="Each plan" className="max-h-96 overflow-x-auto px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="plans-plan-table">
-                <thead className={PADDED_HEAD}>
-                    {/* The "how it went" column takes the slack, so each figure and its head keep to one line. */}
-                    <tr className="text-left whitespace-nowrap">
-                        <th className="panel-label pb-1.5 font-normal">plan</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">ticket</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">level</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">how it went</th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">
-                            <Hinted hint={`Its length, ${PAGE_HINT}`}>length</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">
-                            <Hinted hint="Its words, outside code and diagrams">words</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">
-                            <Hinted hint="Its code blocks, tables, and diagrams">not prose</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">to approve</th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">resumes</th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">written</th>
-                    </tr>
-                </thead>
-                <tbody className="text-xs">
-                    {plans.map((p) => (
-                        <Plan key={p.plan_id} plan={p} pageLines={pageLines} />
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={plans}
+            columns={planColumns(pageLines)}
+            rowKey={(p) => String(p.plan_id)}
+            label="Each plan"
+            testId="plans-plan-table"
+            rowTestId={(p) => `plans-plan-${p.plan_id}`}
+        />
     )
 }
 
 /**
- * A plan's row: its run, its ticket, the level it was offered, how it went and what changed first, its length, words,
- * and what is not prose, how long approving it took, and the resumes its ticket needed after, with their reasons on
- * hover.
+ * A plan's columns: its run, its ticket, the level it was offered, how it went and what changed first, its length,
+ * words, and what is not prose, how long approving it took, and the resumes its ticket needed after, with their
+ * reasons on hover, and when it was written.
  */
-function Plan({ plan, pageLines }: { plan: PlansRow; pageLines: number }) {
-    const { metrics } = plan
-    const changes = changesText(plan)
-    const reasons = reasonsText(plan.reasons)
-    return (
-        <tr className="align-top" data-testid={`plans-plan-${plan.plan_id}`}>
-            <th scope="row" className="py-0.5 text-left font-normal whitespace-nowrap">
-                <RunLink id={plan.run_id} />
-            </th>
-            <td className="pl-3 whitespace-nowrap">
-                <TicketLink ticketKey={plan.ticket_key} />
-            </td>
-            <td className="pl-3 font-mono whitespace-nowrap text-muted-foreground">
-                <Hinted hint={LEVEL_HINT[plan.level ?? '']}>{levelText(plan.level)}</Hinted>
-            </td>
-            <td className="w-full pl-3 text-muted-foreground">
-                <Hinted hint={OUTCOME_HINT[plan.outcome]}>{OUTCOME_WORD[plan.outcome]}</Hinted>
-                {changes !== '' && <span>: {changes}</span>}
-            </td>
-            <td className="readout pl-3 text-right whitespace-nowrap text-muted-foreground">
-                <Tipped fact={metrics ? measuredText(metrics, plan.size) : UNMEASURED} mono={Boolean(metrics)}>
+function planColumns(pageLines: number): ReportColumn<PlansRow>[] {
+    return [
+        { key: 'plan', kind: 'name', label: 'plan', cell: (p) => <RunLink id={p.run_id} /> },
+        { key: 'ticket', kind: 'word', label: 'ticket', cell: (p) => <TicketLink ticketKey={p.ticket_key} /> },
+        {
+            key: 'level',
+            kind: 'word',
+            label: 'level',
+            cell: (p) => (
+                <span className="font-mono">
+                    <Hinted hint={LEVEL_HINT[p.level ?? '']}>{levelText(p.level)}</Hinted>
+                </span>
+            ),
+            muted: true,
+        },
+        { key: 'went', kind: 'free', label: 'how it went', cell: (p) => <HowItWent plan={p} />, muted: true },
+        {
+            key: 'length',
+            kind: 'figure',
+            label: 'length',
+            hint: `Its length, ${PAGE_HINT}`,
+            cell: ({ metrics, size }) => (
+                <Tipped fact={metrics ? measuredText(metrics, size) : UNMEASURED} mono={Boolean(metrics)}>
                     {metrics ? pagesText(metrics.lines, pageLines) : '–'}
                 </Tipped>
-            </td>
-            <td className="readout pl-3 text-right whitespace-nowrap text-muted-foreground">
-                {metrics ? grouped(metrics.words) : '–'}
-            </td>
-            <td className="pl-3 whitespace-nowrap text-muted-foreground">
-                {metrics ? notProseText(metrics) || '–' : '–'}
-            </td>
-            <td className="readout pl-3 text-right whitespace-nowrap">
-                {plan.outcome === 'planner' ? '–' : hoursText(plan.hours_to_approve)}
-            </td>
-            <td className={cn('readout pl-3 text-right whitespace-nowrap', plan.resumes > 0 && 'text-status-blocked')}>
-                <Tipped fact={plan.implemented ? reasons : 'No implement followed it'}>
-                    {plan.implemented ? plan.resumes : '–'}
+            ),
+            muted: true,
+        },
+        {
+            key: 'words',
+            kind: 'figure',
+            label: 'words',
+            hint: 'Its words, outside code and diagrams',
+            cell: ({ metrics }) => (metrics ? grouped(metrics.words) : '–'),
+            muted: true,
+        },
+        {
+            key: 'not-prose',
+            kind: 'word',
+            label: 'not prose',
+            hint: 'Its code blocks, tables, and diagrams',
+            cell: ({ metrics }) => (metrics ? notProseText(metrics) || '–' : '–'),
+            muted: true,
+        },
+        {
+            key: 'to-approve',
+            kind: 'figure',
+            label: 'to approve',
+            cell: (p) => (p.outcome === 'planner' ? '–' : hoursText(p.hours_to_approve)),
+        },
+        {
+            key: 'resumes',
+            kind: 'figure',
+            label: 'resumes',
+            cell: (p) => (
+                <Tipped fact={p.implemented ? reasonsText(p.reasons) : 'No implement followed it'}>
+                    {p.implemented ? p.resumes : '–'}
                 </Tipped>
-            </td>
-            <td className="pl-3 text-right whitespace-nowrap">
-                <Age at={plan.created_at} variant="ago" />
-            </td>
-        </tr>
+            ),
+            tone: (p) => p.resumes > 0 && 'text-status-blocked',
+        },
+        { key: 'written', kind: 'age', label: 'written', cell: (p) => <Age at={p.created_at} variant="ago" /> },
+    ]
+}
+
+/** How a plan went ahead, and what changed first, cut to a line, whole on its hover while it is cut. */
+function HowItWent({ plan }: { plan: PlansRow }) {
+    const changes = changesText(plan)
+    const word = OUTCOME_WORD[plan.outcome]
+    return (
+        <Clipped text={changes === '' ? word : `${word}: ${changes}`} className="block">
+            <Hinted hint={OUTCOME_HINT[plan.outcome]}>{word}</Hinted>
+            {changes !== '' && <span>: {changes}</span>}
+        </Clipped>
     )
 }

@@ -15,6 +15,8 @@ import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
+import { ReportTable } from '@/components/report-table'
+import type { ReportColumn } from '@/components/report-table'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
@@ -35,6 +37,9 @@ import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
+
+// A window of a chore's spend, by its name.
+type SpendWindow = [string, ChoreSpendWindow]
 
 // What every chore's page shows, on its title's hover: its description is where the chore stands.
 const HELP =
@@ -218,40 +223,35 @@ function RunRow({ name, run }: { name: string; run: ChoreRun }) {
  * three are over the runs that reported a cost; under 100 of them, the percentile is the dearest run, as max is.
  */
 function SpendTable({ spend }: { spend: ChoreSpend }) {
-    const windows: [string, ChoreSpendWindow][] = [
+    const windows: SpendWindow[] = [
         ['last 24 hours', spend.day],
         ['last 30 days', spend.month],
     ]
     return (
-        <div className="overflow-x-auto p-3">
-            <table className="w-full border-collapse text-sm" data-testid="chore-spend-table">
-                <thead>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">window</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">total</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">average</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal" title="99th percentile of a run's cost">
-                            p99
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">max</th>
-                    </tr>
-                </thead>
-                <tbody className="text-xs">
-                    {windows.map(([label, window]) => (
-                        <tr key={label} className="text-right" data-testid={`chore-spend-${window.hours}h`}>
-                            <th scope="row" className="w-full py-0.5 text-left font-normal">
-                                {label}
-                            </th>
-                            <td className="readout pl-3 whitespace-nowrap">{runsText(window)}</td>
-                            <td className="readout pl-3">{costText(window.cost_usd)}</td>
-                            <td className="readout pl-3">{costText(window.mean_usd)}</td>
-                            <td className="readout pl-3">{costText(window.p99_usd)}</td>
-                            <td className="readout pl-3">{costText(window.max_usd)}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+        <ReportTable
+            rows={windows}
+            columns={SPEND_COLUMNS}
+            rowKey={([label]) => label}
+            label="Spend"
+            className="px-3 pb-3"
+            testId="chore-spend-table"
+            rowTestId={([, window]) => `chore-spend-${window.hours}h`}
+        />
     )
 }
+
+/** The spend table's columns: the window, its runs, their total, and a run's average, 99th percentile, and most. */
+const SPEND_COLUMNS: ReportColumn<SpendWindow>[] = [
+    { key: 'window', kind: 'name', label: 'window', cell: ([label]) => label },
+    { key: 'runs', kind: 'figure', label: 'runs', cell: ([, window]) => runsText(window) },
+    { key: 'total', kind: 'figure', label: 'total', cell: ([, window]) => costText(window.cost_usd) },
+    { key: 'average', kind: 'figure', label: 'average', cell: ([, window]) => costText(window.mean_usd) },
+    {
+        key: 'p99',
+        kind: 'figure',
+        label: 'p99',
+        hint: "99th percentile of a run's cost",
+        cell: ([, window]) => costText(window.p99_usd),
+    },
+    { key: 'max', kind: 'figure', label: 'max', cell: ([, window]) => costText(window.max_usd) },
+]
