@@ -159,7 +159,7 @@ def test_a_runs_page_names_the_models_its_session_says_served_it_once_a_tick_has
     assert [r["models"] for r in c.get("/api/runs").json()] == [models()]  # the runs list carries them too
     assert [r["models"] for r in c.get(f"/api/tickets/{KEY}").json()["runs"]] == [models()]
     found = models()
-    # Read again, as 0069 has every found run read: what was found stays shown while the read is due, fails, or finds
+    # Read again, as a found run may be: what was found stays shown while the read is due, fails, or finds
     # the session gone.
     ctx.conn.execute("DELETE FROM run_model_reads")
     assert models() == found

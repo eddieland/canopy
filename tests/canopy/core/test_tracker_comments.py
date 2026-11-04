@@ -1,6 +1,6 @@
 """Tracker comments in the conversation (DESIGN §22, §35, ROADMAP M37): each one the tracker source observes, once.
 
-Also, what a recorded comment does not do, and the comments a journal held before the overseer's mirror was retired.
+Also, what a recorded comment does not do.
 """
 
 from __future__ import annotations
@@ -13,21 +13,17 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.core import conversation, db, records
-from canopy.infra import resources
-from tests.canopy.helpers import KEY, journal_at, old_ticket, present, versions_after, waits
+from tests.canopy.helpers import KEY, present, waits
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from tests.canopy.scenario_helpers import Scenario
-    from tests.conftest import Journals
 
 #: A tracker source, played by the fake connector as `jira`.
 SOURCES = {"sources": {"jira": {"kind": "tracker", "cmd": "connector jira", "timeout_minutes": 1}}}
 #: The same source, its comments by `acc-1` on a private ticket the operator's own.
 OPERATOR_SOURCES = {"sources": {"jira": {**SOURCES["sources"]["jira"], "operators": ["acc-1"]}}}
-#: The migration that recorded the comments observed before it.
-VERSION = next(m.version for m in db.discover(resources.migrations_dir()) if m.name == "comments_in_conversations")
 
 
 def comment(
@@ -250,27 +246,3 @@ def test_a_worker_marked_comment_is_recorded_as_the_workers() -> None:
     assert not conversation.worker_marked("[bot] opened PR 7", "[bot]", "-- canopy")
     assert conversation.worker_marked("opened PR 7\n-- canopy", "", "-- canopy")
     assert not conversation.worker_marked("I agree with this:\n> opened PR 7 -- canopy", "", "-- canopy")
-
-
-def test_the_comments_observed_before_the_mirror_retired_are_recorded_once(tmp_path: Path, journals: Journals) -> None:
-    conn = journal_at(journals, tmp_path, VERSION - 1)
-    old_ticket(conn, "OLD-1")
-    observed = (
-        "INSERT INTO observed_comments (ticket, id, author, commented_at, body, truncated, source, observed_at) "
-        "VALUES ('OLD-1', ?, 'acc-1', ?, ?, 0, ?, ?)"
-    )
-    conn.execute(observed, ("c-2", "2026-10-18T11:00:00.000Z", "CANOPY: Opened PR 7.", "worker", "2026-10-18T11:01Z"))
-    conn.execute(observed, ("c-1", "2026-10-18T10:00:00.000Z", "Make it blue.", "tracker", "2026-10-18T10:01Z"))
-    conn.execute(observed, ("c-3", "2026-10-18T12:00:00.000Z", "As observed.", "tracker", "2026-10-18T12:01Z"))
-    conn.execute(
-        "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body, comment_id, author, "
-        "commented_at) VALUES ('ticket', 'OLD-1', 'x', 'tracker', 'comment', 'tracker', 'As mirrored.', 'c-3', "
-        "'acc-1', '2026-10-18T12:00:00.000Z')",
-    )
-    assert db.migrate(conn, resources.migrations_dir()) == versions_after(VERSION - 1)
-    # Each one the overseer had not mirrored, oldest first, at the time it was observed; the mirrored one kept.
-    assert [(m.comment_id, m.source, m.at, m.body) for m in conversation_of(conn, "OLD-1")] == [
-        ("c-3", "tracker", "x", "As mirrored."),
-        ("c-1", "tracker", "2026-10-18T10:01Z", "Make it blue."),
-        ("c-2", "worker", "2026-10-18T11:01Z", "CANOPY: Opened PR 7."),
-    ]
