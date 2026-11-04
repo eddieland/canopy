@@ -204,6 +204,9 @@
      * knowing which it is on. */
     --burst-leaf: block;
     --burst-plate: none;
+    /* A bubble's balloon tail (`bubble-tail` in src/index.css): how far it reaches and the line it is inked in. */
+    --bubble-tail: 0px;
+    --bubble-tail-line: 0px;
     --title-drop-2: 0 0 transparent;
 
     /* The face interface text is set in: Plex Sans, or the mono data is set in (`--face-mono`), for an editor that
@@ -560,6 +563,9 @@
     /* A cleared item goes off with a bang, as a comic's panel would letter it, where the others drop a leaf. */
     --burst-leaf: none;
     --burst-plate: block;
+    /* A bubble's balloon tail out of its square corner, inked as its ring is. */
+    --bubble-tail: 7px;
+    --bubble-tail-line: 1.5px;
     /* Its section titles lettered as a comic's are: in Bangers's caps (`--face-title`), tracked open so no two
      * touch, each dropped in its section's ink with a thin cyan plate printed up and to the left of it, off register,
      * as a cheap press prints. */
@@ -888,6 +894,10 @@
     --title-drop-alpha: 1;
     --burst-leaf: none;
     --burst-plate: block;
+    /* A bubble's balloon tail out of its square corner, inked as its ring is, the operator's dropping its shadow
+     * outward. */
+    --bubble-tail: 7px;
+    --bubble-tail-line: 1px;
     /* Its section titles lettered as light's are, the plate up and to the left a paler cyan, which reads on the
      * night. */
     --face-title: 'Bangers Title', var(--face);
