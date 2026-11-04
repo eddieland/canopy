@@ -31,8 +31,8 @@
     html {
         /* Inherited, so every scroller (the page, a panel's list, a textarea) has the same thumb in both themes. */
         scrollbar-color: var(--scrollbar) transparent;
-        /* On the root, so it paints the whole canvas, under a palette's texture (Gruvbox's halftone dots). */
-        background: var(--canvas-texture), var(--background);
+        /* On the root, so it paints the whole canvas, under a palette's tone (below). */
+        background: var(--background);
         -webkit-font-smoothing: antialiased;
         /*
          * Every size is in rem, so the whole interface grows with the window on a large screen: the browser's size up
@@ -46,6 +46,31 @@
         min-height: 100dvh;
         color: var(--foreground);
         font-family: var(--font-sans);
+    }
+
+    /*
+     * A palette's tone over the canvas, which only Pulp prints: its dots (`--canvas-texture`) and, outside them, the
+     * swell they grow into (`--canvas-swell`), each where its mask lets it. Fixed to the window and under everything
+     * else, so it is painted once, never on a scroll, and the panels, the header, and the rail sit over it. By default
+     * both are none, and the two layers draw nothing.
+     */
+    html::before,
+    html::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+    }
+
+    html::before {
+        background: var(--canvas-texture);
+        mask: var(--canvas-texture-mask);
+    }
+
+    html::after {
+        background: var(--canvas-swell);
+        mask: var(--canvas-swell-mask);
     }
 
     :focus-visible {

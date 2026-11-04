@@ -188,15 +188,18 @@
     --depth-action: 0 1px 2px oklch(from var(--accent) l c h / 0.35);
     /* A comic's ink, which only Pulp draws: the primary action pressed into its shadow (`--press-x`,
      * `--press-y`, and `--depth-action-pressed`), a message's bubble inked and dropped (`--depth-bubble`), the
-     * canvas's halftone dots (`--canvas-texture`), and a page title's drop in its section's color (`--title-drop`),
-     * with a second plate printed off register on a section's title (`--title-drop-2`). The defaults press a pixel
-     * down and draw none of the rest, the title's drops transparent (`--title-drop-alpha`). Each is a shadow, a
-     * transform, or a background, so none takes room. */
+     * canvas's Ben-Day tone (`--canvas-texture` and `--canvas-swell`, each masked where it prints, src/index.css),
+     * and a page title's drop in its section's color (`--title-drop`), with a second plate printed off register on a
+     * section's title (`--title-drop-2`). The defaults press a pixel down and draw none of the rest, the title's drops
+     * transparent (`--title-drop-alpha`). Each is a shadow, a transform, or a background, so none takes room. */
     --press-x: 0px;
     --press-y: 1px;
     --depth-action-pressed: var(--depth-action);
     --depth-bubble: none;
     --canvas-texture: none;
+    --canvas-texture-mask: none;
+    --canvas-swell: none;
+    --canvas-swell-mask: none;
     --title-drop: 0px;
     --title-drop-alpha: 0;
     /* What a cleared attention item drops (src/routes/attention.tsx): a leaf by default, or, where a palette shows
@@ -204,6 +207,42 @@
      * knowing which it is on. */
     --burst-leaf: block;
     --burst-plate: none;
+    /* The Ben-Day screen a palette may print its canvas with, in its ink (`--ben-day-ink`), which none does by
+     * default: dots on a lattice turned 45°, as a printer's screen is, each grown by a ring where the tone deepens.
+     * The pitch and the dots are in rem, so the screen grows with the type, and the pitch is rounded to an even
+     * pixel, so both lattices' dots land on whole pixels at every size and no moiré beats across the page. Each ramp
+     * is clear over the window's left and top, where the rail, the header, and a page's title are, and deepens toward
+     * its far edges, the right and the foot: the dots (`--ben-day-ramp`), then, nearer the corner, their swell
+     * (`--ben-day-swell-ramp`). */
+    --ben-day-ink: transparent;
+    --ben-day-pitch: round(0.625rem, 2px);
+    --ben-day-dot: 0.09rem;
+    --ben-day-swell-to: 0.16rem;
+    --ben-day-dots:
+        radial-gradient(circle, var(--ben-day-ink) 0 var(--ben-day-dot), transparent calc(var(--ben-day-dot) + 0.6px)) 0
+            0 / var(--ben-day-pitch) var(--ben-day-pitch),
+        radial-gradient(circle, var(--ben-day-ink) 0 var(--ben-day-dot), transparent calc(var(--ben-day-dot) + 0.6px))
+            calc(var(--ben-day-pitch) / 2) calc(var(--ben-day-pitch) / 2) / var(--ben-day-pitch) var(--ben-day-pitch);
+    --ben-day-swell:
+        radial-gradient(
+                circle,
+                transparent var(--ben-day-dot),
+                var(--ben-day-ink) calc(var(--ben-day-dot) + 0.6px) var(--ben-day-swell-to),
+                transparent calc(var(--ben-day-swell-to) + 0.6px)
+            )
+            0 0 / var(--ben-day-pitch) var(--ben-day-pitch),
+        radial-gradient(
+                circle,
+                transparent var(--ben-day-dot),
+                var(--ben-day-ink) calc(var(--ben-day-dot) + 0.6px) var(--ben-day-swell-to),
+                transparent calc(var(--ben-day-swell-to) + 0.6px)
+            )
+            calc(var(--ben-day-pitch) / 2) calc(var(--ben-day-pitch) / 2) / var(--ben-day-pitch) var(--ben-day-pitch);
+    --ben-day-ramp:
+        linear-gradient(90deg, transparent 28%, oklch(0 0 0 / 0.55) 64%, oklch(0 0 0)) intersect,
+        linear-gradient(transparent 18%, oklch(0 0 0 / 0.55) 56%, oklch(0 0 0));
+    --ben-day-swell-ramp:
+        linear-gradient(90deg, transparent 50%, oklch(0 0 0)) intersect, linear-gradient(transparent 40%, oklch(0 0 0));
     /* A bubble's balloon tail (`bubble-tail` in src/index.css): how far it reaches and the line it is inked in. */
     --bubble-tail: 0px;
     --bubble-tail-line: 0px;
@@ -519,8 +558,8 @@
     --face-mono: var(--face-mono-compact);
     --face: var(--face-mono);
     --code-size: 1em;
-    /* A comic's page: panels inked in its dark fg, a line and a half thick, each dropping a hard shadow; halftone
-     * dots on the gutter between them; the primary action pressed flat into its shadow; and a bubble inked as a
+    /* A comic's page: panels inked in its dark fg, a line and a half thick, each dropping a hard shadow; Ben-Day
+     * tone on the gutter between them (below); the primary action pressed flat into its shadow; and a bubble inked as a
      * panel is. The extra half line is a shadow's spread, so it takes no room. */
     --ink: oklch(from var(--foreground) l c h / 0.9);
     --edge: var(--ink);
@@ -531,7 +570,6 @@
     --press-x: 3px;
     --press-y: 3px;
     --depth-bubble: 0 0 0 1.5px var(--ink), 3px 3px 0 1.5px var(--ink);
-    --canvas-texture: radial-gradient(oklch(from var(--foreground) l c h / 0.11) 1px, transparent 1.5px) 0 0 / 6px 6px;
     --title-drop: 0.08em;
     --title-drop-alpha: 1;
     --aurora-height: 0.25rem;
@@ -563,6 +601,13 @@
     /* A cleared item goes off with a bang, as a comic's panel would letter it, where the others drop a leaf. */
     --burst-leaf: none;
     --burst-plate: block;
+    /* The gutter's tone, printed Ben-Day in process cyan on the newsprint, as a comic's sky is: clear where a page is
+     * read, deepening to the window's far edges. */
+    --ben-day-ink: oklch(0.7 0.13 225 / 0.42);
+    --canvas-texture: var(--ben-day-dots);
+    --canvas-texture-mask: var(--ben-day-ramp);
+    --canvas-swell: var(--ben-day-swell);
+    --canvas-swell-mask: var(--ben-day-swell-ramp);
     /* A bubble's balloon tail out of its square corner, inked as its ring is. */
     --bubble-tail: 7px;
     --bubble-tail-line: 1.5px;
@@ -877,7 +922,7 @@
      * primary action, and a bubble outlined in the cream, by the same rings, at one line where light draws a line and
      * a half, for a page read all day. Each drops a hard shadow in an ultramarine plate (`--ink-drop`): black would
      * vanish into the night blue, and this reads on it at 1.85:1 and on a panel at 1.78:1, at a hue far from
-     * failed's red and the magenta accent. The gutter is dotted in halftone, and the primary action presses flat into
+     * failed's red and the magenta accent. The gutter is toned in Ben-Day, and the primary action presses flat into
      * its shadow. */
     --ink: oklch(from var(--foreground) l c h / 0.85);
     --ink-drop: oklch(0.4 0.11 280);
@@ -889,11 +934,16 @@
     --press-x: 3px;
     --press-y: 3px;
     --depth-bubble: 0 0 0 1px var(--ink), 3px 3px 0 1px var(--ink-drop);
-    --canvas-texture: radial-gradient(oklch(from var(--foreground) l c h / 0.1) 1px, transparent 1.5px) 0 0 / 6px 6px;
     --title-drop: 0.08em;
     --title-drop-alpha: 1;
     --burst-leaf: none;
     --burst-plate: block;
+    /* The gutter's tone, printed Ben-Day as light's is, in a cyan that glows faintly on the night blue. */
+    --ben-day-ink: oklch(0.78 0.135 232 / 0.3);
+    --canvas-texture: var(--ben-day-dots);
+    --canvas-texture-mask: var(--ben-day-ramp);
+    --canvas-swell: var(--ben-day-swell);
+    --canvas-swell-mask: var(--ben-day-swell-ramp);
     /* A bubble's balloon tail out of its square corner, inked as its ring is, the operator's dropping its shadow
      * outward. */
     --bubble-tail: 7px;
