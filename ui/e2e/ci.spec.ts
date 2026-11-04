@@ -26,17 +26,18 @@ test("the nav opens CI under Reports, the week's checks the worst first", async 
 
 test('a long count stays on one line, its bar in line with the others', async ({ page }) => {
     // A busy check's counts run past the mock's single digits: each column is as wide as its longest, so none wraps.
-    await page.route('**/api/reports/ci*', async (route) => {
-        const response = await route.fetch()
-        const report = (await response.json()) as { checks: Record<string, unknown>[] }
-        const [worst, next] = report.checks
-        if (worst === undefined || next === undefined) {
-            throw new Error('the mock has fewer than two checks')
-        }
-        Object.assign(worst, { followed: 14, passed: 12, reruns: 120, reruns_green: 103 })
-        Object.assign(next, { followed: 140, passed: 3 })
-        await route.fulfill({ response, json: report })
-    })
+    // Read once and answered whole: the stream reads the report again as it connects, and a fetch still in flight
+    // when the test ends fails it.
+    const report = (await (await page.request.get('api/reports/ci?days=7')).json()) as {
+        checks: Record<string, unknown>[]
+    }
+    const [worst, next] = report.checks
+    if (worst === undefined || next === undefined) {
+        throw new Error('the mock has fewer than two checks')
+    }
+    Object.assign(worst, { followed: 14, passed: 12, reruns: 120, reruns_green: 103 })
+    Object.assign(next, { followed: 140, passed: 3 })
+    await page.route('**/api/reports/ci?days=7', (route) => route.fulfill({ json: report }))
     await page.goto('reports/ci')
     await settled(page)
     const rows = page.getByTestId('ci-check-table').getByTestId('ci-check')
