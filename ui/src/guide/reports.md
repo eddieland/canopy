@@ -44,8 +44,9 @@ and the work didn't: a changed prompt or a new tool list can turn every run cold
 failing more and going green first less often may have been bought, not earned.
 
 **Delivery** is what the months got done, as medians: four per landed ticket, then the first reviews'. Each median is
-drawn across the months over the table, the latest month's figure beside its name, so a review wait creeping up reads
-as a line going the wrong way rather than a column of numbers you have to remember. Hover a point for its month:
+drawn across the months over its own column, the latest month the line's right end and the table's first row, so a
+review wait creeping up reads as a line going the wrong way rather than a column of numbers you have to remember. Hover
+a point for its month:
 
 - **iterations**: the worker runs, implement and resume, a ticket took before it landed. One means the first attempt
   shipped; five means somebody had opinions.

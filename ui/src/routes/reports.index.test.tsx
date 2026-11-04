@@ -180,17 +180,22 @@ describe('the reports page', () => {
         ).toBeTruthy()
     })
 
-    it("draws Delivery's medians across the months over its table, the latest beside each name", async () => {
+    it("draws each of Delivery's medians across the months over its column, the newest month first", async () => {
         await renderPage()
-        const trends = await screen.findByTestId('reports-trends')
-        expect(within(trends).getByTestId('reports-trend-iterations').textContent).toContain('iterations1')
+        const table = await screen.findByTestId('reports-delivery-table')
+        const names = within(table)
+            .getAllByRole('columnheader')
+            .map((th) => th.textContent)
+        const [newest] = screen.getAllByTestId('reports-delivery-month')
+        const cells = within(newest ?? document.body).getAllByRole('cell')
+        expect(cells[names.indexOf('iterations') - 1]?.textContent).toBe('1')
         // A point for each month with a median, which says the month, and for a time its clock, on hover.
-        const toLand = within(trends).getByTestId('reports-trend-to-land-line')
+        const toLand = within(table).getByTestId('reports-trend-to-land-line')
         expect(within(toLand).getByTestId('reports-trend-to-land-line-point-2026-10').getAttribute('title')).toBe(
             "Oct 2026: 20.0h · From GitHub's times",
         )
         expect(within(toLand).queryByTestId('reports-trend-to-land-line-point-2026-05')).toBeNull()
-        // The table stays, for a screen reader and for picking a month.
+        // Every month is a row, for a screen reader and for picking a month.
         expect(screen.getAllByTestId('reports-delivery-month')).toHaveLength(7)
     })
 
@@ -219,13 +224,11 @@ describe('the reports page', () => {
 
     it("draws each month's median first review in Delivery, as a trend and a column", async () => {
         await renderPage()
-        const trends = await screen.findByTestId('reports-trends')
-        expect(within(trends).getByTestId('reports-trend-first-review').textContent).toContain('first review4.0h')
-        const line = within(trends).getByTestId('reports-trend-first-review-line')
+        const table = await screen.findByTestId('reports-delivery-table')
+        const line = within(table).getByTestId('reports-trend-first-review-line')
         expect(within(line).getByTestId('reports-trend-first-review-line-point-2026-10').getAttribute('title')).toBe(
             'Oct 2026: 4.0h · 2 first reviews',
         )
-        const table = screen.getByTestId('reports-delivery-table')
         expect(within(table).getByRole('columnheader', { name: 'first review' })).toBeTruthy()
         const [october] = screen.getAllByTestId('reports-delivery-month')
         expect(within(october ?? document.body).getByText('4.0h')).toBeTruthy()
