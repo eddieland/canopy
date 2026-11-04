@@ -81,6 +81,8 @@ const BASES = ['background', 'surface', 'surface-raised']
 const SECTIONS = TEXT.filter((name) => name.startsWith('section-'))
 // The nav's highlight on the section shown (`SECTION_TINT` in src/lib/sections.ts).
 const NAV_TINT = 0.24
+// The colors a nav count is in: a failed item's, one waiting on the operator's, and the rest's.
+const NAV_COUNTS = ['status-failed', 'status-blocked', 'muted-foreground']
 // The rail's own fill over the canvas (`bg-surface/60` in src/components/shell/app-shell.tsx).
 const RAIL = 0.6
 
@@ -175,6 +177,18 @@ describe.each(Object.entries(THEMES))('%s theme', (themeName, colors) => {
             )
         }).filter((line) => line !== null)
         expect(low).toEqual([])
+    })
+
+    // A count beside an active item (Attention's, Pull requests', Memory's) keeps its status color, which would not
+    // read on a section's solid block: a palette that draws one sets the count on a plate of the label's ink
+    // (`ON_BLOCK` in src/components/shell/nav.tsx), and the count reads on that.
+    it("reads the nav's counts on their plate in a block", () => {
+        const ink = NAV[themeName]?.ink
+        if (ink === undefined) {
+            return
+        }
+        const low = NAV_COUNTS.map((name) => below(`${name} on its plate of ${ink}`, token(name), token(ink)))
+        expect(low.filter((line) => line !== null)).toEqual([])
     })
 
     it("reads a diff's marks on their line's tint", () => {
@@ -303,6 +317,21 @@ describe('inline code size', () => {
     )('%s sets code at full size if and only if its face is mono', (_name, selector) => {
         const body = rule(selector)
         expect(body.includes('--code-size: 1em;')).toBe(body.includes('--face: var(--face-mono);'))
+    })
+})
+
+// The ink Pulp carries inside a panel (ui/DESIGN.md, "Palettes"): its knobs' defaults draw nothing, so a palette that
+// sets none of them looks as it did before they were added.
+describe("the inside ink's knobs", () => {
+    it.each([
+        ['--depth-chip', 'none'],
+        ['--depth-selected', 'none'],
+        ['--lift-x', '0px'],
+        ['--lift-y', '0px'],
+        ['--control-line', 'var(--border)'],
+        ['--control-line-quiet', 'transparent'],
+    ])('defaults %s to %s', (knob, value) => {
+        expect(rule(':root')).toContain(`\n    ${knob}: ${value};`)
     })
 })
 

@@ -182,7 +182,7 @@ export function MarkdownField({
     return (
         <div
             className={cn(
-                '@container flex flex-col rounded-md border bg-surface-raised text-sm text-foreground',
+                '@container flex flex-col rounded-md border border-control bg-surface-raised text-sm text-foreground',
                 'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
                 props.disabled === true && 'opacity-50',
                 className,

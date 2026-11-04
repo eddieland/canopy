@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 const FIELD = [
-    'w-full rounded-md border bg-surface-raised px-2.5 text-sm text-foreground outline-none',
+    'w-full rounded-md border border-control bg-surface-raised px-2.5 text-sm text-foreground outline-none',
     'placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
     'disabled:opacity-50',
 ]
@@ -62,7 +62,7 @@ export function SearchField({
     return (
         <div
             className={cn(
-                'flex items-center gap-2 rounded-md border bg-surface-raised',
+                'flex items-center gap-2 rounded-md border border-control bg-surface-raised',
                 'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
                 sized.field,
                 className,
