@@ -12,12 +12,12 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import chore_runs, db, records, review_runs, sql
-from canopy.core.vocab import Phase, SeenKind, TickStatus
+from canopy.core import db
+from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import resources
 from canopy.runtime.report import ToolUse, Usage
 from canopy.serve import pr_list
-from tests.canopy.helpers import DEAD_PID, journal_at, old_ticket, present, shipped_through, versions_after
+from tests.canopy.helpers import DEAD_PID, journal_at, old_ticket, present, shipped_through
 from tests.conftest import Journals
 
 # Each migration has a companion here, named by its version alone, that opens with the migration's sha256 over LF line
@@ -26,18 +26,10 @@ from tests.conftest import Journals
 # the companion's name, which is the one conflict worth having.
 COMPANIONS = Path(__file__).parent / "migrations"
 HASH = re.compile(r"-- sha256 of (\S+): ([0-9a-f]{64})\n")
-#: The tables a migration means to delete rows of, by its version: 0069 deletes the found reads, to read them again,
-#: and 0088 those of the runs more than one model served.
-DELETES: Mapping[int, AbstractSet[str]] = {69: frozenset({"run_model_reads"}), 88: frozenset({"run_model_reads"})}
-#: The tables a migration renames, by its version: each old name to its new one and its renamed columns. 0125 names
-#: initiatives epics, and their tracker epic `tracker_epic`.
-RENAMES: Mapping[int, Mapping[str, tuple[str, Mapping[str, str]]]] = {
-    125: {
-        "initiatives": ("epics", {"epic": "tracker_epic"}),
-        "initiative_repos": ("epic_repos", {"initiative_id": "epic_id"}),
-        "initiative_members": ("epic_members", {"initiative_id": "epic_id"}),
-    },
-}
+#: The tables a migration means to delete rows of, by its version. None does yet.
+DELETES: Mapping[int, AbstractSet[str]] = {}
+#: The tables a migration renames, by its version: each old name to its new one and its renamed columns. None does yet.
+RENAMES: Mapping[int, Mapping[str, tuple[str, Mapping[str, str]]]] = {}
 
 
 def companion(number: int) -> str:
@@ -175,6 +167,43 @@ def test_migration_files_must_be_numbered_in_order(tmp_path: Path, names: list[s
         db.discover(tmp_path)
 
 
+def test_a_journal_through_the_squashed_migrations_is_taken_as_having_applied_0001(
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """D068: 0001 makes the schema a journal migrated through 0129 holds, so its ledger is rewritten, and nothing run.
+
+    A live run of the canopy before is no reason to wait: the schema it writes is the same.
+    """
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    conn.executemany(
+        "INSERT INTO schema_migrations (version, name) VALUES (?, 'squashed')",
+        [(v,) for v in range(2, db.SQUASHED_THROUGH + 1)],
+    )
+    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
+    db.touch_ticket(conn, "OLD-1", "/r")
+    conn.execute(
+        "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, status, pid) "
+        "VALUES (1, 'OLD-1', 'implement', 'agent/OLD-1-a', 'x', 'l', 'running', ?)",
+        (os.getpid(),),
+    )
+    assert db.migrate(conn, resources.migrations_dir()) == []
+    assert [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")] == [(1, "init")]
+
+
+def test_a_journal_short_of_the_last_squashed_migration_is_unknown(tmp_path: Path, journals: Journals) -> None:
+    """Only a journal at the last squashed migration holds 0001's schema; one before it is not upgraded (D068)."""
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    conn.executemany(
+        "INSERT INTO schema_migrations (version, name) VALUES (?, 'squashed')",
+        [(v,) for v in range(2, db.SQUASHED_THROUGH)],
+    )
+    with pytest.raises(db.MigrationError, match="migrations this canopy does not know"):
+        db.migrate(conn, resources.migrations_dir())
+
+
 def test_journal_newer_than_code_is_an_error(tmp_path: Path, journals: Journals) -> None:
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
@@ -262,9 +291,23 @@ def test_a_report_replaces_the_tools_a_run_recorded(tmp_path: Path, journals: Jo
     assert db.run_tools(conn, "ticks", tick) == []
 
 
-# The last migration before M36. A table made after it constrains each column of a closed vocabulary (`core/vocab.py`)
-# in SQL; the tables before it list their values in comments, since a shipped migration is never edited.
-UNCHECKED_THROUGH = 26
+#: The closed columns of the tables made before M36, which list their values in comments: their schema was kept when
+#: the migrations were squashed into 0001 (D068). Every other column of a closed vocabulary (`core/vocab.py`)
+#: constrains its values in SQL.
+UNCHECKED = frozenset(
+    {
+        "chore_runs.status",
+        "messages.kind",
+        "notify_events.kind",
+        "review_runs.status",
+        "runs.kind",
+        "runs.status",
+        "starts.status",
+        "ticket_units.phase",
+        "tickets.phase",
+        "ticks.status",
+    },
+)
 CLOSED_COLUMNS = frozenset({"status", "kind", "phase"})
 
 
@@ -285,15 +328,14 @@ def unchecked(conn: sqlite3.Connection, made: Iterable[str]) -> list[str]:
 
 
 def test_a_table_made_from_m36_on_checks_its_closed_columns(tmp_path: Path, journals: Journals) -> None:
-    before = set(tables(journal_at(journals, tmp_path / "before", UNCHECKED_THROUGH)))
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
-    assert unchecked(conn, set(tables(conn)) - before) == []
+    assert set(unchecked(conn, tables(conn))) == UNCHECKED
 
 
 def test_a_closed_column_without_a_check_is_found(tmp_path: Path, journals: Journals) -> None:
-    migrations = shipped_through(tmp_path / "migrations", UNCHECKED_THROUGH)
-    (migrations / f"{UNCHECKED_THROUGH + 1:04d}_observed.sql").write_text(
+    migrations = shipped_through(tmp_path / "migrations", 1)
+    (migrations / "0002_observed.sql").write_text(
         "CREATE TABLE checked (id INTEGER PRIMARY KEY, status TEXT NOT NULL CHECK (status IN ('ok', 'failed')));\n"
         "CREATE TABLE unchecked (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, phase TEXT, note TEXT);\n",
     )
@@ -447,103 +489,14 @@ def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Pa
     assert db.migrate(conn, migrations) == []
 
 
-def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: Path, journals: Journals) -> None:
-    conn = journal_at(journals, tmp_path, 1)
-    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
-    old_ticket(conn, "OLD-1")
-    conn.execute(
-        "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, status) "
-        "VALUES (1, 'OLD-1', 'implement', 'agent/OLD-1-a', 'x', 'l', 'done')",
-    )
-    conn.execute(
-        "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path) VALUES (1, 'nightly', 'x', 'ok', 'l')",
-    )
-    conn.execute(
-        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, log_path) "
-        "VALUES (1, 'https://github.com/acme/api/pull/7', 'abc', 'x', 'done', 'l')",
-    )
-    assert db.migrate(conn, resources.migrations_dir()) == versions_after(1)
-    review_run = present(review_runs.get_review_run(conn, 1))
-    assert (review_run.session_id, review_run.cost_usd, review_run.tokens_input) == (None, None, None)
-    chore_run = present(chore_runs.get_chore_run(conn, 1))
-    assert (chore_run.session_id, chore_run.cost_usd, chore_run.tokens_input) == (None, None, None)
-    run = present(db.get_run(conn, 1))
-    assert (run["session_id"], run["cost_usd"], run["tokens_input"]) == (None, None, None)
-    tick = present(db.get_tick(conn, 1))
-    assert (tick.session_id, tick.cost_usd, tick.tokens_input) == (None, None, None)
-    # Nor did the loop say whether it was idle or what woke it.
-    assert (tick.idle, tick.woken_by) == (None, None)
-
-
-def test_review_runs_from_before_their_purpose_are_own_only_where_their_tickets_unit_has_their_pr(
-    tmp_path: Path,
-    journals: Journals,
-) -> None:
-    """0023 settles the purpose of runs recorded before it: `own` for their ticket's unit's PR, `query` otherwise."""
-    conn = journal_at(journals, tmp_path, 21)
-    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
-    conn.execute(
-        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, phase) "
-        "VALUES ('OLD-1', '/r', 'x', 'y', 'ci_red')",
-    )
-    conn.execute(
-        "INSERT INTO ticket_units (ticket_key, repo, branch, phase, pr_url) "
-        "VALUES ('OLD-1', 'api', 'b', 'ci_red', 'https://e.test/pr/7')",
-    )
-    pr = "https://e.test/pr/7"
-    # The unit's PR in its repository, and with no repository recorded (a workspace of one); another PR; no ticket; and
-    # the unit's PR URL in another repository.
-    for url, ticket, repo in [
-        (pr, "OLD-1", "api"),
-        (pr, "OLD-1", None),
-        ("https://e.test/pr/8", "OLD-1", "api"),
-        (pr, None, "api"),
-        (pr, "OLD-1", "web"),
-    ]:
-        conn.execute(
-            "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, repo, started_at, status, log_path) "
-            "VALUES (1, ?, 'abc', ?, ?, 'x', 'done', 'l')",
-            (url, ticket, repo),
-        )
-    assert db.migrate(conn, resources.migrations_dir()) == versions_after(21)
-    purposes = [r[0] for r in conn.execute("SELECT purpose FROM review_runs ORDER BY id")]
-    assert purposes == ["own", "own", "query", "query", "query"]
-
-
-def test_a_ticket_forgotten_before_forgets_were_recorded_has_its_latest_forget_with_what_it_dropped_unknown(
-    tmp_path: Path,
-    journals: Journals,
-) -> None:
-    """0045 records each ticket's latest forget from its row; what that forget dropped, and from where, is unknown."""
-    conn = journal_at(journals, tmp_path, 44)
-    conn.execute(
-        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, forgotten_at) VALUES "
-        "('OLD-1', '/r', 'x', 'y', '2026-10-01T00:00:00Z'), ('OLD-2', '/r', 'x', 'y', NULL)",
-    )
-    assert db.migrate(conn, resources.migrations_dir()) == versions_after(44)
-    [forget] = db.forgets_of(conn, "OLD-1")
-    assert (forget.at, forget.channel, forget.run_id, forget.message_id, forget.branch, forget.prs) == (
-        "2026-10-01T00:00:00Z",
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
-    assert db.forgets_of(conn, "OLD-2") == []
-
-
-def test_the_memory_index_is_built_from_what_the_journal_holds_and_kept_in_step(
-    tmp_path: Path,
-    journals: Journals,
-) -> None:
-    """0038 indexes the memories already written, and its triggers follow every later write and delete."""
-    conn = journal_at(journals, tmp_path, 37)
+def test_the_memory_index_is_kept_in_step_with_every_write_and_delete(tmp_path: Path, journals: Journals) -> None:
+    """The full-text index's triggers follow every write and delete of `memories`."""
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
     conn.execute(
         "INSERT INTO memories (scope, key, body, status, author, created_at) "
         "VALUES ('lesson', 'api-tests', 'Run the whole suite with make check.', 'active', 'operator', 'x')",
     )
-    assert db.migrate(conn, resources.migrations_dir()) == versions_after(37)
 
     def indexed(word: str) -> list[int]:
         return [r[0] for r in conn.execute("SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?", (word,))]
@@ -556,74 +509,3 @@ def test_the_memory_index_is_built_from_what_the_journal_holds_and_kept_in_step(
     conn.execute("DELETE FROM memories WHERE id = 1")
     # Raises if the index and the rows it is built from disagree.
     conn.execute("INSERT INTO memories_fts (memories_fts) VALUES ('integrity-check')")
-
-
-def test_the_reviews_that_had_ended_are_taken_as_seen(tmp_path: Path, journals: Journals) -> None:
-    """0055 marks every ended review run seen, with no channel, so the reviews before it are not all new at once."""
-    conn = journal_at(journals, tmp_path, 54)
-    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
-    conn.execute(
-        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, ended_at, status, log_path) VALUES "
-        "(1, 'https://github.com/acme/api/pull/7', 'abc', 'x', '2026-10-01T00:00:00Z', 'done', 'l'), "
-        "(1, 'https://github.com/acme/api/pull/8', 'def', 'x', NULL, 'running', 'l')",
-    )
-    assert db.migrate(conn, resources.migrations_dir()) == versions_after(54)
-    seen = records.fetch_all(conn, records.Seen, sql.select("*").from_("seen"))
-    assert seen == [records.Seen(SeenKind.REVIEW, "1", "2026-10-01T00:00:00Z", None)]
-    assert db.seen_among(conn, SeenKind.REVIEW, ["1", "2"]) == {"1"}
-
-
-def test_runs_whose_models_were_found_are_read_again_and_keep_their_models(tmp_path: Path, journals: Journals) -> None:
-    """0069 makes each found run due again, for the variant its models served at; missing and failed reads stay."""
-    conn = journal_at(journals, tmp_path, 68)
-    conn.executemany(
-        "INSERT INTO run_model_reads (run_table, run_id, status, error, attempts, read_at) VALUES (?, ?, ?, ?, 1, 'x')",
-        [("runs", 1, "found", None), ("runs", 2, "missing", None), ("ticks", 3, "failed", "exited 1")],
-    )
-    conn.execute(
-        "INSERT INTO run_models (run_table, run_id, model, replies, cost_usd) VALUES ('runs', 1, 'a/x', 2, 0.5)",
-    )
-    assert db.migrate(conn, resources.migrations_dir()) == versions_after(68)
-    reads = conn.execute("SELECT run_table, run_id, status FROM run_model_reads ORDER BY run_id").fetchall()
-    assert [tuple(r) for r in reads] == [("runs", 2, "missing"), ("ticks", 3, "failed")]
-    assert [tuple(r) for r in conn.execute("SELECT run_id, model FROM run_models")] == [(1, "a/x")]
-
-
-def test_review_drafts_rebuilt_to_be_discarded_keep_the_revisions_that_name_them(
-    tmp_path: Path,
-    journals: Journals,
-) -> None:
-    """0080 rebuilds `review_drafts` under the review runs, versions, and notes that reference them, keeping each."""
-    conn = journal_at(journals, tmp_path, 79)
-    pr = "https://github.com/acme/api/pull/8"
-    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
-    conn.execute(
-        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, log_path, purpose) "
-        "VALUES (1, ?, 'abc', 'x', 'done', 'l', 'request')",
-        (pr,),
-    )
-    conn.execute(
-        "INSERT INTO review_drafts (review_run_id, pr_url, sha, status, created_at) "
-        "VALUES (1, ?, 'abc', 'waiting', 'x')",
-        (pr,),
-    )
-    conn.execute(
-        "INSERT INTO review_draft_versions (draft_id, version, body, comments, author, change, created_at) "
-        "VALUES (1, 1, 'One defect.', '[]', 'reviewer', 'made', 'x')",
-    )
-    conn.execute(
-        "INSERT INTO review_draft_notes (draft_id, after_version, body, channel, created_at) "
-        "VALUES (1, 1, 'Gentler.', 'cli', 'x')",
-    )
-    conn.execute(
-        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, log_path, purpose, revises, "
-        "revises_version) VALUES (1, ?, 'abc', 'x', 'done', 'l', 'request', 1, 1)",
-        (pr,),
-    )
-    assert db.migrate(conn, resources.migrations_dir()) == versions_after(79)
-    assert [tuple(r) for r in conn.execute("SELECT id, review_run_id, status FROM review_drafts")] == [
-        (1, 1, "waiting"),
-    ]
-    assert [tuple(r) for r in conn.execute("SELECT id, revises FROM review_runs ORDER BY id")] == [(1, None), (2, 1)]
-    assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
-    conn.execute("UPDATE review_drafts SET status = 'discarded', why = 'discarded by you through cli'")

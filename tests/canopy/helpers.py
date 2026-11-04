@@ -1529,11 +1529,6 @@ def shipped_through(dest: Path, version: int) -> Path:
     return dest
 
 
-def versions_after(version: int) -> list[int]:
-    """The shipped migrations after `version`: what upgrading a journal at `version` applies."""
-    return [m.version for m in db.discover(resources.migrations_dir()) if m.version > version]
-
-
 def ended_tick(conn: sqlite3.Connection, ended: str | None, status: str = "ok") -> int:
     """A tick that ended at `ended` with `status`, or one still running, for what garbage collection keeps of it."""
     cursor = conn.execute(

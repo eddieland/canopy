@@ -195,7 +195,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   with `#:`, and convert a module's when a PR is already changing it, if that is cheap.
 - SQLite: WAL mode, `PRAGMA foreign_keys=ON`, numbered migrations in `migrations/NNNN_name.sql` applied in order at
   startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one. The series was
-  squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
+  squashed into `0001_init.sql` for v0.1 and again at 0129, each time on the operator's word (D068); that is not a
+  precedent for editing one.
   A new migration gets a companion, `tests/canopy/core/migrations/NNNN.sql` for the same version, opening with the
   migration's sha256 and holding a row for each table it creates; `tests/canopy/core/test_db.py` fails on an edited
   migration, and applies every migration to a journal with data in it and fails on any row lost. Two PRs that take the

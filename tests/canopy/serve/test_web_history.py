@@ -36,7 +36,7 @@ GROWTH = 1.1
 SLACK = 5
 
 # Each read a page or the event stream makes, but the all-time spend: that one sums every cost ever recorded, from an
-# index alone (migration 0022), and grows with the journal by design.
+# index alone, and grows with the journal by design.
 READS: dict[str, Callable[[Backend, Context], object]] = {
     "attention": views.attention,
     "runs": lambda _b, ctx: views.runs(ctx),
@@ -67,8 +67,9 @@ def backend(tmp_path: Path) -> Backend:
 def test_no_read_grows_with_the_history_behind_it(backend: Backend) -> None:
     """Five times the history, every row older than any the pages show, and each read does the same work.
 
-    Before migration 0022 and the candidates `db.recent_tickets` and `pr_list.pull_requests` weigh, the tickets list,
-    the runs list, the PRs, a PR's decisions, and a chore's runs each read every row ever recorded, on every commit.
+    Before the history's indexes and the candidates `db.recent_tickets` and `pr_list.pull_requests` weigh, the tickets
+    list, the runs list, the PRs, a PR's decisions, and a chore's runs each read every row ever recorded, on every
+    commit.
     """
     with backend.open() as ctx:
         add_history(ctx.conn, 0, 1_200)
@@ -337,7 +338,7 @@ def moment(rnd: random.Random) -> str:
 
 
 def every_ticket(conn: sqlite3.Connection, limit: int) -> list[tuple[str, str]]:
-    """The tickets list as it was read before migration 0022: every ticket's activity, weighed."""
+    """The tickets list as it was read before the history's indexes: every ticket's activity, weighed."""
     rows = conn.execute(
         "SELECT t.key, max("
         "  t.changed_at,"
@@ -353,7 +354,7 @@ def every_ticket(conn: sqlite3.Connection, limit: int) -> list[tuple[str, str]]:
 
 
 def every_pull_request(conn: sqlite3.Connection, limit: int, *, url: str | None = None) -> list[tuple[object, ...]]:
-    """The PRs as read before migration 0022, with their own titles: every unit and every review run, weighed."""
+    """The PRs as read before the history's indexes, with their own titles: every unit and every review run, weighed."""
     rows = conn.execute(
         "SELECT k.url, max(k.at) AS active_at, u.ticket_key, u.repo, u.branch, u.phase, t.title, p.title "
         "FROM ("
