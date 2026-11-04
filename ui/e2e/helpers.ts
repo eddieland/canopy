@@ -228,21 +228,28 @@ export async function screenshotMain(page: Page, name: string): Promise<void> {
 async function growToPage(page: Page): Promise<void> {
     await expect.poll(() => page.evaluate(readsInFlight)).toBe(0)
     const scroller = page.locator('[data-scroll-restoration-id=page]')
-    await expect(async () => {
-        const { top, scrolls, shown } = await scroller.evaluate((el) => ({
-            top: el.getBoundingClientRect().top,
-            scrolls: el.scrollHeight,
-            shown: el.clientHeight,
+    const measure = (): Promise<{ height: number; scrolls: boolean }> =>
+        scroller.evaluate((el) => ({
+            height: Math.ceil(el.getBoundingClientRect().top + el.scrollHeight),
+            scrolls: el.scrollHeight > el.clientHeight,
         }))
+    const grow = async (height: number): Promise<void> => {
         const viewport = page.viewportSize()
         if (viewport === null) {
             throw new Error('the page has no viewport to grow')
         }
-        if (scrolls > shown) {
-            await page.setViewportSize({ width: viewport.width, height: Math.ceil(top + scrolls) })
+        await page.setViewportSize({ width: viewport.width, height: Math.max(viewport.height, height) })
+    }
+    // Grown once as the baselines were drawn: to the page's top and height, rounded up, which on a page that fits
+    // the window is a pixel past it.
+    await grow((await measure()).height)
+    // Then again while the page still scrolls: what drew meanwhile grows it once more.
+    await expect(async () => {
+        const { height, scrolls } = await measure()
+        if (scrolls) {
+            await grow(height)
         }
-        // Measured again after growing, until the page no longer scrolls: what drew meanwhile grows it once more.
-        expect(scrolls).toBeLessThanOrEqual(shown)
+        expect(scrolls).toBe(false)
     }).toPass()
 }
 
