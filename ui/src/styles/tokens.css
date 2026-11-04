@@ -188,15 +188,16 @@
     --depth-action: 0 1px 2px oklch(from var(--accent) l c h / 0.35);
     /* A comic's ink, which only Pulp draws: the primary action pressed into its shadow (`--press-x`,
      * `--press-y`, and `--depth-action-pressed`), a message's bubble inked and dropped (`--depth-bubble`), the
-     * canvas's halftone dots (`--canvas-texture`), and a page title's drop in its section's color (`--title-drop`).
-     * The defaults press a pixel down and draw none of the rest, the title's drop transparent
-     * (`--title-drop-alpha`). Each is a shadow, a transform, or a background, so none takes room. */
+     * canvas's halftone dots (`--canvas-texture`), and a page title's drop in its section's color (`--title-drop`),
+     * with a second plate printed off register on a section's title (`--title-drop-2`). The defaults press a pixel
+     * down and draw none of the rest, the title's drops transparent (`--title-drop-alpha`). Each is a shadow, a
+     * transform, or a background, so none takes room. */
     --press-x: 0px;
     --press-y: 1px;
     --depth-action-pressed: var(--depth-action);
     --depth-bubble: none;
     --canvas-texture: none;
-    --title-drop: 0;
+    --title-drop: 0px;
     --title-drop-alpha: 0;
     /* What a cleared attention item drops (src/routes/attention.tsx): a leaf by default, or, where a palette shows
      * the plate, a comic's starburst in its place. Each is a `display`, so a palette picks one without a component
@@ -206,6 +207,7 @@
     /* A bubble's balloon tail (`bubble-tail` in src/index.css): how far it reaches and the line it is inked in. */
     --bubble-tail: 0px;
     --bubble-tail-line: 0px;
+    --title-drop-2: 0 0 transparent;
 
     /* The face interface text is set in: Plex Sans, or the mono data is set in (`--face-mono`), for an editor that
      * sets everything in it. Both are bundled and preloaded, so a palette that switches never paints in a fallback
@@ -217,6 +219,11 @@
     --face: var(--face-sans);
     --face-mono: var(--face-mono-full);
     --face-mono-compact: 'IBM Plex Mono Compact', 'IBM Plex Mono', ui-monospace, monospace;
+    /* The face and tracking a section's own page title is lettered in (`section-title`): the interface face, tracked
+     * as tight as any page title, unless a palette letters it as a comic does (src/styles/title-face.css), in the
+     * same line box, so a switch moves nothing. */
+    --face-title: var(--face);
+    --title-tracking: -0.025em;
 
     /* Code inside a line of text (ui/DESIGN.md, "Rich text"): sized to its line, a step under the sans, where the
      * change of face sets it apart, and at the line's own size on a palette whose every line is mono (`--code-size:
@@ -559,6 +566,12 @@
     /* A bubble's balloon tail out of its square corner, inked as its ring is. */
     --bubble-tail: 7px;
     --bubble-tail-line: 1.5px;
+    /* Its section titles lettered as a comic's are: in Bangers's caps (`--face-title`), tracked open so no two
+     * touch, each dropped in its section's ink with a thin cyan plate printed up and to the left of it, off register,
+     * as a cheap press prints. */
+    --face-title: 'Bangers Title', var(--face);
+    --title-tracking: 0.03em;
+    --title-drop-2: -0.06em -0.06em 0 oklch(0.62 0.14 222 / 0.55);
 }
 
 /* Sage: a soft green canvas, the light side of Forest, with heather for an accent, since a green one would
@@ -885,6 +898,11 @@
      * outward. */
     --bubble-tail: 7px;
     --bubble-tail-line: 1px;
+    /* Its section titles lettered as light's are, the plate up and to the left a paler cyan, which reads on the
+     * night. */
+    --face-title: 'Bangers Title', var(--face);
+    --title-tracking: 0.03em;
+    --title-drop-2: -0.06em -0.06em 0 oklch(0.8 0.12 215 / 0.5);
 }
 
 /* Forest: a deep green canvas, the dark side of Sage, and heather for an accent, as Sage wears: a lake blue read as

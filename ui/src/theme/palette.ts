@@ -56,7 +56,7 @@ export const PALETTE_DESCRIPTIONS: { readonly [T in ResolvedTheme]: Readonly<Rec
         solarized: "Solarized's light base tones and its blue, crisp and flat.",
         nord: "Nord's Snow Storm and Frost's blue, soft, under a fade through Frost's blues.",
         gruvbox: "Gruvbox's light tones and its faded purple, set in mono like an editor of the nineties.",
-        pulp: 'Newsprint cream in four-color print, process magenta for an accent, inked like a comic.',
+        pulp: 'Newsprint cream in four-color print, process magenta for an accent, inked and lettered like a comic.',
         'rose-pine': "Rosé Pine Dawn's warm cream, with its rose for an accent and soft corners.",
         acme: "Plan 9's editor: pale yellow panels on a pale cyan canvas, square and in mono.",
     },
@@ -69,7 +69,7 @@ export const PALETTE_DESCRIPTIONS: { readonly [T in ResolvedTheme]: Readonly<Rec
         solarized: "Solarized's dark base tones and its blue, crisp and flat.",
         gruvbox:
             "Gruvbox's dark tones and its bright purple, in mono with hard shadows, like an editor of the nineties.",
-        pulp: "A night-blue comic's page in four-color print, process magenta for an accent, inked in cream.",
+        pulp: 'A night-blue comic in four-color print, process magenta for an accent, inked in cream and lettered.',
         monokai: "Monokai's olive grey and its pink, crisp and in mono under a neon aurora.",
     },
 }
