@@ -1,6 +1,6 @@
 # M69. What each run changed, kept and shown
 
-DESIGN §8, §21, §22, §23, §26, §29, §36, and §42, TRUST_MODEL T1, T4, and T5. Asked for by the operator
+DESIGN §8, §21, §22, §23, §26, §29, §36, §42, and §45, TRUST_MODEL T1, T4, and T5. Asked for by the operator
 (2026-11-04): richer git integration, around tracking and showing diffs. Today canopy knows a run by its branch and
 its result line.
 Which commit the branch was at when the run started, which it left on origin, and what changed between them is not in
@@ -63,15 +63,15 @@ its own go-ahead.
   §26 already retires a run's files); a diff per commit (one per run is what the operator reads, and stage 3's list names
   the commits); a model's summary of the change (the run's own summary is that, and a diff is the fact under it); a
   page of the repository's history (canopy's record is the loop's own work, not the repository's).
-- **Design and TRUST_MODEL.** §8 gains a short subsection on what a run leaves of its push: the range, the commits,
-  and the kept diffs, as a promise the pages rely on; §29's sentence that keeps a diff under `approve` changes to say
-  every run keeps one; §42's sentence on the stretch diff names where it shows; §26's table row for a run's files
-  grows by the new ones. No new section, and no decision entry: nothing here spans the codebase or moves the trust
-  boundary. TRUST_MODEL, in stage 1's PR: T4 (the harness reads nothing new from a slot: `rev-parse`, `merge-base`,
-  and `diff` already run there after a worker under `approve`, with hooks and drivers off, D107; stage 3 adds `log`,
-  read the same way); T1 (a diff and a commit's subject are a worker's text, shown to the operator as text, never put
-  in an agent's prompt); T5 (unchanged in what it promises, and a run's commits and their marks are now a row each,
-  not only a note).
+- **Design and TRUST_MODEL.** DESIGN §45 states the promise, written ahead of the code: the range, the commits, and
+  the kept diffs, which the pages rely on; stage 1's PR changes it only where the build makes it. In that PR, §29's
+  sentence that keeps a diff under `approve` changes to say every run keeps one; §42's sentence on the stretch diff
+  names where it shows; §26's table row for a run's files grows by the new ones. No decision entry: nothing here spans
+  the codebase or moves the trust boundary. TRUST_MODEL, in stage 1's PR: T4 (the harness reads nothing new from a
+  slot: `rev-parse`, `merge-base`, and `diff` already run there after a worker under `approve`, with hooks and drivers
+  off, D107; stage 3 adds `log`, read the same way); T1 (a diff and a commit's subject are a worker's text, shown to
+  the operator as text, never put in an agent's prompt); T5 (unchanged in what it promises, and a run's commits and
+  their marks are now a row each, not only a note).
 - **Tests with the fakes**, against real git in a worktree slot, as `runs/test_checklist_hold.py` holds the hooks: an
   `implement` that pushes records the base's commit, origin's head, and the merge base, with both diffs kept; a
   `resume` records origin's previous head as its start, and its own diff holds the fix alone; a joint run records one
