@@ -191,6 +191,24 @@ test('rich text in a conversation in gruvbox dark', async ({ page }) => {
     await expect(conversation).toHaveScreenshot('conversation-rich-text-gruvbox-dark.png')
 })
 
+// A conversation in Pulp dark, whose bubbles grow a balloon tail: every kind of message, on both sides, so each tail
+// shows over its own fill, the operator's dropping its shadow outward. The conversation alone.
+test('balloon tails in a conversation in pulp dark', async ({ page }) => {
+    await page.clock.setFixedTime(NOW)
+    await storeTheme(page, 'dark')
+    await storePalette(page, 'dark', 'pulp')
+    await signIn(page)
+    await page.goto('tickets/ABC-103')
+    await settled(page)
+    await expect(page.locator('html')).toHaveAttribute('data-dark-palette', 'pulp')
+    const conversation = page.getByTestId('conversation')
+    await expect(conversation.getByText('What changed', { exact: true })).toBeVisible()
+    await expect(conversation).toHaveScreenshot('conversation-pulp-dark.png')
+    // The tails stay inside the thread's padding: it never scrolls sideways.
+    const thread = page.getByTestId('thread-scroll')
+    expect(await thread.evaluate((region) => region.scrollWidth - region.clientWidth)).toBe(0)
+})
+
 // A PR's feedback plan in each state it has, each on a PR of its own (canopy/serve/mock/feedback_plans.py): the panel
 // alone, so a change to it rewrites these small images rather than a PR's whole page.
 const FEEDBACK_PLANS = [
