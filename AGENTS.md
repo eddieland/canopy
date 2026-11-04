@@ -95,6 +95,7 @@ If code and the design disagree, the design doc wins until a decision entry says
   Every formatter and linter is cheap, so it runs them all; the tests it runs are the ones its change reaches.
   - Always `make fmt` and `make lint`: every formatter, then every linter and the type checker, over the whole
     repository, in seconds. A change under `ui/` also runs `npm --prefix ui run lint` and `typecheck`.
+  - The Playwright screenshot baselines are Git LFS objects, so `make ui-e2e` needs `git-lfs` and `git lfs pull`.
   - Optionally `make hooks`, once per clone: prek's git hooks (`prek.toml`) then run the same formatters and linters
     on each commit's files, and `ui/`'s lint and type check on a push. They stop a commit that fails one; they do not
     replace the step above. A Claude Code cloud session installs them when it starts (`.claude/settings.json`).

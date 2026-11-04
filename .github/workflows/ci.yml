@@ -180,7 +180,7 @@ jobs:
           use_oidc: true
           fail_ci_if_error: false
 
-  # The rest of `make check`: the UI's format, lint, types, generated API types, unit tests, and build (ui/AGENTS.md).
+  # The rest of `make check`: the UI's format, lint, types, unit tests, and build (ui/AGENTS.md).
   ui-check:
     runs-on: ubuntu-latest
     needs: changes
@@ -196,7 +196,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # The generated API types are checked against the schema canopy.serve produces.
+      # The lint and type check generate the API's types from the schema canopy.serve produces.
       - name: Set up uv and Python 3.12
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
@@ -351,6 +351,9 @@ jobs:
       # `./`, not the `$/` zizmor asks for: actionlint does not parse `$/` yet.
       - name: Install Playwright's Chromium
         uses: ./.github/actions/playwright-chromium # zizmor: ignore[self-repository]
+
+      - name: Fetch the screenshot baselines
+        uses: ./.github/actions/screenshot-baselines # zizmor: ignore[self-repository]
 
       - name: Playwright
         env:

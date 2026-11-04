@@ -2,7 +2,7 @@
 
 `python -m canopy.serve --mock [--port N] [--base-path /x] [--secret-file F]` serves the UI on loopback, over a journal
 seeded from fixtures in a temporary directory (mock/), until interrupted. Without `--secret-file` it signs nobody in.
-`python -m canopy.serve openapi` prints the schema the UI's types are generated from (`npm run gen:api` in ui/).
+`python -m canopy.serve openapi` prints the schema the UI's types are generated from (`make ui-gen`).
 Not an operator command: `canopy loop` serves the operator's own journal (DESIGN §22).
 """
 

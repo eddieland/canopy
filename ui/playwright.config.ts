@@ -21,6 +21,8 @@ const withSecret = (args: string): string =>
 /** Playwright against the production build, served by FastAPI over the mock journal: never the Vite dev server. */
 export default defineConfig({
     testDir: './e2e',
+    // The screenshot baselines are Git LFS objects: a checkout without them fails here, once, saying how to fetch them.
+    globalSetup: './e2e/baselines.ts',
     fullyParallel: true,
     forbidOnly: Boolean(process.env.CI),
     // On CI a failed test runs once more, and passing then still fails the run: the report names it flaky rather than

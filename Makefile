@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help all check fmt lint test coverage snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary
+.PHONY: help all check fmt lint test coverage snapshots ui-fmt ui-gen ui-check ui-e2e ui-build install-check
+.PHONY: sandbox-canary
 .PHONY: hooks screenshots test-plugin pool-contract treehouse prompt-sizes burn-in burn-in-py burn-in-ui ui-e2e-burn-in
 
 ##@ General
@@ -110,11 +111,25 @@ ui/node_modules: ui/package.json ui/package-lock.json
 	npm --prefix ui ci --no-audit --no-fund
 	@touch $@
 
+# The generated TypeScript is not committed: each file is written when what it comes from is newer. The route tree
+# comes from ui/src/routes; the API's types from canopy.serve's OpenAPI schema, which any of canopy's Python can shape.
+ui-gen: ui/src/routeTree.gen.ts ui/src/api/schema.gen.ts ## Write ui/'s generated route tree and API types, where stale
+
+# ui/node_modules is order-only: tools write their caches inside it, which moves its time on every build. The
+# lockfile stands for the generators' versions.
+ui/src/routeTree.gen.ts: ui/package-lock.json ui/tsr.config.json $(shell find ui/src/routes -type f) | ui/node_modules
+	npm --prefix ui run -s gen:routes
+	@touch $@
+
+ui/src/api/schema.gen.ts: ui/package-lock.json ui/scripts/gen-api.mjs uv.lock $(shell find src/canopy -name '*.py') \
+		| ui/node_modules
+	npm --prefix ui run -s gen:api
+
 ui-fmt: ui/node_modules ## Format ui/: remove unused imports (oxlint), then format and sort imports (oxfmt)
 	npm --prefix ui run fmt
 
 # COVERAGE=1 also measures the unit tests' coverage and writes ui/coverage/lcov.info, which CI sends to Codecov.
-ui-check: ui/node_modules ## Check ui/ without changing it: format, lint, types, generated API types, unit tests, build
+ui-check: ui/node_modules ## Check ui/ without changing it: format, lint, types, unit tests, build
 	$(if $(COVERAGE),COVERAGE=1 )npm --prefix ui run check
 
 ui-build: ui/node_modules ## Build ui/dist, which canopy serves from a checkout and bundles into its wheel
@@ -152,7 +167,10 @@ pool-contract: ## Check that real treehouse keeps every guarantee canopy takes f
 ##@ Setup
 
 # Optional: CI's `make check` runs every check anyway. prek.toml says which hook runs what, and on which stage.
+# Git LFS's hooks go in first, forced over any earlier prek ones: prek then keeps LFS's pre-push as pre-push.legacy
+# and runs it, which uploads the screenshot baselines a push names. In that order, running it again changes nothing.
 hooks: ## Install git hooks (prek): the formatters and linters on each commit, ui/'s lint and types on each push
+	git lfs install --local --force
 	uv run prek install
 
 TREEHOUSE_REPO := https://github.com/kunchenguid/treehouse
