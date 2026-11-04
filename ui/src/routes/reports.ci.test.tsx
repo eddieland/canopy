@@ -177,8 +177,8 @@ describe('the CI page', () => {
         const rows = within(await screen.findByTestId('ci-check-table')).getAllByTestId('ci-check')
         // The rate first, then red and runs beside it, then the next head and the same head's reruns.
         expect(rows.map((row) => [...row.children].map((cell) => cell.textContent))).toEqual([
-            ['e2e', '40%', '2', '5', '1 of 2', '2 of 3flaky'],
-            ['lint', '0%', '0', '4', '–', '–'],
+            ['e2e', '40%', '', '2', '5', '1 of 2', '', '2 of 3', 'flaky'],
+            ['lint', '0%', '', '0', '4', '–', '', '–', ''],
         ])
         expect(screen.getByTestId('ci-limits').textContent).toContain('A commit status has no run id')
         expect(screen.getByTestId('ci-limits').textContent).toContain('cancelled, skipped, neutral, stale')

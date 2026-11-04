@@ -553,13 +553,16 @@ whole either side.
   it waits on the operator, a header of its `panel-label` and what names it, its text, then its verbs in a row under
   it, `sm` buttons with the CLI's command on hover, `Edit` outline and `Drop` ghost. `Edit` opens a `Textarea` with its
   count against the bound, `Save` disabled past it, and `Cancel`.
-- **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel where its rows name
-  something that wants the room; one with a short name and a few figures sizes to its content at the panel's left, so
-  a row reads in one glance. Its column heads are in `panel-label` type, its figures right-aligned readouts. A row head
-  that names something is its name in medium weight, as `TicketTitle` sets a ticket's title, after its reference in its
-  monospace link. Its panel's header repeats none of its rows. Rows in groups stay one table, so their columns line up:
-  a `tbody` per group, headed by a row whose `rowgroup` cell names it, with the group's own figures in its columns where
-  it has them.
+- **A table of figures** (a chore's spend, the Spend page's) is as wide as its content and never wider than its panel,
+  so a row's figures sit by what it names and the row reads in one glance; a column of text grows to its text, using the
+  panel's room, and is cut only where the panel runs out, never stretched past its text. Its column heads are in
+  `panel-label` type, its figures right-aligned readouts. A row head that names something is its name in medium weight,
+  as `TicketTitle` sets a ticket's title, after its reference in its monospace link. Its panel's header repeats none of
+  its rows. A report's table is a `ReportTable` (`src/components/report-table.tsx`, on `ui/table`), its columns each of
+  a kind, which sets how its head and cells sit: the row's `name`, `free` text, cut only past the panel, a `figure`, a
+  `bar` (`CellBar`), or a `word`; a table is not written by hand, so the rule holds in one place. Rows in groups stay
+  one table, so their columns line up: a `tbody` per group, headed by a row whose `rowgroup` cell names it, with the
+  group's own figures in its columns where it has them.
 - **Readout tiles** (`ReadoutTiles`, `src/components/readout-tiles.tsx`) are a report window's headline figures: its
   sums, not a count of what is now, so they are not `Counter`s. Each is a `panel-label` name over a `readout text-xl`
   figure, what it counts in the name's tip, and, when the page has the window before's figure, a muted line under it
@@ -568,8 +571,9 @@ whole either side.
   the tiles hold what was spent. A figure still being read holds its place. A `Counter` stays a page's count of the
   present, with its state's color.
 - **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest,
-  where comparing the rows is the point: the figure, at a fixed width so the bars start at one edge, then a rounded
-  bar, long enough that a narrow column's still compares, filled in `muted-foreground` or the series' own fill; never a
+  where comparing the rows is the point: the figure in a cell of its own, which the table sizes to the column's widest
+  so the bars start at one edge and no figure wraps, whatever the journal holds, then a rounded bar in the next cell,
+  long enough that a narrow column's still compares, filled in `muted-foreground` or the series' own fill; never a
   state's color, but for a failure rate, in `status-failed`, a share of the whole rather than of the column's largest:
   it says what is broken. It is the eye's, `aria-hidden`. Where a table's rows sum to a whole, a bar is its row's share
   of the whole too, the percent on the cell's hover.

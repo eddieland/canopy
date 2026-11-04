@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
 
 import {
     checklistCountsQuery,
@@ -12,18 +11,19 @@ import {
     reviewsReportQuery,
     spendBreakdownQuery,
 } from '@/api/queries'
-import type { ReportKind, ReportModel, ReportMonth, ReportTicket } from '@/api/types'
-import { CellBar } from '@/components/cell-bar'
+import type { ReportKind, ReportModel, ReportMonth, ReportTicket, ReportTokens } from '@/api/types'
 import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
-import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { ReportTable } from '@/components/report-table'
+import type { ReportColumn } from '@/components/report-table'
 import { Sparkline } from '@/components/sparkline'
 import type { SparkPoint } from '@/components/sparkline'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { Clipped, Hinted, Tip, Tipped } from '@/components/tip'
+import { Clipped, Hinted, Tip } from '@/components/tip'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { UnnamedModel } from '@/components/unnamed-model'
@@ -37,6 +37,7 @@ import { unnamedHint } from '@/lib/models'
 import { plansLine } from '@/lib/plan-report'
 import { REPORT_PAGES } from '@/lib/report-pages'
 import type { ReportPage } from '@/lib/report-pages'
+import type { DeliveryTrend } from '@/lib/reports'
 import {
     clockShare,
     DEFAULT_MONTHS,
@@ -47,7 +48,6 @@ import {
     greenFirstHint,
     greenFirstText,
     hoursText,
-    medianText,
     monthBars,
     monthChange,
     monthLabel,
@@ -120,10 +120,26 @@ const TREND_HINT: Record<string, string> = {
     'first-review': FIRST_REVIEW_HINT,
 }
 
-// The column names of a table in a padded scrolling region, as the spend page's: the region's top padding is the
-// head's cells', so the rows scrolling under the sticky head never show above it.
-const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
-const HEAD = 'panel-label pb-1.5 pl-3 font-normal whitespace-nowrap'
+// A row of the month table: the month, and the month before it, which its tips compare it with.
+interface MonthRow {
+    month: ReportMonth
+    before: ReportMonth | undefined
+}
+
+// A row of By kind: a kind of run, or the sessions outside canopy, ruled off under them; its test id says which.
+interface KindRow {
+    key: string
+    name: string
+    hint?: string
+    runs: number
+    cost: number | null
+    tokens: ReportTokens
+    fill: string | undefined
+    outside: boolean
+}
+
+// A row of By model: the model, and its cost, as a share of the month's.
+type ModelShare = ReportModel & { cost: number | null }
 
 /**
  * The reports' home: a card for each report page, its last 30 days at a glance, then what each local calendar month
@@ -365,29 +381,6 @@ function MonthName({ month }: { month: ReportMonth | undefined }) {
 }
 
 /**
- * A month's name as the first cell of its row in Delivery: a link that shows the month in detail below, marked while
- * it does, which the month chart's bars do too, for the mouse.
- */
-function MonthCell({ month, picked }: { month: string; picked: string | undefined }) {
-    return (
-        <th scope="row" className="py-1 text-left font-normal whitespace-nowrap">
-            <Link
-                to="/reports"
-                search={(prev) => ({ ...prev, month })}
-                resetScroll={false}
-                aria-current={month === picked ? 'true' : undefined}
-                className={cn(
-                    'rounded-sm px-1 font-sans text-accent underline-offset-4 hover:underline',
-                    'aria-[current=true]:bg-accent/16 aria-[current=true]:text-foreground',
-                )}
-            >
-                {monthLabel(month)}
-            </Link>
-        </th>
-    )
-}
-
-/**
  * Every month as the month chart: the spend chart at a month's pitch (`monthBars`), a bar of what each cost stacked
  * by kind, the sessions outside canopy on top, the picked month marked and a click on another picking it, the legend
  * under it, then the same months as a table, folded: what each cost, against the month before on hover, its runs,
@@ -422,184 +415,165 @@ function Months({
                 className="max-h-96 overflow-x-auto"
                 testId="reports-month-scroll"
             >
-                <table className="w-full border-collapse text-sm" data-testid="reports-month-table">
-                    <thead className="sticky top-0 bg-surface">
-                        <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">month</th>
-                            <th className={HEAD}>spent</th>
-                            <th className={HEAD}>runs</th>
-                            <th className={HEAD}>
-                                <Hinted hint={SENT_HINT}>sent</Hinted>
-                            </th>
-                            <th className={HEAD}>
-                                <Hinted hint={WROTE_HINT}>wrote</Hinted>
-                            </th>
-                            <th className={HEAD}>
-                                <Hinted hint={CACHE_HINT}>cache hit</Hinted>
-                            </th>
-                            <th className={HEAD}>
-                                <Hinted hint={FAILED_HINT}>failed</Hinted>
-                            </th>
-                            <th className={HEAD}>
-                                <Hinted hint={GREEN_FIRST_HINT}>green first</Hinted>
-                            </th>
-                            <th className={HEAD}>landed</th>
-                            <th className={HEAD}>closed</th>
-                            <th className={HEAD}>
-                                <Hinted hint={PRS_HINT}>PRs</Hinted>
-                            </th>
-                            <th className={HEAD}>
-                                <Hinted hint={PER_LANDED_HINT}>per landed</Hinted>
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody className="font-mono text-xs">
-                        {months.toReversed().map((m, i, newest) => {
-                            // The month before is the next row down.
-                            const before = newest[i + 1]
-                            return (
-                                <tr key={m.month} className="text-right" data-testid="reports-month">
-                                    <th scope="row" className="py-0.5 text-left font-sans font-normal">
-                                        {monthLabel(m.month)}
-                                    </th>
-                                    <Readout hint={monthChange(m.cost_usd, before, (b) => b.cost_usd)}>
-                                        <Cost usd={m.cost_usd} />
-                                    </Readout>
-                                    <Readout>{m.runs}</Readout>
-                                    <Readout>{tokenCount(sentTokens(m.tokens))}</Readout>
-                                    <Readout>{tokenCount(wroteTokens(m.tokens))}</Readout>
-                                    <Readout>{shareText(m.tokens.cache_hit)}</Readout>
-                                    <Readout hint={failedHint(m)}>{failedText(m)}</Readout>
-                                    <Readout hint={greenFirstHint(m)}>{greenFirstText(m)}</Readout>
-                                    <Readout>{m.landed.length}</Readout>
-                                    <Readout>{m.closed}</Readout>
-                                    <Readout>{m.pull_requests}</Readout>
-                                    <Readout hint={monthChange(m.per_landed_usd, before, (b) => b.per_landed_usd)}>
-                                        <Cost usd={m.per_landed_usd} />
-                                    </Readout>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </table>
+                <ReportTable
+                    rows={months.toReversed().map((month, n, newest) => ({ month, before: newest[n + 1] }))}
+                    columns={MONTH_COLUMNS}
+                    rowKey={(row) => row.month.month}
+                    label="Month by month"
+                    scroll={false}
+                    testId="reports-month-table"
+                    rowTestId="reports-month"
+                />
             </ChartTable>
         </div>
     )
 }
 
-/** A number in a table's row, right aligned, with what it ran on, if said, in its tip. */
-function Readout({ children, hint }: { children: ReactNode; hint?: string | undefined }) {
-    return (
-        <td className="readout pl-3">
-            <Tipped fact={hint}>{children}</Tipped>
-        </td>
-    )
-}
+/**
+ * The month table's columns: the month, what it cost, against the month before on hover, its runs, its tokens, its
+ * failed runs, its share of PR heads green first time, and its output.
+ */
+const MONTH_COLUMNS: ReportColumn<MonthRow>[] = [
+    { key: 'month', kind: 'name', label: 'month', cell: ({ month: m }) => monthLabel(m.month) },
+    {
+        key: 'spent',
+        kind: 'figure',
+        label: 'spent',
+        cell: ({ month: m }) => <Cost usd={m.cost_usd} />,
+        tip: ({ month: m, before }) => monthChange(m.cost_usd, before, (b) => b.cost_usd),
+    },
+    { key: 'runs', kind: 'figure', label: 'runs', cell: ({ month: m }) => m.runs },
+    {
+        key: 'sent',
+        kind: 'figure',
+        label: 'sent',
+        hint: SENT_HINT,
+        cell: ({ month: m }) => tokenCount(sentTokens(m.tokens)),
+    },
+    {
+        key: 'wrote',
+        kind: 'figure',
+        label: 'wrote',
+        hint: WROTE_HINT,
+        cell: ({ month: m }) => tokenCount(wroteTokens(m.tokens)),
+    },
+    {
+        key: 'cache',
+        kind: 'figure',
+        label: 'cache hit',
+        hint: CACHE_HINT,
+        cell: ({ month: m }) => shareText(m.tokens.cache_hit),
+    },
+    {
+        key: 'failed',
+        kind: 'figure',
+        label: 'failed',
+        hint: FAILED_HINT,
+        cell: ({ month: m }) => failedText(m),
+        tip: ({ month: m }) => failedHint(m),
+    },
+    {
+        key: 'green-first',
+        kind: 'figure',
+        label: 'green first',
+        hint: GREEN_FIRST_HINT,
+        cell: ({ month: m }) => greenFirstText(m),
+        tip: ({ month: m }) => greenFirstHint(m),
+    },
+    { key: 'landed', kind: 'figure', label: 'landed', cell: ({ month: m }) => m.landed.length },
+    { key: 'closed', kind: 'figure', label: 'closed', cell: ({ month: m }) => m.closed },
+    { key: 'prs', kind: 'figure', label: 'PRs', hint: PRS_HINT, cell: ({ month: m }) => m.pull_requests },
+    {
+        key: 'per-landed',
+        kind: 'figure',
+        label: 'per landed',
+        hint: PER_LANDED_HINT,
+        cell: ({ month: m }) => <Cost usd={m.per_landed_usd} />,
+        tip: ({ month: m, before }) => monthChange(m.per_landed_usd, before, (b) => b.per_landed_usd),
+    },
+]
 
 /**
- * Every month: the medians of what each landed ticket took, and of its first reviews' waits, drawn across the months,
- * a sparkline each over the table, a month's figure on its point's hover with, for a time, how many ran on GitHub's
- * clock, or how many first reviews; then the table, the newest month first, which a screen reader reads, each month a
- * link that picks it.
+ * Every month, the newest first: the tickets it landed, the medians of what each took, each drawn across the months
+ * as a sparkline over its column, a month's figure on its point's hover with, for a time, how many ran on GitHub's
+ * clock, or how many first reviews; and the median wait of the first reviews that came in it, with how many on hover.
+ * Each month is a link that picks it.
  */
 function Delivery({ months, picked }: { months: readonly ReportMonth[]; picked: string | undefined }) {
-    // Each trend's figure beside its name is the latest month's, as the line ends on it.
-    const latest = months.at(-1)
     return (
-        <div className="flex flex-col">
-            <ul
-                className="grid grid-cols-2 gap-x-6 gap-y-3 p-3 @xl:grid-cols-3 @3xl:grid-cols-5"
-                data-testid="reports-trends"
-            >
-                {DELIVERY_TRENDS.map((trend) => (
-                    <li
-                        key={trend.key}
-                        className="flex min-w-0 flex-col gap-1"
-                        data-testid={`reports-trend-${trend.key}`}
-                    >
-                        <span className="flex items-baseline justify-between gap-2">
-                            <span className="panel-label">
-                                <Hinted hint={TREND_HINT[trend.key]}>{trend.label}</Hinted>
-                            </span>
-                            <span className="readout text-xs text-muted-foreground">
-                                {latest === undefined ? '–' : trend.text(trend.value(latest))}
-                            </span>
-                        </span>
-                        <Sparkline
-                            dots
-                            points={months.map((m) => ({
-                                key: m.month,
-                                value: trend.value(m),
-                                hint: trendPointHint(m, trend),
-                            }))}
-                            testId={`reports-trend-${trend.key}-line`}
-                        />
-                    </li>
-                ))}
-            </ul>
-            <DeliveryTable months={months} picked={picked} />
-        </div>
+        <ReportTable
+            rows={months.toReversed()}
+            columns={deliveryColumns(months, picked)}
+            rowKey={(m) => m.month}
+            label="Delivery"
+            className="px-3 pb-3"
+            testId="reports-delivery-table"
+            rowTestId="reports-delivery-month"
+        />
     )
 }
 
+/** Delivery's columns: the month, a link that picks it, its tickets landed, and a column per trend, its line on top. */
+function deliveryColumns(months: readonly ReportMonth[], picked: string | undefined): ReportColumn<ReportMonth>[] {
+    return [
+        { key: 'month', kind: 'name', label: 'month', cell: (m) => <MonthLink month={m.month} picked={picked} /> },
+        { key: 'landed', kind: 'figure', label: 'landed', cell: (m) => m.landed.length },
+        ...DELIVERY_TRENDS.map((trend): ReportColumn<ReportMonth> => ({
+            key: trend.key,
+            kind: 'figure',
+            label: trend.label,
+            hint: TREND_HINT[trend.key],
+            cell: (m) => trend.text(trend.value(m)),
+            tip: (m) => trendTip(m, trend),
+            over: (
+                <Sparkline
+                    dots
+                    points={months.map((m) => ({
+                        key: m.month,
+                        value: trend.value(m),
+                        hint: trendPointHint(m, trend),
+                    }))}
+                    testId={`reports-trend-${trend.key}-line`}
+                    className="w-32"
+                />
+            ),
+        })),
+    ]
+}
+
+// A month's median of a trend in Delivery's table, on hover: for a time, how many of its figures ran on GitHub's
+// clock; for a median of other figures than the landed tickets', how many, where it has one.
+function trendTip(month: ReportMonth, trend: DeliveryTrend): string | undefined {
+    if (trend.clock !== undefined) {
+        return clockShare(month, trend.clock)
+    }
+    return trend.value(month) === null ? undefined : trend.of?.(month)
+}
+
 /**
- * Every month, the newest first: the tickets it landed, the medians of what each took, and the median wait of the
- * first reviews that came in it, with how many on hover.
+ * A month's name as the first cell of its row in Delivery: a link that shows the month in detail below, marked while
+ * it does, which the month chart's bars do too, for the mouse.
  */
-function DeliveryTable({ months, picked }: { months: readonly ReportMonth[]; picked: string | undefined }) {
+function MonthLink({ month, picked }: { month: string; picked: string | undefined }) {
     return (
-        <PanelScroll label="Delivery" className="px-3 pb-3">
-            <table className="border-collapse text-sm" data-testid="reports-delivery-table">
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">month</th>
-                        <th className={HEAD}>landed</th>
-                        <th className={HEAD}>
-                            <Hinted hint={ITERATIONS_HINT}>iterations</Hinted>
-                        </th>
-                        <th className={HEAD}>
-                            <Hinted hint={COMMENTS_HINT}>PR comments</Hinted>
-                        </th>
-                        <th className={HEAD}>
-                            <Hinted hint={TO_LAND_HINT}>to land</Hinted>
-                        </th>
-                        <th className={HEAD}>
-                            <Hinted hint={WAIT_HINT}>review wait</Hinted>
-                        </th>
-                        <th className={HEAD}>
-                            <Hinted hint={FIRST_REVIEW_HINT}>first review</Hinted>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody className="font-mono text-xs">
-                    {months.toReversed().map((m) => (
-                        <tr key={m.month} className="text-right" data-testid="reports-delivery-month">
-                            <MonthCell month={m.month} picked={picked} />
-                            <Readout>{m.landed.length}</Readout>
-                            <Readout>{medianText(m.median_iterations ?? null)}</Readout>
-                            <Readout>{medianText(m.median_pr_comments ?? null)}</Readout>
-                            <Readout hint={clockShare(m, 'to land')}>
-                                {hoursText(m.median_hours_to_land ?? null)}
-                            </Readout>
-                            <Readout hint={clockShare(m, 'review wait')}>
-                                {hoursText(m.median_review_wait_hours ?? null)}
-                            </Readout>
-                            <Readout
-                                hint={m.first_reviews === 0 ? undefined : counted(m.first_reviews, 'first review')}
-                            >
-                                {hoursText(m.median_first_review_hours ?? null)}
-                            </Readout>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <Link
+            to="/reports"
+            search={(prev) => ({ ...prev, month })}
+            resetScroll={false}
+            aria-current={month === picked ? 'true' : undefined}
+            className={cn(
+                'rounded-sm px-1 text-accent underline-offset-4 hover:underline',
+                'aria-[current=true]:bg-accent/16 aria-[current=true]:text-foreground',
+            )}
+        >
+            {monthLabel(month)}
+        </Link>
     )
 }
 
 /**
- * The picked month's kinds of run: their runs, cost, and tokens; and under them the sessions outside canopy, as of
- * `readAt`, when the runtime's sessions were last read.
+ * The picked month's kinds of run: their runs, cost, and tokens; and under them, ruled off, the sessions outside
+ * canopy, as of `readAt`, when the runtime's sessions were last read.
  */
 function Kinds({ month, readAt }: { month: ReportMonth; readAt: string | null }) {
     const clock = useClock()
@@ -607,62 +581,97 @@ function Kinds({ month, readAt }: { month: ReportMonth; readAt: string | null })
     if (month.runs === 0 && outside.sessions === 0) {
         return <Empty size="panel">nothing ran in {monthLabel(month.month, 'long')}</Empty>
     }
+    const rows: KindRow[] = [
+        ...month.kinds.map((k: ReportKind) => ({
+            key: k.kind,
+            name: k.kind,
+            runs: k.runs,
+            cost: k.cost_usd ?? null,
+            tokens: k.tokens,
+            fill: SERIES.find((s) => s.key === k.kind)?.fill,
+            outside: false,
+        })),
+        {
+            key: 'outside',
+            name: 'outside canopy',
+            hint: outsideHint(readAt, clock),
+            runs: outside.sessions,
+            cost: outside.cost_usd ?? null,
+            tokens: outside.tokens,
+            fill: 'bg-spend-outside',
+            outside: true,
+        },
+    ]
     return (
-        <PanelScroll label="By kind" className="px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="reports-kind-table">
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-right">
-                        <th className="panel-label w-full pb-1.5 text-left font-normal">kind</th>
-                        <th className={HEAD}>runs</th>
-                        <th className={HEAD}>spent</th>
-                        <th className={HEAD}>
-                            <Hinted hint={SENT_HINT}>sent</Hinted>
-                        </th>
-                        <th className={HEAD}>
-                            <Hinted hint={WROTE_HINT}>wrote</Hinted>
-                        </th>
-                        <th className={HEAD}>
-                            <Hinted hint={CACHE_HINT}>cache hit</Hinted>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody className="font-mono text-xs">
-                    {month.kinds.map((k: ReportKind) => (
-                        <tr key={k.kind} className="text-right" data-testid="reports-kind">
-                            <th scope="row" className="py-0.5 text-left font-normal">
-                                {k.kind}
-                            </th>
-                            <Readout>{k.runs}</Readout>
-                            <ShareCell
-                                cost={k.cost_usd}
-                                whole={month.cost_usd}
-                                month={month}
-                                fill={SERIES.find((s) => s.key === k.kind)?.fill}
-                            />
-                            <Readout>{tokenCount(sentTokens(k.tokens))}</Readout>
-                            <Readout>{tokenCount(wroteTokens(k.tokens))}</Readout>
-                            <Readout>{shareText(k.tokens.cache_hit ?? null)}</Readout>
-                        </tr>
-                    ))}
-                    <tr className="border-t border-border text-right" data-testid="reports-outside">
-                        <th scope="row" className="py-0.5 text-left font-normal">
-                            <Hinted hint={outsideHint(readAt, clock)}>outside canopy</Hinted>
-                        </th>
-                        <Readout>{outside.sessions}</Readout>
-                        <ShareCell
-                            cost={outside.cost_usd}
-                            whole={month.cost_usd}
-                            month={month}
-                            fill="bg-spend-outside"
-                        />
-                        <Readout>{tokenCount(sentTokens(outside.tokens))}</Readout>
-                        <Readout>{tokenCount(wroteTokens(outside.tokens))}</Readout>
-                        <Readout>{shareText(outside.tokens.cache_hit ?? null)}</Readout>
-                    </tr>
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={rows}
+            columns={kindColumns(month)}
+            rowKey={(row) => row.key}
+            label="By kind"
+            className="px-3 pb-3"
+            ruled={(row) => row.outside}
+            testId="reports-kind-table"
+            rowTestId={(row) => (row.outside ? 'reports-outside' : 'reports-kind')}
+        />
     )
+}
+
+/** By kind's columns: the kind, its runs, what it cost with a bar of its share of `month`, and its tokens. */
+function kindColumns(month: ReportMonth): ReportColumn<KindRow>[] {
+    return [
+        {
+            key: 'kind',
+            kind: 'name',
+            label: 'kind',
+            cell: (row) => (
+                <span className="font-mono">
+                    <Hinted hint={row.hint}>{row.name}</Hinted>
+                </span>
+            ),
+        },
+        { key: 'runs', kind: 'figure', label: 'runs', cell: (row) => row.runs },
+        { ...shareColumn<KindRow>(month, month.cost_usd ?? null), fill: (row) => row.fill },
+        {
+            key: 'sent',
+            kind: 'figure',
+            label: 'sent',
+            hint: SENT_HINT,
+            cell: (row) => tokenCount(sentTokens(row.tokens)),
+        },
+        {
+            key: 'wrote',
+            kind: 'figure',
+            label: 'wrote',
+            hint: WROTE_HINT,
+            cell: (row) => tokenCount(wroteTokens(row.tokens)),
+        },
+        {
+            key: 'cache',
+            kind: 'figure',
+            label: 'cache hit',
+            hint: CACHE_HINT,
+            cell: (row) => shareText(row.tokens.cache_hit ?? null),
+        },
+    ]
+}
+
+/**
+ * A `spent` column of a cost with a bar of its share of `month`'s `whole` after it, and the share in words on its
+ * hover: `51% of October 2026`. The rows of By kind and By model sum to the month, so the bar is the share of it, not
+ * of the largest row.
+ */
+function shareColumn<T extends { cost: number | null }>(month: ReportMonth, whole: number | null): ReportColumn<T> {
+    return {
+        key: 'spent',
+        kind: 'bar',
+        label: 'spent',
+        cell: (row) => <Cost usd={row.cost} />,
+        bar: (row) => monthShare(row.cost, whole),
+        tip: (row) =>
+            row.cost === null
+                ? undefined
+                : `${Math.round(monthShare(row.cost, whole))}% of ${monthLabel(month.month, 'long')}`,
+    }
 }
 
 /**
@@ -670,78 +679,51 @@ function Kinds({ month, readAt }: { month: ReportMonth; readAt: string | null })
  * session named a model for, `unread` and then `none` (`UnnamedModel`).
  */
 function Models({ month }: { month: ReportMonth }) {
-    // What every row cost together, the runs no session named a model for among them: the share's whole.
-    const modelsCost = month.models.reduce((total, m) => total + (m.cost_usd ?? 0), 0)
     if (month.models.length === 0) {
         return <Empty size="panel">nothing ran in {monthLabel(month.month, 'long')}</Empty>
     }
     return (
-        <PanelScroll label="By model" className="max-h-96 px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="reports-model-table">
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">model</th>
-                        <th className={HEAD}>runs</th>
-                        <th className={HEAD}>replies</th>
-                        <th className={HEAD}>spent</th>
-                    </tr>
-                </thead>
-                <tbody className="font-mono text-xs">
-                    {month.models.map((m: ReportModel) => (
-                        <tr key={modelKey(m)} className="text-right" data-testid="reports-model">
-                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
-                                {m.model === null ? (
-                                    <Tip fact={unnamedHint(m.unread)}>
-                                        <span className="block truncate">
-                                            <UnnamedModel unread={m.unread} />
-                                        </span>
-                                    </Tip>
-                                ) : (
-                                    <Clipped text={m.model} className="block readout" />
-                                )}
-                            </th>
-                            <Readout>{m.runs}</Readout>
-                            <td className={cn('readout pl-3', m.model === null && 'text-muted-foreground')}>
-                                {m.model === null ? '–' : m.replies}
-                            </td>
-                            <ShareCell cost={m.cost_usd} whole={modelsCost} month={month} />
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={month.models.map((m: ReportModel) => ({ ...m, cost: m.cost_usd ?? null }))}
+            columns={modelColumns(month)}
+            rowKey={modelKey}
+            label="By model"
+            testId="reports-model-table"
+            rowTestId="reports-model"
+        />
     )
 }
 
-/**
- * A cost with a bar of its share of the month's `whole` after it, in its series' `fill` (`CellBar`), and the share in
- * words on its hover: `51% of October 2026`. The rows of By kind and By model sum to the month, so the bar is the
- * share of it, not of the largest row.
- */
-function ShareCell({
-    cost,
-    whole,
-    month,
-    fill,
-}: {
-    cost: number | null
-    whole: number | null
-    month: ReportMonth
-    fill?: string | undefined
-}) {
-    const share = monthShare(cost, whole)
-    const bar = (
-        <CellBar percent={share} fill={fill} valueClassName="readout w-16 text-right">
-            <Cost usd={cost} />
-        </CellBar>
-    )
-    return (
-        <td className="pl-3">
-            <Tipped fact={cost === null ? undefined : `${Math.round(share)}% of ${monthLabel(month.month, 'long')}`}>
-                {bar}
-            </Tipped>
-        </td>
-    )
+/** By model's columns: the model, its runs and replies, and what it cost with a bar of its share of the month's. */
+function modelColumns(month: ReportMonth): ReportColumn<ModelShare>[] {
+    // What every row cost together, the runs no session named a model for among them: the share's whole.
+    const modelsCost = month.models.reduce((total, m) => total + (m.cost_usd ?? 0), 0)
+    return [
+        {
+            key: 'model',
+            kind: 'free',
+            label: 'model',
+            cell: (m) =>
+                m.model === null ? (
+                    <Tip fact={unnamedHint(m.unread)}>
+                        <span className="block truncate">
+                            <UnnamedModel unread={m.unread} />
+                        </span>
+                    </Tip>
+                ) : (
+                    <Clipped text={m.model} className="block readout" />
+                ),
+        },
+        { key: 'runs', kind: 'figure', label: 'runs', cell: (m) => m.runs },
+        {
+            key: 'replies',
+            kind: 'figure',
+            label: 'replies',
+            cell: (m) => (m.model === null ? '–' : m.replies),
+            tone: (m) => m.model === null && 'text-muted-foreground',
+        },
+        shareColumn<ModelShare>(month, modelsCost),
+    ]
 }
 
 /** The tickets the picked month landed, the latest first, with what each took. */
@@ -750,71 +732,84 @@ function Landed({ month }: { month: ReportMonth }) {
         return <Empty size="panel">no tickets landed in {monthLabel(month.month, 'long')}</Empty>
     }
     return (
-        <PanelScroll label="Landed" className="max-h-[32rem] px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="reports-landed-table">
-                <thead className={PADDED_HEAD}>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">ticket</th>
-                        <th className={HEAD}>
-                            <Hinted hint={ITERATIONS_HINT}>iterations</Hinted>
-                        </th>
-                        <th className={HEAD}>
-                            <Hinted hint={COMMENTS_HINT}>PR comments</Hinted>
-                        </th>
-                        <th className={HEAD}>
-                            <Hinted hint={REVIEWS_HINT}>reviews</Hinted>
-                        </th>
-                        <th className={HEAD}>
-                            <Hinted hint={TO_LAND_HINT}>to land</Hinted>
-                        </th>
-                        <th className={HEAD}>
-                            <Hinted hint={WAIT_HINT}>review wait</Hinted>
-                        </th>
-                        <th className={HEAD}>spent</th>
-                        <th className={cn(HEAD, 'text-left')}>pull requests</th>
-                    </tr>
-                </thead>
-                <tbody className="font-mono text-xs">
-                    {month.landed.map((t: ReportTicket) => (
-                        <tr key={t.key} className="text-right" data-testid="reports-landed-ticket">
-                            <th scope="row" className="w-full max-w-0 py-1 text-left font-normal">
-                                <span className="flex min-w-0 items-baseline gap-2">
-                                    <TicketLink ticketKey={t.key} className="shrink-0" />
-                                    <TicketTitle title={t.title ?? null} className="font-sans font-normal" />
-                                </span>
-                            </th>
-                            <Readout>{t.iterations}</Readout>
-                            <Readout>{t.pr_comments}</Readout>
-                            <Readout>
-                                {t.reviews}
-                                {t.changes_requested > 0 && (
-                                    <span className="text-status-blocked"> ({t.changes_requested})</span>
-                                )}
-                            </Readout>
-                            <Readout hint={toLandHint(t)}>{hoursText(t.hours_to_land ?? null)}</Readout>
-                            <Readout hint={reviewWaitHint(t)}>{hoursText(t.review_wait_hours ?? null)}</Readout>
-                            <td className="pl-3">
-                                <CellBar
-                                    percent={barPercent(
-                                        t.cost_usd,
-                                        month.landed.map((l) => l.cost_usd),
-                                    )}
-                                    valueClassName="readout w-16 text-right"
-                                >
-                                    <Cost usd={t.cost_usd} />
-                                </CellBar>
-                            </td>
-                            <td className="pl-3 text-left">
-                                <span className="flex flex-col items-start">
-                                    {t.pull_requests.map((url) => (
-                                        <PullRequestLink key={url} url={url} />
-                                    ))}
-                                </span>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={month.landed}
+            columns={landedColumns(month.landed)}
+            rowKey={(t) => t.key}
+            label="Landed"
+            className="max-h-[32rem] px-3 pb-3"
+            testId="reports-landed-table"
+            rowTestId="reports-landed-ticket"
+        />
     )
+}
+
+/**
+ * Landed's columns: the ticket, its iterations, PR comments, reviews and those that asked for changes, how long it
+ * took to land and to be reviewed, what it cost with a bar of the dearest's, and its PRs.
+ */
+function landedColumns(landed: readonly ReportTicket[]): ReportColumn<ReportTicket>[] {
+    const spent = landed.map((t) => t.cost_usd)
+    return [
+        {
+            key: 'ticket',
+            kind: 'free',
+            label: 'ticket',
+            cell: (t) => (
+                <span className="flex min-w-0 items-baseline gap-2">
+                    <TicketLink ticketKey={t.key} className="shrink-0" />
+                    <TicketTitle title={t.title ?? null} className="font-normal" />
+                </span>
+            ),
+        },
+        { key: 'iterations', kind: 'figure', label: 'iterations', hint: ITERATIONS_HINT, cell: (t) => t.iterations },
+        { key: 'comments', kind: 'figure', label: 'PR comments', hint: COMMENTS_HINT, cell: (t) => t.pr_comments },
+        {
+            key: 'reviews',
+            kind: 'figure',
+            label: 'reviews',
+            hint: REVIEWS_HINT,
+            cell: (t) => (
+                <>
+                    {t.reviews}
+                    {t.changes_requested > 0 && <span className="text-status-blocked"> ({t.changes_requested})</span>}
+                </>
+            ),
+        },
+        {
+            key: 'to-land',
+            kind: 'figure',
+            label: 'to land',
+            hint: TO_LAND_HINT,
+            cell: (t) => hoursText(t.hours_to_land ?? null),
+            tip: toLandHint,
+        },
+        {
+            key: 'review-wait',
+            kind: 'figure',
+            label: 'review wait',
+            hint: WAIT_HINT,
+            cell: (t) => hoursText(t.review_wait_hours ?? null),
+            tip: reviewWaitHint,
+        },
+        {
+            key: 'spent',
+            kind: 'bar',
+            label: 'spent',
+            cell: (t) => <Cost usd={t.cost_usd} />,
+            bar: (t) => barPercent(t.cost_usd, spent),
+        },
+        {
+            key: 'pull-requests',
+            kind: 'word',
+            label: 'pull requests',
+            cell: (t) => (
+                <span className="flex flex-col items-start">
+                    {t.pull_requests.map((url) => (
+                        <PullRequestLink key={url} url={url} />
+                    ))}
+                </span>
+            ),
+        },
+    ]
 }
