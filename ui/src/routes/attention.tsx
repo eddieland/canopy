@@ -434,7 +434,11 @@ function Row({
                 data-testid={`attention-item-${item.id}`}
                 className={cn(
                     'flex flex-col gap-1 rounded-sm px-2.5 py-2 hover:bg-surface-raised',
-                    selected && 'bg-accent/14 hover:bg-accent/14',
+                    'motion-safe:transition-[translate,box-shadow] motion-safe:duration-150',
+                    // Selected, it wears its palette's ink, if it draws one: lifted off the list onto a hard drop, in
+                    // front of the row below it. A shadow and a transform, so nothing moves around it.
+                    selected && 'relative z-1 bg-accent/14 shadow-selected hover:bg-accent/14',
+                    selected && 'translate-x-(--lift-x) translate-y-(--lift-y)',
                 )}
             >
                 <RowContent item={item} done={done} />

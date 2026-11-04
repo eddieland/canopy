@@ -35,6 +35,8 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `scrollbar` | Every scrollbar's thumb, on a clear track: `muted-foreground`, translucent. Set once on the root. |
 | `edge` | A panel's and a float's outline: `border` by default, clear where a palette draws none. |
 | `depth-panel`, `-float`, `-action` | The palette's shadows, as `shadow-panel`, `shadow-float`, and `shadow-action`. |
+| `depth-chip`, `-selected` | A chip's and a selected row's ink, `shadow-chip` and `shadow-selected`: none by default. |
+| `control-line`, `-quiet` | A field's and outline button's line, and a secondary one's (`border-control`, `-quiet`). |
 | `status-running` | A run working. Pulses. |
 | `status-blocked` | A run that asked a question, and anything else waiting on the operator. |
 | `status-stopped` | A run the operator stopped. |
@@ -159,19 +161,22 @@ Rules:
   section's color (`--title-drop`), and a bubble's balloon tail (`--bubble-tail`, `--bubble-tail-line`), out of its
   square corner along its top edge, so it never meets the head line above, in the bubble's own fill over the panel's
   surface. A section's own title is lettered too: in its display face and tracking (`--face-title`, `--title-tracking`),
-  its drop half again as far, and a thin second plate up and to its left, off register (`--title-drop-2`). Each is a
-  shadow, a transform, a background, a face drawn in the same line box, or drawn beside its box, so it takes no room.
-  Both sides ink by the same rings; dark's line is its cream, and its drop a color that reads on the night blue, where
-  black would not. Pulp shows a starburst where a cleared item drops its leaf (`--burst-plate`, `--burst-leaf`),
-  absolutely placed, so it too takes no room.
+  its drop half again as far, and a thin second plate up and to its left, off register (`--title-drop-2`). Inside a
+  panel, a chip is ringed and dropped (`shadow-chip`, its colors still its tone's), a list's selected row inked and
+  lifted off it (`shadow-selected`, `--lift-x`, `--lift-y`), and a field's and an outline or secondary button's line
+  drawn in ink (`border-control`, `border-control-quiet`). Each is a shadow, a transform, a background, a face drawn
+  in the same line box, or drawn beside its box, so it takes no room. Both sides ink by the same rings; dark's line is
+  its cream, and its drop a color that reads on the night blue, where black would not. Pulp shows a starburst where a
+  cleared item drops its leaf (`--burst-plate`, `--burst-leaf`), absolutely placed, so it too takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, a print strip of those blocks between ink gutters, or a line that blooms),
   the name (the aurora's gradient, on a solid block, on a plate inked as a panel and tilted a few degrees by a
   transform, `--wordmark-tilt`, or glowing), and the nav's highlight (a tint and a bar, a solid block with the active
-  item inked in the canvas's color, or a tint with the icon lit). Each form takes the room the default does, so a
-  switch moves nothing, and what a form draws past its box (a frame, a drop, a tilt) stays clear of what is beside it;
-  the defaults keep the first of each, Gruvbox's dark the second, Pulp's sides the print strip, the plate, and the
-  block, and black the last of each.
+  item inked in the canvas's color, or a tint with the icon lit). On a block, a count beside the active item sits on a
+  plate of that ink, where its status color reads. Each form takes the room the default does, so a switch moves
+  nothing, and what a form draws past its box (a frame, a drop, a tilt) stays clear of what is beside it; the defaults
+  keep the first of each, Gruvbox's dark the second, Pulp's sides the print strip, the plate, and the block, and black
+  the last of each.
   A palette may tune its section colors too, muted toward a scheme's own set or turned up, but each keeps its hue's
   family, which says what its page is for: a rose stays a rose, a gold a gold, though a scheme's own shade of it may
   sit a few degrees round the wheel. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
@@ -223,8 +228,9 @@ Rules:
   (`shadow-panel`), a shadow under what floats over the page, a menu, a card, a tip, a dialog, a toast, the rail's
   sheet, and the settings' save bar (`shadow-float`), and one under the primary action, the default button
   (`shadow-action`, and `shadow-action-pressed` while it is pressed). Each is the palette's (Palettes, under Tokens),
-  so its form changes with it, and nothing inside a panel casts one but a pressed segment's `shadow-xs` and a
-  conversation's bubble (`shadow-bubble`), which casts none but on a palette that inks it.
+  so its form changes with it, and nothing inside a panel casts one but a pressed segment's `shadow-xs`, and a
+  conversation's bubble, a chip, and a list's selected row (`shadow-bubble`, `shadow-chip`, `shadow-selected`), which
+  cast none but on a palette that inks them.
 - Radius: `rounded-md` (8px) for panels, buttons, and fields, `rounded-sm` (6px) for chips and nav items, `rounded-xs`
   (4px) for a mark smaller than a line of text, a checkbox or a slot's square, at the default palettes' `--radius`. A
   palette may set its own, and the scale follows it. The scale is in `tokens.css`; no arbitrary radius
