@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Save } from 'lucide-react'
 import { useState } from 'react'
 
-import { saveConfig } from '@/api/mutations'
-import { configQuery, keys } from '@/api/queries'
+import { refreshReloaded, saveConfig } from '@/api/mutations'
+import { configQuery } from '@/api/queries'
 import type { ConfigKey, ConfigSaved, ConfigSettings, ConfigValue } from '@/api/types'
 import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
@@ -42,7 +42,7 @@ export function ConfigForm() {
     const mutation = useMutation({
         mutationFn: ({ hash, changes }: { hash: string; changes: Record<string, ConfigValue> }) =>
             saveConfig(hash, changes),
-        onSuccess: () => client.invalidateQueries({ queryKey: keys.config }),
+        onSuccess: () => refreshReloaded(client),
     })
     if (data === undefined) {
         return (

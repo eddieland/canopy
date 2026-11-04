@@ -5,7 +5,7 @@ import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { reloadConfig, signOut } from '@/api/mutations'
+import { refreshReloaded, reloadConfig, signOut } from '@/api/mutations'
 import { keys, personasQuery, sessionQuery, spendQuery } from '@/api/queries'
 import { Code } from '@/components/code'
 import { ConfigModels } from '@/components/config-models'
@@ -918,8 +918,8 @@ function ConfigPanel() {
     const client = useQueryClient()
     const mutation = useMutation({
         mutationFn: reloadConfig,
-        // The models shown above are the loop's: a reload may change them.
-        onSuccess: () => client.invalidateQueries({ queryKey: keys.configModels }),
+        // The models shown above are the loop's, and what the menus hide its config's: a reload may change both.
+        onSuccess: () => refreshReloaded(client),
     })
     return (
         <Panel>

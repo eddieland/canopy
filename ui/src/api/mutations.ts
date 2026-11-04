@@ -551,6 +551,18 @@ export async function reloadConfig(): Promise<ConfigReload> {
 }
 
 /**
+ * After the loop reads its config again, by Reload or a save: read the config's queries again, the agents' models among
+ * them, and the runtime's model list, whose `hidden` is `runtime.hide_models` as the loop reads it, so a menu leaves
+ * out what the file hides now rather than what it hid a minute ago.
+ */
+export async function refreshReloaded(client: QueryClient): Promise<void> {
+    await Promise.all([
+        client.invalidateQueries({ queryKey: keys.config }),
+        client.invalidateQueries({ queryKey: keys.models }),
+    ])
+}
+
+/**
  * Ask the loop for a tick now, as `t` at its terminal does (DESIGN §6): its wait ends at once, paused or not, and a
  * pause stays. Asked for during a tick, it starts when that one ends.
  */
