@@ -176,6 +176,14 @@ The repositories this plan covers, as the overseer chose them:
 
 {{/MAP}}
 
+{{#EPIC}}
+
+## The epic
+
+{{EPIC}}
+
+{{/EPIC}}
+
 {{#OPERATOR_MESSAGES}}
 
 ## Messages from the operator

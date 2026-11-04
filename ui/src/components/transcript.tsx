@@ -3,6 +3,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type {
+    RunWorktree,
     Transcript,
     TranscriptEntry,
     TranscriptPrompt,
@@ -24,6 +25,7 @@ import { RowGrid, RowLine } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Toggle } from '@/components/ui/toggle'
+import { RunWorktreesContext, useRunWorktrees } from '@/hooks/use-run-worktrees'
 import { useTranscriptView } from '@/hooks/use-transcript-view'
 import type { TranscriptView } from '@/hooks/use-transcript-view'
 import { useClock } from '@/lib/clock'
@@ -52,10 +54,12 @@ import {
     sentTokens,
     settingsOf,
     settingSubject,
+    shellCall,
     shownOutput,
     signed,
     startOf,
     summary,
+    summaryTitle,
     tally,
     THINKING_LINES,
     THIS_TICK,
@@ -63,7 +67,7 @@ import {
     TRANSCRIPT_BUDGET,
     wroteTokens,
 } from '@/lib/transcript'
-import type { CallDecision, CallSetting, ModelCall as Call } from '@/lib/transcript'
+import type { CallDecision, CallSetting, ModelCall as Call, ShellCall } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
 // What a row marks with no search: one stable value, as a default prop must be.
@@ -72,6 +76,8 @@ const NO_WORDS: readonly string[] = []
 const NO_CALLS: readonly Call[] = []
 // The models a row inside a call is given: none, for the same reason.
 const NO_MODELS: ReadonlyMap<number, string> = new Map()
+// The worktrees of a transcript that is not a run's: none, so a shell call's directory stays whole.
+const NO_WORKTREES: readonly RunWorktree[] = []
 
 /**
  * A session's transcript (DESIGN §22): the agent's text, each tool call (what it did and how it ended on its line,
@@ -88,18 +94,21 @@ const NO_MODELS: ReadonlyMap<number, string> = new Map()
  * All of it is agent output, rendered as text. `running` says the session has not ended: its events reach the log as
  * the runtime prints them, so it is what the agent has done so far. Its header names the session, on every page that
  * shows one. With no events, it is its header alone, which says why in a few words (`log gone`), the whole reason on
- * hover. A page that shows a row from outside the panel passes the `view` it holds (`useTranscriptView`).
+ * hover. A page that shows a row from outside the panel passes the `view` it holds (`useTranscriptView`). A run's page
+ * passes its `worktrees`, which a shell call's line reads its directory against (`summary`); other pages pass none.
  */
 export function TranscriptPanel({
     transcript,
     running,
     page,
     view,
+    worktrees = NO_WORKTREES,
 }: {
     transcript: Transcript | undefined
     running: boolean
     page: TranscriptPage
     view?: TranscriptView
+    worktrees?: readonly RunWorktree[]
 }) {
     const own = useTranscriptView()
     const { grouped, setGrouped, typed, found, setTyped, target, show } = view ?? own
@@ -160,177 +169,184 @@ export function TranscriptPanel({
     const why = transcript !== undefined && entries.length === 0 ? empty(transcript, running) : null
     return (
         // Its space is held only while it is read (No layout shift): read, it is as tall as what it holds.
-        <Panel className={cn(transcript === undefined && 'min-h-40')} data-testid="transcript">
-            <PanelHeader label="Transcript">
-                <span className="flex flex-wrap items-center gap-3">
-                    {transcript?.session_id && (
-                        <Copyable
-                            text={transcript.session_id}
-                            label="session id"
-                            className="readout hidden text-xs text-muted-foreground @lg:inline-flex"
-                        >
-                            <span title="open it with the runtime's tools too: opencode export <id>">
-                                session {transcript.session_id}
-                            </span>
-                        </Copyable>
-                    )}
-                    {why !== null && (
-                        <span className="readout text-xs text-muted-foreground" title={why.reason}>
-                            {why.short}
-                        </span>
-                    )}
-                    {transcript?.session_id && (entries.length > 1 || groups || tools) && (
-                        // The session is what the transcript is; the modes after the rule are how it is shown.
-                        <span aria-hidden className="hidden h-4 w-px bg-border @lg:inline" />
-                    )}
-                    <span className="flex items-center gap-1">
-                        {entries.length > 1 && <OrderToggle list="transcript" />}
-                        {groups && (
-                            <Toggle
-                                size="xs"
-                                pressed={grouped}
-                                onPressedChange={setGrouped}
-                                title={grouped ? 'Show each event in order' : 'Group the events by model call'}
+        <RunWorktreesContext value={worktrees}>
+            <Panel className={cn(transcript === undefined && 'min-h-40')} data-testid="transcript">
+                <PanelHeader label="Transcript">
+                    <span className="flex flex-wrap items-center gap-3">
+                        {transcript?.session_id && (
+                            <Copyable
+                                text={transcript.session_id}
+                                label="session id"
+                                className="readout hidden text-xs text-muted-foreground @lg:inline-flex"
                             >
-                                <Rows3 />
-                                By call
-                            </Toggle>
-                        )}
-                        {(tools || callView) && (
-                            <Toggle
-                                size="xs"
-                                pressed={allOpen}
-                                onPressedChange={(on) => setOpened((o) => ({ open: on, round: o.round + 1, query }))}
-                                title={allOpen ? 'Close every call' : 'Open every call'}
-                            >
-                                <ChevronsUpDown />
-                                All open
-                            </Toggle>
-                        )}
-                    </span>
-                </span>
-            </PanelHeader>
-            {transcript === undefined ? (
-                <PanelSkeleton />
-            ) : entries.length === 0 ? null : (
-                <>
-                    <div
-                        className={cn(
-                            'flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 pt-1.5',
-                            // The context chart's line reads as the counts' second, in the same band.
-                            shape.peak === null ? 'border-b pb-1.5' : 'pb-1',
-                        )}
-                    >
-                        <p className="flex flex-wrap gap-x-4 font-mono text-xs text-muted-foreground">
-                            <span>
-                                {counts.tools} tool {counts.tools === 1 ? 'call' : 'calls'}
-                                {counts.failed > 0 && (
-                                    <>
-                                        , <span className="text-status-failed">{counts.failed} failed</span>
-                                    </>
-                                )}
-                                {counts.refused > 0 && (
-                                    <>
-                                        , <span className="text-status-failed">{counts.refused} refused</span>
-                                    </>
-                                )}
-                            </span>
-                            <span>
-                                {counts.calls} model {counts.calls === 1 ? 'call' : 'calls'}
-                            </span>
-                            {counts.errors > 0 && (
-                                <span className="text-status-failed">
-                                    {counts.errors} runtime {counts.errors === 1 ? 'error' : 'errors'}
+                                <span title="open it with the runtime's tools too: opencode export <id>">
+                                    session {transcript.session_id}
                                 </span>
+                            </Copyable>
+                        )}
+                        {why !== null && (
+                            <span className="readout text-xs text-muted-foreground" title={why.reason}>
+                                {why.short}
+                            </span>
+                        )}
+                        {transcript?.session_id && (entries.length > 1 || groups || tools) && (
+                            // The session is what the transcript is; the modes after the rule are how it is shown.
+                            <span aria-hidden className="hidden h-4 w-px bg-border @lg:inline" />
+                        )}
+                        <span className="flex items-center gap-1">
+                            {entries.length > 1 && <OrderToggle list="transcript" />}
+                            {groups && (
+                                <Toggle
+                                    size="xs"
+                                    pressed={grouped}
+                                    onPressedChange={setGrouped}
+                                    title={grouped ? 'Show each event in order' : 'Group the events by model call'}
+                                >
+                                    <Rows3 />
+                                    By call
+                                </Toggle>
                             )}
-                            {transcript.truncated && <span>cut: the log holds more than a page shows</span>}
-                            {transcript.unreadable > 0 && <span>{transcript.unreadable} events could not be read</span>}
-                        </p>
-                        {!callView && (
-                            <Find
-                                value={typed}
-                                onChange={setTyped}
-                                lines={query === null ? null : lines}
-                                rows={shown.length}
-                            />
-                        )}
-                    </div>
-                    <ContextChart
-                        shape={shape}
-                        onShow={show}
-                        open={chartOpen}
-                        onOpenChange={(open) => setContextChartOpen(page, open)}
-                    />
-                    <PanelScroll
-                        label="transcript rows"
-                        // Most of the window, so a page of rows scrolls under the header, its counts, and its search.
-                        className="max-h-[max(24rem,80dvh)]"
-                        data-testid="transcript-scroll"
-                    >
-                        {callView ? (
-                            <ol className="divide-y" data-testid="transcript-calls">
-                                {ordered('transcript', order, [
-                                    ...calls.before.map((entry, i) => (
-                                        <Entry
-                                            key={`before-${i}`}
-                                            entry={entry}
-                                            start={startOf(entries)}
-                                            open={false}
-                                        />
-                                    )),
-                                    ...calls.calls.map((call) => (
-                                        <CallRow
-                                            key={`${call.n}-${opened.round}`}
-                                            call={call}
-                                            model={models.get(call.n) ?? null}
-                                            step={shape.calls.find((c) => c.n === call.n)?.step ?? null}
-                                            prompt={transcript.prompt}
-                                            start={startOf(entries)}
-                                            open={opened.open}
-                                        />
-                                    )),
-                                ]).slice(0, drawn)}
-                                {drawn < callRows && (
-                                    <Fold
-                                        label={moreLabel(callRows - drawn, 'calls', TRANSCRIPT_BUDGET)}
-                                        onShow={more}
-                                    />
+                            {(tools || callView) && (
+                                <Toggle
+                                    size="xs"
+                                    pressed={allOpen}
+                                    onPressedChange={(on) =>
+                                        setOpened((o) => ({ open: on, round: o.round + 1, query }))
+                                    }
+                                    title={allOpen ? 'Close every call' : 'Open every call'}
+                                >
+                                    <ChevronsUpDown />
+                                    All open
+                                </Toggle>
+                            )}
+                        </span>
+                    </span>
+                </PanelHeader>
+                {transcript === undefined ? (
+                    <PanelSkeleton />
+                ) : entries.length === 0 ? null : (
+                    <>
+                        <div
+                            className={cn(
+                                'flex flex-wrap items-center gap-x-4 gap-y-1.5 px-3 pt-1.5',
+                                // The context chart's line reads as the counts' second, in the same band.
+                                shape.peak === null ? 'border-b pb-1.5' : 'pb-1',
+                            )}
+                        >
+                            <p className="flex flex-wrap gap-x-4 font-mono text-xs text-muted-foreground">
+                                <span>
+                                    {counts.tools} tool {counts.tools === 1 ? 'call' : 'calls'}
+                                    {counts.failed > 0 && (
+                                        <>
+                                            , <span className="text-status-failed">{counts.failed} failed</span>
+                                        </>
+                                    )}
+                                    {counts.refused > 0 && (
+                                        <>
+                                            , <span className="text-status-failed">{counts.refused} refused</span>
+                                        </>
+                                    )}
+                                </span>
+                                <span>
+                                    {counts.calls} model {counts.calls === 1 ? 'call' : 'calls'}
+                                </span>
+                                {counts.errors > 0 && (
+                                    <span className="text-status-failed">
+                                        {counts.errors} runtime {counts.errors === 1 ? 'error' : 'errors'}
+                                    </span>
                                 )}
-                            </ol>
-                        ) : shown.length === 0 ? (
-                            <Empty>no line holds “{query}”</Empty>
-                        ) : (
-                            <ol className="divide-y" data-testid="transcript-entries">
-                                {shown.slice(0, drawn).map(({ entry, i, hits }) => {
-                                    const targeted = target?.i === i
-                                    // A row whose place changes remounts to it, as does the one the chart shows.
-                                    const open = opened.open || searchOpens(hits) || targeted
-                                    return (
-                                        <Entry
-                                            key={`${i}-${opened.round}-${open}-${targeted ? target.round : ''}`}
-                                            entry={entry}
-                                            start={startOf(entries)}
-                                            open={open}
-                                            words={words}
-                                            targeted={targeted}
-                                            calls={calls.calls}
-                                            models={models}
-                                            prompt={transcript.prompt}
-                                        />
-                                    )
-                                })}
-                                {drawn < shown.length && (
-                                    <Fold
-                                        label={moreLabel(shown.length - drawn, 'rows', TRANSCRIPT_BUDGET)}
-                                        onShow={more}
-                                    />
+                                {transcript.truncated && <span>cut: the log holds more than a page shows</span>}
+                                {transcript.unreadable > 0 && (
+                                    <span>{transcript.unreadable} events could not be read</span>
                                 )}
-                            </ol>
-                        )}
-                    </PanelScroll>
-                </>
-            )}
-        </Panel>
+                            </p>
+                            {!callView && (
+                                <Find
+                                    value={typed}
+                                    onChange={setTyped}
+                                    lines={query === null ? null : lines}
+                                    rows={shown.length}
+                                />
+                            )}
+                        </div>
+                        <ContextChart
+                            shape={shape}
+                            onShow={show}
+                            open={chartOpen}
+                            onOpenChange={(open) => setContextChartOpen(page, open)}
+                        />
+                        <PanelScroll
+                            label="transcript rows"
+                            // Most of the window, so a page of rows scrolls under the header, its counts, and its
+                            // search.
+                            className="max-h-[max(24rem,80dvh)]"
+                            data-testid="transcript-scroll"
+                        >
+                            {callView ? (
+                                <ol className="divide-y" data-testid="transcript-calls">
+                                    {ordered('transcript', order, [
+                                        ...calls.before.map((entry, i) => (
+                                            <Entry
+                                                key={`before-${i}`}
+                                                entry={entry}
+                                                start={startOf(entries)}
+                                                open={false}
+                                            />
+                                        )),
+                                        ...calls.calls.map((call) => (
+                                            <CallRow
+                                                key={`${call.n}-${opened.round}`}
+                                                call={call}
+                                                model={models.get(call.n) ?? null}
+                                                step={shape.calls.find((c) => c.n === call.n)?.step ?? null}
+                                                prompt={transcript.prompt}
+                                                start={startOf(entries)}
+                                                open={opened.open}
+                                            />
+                                        )),
+                                    ]).slice(0, drawn)}
+                                    {drawn < callRows && (
+                                        <Fold
+                                            label={moreLabel(callRows - drawn, 'calls', TRANSCRIPT_BUDGET)}
+                                            onShow={more}
+                                        />
+                                    )}
+                                </ol>
+                            ) : shown.length === 0 ? (
+                                <Empty>no line holds “{query}”</Empty>
+                            ) : (
+                                <ol className="divide-y" data-testid="transcript-entries">
+                                    {shown.slice(0, drawn).map(({ entry, i, hits }) => {
+                                        const targeted = target?.i === i
+                                        // A row whose place changes remounts to it, as does the one the chart shows.
+                                        const open = opened.open || searchOpens(hits) || targeted
+                                        return (
+                                            <Entry
+                                                key={`${i}-${opened.round}-${open}-${targeted ? target.round : ''}`}
+                                                entry={entry}
+                                                start={startOf(entries)}
+                                                open={open}
+                                                words={words}
+                                                targeted={targeted}
+                                                calls={calls.calls}
+                                                models={models}
+                                                prompt={transcript.prompt}
+                                            />
+                                        )
+                                    })}
+                                    {drawn < shown.length && (
+                                        <Fold
+                                            label={moreLabel(shown.length - drawn, 'rows', TRANSCRIPT_BUDGET)}
+                                            onShow={more}
+                                        />
+                                    )}
+                                </ol>
+                            )}
+                        </PanelScroll>
+                    </>
+                )}
+            </Panel>
+        </RunWorktreesContext>
     )
 }
 
@@ -569,7 +585,9 @@ function Tool({
 }) {
     const { verdict, guard, line } = outcome(entry)
     const failed = verdict !== 'done'
-    const did = summary(entry)
+    const worktrees = useRunWorktrees()
+    const did = summary(entry, worktrees)
+    const shell = shellCall(entry, worktrees)
     const decisions = decisionsOf(entry)
     const settings = decisions === null ? settingsOf(entry) : null
     return (
@@ -589,9 +607,14 @@ function Tool({
                         <MarkedText text={entry.tool} words={words} />
                     </span>
                     <span className="flex min-w-40 flex-1 flex-col">
-                        {/* A shell call's title is what the agent said it was for: the command is what it did. */}
-                        <span className="truncate font-mono text-xs" title={entry.title ?? did}>
-                            <MarkedText text={did} words={words} />
+                        {/* A shell call's title is what the agent said it was for: the command is what it did. Its
+                            hover is the line whole, as the call named its directory, then that title. */}
+                        <span className="truncate font-mono text-xs" title={summaryTitle(entry)}>
+                            {shell === null ? (
+                                <MarkedText text={did} words={words} />
+                            ) : (
+                                <ShellLine call={shell} words={words} />
+                            )}
                         </span>
                         {line !== null && (
                             <span
@@ -895,17 +918,43 @@ function Heading({ label, tokens, detail }: { label: string; tokens: number | nu
 /** What one tool call returned, as the next model call was sent it: the call on one line, then its output or error. */
 function Returned({ tool }: { tool: TranscriptTool }) {
     const failed = outcome(tool).verdict !== 'done'
+    const worktrees = useRunWorktrees()
+    const shell = shellCall(tool, worktrees)
     return (
         <div className="flex flex-col gap-1">
             <span className="flex min-w-0 items-baseline gap-2 font-mono text-xs">
                 <RunDot state={failed ? 'failed' : 'done'} />
                 <span className="shrink-0">{tool.tool}</span>
-                <span className="truncate text-muted-foreground" title={summary(tool)}>
-                    {summary(tool)}
+                <span className="truncate text-muted-foreground" title={summaryTitle(tool)}>
+                    {shell === null ? summary(tool, worktrees) : <ShellLine call={shell} />}
                 </span>
             </span>
             <Pre failed={failed}>{shownOutput(tool)}</Pre>
         </div>
+    )
+}
+
+/**
+ * A shell call's line: the directory it ran in, muted, then `$` and its command in the line's own color, so the eye
+ * finds the command and the directory reads apart from it. A directory outside the run's worktrees is in
+ * `status-blocked`, whole, so a call that wandered off stands out. Search marks hold in each part.
+ */
+function ShellLine({ call, words = NO_WORDS }: { call: ShellCall; words?: readonly string[] }) {
+    return (
+        <>
+            {call.dir !== null && (
+                <>
+                    <span
+                        className={call.outside ? 'text-status-blocked' : 'text-muted-foreground'}
+                        data-testid="shell-dir"
+                    >
+                        <MarkedText text={call.dir} words={words} />
+                    </span>
+                    <span className="text-muted-foreground"> $ </span>
+                </>
+            )}
+            <MarkedText text={call.command} words={words} />
+        </>
     )
 }
 

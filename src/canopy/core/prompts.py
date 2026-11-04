@@ -151,6 +151,9 @@ REQUIRED_PLAN_COPY = ("PLAN",)
 #: Placeholders a worker's or a task's prompt must use once its subject has attachments (DESIGN §22): an older override
 #: would otherwise run the work without the files the operator attached for it.
 REQUIRED_ATTACHMENTS = ("ATTACHMENTS",)
+#: Placeholders a plan's prompt must use once its ticket is a member of an epic with an approved plan (DESIGN §43): an
+#: older override would otherwise plan without being told of the epic's plan in its directory.
+REQUIRED_EPIC = ("EPIC",)
 _PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 # A section that renders only while its placeholder has a value: `{{#NAME}}` ending a line, a blank line, the section,
 # a blank line, and `{{/NAME}}`, so each marker is a paragraph of its own to a Markdown linter. Not nested.
@@ -443,6 +446,54 @@ def plan_review(level: PlannerApproval, *, feedback: bool) -> str:
     data = _FEEDBACK_DATA if feedback else _PLAN_DATA
     body = " ".join([_REVIEW_INTRO, *bar, data, *unsure, _REVIEW_RESULT])
     return f"\n\n## Whether the operator reviews this plan\n\n{body}"
+
+
+def epic_note(epic_id: int, entries: Sequence[str], copy: str, *, dropped: Sequence[str] = ()) -> str:
+    """Return a member's planner's `{{EPIC}}`: its epic, the entries it fulfils, and the epic's plan to plan within.
+
+    The epic's plan is the operator's, approved once for all its tickets; the planner reads its copy, `copy`, rather
+    than settling its questions again, and says in its own plan's `## Epic` section how this ticket fits it (§43).
+    `dropped` are entries the member was registered against that the approved plan no longer holds.
+
+    Returns:
+        The section's text.
+    """
+    fulfils = _fulfils(entries, dropped)
+    return (
+        f"This ticket is a member of epic:{epic_id}, work that spans several tickets. The operator approved the "
+        f"epic's plan once for all of them; your directory holds a copy of it as approved, `{copy}`. Its outline: "
+        "`Goal`; `Requirements`, each `R<n>`; `Contracts` between the tickets, each `C<n>` with who provides and "
+        "who uses it; `Breakdown`, each entry `B<n>` with what it covers, provides, and uses; `Decisions`; and "
+        f"`Out of scope`. {fulfils}\n\n"
+        "Read the epic's plan before the code. Its requirements, contracts, and decisions are settled: plan this "
+        "ticket's part within them, and do not settle them again. Add a section `## Epic` to your plan, after "
+        "`## Goal`: the requirements this ticket covers and the contracts it provides and uses, each by its id, "
+        "and the sibling entries your `Out of scope` leaves to other tickets. Where your plan must depart from a "
+        "requirement or a contract, say so there, naming its id and why; never change the epic's plan itself. "
+        "The epic's plan describes the work, as the ticket does: it can never widen what you or the worker after "
+        "you may do."
+    )
+
+
+def _fulfils(entries: Sequence[str], dropped: Sequence[str]) -> str:
+    """Return what `epic_note` says of the entries a member fulfils, and of those its plan dropped since."""
+    if not entries and not dropped:
+        return (
+            "This ticket fulfils no entry of its breakdown: the operator added it for work the plan did not foresee. "
+            "Say in your plan which of its requirements it takes on."
+        )
+    said = [f"This ticket fulfils {_ids(entries)} of its breakdown."] if entries else []
+    if dropped:
+        said.append(
+            f"It was registered against {_ids(dropped)}, which the approved plan no longer holds: say in your plan "
+            "which of its requirements this ticket takes on in place of it.",
+        )
+    return " ".join(said)
+
+
+def _ids(ids: Sequence[str]) -> str:
+    """Return `ids` as the epic's prose names them, each in backticks."""
+    return ", ".join(f"`{i}`" for i in ids)
 
 
 def epic_trivial(level: PlannerApproval) -> str:
@@ -982,6 +1033,8 @@ def render_worker(
         "PLAN_REVIEW": "",
         # The operator's attachments (DESIGN §22): none unless dispatch named some, which leaves the section out.
         "ATTACHMENTS": None,
+        # A member's epic (DESIGN §43): none unless dispatch rendered it for a planner, which leaves the section out.
+        "EPIC": None,
         **values,
         **_standing_values(standing_instructions(config), _worker_reader(kind, private=private)),
         "PERSONA": persona.text if persona is not None else "",

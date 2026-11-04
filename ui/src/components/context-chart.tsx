@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Disclosure } from '@/components/disclosure'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { useRunWorktrees } from '@/hooks/use-run-worktrees'
 import { axisNames, axisStep } from '@/lib/chart'
 import { signed, summary, tokenCount } from '@/lib/transcript'
 import type { Addition, CallContext, ContextShape } from '@/lib/transcript'
@@ -295,7 +296,8 @@ function Grew({
 function ShowButton({ addition, onShow }: { addition: Addition; onShow: (i: number) => void }) {
     const { entry } = addition
     const name = entry.kind === 'tool' ? entry.tool : entry.reasoning ? 'thinking' : 'text'
-    const what = entry.kind === 'tool' ? summary(entry) : entry.text.replaceAll(/\s+/gu, ' ').trim()
+    const worktrees = useRunWorktrees()
+    const what = entry.kind === 'tool' ? summary(entry, worktrees) : entry.text.replaceAll(/\s+/gu, ' ').trim()
     return (
         <button
             type="button"

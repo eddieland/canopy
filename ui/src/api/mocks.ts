@@ -55,7 +55,13 @@ export const mockRuns: Run[] = [
         cost_usd: 0.42,
         new_tokens: 19320,
         peak_context: 25200,
-        worktrees: ['.treehouse/web-3f9c2a1b/1/web'],
+        worktrees: [
+            {
+                repo: 'web',
+                path: '.treehouse/web-3f9c2a1b/1/web',
+                absolute: '/home/op/acme/.treehouse/web-3f9c2a1b/1/web',
+            },
+        ],
         log_path: '/home/op/.canopy/runs/41.log',
         activity: { tool: 'bash', did: 'npm test -- login', at: '2026-10-08T12:27:00Z' },
         card: {

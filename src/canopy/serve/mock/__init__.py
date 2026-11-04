@@ -388,7 +388,7 @@ def seed(directory: Path) -> Backend:
             # Last, so its runs take ids after every other fixture's.
             plan_approvals.seed(ctx.conn, ws.state_dir, root)
         reviews.drafts(ctx.conn, at)
-    transcripts.write(ws.state_dir, T0)
+    transcripts.write(ws.state_dir, T0, lambda repo, n: slot_path(root, repo, n))
     return backend
 
 
@@ -947,8 +947,10 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     # Run 39's peak is the most one model call in its transcript was sent (transcripts.py), as its page's chart shows.
     records.update(records.Run).set(tokens_peak_context=30200).where("id = 39").run(conn)
     run_slots = (
-        # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile; 37 and 40 ended long ago
+        # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile; 37, 39, and 40 ended long
+        # ago, and 39's slot holds a shell someone opened since.
         (37, "web", 4, "lease-37", "canopy:ABC-100"),
+        (39, "web", 3, "lease-39", "canopy:ABC-099"),
         (40, "web", 4, "lease-40", "canopy:ABC-100"),
         (LIVE_RUN, "web", 1, "lease-1", "canopy:ABC-101"),
         (43, "web", 2, "lease-2", "canopy:ABC-104"),

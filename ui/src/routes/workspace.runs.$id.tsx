@@ -33,6 +33,10 @@ import { runRef } from '@/lib/refs'
 import { tickId } from '@/lib/ticks'
 import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 
+// A worktree's hover, while the run holds it and once it has ended: the pool leases an ended run's slot again.
+const HOLDS = 'the worktree it holds'
+const HELD = 'the worktree it worked in: the slot may hold other work since'
+
 // What every run's page shows, on its title's hover: its description is the run's state.
 const HELP =
     "What the worker did, from its session's events in the run's log: its text, each tool call with its input and " +
@@ -95,7 +99,13 @@ function Loaded({ id }: { id: number }) {
                 )}
                 <RunPanel run={data} transcript={transcript} onShow={view.show} />
                 <ChecklistPanel answers={data.checklist} />
-                <TranscriptPanel transcript={transcript} running={data.state === 'running'} page="run" view={view} />
+                <TranscriptPanel
+                    transcript={transcript}
+                    running={data.state === 'running'}
+                    page="run"
+                    view={view}
+                    worktrees={data.worktrees}
+                />
                 <PromptPanel transcript={transcript} />
                 <RunOutputPanel id={data.id} />
                 <RunMemoryPanel id={data.id} />
@@ -138,7 +148,7 @@ function RunPanel({
                 {(run.summary || run.card === null) && (
                     <Field label="summary">{run.summary ? <RichText text={run.summary} /> : <None />}</Field>
                 )}
-                <EndedOnField status={run.status} transcript={transcript} onShow={onShow} />
+                <EndedOnField status={run.status} transcript={transcript} onShow={onShow} worktrees={run.worktrees} />
                 {run.feedback_plan !== null && (
                     <Field label="wrote" mono>
                         <WroteFeedbackPlan plan={run.feedback_plan} />
@@ -171,8 +181,10 @@ function RunPanel({
                 {run.worktrees.length > 0 && (
                     <Field label="worktrees" mono>
                         <span className="flex flex-wrap gap-x-4">
-                            {run.worktrees.map((path) => (
-                                <CopyablePath key={path} path={path} label="worktree path" />
+                            {run.worktrees.map((w) => (
+                                <CopyablePath key={w.absolute} path={w.path} label="worktree path">
+                                    <span title={run.ended_at === null ? HOLDS : HELD}>{w.path}</span>
+                                </CopyablePath>
                             ))}
                         </span>
                     </Field>

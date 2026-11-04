@@ -51,6 +51,8 @@ class Plan(Row):
     approved_title_sha256: str | None
     #: The same of its description, set with the title's.
     approved_body_sha256: str | None
+    #: The approved epic plan its planner read, when its ticket is a member of an epic with one (DESIGN §43).
+    epic_plan_id: int | None
 
 
 @dataclass(frozen=True)

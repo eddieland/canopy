@@ -1,4 +1,5 @@
 import type {
+    RunWorktree,
     TranscriptEntry,
     TranscriptError,
     TranscriptPrompt,
@@ -128,7 +129,7 @@ export interface EndedOn {
  * What a session that ended badly ended on: its last runtime error, which is what stops a session the runtime gave up
  * on; else its last failed or refused tool call. Null when it holds neither.
  */
-export function endedOn(entries: TranscriptEntry[]): EndedOn | null {
+export function endedOn(entries: TranscriptEntry[], worktrees: readonly RunWorktree[] = []): EndedOn | null {
     let tool: EndedOn | null = null
     for (let i = entries.length - 1; i >= 0; i -= 1) {
         const entry = entries[i]
@@ -138,7 +139,7 @@ export function endedOn(entries: TranscriptEntry[]): EndedOn | null {
         if (tool === null && entry?.kind === 'tool') {
             const { verdict, line } = outcome(entry)
             if (verdict !== 'done') {
-                tool = { i, entry, line: line ?? summary(entry) }
+                tool = { i, entry, line: line ?? summary(entry, worktrees) }
             }
         }
     }
@@ -369,16 +370,14 @@ export function startOf(entries: TranscriptEntry[]): string | null {
  * `ticket-set` call's settings, each its ticket and what it sets (`ABC-1 approved, ABC-2 (web) merged done, ABC-3
  * cursors`); else the runtime's title; else its input's short values as `key=value`, as
  * `{"repo": "web", "pullNumber": 88}` reads `repo=web pullNumber=88`. Empty when the input has none, or was cut and
- * no longer parses.
+ * no longer parses. Given the run's `worktrees`, a shell call's directory is read against them (`shellCall`).
  */
-export function summary(entry: TranscriptTool): string {
-    const input = parsed(entry.input)
-    const command = input?.['command']
-    if (typeof command === 'string') {
-        const workdir = input?.['workdir']
-        const dir = typeof workdir === 'string' ? oneLine(workdir) : ''
-        return dir === '' ? oneLine(command) : `${dir} $ ${oneLine(command)}`
+export function summary(entry: TranscriptTool, worktrees: readonly RunWorktree[] = []): string {
+    const shell = shellCall(entry, worktrees)
+    if (shell !== null) {
+        return shell.dir === null ? shell.command : `${shell.dir} $ ${shell.command}`
     }
+    const input = parsed(entry.input)
     const decisions = decisionsIn(input)
     if (decisions !== null) {
         return decisions
@@ -413,6 +412,70 @@ export function summary(entry: TranscriptTool): string {
         return [`${key}=${/\s/u.test(shown) ? JSON.stringify(shown) : shown}`]
     })
     return pairs.join(' ').slice(0, MAX_LINE)
+}
+
+/**
+ * What a tool call's line says on hover: a shell call's whole line, its directory as the call named it, then what the
+ * agent said it was for; else the runtime's title, else the line (`summary`).
+ */
+export function summaryTitle(entry: TranscriptTool): string {
+    const whole = summary(entry)
+    if (typeof parsed(entry.input)?.['command'] !== 'string') {
+        return entry.title ?? whole
+    }
+    return entry.title === null || entry.title === '' ? whole : `${whole}\n${entry.title}`
+}
+
+/** A shell call as its line shows it: the directory it ran in, then its command. */
+export interface ShellCall {
+    /** The directory as the line names it (`shownDir`), whole when it is outside the run's worktrees; null when the
+     * call names none. */
+    dir: string | null
+    /** Whether the directory is outside every worktree of the run, which the line marks; false without any. */
+    outside: boolean
+    /** The command, on one line. */
+    command: string
+}
+
+/**
+ * A shell call's directory and command, or null for any other call. Its directory is read against the run's
+ * `worktrees`: one inside them reads from its repository (`shownDir`), any other whole, marked `outside` when there
+ * were worktrees to be inside. Without them, as on a tick's page, it is whole and unmarked.
+ */
+export function shellCall(entry: TranscriptTool, worktrees: readonly RunWorktree[] = []): ShellCall | null {
+    const input = parsed(entry.input)
+    const command = input?.['command']
+    if (typeof command !== 'string') {
+        return null
+    }
+    const workdir = input?.['workdir']
+    const whole = typeof workdir === 'string' ? oneLine(workdir) : ''
+    if (whole === '') {
+        return { dir: null, outside: false, command: oneLine(command) }
+    }
+    const inside = shownDir(whole, worktrees)
+    return { dir: inside ?? whole, outside: inside === null && worktrees.length > 0, command: oneLine(command) }
+}
+
+/**
+ * A directory inside one of the run's `worktrees` as a line names it, from its repository: `web` for the worktree
+ * itself, `web/src` under it, the form canopy's plugin gives a leading `cd web &&`. Null for a directory inside none.
+ */
+export function shownDir(dir: string, worktrees: readonly RunWorktree[]): string | null {
+    const at = dir.replace(/\/+$/u, '')
+    for (const w of worktrees) {
+        const root = w.absolute.replace(/\/+$/u, '')
+        if (root === '') {
+            continue
+        }
+        if (at === root) {
+            return w.repo
+        }
+        if (at.startsWith(`${root}/`)) {
+            return `${w.repo}/${at.slice(root.length + 1)}`
+        }
+    }
+    return null
 }
 
 /** One decision a call to canopy's `decide` tool records, as its input names it. */

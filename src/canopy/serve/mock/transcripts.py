@@ -17,7 +17,7 @@ from canopy.serve.mock import reviews
 from canopy.serve.mock.chores import LODASH
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
     from datetime import datetime
     from pathlib import Path
 
@@ -132,8 +132,12 @@ class _Session(NamedTuple):
     t0: datetime
 
 
-def write(state_dir: Path, t0: datetime) -> None:
-    """Write the events of runs 39 to 43's, tick 2's, chore run 2's, reviews 3 and 4's, and task run 1's sessions."""
+def write(state_dir: Path, t0: datetime, slot: Callable[[str, int], str]) -> None:
+    """Write the events of runs 39 to 43's, tick 2's, chore run 2's, reviews 3 and 4's, and task run 1's sessions.
+
+    `slot` names a slot of a repository's pool by number, as the journal's `run_slots` name the ones the runs leased:
+    a shell call names its directory so (`workdir`), which the page shortens against the run's worktrees.
+    """
     # The worktree run 39 worked in, as the operator's machine names it: the same on every start, for screenshots.
     web = "/home/op/acme/.treehouse/web-3f9c2a1b/3/web"
     s39, s40, s41, s43 = (_Session(s, t0) for s in ("ses_mock39", "ses_mock40", "ses_mock41", "ses_mock43"))
@@ -206,6 +210,7 @@ def write(state_dir: Path, t0: datetime) -> None:
             "git push origin HEAD:refs/heads/agent/ABC-099-search",
             "To github.com:acme/web.git\n * [new branch]      HEAD -> agent/ABC-099-search\n",
             seconds=3,
+            workdir=slot("web", 3),
         ),
         _tool(
             s39,
@@ -241,7 +246,7 @@ def write(state_dir: Path, t0: datetime) -> None:
         _event("error", s40, -70.1, error={"name": "APIError", "data": {"message": "Rate limited: retry after 60s"}}),
     ]
     # The running runs print as they go (DESIGN §8): what each has done so far, its cost the seeded run's.
-    w41, w43 = "/home/op/acme/.treehouse/web-3f9c2a1b/1/web", "/home/op/acme/.treehouse/web-3f9c2a1b/2/web"
+    w41 = "/home/op/acme/.treehouse/web-3f9c2a1b/1/web"
     run_41 = [
         _start(s41, 0.5),
         _text(s41, 0.6, "I'll read the login form first, then its tests."),
@@ -264,7 +269,15 @@ def write(state_dir: Path, t0: datetime) -> None:
     run_43 = [
         _start(s43, 5.5),
         _text(s43, 5.6, "The retry test fails on mobile only. Reading the workflow both repositories run."),
-        _done(s43, 29, "Read the CI workflow", f"cat {w43}/.github/workflows/ci.yml", "name: ci\n", seconds=1),
+        _done(
+            s43,
+            29,
+            "Read the CI workflow",
+            "cat .github/workflows/ci.yml",
+            "name: ci\n",
+            seconds=1,
+            workdir=slot("mobile", 1),
+        ),
         _step(s43, 29.1, 0.12),
     ]
     chore_2 = [
@@ -535,13 +548,25 @@ def _step(session: _Session, minutes: float, cost: float, reason: str = "tool-ca
     )
 
 
-def _done(session: _Session, minutes: float, title: str, command: str, output: str, *, seconds: float = 1) -> str:
-    """A bash call that completed.
+def _done(
+    session: _Session,
+    minutes: float,
+    title: str,
+    command: str,
+    output: str,
+    *,
+    seconds: float = 1,
+    workdir: str | None = None,
+) -> str:
+    """A bash call that completed, run in `workdir` when it names one, as an agent names its slot's whole path.
 
     Returns:
         The `tool_use` event as one line of JSON.
     """
-    state = {"status": "completed", "input": {"command": command, "description": title}, "output": output}
+    called: dict[str, object] = {"command": command, "description": title}
+    if workdir is not None:
+        called["workdir"] = workdir
+    state = {"status": "completed", "input": called, "output": output}
     return _tool(session, minutes, "bash", {**state, "title": title}, seconds)
 
 

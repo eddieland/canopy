@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { mockChores, mockReviews, mockRuns, mockTasks } from '@/api/mocks'
 import { keys } from '@/api/queries'
-import type { ChoreSummary, ReviewSummary, Run, TaskSummary } from '@/api/types'
+import type { ChoreSummary, ReviewSummary, Run, RunWorktree, TaskSummary } from '@/api/types'
 import { subjectRuns } from '@/lib/run-state'
 import { renderRouted, tipOf } from '@/test-utils'
 
@@ -32,6 +32,11 @@ function renderRuns(runs: Run[], props: { ticket?: boolean; ownPr?: string } = {
 
 function run(fields: Partial<Run>): Run {
     return { ...BLOCKED, ...fields }
+}
+
+// A worktree shown at `path`, of a repository named for it.
+function slot(path: string): RunWorktree {
+    return { repo: path, path, absolute: `/home/op/acme/${path}` }
 }
 
 // A run one model served whole.
@@ -72,14 +77,14 @@ describe('RunsTable', () => {
 
     it('names up to four worktrees, and counts the rest past three, every one in a tip', async () => {
         const four = ['w/1', 'w/2', 'w/3', 'w/4']
-        const { unmount } = await renderRuns([run({ worktrees: four })])
+        const { unmount } = await renderRuns([run({ worktrees: four.map((path) => slot(path)) })])
         for (const path of four) {
             expect(screen.getByText(path)).toBeDefined()
         }
         expect(screen.queryByTestId('run-worktrees-more')).toBeNull()
         unmount()
 
-        await renderRuns([run({ worktrees: [...four, 'w/5'] })])
+        await renderRuns([run({ worktrees: [...four, 'w/5'].map((path) => slot(path)) })])
         expect(screen.getByText('w/3')).toBeDefined()
         expect(screen.queryByText('w/4')).toBeNull()
         const more = screen.getByText('+2 more worktrees')
