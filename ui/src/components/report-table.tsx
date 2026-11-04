@@ -66,12 +66,13 @@ const CELL: Record<Exclude<ReportColumnKind, 'bar'>, string> = {
 
 /**
  * A report's table (ui/DESIGN.md, "A table of figures"), one row of `rows` each, in `columns`: the first column is the
- * row's head. It is as wide as its content and never wider than its panel, so a row's figures sit by what it names;
- * its `free` column grows to its text up to a cap, then is cut. It scrolls in its panel under a sticky head, named
- * `label` for a screen reader, in a region of `className` (`max-h-96 px-3 pb-3` unless given); with `scroll` false it
- * is bare, for a region of someone else's (`ChartTable`). `rowKey` keys a row; the table's test id is `testId`, each
- * row's `rowTestId`'s, or what it makes of the row. `top` sets each row's cells at its top, for a row whose free cell
- * runs to several lines. A page shows its own `Empty` in its place when it has no rows.
+ * row's head, so it names the row (a `name`, `free`, or `word` column), never a figure or a bar. It is as wide as its
+ * content and never wider than its panel, so a row's figures sit by what it names; its `free` column grows to its text
+ * up to a cap, then is cut. It scrolls in its panel under a sticky head, named `label` for a screen reader, in a region
+ * of `className` (`max-h-96 px-3 pb-3` unless given); with `scroll` false it is bare, for a region of someone else's
+ * (`ChartTable`). `rowKey` keys a row; the table's test id is `testId`, each row's `rowTestId`'s, or what it makes of
+ * the row. `top` sets each row's cells at its top, for a row whose free cell runs to several lines. A page shows its
+ * own `Empty` in its place when it has no rows.
  */
 export function ReportTable<T>({
     rows,
@@ -133,7 +134,7 @@ function ColumnHead<T>({ column, first }: { column: ReportColumn<T>; first: bool
     }
     const name = <Hinted hint={column.hint}>{column.label}</Hinted>
     if (column.kind === 'bar') {
-        return <CellBarHead className={cn(first && 'pl-0')}>{name}</CellBarHead>
+        return <CellBarHead>{name}</CellBarHead>
     }
     return <TableHead className={cn(HEAD_ALIGN[column.kind], !first && 'pl-3')}>{name}</TableHead>
 }
