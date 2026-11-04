@@ -3,6 +3,16 @@ import type { Page } from '@playwright/test'
 
 import { settled, signIn } from './helpers.ts'
 
+/** A worktree as a run's row reads it: its repository, its path as shown, and its whole path. */
+interface RunWorktree {
+    /** The repository. */
+    repo: string
+    /** Its path from the workspace root. */
+    path: string
+    /** Its whole path. */
+    absolute: string
+}
+
 // A workspace far past the mock's three repositories: pages that list a line per repository or per slot must keep
 // what the operator came for in reach, and nothing past the panel's edge.
 
@@ -123,12 +133,15 @@ test('a run holding a slot in many repositories names a few of them in its row',
     // On its ticket's page: the runs page's list is the stream's, which would write over a stubbed read.
     await page.route('**/api/tickets/ABC-101', async (route) => {
         const response = await route.fetch()
-        const body = (await response.json()) as { runs: { id: number; worktrees: string[] }[] }
+        const body = (await response.json()) as { runs: { id: number; worktrees: RunWorktree[] }[] }
         const run = body.runs.find((r) => r.id === 41)
         if (run === undefined) {
             throw new Error("the mock has no run 41 on ABC-101's page")
         }
-        run.worktrees = Array.from({ length: 12 }, (_, i) => `.treehouse/repo-${i}-abc/1/repo-${i}`)
+        run.worktrees = Array.from({ length: 12 }, (_, i) => {
+            const path = `.treehouse/repo-${i}-abc/1/repo-${i}`
+            return { repo: `repo-${i}`, path, absolute: `/home/op/acme/${path}` }
+        })
         await route.fulfill({ response, json: body })
     })
     await page.goto('tickets/ABC-101')
