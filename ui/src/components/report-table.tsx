@@ -61,8 +61,9 @@ const CELL: Record<Exclude<ReportColumnKind, 'bar'>, string> = {
 
 /**
  * A report's table (ui/DESIGN.md, "A table of figures"), one row of `rows` each, in `columns`: the first column is the
- * row's head, so it names the row (a `name`, `free`, or `word` column), never a figure or a bar. It scrolls in its panel under a sticky head, named `label` for a screen reader, in a region of
- * `className` (its height, `max-h-96` unless given). `rowKey` keys a row; the table's test id is `testId`, each row's
+ * row's head, so it names the row (a `name`, `free`, or `word` column), never a figure or a bar. It scrolls in its
+ * panel under a sticky head, named `label` for a screen reader, in a region of `className` (its height, `max-h-96`
+ * unless given). `rowKey` keys a row; the table's test id is `testId`, each row's
  * `rowTestId`. A page shows its own `Empty` in its place when it has no rows.
  */
 export function ReportTable<T>({
