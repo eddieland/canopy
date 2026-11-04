@@ -18,31 +18,32 @@ its summary.
 As a worker's or a task's run ends, after its push and before a flaky kick rewrites the branch (§8 step 5), the harness
 records, per slot: the commit origin's branch held when the run started, or the base's commit the run started from when
 origin had no branch yet; the commit the run left on origin, or none, for a run that left no branch there; and the merge
-base with its base branch at the end. A joint run (§18) records one per repository. The commits are the harness's own
-reads of origin and of the slot, never the agent's word. The rows are never removed (§26): a later run, a kick, or the
-operator tells by them which commits were whose.
+base with its base branch as the slot last fetched it, since nothing here fetches. A joint run (§18) records one per
+repository. The commits are the harness's own reads of origin and of the slot, never the agent's word. The rows are
+never removed (§26): a later run, a kick, or the operator tells by them which commits were whose.
 
 ### The kept diffs
 
 Beside the run's log, the harness keeps two diffs per slot, as a review keeps its one (§21, The diff): the run's own
 change, from the commit it started from to the one it left, and the branch against its base, which §29 keeps for its
-threads and which every run now keeps, with or without drafts. A run that ends `unpushed` keeps the diff of its slot's
-HEAD, marked as work not on origin, so what it did can be read though its commits go with it; a `crashed` run, in whose
-slots no git runs, keeps nothing. Each is kept then or never: the slot is returned, a kick may rewrite the branch, and
-the run's objects are deleted with it. Best effort, as a kept diff is: the run needs none of it, a failure is logged,
-and the journal says when a diff is missing. The diffs are the branch's text, untrusted, read and shown within the
-bounds a review's diff has, every control character dropped, on a page and at the terminal alike, with drivers and
-textconv off (D107), and removed with the run's other files, a task run's too, after `run_files_days` (§26).
+threads and which every run now keeps, with or without drafts. A slot the run left unpushed keeps the diff of the last
+commit the run made there, found as the push check finds what a push left behind, marked as work not on origin, so what
+it did can be read though its commits go with it, and a joint run's slot that pushed is not so marked; a `crashed` run,
+in whose slots no git runs, keeps nothing. Each is kept then or never: the slot is returned, a kick may rewrite the
+branch, and the run's objects are deleted with it. Best effort, as a kept diff is: the run needs none of it, a failure
+is logged, and the journal says when a diff is missing. The diffs are the branch's text, untrusted, read and shown
+within the bounds a review's diff has, every control character dropped, on a page and at the terminal alike, with
+drivers and textconv off (D107), and removed with the run's other files, a task run's too, after `run_files_days` (§26).
 
 ### Where it shows
 
 The operator reads what a run changed where they judge the run: on its page, a worker run's or a task run's, a joint
 run's per repository, with the branch against its base beside it, and the stretches a checklist kept (§42) with its
-answers; on its PR's page, whose threads sit on the latest run's kept diff under every `trust.review_replies` setting
-(§29); and from the CLI, which prints a kept diff on request. An `unpushed` run's diff is marked as work not on origin,
-and a diff that was not kept is said to be missing, never shown as nothing. What each page draws is `ui/DESIGN.md`'s.
-Nothing here reaches the overseer's state block (§6) or any agent's prompt: the reviewer and the planner read git
-themselves (§27).
+answers; on its PR's page, whose threads sit on the kept diff of the latest run that pushed, under every
+`trust.review_replies` setting (§29); and from the CLI, which prints a kept diff on request. An `unpushed` run's diff is
+marked as work not on origin, and a diff that was not kept is said to be missing, never shown as nothing. What each page
+draws is `ui/DESIGN.md`'s. Nothing here reaches the overseer's state block (§6) or any agent's prompt: the reviewer and
+the planner read git themselves (§27).
 
 ### The commits
 
