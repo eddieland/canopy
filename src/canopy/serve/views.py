@@ -64,6 +64,7 @@ from canopy.serve.schema import (
     RunCardStep,
     RunsSince,
     RunState,
+    RunWorktree,
     ServedModel,
     StartStatus,
     TicketSummary,
@@ -232,7 +233,9 @@ def run_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
 
 
 def run_detail(ctx: Context, run_id: int) -> Run | None:
-    """One run, with the worktrees it holds if it is running, or None if there is no such run.
+    """One run, with the worktrees it leased whatever its status, or None if there is no such run.
+
+    The journal keeps a run's slots once it ends, so an ended run's page still says where it worked.
 
     Returns:
         The run, the worktrees' paths from the workspace root.
@@ -241,11 +244,11 @@ def run_detail(ctx: Context, run_id: int) -> Run | None:
     if row is None:
         return None
     root = ctx.workspace.root
-    held = db.all_run_slots(ctx.conn, [run_id] if row["status"] == "running" else []).get(run_id, [])
+    held = db.all_run_slots(ctx.conn, [run_id])[run_id]
     served = models_served(ctx.conn, "runs", run_id, ended=row["ended_at"] is not None, session_id=row["session_id"])
     wrote = feedback_plan_views.written(ctx, run_id) if row["kind"] == RunKind.FEEDBACK_PLAN else None
     limit = ctx.config.runtime.worker_timeout_minutes
-    worktrees = [shown_path(str(s.slot_path), root) for s in held]
+    worktrees = [run_worktree(s, root) for s in held]
     answers = checklist_views.run_answers(ctx.conn, run_id)
     return run(row, root, worktrees, served, wrote, checklist=answers, timeout_minutes=limit)
 
@@ -331,7 +334,7 @@ def runs(ctx: Context) -> list[Run]:
             run(
                 r,
                 root,
-                [shown_path(str(s.slot_path), root) for s in slots[int(r["id"])]],
+                [run_worktree(s, root) for s in slots[int(r["id"])]],
                 running_models,
                 timeout_minutes=limit,
             )
@@ -390,17 +393,30 @@ def shown_path(path: str, root: Path) -> str:
     return str(found.relative_to(root)) if found.is_relative_to(root) else path
 
 
+def run_worktree(slot: records.RunSlot, root: Path) -> RunWorktree:
+    """A slot a run leased, as the API sends it: its repository, its path as a page shows it, and its whole path.
+
+    Returns:
+        The worktree, named for its directory when the slot names no repository, as one from before canopy kept it.
+    """
+    return RunWorktree(
+        repo=slot.repo or Path(slot.slot_path).name,
+        path=shown_path(slot.slot_path, root),
+        absolute=slot.slot_path,
+    )
+
+
 def run(
     row: sqlite3.Row,
     root: Path,
-    worktrees: list[str] | None = None,
+    worktrees: list[RunWorktree] | None = None,
     models: ModelsServed | None = None,
     feedback_plan: FeedbackPlanWritten | None = None,
     *,
     checklist: Sequence[ChecklistAnswer] = (),
     timeout_minutes: int | None = None,
 ) -> Run:
-    """One run's row, with the worktrees it holds if it is running, its paths from the workspace `root`.
+    """One run's row, with the `worktrees` it leased, its paths from the workspace `root`.
 
     On the run's own page it carries `models`, the models that served it, for a `feedback-plan` run `feedback_plan`,
     the plan it wrote, and `checklist`, what it answered of its repositories' lists. `timeout_minutes`, a worker's

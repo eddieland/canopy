@@ -273,8 +273,11 @@ describe('applyStreamEvent', () => {
         expect([shown?.cost_usd, shown?.checklist, shown?.feedback_plan]).toEqual([9, answers, plan])
         expect(client.getQueryState(keys.run(first.id))?.isInvalidated).toBe(false)
 
+        // Ended, the list names no worktrees for it: the page keeps the ones it worked in.
         const ended = { ...first, status: 'done', state: 'done', ended_at: '2026-10-08T12:20:00Z' } as const
-        applyStreamEvent(client, { type: 'runs.updated', runs: [ended] })
+        applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...ended, worktrees: [] }] })
+        expect(client.getQueryData<Run>(keys.run(first.id))?.worktrees).toEqual(first.worktrees)
+        expect(first.worktrees).not.toHaveLength(0)
         expect(client.getQueryState(keys.run(first.id))?.isInvalidated).toBe(true)
     })
 

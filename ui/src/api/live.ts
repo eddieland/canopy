@@ -48,12 +48,13 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
                 if (shown === undefined) {
                     continue
                 }
-                // What only its page carries, the list sends empty: the plan it wrote and its checklist's answers stay
-                // as the page read them.
+                // What only its page carries, the list sends empty: the plan it wrote, its checklist's answers, and
+                // once it ends the worktrees it worked in stay as the page read them.
                 client.setQueryData(keys.run(run.id), {
                     ...run,
                     feedback_plan: shown.feedback_plan,
                     checklist: shown.checklist,
+                    worktrees: run.ended_at === null ? run.worktrees : shown.worktrees,
                 })
                 if (logged(shown) !== logged(run)) {
                     void client.invalidateQueries({ queryKey: keys.runTranscript(run.id) })
@@ -223,7 +224,7 @@ function tickLogged(tick: Tick): string {
 export function holding(runs: Run[]): string {
     return runs
         .filter((r) => r.state === 'running')
-        .map((r) => `${r.id}:${r.worktrees.join(',')}`)
+        .map((r) => `${r.id}:${r.worktrees.map((w) => w.path).join(',')}`)
         .toSorted()
         .join(' ')
 }

@@ -9801,10 +9801,11 @@ export type components = {
             ticket_title: string | null;
             /**
              * Worktrees
-             * @description The worktrees a running run holds, from the workspace root when under it.
+             * @description The worktrees it leased, by repository: the ones it holds while it runs, and once it ends the ones it held,
+             *     which may hold other work since. The runs list names them for running runs alone.
              * @default []
              */
-            worktrees: string[];
+            worktrees: components["schemas"]["RunWorktree"][];
         };
         /**
          * RunActivity
@@ -10076,6 +10077,27 @@ export type components = {
              * @enum {string}
              */
             type: "runs.updated";
+        };
+        /**
+         * RunWorktree
+         * @description A pool slot a run leased (DESIGN §8), one per repository it works in.
+         */
+        RunWorktree: {
+            /**
+             * Absolute
+             * @description Its whole path, which a shell call's `workdir` names.
+             */
+            absolute: string;
+            /**
+             * Path
+             * @description Its path as a page shows it: from the workspace root when under it, else whole.
+             */
+            path: string;
+            /**
+             * Repo
+             * @description The repository it is a worktree of.
+             */
+            repo: string;
         };
         /**
          * SearchHit

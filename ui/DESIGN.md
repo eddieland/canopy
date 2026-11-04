@@ -534,7 +534,8 @@ Rules:
   run's PRs, a chore run's and a task run's `harness` note, a task run's tickets; a chore run's findings are counted
   in its description and listed under the panel); `when` (`WhenField`), started, ended, and how long it took in one
   field, `Oct 8 06:30 → 06:59 · 29m`, and its `span` age (`for 3m` while it runs); `spent`; then a tick's canopy
-  version; then the paths, a run's branch, worktrees, and log, a chore run's log, a task run's branch, pushed commit,
+  version; then the paths, a run's branch, worktrees (once it ends too, the slot perhaps holding other work since, as
+  their hover says), and log, a chore run's log, a task run's branch, pushed commit,
   and log. A run given a checklist has its answers in a panel of their own under that one (`ChecklistPanel`), before
   its transcript: what came of it, a row an item, too many for a field. An answer is a chip, `held` in
   `status-blocked`, since a reviewer reads its reason under it, and the rest plain.
@@ -1367,8 +1368,11 @@ sliver beside four others; and its axis names short call numbers without measuri
   `show N more lines` toggle (`foldText`), whole when All open is on or a search holds a line it hides. A tool call
   is a native `<details>` whose line says what it
   did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, the tool's name at its own width up
-  to 14rem, the first to give way, and in monospace a shell call's command (the agent's description of it on hover),
-  else the runtime's title, else its input's short values as `key=value`; under that, muted, its error's first line in
+  to 14rem, the first to give way, and in monospace a shell call's command, after the directory it ran in when the
+  call names one (`app $ make test`): on a run's page, read against the run's worktrees, none for one of them, from it
+  for one under it, a joint run's by its repository (`web/src $`), any other whole, so a call outside them stands out;
+  the line whole and the agent's description of it on hover. Else the runtime's title, else its input's short values
+  as `key=value`; under that, muted, its error's first line in
   `status-failed`, or an output of one short line that is
   not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a `refused: <guard>` chip
   in `status-failed`. It opens to its input and its output (or error), JSON indented and colored as a tick's output is
