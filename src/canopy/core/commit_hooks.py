@@ -120,8 +120,9 @@ hold() {
                     echo "[canopy] Pushed, not held, as this run is near canopy's deadline. $repo's checklist is" \
                         "below, and in $list, should this output be cut short. Diff this branch against its base and" \
                         "hold each item of the checklist to the diff; if one fails and there is time, commit the" \
-                        "fix and push it. Answer each item in your result line's \`checklist\`," \
-                        "under $repo: pass, fixed, held with the reason, or n/a."
+                        "fix and push it. Answer every item in your result line's \`checklist\`, under $repo," \
+                        "none left out: pass, fixed, held with the reason, or n/a only for an item whose paths" \
+                        "the diff does not touch."
                     echo
                     cat "$list"
                 } >&2
@@ -147,8 +148,8 @@ hold() {
         echo "[canopy] Push held, not rejected: nothing was sent. $repo's checklist is below, and in $list," \
             "should this output be cut short. Before this branch goes up, diff it against its base and hold each" \
             "item of the checklist to the diff. Commit a fix for each item that fails, then push again: the next" \
-            "push goes through. Answer each item in your result line's \`checklist\`," \
-            "under $repo: pass, fixed, held with the reason, or n/a."
+            "push goes through. Answer every item in your result line's \`checklist\`, under $repo, none left" \
+            "out: pass, fixed, held with the reason, or n/a only for an item whose paths the diff does not touch."
         echo
         cat "$list"
     } >&2
