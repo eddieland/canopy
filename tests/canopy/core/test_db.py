@@ -173,10 +173,11 @@ def test_a_journal_through_the_squashed_migrations_is_taken_as_having_applied_00
 ) -> None:
     """D068: 0001 makes the schema a journal migrated through 0129 holds, so its ledger is rewritten, and nothing run.
 
-    A live run of the canopy before is no reason to wait: the schema it writes is the same.
+    A live run of the canopy before is no reason to wait: the schema it writes is the same. The migrations after the
+    squash are their own tests': the canopy here ships 0001 alone.
     """
-    conn = fresh(journals, tmp_path)
-    db.migrate(conn, resources.migrations_dir())
+    squashed = shipped_through(tmp_path / "migrations", 1)
+    conn = journals.open_through(tmp_path / "canopy.db", squashed)
     conn.executemany(
         "INSERT INTO schema_migrations (version, name) VALUES (?, 'squashed')",
         [(v,) for v in range(2, db.SQUASHED_THROUGH + 1)],
@@ -189,21 +190,21 @@ def test_a_journal_through_the_squashed_migrations_is_taken_as_having_applied_00
         (os.getpid(),),
     )
     before = contents(conn)
-    assert db.migrate(conn, resources.migrations_dir()) == []
+    assert db.migrate(conn, squashed) == []
     assert [tuple(r) for r in conn.execute("SELECT version, name FROM schema_migrations")] == [(1, "init")]
     assert contents(conn) == before
 
 
 def test_a_journal_short_of_the_last_squashed_migration_is_unknown(tmp_path: Path, journals: Journals) -> None:
     """Only a journal at the last squashed migration holds 0001's schema; one before it is not upgraded (D068)."""
-    conn = fresh(journals, tmp_path)
-    db.migrate(conn, resources.migrations_dir())
+    squashed = shipped_through(tmp_path / "migrations", 1)
+    conn = journals.open_through(tmp_path / "canopy.db", squashed)
     conn.executemany(
         "INSERT INTO schema_migrations (version, name) VALUES (?, 'squashed')",
         [(v,) for v in range(2, db.SQUASHED_THROUGH)],
     )
     with pytest.raises(db.MigrationError, match="migrations this canopy does not know"):
-        db.migrate(conn, resources.migrations_dir())
+        db.migrate(conn, squashed)
 
 
 def test_journal_newer_than_code_is_an_error(tmp_path: Path, journals: Journals) -> None:

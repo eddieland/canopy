@@ -309,6 +309,14 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   `canopy_chore_history`. With MEASUREMENTS' prompt (Re-measuring), record tool-result tokens per tick against
   2026-10-13's median, the only one on record from the overseer's shell: about 8k a tick from tick 100 on. Record the
   numbers in `MEASUREMENTS.md`.
+- **S74. A review item's text shown once** (#2062). After a day of `canopy loop` against the real queue, measure
+  `observations.tickets[].units[].reviews[]` in `.canopy/ticks/*.prompt` against the 2026-11-04 numbers in the issue.
+  Expect a `body` only on an item no earlier `ok` tick listed, `seen` on each listed before, and `held` on every item
+  of a ticket whose attention item is `needs_human`, `awaiting_reply`, `attempt_limit`, or `plan_review`, and on the
+  untrusted items of a unit with `untrusted_review`; the key's size down by about 4 to 5 KB a tick on average. Expect
+  the rate of `needs_author` items, and of dispatches refused `stale`, unchanged against the week before, and a
+  `canopy_review-items` call only on a tick that judged an item, never on one that waited. Record the numbers in
+  `MEASUREMENTS.md`.
 
 ## Retired
 

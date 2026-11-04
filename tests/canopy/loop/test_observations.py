@@ -12,10 +12,10 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
-from canopy.core import db
-from canopy.core.vocab import NumberedItem
+from canopy.core import db, item_numbers
+from canopy.core.vocab import Decider, NumberedItem, RunStatus
 from canopy.loop import observations, phases
-from tests.canopy.helpers import KEY, context
+from tests.canopy.helpers import KEY, LABEL, context, in_tick, operator, running_run
 from tests.canopy.observation_helpers import (
     FIRST_SEEN,
     FRESH,
@@ -39,10 +39,15 @@ from tests.canopy.observation_helpers import (
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Sequence
 
     from syrupy.assertion import SnapshotAssertion
 
     from tests.conftest import CanopyEnv
+
+#: When a person asked for a change on KEY's PR, and when the worker answered.
+ASKED = "2026-10-20T11:00:00.000Z"
+ANSWERED = "2026-10-20T11:20:00.000Z"
 
 
 @pytest.fixture
@@ -233,6 +238,143 @@ def test_the_prs_reviews_ask_about_are_shown_as_read(canopy_env: CanopyEnv, trac
     ]
 
 
+def test_a_review_items_text_is_shown_once_and_its_number_and_marks_after(
+    canopy_env: CanopyEnv,
+    tracked: sqlite3.Connection,
+) -> None:
+    """A live tick that closes ok marks what it showed (`item_numbers.mark_shown`); the next block lists it `seen`."""
+    observe_ticket(tracked)
+    db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR)
+    observe_pr(tracked)
+    asked = review(tracked, 2, "octocat", "changes_requested", ASKED, "Rename the helper.")
+    answered = review(tracked, 5, "operator", None, ANSWERED, "CANOPY: Renamed it.", item="comment")
+    [first] = observed(canopy_env, tracked)["tickets"][0]["units"]
+    assert [(r["number"], r.get("body"), r.get("seen")) for r in first["reviews"]] == [
+        (asked, "Rename the helper.", None),
+        (answered, "CANOPY: Renamed it.", None),
+    ]
+    with in_tick(tracked, ends_ok=True) as tick_id:
+        item_numbers.mark_shown(tracked, tick_id, [asked])
+    [unit] = observed(canopy_env, tracked)["tickets"][0]["units"]
+    assert unit["reviews"] == [
+        {
+            "number": asked,
+            "item": "review",
+            "id": 2,
+            "author": "octocat",
+            "trusted": True,
+            "worker": False,
+            "at": ASKED,
+            "seen": True,
+            "state": "changes_requested",
+        },
+        {
+            "number": answered,
+            "item": "comment",
+            "id": 5,
+            "author": "operator",
+            "trusted": False,
+            "worker": True,
+            "at": ANSWERED,
+            "body": "CANOPY: Renamed it.",
+        },
+    ]
+    assert "Rename the helper." not in json.dumps(unit)
+
+
+def test_a_ticket_held_for_a_person_shows_its_review_items_without_their_text_until_the_hold_clears(
+    canopy_env: CanopyEnv,
+    tracked: sqlite3.Connection,
+) -> None:
+    """`needs_human` holds the ticket; a reply after the label ends it on the tick that acts on it, text unmarked."""
+    observe_ticket(tracked, labels={LABEL: None, "needs-human": "2026-10-20T10:00:00.000Z"})
+    db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR)
+    observe_pr(tracked)
+    asked = review(tracked, 2, "octocat", "changes_requested", ASKED, "Rename the helper.")
+    [held_unit] = observed(canopy_env, tracked)["tickets"][0]["units"]
+    assert [(r["number"], r.get("body"), r.get("held")) for r in held_unit["reviews"]] == [(asked, None, True)]
+    assert "Rename" not in json.dumps(held_unit)
+    # The operator's message makes the ticket `human_replied` though the label is still observed: the tick decides.
+    assert operator("reply", KEY, "Go ahead with the rename.") == 0
+    found = observed(canopy_env, tracked)["tickets"][0]
+    assert found["derived"] == ["needs_human", "human_replied"]
+    [unit] = found["units"]
+    assert [(r["number"], r.get("body"), r.get("held"), r.get("seen")) for r in unit["reviews"]] == [
+        (asked, "Rename the helper.", None, None),
+    ]
+
+
+def test_a_ticket_whose_worker_runs_and_a_unit_whose_checks_run_hold_their_review_items(
+    canopy_env: CanopyEnv,
+    tracked: sqlite3.Connection,
+) -> None:
+    """A tick that can only wait spends no item's text: it is shown to the first tick that may decide on it."""
+    other = f"{PR}1"
+    observe_ticket(tracked)
+    db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR)
+    db.set_unit(tracked, KEY, str(canopy_env.root), "web", pr_url=other)
+    observe_pr(tracked)
+    observe_pr(tracked, url=other)
+    asked = review(tracked, 2, "octocat", "changes_requested", ASKED, "Rename the helper.")
+    elsewhere = review(tracked, 4, "octocat", "commented", ASKED, "Also here.", pr=other)
+    check(tracked, "build", "in_progress", None)
+    [building, idle] = observed(canopy_env, tracked)["tickets"][0]["units"]
+    assert (building["derived"], [(r["number"], r.get("held")) for r in building["reviews"]]) == (
+        ["ci_running", "changes_requested"],
+        [(asked, True)],
+    )
+    assert [(r["number"], r.get("body")) for r in idle["reviews"]] == [(elsewhere, "Also here.")]
+    run_id = running_run(context(canopy_env), KEY, private=False)
+    found = observed(canopy_env, tracked)["tickets"][0]
+    assert found["derived"][0] == "running"
+    assert [(r["number"], r.get("held")) for u in found["units"] for r in u["reviews"]] == [
+        (asked, True),
+        (elsewhere, True),
+    ]
+    assert db.finish_run(tracked, "runs", run_id, RunStatus.DONE, None)
+
+
+def test_the_harnesss_items_hold_the_ticket_or_one_unit_and_untrusted_review_its_untrusted_items(
+    canopy_env: CanopyEnv,
+    tracked: sqlite3.Connection,
+) -> None:
+    other = f"{PR}1"
+    observe_ticket(tracked)
+    db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR)
+    db.set_unit(tracked, KEY, str(canopy_env.root), "web", pr_url=other)
+    observe_pr(tracked)
+    observe_pr(tracked, url=other)
+    trusted = review(tracked, 2, "octocat", "changes_requested", ASKED, "Rename the helper.")
+    untrusted = review(tracked, 3, "stranger", None, ASKED, "Why not a map?", item="comment")
+    elsewhere = review(tracked, 4, "octocat", "commented", ASKED, "Also here.", pr=other)
+
+    def texts(raised: Sequence[tuple[str, str | None]]) -> dict[str, list[tuple[int, str | None, bool | None]]]:
+        found = observed(canopy_env, tracked, raised=raised)
+        return {
+            u["repo"]: [(r["number"], r.get("body"), r.get("held")) for r in u["reviews"]]
+            for u in found["tickets"][0]["units"]
+        }
+
+    shown = {"repo": [(trusted, "Rename the helper.", None), (untrusted, "Why not a map?", None)]}
+    shown["web"] = [(elsewhere, "Also here.", None)]
+    assert texts([]) == shown
+    # A unit at its attempt limit is held alone: the other unit's feedback is still decided on.
+    assert texts([("attempt_limit", "repo")]) == {
+        "repo": [(trusted, None, True), (untrusted, None, True)],
+        "web": shown["web"],
+    }
+    # A plan waiting on the operator holds the ticket whole.
+    assert texts([("plan_review", None)]) == {
+        "repo": [(trusted, None, True), (untrusted, None, True)],
+        "web": [(elsewhere, None, True)],
+    }
+    # Untrusted feedback the operator has not answered holds only the untrusted items of its unit.
+    assert texts([("untrusted_review", "repo")]) == {
+        "repo": [(trusted, "Rename the helper.", None), (untrusted, None, True)],
+        "web": shown["web"],
+    }
+
+
 def test_a_subject_shows_its_oldest_new_items_and_counts_the_rest(
     canopy_env: CanopyEnv,
     tracked: sqlite3.Connection,
@@ -261,17 +403,25 @@ def test_comments_past_the_cursor_are_those_first_observed_after_it(tracked: sql
     assert past(nine) == ["3"]
 
 
-def observed(env: CanopyEnv, conn: sqlite3.Connection) -> dict[str, Any]:
+def observed(
+    env: CanopyEnv,
+    conn: sqlite3.Connection,
+    *,
+    raised: Sequence[tuple[str, str | None]] = (),
+) -> dict[str, Any]:
     """The block's observations of `env`'s journal at NOW, as the overseer reads them.
 
-    The tick is derived first, as a tick derives it, and the section is returned as JSON, rendered with the open
-    tickets' titles as the block lists them.
+    The tick is derived first, as a tick derives it, with `raised` the items the harness raised in it about KEY, each
+    a reason and the unit's repository, and the section is returned as JSON, rendered with the open tickets' titles as
+    the block lists them.
     """
     conn.commit()
     ctx = context(env)
     with clock(FRESH):
         tick_id = db.start_tick(ctx.conn, dry_run=False)
     phases.record(ctx.conn, tick_id, phases.derive(ctx, NOW))
+    for reason, repo in raised:
+        db.record_decision(ctx.conn, tick_id, KEY, f"attention:{reason}", "d", repo=repo, decider=Decider.HARNESS)
     listed = db.open_tickets(ctx.conn)
     section = observations.section(ctx, tick_id, NOW, listed)
     return json.loads(json.dumps(observations.rendered(section, {t.key: t.title for t in listed})))

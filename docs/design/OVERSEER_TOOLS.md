@@ -65,14 +65,16 @@ name; every other definition denies them. Workers keep their shell, for git's wr
 ### The tools
 
 One tool per overseer verb, its words joined by hyphens: `dispatch`, `decide`, `attention`,
-`ticket-set`, `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and `chore-wait`. The overseer
-sees them as `canopy_dispatch` and so on.
+`ticket-set`, `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and `chore-wait`, and one read,
+`review-items`: the text of a unit's review items by journal number, which the state block shows once (§30), of a
+candidate it listed this tick alone, answered as records in JSON, as `log` and `grep` are, and recording nothing. The
+overseer sees them as `canopy_dispatch` and so on.
 No tool name holds an underscore: OpenCode joins server and tool with one, so `canopy_ticket_set` could also come from
-a server named `canopy_ticket`, and the later would replace the earlier. No tool reads the pool or the observations:
-the state block already holds them, and a claim on them, such as a dispatch's label or a cursor, is a field its tool
-checks (§7). A tool about a ticket refuses one the journal has no record of (`unknown`): the harness records the
-query's tickets before the overseer runs, and the operator's starts, so any other key came from nowhere, and once
-recorded every tracker read would ask for a ticket none can read.
+a server named `canopy_ticket`, and the later would replace the earlier. No tool reads the pool, nor the observations
+but for that read: the state block already holds them, and a claim on them, such as a dispatch's label or a cursor,
+is a field its tool checks (§7). A tool about a ticket refuses one the journal has no record of (`unknown`): the
+harness records the query's tickets before the overseer runs, and the operator's starts, so any other key came from
+nowhere, and once recorded every tracker read would ask for a ticket none can read.
 
 Each input refuses an unknown field and is the tool's schema, and holds the bounds §6 lists. A tool's result is text
 the model reads, and what it did as structured content, such as the id of a run it started, held to the output schema
@@ -122,8 +124,6 @@ these:
   MCP tool; the first set to false turns it off whatever the second says. OpenCode 2 (2.1.4, 2026-10-23) has no such
   variable: a server's own `codemode: false` takes it out of code mode. It sends a session's first model call no MCP
   tool until the server's tools are registered, which canopy's plugin waits for (§33).
-
-D124 holds that canopy serves MCP itself, over stdio only.
 
 ### Open
 

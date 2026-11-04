@@ -80,6 +80,10 @@ loop's polls between ticks run the same sources the same way and raise nothing (
 - A candidate shows what the overseer decides from, its body only until its first unit and its items only past their
   cursors (§7). The harness marks in code whether each comment's author is an authorized replier and whether it is a
   worker's (D069), and whether each review item's author is trusted (D089).
+- A review item's text is shown once, on the first live tick whose overseer decides the ticket with it listed, and
+  not while the ticket or the unit can only wait, on a person or a run, since then the hold decides, not the feedback;
+  after that the item is listed by its number and marks, and one tool (§27) reads a listed candidate's unit's items
+  again, a few at a time, as the block shows them. Rejected: moving the cursor on a wait, which loses feedback.
 - Each subject shows the rows of §7 the derivation found holding (below), which the overseer may overrule, and each
   query its result as its source last read it whole (§7, §21).
 - Source and author are labeled in code, never by a model. A subject shows a fixed number of new items, oldest first,

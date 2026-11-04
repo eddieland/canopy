@@ -124,6 +124,9 @@ class ItemNumber(Row):
     #: The source's id for it, or canopy's own for a review run.
     id: str
     numbered_at: str
+    #: The live tick that first showed the item's text to an overseer that decided its ticket (DESIGN §30); None for
+    #: one never shown so, and for every kind but a review item.
+    shown_tick_id: int | None
 
 
 @dataclass(frozen=True)

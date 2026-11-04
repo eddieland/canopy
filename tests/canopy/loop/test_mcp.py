@@ -20,7 +20,7 @@ from canopy.cli.main import main
 from canopy.core import cards, chore_runs, db, git_tools, recorded_runs, reports
 from canopy.core.vocab import ChoreRunStatus, RunKind, TickStatus
 from canopy.infra import procs
-from canopy.loop import mcp, tools
+from canopy.loop import mcp, observation_tools, tools
 from canopy.runs import policy
 from canopy.runtime import servers
 from canopy.runtime.implementation import Version
@@ -39,7 +39,7 @@ from tests.canopy.helpers import (
     tool_call,
     tracker_holds,
 )
-from tests.canopy.observation_helpers import comment
+from tests.canopy.observation_helpers import comment, review
 from tests.canopy.review_helpers import feature_commit
 from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, executable, git
@@ -54,6 +54,7 @@ TOOL_NAMES = [
     "decide",
     "attention",
     "ticket-set",
+    "review-items",
     "review-run",
     "review-wait",
     "review-end",
@@ -63,6 +64,24 @@ TOOL_NAMES = [
 ]
 #: What a chore reports, for a run a tool starts.
 CHORE_OK: Mapping[str, object] = {"status": "ok", "summary": "nothing found", "findings": []}
+#: What the read of PROJ-1's one review item returns, as fields and as the JSON in its text.
+READ_ITEM: Mapping[str, object] = {
+    "key": "PROJ-1",
+    "repo": "repo",
+    "items": [
+        {
+            "number": 2,
+            "item": "review",
+            "id": 9,
+            "author": "octocat",
+            "trusted": False,
+            "worker": False,
+            "state": "commented",
+            "at": "2026-10-18T10:30:00.000Z",
+            "body": "Why a map?",
+        },
+    ],
+}
 
 
 @pytest.fixture
@@ -149,9 +168,11 @@ def fresh(env: CanopyEnv, verb: Verb) -> Iterator[sqlite3.Connection]:
     db.set_unit(conn, "PROJ-1", str(env.root), "repo", pr_url=PR)
     # PROJ-2 is in the journal too, as the query's record puts it, for the verbs that name two tickets.
     db.touch_ticket(conn, "PROJ-2", str(env.root))
-    # The tracker source reads PROJ-1, and shows a comment on it, journal number 1, which a cursor may name.
+    # The tracker source reads PROJ-1, and shows a comment on it, journal number 1, which a cursor may name; a review
+    # of its PR is journal number 2, which the read of a unit's review items may name.
     tracker_holds(conn)
     comment(conn, "c7", "acc-1", "2026-10-18T10:00:00.000Z", "See the login page.")
+    review(conn, 9, "octocat", "commented", "2026-10-18T10:30:00.000Z", "Why a map?", pr=PR)
     assert operator("start", REQUESTED, "--review") == 0
     with in_tick(conn, dry_run=verb.dry_run) if verb.ticking else contextlib.nullcontext():
         yield conn
@@ -321,6 +342,16 @@ RECORDS = [
             },
         ),
         id="ticket-set-several",
+    ),
+    pytest.param(
+        Verb(
+            "review-items",
+            {"key": "PROJ-1", "repo": "repo", "numbers": [2]},
+            said=f"{observation_tools.DATA_NOTE}\n\n{json.dumps(READ_ITEM, separators=(',', ':'))}",
+            writes=(),
+            result=READ_ITEM,
+        ),
+        id="review-items",
     ),
     pytest.param(
         Verb(
@@ -638,20 +669,19 @@ def test_each_tools_input_is_its_schema_and_takes_no_other_field(overseen: Canop
 
 
 @pytest.mark.parametrize(
-    ("tools_listed", "read_only"),
+    ("tools_listed", "reads"),
     [
-        (mcp.TOOLS, False),
-        (mcp.CHORE_TOOLS, True),
-        (mcp.REPORT_TOOLS, True),
-        (mcp.STATUS_TOOLS, False),
-        (mcp.git_mode(procs.SubprocessRunner(), {"api": Path("/a")}).tools, True),
+        (mcp.TOOLS, {"review-items"}),
+        (mcp.CHORE_TOOLS, {history.TOOL}),
+        (mcp.REPORT_TOOLS, set(reports.TOOLS)),
+        (mcp.STATUS_TOOLS, set()),
+        (mcp.git_mode(procs.SubprocessRunner(), {"api": Path("/a")}).tools, set(git_tools.TOOLS)),
     ],
     ids=["overseer", "chore", "reports", "status", "git"],
 )
 def test_each_tool_describes_every_field_and_says_whether_it_only_reads(
     tools_listed: Sequence[mcp.Tool],
-    *,
-    read_only: bool,
+    reads: set[str],
 ) -> None:
     """The model reads a tool's description and its fields' alone, so none is left without one."""
     for found in tools_listed:
@@ -659,6 +689,7 @@ def test_each_tool_describes_every_field_and_says_whether_it_only_reads(
         assert undescribed(listed["inputSchema"]) == [], found.name
         hints = listed["annotations"]
         assert isinstance(hints, dict)
+        read_only = found.name in reads
         assert (hints["readOnlyHint"], hints["openWorldHint"]) == (read_only, False), found.name
         if not read_only:
             # (destructive, idempotent): only these overwrite or end what is recorded, and only these may be repeated.
