@@ -128,6 +128,9 @@ not go in the middle of the sequence.
 - [Epics](EPICS.md): one plan for work that spans several tickets, approved once, and a plan per ticket
   that points back to it.
   - [43. Epics](EPICS.md#43-epics)
+- [Messages to running agents](MESSAGES.md): the operator's message to a worker, a planner, or a task's worker while
+  it runs, and how it reaches the agent.
+  - [44. Messages to running agents](MESSAGES.md#44-messages-to-running-agents)
 
 ## 1. Problem
 
