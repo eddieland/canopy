@@ -308,7 +308,7 @@ function Items({ groups, repo, span }: { groups: RepoItems[]; repo: string | und
  * count of none muted, and the guide's verdict.
  */
 const ITEM_COLUMNS: ReportColumn<ChecklistItemCounts>[] = [
-    { key: 'item', kind: 'name', label: 'item', cell: (item) => <ItemLink item={item} /> },
+    { key: 'item', kind: 'free', label: 'item', cell: (item) => <ItemLink item={item} /> },
     { key: 'reminded', kind: 'figure', label: 'reminded', hint: REMINDED_HINT, cell: (item) => item.reminded },
     { key: 'answers', kind: 'word', label: 'answers', cell: (item) => <AnswerBar item={item} /> },
     ...ANSWER_COLUMNS.map((c): ReportColumn<ChecklistItemCounts> => ({
@@ -332,7 +332,7 @@ function ItemLink({ item }: { item: ChecklistItemCounts }) {
             replace
             resetScroll={false}
             className={cn(
-                'block max-w-lg rounded-sm px-1 text-accent underline-offset-4 hover:underline',
+                'block rounded-sm px-1 text-accent underline-offset-4 hover:underline',
                 'aria-[current=page]:bg-accent/16 aria-[current=page]:text-foreground',
             )}
         >
