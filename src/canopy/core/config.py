@@ -97,6 +97,9 @@ _PLACEHOLDER_RE = re.compile(r"\{prompt\}|\{definitions_dir\}|\{title\}")
 SANDBOX_WRAPPER = "canopy-sandbox"
 # A repository name is a directory name, a treehouse leaf, and a `--repo` argument (DESIGN §18).
 REPO_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
+#: A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17). It has no `:`, `#`, or `/`, so no
+#: other kind of reference can be read as one.
+KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 # A chore's name appears in file paths and on the command line (DESIGN §19).
 CHORE_NAME_RE = re.compile(r"[a-z][a-z0-9-]*")
 MIN_CHORE_EVERY_MINUTES = 15
