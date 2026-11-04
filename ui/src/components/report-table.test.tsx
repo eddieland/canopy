@@ -88,4 +88,68 @@ describe('ReportTable', () => {
         const table = await renderTable()
         expect(tipOf(within(table).getByText('3'))).toBe('3')
     })
+
+    it('sets what a column has over its head in a head row of its own, hidden from a screen reader', async () => {
+        const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
+        const columns: ReportColumn<Row>[] = COLUMNS.map((column) =>
+            column.key === 'name' ? column : { ...column, over: <span data-testid={`over-${column.key}`}>~</span> },
+        )
+        await renderRouted(
+            <ReportTable rows={ROWS} columns={columns} rowKey={(r) => r.name} label="By kind" testId="t" />,
+            { client },
+        )
+        const table = screen.getByTestId('t')
+        expect(
+            within(table)
+                .getAllByRole('columnheader')
+                .map((th) => th.textContent),
+        ).toEqual(['kind', 'note', 'runs', 'spent'])
+        expect(within(table).getByTestId('over-cost').closest('[aria-hidden="true"]')).not.toBeNull()
+        // The bar's spans its figure's cell and its bar's, so each sits over the column it heads.
+        const [over, head] = within(table).getAllByRole('row', { hidden: true })
+        const spans = [...(over?.children ?? [])].map((cell) => (cell as HTMLTableCellElement).colSpan)
+        expect(spans.reduce((a, b) => a + b, 0)).toBe(head?.children.length)
+    })
+
+    it('keeps a ruled row in the table, after the rows above it, reading as its cells', async () => {
+        const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
+        await renderRouted(
+            <ReportTable
+                rows={ROWS}
+                columns={COLUMNS}
+                rowKey={(r) => r.name}
+                label="By kind"
+                ruled={(r) => r.name === 'plans'}
+                testId="t"
+            />,
+            { client },
+        )
+        const rows = within(screen.getByTestId('t')).getAllByRole('row')
+        expect(rows.map((row) => within(row).queryByRole('rowheader')?.textContent)).toEqual([
+            undefined,
+            'workers',
+            'plans',
+        ])
+        expect(
+            within(rows[2] as HTMLElement)
+                .getAllByRole('cell')
+                .map((td) => td.textContent),
+        ).toEqual(['fewer', '3', '$0.42'])
+    })
+
+    it("fills a row's bar in its own series' fill where the column says so", async () => {
+        const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
+        const plans = (r: Row) => (r.name === 'plans' ? 'bg-spend-plans' : undefined)
+        const columns: ReportColumn<Row>[] = [
+            ...COLUMNS.slice(0, -1),
+            { key: 'cost', kind: 'bar', label: 'spent', cell: (r) => r.cost, bar: (r) => r.share, fill: plans },
+        ]
+        await renderRouted(<ReportTable rows={ROWS} columns={columns} rowKey={(r) => r.name} label="By kind" />, {
+            client,
+        })
+        const [first, second] = screen.getAllByTestId('cell-bar')
+        // The fill is the bar's whole look, so its class is what there is to read.
+        expect(first?.firstElementChild?.className).toContain('bg-muted-foreground')
+        expect(second?.firstElementChild?.className).toContain('bg-spend-plans')
+    })
 })
