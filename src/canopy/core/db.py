@@ -41,6 +41,9 @@ DB_FILE_NAME = "canopy.db"
 # How long a connection waits for another to release the write lock before its write fails as `database is locked`.
 BUSY_SECONDS = 10.0
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
+#: The last of the migrations squashed into `0001_init.sql` (D068). A journal that applied 1 through it holds the schema
+#: 0001 makes now, so its ledger is rewritten to name 0001 alone.
+SQUASHED_THROUGH = 129
 # The rationale the overseer gives a `done` decision for a ticket the tracker reports closed (DESIGN §7).
 CLOSED_RATIONALE = "closed"
 # The version of canopy this process runs, recorded on each tick it starts (DESIGN §6). Read once, at import: an upgrade
@@ -230,6 +233,11 @@ def migrate(conn: sqlite3.Connection, migrations_dir: Path) -> list[int]:
             if has_table
             else set()
         )
+        if applied == set(range(1, SQUASHED_THROUGH + 1)):
+            # The ledger names migrations that are now 0001, and nothing else changes: no live run needs to finish.
+            unsquashed = sql.delete("schema_migrations").where("version > 1")  # noqa: TID251
+            sql.execute(conn, unsquashed)
+            applied = {1}
         unknown = applied - {m.version for m in known}
         if unknown:
             # Runs the journal's own canopy started come first: the fix for an unknown journal may be a fresh one, and
@@ -1641,7 +1649,7 @@ def _weighed_tickets(conn: sqlite3.Connection, keys: str, limit: int) -> list[sq
 
 
 # Each source of a ticket's activity as `recent_tickets` weighs it: a ticket key and a time, newest first, read in
-# order from an index (migration 0022). A run that ended has its end time (`finish_run`), so the ended runs and the
+# order from an index. A run that ended has its end time (`finish_run`), so the ended runs and the
 # running ones between them give each run's time as `recent_tickets` takes it. Messages and start records may name a
 # ticket the journal has no row for, which the join leaves out, so one never takes a real ticket's place; CROSS JOIN
 # keeps SQLite reading the start records in order from their index, rather than sorting every one.

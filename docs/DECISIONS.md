@@ -293,9 +293,11 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - treehouse's `max_trees` lives only in committed or global files, so canopy enforces sizes itself.
 
-## D068. Migrations were squashed into one for v0.1; older journals are not upgraded
+## D068. Migrations are squashed into one only on the operator's word; older journals are not upgraded
 
-- A one-time exception. Never edit a shipped migration.
+- Done for v0.1, and again at 0129 with every journal there. Otherwise, never edit a shipped migration.
+- The squash keeps the schema of a journal at its last migration exactly, unread columns included, and `db.migrate`
+  records such a journal as having applied 0001 (`db.SQUASHED_THROUGH`).
 
 ## D069. Worker comments carry a configurable prefix and suffix that only take authority away
 
