@@ -46,7 +46,7 @@ from canopy.core import (
 from canopy.core.config import render_command
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, procs, stopping
-from canopy.runs import attachments, checkpoint, follow_ups, task_tickets, tasks, tidy
+from canopy.runs import attachments, checklist_pushes, checkpoint, follow_ups, task_tickets, tasks, tidy
 from canopy.runs import task_starts as starts
 from canopy.runs.checkpoint import SetupError
 from canopy.runtime import project_config, servers, stdout
@@ -334,6 +334,7 @@ def _work(ctx: Context, run: records.TaskRun, link: bytes | None, out: TextIO, l
     unpushed = checkpoint.ensure_pushed(git, run.branch, start, log, rebase=False)
     if unpushed:
         status, note = RunStatus.UNPUSHED, unpushed
+    listed = _keep_checklist_pushes(git, run, listed, log)
     head = checkpoint.remote_head(git, run.branch) or None
     forced = _forced(git, run.branch, start, head)
     if forced:
@@ -363,6 +364,24 @@ def _write_checklist(ctx: Context, run: records.TaskRun) -> None:
             checklists.write(answers, lists)
     except (checklists.ChecklistError, OSError) as e:
         raise SetupError(str(e)) from e
+
+
+def _keep_checklist_pushes(
+    git: checkpoint.Git,
+    run: records.TaskRun,
+    listed: checklist_answers.Checked | None,
+    log: logs.TickAdapter,
+) -> checklist_answers.Checked | None:
+    """Keep what the worker pushed after canopy's `pre-push` showed it the repository's list (§42).
+
+    Returns:
+        `listed`, with the pushes whose diffs were kept; None for a run given no list.
+    """
+    if listed is None:
+        return None
+    run_id = f"{RUN_ID_PREFIX}{run.id}"
+    pushed = checklist_pushes.keep(git, repo=run.repo, branch=run.branch, run_id=run_id, log_path=run.log_path, log=log)
+    return listed.pushing(pushed)
 
 
 def _check_checklist(run: records.TaskRun, text: str) -> checklist_answers.Checked | None:

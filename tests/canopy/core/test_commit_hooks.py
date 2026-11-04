@@ -161,3 +161,43 @@ def test_with_no_marks_to_add_the_version_is_not_read(canopy_env: CanopyEnv) -> 
     runner = mock.create_autospec(procs.Runner, instance=True)
     assert commit_hooks.git_too_old(load(canopy_env.root, canopy_env.user_file), runner) is None
     runner.run.assert_not_called()
+
+
+A = "a" * 40
+B = "b" * 40
+C = "c" * 64
+
+
+def test_each_showing_of_the_list_is_paired_with_the_next_push_it_let_through(tmp_path: Path) -> None:
+    """A list shown again before a push keeps the first commit: all that follows it came after the list."""
+    notes = tmp_path / commit_hooks.PUSHES_LOG
+    notes.write_text(f"shown 3 {A}\nsent 3 {B}\nsent 3 {A}\nshown 3 {B}\nshown 3 {A}\nsent 3 {C}\nshown 3 {C}\n")
+    assert commit_hooks.pushes_after(tmp_path, "3") == [(A, B), (B, C), (C, None)]
+    # Taken: a later run in the slot starts with none.
+    assert not notes.exists()
+    assert commit_hooks.pushes_after(tmp_path, "3") == []
+
+
+def test_a_note_that_is_not_the_runs_or_not_a_commit_counts_for_nothing(tmp_path: Path) -> None:
+    """The notes are in a directory the run may write, so what is not the hook's shape is skipped."""
+    (tmp_path / commit_hooks.PUSHES_LOG).write_text(
+        f"shown 4 {A}\nshown task-3 {A}\nshown 3 HEAD\nshown 3 {A[:12]}\nheld 3 {A}\nshown 3 {A} more\n"
+        f"shown 3\nsent 3 {B.upper()}\n\0\nshown 3 {B}\nsent 30 {A}\nsent 3 {C}\n",
+    )
+    assert commit_hooks.pushes_after(tmp_path, "3") == [(B, C)]
+
+
+def test_notes_past_the_bound_or_not_in_a_regular_file_are_not_read(tmp_path: Path) -> None:
+    notes = tmp_path / commit_hooks.PUSHES_LOG
+    line = f"shown 3 {A}\n"
+    padding = "x" * (commit_hooks.MAX_PUSHES_BYTES - len(line) - 1) + "\n"
+    # The line cut by the bound is dropped whole, not read in part.
+    notes.write_text(f"{line}{padding}sent 3 {B}\n")
+    assert commit_hooks.pushes_after(tmp_path, "3") == [(A, None)]
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.write_text(f"shown 3 {A}\nsent 3 {B}\n")
+    notes.symlink_to(elsewhere)
+    assert commit_hooks.pushes_after(tmp_path, "3") == []
+    # The link is taken, not what it names.
+    assert not notes.is_symlink()
+    assert elsewhere.exists()

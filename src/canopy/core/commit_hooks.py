@@ -15,7 +15,9 @@ the hold, with `CANOPY_RUN_ID` and the time, in the slot's own git directory, si
 the same run within `HOLD_WINDOW_SECONDS` of the hold goes through; one after it, or after another run's hold, is held
 again. It holds only a push with something to send, by the refs git hands it on its input, which it hands on to the
 repository's own hook, and in the run's last `LAST_STRETCH_SECONDS` by `CANOPY_DEADLINE` it prints the list and lets
-the push through. It is a reminder, not a guard: what it cannot read or write lets the push through.
+the push through. It is a reminder, not a guard: what it cannot read or write lets the push through. Each time it shows
+the list, and each push it lets through after a hold, it notes the commit in the slot's own git directory too, so the
+harness can keep what the run changed after the list was shown (`pushes_after`).
 
 canopy's entry is the last of the `GIT_CONFIG_*` ones, after any the operator's environment holds, so a hook finds
 the repository's own hooks by asking git with one entry fewer, or more where a tool added its own after canopy's.
@@ -27,7 +29,10 @@ repository of its own commits as it would without canopy.
 
 from __future__ import annotations
 
+import contextlib
+import os
 import re
+import stat
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -53,6 +58,14 @@ SLOTS_ENV = "CANOPY_SLOTS"
 CHECKLISTS_ENV = "CANOPY_CHECKLISTS"
 #: The file in a slot's own git directory where `pre-push` marks its hold: the run's id and the time, in Unix seconds.
 HOLD_MARKER = "canopy-checklist-hold"
+#: The file in a slot's own git directory where `pre-push` notes each time it showed the run its list, and each push it
+#: let through after a hold: a line `<shown|sent> <run id> <commit>`, which the harness reads, and removes, as the run
+#: ends (`pushes_after`).
+PUSHES_LOG = "canopy-checklist-pushes"
+#: How much of that file the harness reads: far more than a run's pushes fill.
+MAX_PUSHES_BYTES = 64 * 1024
+#: A commit id, as git names one: SHA-1, or SHA-256.
+_COMMIT_RE = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
 #: How long after a hold a push of the same run goes through: past it, a push after a long stretch of work is held
 #: again. Long enough to diff, fix, and commit; a push held a second time still goes through the time after.
 HOLD_WINDOW_SECONDS = 30 * 60
@@ -95,9 +108,9 @@ read_refs=
 # Holds a push of the refs in $1 for the list CANOPY_CHECKLISTS names for this slot: prints it and exits, or returns to
 # let the push through. What it cannot read or write lets the push through, since the hold is a reminder, not a guard.
 hold() {
-    # Something to send: a ref whose local sha is not all zeros, as a deletion's is.
+    # Something to send: a ref whose local sha is not all zeros, as a deletion's is. Its commit is the one noted.
     sending=$(printf '%s\n' "$1" | while read -r _ sha _ _; do
-        case $sha in *[!0]*) echo yes && break ;; esac
+        case $sha in *[!0]*) echo "$sha" && break ;; esac
     done)
     [ -n "$sending" ] || return 0
     # git runs pre-push at the top of the slot's working tree.
@@ -112,6 +125,8 @@ hold() {
     now=$(date +%s) || return 0
     repo=${list##*/}
     repo=${repo%.md}
+    # The slot's own git directory, which no other slot reads: a worktree's, not the one its pool shares.
+    own=$(git rev-parse --absolute-git-dir 2>/dev/null) || own=
     case ${CANOPY_DEADLINE-} in
         "" | *[!0-9]*) ;;
         *)
@@ -125,12 +140,13 @@ hold() {
                     echo
                     cat "$list"
                 } >&2
+                note shown "$sending"
                 return 0
             fi
             ;;
     esac
-    # The slot's own git directory, which no other slot reads: a worktree's, not the one its pool shares.
-    marker=$(git rev-parse --absolute-git-dir)/@MARKER@ || return 0
+    [ -n "$own" ] || return 0
+    marker=$own/@MARKER@
     held_run=
     held_at=
     if [ -f "$marker" ]; then
@@ -140,9 +156,11 @@ hold() {
     # Held already in this run, a moment ago: this is the push after the hold. A marker another run left in the slot,
     # or one from before a long stretch of work, counts for nothing.
     if [ "$held_run" = "${CANOPY_RUN_ID-}" ] && [ $((now - held_at)) -lt @WINDOW@ ]; then
+        note sent "$sending"
         return 0
     fi
     { printf '%s %s\n' "${CANOPY_RUN_ID-}" "$now" >"$marker"; } 2>/dev/null || return 0
+    note shown "$sending"
     {
         echo "[canopy] Push held, not rejected: nothing was sent. $repo's checklist is below, and in $list," \
             "should this output be cut short. Before this branch goes up, diff it against its base and hold each" \
@@ -153,6 +171,14 @@ hold() {
         cat "$list"
     } >&2
     exit 1
+}
+# Notes for the harness, which reads them as the run ends, that the run was shown its list with the branch at the
+# commit $2, or pushed $2 through: a line `<shown|sent> <run id> <commit>` in the slot's own git directory. Best effort:
+# a note it cannot write loses only the record.
+note() {
+    if [ -n "$own" ]; then
+        { printf '%s %s %s\n' "$1" "${CANOPY_RUN_ID-}" "$2" >>"$own/@PUSHES@"; } 2>/dev/null || :
+    fi
 }
 # The marks go on a commit in one of the run's slots alone, at whose top git runs this hook: a repository the worker's
 # tools make or use elsewhere, as a test's, is not the run's work.
@@ -211,6 +237,7 @@ done
     .replace("@LAST_STRETCH@", str(LAST_STRETCH_SECONDS))
     .replace("@WINDOW@", str(HOLD_WINDOW_SECONDS))
     .replace("@MARKER@", HOLD_MARKER)
+    .replace("@PUSHES@", PUSHES_LOG)
 )
 
 
@@ -309,6 +336,39 @@ def env(
     }
 
 
+def pushes_after(git_dir: Path, run_id: str) -> list[tuple[str, str | None]]:
+    """Take what `pre-push` noted of run `run_id` in the slot whose own git directory is `git_dir`, and remove it.
+
+    The notes are the run's to write, so untrusted: a line that is not `<shown|sent> <run id> <commit>`, or names
+    another run, counts for nothing, and only the first `MAX_PUSHES_BYTES` are read. Each showing of the list opens a
+    stretch, and the next push let through closes it; one shown again while open keeps the first commit, since all
+    that follows it came after the list. The file is removed, so a later run in the slot starts with none.
+
+    Returns:
+        Each stretch, oldest first: the commit the branch was at when the list was shown, and the commit of the next
+        push let through, or None for one no push closed.
+    """
+    path = git_dir / PUSHES_LOG
+    text = _read_bounded(path, MAX_PUSHES_BYTES)
+    with contextlib.suppress(OSError):
+        path.unlink(missing_ok=True)
+    found: list[tuple[str, str | None]] = []
+    opened: str | None = None
+    for line in text.splitlines():
+        match line.split():
+            case [event, run, sha] if run == run_id and _COMMIT_RE.fullmatch(sha):
+                if event == "shown" and opened is None:
+                    opened = sha
+                elif event == "sent" and opened is not None:
+                    found.append((opened, sha))
+                    opened = None
+            case _:
+                pass
+    if opened is not None:
+        found.append((opened, None))
+    return found
+
+
 def git_too_old(config: Config, runner: procs.Runner) -> str | None:
     """Return why canopy's marks cannot reach a worker's commits, when the git on `PATH` is older than `MIN_GIT`.
 
@@ -332,3 +392,19 @@ def git_too_old(config: Config, runner: procs.Runner) -> str | None:
         f"git {found[1]}.{found[2]} on PATH is older than {least}, which canopy's commit hooks need: workers' commits "
         f"get no trailer or prefix, and each run's note names them; install git {least} or later"
     )
+
+
+def _read_bounded(path: Path, limit: int) -> str:
+    # The first `limit` bytes of the regular file at `path`, its last partial line dropped; "" for none, a link's
+    # included, since the file is in a directory the run may write.
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return ""
+    with os.fdopen(fd, "rb") as f:
+        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+            return ""
+        data = f.read(limit + 1)
+    if len(data) > limit:
+        data = data[: data.rfind(b"\n", 0, limit) + 1]
+    return data.decode("ascii", errors="replace")
