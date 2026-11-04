@@ -744,7 +744,7 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     replaced = plans.current(ctx.conn, key)
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text if replaced is not None else None
     desk_files = {plans.REPLACED: copy} if copy is not None else {}
-    member = epics.member_epic(ctx.conn, key)
+    member = epics.member_epic(ctx.conn, ctx.state_dir, key)
     if member is not None:
         desk_files[epics.EPIC_COPY] = _epic_copy(ctx, member)
     desk_files |= _place_attachments(run, slots, _attachment_copies(ctx, run))

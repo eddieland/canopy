@@ -41,6 +41,12 @@ Sessions survive a restart.
 
 ## Out of scope
 """
+#: `EPIC_PLAN` with a second entry, which a later approval of `EPIC_PLAN` drops.
+TWO_ENTRIES = EPIC_PLAN.replace(
+    "## Decisions",
+    "### B2. Read from the store\n\n- Covers: R1\n- Provides: none\n- Uses: C1\n- Repositories: repo\n"
+    "- After: B1\n- Trivial: no\n\n## Decisions",
+)
 
 
 def approved_epic(scenario: Scenario, *member: str) -> int:
@@ -112,3 +118,37 @@ def test_a_member_is_not_planned_from_an_epic_plan_no_longer_as_approved(
         in json.loads(run.row["result_json"])["harness"]
     )
     assert plans.history(scenario.conn, KEY) == []
+
+
+def test_a_member_whose_entry_a_later_approval_dropped_is_told_so(scenario: Scenario, git_pool: GitPool) -> None:
+    """A registration names the plan approved when it was made: the planner hears its entry is gone since."""
+    assert git_pool.slots
+    assert operator("epic", "submit", "Move sessions to the new store.") == 0
+    epic_planned(scenario.env, TWO_ENTRIES)
+    assert operator("plan", "epic:1", "--approve") == 0
+    assert operator("epic", "add", "epic:1", KEY, "--entry", "B2") == 0
+    assert operator("reply", "epic:1", "Leave the reads to the API's own ticket.") == 0
+    epic_planned(scenario.env, EPIC_PLAN)
+    assert operator("plan", "epic:1", "--approve") == 0
+    run = scenario.run(PLAN, worker=planner_does(plan=TEXT))
+    assert run.status is RunStatus.DONE
+    assert "It was registered against `B2`, which the approved plan no longer holds" in run.prompt
+    assert "This ticket fulfils" not in run.prompt
+
+
+def test_an_override_without_the_epic_is_refused_once_its_plan_is_approved(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """An older planner override would plan a member without telling it of the epic's plan: it fails to render."""
+    assert git_pool.slots
+    overrides = scenario.env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-plan.md").write_text(
+        "Plan {{KEY}} in {{REPOSITORIES}}, {{AUTHORIZATION}}, hearing {{OPERATOR_MESSAGES}}, into {{PLAN_OUT}}\n",
+    )
+    scenario.seen()
+    approved_epic(scenario, "--entry", "B1")
+    [(action, rationale)] = scenario.refuses(PLAN)
+    assert action == "refused:bad_prompt"
+    assert "missing required placeholder {{EPIC}}" in rationale

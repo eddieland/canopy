@@ -60,8 +60,11 @@ class MemberEpic:
     epic_id: int
     #: The epic's latest plan the operator approved.
     plan: records.EpicPlan
-    #: The breakdown's entries the member was registered against; none for a member of no entry.
+    #: The breakdown's entries the member was registered against that the approved plan holds; none for a member of
+    #: no entry.
     entries: Sequence[str]
+    #: Those it was registered against that a later approval dropped.
+    dropped: Sequence[str]
 
 
 @dataclass(frozen=True)
@@ -443,8 +446,11 @@ def approved_plan(conn: sqlite3.Connection, epic_id: int) -> records.EpicPlan | 
     return found[0] if found else None
 
 
-def member_epic(conn: sqlite3.Connection, key: str) -> MemberEpic | None:
+def member_epic(conn: sqlite3.Connection, state_dir: Path, key: str) -> MemberEpic | None:
     """Return ticket `key`'s epic as its planner meets it: the epic, its approved plan, and the entries it fulfils.
+
+    A registration names the plan approved when it was made, so an entry a later approval dropped is set apart. Where
+    the approved copy cannot be read, every entry is kept: the run that reads the copy refuses it.
 
     Returns:
         None when the ticket is a member of no epic, or its epic has no approved plan yet.
@@ -455,7 +461,11 @@ def member_epic(conn: sqlite3.Connection, key: str) -> MemberEpic | None:
     plan = approved_plan(conn, member.epic_id)
     if plan is None:
         return None
-    return MemberEpic(epic_id=member.epic_id, plan=plan, entries=entries_of(conn, member.id))
+    registered = entries_of(conn, member.id)
+    held = _held_entries(state_dir, plan)
+    entries = [e for e in registered if held is None or e in held]
+    dropped = [e for e in registered if e not in entries]
+    return MemberEpic(epic_id=member.epic_id, plan=plan, entries=entries, dropped=dropped)
 
 
 def approved_text(state_dir: Path, plan: records.EpicPlan) -> str | None:
@@ -490,6 +500,17 @@ def _keep_approved(state_dir: Path, epic_id: int, run_id: int, text: str, sha256
     if path.exists() and plans.read(path).sha256 == sha256:
         return
     plans.write_new(state_dir / PLANS_DIR, str(epic_id), path.name, text)
+
+
+def _held_entries(state_dir: Path, plan: records.EpicPlan) -> AbstractSet[str] | None:
+    """Return the breakdown's entries of approved plan `plan`, or None when its copy cannot be read as approved."""
+    text = approved_text(state_dir, plan)
+    if text is None:
+        return None
+    try:
+        return frozenset(epic_outline.read(text).entries)
+    except epic_outline.OutlineError:
+        return None
 
 
 def _approved_outlines(

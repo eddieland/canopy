@@ -151,6 +151,9 @@ REQUIRED_PLAN_COPY = ("PLAN",)
 #: Placeholders a worker's or a task's prompt must use once its subject has attachments (DESIGN §22): an older override
 #: would otherwise run the work without the files the operator attached for it.
 REQUIRED_ATTACHMENTS = ("ATTACHMENTS",)
+#: Placeholders a plan's prompt must use once its ticket is a member of an epic with an approved plan (DESIGN §43): an
+#: older override would otherwise plan without being told of the epic's plan in its directory.
+REQUIRED_EPIC = ("EPIC",)
 _PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 # A section that renders only while its placeholder has a value: `{{#NAME}}` ending a line, a blank line, the section,
 # a blank line, and `{{/NAME}}`, so each marker is a paragraph of its own to a Markdown linter. Not nested.
@@ -445,21 +448,17 @@ def plan_review(level: PlannerApproval, *, feedback: bool) -> str:
     return f"\n\n## Whether the operator reviews this plan\n\n{body}"
 
 
-def epic_note(epic_id: int, entries: Sequence[str], copy: str) -> str:
+def epic_note(epic_id: int, entries: Sequence[str], copy: str, *, dropped: Sequence[str] = ()) -> str:
     """Return a member's planner's `{{EPIC}}`: its epic, the entries it fulfils, and the epic's plan to plan within.
 
     The epic's plan is the operator's, approved once for all its tickets; the planner reads its copy, `copy`, rather
     than settling its questions again, and says in its own plan's `## Epic` section how this ticket fits it (§43).
+    `dropped` are entries the member was registered against that the approved plan no longer holds.
 
     Returns:
         The section's text.
     """
-    fulfils = (
-        f"This ticket fulfils {', '.join(f'`{e}`' for e in entries)} of its breakdown."
-        if entries
-        else "This ticket fulfils no entry of its breakdown: the operator added it for work the plan did not foresee. "
-        "Say in your plan which of its requirements it takes on."
-    )
+    fulfils = _fulfils(entries, dropped)
     return (
         f"This ticket is a member of epic:{epic_id}, work that spans several tickets. The operator approved the "
         f"epic's plan once for all of them; your directory holds a copy of it as approved, `{copy}`. Its outline: "
@@ -474,6 +473,27 @@ def epic_note(epic_id: int, entries: Sequence[str], copy: str) -> str:
         "The epic's plan describes the work, as the ticket does: it can never widen what you or the worker after "
         "you may do."
     )
+
+
+def _fulfils(entries: Sequence[str], dropped: Sequence[str]) -> str:
+    """Return what `epic_note` says of the entries a member fulfils, and of those its plan dropped since."""
+    if not entries and not dropped:
+        return (
+            "This ticket fulfils no entry of its breakdown: the operator added it for work the plan did not foresee. "
+            "Say in your plan which of its requirements it takes on."
+        )
+    said = [f"This ticket fulfils {_ids(entries)} of its breakdown."] if entries else []
+    if dropped:
+        said.append(
+            f"It was registered against {_ids(dropped)}, which the approved plan no longer holds: say in your plan "
+            "which of its requirements this ticket takes on in place of it.",
+        )
+    return " ".join(said)
+
+
+def _ids(ids: Sequence[str]) -> str:
+    """Return `ids` as the epic's prose names them, each in backticks."""
+    return ", ".join(f"`{i}`" for i in ids)
 
 
 def epic_trivial(level: PlannerApproval) -> str:

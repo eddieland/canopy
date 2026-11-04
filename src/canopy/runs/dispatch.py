@@ -1155,9 +1155,10 @@ def _spawn(
         # its start record, not a label, authorizes it (DESIGN §25).
         values["AUTHORIZATION"] = prompts.plan_authorization(cfg.tracker.labels, private=plan.private)
         # A member of an epic with an approved plan plans within it, from a copy its run puts in its desk (DESIGN §43).
-        member = epics.member_epic(ctx.conn, key) if kind == policy.PLAN else None
+        member = epics.member_epic(ctx.conn, ctx.state_dir, key) if kind == policy.PLAN else None
         if member is not None:
-            values["EPIC"] = prompts.epic_note(member.epic_id, member.entries, epics.EPIC_COPY)
+            values["EPIC"] = prompts.epic_note(member.epic_id, member.entries, epics.EPIC_COPY, dropped=member.dropped)
+            required = (*required, *prompts.REQUIRED_EPIC)
         values["OPERATOR_MESSAGES"] = (
             conversation.prompt_conversation(ctx.conn, key)
             if plan.private
