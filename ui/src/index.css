@@ -112,6 +112,111 @@
 }
 
 /*
+ * A message bubble's balloon tail, out of its square top corner (on the left; mirrored on the right with
+ * `data-tail='end'`), as a comic letters one: a palette sets how far it reaches (`--bubble-tail`) and the line it is
+ * inked in (`--bubble-tail-line`, the ring `--depth-bubble` draws); by default both are 0, and it draws nothing. It
+ * lies along the bubble's top edge and reaches only sideways, so it never touches the head line above, and takes no
+ * room.
+ *
+ * Two layers in one box beside the corner, from the ink's tip to the bubble's edge. `::before` is the tail's ink, over
+ * the panel's surface it stands on, which covers the bubble's ring and border where the tail opens into the bubble; and
+ * on the right its drop, offset as the bubble's own is, cut at the tip so the box stays inside the panel's padding (on
+ * the left the drop falls under the bubble, as its own does there). `::after` is the fill, the bubble's own background
+ * over that surface, so a tint (a reply's, an open question's) reads as it does in the bubble. Each triangle is the
+ * upper right half of its own box, which a gradient `to bottom left` splits along the diagonal.
+ */
+@utility bubble-tail {
+    --tail: var(--bubble-tail);
+    --tail-line: var(--bubble-tail-line);
+    /* The ink's reach, a line past the fill's slant: (1 + √(1 + 1.5²)) / 1.5 lines further. Its height is 1.5 times. */
+    --tail-ink: calc(var(--tail) + 1.8685 * var(--tail-line));
+    /* How far the bubble's drop falls, as `--depth-bubble`'s does. */
+    --tail-drop: 3px;
+    --tail-drop-ink: transparent;
+    /* A bordered bubble's border, which the tail opens, and which moves the padding box the tail is placed from. */
+    --tail-border: 0px;
+    --tail-ground: var(--color-surface);
+    position: relative;
+
+    &.border {
+        --tail-border: 1px;
+    }
+
+    &::before,
+    &::after {
+        content: '';
+        position: absolute;
+        top: calc(-1 * (var(--tail-line) + var(--tail-border)));
+        left: calc(-1 * (var(--tail-ink) + var(--tail-border)));
+        width: calc(var(--tail-ink) + var(--tail-border));
+        height: calc(1.5 * var(--tail-ink) + var(--tail-drop));
+        pointer-events: none;
+    }
+
+    /* In the box, the ink's tip is at (0, 0), and the bubble's edge at x = `--tail-ink`. */
+    &::before {
+        background:
+            linear-gradient(var(--tail-ground), var(--tail-ground)) var(--tail-ink) var(--tail-line) /
+                var(--tail-border) calc(1.5 * var(--tail)) no-repeat,
+            linear-gradient(to bottom left, var(--tail-ground) calc(50% - 0.5px), transparent calc(50% + 0.5px))
+                calc(var(--tail-ink) - var(--tail)) var(--tail-line) / var(--tail) calc(1.5 * var(--tail)) no-repeat,
+            linear-gradient(to bottom left, var(--ink) calc(50% - 0.5px), transparent calc(50% + 0.5px)) 0 0 /
+                var(--tail-ink) calc(1.5 * var(--tail-ink)) no-repeat,
+            linear-gradient(to bottom left, var(--tail-ground) calc(50% - 0.5px), transparent 0) 0 0 / var(--tail-ink)
+                calc(1.5 * var(--tail-ink)) no-repeat,
+            linear-gradient(to bottom left, var(--tail-drop-ink) calc(50% - 0.5px), transparent calc(50% + 0.5px))
+                calc(-1 * var(--tail-drop)) var(--tail-drop) / var(--tail-ink) calc(1.5 * var(--tail-ink)) no-repeat;
+        /* The ink's triangle and its drop's, and the strip of border the fill opens; of the ring's column, a line wide
+         * outside the bubble's edge, only where the fill opens it, so the ring is never inked twice. */
+        clip-path: polygon(
+            0 0,
+            calc(var(--tail-ink) - var(--tail-line)) 0,
+            calc(var(--tail-ink) - var(--tail-line)) var(--tail-line),
+            calc(var(--tail-ink) + var(--tail-border)) var(--tail-line),
+            calc(var(--tail-ink) + var(--tail-border)) calc(var(--tail-line) + 1.5 * var(--tail)),
+            var(--tail-ink) calc(var(--tail-line) + 1.5 * var(--tail)),
+            calc(var(--tail-ink) - var(--tail-line)) calc(1.5 * var(--tail) - 0.5 * var(--tail-line)),
+            calc(var(--tail-ink) - var(--tail-line)) calc(1.5 * (var(--tail-ink) - var(--tail-line))),
+            calc(var(--tail-ink) - var(--tail-drop)) calc(1.5 * (var(--tail-ink) - var(--tail-drop))),
+            calc(var(--tail-ink) - var(--tail-drop)) calc(1.5 * var(--tail-ink) + var(--tail-drop)),
+            0 calc(2.5 * var(--tail-drop)),
+            0 var(--tail-drop),
+            calc(2 / 3 * var(--tail-drop)) var(--tail-drop)
+        );
+    }
+
+    /* The fill: the tail's own triangle, and the strip of border it opens. */
+    &::after {
+        background-color: inherit;
+        clip-path: polygon(
+            calc(var(--tail-ink) - var(--tail)) var(--tail-line),
+            calc(var(--tail-ink) + var(--tail-border)) var(--tail-line),
+            calc(var(--tail-ink) + var(--tail-border)) calc(var(--tail-line) + 1.5 * var(--tail)),
+            var(--tail-ink) calc(var(--tail-line) + 1.5 * var(--tail))
+        );
+    }
+
+    /* On the right, for the operator's bubble: the left one mirrored, its drop falling outward, clear of the bubble. */
+    &[data-tail='end'] {
+        --tail-drop-ink: var(--ink-drop, var(--ink));
+
+        &::before,
+        &::after {
+            left: auto;
+            right: calc(-1 * (var(--tail-ink) + var(--tail-border)));
+            scale: -1 1;
+        }
+    }
+
+    @media print {
+        &::before,
+        &::after {
+            content: none;
+        }
+    }
+}
+
+/*
  * The guide in the default faces under every palette: Plex Sans for its prose and Plex Mono at full size for its code.
  * A palette that sets every line in mono (Gruvbox, Monokai, Acme) is an editor's look for the app's readouts, not for
  * pages of prose, which read worse in it and wrap sooner.

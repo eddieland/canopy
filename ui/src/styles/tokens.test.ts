@@ -269,6 +269,31 @@ describe.each(Object.entries(THEMES).filter(([, colors]) => colors['ink-drop'] !
     },
 )
 
+// A bubble's balloon tail (`bubble-tail` in src/index.css) draws nothing by default, and is drawn only by a palette
+// that inks its bubbles, since the tail is inked in that palette's `--ink`. Its ink's reach, the tail and its line's
+// offset along the slant, stays inside a conversation's padding (0.75rem) less a bordered bubble's border: past it,
+// the thread's scroll would clip its tip, and scroll sideways.
+const TAIL_ROOM = 12 - 1
+describe("a bubble's balloon tail", () => {
+    it('draws nothing by default', () => {
+        expect(rule(':root')).toContain('--bubble-tail: 0px;')
+        expect(rule(':root')).toContain('--bubble-tail-line: 0px;')
+    })
+
+    it.each(
+        (['light', 'dark'] as const).flatMap((mode) =>
+            PALETTES[mode].slice(1).map((palette) => [`${palette} ${mode}`, paletteRule(mode, palette)]),
+        ),
+    )('%s draws one only if it inks its bubbles, within the padding', (_name, selector) => {
+        const body = rule(selector)
+        const tail = /--bubble-tail: ([\d.]+)px;/u.exec(body)?.[1]
+        const line = /--bubble-tail-line: ([\d.]+)px;/u.exec(body)?.[1]
+        expect(tail !== undefined).toBe(/--depth-bubble: (?!none)/u.test(body))
+        expect(line !== undefined).toBe(tail !== undefined)
+        expect(Number(tail ?? 0) + 1.8685 * Number(line ?? 0)).toBeLessThanOrEqual(TAIL_ROOM)
+    })
+})
+
 // A palette whose every line is mono sets code at its line's size: a smaller copy of the same face reads as a mistake.
 describe('inline code size', () => {
     it.each(

@@ -155,13 +155,15 @@ Rules:
   whose defaults draw nothing: each panel and bubble outlined and dropping a hard shadow (`shadow-panel`,
   `shadow-bubble`), a Ben-Day tone printed on the canvas, its dots swelling toward the window's far edges and clear
   where the rail, the header, and a title sit, so it is never under text (`--canvas-texture`, `--canvas-swell`, and
-  their masks), the primary action pressed into its shadow (`--press-x`, `--press-y`), and a page title dropped in its
-  section's color (`--title-drop`). A section's own title is lettered too: in its display face and tracking
-  (`--face-title`, `--title-tracking`), its drop half again as far, and a thin second plate up and to its left, off
-  register (`--title-drop-2`). Each is a shadow, a transform, a background, or a face drawn in the same line box, so it
-  takes no room. Both sides ink by the same rings; dark's line is its cream, and its drop a color that reads on the
-  night blue, where black would not. Pulp shows a starburst where a cleared item drops its leaf (`--burst-plate`,
-  `--burst-leaf`), absolutely placed, so it too takes no room.
+  their masks), the primary action pressed into its shadow (`--press-x`, `--press-y`), a page title dropped in its
+  section's color (`--title-drop`), and a bubble's balloon tail (`--bubble-tail`, `--bubble-tail-line`), out of its
+  square corner along its top edge, so it never meets the head line above, in the bubble's own fill over the panel's
+  surface. A section's own title is lettered too: in its display face and tracking (`--face-title`, `--title-tracking`),
+  its drop half again as far, and a thin second plate up and to its left, off register (`--title-drop-2`). Each is a
+  shadow, a transform, a background, a face drawn in the same line box, or drawn beside its box, so it takes no room.
+  Both sides ink by the same rings; dark's line is its cream, and its drop a color that reads on the night blue, where
+  black would not. Pulp shows a starburst where a cleared item drops its leaf (`--burst-plate`, `--burst-leaf`),
+  absolutely placed, so it too takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
   hairline, a stepped bar of solid blocks, a print strip of those blocks between ink gutters, or a line that blooms),
   the name (the aurora's gradient, on a solid block, on a plate inked as a panel and tilted a few degrees by a
