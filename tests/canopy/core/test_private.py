@@ -37,22 +37,19 @@ from tests.canopy.helpers import (
     decides,
     decisions,
     dispatch_in_tick,
-    journal_at,
     last_run,
     minute,
-    old_ticket,
     operator,
     overseer_does,
     pool,
     present,
     private_worker_does,
     ticket_sets,
-    versions_after,
     wait_for_run,
     waits,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches, fails, pushes, sets_phase
-from tests.conftest import CanopyEnv, GitPool, Journals
+from tests.conftest import CanopyEnv, GitPool
 
 
 def test_a_started_ticket_is_worked_privately_from_question_to_reply(scenario: Scenario, git_pool: GitPool) -> None:
@@ -441,32 +438,6 @@ def test_github_defaults_keep_the_pr_tools_and_no_issue_writes() -> None:
     for write in (*tools.pr_writes, "issue_write", "add_issue_comment", "sub_issue_write", "merge_pull_request"):
         assert write not in tools.allowed
     assert "actions_run_trigger" not in tools.allowed
-
-
-def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path, journals: Journals) -> None:
-    conn = journal_at(journals, tmp_path, 2)
-    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
-    old_ticket(conn, "OLD-1")
-    results = [
-        ("done", json.dumps({"summary": "did it", "prs": {"api": "https://e.test/pr/1", "web": None}}), "2026-01-02"),
-        ("blocked", json.dumps({"summary": "", "question": "Which one?"}), "2026-01-01"),
-        ("crashed", "not json", "2026-01-03"),
-        ("running", None, None),
-    ]
-    for status, result, ended in results:
-        conn.execute(
-            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, ended_at, log_path, status, result_json) "
-            "VALUES (1, 'OLD-1', 'implement', 'b', 'x', ?, 'l', ?, ?)",
-            (ended, status, result),
-        )
-    assert db.migrate(conn, resources.migrations_dir()) == versions_after(2)
-    found = [(m.run_id, m.kind, m.body, m.source) for m in db.messages_of(conn, "ticket", "OLD-1", 10)]
-    assert found == [
-        (2, "report", "ended blocked", "worker"),
-        (2, "question", "Which one?", "worker"),
-        (1, "report", "did it\nhttps://e.test/pr/1", "worker"),
-        (3, "report", "ended crashed", "worker"),
-    ]
 
 
 def test_run_messages_and_the_run_ended_event_carry_the_message() -> None:

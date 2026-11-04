@@ -48,7 +48,7 @@ type _Table = Literal["ticks", "runs", "chore_runs", "review_runs", "task_runs"]
 
 # Every tick that ended is in exactly one group, in this order: a dry run first, whatever the loop said of it, then a
 # live tick that did not close `ok`, then the loop's word on an `ok` one, idle or not, and last a tick no loop ran. A
-# tick from before migration 0013 has no word from the loop either, so it reads as hand-run: nothing can tell.
+# tick from before canopy recorded the loop's word has none either, so it reads as hand-run: nothing can tell.
 GROUPS: tuple[Group, ...] = ("idle", "busy", "hand_run", "not_ok", "dry_run")
 KINDS: tuple[Kind, ...] = ("overseer", "workers", "plans", "chores", "reviews", "tasks")
 #: Each kind's weekly series of first calls, in the order `Breakdown.first_call_weeks` lists them.
@@ -1182,7 +1182,7 @@ def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
 
 
 # One kind's tool calls in a window, from its runs that started in it. The run table leads, through its `_spent` index
-# on `started_at` (migration 0022), and `run_tools` is read by its key's prefix: `CROSS JOIN` keeps SQLite from
+# on `started_at`, and `run_tools` is read by its key's prefix: `CROSS JOIN` keeps SQLite from
 # reordering them, which with no statistics it would, reading every `run_tools` row of the kind ever recorded. The
 # kind's condition names only the run table's columns, which `run_tools` shares none of.
 def _tools_of(kind: Kind, since: str, until: str) -> sql.Select:

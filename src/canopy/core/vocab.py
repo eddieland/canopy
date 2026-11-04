@@ -7,8 +7,8 @@ converted where it is branched on (`RunStatus(row["status"])`), which raises on 
 table with a row type in `records` does that as the row is read, its column a field of the enum.
 
 A table added from M36 on constrains each such column in SQL, `CHECK (status IN (...))` listing this module's values.
-The tables `0001_init.sql` made keep their schema, since a shipped migration is never edited, and list their values in
-comments.
+The tables made before it keep their schema, which squashing the migrations into `0001_init.sql` kept (D068), and list
+their values in comments.
 """
 
 from __future__ import annotations
