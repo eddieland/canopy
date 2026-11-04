@@ -44,7 +44,11 @@ script's or `make`'s included: a commit chained before it is made. It holds only
 refs git hands it, which it hands on to the repository's own hook. The push after a hold goes through, the repository's
 own `pre-push` with it, so a worker is held once and never kept from pushing; the hook marks when it held, and in which
 run, in the slot's own git directory, since a slot outlives its run, and a push after a long stretch of work is held
-again. Near the deadline, in the clock's last stretch (§33), it holds nothing, since a held push then risks the run
+again. Each time it shows the list, and each push it lets through after a hold, it notes the branch's commit there too;
+as the run ends, the harness keeps the diff from the commit the list was shown at to the next push, or to what the run
+left on origin, beside the run's log, with its answers: what the run changed after being shown the list, with whatever
+else it did in that stretch. It is kept then or never, since a held commit may never reach origin. Near the deadline,
+in the clock's last stretch (§33), it holds nothing, since a held push then risks the run
 ending `unpushed`: it prints the list and lets the push through, asking for the fix pushed again, which D116 allows. So
 it does when it cannot write its marker, since a hold it could not mark would hold every push. A joint run's slots are
 each held on their own, each with its repository's list. A push the remote will refuse is held first, as git runs the
@@ -66,8 +70,8 @@ page for them.
 What lets it run (TRUST_MODEL): a forged `[canopy]` line can only ask the agent to check its own diff against a list it
 already holds, so it fails safe, as the clock's and the nudge's do (T1); nothing a worker does with it extends its run
 (T3); canopy's hook, which every worker's git already runs (T5), reads one more file in a directory the harness made and
-writes one marker in the slot's own git directory, which a sandboxed run may write and nothing on the host reads, and
-the push it holds is only delayed (T4).
+writes one marker and its notes in the slot's own git directory, which a sandboxed run may write; the harness reads the
+notes alone, as untrusted commits it diffs and runs nothing of, and the push it holds is only delayed (T4).
 
 ### The review
 

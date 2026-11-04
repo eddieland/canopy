@@ -1,6 +1,7 @@
 """Workers' runs on tickets.
 
-Each run, the pool slots it leased, why it ran, and what it answered of its checklist (DESIGN §8, §18, §23, §42).
+Each run, the pool slots it leased, why it ran, and what it answered of its checklist and pushed after it (DESIGN §8,
+§18, §23, §42).
 """
 
 from __future__ import annotations
@@ -179,3 +180,24 @@ class ChecklistAnswer(Row):
     #: Why the run left the item failing, for `held`; None for any other answer.
     reason: str | None
     task_run_id: int | None
+
+
+@dataclass(frozen=True)
+class ChecklistPush(Row):
+    """A push a worker's or a task's run made after canopy showed it a repository's checklist (DESIGN §42).
+
+    It names one run: a worker's in `run_id`, or a task's in `task_run_id`, the other None. The commits are the hook's
+    record in the slot, untrusted, each a commit id; the diff between them is kept beside the run's log
+    (`checklist_answers.diff_path`).
+    """
+
+    TABLE: ClassVar[LiteralString] = "checklist_pushes"
+
+    run_id: int | None
+    task_run_id: int | None
+    #: The repository whose list the run was shown.
+    repo: str
+    #: The commit the branch was at when canopy showed the list: the push it held, or let through near the deadline.
+    shown_sha: str
+    #: The commit of the next push the hook let through, or the one the run left on origin when it pushed none.
+    pushed_sha: str

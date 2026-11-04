@@ -617,7 +617,11 @@ Controls now:
 - canopy's git hooks, from the same snapshot, run in every worker's git (T5). Their `pre-push` holds a worker's first
   push of a stretch for its repository's checklist (DESIGN §42): it reads one more file, the slot's list in the run's
   answers directory, which the run cannot write, and writes one marker, the run's id and the time, in the slot's own
-  git directory, which a sandboxed run may write and nothing on the host reads. The push it holds is only delayed: the
+  git directory, which a sandboxed run may write and nothing on the host reads. Beside it, it notes the commit each
+  time it shows the list and each push it lets through after a hold, which the harness reads as the run ends, to keep
+  the diff of what the run changed after the list: untrusted, bounded, read through no link, a line not the run's or
+  naming no commit skipped, and each commit diffed by the harness's git with no driver or textconv, so a forged note
+  can only misrecord that diff, never run anything or reach past the slot. The push it holds is only delayed: the
   next of the same run goes through, the repository's own `pre-push` with it, and none is held in the run's last
   stretch (§33). What it cannot read or write lets the push through. It is a reminder, not a guard: `--no-verify`
   skips it, as it skips the repository's own hooks.
@@ -654,7 +658,7 @@ Controls now:
   run whose repositories disagree. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
   files: not `~/.ssh`, other repositories, `~/.config/canopy`, the workspace's `.canopy/`, or the operator's OpenCode
-  data. It writes only its worktrees, its slot's own HEAD, index, reflog, and checklist marker, a per-run object
+  data. It writes only its worktrees, its slot's own HEAD, index, reflog, and checklist marker and notes, a per-run object
   directory and temp directory, and its role's own cache and data directories: no ref another slot shares, no hook,
   git config, `.git` link, or `commondir` that git on the host later reads, and none of the operator's caches or
   OpenCode data, which the host's OpenCode, the overseer's included, acts on. Its OpenCode starts with a copy of the

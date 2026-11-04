@@ -1342,7 +1342,7 @@ def test_an_answers_directory_that_is_not_a_runs_runs_nothing(sandbox: Sandbox, 
     assert not sandbox.log.exists()
 
 
-def test_a_worker_reads_its_checklist_and_may_write_the_holds_marker_in_its_own_git_directory(
+def test_a_worker_reads_its_checklist_and_may_write_the_holds_marker_and_notes_in_its_own_git_directory(
     sandbox: Sandbox,
     tmp_path: Path,
 ) -> None:
@@ -1368,10 +1368,12 @@ def test_a_worker_reads_its_checklist_and_may_write_the_holds_marker_in_its_own_
     assert not marker.is_relative_to(slot)
     assert covered(filesystem["allowRead"], listed)
     assert not covered(filesystem["allowWrite"], listed)
-    assert covered(filesystem["allowWrite"], marker)
-    assert not covered(filesystem["denyWrite"], marker)
-    only_read = [p for p in filesystem["allowRead"] if p not in filesystem["allowWrite"]]
-    assert not covered(only_read, marker)
+    # So may its notes of the pushes after a list, beside the marker.
+    for written in (marker, marker.with_name(commit_hooks.PUSHES_LOG)):
+        assert covered(filesystem["allowWrite"], written)
+        assert not covered(filesystem["denyWrite"], written)
+        only_read = [p for p in filesystem["allowRead"] if p not in filesystem["allowWrite"]]
+        assert not covered(only_read, written)
 
 
 def covered(entries: list[str], path: Path) -> bool:

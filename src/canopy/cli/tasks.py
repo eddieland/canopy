@@ -199,7 +199,11 @@ def _show_run(ctx: Context, run: records.TaskRun) -> None:
         click.echo(f"    report {path}{_report_state(run, plans.read(path))}")
     session = f"session {run.session_id}" if run.session_id else "no session reported"
     click.echo(f"    {session}, log {run.log_path}")
-    answered = checklist_lines(checklist_answers.of_run(ctx.conn, run.id, table="task_runs"))
+    answered = checklist_lines(
+        checklist_answers.of_run(ctx.conn, run.id, table="task_runs"),
+        checklist_answers.pushes_of(ctx.conn, run.id, table="task_runs"),
+        log_path=run.log_path,
+    )
     if answered:
         click.echo("    checklist:")
     for line in answered:
