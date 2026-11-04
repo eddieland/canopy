@@ -324,8 +324,9 @@ class _Rendered:
     left: Sequence[str]
     #: The overseer's session title.
     title: str
-    #: The review items whose text the block shows, each its ticket's key and its journal number: once the overseer has
-    #: decided the ticket, a live tick marks each as shown, so the next block lists it without its text (DESIGN §30).
+    #: The review items whose text the block shows, each its ticket's key and its journal number: a live tick that
+    #: closes `ok` marks those of each ticket the overseer decided, so the next block lists them without their text
+    #: (DESIGN §30).
     shown_bodies: Sequence[tuple[str, int]]
 
 
@@ -513,8 +514,6 @@ def _steps(
     # it starts none (DESIGN §37, §40).
     with tracing.span("spawn"):
         _spawn(ctx, tick_id, log)
-    if not dry_run and overseer:
-        _mark_shown(ctx, tick_id, rendered.shown_bodies, log)
     if failure is not None:
         return finish(TickStatus.OVERSEER_FAILED, failure, usage)
     owed = rendered.owed
@@ -533,9 +532,12 @@ def _steps(
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
     # Closing `ok` acknowledges the operator's messages the tick read, so each ticket's conversation says what the tick
     # did about them, in the same transaction: a tick that dies between the two leaves neither (DESIGN §22, Messages).
+    # The review items whose text the block showed are marked so with them (DESIGN §30).
     with db.transaction(ctx.conn):
         if not dry_run:
             acknowledge.note(ctx.conn, tick_id)
+            if overseer:
+                _mark_shown(ctx, tick_id, rendered.shown_bodies)
         return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
 
 
@@ -711,18 +713,13 @@ def _spawn(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
         log.exception("starting the runs after the overseer raised", extra={"error": str(e)})
 
 
-def _mark_shown(
-    ctx: Context,
-    tick_id: int,
-    shown: Iterable[tuple[str, int]],
-    log: logs.TickAdapter,
-) -> None:
-    """Mark the review items whose text the block showed of each ticket the overseer decided this tick (DESIGN §30).
+def _mark_shown(ctx: Context, tick_id: int, shown: Iterable[tuple[str, int]]) -> None:
+    """Mark the review items whose text the block showed of each ticket the overseer decided, as tick `tick_id` closes.
 
-    `shown` is each such item, its ticket's key and its journal number. What the overseer recorded stands whatever its
-    run ended as, so a ticket it decided is marked on a failed tick too; one it left undecided, or a read it was
-    refused, is shown again next tick. A dry run marks nothing (D036). What it raises is logged, never the tick's
-    outcome: the items are then shown again.
+    `shown` is each such item, its ticket's key and its journal number. Only a tick that closes `ok` marks: what the
+    overseer kept of a failed tick, an attention item it recorded, is not held (DESIGN §14), so its items are shown
+    again. A ticket whose only decision is a guard's refusal is decided again next tick, with its text. A dry run marks
+    nothing (D036).
     """
     decisions = db.decisions_for_tick(ctx.conn, tick_id)
     decided = {
@@ -730,15 +727,7 @@ def _mark_shown(
         for d in decisions
         if d.ticket_key is not None and d.decider is not Decider.HARNESS and not d.action.startswith(REFUSED_PREFIX)
     }
-    numbers = [number for key, number in shown if key in decided]
-    if not numbers:
-        return
-    try:
-        item_numbers.mark_shown(ctx.conn, tick_id, numbers)
-    except Exception as e:
-        log.exception("marking the review items shown raised", extra={"error": str(e)})
-        return
-    log.info("marked review items shown", extra={"items": numbers})
+    item_numbers.mark_shown(ctx.conn, tick_id, [number for key, number in shown if key in decided])
 
 
 def _record_overseer(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:

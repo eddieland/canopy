@@ -6,8 +6,8 @@ review run takes one when it ends. An item is newer than a cursor when its numbe
 after the item the cursor names. Neither the source's ids, which no tracker orders, nor its times, which a late
 submission backdates, give that order.
 
-A review item's number also records the live tick that first showed its text to an overseer that decided its ticket,
-so the state block shows a body once (DESIGN §30): once its overseer has run, a tick marks what it showed of each ticket
+A review item's number also records the live tick, closed `ok`, whose overseer was first shown its text and decided
+its ticket, so the state block shows a body once (DESIGN §30): as it closes, a tick marks what it showed of each ticket
 the overseer decided, and a dry run marks nothing.
 """
 
@@ -52,20 +52,21 @@ def newer(number: int | None, cursor: int | None) -> bool:
     return cursor is None or number is None or number > cursor
 
 
-def shown(conn: sqlite3.Connection, numbers: Collection[int]) -> set[int]:
-    """Which of the items `numbers` a live tick has shown the text of to an overseer that decided their ticket (§30).
+def shown(conn: sqlite3.Connection, subjects: Collection[str]) -> set[int]:
+    """The review items of the PRs `subjects` whose text an overseer was shown, by number (DESIGN §30).
 
     Returns:
         Each such number.
     """
-    query = records.select(records.ItemNumber).where("shown_tick_id IS NOT NULL").where_in("number", numbers)
+    query = records.select(records.ItemNumber).where("shown_tick_id IS NOT NULL").where_in("subject", subjects)
     return {n.number for n in query.all(conn)}
 
 
 def mark_shown(conn: sqlite3.Connection, tick_id: int, numbers: Collection[int]) -> None:
-    """Record that tick `tick_id` showed the overseer the text of the items `numbers`, and it decided their tickets.
+    """Record that tick `tick_id`, closing `ok`, showed the overseer the text of the items `numbers`.
 
-    One marked by an earlier tick keeps that tick: what matters is that its text was shown once.
+    One marked by an earlier tick keeps that tick: what matters is that its text was shown once. Call inside the
+    transaction that closes the tick, so a tick that dies as it closes marks nothing.
     """
     if not numbers:
         return

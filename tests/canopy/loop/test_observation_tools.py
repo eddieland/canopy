@@ -1,7 +1,7 @@
 """The overseer's read of a unit's review items' text (DESIGN §27, §30), through its tool, in a tick of its own.
 
 Each case writes what the `vcs` source observed by hand and calls `canopy_review-items` as the overseer does; a read
-records nothing, and each of its refusals that a guard makes is recorded, as a verb's is.
+records nothing, and neither does a refusal a guard makes, unlike a verb's: a read decides nothing about its ticket.
 """
 
 from __future__ import annotations
@@ -13,9 +13,9 @@ import pytest
 
 from canopy.core import db
 from canopy.core.vocab import Decider
-from canopy.loop import observation_tools, phases, tools
-from tests.canopy.helpers import KEY, context, in_tick, operator, overseer_calls, reads_items
-from tests.canopy.observation_helpers import NOW, PR, TRACKER, TRUST, held, observe_pr, observe_ticket, review
+from canopy.loop import observation_tools, tools
+from tests.canopy.helpers import KEY, in_tick, operator, overseer_calls, reads_items
+from tests.canopy.observation_helpers import PR, TRACKER, TRUST, held, observe_pr, observe_ticket, review
 
 if TYPE_CHECKING:
     import sqlite3
@@ -180,13 +180,14 @@ def test_a_ticket_the_block_shows_no_text_of_is_refused(
     hidden: Callable[[CanopyEnv, sqlite3.Connection], None],
     why: str,
 ) -> None:
-    """A non-candidate is listed by key alone (TRUST_MODEL T7), and a stopped or done ticket not at all."""
+    """A non-candidate is listed by key alone (TRUST_MODEL T7), and a stopped or done ticket not at all.
+
+    Read from the observation as the block reads it, so a tick whose derivation raised refuses the same.
+    """
     asked = review(observed, 2, "octocat", "changes_requested", "2026-10-20T11:00:00.000Z", "Rename the helper.")
     hidden(canopy_env, observed)
     observed.commit()
-    ctx = context(canopy_env)
     with in_tick(observed) as tick_id:
-        phases.record(observed, tick_id, phases.derive(ctx, NOW))
         said = overseer_calls(reads_items(KEY, asked))
     assert said.error
     assert said.text == f"review-items refused (unlisted): the state block shows none of {KEY}'s text this tick: {why}"

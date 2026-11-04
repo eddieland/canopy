@@ -439,8 +439,8 @@ def dispatch_run(ctx: Context, request: Dispatch) -> Outcome[Dispatched]:
     current = running_tick(ctx)
     key, kind, repos, reasons = request.key, request.kind, request.repos, request.reasons
     tick_id = current.id
-    refuse_unknown(ctx, tick_id, [key], "dispatch")
-    refuse_decided(ctx, tick_id, key, "dispatch")
+    _refuse_unknown(ctx, tick_id, [key], "dispatch")
+    _refuse_decided(ctx, tick_id, key, "dispatch")
     log = logs.for_tick(tick_id)
     db.touch_ticket(ctx.conn, key, ctx.repo)
     now = datetime.now(UTC)
@@ -728,7 +728,7 @@ def decide(ctx: Context, request: Decisions) -> Outcome[Decided]:
     """
     current = running_tick(ctx)
     keys = [d.key for d in request.decisions]
-    refuse_unknown(ctx, current.id, keys, "decide")
+    _refuse_unknown(ctx, current.id, keys, "decide")
     if refused := [r for key in keys if (r := _decided_by_harness(ctx, current.id, key, "decide")) is not None]:
         recorded = "the refusal was recorded" if len(refused) == 1 else "the refusals were recorded"
         unrecorded = "" if len(request.decisions) == 1 else ", and nothing else in the call: decide the rest again"
@@ -809,8 +809,8 @@ def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
     key, pr, detail = request.key, request.pr, request.detail
     unit = mapped_repo(ctx, request.repo)
     if key is not None:
-        refuse_unknown(ctx, current.id, [key], "attention")
-        refuse_decided(ctx, current.id, key, "attention")
+        _refuse_unknown(ctx, current.id, [key], "attention")
+        _refuse_decided(ctx, current.id, key, "attention")
         db.touch_ticket(ctx.conn, key, ctx.repo)
     _refuse_raised(ctx, current.id, request.reason, key=key, repo=unit, pr=pr)
     kept = request.reason in kept_items.KEPT
@@ -1011,14 +1011,14 @@ def _check_setting(ctx: Context, current: records.Tick, setting: TicketSet) -> _
         Refused: As `ticket_set` says, for this setting.
     """
     key, phase = setting.key, setting.phase
-    refuse_unknown(ctx, current.id, [key], "ticket-set")
+    _refuse_unknown(ctx, current.id, [key], "ticket-set")
     cursors: dict[str, str] = dict(setting.cursors.items())
     unit_cursor = next((name for name in cursors if name in db.UNIT_CURSORS), None)
     unit_phase = phase if phase in vocab.UNIT_PHASES else None
     unit = mapped_repo(ctx, setting.repo)
     if unit is None and (unit_cursor is not None or unit_phase is not None):
         unit = _only_unit(ctx, key, f"a {unit_cursor} cursor" if unit_cursor else f"the {unit_phase} phase")
-    refuse_decided(ctx, current.id, key, "ticket-set")
+    _refuse_decided(ctx, current.id, key, "ticket-set")
     reasons = {number: vocab.PassReason(reason) for number, reason in setting.passed.items()}
     passed = _check_cursors(ctx, current.id, key, unit, cursors, passed=reasons) if cursors else []
     return _Checked(setting, unit, unit_phase, passed)
@@ -1138,7 +1138,7 @@ def running_tick(ctx: Context) -> records.Tick:
     return row
 
 
-def refuse_unknown(ctx: Context, tick_id: int, keys: Iterable[str], verb: str) -> None:
+def _refuse_unknown(ctx: Context, tick_id: int, keys: Iterable[str], verb: str) -> None:
     """Refuse the overseer's `verb` about any of `keys` the journal has no ticket of (DESIGN §30).
 
     A ticket is in the journal once the tracker query returned it, which the harness records before the overseer runs,
@@ -1164,7 +1164,7 @@ def refuse_unknown(ctx: Context, tick_id: int, keys: Iterable[str], verb: str) -
     raise Refused(f"{verb} refused ({UNKNOWN}): {why}; the refusal was recorded{rest}")
 
 
-def refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
+def _refuse_decided(ctx: Context, tick_id: int, key: str, verb: str) -> None:
     """Refuse the overseer's `verb` about ticket `key` when the harness decided it in tick `tick_id` (DESIGN §37).
 
     The harness decided it before the overseer ran, or dispatches it after. The overseer was not shown the ticket, and

@@ -34,6 +34,7 @@ from tests.canopy.helpers import (
     only_tick,
     overseer_titles,
     present,
+    reads_items,
     review_comment,
     ticket_sets,
     titled_overseer,
@@ -781,7 +782,7 @@ def test_a_live_tick_marks_the_review_items_whose_text_it_showed_of_each_ticket_
     scenario: Scenario,
     github_state: Path,
 ) -> None:
-    """A review item's text is in the block once (DESIGN §30): a dry run, and a ticket left undecided, mark nothing."""
+    """An item's text is in the block once (DESIGN §30): a dry run, an undecided ticket, and a failed tick mark none."""
     scenario.configures(trust={"trusted_reviewers": ["octocat"]})
     scenario.seen(KEY)
     db.set_unit(scenario.conn, KEY, str(scenario.env.root), "repo", pr_url=PR)
@@ -802,15 +803,17 @@ def test_a_live_tick_marks_the_review_items_whose_text_it_showed_of_each_ticket_
     assert (listed().get("body"), marked()) == ("Why a map?", {})
     # The overseer read the item and decided nothing: its duty is undone, and the item is shown again.
     number = listed()["number"]
-    undone = scenario.tick(calls("canopy_review-items", key=KEY, repo="repo", numbers=[number]), code=1)
+    undone = scenario.tick(reads_items(KEY, number), code=1)
     assert "no decision for PROJ-1" in present(undone.tick.summary)
     assert (listed().get("body"), marked()) == ("Why a map?", {})
     # A refused read is no decision either.
-    refused = scenario.tick(calls("canopy_review-items", key=KEY, repo="repo", numbers=[number + 50]), code=1)
+    refused = scenario.tick(reads_items(KEY, number + 50), code=1)
     assert "no decision for PROJ-1" in present(refused.tick.summary)
     assert marked() == {}
-    # The overseer decided the ticket, though its run then failed: what it recorded stands, and the text was shown.
-    ticked = scenario.tick(*waits(KEY), result="I got distracted", code=1)
+    # The overseer decided the ticket, but its run then failed: what it kept of the tick is not held, so nor is this.
+    scenario.tick(*waits(KEY), result="I got distracted", code=1)
+    assert (listed().get("body"), marked()) == ("Why a map?", {})
+    ticked = scenario.tick(*waits(KEY))
     shown = listed()
     assert (shown["body"], marked()) == ("Why a map?", {number: ticked.tick.id})
     later = scenario.tick(*waits(KEY))

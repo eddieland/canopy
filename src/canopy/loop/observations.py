@@ -13,11 +13,11 @@ overseer may overrule.
 
 Text is the observation's, as the connector's validation cut and marked it (§30). A subject shows at most
 `MAX_NEW_ITEMS` new items, oldest first, and counts the rest, which stay new for a later tick. A review item's text is
-shown once: on the first live tick whose overseer decides the ticket with it listed, which marks it shown
-(`core.item_numbers`), and not while the ticket or the unit can only wait, on a person or on a run, since then the hold
-decides and not the feedback (`Holds`); a later tick lists the item by its number and marks, and the overseer reads its
-text again through a tool (§27). Nothing here authorizes: it is what a connector printed, and the overseer's prompt says
-what it may use it for.
+shown once: on the first live tick, closed `ok`, whose overseer decided the ticket with it listed, which marks it shown
+(`core.item_numbers`), and not while the ticket or the unit can only wait, on a person, a run, or a read, since then the
+hold decides and not the feedback (`Holds`); a later tick lists the item by its number and marks, and the overseer reads
+its text again through a tool (§27). Nothing here authorizes: it is what a connector printed, and the overseer's prompt
+says what it may use it for.
 """
 
 from __future__ import annotations
@@ -48,7 +48,8 @@ if TYPE_CHECKING:
 MAX_NEW_ITEMS = 10
 #: The harness's attention reasons that hold a ticket, or with a repository one unit, for a person (DESIGN §30): while
 #: one is recorded this tick, no decision rests on the unit's review items, so their text is left out. The rows of §7
-#: that allow a `wait` alone hold the same way: `needs_human` and `running` the ticket, `ci_running` its unit.
+#: that allow a `wait` alone hold the same way: `needs_human` and `running` the ticket, `ci_running` its unit, and so
+#: does a ticket whose own observation is stale, which waits for a read (§37).
 #: `untrusted_review` holds only the untrusted items of its unit, since a trusted reviewer's feedback on the same unit
 #: still goes to a worker (D089); one that comes after the first untrusted item is shown, and so spent, though no
 #: `resume` covers it until the operator answers, which is when the overseer judges it either way.
@@ -362,8 +363,8 @@ def new_reviews(reviews: Iterable[records.ObservedReview], cursor: int | None) -
 class Holds:
     """What can only wait this tick, on a person or a run, so no decision rests on its review items' text (§30)."""
 
-    #: The tickets held whole: `needs_human` with no reply, or `running`, derived on the ticket, or a `HOLD_REASONS`
-    #: item about it.
+    #: The tickets held whole: `needs_human` with no reply, or `running`, derived on the ticket, the ticket's own
+    #: observation stale, or a `HOLD_REASONS` item about it.
     tickets: AbstractSet[str]
     #: The units held whole, each `(key, repo)`: `ci_running` derived on the unit, or a `HOLD_REASONS` item about it.
     units: AbstractSet[tuple[str, str]]
@@ -387,7 +388,7 @@ class Holds:
             rows = set(d.phases)
             # A reply ends `needs_human` on the tick that acts on it, though the label is still observed (§7).
             waits = Phase.RUNNING in rows or (Phase.NEEDS_HUMAN in rows and Phase.HUMAN_REPLIED not in rows)
-            if d.repo is None and waits:
+            if d.repo is None and (waits or d.stale is not None):
                 tickets.add(d.ticket_key)
             elif d.repo is not None and Phase.CI_RUNNING in rows:
                 units.add((d.ticket_key, d.repo))
@@ -447,7 +448,7 @@ class Reader:
     #: The tick's derivation, by ticket and unit (None for the ticket's own).
     derived: Mapping[tuple[str, str | None], phases.Derived]
     runs: Mapping[SourceKind, records.ConnectorRun]
-    #: The review items whose text an overseer that decided their ticket was shown, by journal number (DESIGN §30).
+    #: The review items of the listed tickets' PRs whose text an overseer was shown, by journal number (DESIGN §30).
     shown: AbstractSet[int]
     #: What can only wait this tick, whose review items' text is left out.
     holds: Holds
@@ -500,6 +501,9 @@ class Reader:
         branches: dict[str, list[records.ObservedBranch]] = {}
         for b in records.select(records.ObservedBranch).all(conn):
             branches.setdefault(b.repository, []).append(b)
+        units_of = db.all_units(conn)
+        # Every PR of a listed ticket's units: bounded by the queue, where the journal's review items are not.
+        urls = sorted({u.pr_url for key in keys for u in units_of.get(key, []) if u.pr_url is not None})
         return cls(
             ctx=ctx,
             cutoff=cutoff,
@@ -512,10 +516,10 @@ class Reader:
             reviews=reviews,
             branches=branches,
             fresh_repos=phases.fresh_repos(conn, branches, cutoff),
-            units_of=db.all_units(conn),
+            units_of=units_of,
             derived={(d.ticket_key, d.repo): d for d in derived},
             runs=runs,
-            shown=item_numbers.shown(conn, [r.number for rs in reviews.values() for r in rs if r.number is not None]),
+            shown=item_numbers.shown(conn, urls),
             holds=holds,
         )
 

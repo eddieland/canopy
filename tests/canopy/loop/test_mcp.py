@@ -6,6 +6,7 @@ import os
 import re
 import sqlite3
 from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
@@ -681,7 +682,7 @@ def test_each_tools_input_is_its_schema_and_takes_no_other_field(overseen: Canop
 )
 def test_each_tool_describes_every_field_and_says_whether_it_only_reads(
     tools_listed: Sequence[mcp.Tool],
-    reads: set[str],
+    reads: AbstractSet[str],
 ) -> None:
     """The model reads a tool's description and its fields' alone, so none is left without one."""
     for found in tools_listed:

@@ -39,7 +39,7 @@ from tests.canopy.observation_helpers import (
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Sequence
+    from collections.abc import Iterable
 
     from syrupy.assertion import SnapshotAssertion
 
@@ -242,7 +242,7 @@ def test_a_review_items_text_is_shown_once_and_its_number_and_marks_after(
     canopy_env: CanopyEnv,
     tracked: sqlite3.Connection,
 ) -> None:
-    """A live tick that closes ok marks what it showed (`item_numbers.mark_shown`); the next block lists it `seen`."""
+    """A live tick that closes ok marks what its overseer decided on (`mark_shown`); the next block lists it `seen`."""
     observe_ticket(tracked)
     db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR)
     observe_pr(tracked)
@@ -304,6 +304,18 @@ def test_a_ticket_held_for_a_person_shows_its_review_items_without_their_text_un
     ]
 
 
+def test_a_ticket_observed_stale_holds_its_review_items(canopy_env: CanopyEnv, tracked: sqlite3.Connection) -> None:
+    """A stale ticket waits for a read (DESIGN §37), so a tick that lists it spends no item's text."""
+    observe_ticket(tracked, at=OLD)
+    db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR)
+    observe_pr(tracked)
+    asked = review(tracked, 2, "octocat", "changes_requested", ASKED, "Rename the helper.")
+    found = observed(canopy_env, tracked)["tickets"][0]
+    assert found["observed"] == "stale"
+    [unit] = found["units"]
+    assert [(r["number"], r.get("body"), r.get("held")) for r in unit["reviews"]] == [(asked, None, True)]
+
+
 def test_a_ticket_whose_worker_runs_and_a_unit_whose_checks_run_hold_their_review_items(
     canopy_env: CanopyEnv,
     tracked: sqlite3.Connection,
@@ -348,7 +360,7 @@ def test_the_harnesss_items_hold_the_ticket_or_one_unit_and_untrusted_review_its
     untrusted = review(tracked, 3, "stranger", None, ASKED, "Why not a map?", item="comment")
     elsewhere = review(tracked, 4, "octocat", "commented", ASKED, "Also here.", pr=other)
 
-    def texts(raised: Sequence[tuple[str, str | None]]) -> dict[str, list[tuple[int, str | None, bool | None]]]:
+    def texts(raised: Iterable[tuple[str, str | None]]) -> dict[str, list[tuple[int, str | None, bool | None]]]:
         found = observed(canopy_env, tracked, raised=raised)
         return {
             u["repo"]: [(r["number"], r.get("body"), r.get("held")) for r in u["reviews"]]
@@ -407,7 +419,7 @@ def observed(
     env: CanopyEnv,
     conn: sqlite3.Connection,
     *,
-    raised: Sequence[tuple[str, str | None]] = (),
+    raised: Iterable[tuple[str, str | None]] = (),
 ) -> dict[str, Any]:
     """The block's observations of `env`'s journal at NOW, as the overseer reads them.
 

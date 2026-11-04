@@ -15,8 +15,8 @@ from typing import TYPE_CHECKING, Annotated
 
 from pydantic import Field, StrictInt
 
-from canopy.core import conversation, db, records, sql
-from canopy.core.vocab import ReviewItem
+from canopy.core import conversation, db, records
+from canopy.core.vocab import ReviewItem, TicketState
 from canopy.infra import logs
 from canopy.loop import harness, harness_dispatches, phases
 from canopy.loop.tools import DECIDED, UNKNOWN, Key, Outcome, Refused, Repo, Request, Result, mapped_repo, running_tick
@@ -111,8 +111,8 @@ def read_review_items(ctx: Context, request: ReviewItems) -> Outcome[ReviewItems
     repo = mapped_repo(ctx, request.repo) or request.repo
     url = _pr_of(ctx, key, repo)
     numbers = sorted(set(request.numbers))
-    query = sql.select("*").from_("observed_reviews").where("pr_url = ?", url).where_in("number", numbers)
-    found = records.fetch_all(ctx.conn, records.ObservedReview, query.order_by("number"))
+    query = records.select(records.ObservedReview).where("pr_url = ?", url).where_in("number", numbers)
+    found = query.order_by("number").all(ctx.conn)
     missing = sorted(set(numbers) - {r.number for r in found if r.number is not None})
     if missing:
         _refuse_unobserved(current.id, key=key, repo=repo, url=url, missing=missing)
@@ -160,21 +160,24 @@ def _refuse_decided(ctx: Context, tick_id: int, key: str) -> None:
 def _refuse_unlisted(ctx: Context, tick_id: int, key: str) -> None:
     """Refuse the read of ticket `key` when the state block shows none of its text in tick `tick_id` (DESIGN §30).
 
-    A stopped ticket and one marked done are not listed; one observed closed or without a queue label is listed by
-    key and why alone, so a widened query shows the overseer nothing of it (TRUST_MODEL T7).
+    A stopped ticket and one marked done are not listed; one observed closed, or a public one observed without a queue
+    label, is listed by key and why alone, read from the observation as the block reads it, so a widened query shows
+    the overseer nothing of it (TRUST_MODEL T7).
 
     Raises:
         Refused: The block shows none of the ticket's text.
     """
     ticket = db.get_ticket(ctx.conn, key)
-    own = next((d for d in phases.recorded(ctx.conn, tick_id) if d.ticket_key == key and d.repo is None), None)
+    seen = records.select(records.ObservedTicket).where("key = ?", key).one(ctx.conn)
+    queued = {label["name"] for label in phases.labels_of(seen)} if seen is not None else set()
+    private = conversation.is_started(conversation.start_of(ctx.conn, key))
     if key in conversation.stopped(ctx.conn):
         why = "the operator stopped it"
     elif ticket is not None and ticket.done:
         why = "it is marked done"
-    elif own is not None and own.closed:
+    elif seen is not None and seen.state is TicketState.CLOSED:
         why = "the tracker says it is closed"
-    elif own is not None and own.candidate is False:
+    elif seen is not None and not private and not queued & set(ctx.config.tracker.labels):
         why = "it carries no queue label"
     else:
         return
