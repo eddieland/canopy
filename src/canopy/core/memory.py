@@ -80,6 +80,19 @@ _MEMORIES = records.select(records.Memory)
 _EARLIER = (
     sql.select("m.supersedes").from_("memories m").join("back b ON m.id = b.id").where("m.supersedes IS NOT NULL")
 )
+#: The version each lesson in `same(id, root)` was renamed from, its words and repository unchanged: the rows whose
+#: reads count as the root's (`renamed_from`). A forgotten version's text is gone, so it ends the walk.
+_SAME_WORDS = (
+    sql.select("p.id, s.root")
+    .from_("same s")
+    .join("memories m ON m.id = s.id")
+    .join("memories p ON p.id = m.supersedes")
+    .where("m.scope = ?", MemoryScope.LESSON)
+    .where("m.promoted_from = m.supersedes")
+    .where("p.key <> m.key")
+    .where("p.body = m.body")
+    .where("p.repo IS m.repo")
+)
 
 
 def mode_words(mode: MemoryMode) -> str:
@@ -392,12 +405,13 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
     if MemoryMode.USE in (writing.modes.ticket_notes, writing.modes.proposals):
         # Only what was rendered into this run's prompt counts: a worker cannot renew or retire what it never saw.
         shown = {m.id: m for m in read_by(conn, run_id)}
-        wrong = _cited(writing, "memory_wrong", fields.memory_wrong, shown)
-        _mark_wrong(conn, writing, wrong)
+        wrong = _cited(conn, writing, "memory_wrong", fields.memory_wrong, shown)
+        _mark_wrong(conn, writing, [c.memory for c in wrong])
+        reported = {c.memory.id for c in wrong}
         used = [
-            m for m in _cited(writing, "memory_used", fields.memory_used, shown) if m.id not in {w.id for w in wrong}
+            c for c in _cited(conn, writing, "memory_used", fields.memory_used, shown) if c.memory.id not in reported
         ]
-        _mark_used(conn, used)
+        _mark_used(conn, [c.memory for c in used])
         _mark_cited(conn, run_id, MemoryCited.WRONG, wrong)
         _mark_cited(conn, run_id, MemoryCited.USED, used)
         if writing.modes.ticket_notes is MemoryMode.USE:
@@ -420,17 +434,40 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
     return writing.refused
 
 
-def _cited(writing: _Writing, name: str, value: JsonValue, shown: Mapping[int, records.Memory]) -> list[records.Memory]:
+@dataclass(frozen=True)
+class _Citation:
+    """A memory a run cited, as rendered into its prompt, and the version in force it names."""
+
+    #: The id the run read and cited.
+    read: int
+    #: The memory in force it names: the one read, or the lesson it was renamed into since, its words unchanged.
+    memory: records.Memory
+
+
+def _cited(
+    conn: sqlite3.Connection,
+    writing: _Writing,
+    name: str,
+    value: JsonValue,
+    shown: Mapping[int, records.Memory],
+) -> list[_Citation]:
     """The memories a run cites by id in `name`, of those rendered into its prompt and still in force.
+
+    A lesson the operator renamed while the run worked, its words unchanged, is still the one it read, so a citation
+    of it reaches the version in force.
 
     Returns:
         Each cited memory once, in the order cited; an id never rendered, or no longer in force, is passed over.
     """
-    found: list[records.Memory] = []
+    found: list[_Citation] = []
     for entry in _entries(writing, name, value):
-        cited = shown.get(entry) if isinstance(entry, int) and not isinstance(entry, bool) else None
-        if cited is not None and cited.status is MemoryStatus.ACTIVE and cited not in found:
-            found.append(cited)
+        if not isinstance(entry, int) or isinstance(entry, bool):
+            continue
+        cited = shown.get(entry)
+        if cited is not None and cited.status is not MemoryStatus.ACTIVE:
+            cited = renamed_into(conn, cited)
+        if cited is not None and cited.id not in {c.memory.id for c in found}:
+            found.append(_Citation(read=entry, memory=cited))
     return found
 
 
@@ -476,12 +513,13 @@ def _mark_used(conn: sqlite3.Connection, used: Sequence[records.Memory]) -> None
         )
 
 
-def _mark_cited(conn: sqlite3.Connection, run_id: int, cited: MemoryCited, memories: Sequence[records.Memory]) -> None:
-    # Beside the count, so a memory names the runs that relied on it, and a run's page what it relied on.
+def _mark_cited(conn: sqlite3.Connection, run_id: int, cited: MemoryCited, citations: Sequence[_Citation]) -> None:
+    # Beside the count, so a memory names the runs that relied on it, and a run's page what it relied on. The read is
+    # the id the run was shown, which a rename since leaves as it was.
     marked = (
         records.update(records.MemoryRead).set(cited=cited).where("run_id = ?", run_id).where("memory_id = ?", sql.ROW)
     )
-    sql.execute_many(conn, marked, [(m.id,) for m in memories])
+    sql.execute_many(conn, marked, [(c.read,) for c in citations])
 
 
 def _drop_notes(conn: sqlite3.Connection, writing: _Writing, value: JsonValue, shown: Iterable[records.Memory]) -> None:
@@ -797,6 +835,44 @@ def edited(found: records.Memory) -> bool:
     return found.promoted_from is not None and found.promoted_from == found.supersedes
 
 
+def renamed_from(conn: sqlite3.Connection, lesson: records.Memory) -> records.Memory | None:
+    """Return the version a lesson was renamed from, when the edit that made it changed only its key.
+
+    Such a version is the same words to the same runs under another key, so what runs read and said of it counts as
+    the lesson's. Once its text is forgotten, it no longer shows that, and counts as its own.
+
+    Returns:
+        The version before it, or None for a lesson not made by an edit, or by one that changed more than its key.
+    """
+    if not edited(lesson) or lesson.supersedes is None:
+        return None
+    before = get(conn, lesson.supersedes)
+    if before is None or before.key == lesson.key or (before.body, before.repo) != (lesson.body, lesson.repo):
+        return None
+    return before
+
+
+def renamed_into(conn: sqlite3.Connection, found: records.Memory) -> records.Memory | None:
+    """Return the lesson in force that `found` was renamed into, through edits that each changed only its key.
+
+    Returns:
+        The lesson in force, or None when `found` is not a version renamed into one.
+    """
+    current = found
+    while current.status is MemoryStatus.SUPERSEDED:
+        # A later version has a later id, so a chain written into the journal by hand cannot loop.
+        after = (
+            _MEMORIES.where("supersedes = ?", current.id)
+            .where("promoted_from = ?", current.id)
+            .where("id > ?", current.id)
+            .one(conn)
+        )
+        if after is None or renamed_from(conn, after) is None:
+            return None
+        current = after
+    return current if current.id != found.id and current.status is MemoryStatus.ACTIVE else None
+
+
 def origin(conn: sqlite3.Connection, lesson: records.Memory) -> records.Memory | None:
     """Return the proposal or note a lesson was promoted from, past every version of it the operator edited.
 
@@ -872,18 +948,23 @@ class Reads:
 
 
 def reads(conn: sqlite3.Connection, memory_ids: Sequence[int]) -> dict[int, Reads]:
-    """Return how many runs read each of `memory_ids`, and when the latest started; one no run read is left out."""
+    """Return how many runs read each of `memory_ids`, and when the latest started; one no run read is left out.
+
+    A lesson's reads include those of each version it was renamed from, its words unchanged (`renamed_from`).
+    """
     found: dict[int, Reads] = {}
     for start in range(0, len(memory_ids), _READS_BATCH):
+        batch = sql.select("id, id").from_("memories").where_in("id", memory_ids[start : start + _READS_BATCH])
         rows = sql.execute(
             conn,
-            sql.select("m.memory_id, count(*) AS n, max(r.started_at) AS last_at")
-            .from_("memory_reads m")
+            sql.select("s.root, count(*) AS n, max(r.started_at) AS last_at")
+            .with_("same(id, root) AS ({})", sql.union(batch, _SAME_WORDS), recursive=True)
+            .from_("same s")
+            .join("memory_reads m ON m.memory_id = s.id")
             .join("runs r ON r.id = m.run_id")
-            .where_in("m.memory_id", memory_ids[start : start + _READS_BATCH])
-            .group_by("m.memory_id"),
+            .group_by("s.root"),
         )
-        found.update({int(r["memory_id"]): Reads(int(r["n"]), str(r["last_at"])) for r in rows})
+        found.update({int(r["root"]): Reads(int(r["n"]), str(r["last_at"])) for r in rows})
     return found
 
 

@@ -144,7 +144,7 @@ def test_a_check_that_gates_the_merge_or_is_ignored_is_in_none_of_a_units_checks
     canopy_env: CanopyEnv,
     tracked: sqlite3.Connection,
 ) -> None:
-    roles = {"merge-queue": "merge", "lint-legacy": "ignore", "owners": "human"}
+    roles = {"merge-queue": "merge", "lint-legacy": "ignore", "owners": "human", "all-green": "rollup"}
     canopy_env.configure(canopy_env.shared_file, {"repos": {"repo": {"checks": roles}}})
     observe_ticket(tracked)
     db.set_unit(tracked, KEY, str(canopy_env.root), "repo", pr_url=PR)
@@ -153,6 +153,7 @@ def test_a_check_that_gates_the_merge_or_is_ignored_is_in_none_of_a_units_checks
     check(tracked, "merge-queue", "pending", None)
     check(tracked, "lint-legacy", "completed", "failure", run_id=13)
     check(tracked, "owners", "completed", "failure", run_id=14)
+    check(tracked, "all-green", "completed", "failure", run_id=15)
     [unit] = observed(canopy_env, tracked)["tickets"][0].get("units", [])
     assert unit.get("checks") == {
         "passed": 1,

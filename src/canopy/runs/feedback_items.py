@@ -29,7 +29,7 @@ from dataclasses import astuple, dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import db, observe, records, sql
+from canopy.core import ci, db, observe, records, sql
 from canopy.core.vocab import (
     CheckConclusion,
     CheckStatus,
@@ -40,7 +40,6 @@ from canopy.core.vocab import (
     ReviewState,
     RunStatus,
 )
-from canopy.core.workspace import CheckRole
 from canopy.runs import drafts
 
 if TYPE_CHECKING:
@@ -306,24 +305,6 @@ def raised(
     return [r for r in found if not handled.has((r.pr_url, r.item, r.id))]
 
 
-def not_ci(conn: sqlite3.Connection, ws: Workspace, prs: Iterable[str]) -> dict[str, frozenset[str]]:
-    """Return the checks each of `prs`'s repository gives a role other than CI, by PR (DESIGN §30).
-
-    None of them is a feedback plan's item (`raised`) or part of what a plan saw (`take`, `changes`): a check that
-    waits on a person, gates the merge, or is ignored makes no plan stale when it moves. A PR's repository is that of
-    the ticket's unit whose PR it is.
-
-    Returns:
-        Their names, by PR URL; none for a PR no unit has, or whose repository the map does not have.
-    """
-    rows = sql.execute(conn, sql.select("pr_url, repo").from_("ticket_units").where_in("pr_url", tuple(prs)))
-    found: dict[str, frozenset[str]] = {}
-    for row in rows:
-        roles = ws.check_roles(str(row[1]))
-        found[str(row[0])] = frozenset(name for name, role in roles.items() if role is not CheckRole.CI)
-    return found
-
-
 def check_id(pr: str, head: str, name: str) -> int:
     """Return the id canopy gives the check named `name` at `pr`'s `head`, as a feedback plan's item.
 
@@ -452,7 +433,7 @@ def changes(conn: sqlite3.Connection, trust: Trust, plan: records.FeedbackPlan, 
     heads = records.select(records.FeedbackPlanPr).where("plan_id = ?", plan.id).order_by("pr_url").all(conn)
     if not heads:
         return []
-    skip = not_ci(conn, ws, (h.pr_url for h in heads))
+    skip = ci.not_ci(conn, ws.check_roles, (h.pr_url for h in heads))
     found = [c for h in heads for c in _moved(conn, plan.id, h, skip.get(h.pr_url, frozenset[str]()))]
     seen = _seen(conn, plan.id)
     sent = drafts.sent_by_pr(conn)
@@ -532,7 +513,7 @@ def record_values(conn: sqlite3.Connection, ws: Workspace, plan_id: int, prs: Co
     again). A check `ws` gives another role is not recorded: it makes no plan stale, so it holds no quiet period. Call
     after every read that may move them, each tick.
     """
-    skip = not_ci(conn, ws, prs)
+    skip = ci.not_ci(conn, ws.check_roles, prs)
     rows: list[tuple[int, str, MoveKind, str, str, str]] = []
     for pr in prs:
         found = records.select(records.ObservedPr).where("url = ?", pr).one(conn)

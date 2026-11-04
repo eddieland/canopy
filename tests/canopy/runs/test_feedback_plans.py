@@ -1119,7 +1119,7 @@ def test_a_failed_check_and_a_conflict_are_items_planned_approved_and_left_by_nu
 @pytest.mark.usefixtures("git_pool")
 def test_a_failed_check_its_repository_says_is_not_ci_is_no_item(scenario: Scenario, github_state: Path) -> None:
     with_a_pr(scenario)
-    roles = {"owners": "human", "merge-queue": "merge", "lint-legacy": "ignore"}
+    roles = {"owners": "human", "merge-queue": "merge", "lint-legacy": "ignore", "all-green": "rollup"}
     scenario.configures("workspace", repos={"repo": {"checks": roles}})
     failed = [{"name": n, "status": "completed", "conclusion": "failure"} for n in ("build", *roles)]
     github_shows(github_state, ALICE, checks=failed)
@@ -1127,7 +1127,8 @@ def test_a_failed_check_its_repository_says_is_not_ci_is_no_item(scenario: Scena
     items = [{"id": 501, "proposal": "change", "reply": "Renamed."}, {"id": build, "proposal": "change"}]
     planner = planner_does(["cat", feedback_items.ITEMS], plan=TEXT, result={**PLANNED, "items": items})
     assert scenario.run(FEEDBACK_PLAN, worker=planner).status == RunStatus.DONE
-    # Only the build is CI: the others wait on a person, gate the merge, or are ignored, so the planner is given none.
+    # Only the build is CI: the others wait on a person, gate the merge, fan the others in, or are ignored, so the
+    # planner is given none.
     [*_, [_, cat]] = commands_run(scenario.agent_log)
     assert [(i["id"], i["item"]) for i in json.loads(cat["stdout"])] == [(501, "comment"), (build, "check")]
 

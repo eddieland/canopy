@@ -148,7 +148,7 @@ def test_a_repositorys_checks_have_the_roles_its_table_gives_them(ws: Ws) -> Non
         map_text(("web", "https://x.test/web.git"))
         + '\n[repos.api]\nurl = "https://x.test/a.git"\n'
         + '[repos.api.checks]\n"deploy/approval" = "human"\n"merge-queue" = "merge"\n'
-        + 'owners = "human"\n"lint-legacy" = "ignore"\nbuild = "ci"\n',
+        + 'owners = "human"\n"lint-legacy" = "ignore"\nbuild = "ci"\n"all-green" = "rollup"\n',
     )
     found = workspace.load(ws.root)
     assert {r.name: dict(r.checks) for r in found.repos} == {
@@ -158,6 +158,7 @@ def test_a_repositorys_checks_have_the_roles_its_table_gives_them(ws: Ws) -> Non
             "owners": workspace.CheckRole.HUMAN,
             "lint-legacy": workspace.CheckRole.IGNORE,
             "build": workspace.CheckRole.CI,
+            "all-green": workspace.CheckRole.ROLLUP,
         },
         "web": {},
     }

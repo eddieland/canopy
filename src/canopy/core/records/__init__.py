@@ -141,6 +141,7 @@ from canopy.core.records.reviews import (
 )
 from canopy.core.records.runs import (
     ChecklistAnswer,
+    ChecklistPush,
     FlakyKick,
     PoolSlot,
     Run,
@@ -173,6 +174,7 @@ __all__ = [
     "Attachment",
     "AttemptGrant",
     "ChecklistAnswer",
+    "ChecklistPush",
     "ChoreRun",
     "ConnectorRun",
     "Decision",

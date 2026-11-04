@@ -35,6 +35,7 @@ from canopy.core import (
     cards,
     checklist_answers,
     checklists,
+    ci,
     commit_hooks,
     contract,
     conversation,
@@ -64,6 +65,7 @@ from canopy.infra import logs, procs, stopping
 from canopy.runs import (
     artifact_feed,
     attachments,
+    checklist_pushes,
     checkpoint,
     desks,
     dispatch,
@@ -857,7 +859,7 @@ def _feedback_plan(
     if not prs or read.failure is not None:
         raise SetupError(f"the PRs were not read whole, so nothing was planned: {read.failure or 'no PR to read'}")
     reviews = feedback_items.offered(ctx.conn, ctx.config.trust, key, prs)
-    not_ci = feedback_items.not_ci(ctx.conn, ctx.workspace, prs)
+    not_ci = ci.not_ci(ctx.conn, ctx.workspace.check_roles, prs)
     snapshot = feedback_items.take(ctx.conn, prs, reviews, not_ci)
     offered = [*reviews, *feedback_items.raised(ctx.conn, key, prs, not_ci)]
     desk_files = _feedback_desk(ctx, key, offered) | _place_attachments(run, slots, _attachment_copies(ctx, run))
@@ -1014,14 +1016,15 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         slots = [slot.reading(ctx, objects) for slot in slots]
 
     # Every repository is checked, and pushed once if it needs it, even after one fails: a run is unpushed if any is.
-    rebase = ctx.config.trust.rebase
     unpushed = [
         found
         for slot, start in zip(slots, starts, strict=True)
-        if (found := checkpoint.ensure_pushed(slot.git, branch, start, log, rebase=rebase))
+        if (found := checkpoint.ensure_pushed(slot.git, branch, start, log, rebase=ctx.config.trust.rebase))
     ]
     if unpushed:
         status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
+    # Before a kick, which replaces the branch's commits with copies the run did not make (DESIGN §23).
+    listed = _keep_checklist_pushes(run, slots, branch, listed, log)
     committed = [found for slot in slots if copy is not None and (found := _committed_copy(slot, branch))]
     committed += [found for slot in slots if attached and (found := _committed_attachments(slot, branch))]
     for slot, start in zip(slots, starts, strict=True):
@@ -1100,6 +1103,36 @@ def _check_checklist(
     if not lists:
         return None
     return checklist_answers.check(lists, checklist_answers.parse(text) if text else None)
+
+
+def _keep_checklist_pushes(
+    run: sqlite3.Row,
+    slots: Iterable[_Slot],
+    branch: str,
+    listed: checklist_answers.Checked | None,
+    log: logs.TickAdapter,
+) -> checklist_answers.Checked | None:
+    """Keep what the worker pushed after canopy's `pre-push` showed it each slot's list (DESIGN §42).
+
+    Returns:
+        `listed`, with the pushes whose diffs were kept; None for a run given no list.
+    """
+    if listed is None:
+        return None
+    repos = {a.repo for a in listed.answers}
+    return listed.pushing(
+        pushed
+        for slot in slots
+        if slot.repo in repos
+        for pushed in checklist_pushes.keep(
+            slot.git,
+            repo=slot.repo,
+            branch=branch,
+            run_id=str(run["id"]),
+            log_path=str(run["log_path"]),
+            log=log,
+        )
+    )
 
 
 def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:

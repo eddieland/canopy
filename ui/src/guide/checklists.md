@@ -106,10 +106,13 @@ The worker answers every item in its result, under its repository:
 - **pass**: the diff already held to it.
 - **fixed**: it didn't, and the worker committed the fix.
 - **held**: it doesn't, and the worker left it so, with its reason in a sentence or two.
-- **n/a**: the diff touches nothing the item is about.
+- **n/a**: the diff touches none of the paths the item is about, or nothing its rule speaks of, so there was nothing
+  to hold it to. An item the worker checked is never n/a.
 
 An item the result leaves out is recorded **unanswered**, however the run ended, so a run that ended without a result
-counts every item so. An answer to an item or a repository the run's lists don't hold is dropped.
+counts every item so. The worker is told to answer every item, n/a included, whether or not its push was held, so an
+unanswered item on a run that pushed is one the worker skipped, not one it found nothing to say about. An answer to an
+item or a repository the run's lists don't hold is dropped.
 
 No answer raises an attention item, `held` included: a person still reviews the PR, and a held item is the worker's
 case made in advance, on the run for that person to read. Each run's answers are in the **Checklist** panel of
@@ -129,7 +132,8 @@ the numbers to do your own arithmetic.
 - An item that's often **held** is a disagreement. Read the reasons (the page's **held** count lists the runs and what
   each said), then take it up with whoever wrote the rule: one of you is wrong, and the list should say which.
 - A lot of **unanswered** is mostly runs that never pushed, so were never held. canopy counts every item of a run it
-  gave a list to, pushed or not, and errs toward too many.
+  gave a list to, pushed or not, and errs toward too many. On a run that pushed, it is a worker that skipped the list:
+  n/a would have said it looked and found nothing to check.
 
 A list is worth its tokens when its items get **fixed**: each one is a review comment nobody had to write, and a CI run
 nobody had to wait for.

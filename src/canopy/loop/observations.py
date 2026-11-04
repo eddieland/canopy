@@ -853,7 +853,7 @@ def _checks(checks: Iterable[records.ObservedCheck], roles: Mapping[str, CheckRo
             case CheckRole.HUMAN:
                 people.append({"name": c.name, "status": c.status, "conclusion": c.conclusion})
                 continue
-            case CheckRole.MERGE | CheckRole.IGNORE:
+            case CheckRole.MERGE | CheckRole.IGNORE | CheckRole.ROLLUP:
                 continue
             case _:
                 assert_never(role)
