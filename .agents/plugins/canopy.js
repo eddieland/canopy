@@ -11,9 +11,9 @@
 // the answer reads its file, so it loads with no network; and each job does as little as it can: it reads only what it
 // is handed for that job (the clock, CANOPY_DEADLINE and the time; the split, the system prompt; the nudge,
 // CANOPY_RUN_ID and each call's tool and session, and in a run that follows a plan, CANOPY_PLAN and the steps of each
-// `status` call; the answer, CANOPY_RUN_ID and the one file canopy writes in the directory CANOPY_ANSWERS names; the
-// directory, a shell call's command and working directory; under OpenCode 2, the refusal, a refused call's permission
-// and resources), changes only what its
+// `status` call; the answer and the wrap-up, CANOPY_RUN_ID and each its one file canopy writes in the directory
+// CANOPY_ANSWERS names; the directory, a shell call's command and working directory; under OpenCode 2, the refusal, a
+// refused call's permission and resources), changes only what its
 // hook is handed, writes no file, refuses no call, and grants no tool. Each job's hooks run in its own try, in the
 // order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the jobs after it from
 // theirs.
@@ -29,6 +29,9 @@
 // Its fifth is the directory (DESIGN §33): a shell command that opens with `cd <dir> &&` runs with that directory as
 // its working directory instead, which the runtime checks as it checks the `cd`, so the rest of the command is checked
 // from where it runs.
+//
+// Its sixth is the wrap-up (DESIGN §22): in a run that keeps its progress, once the operator stops its ticket and asks
+// it to wrap up, one line on the next tool call's result asks the agent to keep its work and print its result line.
 //
 // Under OpenCode 2 it has two jobs more, its own. A session's first prompt waits until the tools of its MCP servers are
 // registered, which 2 does only after the server connects, so that the first model call is sent them (`mcpTools`).
@@ -86,9 +89,17 @@ const PLAN_PATH = /^\/[^\x00-\x1f\x7f]{0,4095}$/;
 /** The most steps a `status` call may carry, and the longest title one may have, as canopy's server holds them. */
 const MOST_STEPS = 40;
 const MOST_TITLE = 200;
-/** The file in a run's answers directory that holds the operator's latest answer, and the most of it read. */
+/** The file in a run's answers directory that holds the operator's latest answer. */
 const ANSWER_FILE = "answer.json";
-const ANSWER_BYTES = 4096;
+/** The file in it that asks the agent to wrap up. */
+const WRAP_UP_FILE = "wrap_up.json";
+/** The most of a file in it that is read: one longer is not canopy's. */
+const FILE_BYTES = 4096;
+/** The wrap-up's line, which the file asks for. */
+const WRAP_UP =
+    `${MARK} The operator stopped this ticket and asks you to wrap up now: finish what keeps your work (commit and` +
+    " push it, or record your decisions), start nothing new, then print your result line, its summary naming what" +
+    " remains.";
 /** The letter of a question's option. */
 const LETTER = /^[A-E]$/;
 /** The shell tool, as OpenCode 1 names it and as OpenCode 2 does. */
@@ -134,7 +145,7 @@ const ENVIRONMENT = new RegExp(
  *
  * @type {Array<() => Hooks>}
  */
-const JOBS = [clock, split, nudge, answer, workdir];
+const JOBS = [clock, split, nudge, answer, workdir, wrapUp];
 
 /**
  * The plugin, as each major version of OpenCode reads it: its id, and its entry point for each.
@@ -698,12 +709,10 @@ function oneLine(title) {
  * @returns {Hooks} The answer's hooks.
  */
 function answer() {
-    const dir = process.env.CANOPY_ANSWERS;
-    const run = process.env.CANOPY_RUN_ID;
-    if (typeof dir !== "string" || !dir.startsWith("/") || typeof run !== "string" || !ASKING_RUN.test(run)) {
+    const file = answersFile(ANSWER_FILE);
+    if (file === null) {
         return {};
     }
-    const file = `${dir.replace(/\/+$/, "")}/${ANSWER_FILE}`;
     /** @type {Map<string | undefined, string>} */
     const told = new Map();
     return {
@@ -712,7 +721,7 @@ function answer() {
          * @param {BuiltinResult | McpResult | null | undefined} output
          */
         "tool.execute.after": async (input, output) => {
-            const said = answerLine(await readAnswer(file));
+            const said = answerLine(await readOwn(file));
             const session = input?.sessionID;
             if (said !== null && told.get(session) !== said && tell(output, said)) {
                 told.set(session, said);
@@ -722,16 +731,33 @@ function answer() {
 }
 
 /**
- * The answer file's text, or null when there is none to read, or it is too long to be canopy's.
+ * The path of the file `name` in the run's answers directory, or null in a run that has none: without CANOPY_ANSWERS,
+ * or in a run whose progress asks nothing, as CANOPY_RUN_ID names it.
+ *
+ * @param {string} name
+ * @returns {string | null}
+ */
+function answersFile(name) {
+    const dir = process.env.CANOPY_ANSWERS;
+    const run = process.env.CANOPY_RUN_ID;
+    if (typeof dir !== "string" || !dir.startsWith("/") || typeof run !== "string" || !ASKING_RUN.test(run)) {
+        return null;
+    }
+    return `${dir.replace(/\/+$/, "")}/${name}`;
+}
+
+/**
+ * The text of a file canopy writes in the answers directory, or null when there is none to read, or it is too long to
+ * be canopy's.
  *
  * @param {string} file
  * @returns {Promise<string | null>}
  */
-async function readAnswer(file) {
+async function readOwn(file) {
     try {
         const { readFile } = await import("node:fs/promises");
         const text = await readFile(file, "utf8");
-        return text.length <= ANSWER_BYTES ? text : null;
+        return text.length <= FILE_BYTES ? text : null;
     } catch {
         return null;
     }
@@ -830,4 +856,61 @@ function leadingCd(command) {
         return null;
     }
     return { dirs, rest };
+}
+
+/**
+ * The wrap-up's hooks: the one that asks the agent to wrap up, once the operator stops its ticket so.
+ *
+ * `canopy stop --wrap-up` stops a ticket and asks the run working it to end soon, keeping its work, rather than finish
+ * all of it or be killed with what it has not pushed (DESIGN §22). canopy writes when it asked to a file in the run's
+ * answers directory, as it writes an answer; after each tool call, the job reads that file and, for an ask this
+ * session has not been told, adds one line to the call's result, the way the clock adds its line. It keeps when it
+ * last told each session, and nothing else; without the variable, or in a run whose progress asks nothing, it has no
+ * hook. A file it cannot read, or that is not canopy's, tells nothing. A forged one could only ask the agent to end
+ * early, which leaves its work kept, so it fails safe as the clock's line does (§33).
+ *
+ * @returns {Hooks} The wrap-up's hooks.
+ */
+function wrapUp() {
+    const file = answersFile(WRAP_UP_FILE);
+    if (file === null) {
+        return {};
+    }
+    /** @type {Map<string | undefined, string>} */
+    const told = new Map();
+    return {
+        /**
+         * @param {AfterInput | undefined} input
+         * @param {BuiltinResult | McpResult | null | undefined} output
+         */
+        "tool.execute.after": async (input, output) => {
+            const asked = askedAt(await readOwn(file));
+            const session = input?.sessionID;
+            if (asked !== null && told.get(session) !== asked && tell(output, WRAP_UP)) {
+                told.set(session, asked);
+            }
+        },
+    };
+}
+
+/**
+ * When the wrap-up file in `text` was asked, as canopy writes it, or null when `text` is no ask of canopy's.
+ *
+ * @param {string | null} text
+ * @returns {string | null}
+ */
+function askedAt(text) {
+    if (text === null) {
+        return null;
+    }
+    let found;
+    try {
+        found = JSON.parse(text);
+    } catch {
+        return null;
+    }
+    if (found === null || typeof found !== "object" || typeof found.asked !== "string" || found.asked === "") {
+        return null;
+    }
+    return found.asked;
 }

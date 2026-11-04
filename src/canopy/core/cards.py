@@ -71,6 +71,8 @@ ASKING_RUN_ID_RE = re.compile(r"(?:review-)?[0-9]{1,18}")
 #: The variable that names a run's answers directory, and the file in it that holds the operator's latest answer.
 ANSWERS_ENV = "CANOPY_ANSWERS"
 ANSWER_FILE = "answer.json"
+#: The file in a run's answers directory that asks its agent to wrap up, once the operator stops its ticket so (§22).
+WRAP_UP_FILE = "wrap_up.json"
 #: The variable that names a worker's copy of the approved plan it follows, set only when it follows one: canopy's
 #: plugin names the file, and the steps the worker last reported, when it asks for an update (DESIGN §41, Staleness).
 PLAN_ENV = "CANOPY_PLAN"
@@ -411,11 +413,33 @@ def deliver(path: Path, answered: Answered) -> bool:
         "letter": answered.letter,
         "option": answered.option,
     }
-    # Its own name in each process and thread, so two writes at once never share the file one renames over the answer.
-    staged = path / f".{ANSWER_FILE}.{os.getpid()}.{threading.get_ident()}"
+    return _replace(path, ANSWER_FILE, data)
+
+
+def ask_wrap_up(path: Path) -> bool:
+    """Ask the running agent whose answers directory is at `path` to wrap up, when it was asked, for it to read.
+
+    canopy's plugin tells the agent on its next tool call to keep its work and print its result line (DESIGN §22).
+
+    Returns:
+        Whether it was asked: False when the directory is gone, its run having ended.
+    """
+    return _replace(path, WRAP_UP_FILE, {"asked": db.now()})
+
+
+def _replace(path: Path, name: str, data: Mapping[str, str]) -> bool:
+    """Write `data` as the file `name` in the answers directory at `path`, replaced whole.
+
+    A reader sees the file before or after, never half of it.
+
+    Returns:
+        Whether it was written: False when the directory is gone.
+    """
+    # Its own name in each process and thread, so two writes at once never share the file one renames over the last.
+    staged = path / f".{name}.{os.getpid()}.{threading.get_ident()}"
     try:
-        staged.write_text(json.dumps(data) + "\n", encoding="utf-8")
-        staged.replace(path / ANSWER_FILE)
+        staged.write_text(json.dumps(dict(data)) + "\n", encoding="utf-8")
+        staged.replace(path / name)
     except FileNotFoundError:
         return False
     finally:

@@ -134,8 +134,12 @@ export async function storePalette(page: Page, theme: 'light' | 'dark', palette:
     )
 }
 
-/** Signs the page's browser in with the listener secret, as the sign-in page does: the cookie lands in its context. */
+/**
+ * Signs the page's browser in with the listener secret, as the sign-in page does: the cookie lands in its context. It
+ * also counts the page's reads in flight from the first page it opens, which a screenshot waits on (`growToPage`).
+ */
 export async function signIn(page: Page): Promise<void> {
+    await page.addInitScript(countReads)
     const response = await page.request.post('api/session', { data: { secret: E2E_SECRET } })
     expect(response.status()).toBe(200)
 }
@@ -215,17 +219,70 @@ export async function screenshotMain(page: Page, name: string): Promise<void> {
 }
 
 /**
- * Grows the window to the page's height. The page scrolls under the header, not the window (AppShell), so a capture
- * would stop at the window's foot.
+ * Grows the window to the page's height, once every read the page started has landed and drawn. The page scrolls under
+ * the header, not the window (AppShell), so a capture stops at the window's foot: below it, a row that arrived after
+ * the window was grown is never drawn, and two blank captures match as stable. A page that draws as its reads arrive
+ * (the runs list, before its reviews, chores, and tasks) shows no skeleton for `settled` to wait out, so this waits on
+ * the reads themselves, then grows until the page fits.
  */
 async function growToPage(page: Page): Promise<void> {
+    await expect.poll(() => page.evaluate(readsInFlight)).toBe(0)
     const scroller = page.locator('[data-scroll-restoration-id=page]')
-    const height = await scroller.evaluate((el) => el.getBoundingClientRect().top + el.scrollHeight)
-    const viewport = page.viewportSize()
-    if (viewport === null) {
-        throw new Error('the page has no viewport to grow')
+    const measure = (): Promise<{ height: number; scrolls: boolean }> =>
+        scroller.evaluate((el) => ({
+            height: Math.ceil(el.getBoundingClientRect().top + el.scrollHeight),
+            scrolls: el.scrollHeight > el.clientHeight,
+        }))
+    const grow = async (height: number): Promise<void> => {
+        const viewport = page.viewportSize()
+        if (viewport === null) {
+            throw new Error('the page has no viewport to grow')
+        }
+        await page.setViewportSize({ width: viewport.width, height: Math.max(viewport.height, height) })
     }
-    await page.setViewportSize({ width: viewport.width, height: Math.max(viewport.height, Math.ceil(height)) })
+    // Grown once as the baselines were drawn: to the page's top and height, rounded up, which on a page that fits
+    // the window is a pixel past it.
+    await grow((await measure()).height)
+    // Then again while the page still scrolls: what drew meanwhile grows it once more.
+    await expect(async () => {
+        const { height, scrolls } = await measure()
+        if (scrolls) {
+            await grow(height)
+        }
+        expect(scrolls).toBe(false)
+    }).toPass()
+}
+
+/**
+ * Wraps the page's `fetch` to count its reads in flight, each until its body has arrived, before the app's own scripts
+ * run: the API client takes `fetch` as it is created. The event stream is an EventSource, never counted. Run in the
+ * page.
+ */
+function countReads(): void {
+    const counted = globalThis as typeof globalThis & { readsInFlight: number }
+    counted.readsInFlight = 0
+    const original = globalThis.fetch.bind(globalThis)
+    globalThis.fetch = async (...args: Parameters<typeof fetch>): Promise<Response> => {
+        counted.readsInFlight += 1
+        try {
+            const response = await original(...args)
+            await response.clone().arrayBuffer()
+            return response
+        } finally {
+            counted.readsInFlight -= 1
+        }
+    }
+}
+
+/**
+ * How many reads `countReads` has in flight, after a frame, so a read that just landed has drawn; undefined in a page
+ * opened without `signIn`, which counts none, so a screenshot's wait fails there rather than passing. Run in the page.
+ */
+async function readsInFlight(): Promise<number | undefined> {
+    await new Promise((resolve) => {
+        requestAnimationFrame(resolve)
+    })
+    return (globalThis as typeof globalThis & { readsInFlight?: number }).readsInFlight
 }
 
 /**

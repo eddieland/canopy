@@ -44,11 +44,11 @@ From `ui/` (or `make ui-check`, `make ui-e2e`, `make ui-fmt` from the root):
 | Command | Does |
 |---|---|
 | `npm run dev` | Vite on 127.0.0.1:5173, proxying `/api` to `npm run dev:api` (FastAPI over a mock journal on :8765) |
-| `npm run check` | format check, lint, typecheck, generated types current, unit tests, build: what CI runs |
-| `npm run fmt:check`, `lint`, `typecheck`, `check:api` | its pieces, one at a time |
+| `npm run check` | format check, lint, typecheck, unit tests, build: what CI runs |
+| `npm run fmt:check`, `lint`, `typecheck` | its pieces, one at a time; `lint` and `typecheck` run `gen` first |
 | `npm test -- <files>` | the Vitest files named |
 | `npm run fmt` | remove unused imports (oxlint), then format and sort imports with oxfmt |
-| `npm run gen:api` | regenerate `src/api/schema.gen.ts` from `canopy.serve`'s OpenAPI schema |
+| `npm run gen` | write the uncommitted route tree and API types (from `canopy.serve`'s schema) where stale |
 | `npm run test:e2e -- <specs>` | build, then Playwright against it, served by FastAPI; every spec when none is named |
 
 With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` to a local Chromium. It tests behavior,
@@ -78,7 +78,8 @@ dozen. When every screenshot differs, check the browser before the change.
   Follow the compiler's rules (no setState directly in an effect body, no reading refs during render, ...).
 - **Types come from the server.** API types are generated from the pydantic models in `src/canopy/serve/schema/`:
   the shared ones in its `__init__.py`, and each feature's in a module of its own. To change a shape, change the
-  pydantic model, run `npm run gen:api`, and commit both. Import types from `src/api/types.ts`.
+  pydantic model; `npm run gen` writes the types from it, and they are not committed. Import types from
+  `src/api/types.ts`.
 - **One place per query.** Keys and fetchers live in `src/api/queries.ts`; components call `useQuery(xQuery)`.
 - **Live data comes from the stream, not polling.** No `refetchInterval`, but for the worktrees and the host's
   resources. Server pushes arrive through
@@ -158,9 +159,12 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
   write run against the prefixed one. Every route gets a screenshot in dark in `e2e/screenshots.spec.ts`, of its main
   pane alone, so a change to the header or the rail rewrites a few images rather than every one. The pages `README.md`
   shows are taken whole (`WHOLE_ROUTES` in `e2e/helpers.ts`), and a few are taken in light as well (`LIGHT_ROUTES`):
-  both themes draw from the same tokens, so more would double the images git keeps for every visual change without
+  both themes draw from the same tokens, so more would double the images LFS keeps for every visual change without
   catching more. Add a page to either only for what the others cannot show. A visual change updates the baselines
-  deliberately and the PR says why; look at each new image before it merges. The Screenshots workflow never deletes an
+  deliberately and the PR says why; look at each new image before it merges. The baselines are Git LFS objects
+  (`.gitattributes`), so their versions stay out of git's history: fetch them with `git lfs pull`, or Playwright stops
+  before any test and says so. `make hooks` installs LFS's hooks under prek's, so a push uploads the images it names.
+  The Screenshots workflow never deletes an
   image: a PR that stops taking one deletes its baseline. Every screenshot applies `e2e/screenshot.css`, which replaces
   what changes with the build rather than the page (the rail's version, which names the commit, shows a placeholder as
   long as a dev build's, and the mock's private config path, in a temporary directory, is hidden). The guide's
@@ -173,11 +177,13 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
   GitHub tools). It runs only the spec files that call `toHaveScreenshot`, `screenshotMain`, or `screenshotWhole`, so a
   test that takes one through another helper is missed until its file calls one of those. It pushes a commit with the
   images that changed, recompressed losslessly with oxipng, and starts CI on it, which runs the whole suite; pull before
-  going on. It rewrites only the images that fail the comparison, so a change subtle enough to pass within the threshold
-  (a token's small shift) leaves the old images in place: run it with `update` set to `all` (`-f update=all`) to rewrite
-  every one. The workflow stays CI's way. `make screenshots` renders the same images locally in Docker (it needs
-  Docker), from Playwright's Ubuntu image at the pinned version, with the same spec files and oxipng, and writes only
-  the images that changed into the checkout; `UPDATE=all` rewrites every one and `UPDATE=check` only compares. `npx
+  going on. It rewrites only the images that fail the comparison, so a change small enough to pass within the 500
+  pixels `playwright.config.ts` allows (a token's small shift) leaves the old images in place: run it with `update` set
+  to `all` (`-f update=all`) to rewrite every one. What changes with the run rather than the page, a path under the
+  mock's temporary directory or the version, is hidden by `e2e/screenshot.css`; a new one goes there too. The workflow
+  stays CI's way. `make screenshots` renders the same images locally in Docker (it needs Docker), from Playwright's
+  Ubuntu image at the pinned version, with the same spec files and oxipng, and writes only the images that changed
+  into the checkout; `UPDATE=all` rewrites every one and `UPDATE=check` only compares. `npx
   playwright test --update-snapshots=changed` outside Docker runs on a machine whose rendering may not match.
 - On CI, Playwright runs a failed test once more, and one that passes then still fails the run, named flaky in the
   report: fix it, as a broken one is. The lint holds `e2e/` to eslint-plugin-playwright's recommended rules, which
@@ -188,7 +194,7 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
 ## Done for a UI pull request
 
 - The checks pass, run as the repository's `AGENTS.md` says (Toolchain): every formatter and linter (`make fmt`,
-  `make lint`, `npm run lint`, `npm run typecheck`), `check:api` when a pydantic model behind the API changed,
+  `make lint`, `npm run lint`, `npm run typecheck`, which regenerate the API's types from the pydantic models),
   `npm test` for the unit tests of what changed, and `npm run test:e2e` for the Playwright specs that cover it. CI runs
   the rest.
 - New behavior has a unit test or a Playwright test; a new route has its screenshots.

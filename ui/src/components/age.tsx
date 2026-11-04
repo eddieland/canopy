@@ -4,8 +4,8 @@ import { age, localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 /**
- * How an age reads, by what it measures (ui/DESIGN.md, "Ages"): `bare` for how long something has stood open (`3m`),
- * `ago` for a moment (`3m ago`), `span` for something that runs (`for 3m`, then `ended 3m ago`).
+ * How an age reads, by what it measures (ui/DESIGN.md, "Readouts"): `bare` for how long something has stood open
+ * (`3m`), `ago` for a moment (`3m ago`), `span` for something that runs (`for 3m`, then `ended 3m ago`).
  */
 export type AgeVariant = 'bare' | 'ago' | 'span'
 

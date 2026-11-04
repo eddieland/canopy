@@ -86,4 +86,5 @@ a run that a chore's agent may read (§27) leaves its progress out, so none reac
 - A file in the worktree the agent writes: it can be committed, and a sandboxed run's writes outside it are refused.
 - The final line alone, as before: it says nothing while the run goes.
 - An answer in the operator's own words: the first operator text to reach a running agent, and one a line made to look
-  like canopy's could forge to say anything; a letter can only choose one of the agent's own options.
+  like canopy's could forge to say anything; a letter can only choose one of the agent's own options. The operator's
+  words reach a running agent through a tool of canopy's, never a line (§44).

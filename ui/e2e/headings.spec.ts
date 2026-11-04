@@ -4,7 +4,8 @@ import { ROUTES, settled, signIn } from './helpers.ts'
 
 /**
  * Every page's headings as a screen reader lists them, in document order: one h1, the page's title, and no level
- * skipped after it, so a panel's title is an h2 and what heads a part of a panel an h3 (DESIGN.md, "Headings").
+ * skipped after it, so a panel's title is an h2 and what heads a part of a panel an h3 (DESIGN.md, "One heading
+ * ladder").
  */
 for (const route of ROUTES) {
     test(`${route} has one h1 and skips no heading level`, async ({ page }) => {

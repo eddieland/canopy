@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: one plan for work that spans several tickets, approved once, and a
 plan per ticket that points back to it. Sections are numbered across the whole design; the [README](README.md) has the
-map. Previous: [The operator's checklist](CHECKLIST.md).
+map. Previous: [The operator's checklist](CHECKLIST.md). Next: [Messages to running agents](MESSAGES.md).
 
 ## 43. Epics
 

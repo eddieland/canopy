@@ -81,6 +81,14 @@ def test_the_cli_starts_without_the_web_server() -> None:
     assert result.stdout.strip() == "[]"
 
 
+def test_the_parameter_types_load_without_the_overseers_tools() -> None:
+    """Most command modules import the parameter types; the overseer's tools would be most of such a command's start."""
+    code = "import sys, canopy.cli.params; print('canopy.loop.tools' in sys.modules)"
+    result = procs.SubprocessRunner().run([sys.executable, "-c", code])
+    assert result.ok, result.stderr
+    assert result.stdout.strip() == "False"
+
+
 @pytest.mark.parametrize(("argv", "loads"), [(["--version"], set[str]()), (["_mcp", "--help"], {"mcp"})])
 def test_a_command_imports_only_its_own_module(argv: list[str], loads: set[str]) -> None:
     # The runtime starts `canopy _mcp` for each run it gives canopy's tools; each start-up pays for every module it

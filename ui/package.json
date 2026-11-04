@@ -9,13 +9,16 @@
     "build": "vite build",
     "fmt": "oxlint -c .oxlintrc.unused-imports.json --fix --quiet && oxfmt --write .",
     "fmt:check": "oxfmt --check .",
+    "pretypecheck": "npm run -s gen",
     "typecheck": "tsc -b",
+    "prelint": "npm run -s gen",
     "lint": "oxlint --type-aware --deny-warnings && node scripts/check-source.mjs && node scripts/check-imports.mjs",
     "test": "vitest run",
     "test:e2e": "npm run build && playwright test",
+    "gen": "make -s -C .. ui-gen",
+    "gen:routes": "tsr generate",
     "gen:api": "node scripts/gen-api.mjs",
-    "check:api": "node scripts/gen-api.mjs --check",
-    "check": "npm run fmt:check && npm run lint && npm run typecheck && npm run check:api && npm test && npm run build"
+    "check": "npm run fmt:check && npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@fontsource-variable/ibm-plex-sans": "5.3.0",
@@ -50,6 +53,7 @@
   "devDependencies": {
     "@playwright/test": "1.64.1",
     "@tailwindcss/vite": "4.3.3",
+    "@tanstack/router-cli": "1.167.46",
     "@tanstack/router-plugin": "1.168.48",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",

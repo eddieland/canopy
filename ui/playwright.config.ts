@@ -21,6 +21,8 @@ const withSecret = (args: string): string =>
 /** Playwright against the production build, served by FastAPI over the mock journal: never the Vite dev server. */
 export default defineConfig({
     testDir: './e2e',
+    // The screenshot baselines are Git LFS objects: a checkout without them fails here, once, saying how to fetch them.
+    globalSetup: './e2e/baselines.ts',
     fullyParallel: true,
     forbidOnly: Boolean(process.env.CI),
     // On CI a failed test runs once more, and passing then still fails the run: the report names it flaky rather than
@@ -29,10 +31,12 @@ export default defineConfig({
     failOnFlakyTests: Boolean(process.env.CI),
     reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
     expect: {
-        // Fonts are self-hosted and animations are frozen; what is left is antialiasing between Chromium builds.
-        // The rail's version names the commit it was built from, so every commit would change every image: hidden.
+        // Fonts are self-hosted, animations are frozen, and what changes with the run rather than the page (the
+        // version, the mock's temporary paths) is hidden by screenshot.css, so two runs on CI's runner draw the same
+        // image. A count, not a share of the image, so a small change fails on a tall page as on a short one: CI's runs
+        // differed by at most 132 pixels, and the smallest real change a 1% share let through by about 2,800.
         toHaveScreenshot: {
-            maxDiffPixelRatio: 0.01,
+            maxDiffPixels: 500,
             animations: 'disabled',
             caret: 'hide',
             stylePath: './e2e/screenshot.css',

@@ -56,7 +56,10 @@ so no agent can lift a limit that bounds it (TRUST_MODEL T1).
 - Dispatch checks the start record in code, where a public ticket's label is a claim (D051), and always runs a started
   ticket's private worker and prompt.
 - `stop` keeps the ticket private and lets nothing dispatch it until it is started again. Stopped now, its run is ended
-  as reconcile ends a crashed one (§6) and still counts toward attempt limits. Stop and dispatch cannot interleave.
+  as reconcile ends a crashed one (§6) and still counts toward attempt limits. Stopped with a wrap-up, its run is told
+  on its next tool call, through a file in its answers directory that canopy's plugin reads (§33, §41), to keep its
+  work and print its result line, and ends on its own; the ask is advice, so the timeout, or a stop now, still ends a
+  run that goes on (TRUST_MODEL T3). Stop and dispatch cannot interleave.
 - The private worker reads the tracker, and writes to it only to file follow-ups, which authorize nothing (§18): it
   is allowed the tracker tools config names as read tools, so a wrong list fails closed, the provider's tools that
   create a ticket, whole, and on GitHub, whose server its PR goes through, the PR tools, which the planner never

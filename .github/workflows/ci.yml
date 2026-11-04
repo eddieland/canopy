@@ -91,16 +91,14 @@ jobs:
               | tee -a "$GITHUB_STEP_SUMMARY"
           fi
 
-  lint-and-test:
+  # `make check` is `lint`, `test`, and `ui-check`, each a job here, so none waits on another. `make all` would run
+  # `fmt`, which rewrites files; these only verify. `lint` includes `ruff format --check`, so unformatted code still
+  # fails.
+  lint:
     runs-on: ubuntu-latest
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
-    # The suite alone takes 10 to 15 minutes on a runner (2026-10-24), so 15 cancelled runs whose every test passed.
-    timeout-minutes: 25
-    permissions:
-      contents: read
-      # For the OIDC token the Codecov upload authenticates with.
-      id-token: write
+    timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -113,8 +111,7 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
-      # For the plugin canopy ships for its agents: `make lint` type-checks it, and `make test` runs its tests under
-      # Node's own test runner.
+      # For the plugin canopy ships for its agents, whose JSDoc `make lint` type-checks.
       - name: Set up Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -124,31 +121,66 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
-      # `make check` is these two and `ui-check`, which runs in the job below so neither waits on the other.
-      # `make all` would run `fmt`, which rewrites files; these only verify. `lint` includes `ruff format --check`,
-      # so unformatted code still fails.
       - name: Lint and type check
         run: make lint
 
-      # COVERAGE=1 writes coverage.xml for the Python tests. Skipped on a PR that changes only ui/ and docs; Codecov
-      # carries the python flag forward from the parent (.github/codecov.yml).
+  # The Python tests, in slices run side by side (`make test SHARD=i/n`, tests/conftest.py): on one runner they took
+  # about 20 minutes (2026-11-04), longer than every other job together. Each slice keeps the runner's workers, and a
+  # failing slice lets the others finish, to report every failure. Skipped on a PR that changes only ui/ and docs.
+  test:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' && needs.changes.outputs.python != 'false' }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # For the OIDC token the Codecov upload authenticates with.
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      # `make test` also runs the tests of the plugin canopy ships for its agents, under Node's own test runner.
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      # COVERAGE=1 writes coverage.xml for this slice's tests.
       - name: Test
-        if: needs.changes.outputs.python != 'false'
-        run: make test COVERAGE=1
+        env:
+          SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+        run: make test COVERAGE=1 SHARD="$SHARD"
 
       # Codecov authenticates with the run's OIDC token, so no secret is needed; the repository only has to be added
       # on codecov.io. An upload that fails warns and leaves the check green: Codecov being down never blocks a PR.
-      # Each job's upload carries its own flag (.github/codecov.yml says why).
+      # Each slice's upload carries the python flag and a name of its own, and Codecov merges them (.github/codecov.yml
+      # says why).
       - name: Upload coverage to Codecov
-        if: needs.changes.outputs.python != 'false'
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.xml
           flags: python
+          name: python-${{ matrix.shard }}
           use_oidc: true
           fail_ci_if_error: false
 
-  # The rest of `make check`: the UI's format, lint, types, generated API types, unit tests, and build (ui/AGENTS.md).
+  # The rest of `make check`: the UI's format, lint, types, unit tests, and build (ui/AGENTS.md).
   ui-check:
     runs-on: ubuntu-latest
     needs: changes
@@ -164,7 +196,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # The generated API types are checked against the schema canopy.serve produces.
+      # The lint and type check generate the API's types from the schema canopy.serve produces.
       - name: Set up uv and Python 3.12
         uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
         with:
@@ -320,6 +352,9 @@ jobs:
       - name: Install Playwright's Chromium
         uses: ./.github/actions/playwright-chromium # zizmor: ignore[self-repository]
 
+      - name: Fetch the screenshot baselines
+        uses: ./.github/actions/screenshot-baselines # zizmor: ignore[self-repository]
+
       - name: Playwright
         env:
           SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
@@ -368,10 +403,10 @@ jobs:
   # list the job in `needs` here, or nothing requires it. It runs whatever happened above and fails unless every job
   # it needs succeeded, since a required check that is skipped counts as passing. The exceptions are the skips `changes`
   # asked for, when it succeeded: on a docs-only pull request (code=false) any check it gates, and on one that changes
-  # only ui/ and docs (python=false) the sandbox canary and the pool contract.
+  # only ui/ and docs (python=false) the Python tests, the sandbox canary, and the pool contract.
   ci-passed:
     runs-on: ubuntu-latest
-    needs: [changes, lint-and-test, ui-check, sandbox-canary, pool-contract, ui-e2e, install-check]
+    needs: [changes, lint, test, ui-check, sandbox-canary, pool-contract, ui-e2e, install-check]
     if: ${{ always() }}
     timeout-minutes: 5
     steps:
@@ -386,5 +421,5 @@ jobs:
             | ($classified and .changes.outputs.python == "false") as $ui
             | all(to_entries[]; .value.result == "success"
                 or (.value.result == "skipped" and .key != "changes"
-                  and ($docs or ($ui and (.key == "sandbox-canary" or .key == "pool-contract")))))
+                  and ($docs or ($ui and (.key == "test" or .key == "sandbox-canary" or .key == "pool-contract")))))
           ' <<<"$NEEDS" >/dev/null
