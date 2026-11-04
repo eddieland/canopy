@@ -81,6 +81,8 @@ const BASES = ['background', 'surface', 'surface-raised']
 const SECTIONS = TEXT.filter((name) => name.startsWith('section-'))
 // The nav's highlight on the section shown (`SECTION_TINT` in src/lib/sections.ts).
 const NAV_TINT = 0.24
+// The colors a nav count is in: a failed item's, one waiting on the operator's, and the rest's.
+const NAV_COUNTS = ['status-failed', 'status-blocked', 'muted-foreground']
 // The rail's own fill over the canvas (`bg-surface/60` in src/components/shell/app-shell.tsx).
 const RAIL = 0.6
 
@@ -177,6 +179,18 @@ describe.each(Object.entries(THEMES))('%s theme', (themeName, colors) => {
         expect(low).toEqual([])
     })
 
+    // A count beside an active item (Attention's, Pull requests', Memory's) keeps its status color, which would not
+    // read on a section's solid block: a palette that draws one sets the count on a plate of the label's ink
+    // (`ON_BLOCK` in src/components/shell/nav.tsx), and the count reads on that.
+    it("reads the nav's counts on their plate in a block", () => {
+        const ink = NAV[themeName]?.ink
+        if (ink === undefined) {
+            return
+        }
+        const low = NAV_COUNTS.map((name) => below(`${name} on its plate of ${ink}`, token(name), token(ink)))
+        expect(low.filter((line) => line !== null)).toEqual([])
+    })
+
     it("reads a diff's marks on their line's tint", () => {
         const low = ['diff-add', 'diff-del']
             .map((name) => below(`${name} on its 12%`, token(name), over(token(name), 0.12, token('surface'))))
@@ -269,6 +283,31 @@ describe.each(Object.entries(THEMES).filter(([, colors]) => colors['ink-drop'] !
     },
 )
 
+// A bubble's balloon tail (`bubble-tail` in src/index.css) draws nothing by default, and is drawn only by a palette
+// that inks its bubbles, since the tail is inked in that palette's `--ink`. Its ink's reach, the tail and its line's
+// offset along the slant, stays inside a conversation's padding (0.75rem) less a bordered bubble's border: past it,
+// the thread's scroll would clip its tip, and scroll sideways.
+const TAIL_ROOM = 12 - 1
+describe("a bubble's balloon tail", () => {
+    it('draws nothing by default', () => {
+        expect(rule(':root')).toContain('--bubble-tail: 0px;')
+        expect(rule(':root')).toContain('--bubble-tail-line: 0px;')
+    })
+
+    it.each(
+        (['light', 'dark'] as const).flatMap((mode) =>
+            PALETTES[mode].slice(1).map((palette) => [`${palette} ${mode}`, paletteRule(mode, palette)]),
+        ),
+    )('%s draws one only if it inks its bubbles, within the padding', (_name, selector) => {
+        const body = rule(selector)
+        const tail = /--bubble-tail: ([\d.]+)px;/u.exec(body)?.[1]
+        const line = /--bubble-tail-line: ([\d.]+)px;/u.exec(body)?.[1]
+        expect(tail !== undefined).toBe(/--depth-bubble: (?!none)/u.test(body))
+        expect(line !== undefined).toBe(tail !== undefined)
+        expect(Number(tail ?? 0) + 1.8685 * Number(line ?? 0)).toBeLessThanOrEqual(TAIL_ROOM)
+    })
+})
+
 // A palette whose every line is mono sets code at its line's size: a smaller copy of the same face reads as a mistake.
 describe('inline code size', () => {
     it.each(
@@ -278,6 +317,21 @@ describe('inline code size', () => {
     )('%s sets code at full size if and only if its face is mono', (_name, selector) => {
         const body = rule(selector)
         expect(body.includes('--code-size: 1em;')).toBe(body.includes('--face: var(--face-mono);'))
+    })
+})
+
+// The ink Pulp carries inside a panel (ui/DESIGN.md, "Palettes"): its knobs' defaults draw nothing, so a palette that
+// sets none of them looks as it did before they were added.
+describe("the inside ink's knobs", () => {
+    it.each([
+        ['--depth-chip', 'none'],
+        ['--depth-selected', 'none'],
+        ['--lift-x', '0px'],
+        ['--lift-y', '0px'],
+        ['--control-line', 'var(--border)'],
+        ['--control-line-quiet', 'transparent'],
+    ])('defaults %s to %s', (knob, value) => {
+        expect(rule(':root')).toContain(`\n    ${knob}: ${value};`)
     })
 })
 

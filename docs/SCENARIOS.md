@@ -40,6 +40,11 @@ any OpenCode upgrade, and before relying on a permission they check.
 - **S71. A shell command's leading `cd`** (taken on request 2026-11-02). Confirmed in OpenCode's source (1.19.3 and
   2.1.2), not in a run. Have a worker run `cd src && cat ../README.md`, then `cd src && cd ../..`. Expect the first to
   print the file, and the second refused (`external_directory`), on OpenCode 1 and 2 both.
+- **S72. A refusal, explained** (taken on request 2026-11-03). Confirmed in OpenCode's source (2.1.2), not in a run. On
+  OpenCode 2, have a worker run `git push --force` and fetch a web page. Expect each refused, its tool result in the
+  transcript naming the command or the address and carrying canopy's `[canopy]` line, the second saying the agent has
+  no web tools, and the worker going on without trying either another way. Bare `Permission denied:` means 2 no longer
+  tells the agent the inner error's reason: the refusal holds as before, unexplained.
 - **S3. The private worker's wildcard deny** (M18). Confirmed in OpenCode's source (1.18.35), not in a run. Start a
   ticket privately and check that its worker can call the tracker's `tracker.read_tools` and is refused every other
   tool of the tracker's server, and the tracker CLIs in bash.
@@ -125,6 +130,11 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   `opencode models` lists, then take that model's provider out of OpenCode's config. Expect the ticket's next dispatch
   refused `model_missing`, with its attention item, no slot leased and no attempt spent, and no run on the default.
   Put the provider back: expect the next tick to dispatch it on the chosen model, and its session's record to agree.
+- **S73. A stop that wraps up** (taken on request 2026-11-03). Start a toy ticket whose work takes a worker several
+  commits, once unsandboxed and once under `canopy-sandbox`, and run `canopy stop KEY --wrap-up` after its first
+  commit. Expect canopy's wrap-up line once in its transcript, on the next tool call; the worker to push what it has,
+  start nothing new, and print a result line naming what remains; and the run to end on its own, well before its
+  timeout, with no attention item while the ticket stays stopped. Note how many tool calls it took to end.
 
 ### Several repositories
 

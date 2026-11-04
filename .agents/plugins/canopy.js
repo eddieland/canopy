@@ -11,8 +11,9 @@
 // the answer reads its file, so it loads with no network; and each job does as little as it can: it reads only what it
 // is handed for that job (the clock, CANOPY_DEADLINE and the time; the split, the system prompt; the nudge,
 // CANOPY_RUN_ID and each call's tool and session, and in a run that follows a plan, CANOPY_PLAN and the steps of each
-// `status` call; the answer, CANOPY_RUN_ID and the one file canopy writes in the directory CANOPY_ANSWERS names; the
-// directory, a shell call's command and working directory), changes only what its
+// `status` call; the answer and the wrap-up, CANOPY_RUN_ID and each its one file canopy writes in the directory
+// CANOPY_ANSWERS names; the directory, a shell call's command and working directory; under OpenCode 2, the refusal, a
+// refused call's permission and resources), changes only what its
 // hook is handed, writes no file, refuses no call, and grants no tool. Each job's hooks run in its own try, in the
 // order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the jobs after it from
 // theirs.
@@ -29,8 +30,14 @@
 // its working directory instead, which the runtime checks as it checks the `cd`, so the rest of the command is checked
 // from where it runs.
 //
-// Under OpenCode 2 it has one job more, its own: a session's first prompt waits until the tools of its MCP servers are
+// Its sixth is the wrap-up (DESIGN §22): in a run that keeps its progress, once the operator stops its ticket and asks
+// it to wrap up, one line on the next tool call's result asks the agent to keep its work and print its result line.
+//
+// Under OpenCode 2 it has two jobs more, its own. A session's first prompt waits until the tools of its MCP servers are
 // registered, which 2 does only after the server connects, so that the first model call is sent them (`mcpTools`).
+// And a call the run's permission rules refuse, which 2 reports to the agent as no more than `Permission denied:` and
+// the permission, also says what it asked for and that the refusal is on purpose, not to be tried another way
+// (`explain`); it reads the refusal's permission and resources, and changes only the reason the agent is told.
 //
 // Both of OpenCode's major versions load it, so its one export, the default, holds an entry point for each, and each
 // version reads only its own: OpenCode 1 calls `server` for the jobs' hooks, and OpenCode 2 calls `setup`, which
@@ -55,6 +62,7 @@
 /** @typedef {import("@opencode/plugin").Plugin.Context} Context2 */
 /** @typedef {Parameters<Parameters<Context2["tool"]["hook"]>[1]>[0]} ToolEvent2 */
 /** @typedef {Extract<ToolEvent2, { status: "completed" }>["result"]} Result2 */
+/** @typedef {Extract<ToolEvent2, { status: string }>} AfterEvent2 */
 /** @typedef {{ name: string, status: { status: string } }} McpServer2 */
 /** @typedef {Exclude<Result2["content"], string | undefined>[number]} Content2 */
 
@@ -81,9 +89,17 @@ const PLAN_PATH = /^\/[^\x00-\x1f\x7f]{0,4095}$/;
 /** The most steps a `status` call may carry, and the longest title one may have, as canopy's server holds them. */
 const MOST_STEPS = 40;
 const MOST_TITLE = 200;
-/** The file in a run's answers directory that holds the operator's latest answer, and the most of it read. */
+/** The file in a run's answers directory that holds the operator's latest answer. */
 const ANSWER_FILE = "answer.json";
-const ANSWER_BYTES = 4096;
+/** The file in it that asks the agent to wrap up. */
+const WRAP_UP_FILE = "wrap_up.json";
+/** The most of a file in it that is read: one longer is not canopy's. */
+const FILE_BYTES = 4096;
+/** The wrap-up's line, which the file asks for. */
+const WRAP_UP =
+    `${MARK} The operator stopped this ticket and asks you to wrap up now: finish what keeps your work (commit and` +
+    " push it, or record your decisions), start nothing new, then print your result line, its summary naming what" +
+    " remains.";
 /** The letter of a question's option. */
 const LETTER = /^[A-E]$/;
 /** The shell tool, as OpenCode 1 names it and as OpenCode 2 does. */
@@ -99,6 +115,20 @@ const MCP_WAIT_MS = 30_000;
 const MCP_SETTLE_MS = 2_000;
 /** How often it asks the runtime again while it waits. */
 const MCP_POLL_MS = 50;
+/** The tag of the error OpenCode 2 fails a call with when the run's permission rules refuse it. */
+const BLOCKED = "Permission.BlockedError";
+/** The most of a refused call's resources the reason names, and the longest each is named, in characters. */
+const MOST_RESOURCES = 3;
+const MOST_RESOURCE = 200;
+/** What the reason adds for a permission whose refusal says more than the line every refusal ends with. */
+const REFUSED = new Map([
+    ["external_directory", "It is outside the directories this run may reach."],
+    ["webfetch", "This agent has no web tools."],
+    ["websearch", "This agent has no web tools."],
+    ["codesearch", "This agent has no web tools."],
+    ["execute", "This agent has no code mode, which can reach the web."],
+    ["task", "This agent starts no subagents."],
+]);
 /**
  * Where OpenCode 1's environment starts in its system prompt, right after the agent's body: the newline that joins
  * them, the line naming the model, and the head of `<env>`, whose working directory is the first thing two runs of one
@@ -115,7 +145,7 @@ const ENVIRONMENT = new RegExp(
  *
  * @type {Array<() => Hooks>}
  */
-const JOBS = [clock, split, nudge, answer, workdir];
+const JOBS = [clock, split, nudge, answer, workdir, wrapUp];
 
 /**
  * The plugin, as each major version of OpenCode reads it: its id, and its entry point for each.
@@ -153,7 +183,8 @@ function hooksOfJobs() {
  * `execute.after` every call, failed ones too, with the result as the tool returned it; it truncates the
  * result after the hook, keeping its head, whatever the tool. So the jobs get each successful call's result as 1 hands
  * them an MCP tool's, its content as a list (`contentOf`), and the hook puts that list back only when a job changed it.
- * A failed call reaches them with no result, so the nudge counts it and no job writes to it.
+ * A failed call reaches them with no result, so the nudge counts it and no job writes to it. One the permission rules
+ * refused is first explained (`explain`), as 1 has no hook to.
  *
  * @param {Context2} ctx
  * @returns {Promise<void>}
@@ -173,10 +204,15 @@ async function setup(ctx) {
         });
     }
     const after = hooks["tool.execute.after"];
-    if (after === undefined) {
-        return;
-    }
     await ctx.tool.hook("execute.after", async (event) => {
+        try {
+            explain(event);
+        } catch {
+            // The refusal is told as the runtime words it, and the jobs still run.
+        }
+        if (after === undefined) {
+            return;
+        }
         try {
             const input = { tool: event.tool, sessionID: event.sessionID, callID: event.id, args: event.input };
             if (event.status !== "completed") {
@@ -258,6 +294,85 @@ async function untilRegistered(ctx) {
         }
         await new Promise((resolve) => setTimeout(resolve, MCP_POLL_MS));
     }
+}
+
+/**
+ * OpenCode 2's job of its own: tell an agent why a call was refused, in the reason the runtime tells it.
+ *
+ * 2 fails a call its permission rules refuse with a `Permission.BlockedError` inside the call's error, and tells the
+ * agent that error's reason, or, with none, `Permission denied:` and the permission alone: not what it asked for, nor
+ * that the refusal is meant. An agent told only that tries the same another way, through another command or tool, and
+ * spends its run on it. So the job sets the reason to the runtime's own words, the resources the call asked for, and
+ * one line of canopy's: that the rules refuse it on purpose, not to try it another way, and to say in the result line
+ * what remains if the work cannot go on without it. It changes nothing else of the error, so the call stays refused as
+ * the runtime refused it, and leaves an error of any other kind, or one already explained, as it is. A rule the
+ * repository or the operator set (TRUST_MODEL T7) is explained as canopy's are: the line names the rules the run is
+ * under, not whose they are. OpenCode 1 tells the agent the rules that refused it, and has no hook after a call that
+ * fails (§33), so it is 2's alone.
+ *
+ * @param {AfterEvent2} event
+ * @returns {void}
+ */
+function explain(event) {
+    if (event.status !== "error") {
+        return;
+    }
+    const blocked = /** @type {unknown} */ (event.error.error);
+    if (blocked === null || typeof blocked !== "object" || !("_tag" in blocked) || blocked._tag !== BLOCKED) {
+        return;
+    }
+    const refused = /** @type {{ message?: unknown, permission?: unknown, resources?: unknown, reason?: unknown }} */ (
+        blocked
+    );
+    const said = typeof refused.message === "string" ? refused.message : "Permission denied.";
+    if (said.includes(MARK)) {
+        return;
+    }
+    const permission = typeof refused.permission === "string" ? refused.permission : "";
+    refused.reason = `${said}${askedFor(refused.resources)}\n${refusal(permission)}`;
+}
+
+/**
+ * What a refused call asked for, as the reason names it: up to `MOST_RESOURCES` of its resources, each on one line and
+ * cut at `MOST_RESOURCE` characters, or nothing when it names none but the wildcard an MCP tool's call asks for.
+ *
+ * @param {unknown} resources
+ * @returns {string}
+ */
+function askedFor(resources) {
+    if (!Array.isArray(resources)) {
+        return "";
+    }
+    const named = resources
+        .filter((resource) => typeof resource === "string" && resource !== "" && resource !== "*")
+        .map((resource) => {
+            const line = oneLine(resource);
+            return line.length > MOST_RESOURCE ? `${line.slice(0, MOST_RESOURCE)}…` : line;
+        });
+    if (named.length === 0) {
+        return "";
+    }
+    const more = named.length > MOST_RESOURCES ? `, and ${named.length - MOST_RESOURCES} more` : "";
+    return ` (${named
+        .slice(0, MOST_RESOURCES)
+        .map((resource) => `\`${resource}\``)
+        .join(", ")}${more})`;
+}
+
+/**
+ * canopy's line on a refusal of `permission`: what that permission's refusal means, when it says more, and what every
+ * refusal asks of the agent.
+ *
+ * @param {string} permission
+ * @returns {string}
+ */
+function refusal(permission) {
+    const means = REFUSED.get(permission);
+    return (
+        `${MARK} ${means === undefined ? "" : `${means} `}The rules this run is under refuse it on purpose; it is not` +
+        " a fault to fix. Do not try it another way, through another command, a script, or another tool. If your" +
+        " work cannot go on without it, finish what you can and say what remains in your result line."
+    );
 }
 
 /**
@@ -594,12 +709,10 @@ function oneLine(title) {
  * @returns {Hooks} The answer's hooks.
  */
 function answer() {
-    const dir = process.env.CANOPY_ANSWERS;
-    const run = process.env.CANOPY_RUN_ID;
-    if (typeof dir !== "string" || !dir.startsWith("/") || typeof run !== "string" || !ASKING_RUN.test(run)) {
+    const file = answersFile(ANSWER_FILE);
+    if (file === null) {
         return {};
     }
-    const file = `${dir.replace(/\/+$/, "")}/${ANSWER_FILE}`;
     /** @type {Map<string | undefined, string>} */
     const told = new Map();
     return {
@@ -608,7 +721,7 @@ function answer() {
          * @param {BuiltinResult | McpResult | null | undefined} output
          */
         "tool.execute.after": async (input, output) => {
-            const said = answerLine(await readAnswer(file));
+            const said = answerLine(await readOwn(file));
             const session = input?.sessionID;
             if (said !== null && told.get(session) !== said && tell(output, said)) {
                 told.set(session, said);
@@ -618,16 +731,33 @@ function answer() {
 }
 
 /**
- * The answer file's text, or null when there is none to read, or it is too long to be canopy's.
+ * The path of the file `name` in the run's answers directory, or null in a run that has none: without CANOPY_ANSWERS,
+ * or in a run whose progress asks nothing, as CANOPY_RUN_ID names it.
+ *
+ * @param {string} name
+ * @returns {string | null}
+ */
+function answersFile(name) {
+    const dir = process.env.CANOPY_ANSWERS;
+    const run = process.env.CANOPY_RUN_ID;
+    if (typeof dir !== "string" || !dir.startsWith("/") || typeof run !== "string" || !ASKING_RUN.test(run)) {
+        return null;
+    }
+    return `${dir.replace(/\/+$/, "")}/${name}`;
+}
+
+/**
+ * The text of a file canopy writes in the answers directory, or null when there is none to read, or it is too long to
+ * be canopy's.
  *
  * @param {string} file
  * @returns {Promise<string | null>}
  */
-async function readAnswer(file) {
+async function readOwn(file) {
     try {
         const { readFile } = await import("node:fs/promises");
         const text = await readFile(file, "utf8");
-        return text.length <= ANSWER_BYTES ? text : null;
+        return text.length <= FILE_BYTES ? text : null;
     } catch {
         return null;
     }
@@ -726,4 +856,61 @@ function leadingCd(command) {
         return null;
     }
     return { dirs, rest };
+}
+
+/**
+ * The wrap-up's hooks: the one that asks the agent to wrap up, once the operator stops its ticket so.
+ *
+ * `canopy stop --wrap-up` stops a ticket and asks the run working it to end soon, keeping its work, rather than finish
+ * all of it or be killed with what it has not pushed (DESIGN §22). canopy writes when it asked to a file in the run's
+ * answers directory, as it writes an answer; after each tool call, the job reads that file and, for an ask this
+ * session has not been told, adds one line to the call's result, the way the clock adds its line. It keeps when it
+ * last told each session, and nothing else; without the variable, or in a run whose progress asks nothing, it has no
+ * hook. A file it cannot read, or that is not canopy's, tells nothing. A forged one could only ask the agent to end
+ * early, which leaves its work kept, so it fails safe as the clock's line does (§33).
+ *
+ * @returns {Hooks} The wrap-up's hooks.
+ */
+function wrapUp() {
+    const file = answersFile(WRAP_UP_FILE);
+    if (file === null) {
+        return {};
+    }
+    /** @type {Map<string | undefined, string>} */
+    const told = new Map();
+    return {
+        /**
+         * @param {AfterInput | undefined} input
+         * @param {BuiltinResult | McpResult | null | undefined} output
+         */
+        "tool.execute.after": async (input, output) => {
+            const asked = askedAt(await readOwn(file));
+            const session = input?.sessionID;
+            if (asked !== null && told.get(session) !== asked && tell(output, WRAP_UP)) {
+                told.set(session, asked);
+            }
+        },
+    };
+}
+
+/**
+ * When the wrap-up file in `text` was asked, as canopy writes it, or null when `text` is no ask of canopy's.
+ *
+ * @param {string | null} text
+ * @returns {string | null}
+ */
+function askedAt(text) {
+    if (text === null) {
+        return null;
+    }
+    let found;
+    try {
+        found = JSON.parse(text);
+    } catch {
+        return null;
+    }
+    if (found === null || typeof found !== "object" || typeof found.asked !== "string" || found.asked === "") {
+        return null;
+    }
+    return found.asked;
 }

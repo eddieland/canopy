@@ -198,8 +198,9 @@ function Bubble({
         >
             {head}
             <div
+                data-tail={operator ? 'end' : 'start'}
                 className={cn(
-                    'w-fit max-w-full rounded-md px-3 py-2 shadow-bubble',
+                    'bubble-tail w-fit max-w-full rounded-md px-3 py-2 shadow-bubble',
                     operator ? 'rounded-tr-xs' : 'rounded-tl-xs',
                     tone,
                 )}

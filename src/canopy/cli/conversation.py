@@ -345,16 +345,27 @@ def _start_review(
 @click.command("stop")
 @click.argument("ref", metavar="REF")
 @click.option("--now", is_flag=True, help="Also end the run working it now, instead of letting it finish.")
+@click.option(
+    "--wrap-up",
+    is_flag=True,
+    help="Also ask a ticket's run to keep its work and end soon, instead of finishing all of it.",
+)
 @click.pass_context
-def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool) -> int:
+def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool, wrap_up: bool) -> int:
     """Stop working a started ticket or a task (`task:N`), or stop reviewing a PR you asked canopy to review.
 
     A ticket is not dispatched again until `canopy start`, and a task is not started again; one still queued is
     dropped. A running run finishes, unless --now ends it: its processes are killed, its slots returned, and it ends
-    `stopped`. A PR's review request ends; a review of it already running finishes.
+    `stopped`. With --wrap-up, a ticket's running run is told on its next tool call to keep its work (commit and push
+    it), print its result line, and start nothing new; it ends on its own, or at its timeout if it goes on. A PR's
+    review request ends; a review of it already running finishes.
     """
     _operator("stop")
     subject = _ref(ref, "stop")
+    if now and wrap_up:
+        raise click.UsageError("--now ends the run at once and --wrap-up asks it to end soon: give one")
+    if wrap_up and subject.kind != conversation.TICKET:
+        raise click.UsageError("--wrap-up is for a ticket's run")
     if subject.kind == conversation.TASK:
         return tasks_cli.stop(open_context(click_ctx), int(subject.id), now=now)
     if subject.kind == conversation.PR:
@@ -367,19 +378,29 @@ def cmd_stop(click_ctx: click.Context, ref: str, *, now: bool) -> int:
     except conversation.Refused as r:
         raise CliError(f"stop refused ({r.guard}): {r.reason}") from None
     log = logs.for_tick(None)
-    log.info("ticket stopped", extra={"ticket": subject.id, "now": now})
+    log.info("ticket stopped", extra={"ticket": subject.id, "now": now, "wrap_up": wrap_up})
     click.echo(f"{subject} {'was already stopped' if stopped.already else 'is stopped'}; nothing dispatches it now.")
-    run = stopped.running
-    if run is None:
-        return 0
-    if not now:
+    if stopped.running is not None:
+        _stop_run(ctx, stopped.running, log, now=now, wrap_up=wrap_up)
+    return 0
+
+
+def _stop_run(ctx: Context, run: records.Run, log: logs.TickAdapter, *, now: bool, wrap_up: bool) -> None:
+    """Say what becomes of the run working a ticket just stopped: it finishes, is asked to wrap up, or is ended now."""
+    if wrap_up:
+        if halt.wrap_up(ctx, run, log):
+            click.echo(
+                f"Run {run.id} ({run.kind}) is asked to wrap up: it hears it on its next tool call, keeps its work,"
+                " and ends. --now ends it at once.",
+            )
+        else:
+            click.echo(f"Run {run.id} ({run.kind}) had already ended.")
+    elif not now:
         click.echo(f"Run {run.id} ({run.kind}) is still working it and will finish; --now ends it.")
-        return 0
-    if halt.end(ctx, run, log):
+    elif halt.end(ctx, run, log):
         click.echo(f"Run {run.id} ({run.kind}) was ended and its slots returned.")
     else:
         click.echo(f"Run {run.id} ({run.kind}) had already ended.")
-    return 0
 
 
 def _stop_review(click_ctx: click.Context, subject: Ref) -> int:

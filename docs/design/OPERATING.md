@@ -396,7 +396,7 @@ chores, which write nothing, may also read the files beside it.
 canopy ships one plugin, `canopy.js`, whose jobs are a clock that tells a running agent the minutes left, a split under
 OpenCode 1 that lets an unsandboxed run's first call read its agent's tools and body from the provider's cache, which
 OpenCode 2 needs no split for, and, under OpenCode 2, holding a session's first prompt until its MCP tools are
-registered; they, and what OpenCode does with a plugin, are §33.
+registered and explaining a call its permission rules refuse; they, and what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
 

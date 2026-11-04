@@ -78,6 +78,17 @@ is refused, and the refusal does not say why. Before each shell call, the plugin
 directory, and the rest from it, as it checks any call's, so the job reaches nothing the `cd` could not, and a `cd` out
 is refused as before. A directory the shell would expand is left in the command.
 
+### A refusal, explained
+
+OpenCode 2 tells an agent a call its permission rules refuse as `Permission denied:` and the permission, nothing more,
+so an agent tries the same another way and spends its run on it. After such a call (`execute.after`) the plugin sets
+the refusal's reason to the runtime's words, what the call asked for, and one `[canopy]` line: the rules refuse it on
+purpose, it is not to be tried another way, and the result line says what remains if the work needs it. It changes
+nothing else of the error, so the call stays refused as it was, and it reads only the refusal's permission and
+resources. A rule the repository or the operator set is explained as canopy's are (T7). 2's `evaluate` permission hook
+cannot do it: a refusal by the rules returns before the hook (2.1.2, read 2026-11-03). OpenCode 1 already tells the
+agent the rules that refused it, and has no hook after a call that fails, so it gets none.
+
 ### The split
 
 OpenCode 1 sends the agent's body and its environment, which names the working directory and the date, as one system
