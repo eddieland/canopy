@@ -16,7 +16,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db, definitions, outbox
+from canopy.core import cards, config, conversation, db, definitions, outbox
 from canopy.core.vocab import Phase, ResumeReason, RunKind, RunStatus, StartStatus
 from canopy.infra import procs, resources
 from canopy.loop import attention, repeat
@@ -369,6 +369,34 @@ def test_stop_now_ends_the_running_run_and_returns_its_slot(
     assert attention.from_runs(conn) == []
     [report] = db.run_messages(conn, int(run["id"]))
     assert "canopy stop --now" in report.body
+
+
+def test_stop_wrap_up_asks_the_running_run_to_end_and_leaves_it_running(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.operator("start", KEY)
+    working = scenario.starts(dispatches(label=None))
+    run_id = int(working.row["id"])
+    asks = cards.answers_dir(scenario.env.state_dir, str(run_id)) / cards.WRAP_UP_FILE
+    assert not asks.exists()
+
+    said = scenario.operator("stop", KEY, "--wrap-up").out
+    assert f"Run {run_id} (implement) is asked to wrap up" in said
+    assert "nothing dispatches it now" in said
+    # The plugin tells the agent; canopy kills nothing, and the run ends on its own.
+    assert db.parse_time(json.loads(asks.read_text())["asked"])
+    assert working.row["status"] == "running"
+    assert procs.alive(int(working.row["worker_pid"]))
+    assert conversation.stopped(scenario.conn) == [KEY]
+
+    assert working.finishes().status == "done"
+    assert not asks.parent.exists()
+    assert "wrap up" not in scenario.operator("stop", KEY, "--wrap-up").out
+
+
+def test_stop_wrap_up_is_for_a_tickets_run_alone(scenario: Scenario) -> None:
+    scenario.operator("start", KEY)
+    assert "give one" in scenario.operator("stop", KEY, "--now", "--wrap-up", code=2).err
+    assert "is for a ticket's run" in scenario.operator("stop", "task:1", "--wrap-up", code=2).err
+    assert conversation.stopped(scenario.conn) == []
 
 
 def test_a_private_run_refuses_a_worktree_config_that_names_the_trackers_tools(
