@@ -166,7 +166,10 @@ pool-contract: ## Check that real treehouse keeps every guarantee canopy takes f
 ##@ Setup
 
 # Optional: CI's `make check` runs every check anyway. prek.toml says which hook runs what, and on which stage.
+# Git LFS's hooks go in first, forced over any earlier prek ones: prek then keeps LFS's pre-push as pre-push.legacy
+# and runs it, which uploads the screenshot baselines a push names. In that order, running it again changes nothing.
 hooks: ## Install git hooks (prek): the formatters and linters on each commit, ui/'s lint and types on each push
+	git lfs install --local --force
 	uv run prek install
 
 TREEHOUSE_REPO := https://github.com/kunchenguid/treehouse

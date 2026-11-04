@@ -1,0 +1,32 @@
+name: Fetch the screenshot baselines
+description: >-
+  Checks out the Playwright screenshot baselines, which are Git LFS objects, keeping them in the Actions cache. Runs
+  from the repository root, after a checkout without `lfs: true`.
+
+# Each CI run's e2e slices would otherwise download every baseline from LFS, against the repository's LFS bandwidth.
+# The cache is keyed by the objects the commit names, starting from the last one, so a run downloads only the images
+# that changed since. Not for a job holding a write token: it trusts what a cache restores.
+runs:
+  using: composite
+  steps:
+    - name: Name the objects
+      id: objects
+      shell: bash
+      run: |
+        git lfs install --local
+        echo "key=lfs-baselines-$(git lfs ls-files --long | sha256sum | cut -c1-64)" >>"$GITHUB_OUTPUT"
+
+    - name: Restore the objects
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: .git/lfs/objects
+        key: ${{ steps.objects.outputs.key }}
+        restore-keys: lfs-baselines-
+
+    # Prune drops the objects this commit no longer names, so the cache saved after it does not grow with each image
+    # ever drawn.
+    - name: Check out the baselines
+      shell: bash
+      run: |
+        git lfs pull
+        git lfs prune

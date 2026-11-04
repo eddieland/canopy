@@ -320,6 +320,9 @@ jobs:
       - name: Install Playwright's Chromium
         uses: ./.github/actions/playwright-chromium # zizmor: ignore[self-repository]
 
+      - name: Fetch the screenshot baselines
+        uses: ./.github/actions/screenshot-baselines # zizmor: ignore[self-repository]
+
       - name: Playwright
         env:
           SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}

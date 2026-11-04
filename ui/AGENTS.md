@@ -159,9 +159,12 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
   write run against the prefixed one. Every route gets a screenshot in dark in `e2e/screenshots.spec.ts`, of its main
   pane alone, so a change to the header or the rail rewrites a few images rather than every one. The pages `README.md`
   shows are taken whole (`WHOLE_ROUTES` in `e2e/helpers.ts`), and a few are taken in light as well (`LIGHT_ROUTES`):
-  both themes draw from the same tokens, so more would double the images git keeps for every visual change without
+  both themes draw from the same tokens, so more would double the images LFS keeps for every visual change without
   catching more. Add a page to either only for what the others cannot show. A visual change updates the baselines
-  deliberately and the PR says why; look at each new image before it merges. The Screenshots workflow never deletes an
+  deliberately and the PR says why; look at each new image before it merges. The baselines are Git LFS objects
+  (`.gitattributes`), so their versions stay out of git's history: fetch them with `git lfs pull`, or Playwright stops
+  before any test and says so. `make hooks` installs LFS's hooks under prek's, so a push uploads the images it names.
+  The Screenshots workflow never deletes an
   image: a PR that stops taking one deletes its baseline. Every screenshot applies `e2e/screenshot.css`, which replaces
   what changes with the build rather than the page (the rail's version, which names the commit, shows a placeholder as
   long as a dev build's, and the mock's private config path, in a temporary directory, is hidden). The guide's

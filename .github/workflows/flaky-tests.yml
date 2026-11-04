@@ -110,6 +110,9 @@ jobs:
       - name: Install Playwright's Chromium
         uses: ./.github/actions/playwright-chromium # zizmor: ignore[self-repository]
 
+      - name: Fetch the screenshot baselines
+        uses: ./.github/actions/screenshot-baselines # zizmor: ignore[self-repository]
+
       - name: Playwright tests, REPEAT times
         run: make ui-e2e-burn-in REPEAT="$REPEAT"
 

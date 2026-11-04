@@ -1,0 +1,2 @@
+# The Playwright screenshot baselines are Git LFS objects, so their versions stay out of git's history (ui/AGENTS.md).
+ui/e2e/*-snapshots/*.png filter=lfs diff=lfs merge=lfs -text
