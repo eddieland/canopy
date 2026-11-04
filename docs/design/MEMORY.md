@@ -65,7 +65,9 @@ replaced, keeps its text until the operator forgets it.
   `record`. Promoting a private ticket's run's own words warns that they come from a conversation kept off the
   tracker, which a lesson would carry into public tickets' runs.
 - An edit writes a lesson anew, the old words kept as history and served to no run. Rejected: an edit in place, which
-  would leave a run's citations naming words it never read.
+  would leave a run's citations naming words it never read. An edit may give a lesson a new key. One that changes only
+  the key is the same words to the same runs, so it keeps the review date, any report, the reads and citations, and a
+  run's citation of the old version reaches it. An old key is free for another lesson to take.
 - At `use`, lessons are in every worker prompt that carries the standing instructions (§8),
   framed as the operator's words that the prompt's obligations come before; capped, pinned lessons kept first, and a
   lesson naming a repository only in runs that lease it.

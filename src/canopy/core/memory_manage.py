@@ -17,7 +17,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, memory, records, sql
-from canopy.core.memory_text import TextRefused, check_text
+from canopy.core.memory_text import TextRefused, check_key, check_text
 from canopy.core.vocab import MemoryAuthor, MemoryMode, MemoryScope, MemoryStatus
 
 if TYPE_CHECKING:
@@ -315,6 +315,9 @@ class Edited:
     replaced: records.Memory
     #: Which version of the lesson the new one is: 2 for the first edit of a lesson promoted once.
     version: int
+    #: Whether the edit changed only the key, so the new version keeps the old one's review date, pin, any run's report
+    #: that it is wrong, and its reads and citations.
+    renamed_alone: bool
     #: Whether runs are served lessons now, rather than recording them.
     served: bool
 
@@ -325,24 +328,30 @@ def edit(
     lesson_id: int,
     *,
     text: str | None = None,
+    key: str | None = None,
     repo: str | None = None,
     every_repo: bool = False,
     repos: Sequence[str] = (),
 ) -> Edited:
-    """Write a lesson in force anew: in `text` if given, for `repo` if given, or with `every_repo` for every one.
+    """Write a lesson in force anew: in `text`, under `key`, for `repo`, or with `every_repo` for every one, as given.
 
-    The new version keeps the key, supersedes the lesson, and is made from it, so the old one stays, with its text, as
-    the lesson's history, and what runs read of it and said of it stays with the words they read. It is due for review
-    `REVIEW_DAYS` on, or never while the lesson is pinned, with no run's report that it is wrong: in writing it, the
-    operator vouched for it. `repos` are the workspace's repositories, which `repo` must be one of.
+    The new version takes `key` if given, else the lesson's own, supersedes the lesson, and is made from it, so the old
+    one stays, with its text and key, as the lesson's history, and what runs read of it and said of it stays with the
+    words they read. It is due for review `REVIEW_DAYS` on, or never while the lesson is pinned, with no run's report
+    that it is wrong: in writing it, the operator vouched for it. An edit that changes only the key is the same words
+    to the same runs, so the new version keeps the old one's review date, any report that it is wrong, and its
+    citations, and counts its reads (`memory.renamed_from`). A key an earlier lesson had is free to take. `repos` are
+    the workspace's repositories, which `repo` must be one of.
 
     Returns:
-        The new version, the one it replaced, which version it is, and whether runs are served lessons now.
+        The new version, the one it replaced, which version it is, whether only its key changed, and whether runs are
+        served lessons now.
 
     Raises:
         Refused: (`inside_run`) inside one of canopy's ticks or runs; (`off`) proposals are off; (`unknown`) no lesson
-            in force has the id; (`unknown_repo`) `repo` is not in `repos`; (`bad_text`) the text is outside the
-            bounds; (`unchanged`) it would say the same words to the same repositories.
+            in force has the id; (`bad_key`) `key` is not a key; (`key_taken`) another lesson in force has `key`;
+            (`unknown_repo`) `repo` is not in `repos`; (`bad_text`) the text is outside the bounds; (`unchanged`) it
+            would say the same words, under the same key, to the same repositories.
         ValueError: Both `repo` and `every_repo` are given.
         RuntimeError: The lesson it wrote cannot be read back.
     """
@@ -354,6 +363,7 @@ def edit(
     if old is None or old.scope is not MemoryScope.LESSON or old.status is not MemoryStatus.ACTIVE:
         why = f": {old.status}, {old.why}" if old is not None and old.why is not None else ""
         raise conversation.Refused("unknown", f"no lesson in force has id {lesson_id}{why}")
+    named = _new_key(conn, old, key)
     if repo is not None and repo not in repos:
         names = ", ".join(repos) or "none yet"
         raise conversation.Refused("unknown_repo", f"{repo!r} is not a repository in this workspace ({names})")
@@ -362,9 +372,10 @@ def edit(
     except TextRefused as e:
         raise conversation.Refused("bad_text", f"the lesson's {e}") from None
     serves = None if every_repo else repo if repo is not None else old.repo
-    if body == old.body and serves == old.repo:
+    same_words = body == old.body and serves == old.repo
+    if same_words and named == old.key:
         where = f"runs in {serves}" if serves is not None else "every run"
-        raise conversation.Refused("unchanged", f"lesson {lesson_id} already says that, to {where}")
+        raise conversation.Refused("unchanged", f"lesson {lesson_id} already says that, to {where}, as `{named}`")
     now = datetime.now(UTC)
     stamp = db.format_time(now)
     with db.transaction(conn):
@@ -374,7 +385,7 @@ def edit(
             records.Memory,
             scope=MemoryScope.LESSON,
             repo=serves,
-            key=old.key,
+            key=named,
             body=body,
             status=MemoryStatus.ACTIVE,
             author=MemoryAuthor.OPERATOR,
@@ -382,13 +393,19 @@ def edit(
             promoted_from=old.id,
             created_at=stamp,
             approved_at=stamp,
-            review_at=_review_at(now, old.pinned_at),
+            # A rename alone is no new word from the operator: the review, any report, and the citations stay.
+            review_at=old.review_at if same_words else _review_at(now, old.pinned_at),
             pinned_at=old.pinned_at,
+            wrong_at=old.wrong_at if same_words else None,
+            wrong_run_id=old.wrong_run_id if same_words else None,
+            use_count=old.use_count if same_words else 0,
+            last_used_at=old.last_used_at if same_words else None,
         ).run(conn)
         new_id = int(cur.lastrowid or 0)
+        how = "edited" if named == old.key else "renamed" if same_words else "renamed and edited"
         (
             records.update(records.Memory)
-            .set(why=f"edited into lesson {new_id}", invalidated_at=stamp)
+            .set(why=f"{how} into lesson {new_id}", invalidated_at=stamp)
             .where("id = ?", old.id)
             .run(conn)
         )
@@ -399,8 +416,31 @@ def edit(
         lesson=lesson,
         replaced=old,
         version=memory.version(conn, lesson),
+        renamed_alone=same_words,
         served=config.memory.proposals is MemoryMode.USE,
     )
+
+
+def _new_key(conn: sqlite3.Connection, old: records.Memory, key: str | None) -> str:
+    """The key an edit of `old` writes its new version under: `key`, checked, or the lesson's own.
+
+    Returns:
+        The key.
+
+    Raises:
+        Refused: (`bad_key`) `key` is not a key; (`key_taken`) another lesson in force has it.
+    """
+    if key is None:
+        return old.key
+    try:
+        named = check_key(key)
+    except TextRefused as e:
+        raise conversation.Refused("bad_key", f"the lesson's {e}") from None
+    # The journal holds one lesson in force under a key, whichever repositories each serves.
+    taken = next((m for m in memory.active_lessons(conn) if m.key == named and m.id != old.id), None)
+    if taken is not None:
+        raise conversation.Refused("key_taken", f"lesson {taken.id} is in force under `{named}`")
+    return named
 
 
 def _in_force(conn: sqlite3.Connection, config: Config, lesson_id: int) -> records.Memory:

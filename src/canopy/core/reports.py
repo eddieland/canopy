@@ -351,6 +351,7 @@ def _lesson_json(ctx: Context, lesson: records.Memory, read: memory.Reads) -> di
         "key": lesson.key,
         "repo": lesson.repo,
         "made": "edited" if memory.edited(lesson) else "promoted",
+        "renamed_from": _renamed_from(ctx, lesson),
         "approved_at": lesson.approved_at,
         "from": None
         if source is None
@@ -365,6 +366,16 @@ def _lesson_json(ctx: Context, lesson: records.Memory, read: memory.Reads) -> di
         "wrong_run_id": lesson.wrong_run_id,
         "text": _text(lesson),
     }
+
+
+def _renamed_from(ctx: Context, lesson: records.Memory) -> str | None:
+    """The key a lesson had before the edit that made it, when that edit changed it.
+
+    Returns:
+        The earlier key, or None for a lesson promoted, or edited under the same key.
+    """
+    before = memory.get(ctx.conn, lesson.supersedes) if memory.edited(lesson) and lesson.supersedes else None
+    return before.key if before is not None and before.key != lesson.key else None
 
 
 def _text(entry: records.Memory) -> str | None:

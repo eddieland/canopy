@@ -330,7 +330,15 @@ def test_review_dates_raise_one_lesson_review_once_lessons_are_in_use(
 
 @pytest.mark.parametrize(
     "args",
-    [["promote", "1"], ["reject", "1"], ["renew", "1"], ["pin", "1"], ["unpin", "1"], ["edit", "1", "--text", "x"]],
+    [
+        ["promote", "1"],
+        ["reject", "1"],
+        ["renew", "1"],
+        ["pin", "1"],
+        ["unpin", "1"],
+        ["edit", "1", "--text", "x"],
+        ["edit", "1", "--key", "x"],
+    ],
 )
 def test_promote_reject_renew_pin_and_edit_refuse_inside_a_run(
     canopy_env: CanopyEnv,
@@ -499,6 +507,106 @@ def test_edit_moves_a_lesson_between_repositories_and_a_promote_over_it_is_its_n
     assert len(memory.history(conn, first.id)) == 4
 
 
+def test_a_rename_keeps_the_lessons_words_review_report_and_counts_and_its_old_key_leads_to_it(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    conn = scenario.conn
+    scenario.configures("private", memory=memory_modes(proposals="use"))
+    first = promoted(conn, scenario.env, key="remove-foo-from-image")
+    scenario.run(WORK, worker=pushes(memory_used=[first.id]))
+    reporter = present(memory.get(conn, present(first.promoted_from))).run_id
+    conn.execute("UPDATE memories SET wrong_at = ?, wrong_run_id = ? WHERE id = ?", (db.now(), reporter, first.id))
+    before = present(memory.get(conn, first.id))
+    counted = scenario.operator("memory", "lessons").out
+    use = counted[counted.index("read by") : counted.index("; run")]
+    out = scenario.operator("memory", "edit", str(first.id), "--key", "remove-tool-from-image").out
+    lesson = memories(conn)[-1]
+    assert out == (
+        f"Lesson {first.id} (`remove-foo-from-image`) is renamed into lesson {lesson.id} (`remove-tool-from-image`), "
+        f"version 2, due for review at {before.review_at}. Lesson {first.id} stays in its history.\n"
+        "Its words are the same, so it keeps its review date, any report that it is wrong, reads, and citations.\n"
+        "Every run dispatched from now on reads the new version.\n"
+    )
+    assert (lesson.key, lesson.body, lesson.supersedes, lesson.promoted_from) == (
+        "remove-tool-from-image",
+        LESSON,
+        first.id,
+        first.id,
+    )
+    assert (lesson.review_at, lesson.wrong_at, lesson.wrong_run_id, lesson.use_count, lesson.last_used_at) == (
+        before.review_at,
+        before.wrong_at,
+        before.wrong_run_id,
+        before.use_count,
+        before.last_used_at,
+    )
+    assert present(memory.renamed_from(conn, lesson)).id == first.id
+    old = present(memory.get(conn, first.id))
+    assert (old.key, old.status, old.why) == (
+        "remove-foo-from-image",
+        MemoryStatus.SUPERSEDED,
+        f"renamed into lesson {lesson.id}",
+    )
+    listed = scenario.operator("memory", "lessons").out
+    assert f"renamed from `remove-foo-from-image` (lesson {first.id}) at {lesson.approved_at} from proposal" in listed
+    assert use in listed
+    history = scenario.operator("memory", "history", str(lesson.id)).out
+    assert history.startswith("Lesson `remove-tool-from-image` (formerly `remove-foo-from-image`): 2 versions")
+    assert f"v2  {lesson.id} `remove-tool-from-image`  active;" in history
+    assert f"v1  {first.id} `remove-foo-from-image`  superseded, renamed into lesson {lesson.id};" in history
+    found = scenario.operator("memory", "search", "remove-foo-from-image").out
+    assert f"Lesson {first.id}, `remove-foo-from-image`, superseded (renamed into lesson {lesson.id}), " in found
+    assert f"now lesson {lesson.id} `remove-tool-from-image`:" in found
+
+
+def test_a_run_that_read_a_lesson_renamed_since_cites_the_lesson_in_force(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    conn = scenario.conn
+    scenario.configures("private", memory=memory_modes(proposals="use"))
+    first = promoted(conn, scenario.env)
+    wrong = promoted(conn, scenario.env, "Never run the linter.", key="lint")
+    working = scenario.starts(WORK, worker=pushes(memory_used=[first.id], memory_wrong=[wrong.id]))
+    scenario.operator("memory", "edit", str(first.id), "--key", "api-test-fixtures")
+    scenario.operator("memory", "edit", str(wrong.id), "--key", "skip-the-linter")
+    run = working.finishes()
+    lesson, reported = memories(conn)[-2:]
+    assert (lesson.use_count, reported.wrong_run_id) == (1, run.id)
+    # The citation stays on the read, which names the version the run was shown.
+    assert memory.citations(conn, run.id) == {first.id: "used", wrong.id: "wrong"}
+    assert memory.reads(conn, [lesson.id])[lesson.id].count == 1
+
+
+def test_a_rename_with_new_words_is_an_edit_and_the_old_key_is_free_for_another_lesson(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with_memory(canopy_env, proposals="record")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    first = promoted(conn, canopy_env)
+    other = promoted(conn, canopy_env, "Run `make lint` twice.", key="lint")
+    soon = db.format_time(datetime.now(UTC) + timedelta(days=1))
+    conn.execute("UPDATE memories SET review_at = ?, use_count = 3 WHERE id = ?", (soon, first.id))
+    with pytest.raises(Exception, match=f"lesson {other.id} is in force under `lint`"):
+        memory_manage.edit(conn, cfg, first.id, key="lint")
+    edited = memory_manage.edit(conn, cfg, first.id, key="api-test-fixtures", text="Newer words.")
+    lesson = edited.lesson
+    assert not edited.renamed_alone
+    assert memory.renamed_from(conn, lesson) is None
+    assert (lesson.key, lesson.use_count) == ("api-test-fixtures", 0)
+    assert present(lesson.review_at) > soon
+    assert present(memory.get(conn, first.id)).why == f"renamed and edited into lesson {lesson.id}"
+    assert main(["memory", "lessons"]) == 0
+    assert f"renamed from `api-tests` and edited (lesson {first.id}) at" in capsys.readouterr().out
+    # The old key is free: a lesson promoted under it is a lesson of its own, which replaces nothing.
+    again = memory_manage.promote(conn, cfg, proposed(conn, "Different words."))
+    assert (again.lesson.key, again.superseded) == ("api-tests", None)
+    assert [m.id for m in memory.history(conn, again.lesson.id)] == [again.lesson.id]
+
+
 @pytest.mark.parametrize(
     ("args", "refusal"),
     [
@@ -507,6 +615,8 @@ def test_edit_moves_a_lesson_between_repositories_and_a_promote_over_it_is_its_n
         (["--repo", "nowhere"], "(unknown_repo): 'nowhere' is not a repository in this workspace (repo)"),
         (["--text", "x" * 601], "(bad_text): the lesson's its text is 601 characters, over 600"),
         (["--text", "bad\u202etext"], "(bad_text): the lesson's its text holds U+202E"),
+        (["--key", "api-tests"], "(unchanged): lesson {id} already says that, to every run, as `api-tests`"),
+        (["--key", "API tests"], "(bad_key): the lesson's its key is not lowercase words joined by hyphens"),
     ],
 )
 def test_edit_refuses_what_changes_nothing_or_breaks_the_bounds(
@@ -532,7 +642,7 @@ def test_edit_takes_only_a_lesson_in_force_and_needs_proposals_on(
     with_memory(canopy_env, proposals="record")
     first = promoted(conn, canopy_env)
     assert main(["memory", "edit", str(first.id)]) == 2
-    assert "name what changes: --text, --repo, or --every-repo" in capsys.readouterr().err
+    assert "name what changes: --text, --key, --repo, or --every-repo" in capsys.readouterr().err
     assert main(["memory", "edit", str(first.id), "--repo", "repo", "--every-repo"]) == 2
     capsys.readouterr()
     assert main(["memory", "edit", str(first.id), "--text", "Newer words."]) == 0

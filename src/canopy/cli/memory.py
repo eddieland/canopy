@@ -119,7 +119,7 @@ def cmd_search(click_ctx: click.Context, query: tuple[str, ...], key: str | None
     else:
         click.echo(f"\n{len(found)} memor{'y' if len(found) == 1 else 'ies'} found, best match first.")
     for entry in found:
-        click.echo(f"\n{_found(entry)}")
+        click.echo(f"\n{_found(ctx, entry)}")
     return 0
 
 
@@ -346,17 +346,30 @@ def cmd_unpin(click_ctx: click.Context, lesson_id: int) -> int:
 @memory_group.command("edit")
 @click.argument("lesson_id", metavar="ID", type=int)
 @click.option("--text", help="The lesson's new words.")
+@click.option(
+    "--key",
+    help="The lesson's new key, lowercase words joined by hyphens. The old key stays in its history.",
+)
 @click.option("--repo", type=REPO, help="Serve the lesson only to runs in this repository.")
 @click.option("--every-repo", is_flag=True, help="Serve the lesson to runs in every repository.")
 @click.pass_context
-def cmd_edit(click_ctx: click.Context, lesson_id: int, text: str | None, repo: str | None, *, every_repo: bool) -> int:
-    """Write a lesson anew, in new words or for other repositories. The old version stays, as the lesson's history.
+def cmd_edit(
+    click_ctx: click.Context,
+    lesson_id: int,
+    text: str | None,
+    key: str | None,
+    repo: str | None,
+    *,
+    every_repo: bool,
+) -> int:
+    """Write a lesson anew, in new words, under a new key, or for other repositories. The old version stays as history.
 
     The new version has an id of its own, and comes up for review later, with any run's report that the lesson is
-    wrong cleared. `canopy memory history ID` lists every version.
+    wrong cleared. A new key alone keeps the review date, the pin, any report, and the reads and citations: the words
+    are the same. `canopy memory history ID` lists every version, under each key it had.
     """
-    if text is None and repo is None and not every_repo:
-        raise click.UsageError("name what changes: --text, --repo, or --every-repo")
+    if text is None and key is None and repo is None and not every_repo:
+        raise click.UsageError("name what changes: --text, --key, --repo, or --every-repo")
     if repo is not None and every_repo:
         raise click.UsageError("--repo and --every-repo cannot both be given")
     try:
@@ -368,19 +381,27 @@ def cmd_edit(click_ctx: click.Context, lesson_id: int, text: str | None, repo: s
             ctx.config,
             lesson_id,
             text=text,
+            key=key,
             repo=repo,
             every_repo=every_repo,
             repos=repos,
         )
     except conversation.Refused as r:
         raise CliError(f"edit refused ({r.guard}): {r.reason}") from None
-    lesson = edited.lesson
+    lesson, old = edited.lesson, edited.replaced
     logs.for_tick(None).info("lesson edited", extra={"lesson": lesson_id, "into": lesson.id})
     where = f" for {lesson.repo}" if lesson.repo else ""
+    renamed = lesson.key != old.key
+    how = "edited" if not renamed else "renamed" if edited.renamed_alone else "renamed and edited"
+    was = f" (`{old.key}`)" if renamed else ""
     click.echo(
-        f"Lesson {lesson_id} is edited into lesson {lesson.id} (`{lesson.key}`){where}, version {edited.version}, "
+        f"Lesson {lesson_id}{was} is {how} into lesson {lesson.id} (`{lesson.key}`){where}, version {edited.version}, "
         f"{_due(lesson)}. Lesson {lesson_id} stays in its history.",
     )
+    if edited.renamed_alone:
+        click.echo(
+            "Its words are the same, so it keeps its review date, any report that it is wrong, reads, and citations.",
+        )
     if edited.served:
         click.echo("Every run dispatched from now on reads the new version.")
     else:
@@ -400,11 +421,14 @@ def cmd_history(click_ctx: click.Context, memory_id: int) -> int:
     newest = versions[0]
     count = f"{len(versions)} version{'s' if len(versions) != 1 else ''}"
     of = f" of {newest.ticket_key}" if newest.ticket_key is not None else ""
-    click.echo(f"{_kind(newest.scope)} `{newest.key}`{of}: {count}, newest first.")
+    # Every key a lesson's versions had, newest first, so a key it was renamed from leads here.
+    earlier = list(dict.fromkeys(m.key for m in versions if m.key != newest.key))
+    formerly = f" (formerly {', '.join(f'`{k}`' for k in earlier)})" if earlier else ""
+    click.echo(f"{_kind(newest.scope)} `{newest.key}`{formerly}{of}: {count}, newest first.")
     seen = memory.reads(ctx.conn, [m.id for m in versions])
     for number, m in zip(range(len(versions), 0, -1), versions, strict=True):
         status = m.status if m.why is None else f"{m.status}, {m.why}"
-        where = f" for {m.repo}" if m.repo else ""
+        where = f"{f' `{m.key}`' if earlier else ''}{f' for {m.repo}' if m.repo else ''}"
         made = _made(ctx, m) if m.scope is MemoryScope.LESSON else f"by run {m.run_id} at {m.created_at}"
         text = quoted(m.body if m.body is not None else "(text deleted)", _INDENT)
         mark = "  <-" if m.id == memory_id and len(versions) > 1 else ""
@@ -424,7 +448,11 @@ def _provenance(ctx: Context, p: records.Memory) -> str:
 
 def _made(ctx: Context, lesson: records.Memory) -> str:
     """How a lesson version came to be: edited from the one before it, or promoted, and what it was promoted from."""
-    if memory.edited(lesson):
+    before = memory.get(ctx.conn, lesson.supersedes) if memory.edited(lesson) and lesson.supersedes else None
+    if before is not None and before.key != lesson.key:
+        also = "" if memory.renamed_from(ctx.conn, lesson) is not None else " and edited"
+        made = f"renamed from `{before.key}`{also} (lesson {before.id}) at {lesson.approved_at}"
+    elif memory.edited(lesson):
         made = f"edited from lesson {lesson.promoted_from} at {lesson.approved_at}"
     else:
         made = f"promoted at {lesson.approved_at}"
@@ -471,12 +499,16 @@ def _search_run(ctx: Context, run_env: str, text: str, limit: int) -> int:
     if not found:
         click.echo("\nNothing found.")
     for entry in found:
-        click.echo(f"\n{_found(entry)}")
+        click.echo(f"\n{_found(ctx, entry)}")
     return 0
 
 
-def _found(entry: records.Memory) -> str:
-    """One memory a search found, plain, with every character that hides text named."""
+def _found(ctx: Context, entry: records.Memory) -> str:
+    """One memory a search found, plain, with every character that hides text named.
+
+    A lesson's past version names the lesson in force it leads to, so a search for a key it was renamed from finds
+    where the lesson is now.
+    """
     parts = [f"{_kind(entry.scope)} {entry.id}", f"`{entry.key}`"]
     if entry.ticket_key is not None:
         parts.append(f"of {entry.ticket_key}")
@@ -484,6 +516,10 @@ def _found(entry: records.Memory) -> str:
         parts.append(f"for `{entry.repo}`")
     if entry.status is not MemoryStatus.ACTIVE:
         parts.append(entry.status if entry.why is None else f"{entry.status} ({entry.why})")
+    if entry.scope is MemoryScope.LESSON and entry.status is MemoryStatus.SUPERSEDED:
+        newest = memory.history(ctx.conn, entry.id)[0]
+        if newest.status is MemoryStatus.ACTIVE:
+            parts.append(f"now lesson {newest.id} `{newest.key}`")
     if entry.run_id is not None:
         parts.append(f"from run {entry.run_id}")
     if entry.head is not None:
