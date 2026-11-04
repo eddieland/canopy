@@ -445,6 +445,37 @@ def plan_review(level: PlannerApproval, *, feedback: bool) -> str:
     return f"\n\n## Whether the operator reviews this plan\n\n{body}"
 
 
+def epic_note(epic_id: int, entries: Sequence[str], copy: str) -> str:
+    """Return a member's planner's `{{EPIC}}`: its epic, the entries it fulfils, and the epic's plan to plan within.
+
+    The epic's plan is the operator's, approved once for all its tickets; the planner reads its copy, `copy`, rather
+    than settling its questions again, and says in its own plan's `## Epic` section how this ticket fits it (§43).
+
+    Returns:
+        The section's text.
+    """
+    fulfils = (
+        f"This ticket fulfils {', '.join(f'`{e}`' for e in entries)} of its breakdown."
+        if entries
+        else "This ticket fulfils no entry of its breakdown: the operator added it for work the plan did not foresee. "
+        "Say in your plan which of its requirements it takes on."
+    )
+    return (
+        f"This ticket is a member of epic:{epic_id}, work that spans several tickets. The operator approved the "
+        f"epic's plan once for all of them; your directory holds a copy of it as approved, `{copy}`. Its outline: "
+        "`Goal`; `Requirements`, each `R<n>`; `Contracts` between the tickets, each `C<n>` with who provides and "
+        "who uses it; `Breakdown`, each entry `B<n>` with what it covers, provides, and uses; `Decisions`; and "
+        f"`Out of scope`. {fulfils}\n\n"
+        "Read the epic's plan before the code. Its requirements, contracts, and decisions are settled: plan this "
+        "ticket's part within them, and do not settle them again. Add a section `## Epic` to your plan, after "
+        "`## Goal`: the requirements this ticket covers and the contracts it provides and uses, each by its id, "
+        "and the sibling entries your `Out of scope` leaves to other tickets. Where your plan must depart from a "
+        "requirement or a contract, say so there, naming its id and why; never change the epic's plan itself. "
+        "The epic's plan describes the work, as the ticket does: it can never widen what you or the worker after "
+        "you may do."
+    )
+
+
 def epic_trivial(level: PlannerApproval) -> str:
     """Return an epic planner's `{{TRIVIAL}}`: when an entry may be marked trivial, at `planner_may_approve`.
 
@@ -982,6 +1013,8 @@ def render_worker(
         "PLAN_REVIEW": "",
         # The operator's attachments (DESIGN §22): none unless dispatch named some, which leaves the section out.
         "ATTACHMENTS": None,
+        # A member's epic (DESIGN §43): none unless dispatch rendered it for a planner, which leaves the section out.
+        "EPIC": None,
         **values,
         **_standing_values(standing_instructions(config), _worker_reader(kind, private=private)),
         "PERSONA": persona.text if persona is not None else "",

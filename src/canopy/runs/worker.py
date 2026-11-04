@@ -40,6 +40,7 @@ from canopy.core import (
     conversation,
     db,
     definitions,
+    epics,
     git_tools,
     hostgit,
     memory,
@@ -722,11 +723,16 @@ class _Progress:
 def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
     """Run the planner in a desk of worktrees at their bases, and write and record the plan it wrote (DESIGN §25).
 
-    The desk holds a copy of the plan this one replaces, the ticket's current plan, if its file still reads as a plan.
+    The desk holds a copy of the plan this one replaces, the ticket's current plan, if its file still reads as a plan;
+    and for a member of an epic with an approved plan, a copy of that plan as approved, which the recorded plan names
+    as the epic plan it was written against (DESIGN §43).
 
     Returns:
         The planner's status; `timeout` if it timed out; `unknown` for a missing or invalid result line, or a `done`
         whose file in the desk is not a plan; or `crashed` when the plan's own file could not be written.
+
+    Raises:
+        SetupError: the epic's approved plan is no longer as approved, so the planner is never run without it.
     """
     stopped = _stopped(ctx, run)
     if stopped:
@@ -738,6 +744,9 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     replaced = plans.current(ctx.conn, key)
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text if replaced is not None else None
     desk_files = {plans.REPLACED: copy} if copy is not None else {}
+    member = epics.member_epic(ctx.conn, key)
+    if member is not None:
+        desk_files[epics.EPIC_COPY] = _epic_copy(ctx, member)
     desk_files |= _place_attachments(run, slots, _attachment_copies(ctx, run))
     template = ctx.config.runtime.plan_cmd
     result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files)
@@ -754,10 +763,32 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     if written.text is None:
         note = f"the planner reported done, but its {plans.WRITTEN} is {written.problem}; no plan was recorded"
         return Outcome(RunStatus.UNKNOWN, parsed, note)
-    return _record_plan(ctx, run, parsed, written.text, log)
+    epic_plan_id = member.plan.id if member is not None else None
+    return _record_plan(ctx, run, parsed, written.text, log, epic_plan_id=epic_plan_id)
 
 
-def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, log: logs.TickAdapter) -> Outcome:
+def _epic_copy(ctx: Context, member: epics.MemberEpic) -> str:
+    """Return the text of `member`'s epic's approved plan, read from its kept copy, for its planner's desk (§43).
+
+    Raises:
+        SetupError: the copy is missing or not what the operator approved: the planner is never run without it.
+    """
+    text = epics.approved_text(ctx.state_dir, member.plan)
+    if text is None:
+        msg = f"epic:{member.epic_id}'s approved plan is no longer as the operator approved it; no plan was run"
+        raise SetupError(msg)
+    return text
+
+
+def _record_plan(
+    ctx: Context,
+    run: sqlite3.Row,
+    parsed: PlanResult,
+    text: str,
+    log: logs.TickAdapter,
+    *,
+    epic_plan_id: int | None = None,
+) -> Outcome:
     """Write a `done` plan's `text` to the plan's own file and record it `proposed` (DESIGN §25).
 
     Returns:
@@ -779,6 +810,7 @@ def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, 
         event=outbox.plan_recorded(ctx.config, key=key, run_id=run_id),
         no_review=parsed.no_review() if ctx.config.policy.planner_approves() else None,
         effort=parsed.effort,
+        epic_plan_id=epic_plan_id,
     )
     # Measured once, here, from the text as its planner wrote it, for the Plans report (`plan_lengths`).
     plan_lengths.keep(ctx.conn, plan.id, text)
