@@ -95,7 +95,11 @@ Controls:
   not in code from its observed labels and state, a non-candidate by key and why with none of its text, and a
   candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a trusted
   reviewer, a worker). By prompt, the overseer decides from them alone, and a subject no source can read gets its
-  `wait`. The text stays data, cut and marked. The `dispatch` tool checks the overseer's claims against them in code
+  `wait`. The text stays data, cut and marked. A review item's text is shown once, and not while the ticket can only
+  wait (DESIGN §30); one tool of canopy's, `canopy_review-items`, reads the text of a unit's observed review items
+  again, of a candidate the block listed to the overseer this tick alone, cut and marked as the block shows them, and
+  records nothing; it refuses a ticket the harness decided, one the block lists no text of, and a key the journal
+  lacks. The `dispatch` tool checks the overseer's claims against them in code
   (DESIGN §7), before its other guards: the label must be one observed on the ticket, a `resume` for `reply` must cover
   a new comment by an authorized replier that is not a worker's or a new operator message, a `resume` for `review` must
   cover a trusted reviewer's item, or anyone else's only with an operator message after it (`unauthorized`), and each

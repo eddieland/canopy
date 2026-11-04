@@ -202,19 +202,20 @@ def review(
     bot: bool = False,
     thread: str = "PRRT_1",
     resolved: bool | None = None,
+    pr: str = PR,
 ) -> int:
-    """Record a review, or with `item` a review comment, of PR by `author`, a comment's on `thread`, `resolved` or not.
+    """Record a review, or with `item` a comment, of `pr` by `author`, a comment's on `thread`, `resolved` or not.
 
     Returns:
         Its journal number, what a `review` cursor names.
     """
     on = thread if item == "comment" else None
     kind = NumberedItem.REVIEW if item == "review" else NumberedItem.REVIEW_COMMENT
-    number = item_numbers.take(conn, kind, PR, ident, at=FRESH)
+    number = item_numbers.take(conn, kind, pr, ident, at=FRESH)
     conn.execute(
         "INSERT INTO observed_reviews (pr_url, item, id, author, bot, state, created_at, body, url, thread_id, "
         "resolved, observed_at, number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (PR, item, ident, author, bot, state, at, body, f"{PR}#review-{ident}", on, resolved, FRESH, number),
+        (pr, item, ident, author, bot, state, at, body, f"{pr}#review-{ident}", on, resolved, FRESH, number),
     )
     return number
 

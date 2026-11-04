@@ -34,6 +34,8 @@ from tests.canopy.helpers import (
     only_tick,
     overseer_titles,
     present,
+    reads_items,
+    review_comment,
     ticket_sets,
     titled_overseer,
     tools_of,
@@ -43,6 +45,7 @@ from tests.canopy.helpers import (
     with_events,
     worker_ran,
 )
+from tests.canopy.observation_helpers import PR
 from tests.canopy.scenario_helpers import Scenario, sets_phase
 from tests.conftest import CanopyEnv, executable
 
@@ -773,6 +776,51 @@ def test_the_state_block_lists_the_overseers_open_attention_items(scenario: Scen
         {"ticket": "PROJ-1", "repo": "repo", "reason": "flaky_rerun", "since": minute(since[0])},
         {"pr": pr, "reason": "flaky_rerun", "since": minute(since[1])},
     ]
+
+
+def test_a_live_tick_marks_the_review_items_whose_text_it_showed_of_each_ticket_the_overseer_decided(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    """An item's text is in the block once (DESIGN §30): a dry run, an undecided ticket, and a failed tick mark none."""
+    scenario.configures(trust={"trusted_reviewers": ["octocat"]})
+    scenario.seen(KEY)
+    db.set_unit(scenario.conn, KEY, str(scenario.env.root), "repo", pr_url=PR)
+    scenario.conn.commit()
+    github_state.write_text(json.dumps({"prs": {PR: {"reviews": [review_comment(502, "octocat", "Why a map?")]}}}))
+
+    def listed() -> dict[str, Any]:
+        [ticket] = scenario.state()["observations"]["tickets"]
+        [item] = ticket["units"][0]["reviews"]
+        found: dict[str, Any] = item
+        return found
+
+    def marked() -> dict[int, int]:
+        rows = records.select(records.ItemNumber).where("shown_tick_id IS NOT NULL").all(scenario.conn)
+        return {r.number: present(r.shown_tick_id) for r in rows}
+
+    scenario.tick(*waits(KEY), dry_run=True)
+    assert (listed().get("body"), marked()) == ("Why a map?", {})
+    # The overseer read the item and decided nothing: its duty is undone, and the item is shown again.
+    number = listed()["number"]
+    undone = scenario.tick(reads_items(KEY, number), code=1)
+    assert "no decision for PROJ-1" in present(undone.tick.summary)
+    assert (listed().get("body"), marked()) == ("Why a map?", {})
+    # A refused read is no decision either.
+    refused = scenario.tick(reads_items(KEY, number + 50), code=1)
+    assert "no decision for PROJ-1" in present(refused.tick.summary)
+    assert marked() == {}
+    # The overseer decided the ticket, but its run then failed: what it kept of the tick is not held, so nor is this.
+    scenario.tick(*waits(KEY), result="I got distracted", code=1)
+    assert (listed().get("body"), marked()) == ("Why a map?", {})
+    ticked = scenario.tick(*waits(KEY))
+    shown = listed()
+    assert (shown["body"], marked()) == ("Why a map?", {number: ticked.tick.id})
+    later = scenario.tick(*waits(KEY))
+    assert listed() == {k: v for k, v in shown.items() if k != "body"} | {"seen": True}
+    assert later.tick.status == TickStatus.OK
+    # The first tick keeps the mark: what matters is that the text was shown once.
+    assert marked() == {number: ticked.tick.id}
 
 
 def test_a_tick_names_a_git_too_old_for_the_commit_hooks_until_one_new_enough_is_there(scenario: Scenario) -> None:

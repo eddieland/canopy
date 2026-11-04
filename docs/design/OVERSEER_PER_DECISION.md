@@ -23,11 +23,11 @@ ticket out of the context of every decision about another (TRUST_MODEL T1).
 The harness runs the overseer once for each subject left to it (§37): each ticket, each PR whose review is still its to
 start (§21), and the due chores with a `when`, together, since none needs a ticket. A run's message is the state block
 cut to its subject: the part every run of the tick shares, then that subject's observations, items, and messages, and
-nothing of any other, its key included. A decision, dispatch, attention item, or change it records about anything but
-its subject is refused `decided`, as §37 refuses one about a ticket not listed to the overseer, through a tool and its
-command alike. Rejected: one session given the subjects one message at a time, whose context keeps every earlier
-ticket's text; and two standing overseers split by job, which buys only the cheaper model's price, since finding new
-work was a fraction of a percent of overseer spend (MEASUREMENTS 2026-10-15).
+nothing of any other, its key included. A decision, dispatch, attention item, or change it records, or a read it
+asks, about anything but its subject is refused `decided`, as §37 refuses one about a ticket not listed to the
+overseer, through a tool and its command alike. Rejected: one session given the subjects one message at a time, whose
+context keeps every earlier ticket's text; and two standing overseers split by job, which buys only the cheaper
+model's price, since finding new work was a fraction of a percent of overseer spend (MEASUREMENTS 2026-10-15).
 
 - **The prefix stays cacheable.** The definition (§13) and the shared part come first, rendered once a tick and the
   same byte for byte in each of its runs; the subject, and the capacity it may use, come after. A tick's runs go one

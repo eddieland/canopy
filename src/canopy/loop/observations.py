@@ -12,8 +12,12 @@ counted, each person's latest verdict, and the new reviews and review comments, 
 overseer may overrule.
 
 Text is the observation's, as the connector's validation cut and marked it (§30). A subject shows at most
-`MAX_NEW_ITEMS` new items, oldest first, and counts the rest, which stay new for a later tick. Nothing here authorizes:
-it is what a connector printed, and the overseer's prompt says what it may use it for.
+`MAX_NEW_ITEMS` new items, oldest first, and counts the rest, which stay new for a later tick. A review item's text is
+shown once: on the first live tick, closed `ok`, whose overseer decided the ticket with it listed, which marks it shown
+(`core.item_numbers`), and not while the ticket or the unit can only wait, on a person, a run, or a read, since then the
+hold decides and not the feedback (`Holds`); a later tick lists the item by its number and marks, and the overseer reads
+its text again through a tool (§27). Nothing here authorizes: it is what a connector printed, and the overseer's prompt
+says what it may use it for.
 """
 
 from __future__ import annotations
@@ -25,9 +29,10 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Literal, NotRequired, TypedDict, assert_never
 
 from canopy.core import conversation, db, item_numbers, observe, records, sql
-from canopy.core.vocab import CheckStatus, ReviewItem, ReviewState, SourceKind, TicketState
+from canopy.core.items import ACTION_PREFIX
+from canopy.core.vocab import CheckStatus, Phase, ReviewItem, ReviewState, SourceKind, TicketState
 from canopy.core.workspace import CheckRole
-from canopy.loop import phases
+from canopy.loop import attention, harness_items, phases
 from canopy.reviews import review_requests
 
 if TYPE_CHECKING:
@@ -41,6 +46,16 @@ if TYPE_CHECKING:
 #: operator to set from the measurement's ticks (ROADMAP M37, Open): ten comments at their bound are about
 #: 5,000 tokens, and a busier subject waits a tick rather than swelling every tick's block.
 MAX_NEW_ITEMS = 10
+#: The harness's attention reasons that hold a ticket, or with a repository one unit, for a person (DESIGN §30): while
+#: one is recorded this tick, no decision rests on the unit's review items, so their text is left out. The rows of §7
+#: that allow a `wait` alone hold the same way: `needs_human` and `running` the ticket, `ci_running` its unit, and so
+#: does a ticket whose own observation is stale, which waits for a read (§37).
+#: `untrusted_review` holds only the untrusted items of its unit, since a trusted reviewer's feedback on the same unit
+#: still goes to a worker (D089); one that comes after the first untrusted item is shown, and so spent, though no
+#: `resume` covers it until the operator answers, which is when the overseer judges it either way.
+HOLD_REASONS: frozenset[str] = frozenset(
+    {attention.AWAITING_REPLY, harness_items.ATTEMPT_LIMIT, harness_items.PLAN_REVIEW},
+)
 #: How fresh a subject's observation is (DESIGN §35).
 type Freshness = Literal["fresh", "stale", "unobserved"]
 
@@ -222,7 +237,9 @@ class ReviewItemState(TypedDict):
     """A review or review comment past the unit's `review` cursor. `state` only on a review.
 
     `number` is its journal number, what the `review` cursor names (DESIGN §35). `trusted`: its author is in
-    `trust.trusted_reviewers`. `worker`: it carries the workers' marks (D069). Both are decided in code.
+    `trust.trusted_reviewers`. `worker`: it carries the workers' marks (D069). Both are decided in code. Exactly one of
+    `body`, its text, shown once; `seen`, an overseer that decided the ticket was shown its text already; and `held`,
+    the ticket or the unit can only wait this tick, on a person or a run, so the text is left out (DESIGN §30).
     """
 
     number: int | None
@@ -233,8 +250,9 @@ class ReviewItemState(TypedDict):
     worker: bool
     state: NotRequired[str | None]
     at: str | None
-    url: str | None
-    body: str
+    body: NotRequired[str]
+    seen: NotRequired[bool]
+    held: NotRequired[bool]
 
 
 def section(
@@ -253,7 +271,8 @@ def section(
     Returns:
         The block's `observations`.
     """
-    reader = Reader.read(ctx, phases.recorded(ctx.conn, tick_id), now, tickets)
+    derived = phases.recorded(ctx.conn, tick_id)
+    reader = Reader.read(ctx, derived, now, tickets, holds=Holds.read(ctx.conn, tick_id, derived))
     found: ObservationsState = {
         "max_age_minutes": ctx.config.connect.max_age_minutes,
         "max_new_items": MAX_NEW_ITEMS,
@@ -290,6 +309,23 @@ def rendered(found: ObservationsState, titles: Mapping[str, str | None] | None =
     return shown
 
 
+def shown_bodies(found: ObservationsState) -> list[tuple[str, int]]:
+    """The review items whose text `found` shows, each its ticket's key and its journal number (DESIGN §30).
+
+    The tick marks those of each ticket the overseer decided as shown (`item_numbers.mark_shown`).
+
+    Returns:
+        Each, in the block's order; an item with no number is never marked.
+    """
+    return [
+        (t["key"], r["number"])
+        for t in found["tickets"]
+        for u in t.get("units", [])
+        for r in u.get("reviews", [])
+        if "body" in r and r["number"] is not None
+    ]
+
+
 def fresh_query(ctx: Context, now: datetime) -> list[str] | None:
     """The tracker query's result when the block shows it `fresh` at `now`: a source read it whole within its age.
 
@@ -324,6 +360,71 @@ def new_reviews(reviews: Iterable[records.ObservedReview], cursor: int | None) -
 
 
 @dataclass(frozen=True)
+class Holds:
+    """What can only wait this tick, on a person or a run, so no decision rests on its review items' text (§30)."""
+
+    #: The tickets held whole: `needs_human` with no reply, or `running`, derived on the ticket, the ticket's own
+    #: observation stale, or a `HOLD_REASONS` item about it.
+    tickets: AbstractSet[str]
+    #: The units held whole, each `(key, repo)`: `ci_running` derived on the unit, or a `HOLD_REASONS` item about it.
+    units: AbstractSet[tuple[str, str]]
+    #: The units whose untrusted items are held, each `(key, repo)`: `untrusted_review` the operator has not answered.
+    untrusted: AbstractSet[tuple[str, str]]
+
+    @classmethod
+    def read(cls, conn: sqlite3.Connection, tick_id: int, derived: Iterable[phases.Derived]) -> Holds:
+        """Read what tick `tick_id` holds: from `derived`, its derivation, and the items it recorded so far.
+
+        The harness records its items and the derivation before the block is rendered (DESIGN §6 step 3), so what it
+        recorded this tick is the hold as the overseer is shown it.
+
+        Returns:
+            The holds.
+        """
+        tickets: set[str] = set()
+        units: set[tuple[str, str]] = set()
+        untrusted: set[tuple[str, str]] = set()
+        for d in derived:
+            rows = set(d.phases)
+            # A reply ends `needs_human` on the tick that acts on it, though the label is still observed (§7).
+            waits = Phase.RUNNING in rows or (Phase.NEEDS_HUMAN in rows and Phase.HUMAN_REPLIED not in rows)
+            if d.repo is None and (waits or d.stale is not None):
+                tickets.add(d.ticket_key)
+            elif d.repo is not None and Phase.CI_RUNNING in rows:
+                units.add((d.ticket_key, d.repo))
+        reasons = [*HOLD_REASONS, harness_items.UNTRUSTED_REVIEW]
+        query = (
+            records.select(records.Decision)
+            .where("tick_id = ? AND ticket_key IS NOT NULL", tick_id)
+            .where_in("action", [f"{ACTION_PREFIX}{reason}" for reason in reasons])
+        )
+        for d in query.all(conn):
+            key = str(d.ticket_key)
+            if d.action == f"{ACTION_PREFIX}{harness_items.UNTRUSTED_REVIEW}":
+                if d.repo is not None:
+                    untrusted.add((key, d.repo))
+            elif d.repo is None:
+                tickets.add(key)
+            else:
+                units.add((key, d.repo))
+        return cls(tickets=frozenset(tickets), units=frozenset(units), untrusted=frozenset(untrusted))
+
+    def holds(self, key: str, repo: str, *, trusted: bool) -> bool:
+        """Whether a review item of ticket `key`'s unit in `repo`, by a `trusted` reviewer or not, is held.
+
+        Returns:
+            True when the ticket or the unit is held, or the item is untrusted and the unit's untrusted items are.
+        """
+        if key in self.tickets or (key, repo) in self.units:
+            return True
+        return not trusted and (key, repo) in self.untrusted
+
+
+#: No hold: what a read outside a tick takes, such as the loop's poll and a dispatch's claims, which read no text.
+NO_HOLDS = Holds(tickets=frozenset(), units=frozenset(), untrusted=frozenset())
+
+
+@dataclass(frozen=True)
 class Reader:
     """What one tick's observations read: the journal and the connectors' rows, once.
 
@@ -347,6 +448,10 @@ class Reader:
     #: The tick's derivation, by ticket and unit (None for the ticket's own).
     derived: Mapping[tuple[str, str | None], phases.Derived]
     runs: Mapping[SourceKind, records.ConnectorRun]
+    #: The review items of the listed tickets' PRs whose text an overseer was shown, by journal number (DESIGN §30).
+    shown: AbstractSet[int]
+    #: What can only wait this tick, whose review items' text is left out.
+    holds: Holds
 
     @classmethod
     def read(
@@ -355,10 +460,13 @@ class Reader:
         derived: Iterable[phases.Derived],
         now: datetime,
         tickets: Iterable[records.Ticket],
+        *,
+        holds: Holds = NO_HOLDS,
     ) -> Reader:
         """Read the observations as they stand at `now`, with `tickets` the ones the block lists.
 
-        `derived` is the tick's derivation, which a tick has recorded and the loop's poll has not (DESIGN §39).
+        `derived` is the tick's derivation, which a tick has recorded and the loop's poll has not (DESIGN §39); `holds`
+        is what can only wait this tick, which only the state block reads (`section`).
 
         Returns:
             The reader.
@@ -393,6 +501,9 @@ class Reader:
         branches: dict[str, list[records.ObservedBranch]] = {}
         for b in records.select(records.ObservedBranch).all(conn):
             branches.setdefault(b.repository, []).append(b)
+        units_of = db.all_units(conn)
+        # Every PR of a listed ticket's units: bounded by the queue, where the journal's review items are not.
+        urls = sorted({u.pr_url for key in keys for u in units_of.get(key, []) if u.pr_url is not None})
         return cls(
             ctx=ctx,
             cutoff=cutoff,
@@ -405,9 +516,11 @@ class Reader:
             reviews=reviews,
             branches=branches,
             fresh_repos=phases.fresh_repos(conn, branches, cutoff),
-            units_of=db.all_units(conn),
+            units_of=units_of,
             derived={(d.ticket_key, d.repo): d for d in derived},
             runs=runs,
+            shown=item_numbers.shown(conn, urls),
+            holds=holds,
         )
 
     # The queries
@@ -599,25 +712,36 @@ class Reader:
             "pr": _pr(url, pr),
             "checks": _checks([c for c in self.checks.get(url, []) if c.head_sha == pr.head_sha], roles),
             "verdicts": _verdicts(self.reviews.get(url, []), trusted),
-            "reviews": [self._review(r, trusted) for r in new[:MAX_NEW_ITEMS]],
+            "reviews": [self._review(r, trusted, key=unit.ticket_key, repo=repo) for r in new[:MAX_NEW_ITEMS]],
         }
         if len(new) > MAX_NEW_ITEMS:
             observed["more_reviews"] = len(new) - MAX_NEW_ITEMS
         return observed
 
-    def _review(self, r: records.ObservedReview, trusted: AbstractSet[str]) -> ReviewItemState:
+    def _review(self, r: records.ObservedReview, trusted: AbstractSet[str], *, key: str, repo: str) -> ReviewItemState:
+        """A review item of ticket `key`'s unit in `repo`, its text shown once and not while held (DESIGN §30).
+
+        Returns:
+            The item's entry.
+        """
         trust = self.ctx.config.trust
+        by_trusted = (r.author or "").lower() in trusted
         found: ReviewItemState = {
             "number": r.number,
             "item": r.item,
             "id": r.id,
             "author": r.author,
-            "trusted": (r.author or "").lower() in trusted,
+            "trusted": by_trusted,
             "worker": conversation.worker_marked(r.body, trust.comment_prefix, trust.comment_suffix),
             "at": r.created_at,
-            "url": r.url,
-            "body": r.body,
         }
+        # An item with no number was numbered by no source (DESIGN §35), so no tick can mark it: its text stays.
+        if r.number is not None and r.number in self.shown:
+            found["seen"] = True
+        elif self.holds.holds(key, repo, trusted=by_trusted):
+            found["held"] = True
+        else:
+            found["body"] = r.body
         if r.item is ReviewItem.REVIEW:
             found["state"] = r.state
         return found

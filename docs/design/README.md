@@ -252,8 +252,9 @@ Roles:
   judge (§6), and workers on demand.
 - **Overseer**: an agent run with `overseer_cmd`. Reads the world from the state block's observations alone (§30),
   decides one next action per ticket, and acts only through canopy's tools (§27): `dispatch`, `decide`, `attention`,
-  `ticket-set`, `chore-run` and `chore-wait` (§19), and `review-run`, `review-wait`, `review-end`, and `review-revise`
-  (§21, §34). Read-only everywhere else. What it owes every tick is checked when it ends (§6 step 5).
+  `ticket-set`, `chore-run` and `chore-wait` (§19), `review-run`, `review-wait`, `review-end`, and `review-revise`
+  (§21, §34), and one read, `review-items` (§30). Read-only everywhere else. What it owes every tick is checked when
+  it ends (§6 step 5).
 - **Worker**: an agent run with `worker_cmd` in a leased worktree with a task prompt. Writes code, pushes a branch,
   opens or updates a PR, comments on the ticket, prints a result line, exits. Never merges, approves, or moves a ticket
   to Done. A private ticket's worker runs with `private_worker_cmd` and writes nothing to the ticket (§22).
