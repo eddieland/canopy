@@ -3,7 +3,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from './client'
-import { grantLimit, refreshLimits, refreshReviewRequests } from './mutations'
+import { grantLimit, refreshLimits, refreshReloaded, refreshReviewRequests } from './mutations'
 import { keys } from './queries'
 import type { Granted, Limit } from './types'
 
@@ -105,5 +105,20 @@ describe('refreshReviewRequests', () => {
         expect(stale(client, keys.pullRequests)).toBe(true)
         expect(stale(client, keys.pullRequest(PR))).toBe(true)
         expect(stale(client, keys.reviewRequests)).toBe(true)
+    })
+})
+
+describe('refreshReloaded', () => {
+    it("reads the config and the runtime's model list, whose hidden follows hide_models, again", async () => {
+        const client = new QueryClient()
+        client.setQueryData(keys.config, {})
+        client.setQueryData(keys.configModels, {})
+        client.setQueryData(keys.models, { models: [], variants: {}, hidden: [], error: null })
+        client.setQueryData(keys.skills, {})
+        await refreshReloaded(client)
+        expect(stale(client, keys.config)).toBe(true)
+        expect(stale(client, keys.configModels)).toBe(true)
+        expect(stale(client, keys.models)).toBe(true)
+        expect(stale(client, keys.skills)).toBe(false)
     })
 })
