@@ -370,17 +370,14 @@ export function startOf(entries: TranscriptEntry[]): string | null {
  * `ticket-set` call's settings, each its ticket and what it sets (`ABC-1 approved, ABC-2 (web) merged done, ABC-3
  * cursors`); else the runtime's title; else its input's short values as `key=value`, as
  * `{"repo": "web", "pullNumber": 88}` reads `repo=web pullNumber=88`. Empty when the input has none, or was cut and
- * no longer parses. Given the run's `worktrees`, a shell call's directory is read against them (`shownDir`): none
- * for one of them, from it for one under it. Without them the directory is whole, as the line's hover shows it.
+ * no longer parses. Given the run's `worktrees`, a shell call's directory is read against them (`shellCall`).
  */
 export function summary(entry: TranscriptTool, worktrees: readonly RunWorktree[] = []): string {
-    const input = parsed(entry.input)
-    const command = input?.['command']
-    if (typeof command === 'string') {
-        const workdir = input?.['workdir']
-        const dir = typeof workdir === 'string' ? shownDir(oneLine(workdir), worktrees) : ''
-        return dir === '' ? oneLine(command) : `${dir} $ ${oneLine(command)}`
+    const shell = shellCall(entry, worktrees)
+    if (shell !== null) {
+        return shell.dir === null ? shell.command : `${shell.dir} $ ${shell.command}`
     }
+    const input = parsed(entry.input)
     const decisions = decisionsIn(input)
     if (decisions !== null) {
         return decisions
@@ -429,29 +426,56 @@ export function summaryTitle(entry: TranscriptTool): string {
     return entry.title === null || entry.title === '' ? whole : `${whole}\n${entry.title}`
 }
 
+/** A shell call as its line shows it: the directory it ran in, then its command. */
+export interface ShellCall {
+    /** The directory as the line names it (`shownDir`), whole when it is outside the run's worktrees; null when the
+     * call names none. */
+    dir: string | null
+    /** Whether the directory is outside every worktree of the run, which the line marks; false without any. */
+    outside: boolean
+    /** The command, on one line. */
+    command: string
+}
+
 /**
- * A shell call's directory as its line shows it, read against the run's `worktrees`: none when it is one, since that
- * is where the run works; from it when under one; a joint run's named by its repository, as `web` or `web/src`, the
- * form canopy's plugin gives a leading `cd web &&`. Any other directory stays whole, so a call outside the run's
- * worktrees stands out.
+ * A shell call's directory and command, or null for any other call. Its directory is read against the run's
+ * `worktrees`: one inside them reads from its repository (`shownDir`), any other whole, marked `outside` when there
+ * were worktrees to be inside. Without them, as on a tick's page, it is whole and unmarked.
  */
-export function shownDir(dir: string, worktrees: readonly RunWorktree[]): string {
+export function shellCall(entry: TranscriptTool, worktrees: readonly RunWorktree[] = []): ShellCall | null {
+    const input = parsed(entry.input)
+    const command = input?.['command']
+    if (typeof command !== 'string') {
+        return null
+    }
+    const workdir = input?.['workdir']
+    const whole = typeof workdir === 'string' ? oneLine(workdir) : ''
+    if (whole === '') {
+        return { dir: null, outside: false, command: oneLine(command) }
+    }
+    const inside = shownDir(whole, worktrees)
+    return { dir: inside ?? whole, outside: inside === null && worktrees.length > 0, command: oneLine(command) }
+}
+
+/**
+ * A directory inside one of the run's `worktrees` as a line names it, from its repository: `web` for the worktree
+ * itself, `web/src` under it, the form canopy's plugin gives a leading `cd web &&`. Null for a directory inside none.
+ */
+export function shownDir(dir: string, worktrees: readonly RunWorktree[]): string | null {
     const at = dir.replace(/\/+$/u, '')
-    const joint = worktrees.length > 1
     for (const w of worktrees) {
         const root = w.absolute.replace(/\/+$/u, '')
         if (root === '') {
             continue
         }
         if (at === root) {
-            return joint ? w.repo : ''
+            return w.repo
         }
         if (at.startsWith(`${root}/`)) {
-            const under = at.slice(root.length + 1)
-            return joint ? `${w.repo}/${under}` : under
+            return `${w.repo}/${at.slice(root.length + 1)}`
         }
     }
-    return dir
+    return null
 }
 
 /** One decision a call to canopy's `decide` tool records, as its input names it. */

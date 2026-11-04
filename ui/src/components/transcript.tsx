@@ -54,6 +54,7 @@ import {
     sentTokens,
     settingsOf,
     settingSubject,
+    shellCall,
     shownOutput,
     signed,
     startOf,
@@ -66,7 +67,7 @@ import {
     TRANSCRIPT_BUDGET,
     wroteTokens,
 } from '@/lib/transcript'
-import type { CallDecision, CallSetting, ModelCall as Call } from '@/lib/transcript'
+import type { CallDecision, CallSetting, ModelCall as Call, ShellCall } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
 // What a row marks with no search: one stable value, as a default prop must be.
@@ -584,7 +585,9 @@ function Tool({
 }) {
     const { verdict, guard, line } = outcome(entry)
     const failed = verdict !== 'done'
-    const did = summary(entry, useRunWorktrees())
+    const worktrees = useRunWorktrees()
+    const did = summary(entry, worktrees)
+    const shell = shellCall(entry, worktrees)
     const decisions = decisionsOf(entry)
     const settings = decisions === null ? settingsOf(entry) : null
     return (
@@ -607,7 +610,11 @@ function Tool({
                         {/* A shell call's title is what the agent said it was for: the command is what it did. Its
                             hover is the line whole, as the call named its directory, then that title. */}
                         <span className="truncate font-mono text-xs" title={summaryTitle(entry)}>
-                            <MarkedText text={did} words={words} />
+                            {shell === null ? (
+                                <MarkedText text={did} words={words} />
+                            ) : (
+                                <ShellLine call={shell} words={words} />
+                            )}
                         </span>
                         {line !== null && (
                             <span
@@ -911,18 +918,43 @@ function Heading({ label, tokens, detail }: { label: string; tokens: number | nu
 /** What one tool call returned, as the next model call was sent it: the call on one line, then its output or error. */
 function Returned({ tool }: { tool: TranscriptTool }) {
     const failed = outcome(tool).verdict !== 'done'
-    const did = summary(tool, useRunWorktrees())
+    const worktrees = useRunWorktrees()
+    const shell = shellCall(tool, worktrees)
     return (
         <div className="flex flex-col gap-1">
             <span className="flex min-w-0 items-baseline gap-2 font-mono text-xs">
                 <RunDot state={failed ? 'failed' : 'done'} />
                 <span className="shrink-0">{tool.tool}</span>
                 <span className="truncate text-muted-foreground" title={summaryTitle(tool)}>
-                    {did}
+                    {shell === null ? summary(tool, worktrees) : <ShellLine call={shell} />}
                 </span>
             </span>
             <Pre failed={failed}>{shownOutput(tool)}</Pre>
         </div>
+    )
+}
+
+/**
+ * A shell call's line: the directory it ran in, muted, then `$` and its command in the line's own color, so the eye
+ * finds the command and the directory reads apart from it. A directory outside the run's worktrees is in
+ * `status-blocked`, whole, so a call that wandered off stands out. Search marks hold in each part.
+ */
+function ShellLine({ call, words = NO_WORDS }: { call: ShellCall; words?: readonly string[] }) {
+    return (
+        <>
+            {call.dir !== null && (
+                <>
+                    <span
+                        className={call.outside ? 'text-status-blocked' : 'text-muted-foreground'}
+                        data-testid="shell-dir"
+                    >
+                        <MarkedText text={call.dir} words={words} />
+                    </span>
+                    <span className="text-muted-foreground"> $ </span>
+                </>
+            )}
+            <MarkedText text={call.command} words={words} />
+        </>
     )
 }
 

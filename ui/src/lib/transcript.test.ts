@@ -22,6 +22,7 @@ import {
     sentTokens,
     settingSets,
     settingsOf,
+    shellCall,
     shownDir,
     shownOutput,
     signed,
@@ -183,22 +184,43 @@ const WEB = slotOf('web', 3)
 const MOBILE = slotOf('mobile', 1)
 
 describe('shownDir', () => {
-    it("drops a run's own worktree, and shows a directory under it from there", () => {
-        expect(shownDir(WEB.absolute, [WEB])).toBe('')
-        expect(shownDir(`${WEB.absolute}/`, [WEB])).toBe('')
-        expect(shownDir(`${WEB.absolute}/src/search`, [WEB])).toBe('src/search')
-    })
-
-    it("names a joint run's worktree by its repository, as the plugin's cd hoist reads", () => {
+    it("names a run's worktree by its repository, and a directory under it from there", () => {
+        expect(shownDir(WEB.absolute, [WEB])).toBe('web')
+        expect(shownDir(`${WEB.absolute}/`, [WEB])).toBe('web')
+        expect(shownDir(`${WEB.absolute}/src/search`, [WEB])).toBe('web/src/search')
         expect(shownDir(MOBILE.absolute, [MOBILE, WEB])).toBe('mobile')
         expect(shownDir(`${WEB.absolute}/src`, [MOBILE, WEB])).toBe('web/src')
     })
 
-    it('keeps any other directory whole, a sibling whose name starts the same included', () => {
-        expect(shownDir('/tmp', [WEB])).toBe('/tmp')
-        expect(shownDir(`${WEB.absolute}-old/src`, [WEB])).toBe(`${WEB.absolute}-old/src`)
-        expect(shownDir('src', [WEB])).toBe('src')
-        expect(shownDir(WEB.absolute, [])).toBe(WEB.absolute)
+    it('is null for any other directory, a sibling whose name starts the same included', () => {
+        expect(shownDir('/tmp', [WEB])).toBeNull()
+        expect(shownDir(`${WEB.absolute}-old/src`, [WEB])).toBeNull()
+        expect(shownDir('src', [WEB])).toBeNull()
+        expect(shownDir(WEB.absolute, [])).toBeNull()
+    })
+})
+
+describe('shellCall', () => {
+    it("is a shell call's directory and command, the directory marked when it is outside the run's worktrees", () => {
+        expect(shellCall(shellIn(WEB.absolute, 'git push'), [WEB])).toEqual({
+            dir: 'web',
+            outside: false,
+            command: 'git push',
+        })
+        expect(shellCall(shellIn('/tmp/scratch', 'ls'), [WEB])).toEqual({
+            dir: '/tmp/scratch',
+            outside: true,
+            command: 'ls',
+        })
+    })
+
+    it('keeps a directory whole and unmarked with no worktrees, and names none when the call names none', () => {
+        expect(shellCall(shellIn('/tmp/scratch', 'ls'))).toEqual({ dir: '/tmp/scratch', outside: false, command: 'ls' })
+        expect(shellCall(shellIn('', 'ls'), [WEB])).toEqual({ dir: null, outside: false, command: 'ls' })
+    })
+
+    it('is null for any other call', () => {
+        expect(shellCall(tool('completed', { input: '{"filePath": "/r/a.ts"}' }), [WEB])).toBeNull()
     })
 })
 
@@ -218,9 +240,9 @@ describe('summary', () => {
 
     it("reads the directory against the run's worktrees when given them, and keeps it whole without", () => {
         const push = shellIn(WEB.absolute, 'git push')
-        expect(summary(push, [WEB])).toBe('git push')
+        expect(summary(push, [WEB])).toBe('web $ git push')
         expect(summary(push)).toBe(`${WEB.absolute} $ git push`)
-        expect(summary(shellIn(`${WEB.absolute}/src`, 'ls'), [WEB])).toBe('src $ ls')
+        expect(summary(shellIn(`${WEB.absolute}/src`, 'ls'), [WEB])).toBe('web/src $ ls')
         expect(summary(shellIn(MOBILE.absolute, 'make test'), [MOBILE, WEB])).toBe('mobile $ make test')
         expect(summary(shellIn('/tmp', 'ls'), [WEB])).toBe('/tmp $ ls')
     })

@@ -195,10 +195,12 @@ test("a run's page names the worktrees it worked in, and a shell call's line its
     await expect(slot).toHaveAttribute('title', /may hold other work since/u)
     const meta = (await (await page.request.get('api/meta')).json()) as { workspace_root: string }
     const whole = `${meta.workspace_root}/.treehouse/web-3f9c2a1b/3/web`
-    // A call in the run's own worktree reads its command alone, the whole line and the agent's words on hover.
+    // A call in the run's own worktree names it by its repository, the whole line and the agent's words on hover.
     const command = 'git push origin HEAD:refs/heads/agent/ABC-099-search'
     const push = page.getByTestId('transcript').getByTestId('transcript-tool').filter({ hasText: 'git push' })
-    await expect(push.getByTitle(`${whole} $ ${command}\nPush the branch`, { exact: true })).toHaveText(command)
+    const line = push.getByTitle(`${whole} $ ${command}\nPush the branch`, { exact: true })
+    await expect(line).toHaveText(`web $ ${command}`)
+    await expect(line.getByTestId('shell-dir')).toHaveText('web')
 
     // A joint run's names the repository it ran in.
     await page.goto('workspace/runs/43')

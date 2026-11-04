@@ -1368,11 +1368,12 @@ sliver beside four others; and its axis names short call numbers without measuri
   `show N more lines` toggle (`foldText`), whole when All open is on or a search holds a line it hides. A tool call
   is a native `<details>` whose line says what it
   did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, the tool's name at its own width up
-  to 14rem, the first to give way, and in monospace a shell call's command, after the directory it ran in when the
-  call names one (`app $ make test`): on a run's page, read against the run's worktrees, none for one of them, from it
-  for one under it, a joint run's by its repository (`web/src $`), any other whole, so a call outside them stands out;
-  the line whole and the agent's description of it on hover. Else the runtime's title, else its input's short values
-  as `key=value`; under that, muted, its error's first line in
+  to 14rem, the first to give way, and in monospace a shell call's command after the directory it ran in when the
+  call names one (`web $ make test`), the directory and `$` muted so the command reads first. On a run's page the
+  directory is read against the run's worktrees: one of them, or a directory under it, from its repository (`web`,
+  `web/src`); any other whole in `status-blocked`, so a call outside them stands out. Elsewhere it is whole. The line
+  whole and the agent's description of it are on hover. Else the runtime's title, else its input's short values as
+  `key=value`; under that, muted, its error's first line in
   `status-failed`, or an output of one short line that is
   not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a `refused: <guard>` chip
   in `status-failed`. It opens to its input and its output (or error), JSON indented and colored as a tick's output is
