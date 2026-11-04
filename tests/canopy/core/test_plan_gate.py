@@ -3,16 +3,20 @@
 `canopy plan KEY` asks for a plan, `--skip` waives it, `--approve` approves the newest as its file stands, and
 `canopy start KEY --plan` starts a private ticket planned. An `implement` waits on an approved plan when the ticket
 needs one (`unplanned`), and neither an `implement` nor a `resume` follows a plan whose file changed (`plan_changed`).
+A ticket whose text changed since its plan was approved only warns (`ticket_changed`) until the plan is approved again.
 """
 
+import json
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, plans
+from canopy.core import conversation, db, plans, records
 from canopy.core.vocab import PlanSetting, PlanStatus, ResumeReason, RunKind, RunStatus
+from canopy.loop import harness_items, phases
 from tests.canopy.helpers import (
     KEY,
     approve_policy,
@@ -25,7 +29,7 @@ from tests.canopy.helpers import (
     seen,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches
-from tests.conftest import CanopyEnv, GitPool
+from tests.conftest import TRACKER_SOURCE, CanopyEnv, GitPool
 
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
 # `canopy plan KEY`, asking for a plan, and its two flags.
@@ -37,6 +41,31 @@ APPROVE = {"plan": "approve"}
 IMPLEMENT = dispatches(slug="work")
 #: The overseer dispatches a resume of KEY for review.
 RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
+#: KEY's title and description as the tests' tracker first holds them.
+TITLE = "Retry flaky uploads"
+BODY = "Retry each upload three times.\n\nAcceptance: a third failure is reported."
+
+
+def tracker_reads(state: Path, *, title: str = TITLE, body: str = BODY) -> None:
+    """The tests' tracker holds KEY, open and labeled, titled `title` with description `body`, from its next read."""
+    labels = [{"name": "agent-ready-tester"}]
+    ticket = {"kind": "ticket", "key": KEY, "title": title, "body": body, "state": "open", "labels": labels}
+    state.write_text(json.dumps({TRACKER_SOURCE: {"lines": [ticket]}}))
+
+
+def raised(scenario: Scenario) -> dict[str, str]:
+    """The items the harness would raise now, each reason's detail by its reason."""
+    ctx = context(scenario.env)
+    now = datetime.now(UTC)
+    return {i.reason: i.detail for i in harness_items.raised(ctx, phases.derive(ctx, now), now)}
+
+
+def edited(changed: str) -> str:
+    """The harness's `ticket_changed` detail on KEY, whose `changed` changed since plan 1 was approved."""
+    return (
+        f"{KEY}'s {changed} changed since you approved plan 1: read the ticket, then approve the plan again if it "
+        f"still fits (canopy plan {KEY} --approve), ask for a new one (canopy plan {KEY}), or skip it (--skip)"
+    )
 
 
 def planned(scenario: Scenario) -> int:
@@ -133,6 +162,108 @@ def test_an_edit_after_approval_holds_the_implement_until_approved_again(scenari
     assert scenario.refuses(IMPLEMENT) == [("refused:plan_changed", changed)]
     scenario.operator("plan", KEY, "--approve")
     scenario.run(IMPLEMENT)
+
+
+@pytest.mark.parametrize(
+    ("title", "body", "changed"),
+    [
+        (TITLE, BODY + "\nAnd a progress bar.", "description"),
+        ("Retry flaky downloads", BODY, "title"),
+        ("Retry flaky downloads", "Drop retries.", "title and description"),
+    ],
+)
+def test_a_ticket_edited_after_approval_warns_until_approved_again_and_its_implement_goes_ahead(
+    scenario: Scenario,
+    git_pool: GitPool,
+    connector_state: Path,
+    title: str,
+    body: str,
+    changed: str,
+) -> None:
+    """Someone edits the ticket after the operator approved its plan: a warning, which refuses nothing (§25)."""
+    scenario.configures("workspace", policy=APPROVE)
+    tracker_reads(connector_state)
+    planned(scenario)
+    scenario.operator("plan", KEY, "--approve")
+    tracker_reads(connector_state, title=title, body=body)
+    scenario.run(IMPLEMENT)
+    assert raised(scenario) == {"ticket_changed": edited(changed)}
+
+    # Approving again says the plan still fits the ticket as it reads now, and the warning goes.
+    scenario.operator("plan", KEY, "--approve")
+    assert raised(scenario) == {}
+    refused = scenario.operator("plan", KEY, "--approve", code=1)
+    assert "neither its file nor the ticket's text has changed since" in refused.err
+
+
+def test_skipping_a_plan_its_ticket_changed_since_drops_the_warning(
+    scenario: Scenario,
+    git_pool: GitPool,
+    connector_state: Path,
+) -> None:
+    scenario.configures("workspace", policy=APPROVE)
+    tracker_reads(connector_state)
+    planned(scenario)
+    scenario.operator("plan", KEY, "--approve")
+    tracker_reads(connector_state, body="Rewritten.")
+    scenario.run(IMPLEMENT)
+    assert raised(scenario) == {"ticket_changed": edited("description")}
+    scenario.operator("plan", KEY, "--skip")
+    assert raised(scenario) == {}
+
+
+def test_a_ticket_unchanged_since_approval_raises_nothing(
+    scenario: Scenario,
+    git_pool: GitPool,
+    connector_state: Path,
+) -> None:
+    """Whitespace a connector trims is no edit."""
+    scenario.configures("workspace", policy=APPROVE)
+    tracker_reads(connector_state)
+    planned(scenario)
+    scenario.operator("plan", KEY, "--approve")
+    plan = present(plans.current(scenario.conn, KEY))
+    assert plan.approved_title_sha256 is not None
+    assert plan.approved_body_sha256 is not None
+    tracker_reads(connector_state, body=f"  {BODY}\n")
+    scenario.run(IMPLEMENT)
+    assert raised(scenario) == {}
+
+
+def test_an_approval_that_recorded_no_ticket_text_is_never_stale(
+    scenario: Scenario,
+    git_pool: GitPool,
+    connector_state: Path,
+) -> None:
+    """An approval from before canopy recorded the ticket's text, or of a ticket not observed then, holds as it was."""
+    scenario.configures("workspace", policy=APPROVE)
+    tracker_reads(connector_state)
+    planned(scenario)
+    scenario.operator("plan", KEY, "--approve")
+    with db.transaction(scenario.conn):
+        records.update(records.Plan).set(approved_title_sha256=None, approved_body_sha256=None).everything().run(
+            scenario.conn,
+        )
+    tracker_reads(connector_state, title="Something else entirely", body="Rewritten.")
+    scenario.run(IMPLEMENT)
+    assert raised(scenario) == {}
+
+
+def test_a_ticket_edited_after_its_first_implement_still_warns(
+    scenario: Scenario,
+    git_pool: GitPool,
+    connector_state: Path,
+) -> None:
+    """The plan its work follows was written for the ticket as it read then, branch or no branch."""
+    scenario.configures("workspace", policy=APPROVE)
+    tracker_reads(connector_state)
+    planned(scenario)
+    scenario.operator("plan", KEY, "--approve")
+    scenario.run(IMPLEMENT)
+    assert present(db.get_ticket(scenario.conn, KEY)).branch
+    tracker_reads(connector_state, body="Rewritten.")
+    scenario.run(RESUME)
+    assert raised(scenario) == {"ticket_changed": edited("description")}
 
 
 def test_a_missing_plan_holds_a_resume_until_skipped(scenario: Scenario, git_pool: GitPool) -> None:

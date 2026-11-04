@@ -55,6 +55,10 @@ const WAITING = new Set([
 // stuck while one is open, so they never count as blocking.
 const PARKED = new Set(['needs_reviewer', 'ready_to_merge'])
 
+// Reasons that only warn: a ticket changed since its plan was approved (DESIGN §25), whose implement goes ahead on the
+// plan all the same. Nothing waits on one, so it never counts as blocking.
+const WARNS = new Set(['ticket_changed'])
+
 // Reasons raised for a ticket's latest run, or its runs at a limit: what the operator reads first is that run.
 const RUN_BROKE = new Set(['worker_failed', 'crashed', 'unpushed', 'unknown_result', 'attempt_limit'])
 
@@ -85,11 +89,11 @@ export function severity(item: AttentionItem): Severity {
 }
 
 /**
- * Whether the item holds work up until the operator acts: anything but a chore's finding, which reports, or a PR
- * that waits on a reviewer or its merge.
+ * Whether the item holds work up until the operator acts: anything but a chore's finding, which reports, a PR that
+ * waits on a reviewer or its merge, or a warning that holds nothing up.
  */
 export function blocking(item: AttentionItem): boolean {
-    return !item.finding && !PARKED.has(item.reason)
+    return !item.finding && !PARKED.has(item.reason) && !WARNS.has(item.reason)
 }
 
 /** How many of the items are of each severity. */
@@ -229,6 +233,10 @@ export function ask(item: AttentionItem, ticket?: TicketSummary): Ask {
     }
     if (ANSWERED_BY_REPLY.has(item.reason)) {
         return 'reply'
+    }
+    // A ticket changed since its plan was approved: the plan's card answers it, approving the plan again.
+    if (item.reason === 'ticket_changed') {
+        return 'plan'
     }
     if (item.reason !== 'plan_review') {
         return 'ticket'

@@ -46,6 +46,11 @@ class Plan(Row):
     approved_reason: str | None
     #: How much work the plan is for its worker, as its planner judged; None when it gave no estimate.
     effort: PlanEffort | None
+    #: The SHA-256 of the ticket's title as the tracker connector observed it at the latest approval; None when the
+    #: ticket was not observed then, or the plan was approved before canopy recorded it (DESIGN §25).
+    approved_title_sha256: str | None
+    #: The same of its description, set with the title's.
+    approved_body_sha256: str | None
 
 
 @dataclass(frozen=True)

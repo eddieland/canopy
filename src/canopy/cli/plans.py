@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 
 import click
 
+from canopy.cli import epics as epics_cli
 from canopy.cli.common import CliError, open_context
 from canopy.core import conversation, personas, plan_export, plans, prompts
 from canopy.infra import logs
@@ -102,6 +103,9 @@ def cmd_plan(
         conversation.check_verb(subject, "plan")
     except conversation.Refused as r:
         raise CliError(f"plan refused ({r.guard}): {r.reason}") from None
+    if subject.kind == conversation.EPIC:
+        others = (chosen, leave, words, persona)
+        return _plan_epic(click_ctx, int(subject.id), alone=approve and not skip and not any(others))
     ctx = open_context(click_ctx)
     try:
         if approve:
@@ -116,6 +120,21 @@ def cmd_plan(
             _ask(ctx, subject.id, skip=skip)
     except conversation.Refused as r:
         raise CliError(f"plan refused ({r.guard}): {r.reason}") from None
+    return 0
+
+
+def _plan_epic(click_ctx: click.Context, epic_id: int, *, alone: bool) -> int:
+    """Approve an epic's plan, which is asked for by its submission and replies, and approved whole (§43).
+
+    Returns:
+        0, once approved.
+
+    Raises:
+        UsageError: anything but `--approve` alone was passed (`alone` is False).
+    """
+    if not alone:
+        raise click.UsageError("an epic's plan takes --approve alone; `canopy reply epic:N` asks for changes")
+    epics_cli.approve(open_context(click_ctx), epic_id)
     return 0
 
 

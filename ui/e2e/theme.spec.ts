@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
-import { PALETTE_KEY, settled, signIn, STORAGE_KEY, storePalette, storeTheme } from './helpers.ts'
+import { PALETTE_KEY, settled, signIn, STORAGE_KEY, storePalette, storeTheme, windowWidth } from './helpers.ts'
 
 declare global {
     // A `var` in `declare global` is a property of globalThis, where the page's scripts set these.
@@ -262,5 +263,113 @@ test.describe('the guide under a mono palette', () => {
             await expect(guide.getByRole('paragraph').first()).toHaveCSS('font-family', /^"IBM Plex Sans Variable"/u)
             await expect(guide.locator('code').first()).toHaveCSS('font-family', /^"IBM Plex Mono"/u)
         })
+    }
+})
+
+test.describe("Pulp's Ben-Day tone", () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page)
+    })
+
+    for (const theme of ['dark', 'light'] as const) {
+        test(`${theme} draws no tone by default, and Pulp prints it ramped`, async ({ page }) => {
+            await storeTheme(page, theme)
+            await page.goto('workspace/runs')
+            await settled(page)
+            for (const layer of await canvasTone(page)) {
+                expect(layer).toEqual({ image: 'none', mask: 'none' })
+            }
+
+            await storePalette(page, theme, 'pulp')
+            await page.reload()
+            await settled(page)
+            for (const layer of await canvasTone(page)) {
+                expect(layer.image).toMatch(/^radial-gradient\(/u)
+                expect(layer.mask).toMatch(/^linear-gradient\(/u)
+            }
+        })
+    }
+})
+
+/** What the canvas's two tone layers paint, the dots and their swell: each one's background and mask. */
+function canvasTone(page: Page): Promise<{ image: string; mask: string }[]> {
+    return page.evaluate(() =>
+        (['::before', '::after'] as const).map((layer) => {
+            const style = getComputedStyle(document.documentElement, layer)
+            return { image: style.backgroundImage, mask: style.maskImage }
+        }),
+    )
+}
+
+test.describe("Pulp's lettering", () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page)
+    })
+
+    for (const theme of ['dark', 'light'] as const) {
+        test(`${theme} pulp letters only a section's title in its own face, in the same line box`, async ({ page }) => {
+            await storeTheme(page, theme)
+            await page.goto('attention')
+            await settled(page)
+            const title = page.getByRole('heading', { level: 1, name: 'Attention' })
+            await expect(title).not.toHaveCSS('font-family', /Bangers/u)
+            const before = await title.boundingBox()
+
+            await storePalette(page, theme, 'pulp')
+            await page.reload()
+            await settled(page)
+
+            await expect(title).toHaveCSS('font-family', /^"Bangers Title"/u)
+            expect((await title.boundingBox())?.height).toBe(before?.height)
+            await page.goto('workspace/runs/39')
+            await settled(page)
+            await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-family', /^"IBM Plex Mono Compact"/u)
+        })
+    }
+})
+
+// Pulp tilts its name's plate (`--wordmark-tilt`), a transform, which moves nothing; the plate, its ring, and its drop
+// are shadows, which take no room. So what they draw has to fit in the room the name had: clear of the logo, of the
+// stream's pills, and of the header's edges and its aurora, at the operator's width and at the narrow strip's.
+test.describe("Pulp's name plate", () => {
+    test.beforeEach(async ({ page }) => {
+        await signIn(page)
+    })
+
+    test('the default palette draws the name untilted', async ({ page }) => {
+        await storeTheme(page, 'dark')
+        await page.goto('attention')
+        await settled(page)
+        await expect(page.getByTestId('wordmark')).toHaveCSS('transform', 'none')
+    })
+
+    for (const theme of ['light', 'dark'] as const) {
+        for (const width of [1720, 820]) {
+            test(`${theme} at ${width}px tilts the plate and it clears what is beside it`, async ({ page }) => {
+                await storeTheme(page, theme)
+                await storePalette(page, theme, 'pulp')
+                await page.goto('attention')
+                await settled(page)
+                await windowWidth(page, width)
+                const wordmark = page.getByTestId('wordmark')
+                await expect(wordmark).not.toHaveCSS('transform', 'none')
+                const box = (locator: typeof wordmark) =>
+                    locator.evaluate((element) => {
+                        const { top, right, bottom, left } = element.getBoundingClientRect()
+                        return { top, right, bottom, left, font: Number.parseFloat(getComputedStyle(element).fontSize) }
+                    })
+                const name = await box(wordmark)
+                const mark = await box(page.getByTestId('mark'))
+                const pills = await box(page.getByTestId('stream-status'))
+                const header = await box(page.getByTestId('app-header'))
+                // The frame's block, its ring at a line and a half at most, and the drop's 3px past them; the aurora's
+                // 4px strip along the header's foot.
+                const reach = 0.25 * name.font + 1.5
+                expect(name.left - reach).toBeGreaterThan(mark.right)
+                expect(name.right + reach + 3).toBeLessThan(pills.left)
+                expect(name.top - reach).toBeGreaterThan(header.top)
+                expect(name.bottom + reach + 3).toBeLessThan(header.bottom - 4)
+            })
+        }
     }
 })

@@ -34,7 +34,7 @@ from canopy.core import (
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunKind, RunStatus
-from canopy.runs import attachments, drafts
+from canopy.runs import attachments, drafts, worker
 from canopy.serve import checklist_views, draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,
@@ -93,7 +93,9 @@ TICKETS = 200
 TICKET_RUNS = 10
 TICKET_MESSAGES = 100
 TICKET_DECISIONS = 20
-SUMMARY_LENGTH = 300
+#: The most of a run's summary a page is sent: as much as a worker's result may hold, so a page shows it whole and folds
+#: it in a list itself. Only a harness note longer than that is cut.
+SUMMARY_LENGTH = worker.MAX_TEXT
 # The windows the spend figures and a chore's spend cover: the last day and the last 30.
 SPEND_DAY_HOURS = 24
 SPEND_MONTH_HOURS = 30 * 24
@@ -740,6 +742,7 @@ def left_feedback(item: passed_reviews.Left) -> LeftFeedback:
         path=item.path,
         line=item.line,
         url=item.url,
+        body=item.body,
         reason=item.reason.value,
         decider=item.decider.value,
         tick_id=item.tick_id,

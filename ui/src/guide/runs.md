@@ -122,7 +122,8 @@ The **Transcript** is the run's session, from its log, oldest first:
 - its text, with its reasoning set in italics and marked `thinking`. Long thinking shows its first four lines and
   **show N more lines** for the rest, since a model that thinks out loud rarely thinks briefly. **All open**, or a
   search that finds a line in the folded part, shows it whole;
-- each tool call, with what it did and how long it took; click one to see its input and output. A canopy command the
+- each tool call, with what it did and how long it took; click one to see its input and output. A shell command that
+  ran somewhere other than the agent's directory shows that directory first, `app $ make test`. A canopy command the
   harness refused is marked `refused`, with the guard. An overseer's `decide` names each ticket and its action on its
   row, and opens to every decision on a line of its own with its rationale, so a tick that decided twelve tickets in
   one call doesn't leave you reading them out of a JSON array. Its `ticket-set` does the same: each ticket, or
@@ -147,12 +148,12 @@ Escape clears it. **By call** groups the events by model call instead, each call
 one row that opens to the same input and output; a session of one call has nothing to group, so it has no By call.
 **All open** opens every call at once, for when you'd rather scroll than click.
 
-A long session draws its first 100 rows, and a fold at the bottom, **Show 100 of 1,900 more rows**, draws the next
-100 a click. A long worker or overseer session can reach the server's limit of 2,000 entries, some 80,000 elements
-drawn whole, and the page felt every one of them on each key typed into Find. **Find lines** still searches every
-entry, drawn or not, so a search beats clicking the fold nineteen times; to start at the latest rows, flip the order
-to newest first. All open opens only the rows drawn, and following an addition in the chart, or the error a run
-ended on, draws down to its row first.
+A long session draws its first 1,000 rows in a box that scrolls on its own, so the panels below the transcript don't
+end up a marathon away. A fold at the bottom, **Show 1,000 more rows**, draws the rest. A session can reach the
+server's limit of 2,000 entries, some 80,000 elements drawn whole, which is more than any browser enjoys. **Find
+lines** still searches every entry, drawn or not, so a search beats scrolling for it; to start at the latest rows,
+flip the order to newest first. All open opens only the rows drawn, and following an addition in the chart, or the
+error a run ended on, draws down to its row first.
 
 The session id in the transcript's header opens the same session in the runtime's own tools: `opencode export ID`,
 or OpenCode 2's `opencode session export ID`. A

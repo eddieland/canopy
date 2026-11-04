@@ -34,6 +34,7 @@ const PLANS: TicketPlans = {
         sha256: 'abc',
         edited: false,
         changed_since_approval: false,
+        ticket_changed: [],
         persona: null,
     },
     threads: [
@@ -132,6 +133,22 @@ describe('PlanCard', () => {
         expect(card.textContent).toContain('proposed')
         expect(card.textContent).not.toContain('waiting on you')
         expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+    })
+
+    it('offers Approve again for a plan whose ticket changed since, and says what changed', async () => {
+        const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
+        const newest =
+            PLANS.newest === null
+                ? null
+                : { ...PLANS.newest, plan: approved, ticket_changed: ['title' as const, 'description' as const] }
+        await renderCard({ newest })
+        const card = await screen.findByTestId('plan-card')
+        expect(card.textContent).toContain(
+            'Its ticket’s title and description changed since you approved it: approve it again if it still fits.',
+        )
+        fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+        await screen.findByRole('status')
+        expect(sent).toEqual([{ path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
     })
 
     it('says the planner approved a plan it said needs no review, and why, and who approved no other', async () => {

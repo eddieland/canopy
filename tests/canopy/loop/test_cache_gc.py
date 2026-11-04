@@ -150,6 +150,6 @@ def test_every_role_of_the_wrappers_has_the_runs_that_start_as_it() -> None:
         "chore": ("chore_runs",),
         "overseer": (),
         "review": ("review_runs",),
-        "worker": ("runs", "task_runs"),
+        "worker": ("runs", "task_runs", "epic_runs"),
     }
     assert all(set(tables) <= set(db.RUN_TABLES) for tables in cache_gc.ROLE_TABLES.values())

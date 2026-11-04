@@ -274,7 +274,12 @@ Controls:
   `core/epics.py` by `canopy epic` in the operator's shell, each refused as `inside_run` when
   `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set. Its text is the operator's. Membership authorizes no work: a member is
   worked only once a label or a start says so, as any ticket is, and a tracker's epic or parent link never makes a
-  ticket a member. The overseer never reads an epic.
+  ticket a member. The overseer never reads an epic: the submission, or the operator's reply, authorizes its
+  plan runs, which a tick starts in code before the overseer runs. Its planner is `canopy-planner`, which reads and
+  writes only its plan, in a desk of the epic's repositories at their bases. canopy reads the plan's ids and
+  breakdown as data (`core/epic_outline.py`), keeps a plan only when they read in the outline's shape, and records
+  it `proposed`: no agent approves an epic's plan. Only the operator approves one, by `canopy plan epic:N
+  --approve`, replies to ask for the next, and registers members against its entries, each refused as `inside_run`.
 - Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
   authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's
@@ -532,7 +537,10 @@ Controls in code, not prompts:
   counts task runs with workers' and reviews'; each with the worker's timeout. A task the guards hold waits for a
   later tick. Each run follows an operator's word, so a run that fails is never retried: the task stays as it ended.
 - Epics (DESIGN §43): at most `policy.max_epic_tickets` members each (8 by default, and the workspace file
-  may only lower it); an addition past it is refused whole.
+  may only lower it); an addition past it is refused whole. One plan run per epic at a time, started only by a
+  live tick, in code, and only after the submission or an operator's reply newer than its latest run, so a run that
+  fails is never retried on its own; at most `policy.max_plan_attempts` of them, never reset; within
+  `capacity.max_workers`, which counts plan runs with every other run holding a slot; each with the worker's timeout.
 - Attachments (DESIGN §22): only UTF-8 text with no NUL, at most `policy.max_attachments` files on one ticket or task
   (5 by default), each at most `policy.max_attachment_kib` (512) and all together at most
   `policy.max_attachments_total_kib` (1024), each under a ceiling in code (20 files, 1024 and 4096 KiB), and the
@@ -581,23 +589,24 @@ Controls now:
   clock, the split, the nudge for a stale update and the answer to its question (DESIGN §41), asking a run the
   operator stopped to wrap up (§22), moving a shell command's
   leading `cd` into its working directory, and, under OpenCode 2, holding a session's first prompt until its MCP tools
-  are registered (DESIGN §33), from the snapshot. canopy takes the snapshot's write permission away once it is
-  written, the operator's included, so no run changes it through its permissions or its sandbox, and the runtime
-  installs nothing into it. The plugin reads four variables,
+  are registered and explaining a call its permission rules refuse (DESIGN §33), from the snapshot. canopy takes the
+  snapshot's write permission away once it is written, the operator's included, so no run changes it through its
+  permissions or its sandbox, and the runtime installs nothing into it. The plugin reads four variables,
   `CANOPY_DEADLINE`, `CANOPY_RUN_ID`, `CANOPY_ANSWERS`, and `CANOPY_PLAN`, the clock, the system prompt the runtime hands
   it, which it cuts in two without changing its text, each tool call's tool and session, which the nudge counts in its
   session, the step titles of a `status` call in a run that follows a plan, which the nudge restates with the plan's
   path, so its line carries only canopy's words and the worker's own,
   two files, the answer and the ask to wrap up canopy writes in the run's answers directory, through the runtime's own
-  `node:fs`, and under
-  OpenCode 2 the runtime's MCP servers' states and its tools' names; it writes no file, refuses no call, grants no
-  tool, and catches its own errors. The one call it changes is a shell command that opens with `cd <dir> &&`, whose
-  directory becomes the call's working directory, which the runtime's `external_directory` rule then checks, with the
-  rest of the command from it, as it checks any call's: so the plugin reaches nothing the `cd` could not. A
-  repository's own plugins already load in the same process (T7). The answers directory is the run's own, in the
-  state directory beside its other files, made before the agent starts and removed once it ends; a sandboxed run may
-  read it and nothing else of the state directory, and write none of it (§24). An unsandboxed run could write the ask
-  to wrap up, as it could any of the operator's files; it could only tell itself to end early, keeping its work.
+  `node:fs`, and under OpenCode 2 the runtime's MCP servers' states and its tools' names, and a refused call's
+  permission and resources, whose reason, what the agent is told of the refusal, it sets; it writes no file, refuses no
+  call, grants no tool, and catches its own errors. The one call it changes is a shell command that opens with
+  `cd <dir> &&`, whose directory becomes the call's working directory, which the runtime's `external_directory` rule
+  then checks, with the rest of the command from it, as it checks any call's: so the plugin reaches nothing the `cd`
+  could not. A repository's own plugins already load in the same process (T7). The answers directory is the run's
+  own, in the state directory beside its other files, made before the agent starts and removed once it ends; a
+  sandboxed run may read it and nothing else of the state directory, and write none of it (§24). An unsandboxed run
+  could write the ask to wrap up, as it could any of the operator's files; it could only tell itself to end early,
+  keeping its work.
 - canopy's git hooks, from the same snapshot, run in every worker's git (T5). Their `pre-push` holds a worker's first
   push of a stretch for its repository's checklist (DESIGN §42): it reads one more file, the slot's list in the run's
   answers directory, which the run cannot write, and writes one marker, the run's id and the time, in the slot's own

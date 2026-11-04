@@ -396,7 +396,7 @@ chores, which write nothing, may also read the files beside it.
 canopy ships one plugin, `canopy.js`, whose jobs are a clock that tells a running agent the minutes left, a split under
 OpenCode 1 that lets an unsandboxed run's first call read its agent's tools and body from the provider's cache, which
 OpenCode 2 needs no split for, and, under OpenCode 2, holding a session's first prompt until its MCP tools are
-registered; they, and what OpenCode does with a plugin, are §33.
+registered and explaining a call its permission rules refuse; they, and what OpenCode does with a plugin, are §33.
 
 ### Each agent's model
 
@@ -483,8 +483,8 @@ Reasons are the phase table's attention rows (§7), the run reasons below, `atte
 raise them define: `canopy_unavailable` and `disk_low` (§6), `fix_ci_override` and `notice_rerun` (§8), `repo_missing`,
 `auto_maintenance_on`, `multi_repo`, and `follow_up_unrecorded` (§18), `chore_failed` and chore findings (§19),
 `review_failed`, `review_limit`, `review_rebuttal`, and `review_late` (§21), `awaiting_reply` (§22, §25),
-`flaky_rerun` (§23), `plan_review`, `plan_changed`, and `archive_unpushed` (§25), `memory_proposal`, `lesson_review`,
-and `lesson_wrong` (§28),
+`flaky_rerun` (§23), `plan_review`, `plan_changed`, `ticket_changed`, and `archive_unpushed` (§25), `memory_proposal`,
+`lesson_review`, and `lesson_wrong` (§28),
 `drafts_waiting` (§29), `connector_failed` and `check_stuck` (§30), `persona_missing` and `bad_persona` (§31),
 `model_missing` and `model_list_failed` (§13), `git_too_old` (§8), `review_waiting` and `review_unsettled` (§34),
 `task_ticket_unrecorded` (§36), `untrusted_artifact_comment` (§38), and `unobserved_pr` (§37). An item
@@ -514,7 +514,8 @@ From their causes, before the overseer runs, the harness raises the phase table'
 `untrusted_review` while that row holds on a unit, `attempt_limit` for a unit or a ticket's plan whose next run is past
 its limit, `review_limit` for one of the loop's PRs unreviewed at its limit, `review_failed` while a PR's latest review
 run failed, and `plan_review` and `plan_changed` while a plan waits on the operator or its file is no longer what they
-approved; and two the overseer never recorded: `check_stuck`, for a unit one check holds at `ci_running` long after
+approved; and three the overseer never recorded: `ticket_changed`, while a ticket's text is not what it was when its
+plan was approved (§25), `check_stuck`, for a unit one check holds at `ci_running` long after
 the rest finished (§30), and `unobserved_pr`, for a unit whose PR URL names no PR, which no source reads, so its ticket
 waits (§37) until the unit names a PR or the operator forgets the ticket's work. Each is open while its cause holds in
 the journal and the observations (§30). One resting on an observation is kept while that observation is stale, and

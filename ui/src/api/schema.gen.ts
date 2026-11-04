@@ -3267,7 +3267,7 @@ export type components = {
             status: string;
             /**
              * Summary
-             * @description The harness's note or the agent's summary, line breaks kept, cut at 300 characters.
+             * @description The harness's note or the agent's summary, line breaks kept, cut at 2000 characters.
              */
             summary: string | null;
         };
@@ -5738,6 +5738,11 @@ export type components = {
              */
             author: string | null;
             /**
+             * Body
+             * @description What it says, as the reader last saw it: the reviewer's text, shown, never acted on.
+             */
+            body: string;
+            /**
              * Decider
              * @description The overseer, who named it, or the harness, for one on a resolved thread.
              * @enum {string}
@@ -6996,6 +7001,13 @@ export type components = {
              * @description Its Markdown, or none when the file is not a plan any more: `problem` says why.
              */
             text: string | null;
+            /**
+             * Ticket Changed
+             * @description For an approved plan, what of its ticket's text, as last observed, differs from when it was approved: `title`,
+             *     `description`, or both; empty when neither, or for a plan not approved. A warning, which refuses nothing: approving
+             *     the plan again says it still fits (`ticket_changed`).
+             */
+            ticket_changed: ("title" | "description")[];
         };
         /**
          * @description A level of `policy.planner_may_approve` (DESIGN §25): `off` where the planner was asked nothing.
@@ -9768,7 +9780,7 @@ export type components = {
             status: string;
             /**
              * Summary
-             * @description The worker's summary or the harness's note, line breaks kept, cut at 300 characters.
+             * @description The worker's summary or the harness's note, line breaks kept, cut at 2000 characters.
              */
             summary: string | null;
             /**
@@ -11342,7 +11354,7 @@ export type components = {
             status: string;
             /**
              * Summary
-             * @description The harness's note or the agent's summary, line breaks kept, cut at 300 characters: untrusted.
+             * @description The harness's note or the agent's summary, line breaks kept, cut at 2000 characters: untrusted.
              */
             summary: string | null;
         };

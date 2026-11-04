@@ -57,13 +57,13 @@ CURSOR_COLUMNS: Mapping[str, LiteralString] = {**TICKET_CURSORS, **UNIT_CURSORS}
 #: The columns of a ticket whose change is activity, as `change_ticket` sets them. A column name in SQL comes from
 #: here, never from input.
 type TicketChange = Literal["phase", "title", "done", "plan_setting"]
-# The tables of detached runs (DESIGN §6): workers', chores', reviews', and tasks'. Each has the same lifecycle,
-# written once below over a table from this closed set: claimed by its process's pid, its agent's pid recorded, its
-# report, and its close. A table name in SQL comes from here, never from input.
-type RunTable = Literal["runs", "chore_runs", "review_runs", "task_runs"]
+# The tables of detached runs (DESIGN §6): workers', chores', reviews', tasks', and epics' plan runs (§43). Each
+# has the same lifecycle, written once below over a table from this closed set: claimed by its process's pid, its
+# agent's pid recorded, its report, and its close. A table name in SQL comes from here, never from input.
+type RunTable = Literal["runs", "chore_runs", "review_runs", "task_runs", "epic_runs"]
 # The rows whose agent's progress `set_progress` records as it prints; a worker run's is `set_run_progress`.
 type ProgressTable = Literal["ticks", "chore_runs", "task_runs", "review_runs"]
-RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs", "task_runs")
+RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs", "task_runs", "epic_runs")
 # What each run table's rows are called in a message, and the column it keeps its agent's pid in: the leader of the
 # process group the run's own process starts, which outlives that process if it dies.
 RUN_NOUNS: Mapping[RunTable, str] = {
@@ -71,15 +71,17 @@ RUN_NOUNS: Mapping[RunTable, str] = {
     "chore_runs": "chore run",
     "review_runs": "review run",
     "task_runs": "task run",
+    "epic_runs": "epic plan run",
 }
 AGENT_PID: Mapping[RunTable, LiteralString] = {
     "runs": "worker_pid",
     "chore_runs": "agent_pid",
     "review_runs": "agent_pid",
     "task_runs": "agent_pid",
+    "epic_runs": "agent_pid",
 }
-#: The run tables whose runs each hold a slot, and so count toward `capacity.max_workers` (DESIGN §6, §21, §36).
-SLOT_TABLES: tuple[RunTable, ...] = ("runs", "review_runs", "task_runs")
+#: The run tables whose runs each hold a slot, and so count toward `capacity.max_workers` (DESIGN §6, §21, §36, §43).
+SLOT_TABLES: tuple[RunTable, ...] = ("runs", "review_runs", "task_runs", "epic_runs")
 
 
 class MigrationError(Exception):
@@ -683,6 +685,7 @@ _RUN_SELECT: Mapping[RunTable, sql.Select] = {
     "chore_runs": sql.select("r.*").from_("chore_runs r"),
     "review_runs": sql.select("r.*").from_("review_runs r"),
     "task_runs": sql.select("r.*").from_("task_runs r"),
+    "epic_runs": sql.select("r.*").from_("epic_runs r"),
 }
 
 
@@ -1179,14 +1182,15 @@ def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, in
 def spent_since(conn: sqlite3.Connection, since: str) -> float | None:
     """What every agent run that started at or after `since` cost; None when none of them reported one (§13).
 
-    Worker runs, chore runs, review runs, task runs, and each tick's overseer: every table an agent run records on.
+    Worker runs, chore runs, review runs, task runs, epics' plan runs, and each tick's overseer: every table an
+    agent run records on.
 
     Returns:
         The total cost in US dollars, or None when no such run reported one.
     """
     tables: tuple[RunTable | Literal["ticks"], ...] = (*RUN_TABLES, "ticks")
     costs = [sql.select("SUM(cost_usd)").from_(table).where("started_at >= ?", since) for table in tables]
-    row = sql.execute(conn, sql.select("({}), ({}), ({}), ({}), ({})", *costs)).fetchone()
+    row = sql.execute(conn, sql.select("({}), ({}), ({}), ({}), ({}), ({})", *costs)).fetchone()
     parts = [float(v) for v in row if v is not None]
     return sum(parts) if parts else None
 

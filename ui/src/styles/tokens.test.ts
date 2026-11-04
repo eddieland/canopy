@@ -236,6 +236,12 @@ describe.each(Object.entries(THEMES))('%s theme', (themeName, colors) => {
         expect(low).toEqual([])
     })
 
+    // A cleared item's starburst letters its word on its own plate, and inks the plate apart from what it bangs over.
+    it("reads the starburst's word on its plate", () => {
+        expect(contrast(token('flair-burst-letter'), token('flair-burst'))).toBeGreaterThanOrEqual(AA)
+        expect(contrast(token('flair-burst-line'), token('flair-burst'))).toBeGreaterThanOrEqual(AA)
+    })
+
     // The approved band, a live readout, and the newer-build notice set accent text on the accent's own 14%.
     it('reads the accent on its own tint', () => {
         const low = ['surface', 'surface-raised']
@@ -244,6 +250,47 @@ describe.each(Object.entries(THEMES))('%s theme', (themeName, colors) => {
             )
             .filter((line) => line !== null)
         expect(low).toEqual([])
+    })
+})
+
+// A palette that inks its drop in a color of its own (`--ink-drop`), as Pulp's dark does where black would vanish into
+// its canvas: the drop is no text, but it must still read on the canvas and on a panel, under a bubble.
+const DROP = 1.5
+describe.each(Object.entries(THEMES).filter(([, colors]) => colors['ink-drop'] !== undefined))(
+    "%s theme's drop",
+    (_name, colors) => {
+        it.each(['background', 'surface', 'surface-raised'])('reads on %s', (base) => {
+            const [drop, ground] = [colors['ink-drop'], colors[base]]
+            if (drop === undefined || ground === undefined) {
+                throw new Error(`tokens.css sets no --ink-drop or --${base} in this theme`)
+            }
+            expect(contrast(srgb(...drop), srgb(...ground))).toBeGreaterThanOrEqual(DROP)
+        })
+    },
+)
+
+// A bubble's balloon tail (`bubble-tail` in src/index.css) draws nothing by default, and is drawn only by a palette
+// that inks its bubbles, since the tail is inked in that palette's `--ink`. Its ink's reach, the tail and its line's
+// offset along the slant, stays inside a conversation's padding (0.75rem) less a bordered bubble's border: past it,
+// the thread's scroll would clip its tip, and scroll sideways.
+const TAIL_ROOM = 12 - 1
+describe("a bubble's balloon tail", () => {
+    it('draws nothing by default', () => {
+        expect(rule(':root')).toContain('--bubble-tail: 0px;')
+        expect(rule(':root')).toContain('--bubble-tail-line: 0px;')
+    })
+
+    it.each(
+        (['light', 'dark'] as const).flatMap((mode) =>
+            PALETTES[mode].slice(1).map((palette) => [`${palette} ${mode}`, paletteRule(mode, palette)]),
+        ),
+    )('%s draws one only if it inks its bubbles, within the padding', (_name, selector) => {
+        const body = rule(selector)
+        const tail = /--bubble-tail: ([\d.]+)px;/u.exec(body)?.[1]
+        const line = /--bubble-tail-line: ([\d.]+)px;/u.exec(body)?.[1]
+        expect(tail !== undefined).toBe(/--depth-bubble: (?!none)/u.test(body))
+        expect(line !== undefined).toBe(tail !== undefined)
+        expect(Number(tail ?? 0) + 1.8685 * Number(line ?? 0)).toBeLessThanOrEqual(TAIL_ROOM)
     })
 })
 
@@ -256,6 +303,28 @@ describe('inline code size', () => {
     )('%s sets code at full size if and only if its face is mono', (_name, selector) => {
         const body = rule(selector)
         expect(body.includes('--code-size: 1em;')).toBe(body.includes('--face: var(--face-mono);'))
+    })
+})
+
+// A section's title is lettered in a display face, with a second plate off register, on Pulp alone: the defaults
+// draw neither, so every other palette's titles stay as they were.
+describe('title lettering', () => {
+    it('sets no display face and draws no second plate by default', () => {
+        const body = rule(':root')
+        expect(body).toContain('--face-title: var(--face);')
+        expect(body).toContain('--title-tracking: -0.025em;')
+        expect(body).toContain('--title-drop-2: 0 0 transparent;')
+    })
+
+    it.each(
+        (['light', 'dark'] as const).flatMap((mode) =>
+            PALETTES[mode].slice(1).map((palette) => [`${palette} ${mode}`, palette, paletteRule(mode, palette)]),
+        ),
+    )('%s letters its titles if and only if it is Pulp', (_name, palette, selector) => {
+        const body = rule(selector)
+        expect(body.includes('--face-title:')).toBe(palette === 'pulp')
+        expect(body.includes('--title-drop-2:')).toBe(palette === 'pulp')
+        expect(body.includes('--title-tracking:')).toBe(palette === 'pulp')
     })
 })
 

@@ -6,8 +6,8 @@ map. Previous: [The operator's checklist](CHECKLIST.md).
 
 ## 43. Epics
 
-Being built (REQUIREMENTS R28, ROADMAP M67). Built: the epic and its members, of no entry yet, and their bound,
-from the CLI.
+Being built (REQUIREMENTS R28, ROADMAP M67). Built: the epic, its members, and their bound, from the CLI; its plan
+runs, which record a plan `proposed`; its approval, replies, and members registered against its entries.
 
 §25 plans one ticket. Work that spans several has no plan of its own, so each ticket's planner settles the shared
 questions again and the operator approves them again. An **epic** is that work as canopy's own subject: the
@@ -57,9 +57,10 @@ text is never an instruction to the harness (T1).
 
 The usual path is the operator's: they file the tickets themselves, when and as they choose, and register each with the
 membership command against the entries it fulfils, one or more, or none for a ticket the breakdown did not foresee. An
-entry names the approved plan's id, and a registration that names one it does not hold is refused. canopy never asks for
-a ticket per entry: the epic's status lists each entry with its members, or none yet, so the plan shows what is
-left to file.
+entry names the approved plan's id, and a registration that names one it does not hold is refused. Registering a member
+again replaces its entries; what reaches it, and whether it is trivial, follow from its entries and the plan approved
+now. canopy never asks for a ticket per entry: the epic's status lists each entry with its members, or none yet,
+so the plan shows what is left to file.
 
 Filing them is an option, never the default. Only when the operator asks, once the plan is approved, a filing run files
 the entries they name, as a task files tickets (§36): the private worker (§22), whose create tool alone writes to the

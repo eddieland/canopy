@@ -789,10 +789,10 @@ def check_room(
     busy_reviews = len(db.running_runs(ctx.conn, "review_runs")) + len(planned_reviews) + held_reviews
     if busy_reviews >= cfg.capacity.max_reviews:
         raise Refusal("review_capacity", f"{busy_reviews} of {cfg.capacity.max_reviews} review runs are running")
-    # A task's run holds a slot too (DESIGN §36).
-    tasks = len(db.running_runs(ctx.conn, "task_runs"))
+    # A task's run holds a slot too (DESIGN §36), and an epic's plan run one per repository it names (§43).
+    slot_runs = len(db.running_runs(ctx.conn, "task_runs")) + len(db.running_runs(ctx.conn, "epic_runs"))
     held_runs = sum(r.kind is RecordedKind.DISPATCH for r in held)
-    busy = len(db.running_runs(ctx.conn, "runs")) + busy_reviews + tasks + len(planned_runs) + held_runs
+    busy = len(db.running_runs(ctx.conn, "runs")) + busy_reviews + slot_runs + len(planned_runs) + held_runs
     if busy >= cfg.capacity.max_workers:
         raise Refusal("capacity", f"{busy} of {cfg.capacity.max_workers} workers, reviews, and tasks are running")
 

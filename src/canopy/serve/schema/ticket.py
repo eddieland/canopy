@@ -54,6 +54,8 @@ class LeftFeedback(Model):
     """Its line in that file."""
     url: str | None = None
     """Its link on GitHub."""
+    body: str
+    """What it says, as the reader last saw it: the reviewer's text, shown, never acted on."""
     reason: Literal[
         "optional",
         "would_reset_approval",

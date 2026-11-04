@@ -16,8 +16,9 @@ Each theme also has a palette, picked apart; hover one, here or in the header's 
 like before you commit to it. The defaults tint the canvas with the accent's hue: **Lavender** in light,
 **Indigo** in dark. Light can also be **Off-white**, a warm paper, a soft green **Sage**, or the light side of
 **Solarized**, **Nord**, **Gruvbox**, **Rosé Pine** (its Dawn variant), or **Acme**, in the two tones of Plan 9's
-editor. **Pulp**, on either side, is Gruvbox's colors inked as a comic. Dark can be a plain **Grey**, a near
-**Black** for an OLED screen, a deep green **Forest**, a wine-dark
+editor. **Pulp**, on either side, is a comic printed in four colors: newsprint cream in light, a night blue in dark,
+loud flat section colors on both, and process magenta for the button you actually came to press. Dark can be a plain
+**Grey**, a near **Black** for an OLED screen, a deep green **Forest**, a wine-dark
 **Plum**, or the dark side of **Solarized**, **Gruvbox**, or **Monokai**. The background, surfaces, text, and accent
 change. Schemes with an accent bring it: Nord and Solarized their blues, Monokai its hot pink, Rosé Pine its dusty one,
 Acme its dark blue, Gruvbox its purple, since its orange looked like every run was blocked. The rest get one that suits
@@ -31,9 +32,16 @@ Dracula's dark sides missed out the same way.
 
 A few palettes bring more than color. Dark **Gruvbox** has the crisp corners of an editor from the nineties, sets every
 line in monospace as one would, and menus and cards cast a hard shadow with no blur. **Pulp** takes all of that and
-prints it: every panel and speech bubble is outlined and drops a hard shadow onto a page of halftone dots, a title
-casts its section's color, and the primary button sinks into its shadow when you press it. Nothing explodes, though
-not for want of trying. **Black** drops the panels'
+prints it: every panel and speech bubble is outlined and drops a hard shadow onto a page whose far corner fades into
+cyan Ben-Day dots, clear wherever there is something to read, each bubble grows a balloon tail from its square corner,
+pointing out to its speaker's side, a title casts its section's color, and the primary button sinks into its shadow
+when you press it. A section's own page is lettered like a comic's cover, in hand-drawn caps with a cyan plate printed
+a hair out of register; a ticket's or a run's title stays in monospace, so it wraps where it always did. At night the
+line is cream and the shadow an ultramarine plate, since black ink on a night sky is just more night. The header gets
+the treatment too: the name sits on an inked plate tilted like a sound effect, and the strip under it prints each
+section's block between ink gutters. One thing does explode: an attention item that clears while you watch goes off in
+a starburst with a sound effect, where the other palettes drop a leaf. A run of clears gets one bang, not a fireworks
+show. **Black** drops the panels'
 outlines, since a step of lightness does the job on an OLED screen, rounds its corners, and lights what floats with its
 ultraviolet, because a shadow on black is a shadow nobody sees. The rest cast a soft shadow under what floats. Gruvbox
 turns the strip under the header into a stepped status bar and sets the name on a yellow block, and its section colors

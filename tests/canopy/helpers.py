@@ -55,7 +55,7 @@ from canopy.core.vocab import (
 )
 from canopy.infra import logs, procs, resources
 from canopy.loop import connectors, mcp, spawns
-from canopy.runs import drafted
+from canopy.runs import drafted, epic_starts
 from tests.conftest import FAKES_DIR, TRACKER_CMD, TRACKER_SOURCE, CanopyEnv, Journals, git
 
 KEY = "PROJ-1"
@@ -304,6 +304,32 @@ def operator(*args: str) -> int:
     with mock.patch.dict(os.environ):
         os.environ.pop("CANOPY_TICK_ID", None)
         return main(list(args))
+
+
+def epic_planning(env: CanopyEnv) -> int:
+    """Submit an epic and start its plan run, left running, as the tick starts one: return the run's id.
+
+    The run is claimed by this process, so it reads as running, and holds a slot of `repo`, until the test ends.
+    """
+    assert operator("epic", "submit", "Move sessions to the new store.") == 0
+    ctx = inline_context(env)
+    with in_tick(ctx.conn) as tick_id:
+        [started] = epic_starts.start_due(ctx, tick_id, logs.for_tick(tick_id))
+    return started.run_id
+
+
+def epic_planned(env: CanopyEnv, plan: str, epic_id: int = 1) -> int:
+    """Have epic `epic_id`'s next plan run, as a live tick starts one, write `plan`: return the run's id.
+
+    The epic is already submitted, and due a plan run: just submitted, or replied to since its last.
+    """
+    ctx = inline_context(env)
+    with in_tick(ctx.conn) as tick_id:
+        started = epic_starts.start_due(ctx, tick_id, logs.for_tick(tick_id))
+    [run_id] = [s.run_id for s in started if s.epic_id == epic_id]
+    with planner_does(plan=plan):
+        assert main(["_epic", str(run_id)], runner=InlineRunner()) == 0
+    return run_id
 
 
 def running_run(ctx: Context, key: str, *, private: bool = True) -> int:

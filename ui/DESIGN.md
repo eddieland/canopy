@@ -126,14 +126,15 @@ Rules:
   Gruvbox's purple); the others take one that suits the canvas. Light has off-white, a warm paper, sage, and the light
   tones of Solarized, Nord, Gruvbox, Rosé Pine Dawn, and Acme, Plan 9's editor; dark has grey (the near-colorless
   neutrals the 2026-10-19 exploration drew for Mailroom), black, forest, plum, and the dark tones of Solarized, Gruvbox,
-  and Monokai. Pulp, on both sides, is Gruvbox's tones inked as a comic. A light canvas is never grey, which only
+  and Monokai. Pulp, on both sides, is a comic in four-color print: newsprint cream in light, a night blue in dark,
+  process magenta its accent. A light canvas is never grey, which only
   looks dim. Every other hue is the same in all, so a component
   never knows which it is on, and an accent is read through its token, never assumed indigo; where a scheme's own bases
   would drop a hue below 4.5:1, the bases move, never the hue. A palette's accent is darkened or lightened until it
   reads as text there, on its own tint, and under `accent-foreground`, and sets `ring` with it. A scheme whose accent
   would pass for a status wears another of its colors, as Gruvbox wears its purple, not its orange, and a green canvas
   never takes a green accent. A scheme whose bases would have to move until it matched another palette is left out, as
-  Nord's dark is; Pulp alone shares another's colors, Gruvbox's, set apart by its character. `tokens.test.ts`
+  Nord's dark is. `tokens.test.ts`
   measures every palette `src/theme/palette.ts` lists, and `theme-script.test.ts`
   checks the inline script knows each.
   A palette sets its character too, beyond color, from a few closed choices, in the same rule, so a component still
@@ -145,22 +146,37 @@ Rules:
   that are an editor's own look, Gruvbox's sides, Monokai, and Acme, and Pulp, lettered as Gruvbox is. There it
   draws every line a step smaller, at 15/16
   of the size asked for, in the same line boxes, so the wider face crowds less and no line changes height. The guide
-  keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono.
+  keeps the default faces under every palette (`guide-face`), since pages of prose read worse in mono. The one other
+  face that reflows, which the operator approved, is Pulp's display face (`--face-title`), on a section's own page
+  title alone (`section-title`): a fixed name, never a title from the data, so no line it sets wraps differently.
   The defaults take the soft shadow, Gruvbox's dark the crisp corners, hard shadow, and mono face of an editor of the
   nineties, and black no edges, soft corners, and the glow.
-  Pulp's sides take Gruvbox's character and ink the page as a comic does, from a few knobs whose defaults draw
-  nothing: each panel and bubble outlined and dropping a hard shadow (`shadow-panel`, `shadow-bubble`), a halftone
-  canvas (`--canvas-texture`), the primary action pressed into its shadow (`--press-x`, `--press-y`), and a page title
-  dropped in its section's color (`--title-drop`). Each is a shadow, a transform, or a background, so it takes no room.
+  Pulp's sides take Gruvbox's character, in colors of their own, and ink the page as a comic does, from a few knobs
+  whose defaults draw nothing: each panel and bubble outlined and dropping a hard shadow (`shadow-panel`,
+  `shadow-bubble`), a Ben-Day tone printed on the canvas, its dots swelling toward the window's far edges and clear
+  where the rail, the header, and a title sit, so it is never under text (`--canvas-texture`, `--canvas-swell`, and
+  their masks), the primary action pressed into its shadow (`--press-x`, `--press-y`), a page title dropped in its
+  section's color (`--title-drop`), and a bubble's balloon tail (`--bubble-tail`, `--bubble-tail-line`), out of its
+  square corner along its top edge, so it never meets the head line above, in the bubble's own fill over the panel's
+  surface. A section's own title is lettered too: in its display face and tracking (`--face-title`, `--title-tracking`),
+  its drop half again as far, and a thin second plate up and to its left, off register (`--title-drop-2`). Each is a
+  shadow, a transform, a background, a face drawn in the same line box, or drawn beside its box, so it takes no room.
+  Both sides ink by the same rings; dark's line is its cream, and its drop a color that reads on the night blue, where
+  black would not. Pulp shows a starburst where a cleared item drops its leaf (`--burst-plate`, `--burst-leaf`),
+  absolutely placed, so it too takes no room.
   A palette may also give the shell's signature a form of its own, the first place it is felt: the aurora (a gradient
-  hairline, a stepped bar of solid blocks, or a line that blooms), the name (the aurora's gradient, on a solid block,
-  or glowing), and the nav's highlight (a tint and a bar, a solid block with the active item inked in the canvas's
-  color, or a tint with the icon lit). Each form takes the room the default does, so a switch moves nothing; the
-  defaults keep the first of each, Gruvbox's dark the second, and black the third.
+  hairline, a stepped bar of solid blocks, a print strip of those blocks between ink gutters, or a line that blooms),
+  the name (the aurora's gradient, on a solid block, on a plate inked as a panel and tilted a few degrees by a
+  transform, `--wordmark-tilt`, or glowing), and the nav's highlight (a tint and a bar, a solid block with the active
+  item inked in the canvas's color, or a tint with the icon lit). Each form takes the room the default does, so a
+  switch moves nothing, and what a form draws past its box (a frame, a drop, a tilt) stays clear of what is beside it;
+  the defaults keep the first of each, Gruvbox's dark the second, Pulp's sides the print strip, the plate, and the
+  block, and black the last of each.
   A palette may tune its section colors too, muted toward a scheme's own set or turned up, but each keeps its hue's
   family, which says what its page is for: a rose stays a rose, a gold a gold, though a scheme's own shade of it may
   sit a few degrees round the wheel. Each still reads at 4.5:1 there, which `tokens.test.ts` measures, and stays apart
-  from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage.
+  from the status colors and the palette's accent. Gruvbox's dark takes its own faded set, black full voltage, and
+  Pulp's sides a flat, full-chroma set, as a comic prints its colors.
   Every other palette picks from the same choices, so each reads as its own place: Gruvbox's light side as its dark
   one, Solarized's sides crisp and flat, Monokai crisp and in mono under a neon aurora, Acme square and in mono, its
   panels pale yellow on a pale cyan canvas, the one palette in two hues, under one olive rule, Nord's light side soft
@@ -178,7 +194,12 @@ Rules:
   (Plex Mono has no variable build); the latin subsets are preloaded, so text never paints in a fallback face. A
   heavier mono weight needs its own import in `src/index.css` and a place in `PRELOAD_FONTS` in `vite.config.ts`.
   A palette may set interface text in Plex Mono too (Palettes, under Tokens), a step smaller, from the same files
-  (`src/styles/mono-compact.css`), so no third face is ever loaded.
+  (`src/styles/mono-compact.css`).
+- **Bangers**, a comic letterer's caps (OFL), is the one display face, Pulp's, for a section's own page title alone
+  (`section-title`), never a title from the data. Self-hosted from `@fontsource/bangers`, its latin subset alone
+  (`src/styles/title-face.css`), and preloaded with the rest. It is drawn a fifth larger than the size asked for, so
+  its caps stand as tall as a sans title's ascenders, in the same line box; it has one weight, declared for every
+  weight so the browser never fakes a bold. No other face is loaded.
 - `readout`: monospace, `tabular-nums`, slashed zero. Use it for every counter, timer, cost, id, and timestamp, so a
   changing number keeps its width.
 - `panel-label`: small uppercase monospace in `muted-foreground`, the label above or beside a value.
@@ -1376,14 +1397,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`min-h-40`, only then). A transcript with no events, its log gone, its runtime naming no session, or its run yet to
   print one, is its header alone, the session and then why in a few words as its readout (`log gone`, `no session`,
   `no events yet`, `no events`), the whole reason on hover.
-  A transcript over 100 rows draws the first 100 (`TRANSCRIPT_BUDGET`, `src/lib/transcript.ts`), in order or By call,
-  since one at the server's bounds (2,000 entries) drawn whole is 80,000 elements, and every key typed in its search
-  waited on all of them; 100 keeps the page under 10,000 elements even when a search opens every call it draws. After
-  them a fold, a row on `surface-raised/50` with a ghost `xs` button in a diff's fold's words (below), `Show 60 more
-  rows` or `Show 100 of 1,900 more rows` (`more calls` By call), draws the next 100; it only adds. A search still
-  reads every entry, drawn or not, and draws the first 100 of the rows it keeps, the fold counting the rest; a new
-  search, By call turned on or off, or another session starts again at 100. The search redraws the rows in a
-  transition behind the field (`inPage`, `src/lib/in-page.ts`), which the outlet does not cross-fade (Motion, above).
+  A transcript over 1,000 rows draws the first 1,000 (`TRANSCRIPT_BUDGET`, `src/lib/transcript.ts`), in order or By
+  call, since one at the server's bounds (2,000 entries) drawn whole is 80,000 elements. The rows sit in a
+  `PanelScroll` of most of the window's height (`max(24rem,80dvh)`), under the counts, the search, and the chart, so the
+  panels after the transcript stay in reach. After them a fold, a row on `surface-raised/50` with a ghost `xs` button in
+  a diff's fold's words (below), `Show 600 more rows` (`more calls` By call), draws the next 1,000; it only adds. A
+  search still reads every entry, drawn or not, and draws the first 1,000 of the rows it keeps, the fold counting the
+  rest; a new search, By call turned on or off, or another session starts again at 1,000.
+  The search redraws the rows in a transition behind the field (`inPage`, `src/lib/in-page.ts`), so a key typed never
+  waits on them, and the outlet does not cross-fade it (Motion, above).
   All open opens the rows drawn. A row shown from the chart or `ended on` is drawn first, with every row before it.
 - **A transcript's context** (`ContextChart`, `contextShape` in `src/lib/transcript.ts`) sits between the counts and
   the rows, in either view, once a model call has its tokens. Its line, in the counts' band as their second line: a

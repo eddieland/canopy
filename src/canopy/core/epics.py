@@ -1,10 +1,12 @@
-"""Epics (DESIGN §43): the operator's submissions, the repositories each one's plan reads, and its members.
+"""Epics (DESIGN §43): the operator's submissions, the repositories each one's plan reads, its members, its plans.
 
-Only the operator's channels write here, and every write refuses inside a tick or any agent's run (`inside_run`,
-TRUST_MODEL T1): the submission is what will authorize an epic's plan runs, and membership is the operator's
-word alone. A tracker's epic, parent, or sub-issue link never makes a ticket a member, and membership authorizes no work
-on it: a member is worked only once a label or a start says so, as any ticket is. The overseer never reads an
-epic. `policy.max_epic_tickets` bounds the members of one, a guard in code (§4).
+Only the operator's channels submit an epic or change its members, each refusing inside a tick or any agent's run
+(`inside_run`, TRUST_MODEL T1): the submission is what authorizes an epic's plan runs, and membership is the
+operator's word alone. A plan run records the plan it wrote here, as a file in the state directory and a row of its
+hashes, `proposed`, never approved: only the operator approves one. A tracker's epic, parent, or sub-issue link never
+makes a ticket a member, and membership authorizes no work on it: a member is worked only once a label or a start says
+so, as any ticket is. The overseer never reads an epic. `policy.max_epic_tickets` bounds the members of one,
+a guard in code (§4).
 """
 
 from __future__ import annotations
@@ -13,11 +15,14 @@ import sqlite3
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, records
+from canopy.core import conversation, db, epic_outline, plans, records
 from canopy.core.conversation import Refused
+from canopy.core.vocab import PlanStatus, RunStatus
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
+    from collections.abc import Set as AbstractSet
+    from pathlib import Path
 
     from canopy.core.workspace import Workspace
 
@@ -26,6 +31,14 @@ MAX_TEXT = conversation.MAX_OPERATOR
 #: A tracker project's key, or a tracker epic's, as a ticket key spells it (DESIGN §18).
 KEY_RE = conversation.KEY_RE
 MAX_KEY = conversation.MAX_KEY
+#: The copy of an approved plan's text, kept beside its file when the operator approves it: what the next approval is
+#: compared with, whatever later becomes of the file. Named for the run and the text's hash,
+#: `<run>.<sha256>.approved.md`, so an approval retried after one that wrote its copy and then failed finds the copy it
+#: would write already there.
+APPROVED_SUFFIX = ".approved.md"
+#: Where an epic's plans are kept, `<state_dir>/epics/<id>/<run_id>.md`, readable only by the operator, as a
+#: ticket's plans are (DESIGN §25, §43).
+PLANS_DIR = "epics"
 
 
 @dataclass(frozen=True)
@@ -34,6 +47,17 @@ class Added:
 
     added: Sequence[str]
     already: Sequence[str]
+    #: The entries each key was registered against, when the call named some; None when it left them as they were.
+    entries: AbstractSet[str] | None = None
+
+
+@dataclass(frozen=True)
+class Approved:
+    """What an approval did: the plan approved, and what it changed from the one approved before it, if any."""
+
+    plan: records.EpicPlan
+    #: None for the epic's first approved plan.
+    change: epic_outline.Change | None
 
 
 def submit(
@@ -127,11 +151,16 @@ def add(
     *,
     bound: int,
     channel: str,
+    entries: Iterable[str] | None = None,
+    state_dir: Path | None = None,
 ) -> Added:
     """Make tickets `keys` members of epic `epic_id`, the operator's word alone (DESIGN §43).
 
     Every key is added or none is: a refusal leaves the members as they were. A key already a member of this epic
-    is left as it is. `bound` is `policy.max_epic_tickets`, the most members the epic may then hold.
+    stays one. `bound` is `policy.max_epic_tickets`, the most members the epic may then hold. `entries`,
+    when given, registers every key against those breakdown entries of the epic's approved plan, read from
+    `state_dir`, in place of any it had; an empty one registers them against none. None leaves a member's entries as
+    they were, and a new member with none.
 
     Returns:
         The keys it added, in the order given, and those already members.
@@ -139,13 +168,15 @@ def add(
     Raises:
         Refused: `inside_run` inside a tick or a run, `unknown_epic` for no such epic, `bad_key` for a key
             that is not a ticket key, `other_epic` for a ticket already a member of another, and
-            `epic_full` when the members would then be more than `bound`.
+            `epic_full` when the members would then be more than `bound`; `no_plan` for entries named before
+            any plan was approved, and `unknown_entry` for one the approved plan does not hold.
     """
     conversation.check_operator()
     _check_epic(conn, epic_id)
     wanted = list(dict.fromkeys(keys))
     for key in wanted:
         _check_key(key, "a ticket key")
+    named = _entries(conn, state_dir, epic_id, entries) if entries is not None else None
     with db.transaction(conn):
         added: list[str] = []
         already: list[str] = []
@@ -171,7 +202,28 @@ def add(
                 ("epic_id", "ticket_key", "added_at", "added_channel"),
             )
             rows.many(conn, [(epic_id, key, now, channel) for key in added])
-    return Added(added=tuple(added), already=tuple(already))
+        if named is not None:
+            for key in wanted:
+                _register(conn, present_member(conn, key), named)
+    return Added(added=tuple(added), already=tuple(already), entries=named)
+
+
+def present_member(conn: sqlite3.Connection, key: str) -> records.EpicMember:
+    """Return ticket `key`'s membership, which the caller knows it has.
+
+    Raises:
+        DatabaseError: it has none, which nothing but a broken journal makes so.
+    """
+    found = membership(conn, key)
+    if found is None:
+        raise sqlite3.DatabaseError(f"{key}'s membership was not recorded")
+    return found
+
+
+def entries_of(conn: sqlite3.Connection, member_id: int) -> list[str]:
+    """Return the breakdown entries member `member_id` fulfils, as the operator registered them, by number."""
+    rows = records.select(records.EpicMemberEntry).where("member_id = ?", member_id).all(conn)
+    return sorted((r.entry for r in rows), key=lambda e: int(e[1:]))
 
 
 def remove(conn: sqlite3.Connection, epic_id: int, keys: Iterable[str], *, channel: str) -> list[str]:
@@ -202,6 +254,254 @@ def remove(conn: sqlite3.Connection, epic_id: int, keys: Iterable[str], *, chann
             update = records.update(records.EpicMember).set(removed_at=now, removed_channel=channel)
             update.where("epic_id = ? AND ticket_key = ? AND removed_at IS NULL", epic_id, key).run(conn)
     return wanted
+
+
+def plan_path(state_dir: Path, epic_id: int, run_id: int) -> Path:
+    """Where the plan that run `run_id` of epic `epic_id` wrote is kept: built from the ids, never a row.
+
+    Returns:
+        `<state_dir>/epics/<epic_id>/<run_id>.md`. The file may not exist.
+    """
+    return state_dir / PLANS_DIR / str(epic_id) / plans.file_name(run_id)
+
+
+def write_plan(state_dir: Path, epic_id: int, run_id: int, text: str) -> plans.Written:
+    """Write the plan run `run_id` wrote to its file, once, readable only by the operator (DESIGN §43).
+
+    Returns:
+        The file's hash and size, for its row.
+
+    Raises:
+        PlanFileError: `epics/` or the epic's directory is not the operator's own, or the name is taken.
+    """
+    return plans.write_new(state_dir / PLANS_DIR, str(epic_id), plans.file_name(run_id), text)
+
+
+def record_plan(
+    conn: sqlite3.Connection,
+    epic_id: int,
+    run_id: int,
+    written: plans.Written,
+) -> records.EpicPlan:
+    """Record the plan run `run_id` wrote as epic `epic_id`'s newest, `proposed`, superseding its last.
+
+    An approved plan it supersedes stays readable, as what the next approval is compared with (DESIGN §43).
+
+    Returns:
+        The plan, as recorded.
+
+    Raises:
+        DatabaseError: the row was not recorded, which nothing but a broken journal does.
+    """
+    with db.transaction(conn):
+        superseded = records.update(records.EpicPlan).set(status=PlanStatus.SUPERSEDED)
+        superseded.where("epic_id = ? AND status != ?", epic_id, PlanStatus.SUPERSEDED).run(conn)
+        insert = records.insert(
+            records.EpicPlan,
+            epic_id=epic_id,
+            run_id=run_id,
+            created_at=db.now(),
+            sha256=written.sha256,
+            size=written.size,
+        )
+        plan_id = int(insert.run(conn).lastrowid or 0)
+    found = records.select(records.EpicPlan).where("id = ?", plan_id).one(conn)
+    if found is None:
+        raise sqlite3.DatabaseError("the epic plan's row was not recorded")
+    return found
+
+
+def current_plan(conn: sqlite3.Connection, epic_id: int) -> records.EpicPlan | None:
+    """Return epic `epic_id`'s plan waiting on the operator or approved, or None while it has neither."""
+    query = records.select(records.EpicPlan).where(
+        "epic_id = ? AND status != ?",
+        epic_id,
+        PlanStatus.SUPERSEDED,
+    )
+    return query.one(conn)
+
+
+def plans_of(conn: sqlite3.Connection, epic_id: int) -> list[records.EpicPlan]:
+    """Return every plan epic `epic_id` has had, the oldest first."""
+    return records.select(records.EpicPlan).where("epic_id = ?", epic_id).order_by("id").all(conn)
+
+
+def approve(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    epic_id: int,
+    *,
+    repos: AbstractSet[str],
+    channel: str,
+) -> Approved:
+    """Approve epic `epic_id`'s waiting plan, as its file stands, the operator's edits included (§43).
+
+    Only the operator approves one, and only a `proposed` plan whose ids and breakdown read in the outline's shape, in
+    `repos`, and that uses no id an earlier approved plan dropped. A copy of the approved text is kept beside its file,
+    as what the next approval is compared with.
+
+    Returns:
+        The plan approved, and what it changed from the plan approved before it.
+
+    Raises:
+        Refused: `inside_run` inside a tick or a run, `unknown_epic` for no such epic, `planning` while a
+            plan run of it runs, `no_plan` when no plan waits on the operator, `unreadable_plan` when its file is not
+            a plan, `bad_outline` when its ids or breakdown cannot be read, `approved_changed` when an earlier
+            approved plan's copy is not what was approved, and `reused_id` for an id an earlier approval dropped.
+        PlanFileError: the approved copy could not be written: the epic's directory is not the operator's own.
+        DatabaseError: the approval was not recorded, which nothing but a broken journal does.
+    """
+    conversation.check_operator()
+    _check_epic(conn, epic_id)
+    with db.transaction(conn):
+        running = records.select(records.EpicRun).where(
+            "epic_id = ? AND status = ?",
+            epic_id,
+            RunStatus.RUNNING,
+        )
+        if running.all(conn):
+            raise Refused("planning", f"epic:{epic_id} is being planned; approve the plan once its run ends")
+        current = current_plan(conn, epic_id)
+        if current is None or current.status is not PlanStatus.PROPOSED:
+            raise Refused("no_plan", f"no plan of epic:{epic_id} waits on you; reply to it to ask for one")
+        reading = plans.read(plan_path(state_dir, epic_id, current.run_id))
+        if reading.text is None or reading.sha256 is None:
+            raise Refused("unreadable_plan", f"epic:{epic_id}'s plan file is {reading.problem}")
+        try:
+            outline = epic_outline.read(reading.text, repos=repos)
+        except epic_outline.OutlineError as e:
+            raise Refused("bad_outline", f"epic:{epic_id}'s plan cannot be read: {e.reason}") from None
+        earlier = _approved_outlines(conn, state_dir, epic_id)
+        change = epic_outline.compare(earlier[-1], outline) if earlier else None
+        if earlier:
+            retired = frozenset().union(*(o.ids() for o in earlier)) - earlier[-1].ids()
+            reused = epic_outline.reused(outline, retired)
+            if reused:
+                ids = ", ".join(reused)
+                raise Refused("reused_id", f"the plan uses {ids}, which an earlier approved plan dropped: never again")
+        _keep_approved(state_dir, epic_id, current.run_id, reading.text, reading.sha256)
+        update = records.update(records.EpicPlan).set(
+            status=PlanStatus.APPROVED,
+            approved_sha256=reading.sha256,
+            approved_at=db.now(),
+            approved_channel=channel,
+        )
+        update.where("id = ?", current.id).run(conn)
+    approved = records.select(records.EpicPlan).where("id = ?", current.id).one(conn)
+    if approved is None:
+        raise sqlite3.DatabaseError("the epic plan's approval was not recorded")
+    return Approved(plan=approved, change=change)
+
+
+def approved_outline(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    epic_id: int,
+) -> epic_outline.Outline | None:
+    """Return the outline of epic `epic_id`'s latest approved plan, from its approved copy.
+
+    Returns:
+        The outline, or None while no plan of it has been approved.
+
+    Raises:
+        Refused: (`approved_changed`) its copy is not what the operator approved.
+    """
+    earlier = _approved_outlines(conn, state_dir, epic_id)
+    return earlier[-1] if earlier else None
+
+
+def approved_path(state_dir: Path, epic_id: int, run_id: int, sha256: str) -> Path:
+    """Where the copy of the plan run `run_id` wrote, as the operator approved it with hash `sha256`, is kept.
+
+    Returns:
+        `<state_dir>/epics/<epic_id>/<run_id>.<sha256>.approved.md`. The file may not exist.
+    """
+    return plan_path(state_dir, epic_id, run_id).with_name(f"{run_id}.{sha256}{APPROVED_SUFFIX}")
+
+
+def messages_of(conn: sqlite3.Connection, epic_id: int) -> list[records.Message]:
+    """Return the operator's messages to epic `epic_id`, the oldest first: each its next plan's to read."""
+    query = records.select(records.Message).where(
+        "subject_kind = ? AND subject_id = ? AND source = 'operator'",
+        conversation.EPIC,
+        str(epic_id),
+    )
+    return query.order_by("id").all(conn)
+
+
+def _keep_approved(state_dir: Path, epic_id: int, run_id: int, text: str, sha256: str) -> None:
+    """Keep the copy of an approved plan's `text`, or find it kept already by an approval that failed after writing it.
+
+    Raises:
+        PlanFileError: the copy could not be written, or a file of its name holds something else.
+    """
+    path = approved_path(state_dir, epic_id, run_id, sha256)
+    if path.exists() and plans.read(path).sha256 == sha256:
+        return
+    plans.write_new(state_dir / PLANS_DIR, str(epic_id), path.name, text)
+
+
+def _approved_outlines(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    epic_id: int,
+) -> list[epic_outline.Outline]:
+    """Read every plan of the epic the operator approved, the oldest first, from each one's approved copy.
+
+    Returns:
+        Their outlines.
+
+    Raises:
+        Refused: (`approved_changed`) a copy is missing or not what was approved, so no approval can be compared.
+    """
+    found: list[epic_outline.Outline] = []
+    for plan in plans_of(conn, epic_id):
+        if plan.approved_sha256 is None:
+            continue
+        path = approved_path(state_dir, epic_id, plan.run_id, plan.approved_sha256)
+        reading = plans.read(path)
+        if reading.text is None or reading.sha256 != plan.approved_sha256:
+            raise Refused("approved_changed", f"{path} is not the plan approved by run {plan.run_id}")
+        try:
+            found.append(epic_outline.read(reading.text))
+        except epic_outline.OutlineError as e:
+            raise Refused("approved_changed", f"{path} no longer reads: {e.reason}") from None
+    return found
+
+
+def _entries(
+    conn: sqlite3.Connection,
+    state_dir: Path | None,
+    epic_id: int,
+    entries: Iterable[str],
+) -> frozenset[str]:
+    """Check `entries` against the epic's approved plan's breakdown.
+
+    Returns:
+        The entries, each once.
+
+    Raises:
+        Refused: `no_plan` when an entry is named and no plan has been approved, `unknown_entry` for one the approved
+            plan does not hold.
+    """
+    named = frozenset(entries)
+    if not named:
+        return named
+    outline = approved_outline(conn, state_dir, epic_id) if state_dir is not None else None
+    if outline is None:
+        raise Refused("no_plan", f"epic:{epic_id} has no approved plan, so no entry to register against")
+    unknown = sorted(named - frozenset(outline.entries))
+    if unknown:
+        raise Refused("unknown_entry", f"the approved plan of epic:{epic_id} has no {', '.join(unknown)}")
+    return named
+
+
+def _register(conn: sqlite3.Connection, member: records.EpicMember, entries: AbstractSet[str]) -> None:
+    """Replace `member`'s entries with `entries`."""
+    records.delete(records.EpicMemberEntry).where("member_id = ?", member.id).run(conn)
+    if entries:
+        rows = records.insert_rows(records.EpicMemberEntry, ("member_id", "entry"))
+        rows.many(conn, [(member.id, entry) for entry in sorted(entries)])
 
 
 def _repositories(workspace: Workspace, repos: Sequence[str]) -> list[str]:

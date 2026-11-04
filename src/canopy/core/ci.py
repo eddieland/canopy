@@ -23,6 +23,7 @@ status rerun that ended as its last run did, with no read seeing it running, is 
 
 from __future__ import annotations
 
+import bisect
 import json
 import statistics
 from dataclasses import dataclass
@@ -35,6 +36,7 @@ from canopy.core.vocab import CheckConclusion, ResumeReason, RunKind
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Collection, Iterable, Mapping, Sequence
+    from collections.abc import Set as AbstractSet
     from datetime import datetime
 
     from canopy.core.vocab import Phase, RunStatus
@@ -248,32 +250,98 @@ def between(conn: sqlite3.Connection, start: datetime, end: datetime) -> Ci:
     Returns:
         The report, as `report` gives it for any such window: a calendar month's, or the one before a page's.
     """
-    since, until = db.format_time(start), db.format_time(end)
-    days = spend.days_between(start, end)
-    starts = spend.day_starts(start, days)
+    return windows(conn, [(start, end)])[0]
+
+
+def windows(conn: sqlite3.Connection, spans: Sequence[tuple[datetime, datetime]]) -> list[Ci]:
+    """What CI did in each of `spans`, each from one local midnight to another, read once for them all.
+
+    Each is the report `between` gives for it; reading them together reads the journal once, not once a window.
+
+    Returns:
+        Each window's report, in the order of `spans`.
+    """
+    bounds = [(db.format_time(start), db.format_time(end)) for start, end in spans]
+    if not bounds:
+        return []
+    first, last = min(since for since, _ in bounds), max(until for _, until in bounds)
     with db.read_snapshot(conn):
-        named = tracked_prs.tracked(conn, "", until)
+        namings = tracked_prs.read(conn, last)
+        fixes = _fix_runs(conn, first, last)
+        kicks = records.select(records.FlakyKick).where("kicked_at < ?", last).order_by("kicked_at, run_id").all(conn)
+        kick_runs = _runs(conn, {k.run_id for k in kicks if k.kicked_at >= first})
+        named = [namings.tracked("", until) for _, until in bounds]
         # The PRs a window's run named: the last run before its end that named one started in it.
-        tracked = {url: pr for url, pr in named.items() if pr.last_named >= since}
-        fixes = _fix_runs(conn, since, until)
-        kicks = records.select(records.FlakyKick).where("kicked_at < ?", until).order_by("kicked_at, run_id").all(conn)
-        fix_prs = {r.id: _prs_of(r, tracked) for r in fixes}
-        kick_runs = _runs(conn, {k.run_id for k in kicks if k.kicked_at >= since})
-        runs = _check_runs(
-            conn,
+        tracked = [
+            {url: pr for url, pr in found.items() if pr.last_named >= since}
+            for (since, _), found in zip(bounds, named, strict=True)
+        ]
+        fix_prs = [
+            {r.id: _prs_of(r, found) for r in fixes if since <= r.started_at < until}
+            for (since, until), found in zip(bounds, tracked, strict=True)
+        ]
+        runs = _CheckRuns.of(
+            _check_runs(
+                conn,
+                first,
+                last,
+                prs={url for found in fix_prs for urls in found.values() for url in urls},
+                heads={h for k in kicks for h in (k.from_head, k.to_head)},
+            ),
+        )
+    return [
+        _window(
             since,
             until,
-            prs={url for urls in fix_prs.values() for url in urls},
-            heads={h for k in kicks for h in (k.from_head, k.to_head)},
+            runs,
+            fix_prs=fix_prs[i],
+            fixes=fixes,
+            kicks=[k for k in kicks if k.kicked_at < until],
+            kick_runs=kick_runs,
+            named=named[i],
+            tracked=tracked[i],
         )
+        for i, (since, until) in enumerate(bounds)
+    ]
+
+
+def _window(
+    since: str,
+    until: str,
+    read: _CheckRuns,
+    *,
+    fix_prs: Mapping[int, Sequence[str]],
+    fixes: Iterable[records.Run],
+    kicks: Sequence[records.FlakyKick],
+    kick_runs: Mapping[int, records.Run],
+    named: Mapping[str, tracked_prs.TrackedPr],
+    tracked: Mapping[str, tracked_prs.TrackedPr],
+) -> Ci:
+    """One window's report, from the check runs read for every window: those `_check_runs` would read for it alone.
+
+    Returns:
+        The report `between` gives for the window.
+    """
+    start, end = db.parse_time(since), db.parse_time(until)
+    days = spend.days_between(start, end)
+    starts = spend.day_starts(start, days)
+    runs = read.picked(
+        since,
+        until,
+        prs={url for urls in fix_prs.values() for url in urls},
+        heads={h for k in kicks for h in (k.from_head, k.to_head)},
+    )
+    window_fixes = [r for r in fixes if r.id in fix_prs]
     by_pr: dict[str, list[_Run]] = {}
+    by_head: dict[str, list[_Run]] = {}
     for run in runs:
         by_pr.setdefault(run.pr_url, []).append(run)
+        by_head.setdefault(run.head_sha, []).append(run)
     in_window = [r for r in runs if since <= r.observed_at < until]
     first_heads = _first_heads(by_pr, since, until)
     series = _series(in_window)
     window_kicks = [k for k in kicks if k.kicked_at >= since]
-    found_kicks = [_kick(k, kicks, kick_runs, runs) for k in reversed(window_kicks)]
+    found_kicks = [_kick(k, kicks, kick_runs, by_head) for k in reversed(window_kicks)]
     spells = {url: _red_spells(pr_runs) for url, pr_runs in by_pr.items()}
     return Ci(
         since=since,
@@ -284,11 +352,53 @@ def between(conn: sqlite3.Connection, start: datetime, end: datetime) -> Ci:
         checks=_checks(in_window, by_pr),
         series=series,
         per_day=_per_day(in_window, series, starts, first_heads),
-        fixes=[_fix(r, fix_prs[r.id], by_pr, spells) for r in fixes],
+        fixes=[_fix(r, fix_prs[r.id], by_pr, spells) for r in window_fixes],
         kicks=found_kicks,
         kicked_prs=_kicked_prs(found_kicks, tracked, kick_runs),
         pull_requests=_pull_requests({r.pr_url for r in in_window}, spells, named),
     )
+
+
+@dataclass(frozen=True)
+class _CheckRuns:
+    """The check runs `_check_runs` read for every window, the first observed first, indexed to pick each one's."""
+
+    runs: Sequence[_Run]
+    #: Each run's `observed_at`, in the same order, to find a window's by bisection.
+    observed: Sequence[str]
+    #: The positions in `runs` of each PR's runs, and of each head's.
+    by_pr: Mapping[str, Sequence[int]]
+    by_head: Mapping[str, Sequence[int]]
+
+    @classmethod
+    def of(cls, runs: Sequence[_Run]) -> _CheckRuns:
+        """Index `runs`, the first observed first.
+
+        Returns:
+            The index.
+        """
+        by_pr: dict[str, list[int]] = {}
+        by_head: dict[str, list[int]] = {}
+        for i, run in enumerate(runs):
+            by_pr.setdefault(run.pr_url, []).append(i)
+            by_head.setdefault(run.head_sha, []).append(i)
+        return cls(runs=runs, observed=[r.observed_at for r in runs], by_pr=by_pr, by_head=by_head)
+
+    def picked(self, since: str, until: str, *, prs: AbstractSet[str], heads: AbstractSet[str]) -> list[_Run]:
+        """The runs `_check_runs` would read for the window `[since, until)` alone, and `prs` and `heads`.
+
+        Every run of a PR with one observed in the window or of `prs`, and every run at one of `heads`.
+
+        Returns:
+            Them, the first observed first.
+        """
+        seen = {
+            r.pr_url
+            for r in self.runs[bisect.bisect_left(self.observed, since) : bisect.bisect_left(self.observed, until)]
+        }
+        at = {i for url in seen | prs for i in self.by_pr.get(url, ())}
+        at.update(i for head in heads for i in self.by_head.get(head, ()))
+        return [self.runs[i] for i in sorted(at)]
 
 
 # How the page counts a check run: `red` for one of `RED`, `green` for `success`, and `neither` for the rest.
@@ -465,8 +575,10 @@ def _per_day(
             heads[day] += 1
             green_first[day] += green
     for run in in_window:
+        if _verdict(run.conclusion) != "red":
+            continue
         day = red.get(spend.local_day(run.observed_at))
-        if day is None or _verdict(run.conclusion) != "red":
+        if day is None:
             continue
         index = series.index(run.name) if run.name in series else other
         if index is not None:
@@ -607,19 +719,18 @@ def _longest_to_green(started: str, spells: Iterable[Sequence[Spell]]) -> timede
     return max(found, default=None)
 
 
-# A kick, with the checks red on the head it replaced and how each one's first run on the head it pushed ended.
+# A kick, with the checks red on the head it replaced and how each one's first run on the head it pushed ended, from
+# the check runs on each head, the first observed first.
 def _kick(
     kick: records.FlakyKick,
     kicks: Iterable[records.FlakyKick],
     kick_runs: Mapping[int, records.Run],
-    runs: Iterable[_Run],
+    by_head: Mapping[str, Sequence[_Run]],
 ) -> Kick:
-    latest: dict[str, _Run] = {}
+    latest = {r.name: r for r in by_head.get(kick.from_head, ())}
     first_after: dict[str, _Run] = {}
-    for r in runs:
-        if r.head_sha == kick.from_head:
-            latest[r.name] = r
-        elif r.head_sha == kick.to_head:
+    if kick.to_head != kick.from_head:
+        for r in by_head.get(kick.to_head, ()):
             first_after.setdefault(r.name, r)
     red_before = sorted(name for name, r in latest.items() if _verdict(r.conclusion) == "red")
     run = kick_runs.get(kick.run_id)

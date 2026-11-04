@@ -364,16 +364,20 @@ export function startOf(entries: TranscriptEntry[]): string | null {
 
 /**
  * What a tool call did, on one line: a shell call's command, since its title is only what the agent said it was
- * for; else a `decide` call's decisions, each its ticket and action (`ABC-1 wait, ABC-2 done`); else a `ticket-set`
- * call's settings, each its ticket and what it sets (`ABC-1 approved, ABC-2 (web) merged done, ABC-3 cursors`); else
- * the runtime's title; else its input's short values as `key=value`, as `{"repo": "web", "pullNumber": 88}` reads
- * `repo=web pullNumber=88`. Empty when the input has none, or was cut and no longer parses.
+ * for, after the directory it ran in when the call names one (`app $ make test`), as canopy's plugin moves a leading
+ * `cd app &&` there; else a `decide` call's decisions, each its ticket and action (`ABC-1 wait, ABC-2 done`); else a
+ * `ticket-set` call's settings, each its ticket and what it sets (`ABC-1 approved, ABC-2 (web) merged done, ABC-3
+ * cursors`); else the runtime's title; else its input's short values as `key=value`, as
+ * `{"repo": "web", "pullNumber": 88}` reads `repo=web pullNumber=88`. Empty when the input has none, or was cut and
+ * no longer parses.
  */
 export function summary(entry: TranscriptTool): string {
     const input = parsed(entry.input)
     const command = input?.['command']
     if (typeof command === 'string') {
-        return oneLine(command)
+        const workdir = input?.['workdir']
+        const dir = typeof workdir === 'string' ? oneLine(workdir) : ''
+        return dir === '' ? oneLine(command) : `${dir} $ ${oneLine(command)}`
     }
     const decisions = decisionsIn(input)
     if (decisions !== null) {
@@ -647,26 +651,34 @@ function cutWords(line: string, chars: number): string {
 
 /**
  * How much of a transcript the page draws before the operator asks for more. A transcript at the server's bounds
- * (2,000 entries, 2,000,000 characters) drawn whole is about 80,000 elements: half a second to paint, and every key
- * typed in its search waits on all of them. So the page draws the first `page` rows, in order or By call, of those a
- * search keeps or of all of them, and a fold after them shows `step` more a click, as a diff's do (`DIFF_BUDGET`). A
- * row here is some thirty elements to a diff line's few, so its page is a twentieth of a diff's: about 3,000
- * elements, and under 10,000 even when a search opens every call it draws.
+ * (2,000 entries, 2,000,000 characters) drawn whole is about 80,000 elements: half a second to paint. So the page draws
+ * the first `page` rows, in order or By call, of those a search keeps or of all of them, and a fold after them shows
+ * `step` more a click, as a diff's do (`DIFF_BUDGET`). A page is most of a long session, about 30,000 elements, in a
+ * region that scrolls inside the panel; its search redraws them behind the field (`inPage`), so a key typed never
+ * waits on them.
  */
-export const TRANSCRIPT_BUDGET = { page: 100, step: 100 } as const
+export const TRANSCRIPT_BUDGET: TranscriptBudget = { page: 1000, step: 1000 }
 
-/**
- * How many of `count` rows the page draws: a budget's page, or the rows its fold was asked for (`asked`), or more, up
- * to `through`, so a row the page was asked to show, the `through`th, is drawn before it is scrolled to.
- */
-export function drawnRows(count: number, asked: number, through: number): number {
-    return Math.min(count, Math.max(TRANSCRIPT_BUDGET.page, asked, through))
+/** A transcript's budget: the rows it draws at first, and how many more each click of its fold draws. */
+export interface TranscriptBudget {
+    /** The rows drawn at first. */
+    readonly page: number
+    /** The rows each click of the fold draws. */
+    readonly step: number
 }
 
-/** What a transcript's fold says, holding `hidden` rows (or calls, By call) back: `Show 100 of 1,900 more rows`. */
-export function moreLabel(hidden: number, what: 'rows' | 'calls'): string {
+/**
+ * How many of `count` rows the page draws: a `budget`'s page, or the rows its fold was asked for (`asked`), or more,
+ * up to `through`, so a row the page was asked to show, the `through`th, is drawn before it is scrolled to.
+ */
+export function drawnRows(count: number, asked: number, through: number, budget: TranscriptBudget): number {
+    return Math.min(count, Math.max(budget.page, asked, through))
+}
+
+/** What a transcript's fold says, holding `hidden` rows (or calls, By call) back: `Show 1,000 of 1,900 more rows`. */
+export function moreLabel(hidden: number, what: 'rows' | 'calls', budget: TranscriptBudget): string {
     const nouns = what === 'rows' ? (['more row', 'more rows'] as const) : (['more call', 'more calls'] as const)
-    return foldWords(hidden, TRANSCRIPT_BUDGET.step, nouns)
+    return foldWords(hidden, budget.step, nouns)
 }
 
 /** A transcript's search as typed, its ends trimmed, or null when that leaves nothing to find. */

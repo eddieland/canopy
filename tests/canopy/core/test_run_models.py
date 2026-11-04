@@ -231,8 +231,11 @@ def test_0088_reads_again_only_the_runs_more_than_one_model_served(tmp_path: Pat
         "INSERT INTO run_models (run_table, run_id, model, replies, cost_usd) VALUES (?, ?, ?, 1, 0.1)",
         [("ticks", first, "a/x"), ("runs", w, "a/x"), ("runs", w, "a/y")],
     )
-    [latest] = [m for m in shipped if m.version == 88]
-    (migrations / latest.path.name).write_text(latest.path.read_text())
+    # 0088 and every migration after it, as canopy applies them: the reads look at tables later ones add, and those
+    # keep every row 0088 left.
+    for m in shipped:
+        if m.version >= 88:
+            (migrations / m.path.name).write_text(m.path.read_text())
     db.migrate(conn, migrations)
     assert due(conn) == [("runs", w, "ses_w", 0)]
     # Its models are shown till a read replaces them.

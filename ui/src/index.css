@@ -4,6 +4,7 @@
 @import '@fontsource/ibm-plex-mono/500.css';
 @import '@fontsource/ibm-plex-mono/600.css';
 @import './styles/mono-compact.css';
+@import './styles/title-face.css';
 @import './styles/tokens.css';
 
 /*
@@ -30,8 +31,8 @@
     html {
         /* Inherited, so every scroller (the page, a panel's list, a textarea) has the same thumb in both themes. */
         scrollbar-color: var(--scrollbar) transparent;
-        /* On the root, so it paints the whole canvas, under a palette's texture (Gruvbox's halftone dots). */
-        background: var(--canvas-texture), var(--background);
+        /* On the root, so it paints the whole canvas, under a palette's tone (below). */
+        background: var(--background);
         -webkit-font-smoothing: antialiased;
         /*
          * Every size is in rem, so the whole interface grows with the window on a large screen: the browser's size up
@@ -45,6 +46,31 @@
         min-height: 100dvh;
         color: var(--foreground);
         font-family: var(--font-sans);
+    }
+
+    /*
+     * A palette's tone over the canvas, which only Pulp prints: its dots (`--canvas-texture`) and, outside them, the
+     * swell they grow into (`--canvas-swell`), each where its mask lets it. Fixed to the window and under everything
+     * else, so it is painted once, never on a scroll, and the panels, the header, and the rail sit over it. By default
+     * both are none, and the two layers draw nothing.
+     */
+    html::before,
+    html::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+    }
+
+    html::before {
+        background: var(--canvas-texture);
+        mask: var(--canvas-texture-mask);
+    }
+
+    html::after {
+        background: var(--canvas-swell);
+        mask: var(--canvas-swell-mask);
     }
 
     :focus-visible {
@@ -62,11 +88,132 @@
 
 /*
  * A page title's drop in its section's color (`--section-hue`, set on its header), as a comic's lettering casts one: a
- * palette sets how far (`--title-drop`) and makes it opaque (`--title-drop-alpha`); by default it is transparent.
+ * palette sets how far (`--title-drop`) and makes it opaque (`--title-drop-alpha`); by default it is transparent. A
+ * section's title (`section-title`) sets the two vars it falls back from.
  */
 @utility title-drop {
-    text-shadow: var(--title-drop) var(--title-drop) 0
-        color-mix(in oklab, var(--section-hue, var(--accent)) calc(var(--title-drop-alpha) * 100%), transparent);
+    text-shadow:
+        var(--title-drop-at, var(--title-drop)) var(--title-drop-at, var(--title-drop)) 0
+            color-mix(in oklab, var(--section-hue, var(--accent)) calc(var(--title-drop-alpha) * 100%), transparent),
+        var(--title-drop-plate, 0 0 transparent);
+}
+
+/*
+ * The title of a section's own page (Attention, Tickets, ...), lettered as a palette letters its display type: in its
+ * face (`--face-title`) and tracking (`--title-tracking`), its drop half again as far, and a second plate printed off
+ * register (`--title-drop-2`). By default it is the interface face, tracked tight, with no second plate. Only a
+ * section's name wears it, never a ticket's or a run's title, so a title from the data never wraps differently.
+ */
+@utility section-title {
+    font-family: var(--face-title);
+    letter-spacing: var(--title-tracking);
+    --title-drop-at: calc(var(--title-drop) * 1.5);
+    --title-drop-plate: var(--title-drop-2);
+}
+
+/*
+ * A message bubble's balloon tail, out of its square top corner (on the left; mirrored on the right with
+ * `data-tail='end'`), as a comic letters one: a palette sets how far it reaches (`--bubble-tail`) and the line it is
+ * inked in (`--bubble-tail-line`, the ring `--depth-bubble` draws); by default both are 0, and it draws nothing. It
+ * lies along the bubble's top edge and reaches only sideways, so it never touches the head line above, and takes no
+ * room.
+ *
+ * Two layers in one box beside the corner, from the ink's tip to the bubble's edge. `::before` is the tail's ink, over
+ * the panel's surface it stands on, which covers the bubble's ring and border where the tail opens into the bubble; and
+ * on the right its drop, offset as the bubble's own is, cut at the tip so the box stays inside the panel's padding (on
+ * the left the drop falls under the bubble, as its own does there). `::after` is the fill, the bubble's own background
+ * over that surface, so a tint (a reply's, an open question's) reads as it does in the bubble. Each triangle is the
+ * upper right half of its own box, which a gradient `to bottom left` splits along the diagonal.
+ */
+@utility bubble-tail {
+    --tail: var(--bubble-tail);
+    --tail-line: var(--bubble-tail-line);
+    /* The ink's reach, a line past the fill's slant: (1 + √(1 + 1.5²)) / 1.5 lines further. Its height is 1.5 times. */
+    --tail-ink: calc(var(--tail) + 1.8685 * var(--tail-line));
+    /* How far the bubble's drop falls, as `--depth-bubble`'s does. */
+    --tail-drop: 3px;
+    --tail-drop-ink: transparent;
+    /* A bordered bubble's border, which the tail opens, and which moves the padding box the tail is placed from. */
+    --tail-border: 0px;
+    --tail-ground: var(--color-surface);
+    position: relative;
+
+    &.border {
+        --tail-border: 1px;
+    }
+
+    &::before,
+    &::after {
+        content: '';
+        position: absolute;
+        top: calc(-1 * (var(--tail-line) + var(--tail-border)));
+        left: calc(-1 * (var(--tail-ink) + var(--tail-border)));
+        width: calc(var(--tail-ink) + var(--tail-border));
+        height: calc(1.5 * var(--tail-ink) + var(--tail-drop));
+        pointer-events: none;
+    }
+
+    /* In the box, the ink's tip is at (0, 0), and the bubble's edge at x = `--tail-ink`. */
+    &::before {
+        background:
+            linear-gradient(var(--tail-ground), var(--tail-ground)) var(--tail-ink) var(--tail-line) /
+                var(--tail-border) calc(1.5 * var(--tail)) no-repeat,
+            linear-gradient(to bottom left, var(--tail-ground) calc(50% - 0.5px), transparent calc(50% + 0.5px))
+                calc(var(--tail-ink) - var(--tail)) var(--tail-line) / var(--tail) calc(1.5 * var(--tail)) no-repeat,
+            linear-gradient(to bottom left, var(--ink) calc(50% - 0.5px), transparent calc(50% + 0.5px)) 0 0 /
+                var(--tail-ink) calc(1.5 * var(--tail-ink)) no-repeat,
+            linear-gradient(to bottom left, var(--tail-ground) calc(50% - 0.5px), transparent 0) 0 0 / var(--tail-ink)
+                calc(1.5 * var(--tail-ink)) no-repeat,
+            linear-gradient(to bottom left, var(--tail-drop-ink) calc(50% - 0.5px), transparent calc(50% + 0.5px))
+                calc(-1 * var(--tail-drop)) var(--tail-drop) / var(--tail-ink) calc(1.5 * var(--tail-ink)) no-repeat;
+        /* The ink's triangle and its drop's, and the strip of border the fill opens; of the ring's column, a line wide
+         * outside the bubble's edge, only where the fill opens it, so the ring is never inked twice. */
+        clip-path: polygon(
+            0 0,
+            calc(var(--tail-ink) - var(--tail-line)) 0,
+            calc(var(--tail-ink) - var(--tail-line)) var(--tail-line),
+            calc(var(--tail-ink) + var(--tail-border)) var(--tail-line),
+            calc(var(--tail-ink) + var(--tail-border)) calc(var(--tail-line) + 1.5 * var(--tail)),
+            var(--tail-ink) calc(var(--tail-line) + 1.5 * var(--tail)),
+            calc(var(--tail-ink) - var(--tail-line)) calc(1.5 * var(--tail) - 0.5 * var(--tail-line)),
+            calc(var(--tail-ink) - var(--tail-line)) calc(1.5 * (var(--tail-ink) - var(--tail-line))),
+            calc(var(--tail-ink) - var(--tail-drop)) calc(1.5 * (var(--tail-ink) - var(--tail-drop))),
+            calc(var(--tail-ink) - var(--tail-drop)) calc(1.5 * var(--tail-ink) + var(--tail-drop)),
+            0 calc(2.5 * var(--tail-drop)),
+            0 var(--tail-drop),
+            calc(2 / 3 * var(--tail-drop)) var(--tail-drop)
+        );
+    }
+
+    /* The fill: the tail's own triangle, and the strip of border it opens. */
+    &::after {
+        background-color: inherit;
+        clip-path: polygon(
+            calc(var(--tail-ink) - var(--tail)) var(--tail-line),
+            calc(var(--tail-ink) + var(--tail-border)) var(--tail-line),
+            calc(var(--tail-ink) + var(--tail-border)) calc(var(--tail-line) + 1.5 * var(--tail)),
+            var(--tail-ink) calc(var(--tail-line) + 1.5 * var(--tail))
+        );
+    }
+
+    /* On the right, for the operator's bubble: the left one mirrored, its drop falling outward, clear of the bubble. */
+    &[data-tail='end'] {
+        --tail-drop-ink: var(--ink-drop, var(--ink));
+
+        &::before,
+        &::after {
+            left: auto;
+            right: calc(-1 * (var(--tail-ink) + var(--tail-border)));
+            scale: -1 1;
+        }
+    }
+
+    @media print {
+        &::before,
+        &::after {
+            content: none;
+        }
+    }
 }
 
 /*
@@ -358,6 +505,56 @@
     }
 }
 
+/*
+ * A cleared attention item's starburst (src/components/starburst.tsx), where a palette shows it in place of the leaf
+ * (`--burst-plate`, `--burst-leaf`): it bangs open, rocking back a few degrees, holds while the row fades, and goes as
+ * the row folds shut over it. One flash, under 700ms, and none under reduced motion.
+ */
+@keyframes burst {
+    0% {
+        opacity: 1;
+        transform: scale(0.2) rotate(-28deg);
+    }
+    18% {
+        transform: scale(1.14) rotate(-5deg);
+    }
+    30% {
+        transform: scale(1) rotate(-8deg);
+    }
+    55% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.04) rotate(-8deg);
+    }
+}
+
+@utility burst-plate {
+    display: var(--burst-plate);
+}
+
+@utility burst-leaf {
+    display: var(--burst-leaf);
+}
+
+@utility animate-burst {
+    transform-origin: center;
+    opacity: 0;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: burst 520ms cubic-bezier(0.2, 0, 0, 1);
+    }
+}
+
+/* The starburst's plate drops a hard shadow in its own ink, and its word one a hair's width, as a letterer's would. */
+@utility burst-drop {
+    filter: drop-shadow(3px 3px 0 var(--color-flair-burst-line));
+}
+
+@utility burst-word {
+    text-shadow: 1.5px 1.5px 0 var(--color-flair-burst-line);
+}
+
 /* One digit of a rolling readout (src/components/rolling-number.tsx): a strip of 0 to 9 behind a one-line window. */
 @utility roll-window {
     display: inline-block;
@@ -578,7 +775,8 @@
  * gradient runs twice the name's width and back, so a period of `flow` ends where it began. Printed, where a
  * background may not be, it is plain text. A palette may give it a form of its own (`tokens.css`): another image
  * (`--wordmark-image`) painted behind the letters (`--wordmark-clip`) in an ink of their own (`--wordmark-ink`), a
- * frame around it drawn as a shadow, so it takes no room (`--wordmark-frame`), and a glow (`--wordmark-glow`).
+ * frame around it drawn as a shadow, so it takes no room (`--wordmark-frame`), a glow (`--wordmark-glow`), and a
+ * transform, which moves nothing beside it (`--wordmark-tilt`).
  */
 @utility wordmark {
     background-image: var(
@@ -597,6 +795,7 @@
     color: var(--wordmark-ink, transparent);
     box-shadow: var(--wordmark-frame, none);
     filter: var(--wordmark-glow, none);
+    transform: var(--wordmark-tilt, none);
     /* It has no capitals or ascenders, so centered on its line its letters sit low: trimmed to its x-height, the row
     centers what shows, beside the logo's dot and the pills' capitals. The gradient paints only the box, so a padding
     as deep as the descenders takes it under them, and a margin as deep takes the padding back out of the layout. */
@@ -608,6 +807,7 @@
         color: inherit;
         box-shadow: none;
         filter: none;
+        transform: none;
     }
 }
 

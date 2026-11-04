@@ -5,6 +5,8 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from canopy.core import db, records, tracked_prs
 from canopy.core.vocab import Phase, RunKind, RunStatus
 from tests.canopy.helpers import earlier
@@ -72,3 +74,24 @@ def test_an_empty_window_tracks_no_pr(tmp_path: Path, journals: Journals) -> Non
     """A window no run started in tracks nothing."""
     conn = journals.open(tmp_path / "canopy.db")
     assert tracked_prs.tracked(conn, earlier(NOW, 7), earlier(NOW, -1)) == {}
+
+
+def test_one_read_answers_each_window_as_tracked_does(tmp_path: Path, journals: Journals) -> None:
+    """The runs read once, to the latest window's end, give each earlier window the PRs `tracked` gives it alone."""
+    conn = journals.open(tmp_path / "canopy.db")
+    ran(conn, "PROJ-1", earlier(NOW, 10), {"prs": {"web": PR_1}})
+    ran(conn, "PROJ-2", earlier(NOW, 5), {"pr": PR_3})
+    ran(conn, "PROJ-1", earlier(NOW, 2), {"prs": {"web": PR_1, "api": PR_2}})
+    ran(conn, "PROJ-2", earlier(NOW, -2), {"pr": PR_3})
+    db.touch_ticket(conn, "PROJ-9", "/ws")
+    records.insert(records.TicketUnit, ticket_key="PROJ-9", repo="api", pr_url=PR_2, phase=Phase.CI_RED).run(conn)
+    read = tracked_prs.read(conn, earlier(NOW, -1))
+    for since, until in (
+        (earlier(NOW, 11), earlier(NOW, 6)),
+        ("", earlier(NOW, 3)),
+        (earlier(NOW, 7), earlier(NOW, -1)),
+    ):
+        assert read.tracked(since, until) == tracked_prs.tracked(conn, since, until)
+    # A window ending past the read is not answered from it: the runs after the read are not in it.
+    with pytest.raises(ValueError, match="read to"):
+        read.tracked(earlier(NOW, 7), earlier(NOW, -3))

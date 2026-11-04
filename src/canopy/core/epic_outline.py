@@ -12,7 +12,9 @@ holds one line for each field:
     - After: B1
     - Trivial: no
 
-`Trivial` is `no`, or `yes` with its reason after a comma. The plan is model text (TRUST_MODEL T1), edited by the
+`Trivial` is `no`, or `yes` with its reason after a comma. A fenced code block is never read as structure, but its
+lines are part of the text of the id it sits under, so a contract sketched in one changes when the sketch does. The
+plan is model text (TRUST_MODEL T1), edited by the
 operator until approved: these are data, used only to compare one approval with the next and to route entries to
 members, never an instruction to the harness. A file canopy cannot read in this shape is refused whole, never read in
 part, so no entry is routed on a guess. Everything else in the plan, its goal, decisions, and prose, is never read here.
@@ -189,6 +191,8 @@ def trivial(outline: Outline, entries: AbstractSet[str]) -> bool:
 
 # The outline's shapes. A fence opens and closes a code block, whose lines are never read as structure.
 _FENCE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+# What marks a line of a code block: a character no plan's structure starts with, dropped from the text compared.
+_CODE = "\x00"
 _HEADING = re.compile(r"^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$")
 _ITEM = re.compile(r"^[-*+]\s+(.*)$")
 _ID_ITEM = re.compile(r"^\*\*([RCB])([1-9][0-9]{0,3})\.?\*\*\.?\s*(.*)$")
@@ -210,7 +214,7 @@ def _sections(text: str) -> dict[str, list[str]]:
     """
     found: dict[str, list[str]] = {}
     current: list[str] | None = None
-    for line in _outside_code(text):
+    for line in _marking_code(text):
         heading = _HEADING.match(line)
         if heading is None or len(heading.group(1)) > 2:  # noqa: PLR2004  (a level-one or level-two heading)
             if current is not None:
@@ -230,10 +234,11 @@ def _sections(text: str) -> dict[str, list[str]]:
     return found
 
 
-def _outside_code(text: str) -> list[str]:
-    """Return `text`'s lines with each line of a fenced code block, its fences included, made blank.
+def _marking_code(text: str) -> list[str]:
+    """Return `text`'s lines with each line of a fenced code block, its fences included, marked with `_CODE`.
 
-    So nothing a plan quotes in a code block reads as a heading, an id, or a field.
+    A marked line matches no heading, item, or field, so nothing a plan quotes in a code block reads as structure; it
+    stays part of the text of what it sits under.
     """
     lines: list[str] = []
     fence: str | None = None
@@ -241,11 +246,11 @@ def _outside_code(text: str) -> list[str]:
         opened = _FENCE.match(line)
         if fence is None and opened is not None:
             fence = opened.group(1)
-            lines.append("")
+            lines.append(f"{_CODE}{line}")
         elif fence is not None:
             if opened is not None and opened.group(1)[0] == fence[0] and len(opened.group(1)) >= len(fence):
                 fence = None
-            lines.append("")
+            lines.append(f"{_CODE}{line}")
         else:
             lines.append(line)
     return lines
@@ -451,8 +456,8 @@ def _parts(value: str) -> list[str]:
 
 
 def _collapse(parts: Iterable[str]) -> str:
-    """Return `parts` joined with their whitespace collapsed, so a rewrap is no change."""
-    return " ".join(" ".join(parts).split())
+    """Return `parts` joined with their whitespace collapsed, so a rewrap is no change, and code blocks unmarked."""
+    return " ".join(" ".join(parts).replace(_CODE, "").split())
 
 
 def _section_of(kind: Kind) -> str:

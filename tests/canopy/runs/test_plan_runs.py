@@ -357,6 +357,9 @@ def test_a_plan_its_planner_says_needs_no_review_is_approved_as_the_planners_and
     assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, plans.PLANNER)
     assert plan.approved_sha256 == plan.sha256
     assert plan.approved_reason == "A one-line copy fix the ticket spells out."
+    # It holds for the ticket as observed then, as the operator's approval does (`plans.ticket_changed`).
+    seen_then = present(plans.ticket_text(conn, KEY))
+    assert (plan.approved_title_sha256, plan.approved_body_sha256) == (seen_then.title_sha256, seen_then.body_sha256)
     # Every approval of the planner's carries its reason, and no other approval carries one.
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute("UPDATE plans SET approved_reason = NULL WHERE id = ?", (plan.id,))
