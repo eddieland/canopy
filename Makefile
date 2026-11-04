@@ -40,10 +40,11 @@ lint: tests/plugins/node_modules ## Lint and type check: ruff, pyrefly, rumdl, e
 # ends its worker, which fails that test by name instead of stalling the run until CI's job timeout. Here, not in
 # pyproject.toml, so the opt-in canaries, which wait minutes on a real sandbox or model, keep no limit.
 # COVERAGE=1 also measures coverage and writes coverage.xml, which is how CI's `make check` feeds Codecov.
+# SHARD=i/n runs the i-th of n slices of the Python tests (tests/conftest.py), as CI's test jobs do.
 PYTEST := uv run pytest -q -n auto -o faulthandler_timeout=60 -o faulthandler_exit_on_timeout=true
 
-test: test-plugin ## Run all tests, in parallel (COVERAGE=1: also write coverage.xml)
-	$(PYTEST) $(if $(COVERAGE),--cov --cov-report=xml)
+test: test-plugin ## Run all tests, in parallel (COVERAGE=1: also write coverage.xml; SHARD=i/n: one slice)
+	$(PYTEST) $(if $(COVERAGE),--cov --cov-report=xml) $(if $(SHARD),--shard=$(SHARD))
 
 # The plugin canopy ships in its agents' snapshot is plain JavaScript (DESIGN §33), tested with Node's own runner and
 # type-checked by `lint` with the dev-only packages in tests/plugins. The rest of the JavaScript, ui/, is ui-check's.
