@@ -68,10 +68,11 @@ test("a job whose hook throws does not fail the call it runs after", async () =>
     await assert.doesNotReject(hooks["tool.execute.after"]({ tool: "bash", sessionID: "ses_1" }, output));
 });
 
-test("a run with no deadline gets no hook after its tool calls, only the directory's before them", async () => {
+test("a run with no deadline gets no hook after its tool calls, but the directory's before them", async () => {
     const hooks = ["experimental.chat.system.transform", "tool.execute.before"];
     assert.deepEqual(Object.keys(await canopy.server({})).sort(), hooks);
-    assert.deepEqual(Object.keys(await setUp()), ["execute.before"]);
+    // Under OpenCode 2 every run's refusals are explained, after the call, as `explain.test.mjs` tests.
+    assert.deepEqual(Object.keys(await setUp()).sort(), ["execute.after", "execute.before"]);
 });
 
 test("under OpenCode 2, a shell call's leading cd becomes its working directory, in the input it runs", async () => {
