@@ -222,10 +222,10 @@ it. A fresh candidate carries:
   person's latest approval, change request, or dismissal, whenever it came; and `reviews`, the reviews and review
   comments past the unit's `review` cursor, oldest first, each with its `number` and marked `trusted` and `worker` by
   canopy. An item's `body` is shown once, to the first overseer that decides the ticket with it listed and ends its
-  tick well; after that it carries `seen: true` instead, and while the ticket or the unit can only wait (`stale`,
-  `running`, `ci_running`, `needs_human` with no reply, `awaiting_reply`, `attempt_limit`, `plan_review`, or, for the
-  untrusted items alone, untrusted feedback the operator has not answered) it carries `held: true`, since the hold
-  decides and not the feedback. `canopy_review-items` reads the text of a listed candidate's items again, by
+  tick well; after that it carries `seen: true` instead, and while the ticket or the unit can only wait (`running`,
+  `ci_running`, `needs_human` with no reply, `awaiting_reply`, `attempt_limit`, `plan_review`, or, for the untrusted
+  items alone, untrusted feedback the operator has not answered) it carries `held: true`, since the hold decides and
+  not the feedback. `canopy_review-items` reads the text of a listed candidate's items again, by
   `number`, as JSON, for a judgment that needs it, such as `needs_author` or a `passed` reason; a `wait` needs none.
   An item's link is the PR's URL with `#pullrequestreview-<id>` for a review, or `#discussion_r<id>` for a comment. A
   unit without a PR has `branch`, the ticket's branch seen on origin, or null;
