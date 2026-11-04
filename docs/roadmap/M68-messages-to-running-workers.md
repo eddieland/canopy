@@ -10,7 +10,8 @@ pushed the whole thing, or from `canopy stop --now`, which spends an attempt and
 then say anything (§33's Forged lines). This milestone keeps that: no operator text travels in a `[canopy]` line. The
 line only says a message waits, and the text comes back as the result of the agent calling one of canopy's own tools,
 which no file, PR, or tool output can forge. A fake line can make the agent spend one call to learn that nothing is new.
-Three stages, in order, each in its own PRs; stage 0 may change the shape of stage 1.
+Three stages, in order, each in its own PRs; stage 0 may change the shape of stage 1, and the bullets between stages 1
+and 2 are stage 1's.
 
 - **Stage 0, a source read.** Of the pinned OpenCode (1.19.3, and 2's 2.1.x): what happens to a user message sent to
   a session while `opencode run` is working it, through the plugin's client and through `opencode serve`; whether such
@@ -29,9 +30,10 @@ Three stages, in order, each in its own PRs; stage 0 may change the shape of sta
   allowed by exact name in the same definitions and denied to every other agent (§27). It returns the messages sent to
   this run since it started, oldest first, marked as the operator's, and the harness records the fetch from the call in
   the events it already reads, so the journal knows when the run heard it. A review's run gets none in this milestone.
-- **What the message does downstream.** A message fetched by its run is answered: the loop does not read it as
-  `human_replied` and dispatch a `resume` for it, since the run it was for has it, and the run's report says what it
-  did with it. One the run ends before fetching stays an operator message like any other, so the next run's prompt
+- **What the message does downstream.** A message its run fetched is answered once that run ends with its report,
+  `ok` or `blocked`, which says what it did with it: the loop does not then read it as `human_replied` and dispatch a
+  `resume` for it. A fetch alone answers nothing: one the run never fetched, or fetched and then failed, timed out,
+  crashed, or was stopped before its report, stays an operator message like any other, so the next run's prompt
   carries it and nothing is lost. A message sent to a run that has ended is refused, with the ticket's reply named
   instead. `canopy show` of the run, and its page, list the messages and when each was fetched; a message never
   fetched shows so.
@@ -55,8 +57,9 @@ Three stages, in order, each in its own PRs; stage 0 may change the shape of sta
   through canopy's own tool; a forged line can only prompt a fetch); T4 (the plugin's new job reads one more file and
   writes nothing); T8 (unchanged: no new listener, the web UI writes through the same function the CLI does).
 - Tests with the fakes: a fake worker that calls `messages` after a message was sent to its run gets the text and the
-  run's journal records the fetch; a run that ends with the message unfetched leaves it for the next run's prompt, as
-  the scenario's `resume` shows; a message to an ended run is refused; the tool lists only where `CANOPY_RUN_ID` names
+  run's journal records the fetch; a run that ends with the message unfetched, and one that fetches it and then
+  fails, each leave it for the next run's prompt, as the scenario's `resume` shows, where one that fetches it and ends
+  `ok` does not; a message to an ended run is refused; the tool lists only where `CANOPY_RUN_ID` names
   a worker's, planner's, or task's run, and a review's gets none; a message over the limit, or empty, is refused;
   the plugin's own tests for the line's wording, that it carries none of the text, that it is told once per session,
   and its place in a built-in and an MCP result.
