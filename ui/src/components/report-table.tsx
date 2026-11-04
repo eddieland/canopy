@@ -61,7 +61,7 @@ const CELL: Record<Exclude<ReportColumnKind, 'bar'>, string> = {
 
 /**
  * A report's table (ui/DESIGN.md, "A table of figures"), one row of `rows` each, in `columns`: the first column is the
- * row's head. It scrolls in its panel under a sticky head, named `label` for a screen reader, in a region of
+ * row's head, so it names the row (a `name`, `free`, or `word` column), never a figure or a bar. It scrolls in its panel under a sticky head, named `label` for a screen reader, in a region of
  * `className` (its height, `max-h-96` unless given). `rowKey` keys a row; the table's test id is `testId`, each row's
  * `rowTestId`. A page shows its own `Empty` in its place when it has no rows.
  */
@@ -84,7 +84,8 @@ export function ReportTable<T>({
 }) {
     return (
         <PanelScroll label={label} className={cn('max-h-96 px-3 pb-3', className)}>
-            <Table data-testid={testId}>
+            {/* A free column takes the panel's slack, which a table has to give only at the panel's width. */}
+            <Table className={cn(columns.some((c) => c.kind === 'free') && 'w-full')} data-testid={testId}>
                 <TableHeader className={PADDED_HEAD}>
                     <TableRow>
                         {columns.map((column, i) => (
@@ -109,7 +110,7 @@ export function ReportTable<T>({
 function ColumnHead<T>({ column, first }: { column: ReportColumn<T>; first: boolean }) {
     const name = <Hinted hint={column.hint}>{column.label}</Hinted>
     if (column.kind === 'bar') {
-        return <CellBarHead className={cn(first && 'pl-0')}>{name}</CellBarHead>
+        return <CellBarHead>{name}</CellBarHead>
     }
     return <TableHead className={cn(HEAD_ALIGN[column.kind], !first && 'pl-3')}>{name}</TableHead>
 }
