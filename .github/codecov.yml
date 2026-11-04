@@ -1,6 +1,6 @@
-# Codecov's settings. ci.yml uploads coverage.xml from the lint-and-test job and ui/coverage/lcov.info from the ui-check
-# job, which run side by side. Its commit statuses are informational: they report project and patch coverage on each PR
-# but never fail one, since no milestone sets a coverage bar.
+# Codecov's settings. ci.yml uploads a coverage.xml from each slice of the test job and ui/coverage/lcov.info from the
+# ui-check job, which run side by side. Its commit statuses are informational: they report project and patch coverage
+# on each PR but never fail one, since no milestone sets a coverage bar.
 coverage:
   status:
     project:
@@ -13,12 +13,14 @@ coverage:
 # No PR comment: the statuses and codecov.io carry the numbers, and a comment on every push is noise in the thread.
 comment: false
 
-# Two uploads per commit, one from each job: Codecov reports only once both arrive, not on the half that came first.
-# Each carries its own flag, python or ui. The uploader names both jobs' uploads alike (the run id and the workflow's
-# name), so without flags Codecov kept only one of the two, and a commit showed only the UI's coverage.
+# Five uploads per commit, one from each of the test job's four slices and one from ui-check: Codecov reports only
+# once all arrive, not on the part that came first. Each carries its flag, python or ui, and the slices each a name of
+# its own, python-1 to python-4, which Codecov merges under the python flag. The uploader names every job's upload
+# alike (the run id and the workflow's name), so without flags Codecov kept only one of two, and a commit showed only
+# the UI's coverage. Keep the count in step with the test job's matrix.
 codecov:
   notify:
-    after_n_builds: 2
+    after_n_builds: 5
 
 # A job that fails skips its upload, so a commit can arrive with one flag's coverage and not the other's. Carryforward
 # fills the missing flag from the nearest parent that has it, so the commit, and main's head on codecov.io, still show

@@ -9,6 +9,7 @@ import re
 import sys
 import time
 import tomllib
+import zlib
 from collections.abc import Mapping
 from contextlib import closing
 from dataclasses import dataclass, field
@@ -51,6 +52,40 @@ HERMETIC_GIT = {
     "GIT_CONFIG_KEY_0": "maintenance.auto",
     "GIT_CONFIG_VALUE_0": "false",
 }
+#: What `--shard` takes: the slice to run, counted from 1, and how many slices there are.
+SHARD_RE = re.compile(r"(?P<index>[1-9][0-9]*)/(?P<total>[1-9][0-9]*)")
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    """Add `--shard I/N`, which runs the I-th of N slices of the tests collected, as CI's test jobs do side by side."""
+    parser.addoption("--shard", metavar="I/N", help="run only the I-th of N slices of the tests collected")
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Keep the tests of the slice `--shard` names, and deselect the rest.
+
+    A test's slice is a hash of its node id, so it does not depend on what else was collected, and every xdist worker
+    and every job agrees on it. Spread over thousands of tests, the slow ones fall about evenly into each slice. The
+    hash leaves out a parametrized test's parameters, so its cases share a slice: syrupy counts a snapshot as one of
+    a test's whatever its parameters, and would call those of the cases another slice ran unused.
+
+    Raises:
+        pytest.UsageError: `--shard` is not I/N with I from 1 to N.
+    """
+    shard = config.getoption("--shard")
+    if shard is None:
+        return
+    match = SHARD_RE.fullmatch(str(shard))
+    if match is None or int(match["index"]) > int(match["total"]):
+        raise pytest.UsageError(f"--shard must be I/N with I from 1 to N, not {shard!r}")
+    index, total = int(match["index"]) - 1, int(match["total"])
+    kept: list[pytest.Item] = []
+    deselected: list[pytest.Item] = []
+    for item in items:
+        function = item.nodeid.partition("[")[0]
+        (kept if zlib.crc32(function.encode()) % total == index else deselected).append(item)
+    config.hook.pytest_deselected(items=deselected)
+    items[:] = kept
 
 
 @pytest.fixture(autouse=True)
