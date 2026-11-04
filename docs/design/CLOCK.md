@@ -29,10 +29,9 @@ JavaScript that imports only the runtime's own `node:fs`, and that only when it 
 with no network, inside the sandbox too. It holds each job canopy asks of the agent process, the clock its first: each
 job reads only what it is handed for that job, and its hooks run in a try of their own, so one that throws fails
 neither the call nor the jobs after it. A later job joins this file rather than shipping a plugin of its own, as the
-nudge for a stale update and the answer to its question have (§41), and the word that a message waits (§44). Both of
-OpenCode's major versions load the one file:
-its default export carries an entry point for each, and each version reads only its own, so binding OpenCode 2 (D009)
-keeps the clock.
+nudge for a stale update, the answer to its question, and a stop's wrap-up ask have (§22, §41), and the word that a
+message waits (§44). Both of OpenCode's major versions load the one file: its default export carries an entry point
+for each, and each version reads only its own, so binding OpenCode 2 (D009) keeps the clock.
 
 After each tool call that succeeds (`tool.execute.after`, MCP tools' included), once the run is in the last fifth of
 the time it had when the plugin loaded, and never more than its last 10 minutes, the plugin adds one line to the call's
