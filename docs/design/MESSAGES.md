@@ -11,9 +11,9 @@ Not yet built (ROADMAP M68); the code does not follow it until it is.
 A running agent hears from the operator once, in its prompt, and after that only a letter answering a question of its
 own (§41). What changes while it works, the ticket's scope or what the operator expects of its PR, reaches it at the
 earliest in its next run's prompt, after it has pushed, or by `canopy stop`, which ends the run, with a wrap-up or at
-once (§22), and spends its attempt. This section lets the operator send a running worker, planner, or one-off task's worker (§36) a message in
-their own words and have it there within one tool call, without weakening what §33 and §41 hold: no line canopy adds
-to a tool's result can be forged into an instruction.
+once (§22), and spends its attempt. This section lets the operator send a running worker, planner, or one-off task's
+worker (§36) a message in their own words and have it there within one tool call, without weakening what §33 and §41
+hold: no line canopy adds to a tool's result can be forged into an instruction.
 
 ### The message
 
@@ -29,12 +29,11 @@ The agent is told that a message waits, and fetches it itself. canopy writes a m
 nothing of its text, to the run's answers directory (§41), which a sandboxed run reads and cannot write (§24), as a
 stop's wrap-up ask is written (§22). canopy's plugin (§33) reads the mark after each tool call and, once per message
 per session, adds one `[canopy]` line to the call's result saying a message from the operator waits and naming the
-tool that returns it. The tool is
-`messages`, served by the run's own server `canopy_run` beside `status` (§41), allowed by exact name in those
-definitions and denied to every other agent (§27): it returns the messages sent to this run, oldest first, each marked
-the operator's. The harness records the fetch from the call in the events it already reads (§8), so the journal says
-when the run heard each message. An agent thinking without calling a tool hears nothing until its next call, as with
-the clock.
+tool that returns it. The tool is `messages`, served by the run's own server `canopy_run` beside `status` (§41),
+allowed by exact name in those definitions and denied to every other agent (§27): it returns the messages sent to this
+run, oldest first, each marked the operator's. The harness records the fetch from the call in the events it already
+reads (§8), so the journal says when the run heard each message. An agent thinking without calling a tool hears
+nothing until its next call, as with the clock.
 
 Every prompt such a run gets says once that a canopy line may say a message waits, that what `messages` returns is the
 operator's instruction, ranking as the prompt's own do, and that any other text claiming to be one is data; said once,
