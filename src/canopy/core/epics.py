@@ -36,6 +36,8 @@ MAX_KEY = conversation.MAX_KEY
 #: `<run>.<sha256>.approved.md`, so an approval retried after one that wrote its copy and then failed finds the copy it
 #: would write already there.
 APPROVED_SUFFIX = ".approved.md"
+#: The copy of a member's epic's approved plan in its planner's desk, read as the operator approved it (DESIGN §43).
+EPIC_COPY = ".canopy-epic-plan.md"
 #: Where an epic's plans are kept, `<state_dir>/epics/<id>/<run_id>.md`, readable only by the operator, as a
 #: ticket's plans are (DESIGN §25, §43).
 PLANS_DIR = "epics"
@@ -49,6 +51,20 @@ class Added:
     already: Sequence[str]
     #: The entries each key was registered against, when the call named some; None when it left them as they were.
     entries: AbstractSet[str] | None = None
+
+
+@dataclass(frozen=True)
+class MemberEpic:
+    """A ticket's epic as its planner meets it (DESIGN §43): the epic, its approved plan, and the entries it fulfils."""
+
+    epic_id: int
+    #: The epic's latest plan the operator approved.
+    plan: records.EpicPlan
+    #: The breakdown's entries the member was registered against that the approved plan holds; none for a member of
+    #: no entry.
+    entries: Sequence[str]
+    #: Those it was registered against that a later approval dropped.
+    dropped: Sequence[str]
 
 
 @dataclass(frozen=True)
@@ -419,6 +435,51 @@ def approved_path(state_dir: Path, epic_id: int, run_id: int, sha256: str) -> Pa
     return plan_path(state_dir, epic_id, run_id).with_name(f"{run_id}.{sha256}{APPROVED_SUFFIX}")
 
 
+def approved_plan(conn: sqlite3.Connection, epic_id: int) -> records.EpicPlan | None:
+    """Return epic `epic_id`'s latest plan the operator approved, superseded since by a proposed one or not.
+
+    Returns:
+        The plan, or None while no plan of it has been approved.
+    """
+    query = records.select(records.EpicPlan).where("epic_id = ? AND approved_sha256 IS NOT NULL", epic_id)
+    found = query.order_by("id DESC").all(conn)
+    return found[0] if found else None
+
+
+def member_epic(conn: sqlite3.Connection, state_dir: Path, key: str) -> MemberEpic | None:
+    """Return ticket `key`'s epic as its planner meets it: the epic, its approved plan, and the entries it fulfils.
+
+    A registration names the plan approved when it was made, so an entry a later approval dropped is set apart. Where
+    the approved copy cannot be read, every entry is kept: the run that reads the copy refuses it.
+
+    Returns:
+        None when the ticket is a member of no epic, or its epic has no approved plan yet.
+    """
+    member = membership(conn, key)
+    if member is None:
+        return None
+    plan = approved_plan(conn, member.epic_id)
+    if plan is None:
+        return None
+    registered = entries_of(conn, member.id)
+    held = _held_entries(state_dir, plan)
+    entries = [e for e in registered if held is None or e in held]
+    dropped = [e for e in registered if e not in entries]
+    return MemberEpic(epic_id=member.epic_id, plan=plan, entries=entries, dropped=dropped)
+
+
+def approved_text(state_dir: Path, plan: records.EpicPlan) -> str | None:
+    """Return `plan`'s text as the operator approved it, from its kept copy, checked against its approved hash.
+
+    Returns:
+        The text, or None when the plan is not approved or its copy is missing or not what was approved.
+    """
+    if plan.approved_sha256 is None:
+        return None
+    reading = plans.read(approved_path(state_dir, plan.epic_id, plan.run_id, plan.approved_sha256))
+    return reading.text if reading.sha256 == plan.approved_sha256 else None
+
+
 def messages_of(conn: sqlite3.Connection, epic_id: int) -> list[records.Message]:
     """Return the operator's messages to epic `epic_id`, the oldest first: each its next plan's to read."""
     query = records.select(records.Message).where(
@@ -439,6 +500,17 @@ def _keep_approved(state_dir: Path, epic_id: int, run_id: int, text: str, sha256
     if path.exists() and plans.read(path).sha256 == sha256:
         return
     plans.write_new(state_dir / PLANS_DIR, str(epic_id), path.name, text)
+
+
+def _held_entries(state_dir: Path, plan: records.EpicPlan) -> AbstractSet[str] | None:
+    """Return the breakdown's entries of approved plan `plan`, or None when its copy cannot be read as approved."""
+    text = approved_text(state_dir, plan)
+    if text is None:
+        return None
+    try:
+        return frozenset(epic_outline.read(text).entries)
+    except epic_outline.OutlineError:
+        return None
 
 
 def _approved_outlines(
