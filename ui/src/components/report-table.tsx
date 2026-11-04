@@ -87,7 +87,7 @@ const CELL: Record<Exclude<ReportColumnKind, 'bar'>, string> = {
  * up to a cap, then is cut. It scrolls in its panel under a sticky head, named `label` for a screen reader, in a region
  * of `className` (`max-h-96 px-3 pb-3` unless given); with `scroll` false it is bare, for a region of someone else's
  * (`ChartTable`). `rowKey` keys a row; the table's test id is `testId`, each row's `rowTestId`'s, or what it makes of
- * the row. `top` sets each row's cells at its top, for a row whose free cell runs to several lines. In place of
+ * the row. `top` sets each row's cells at its top, for a row whose free cell stacks rows of its own. In place of
  * `rows` it takes `groups`, each a `tbody` under its head, so the groups' columns line up. A page shows its own
  * `Empty` in its place when it has no rows.
  */
