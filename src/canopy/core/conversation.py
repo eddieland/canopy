@@ -39,7 +39,7 @@ from canopy.core import (
     sql,
 )
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
-from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
+from canopy.core.config import CHORE_NAME_RE, KEY_RE, REPO_NAME_RE
 from canopy.core.vocab import DismissalReason, ReviewRunStatus, RunKind, RunStatus, SeenKind, StartStatus
 from canopy.infra import lock
 from canopy.infra.text import printable, quoted
@@ -50,9 +50,6 @@ if TYPE_CHECKING:
 
     from canopy.core.config import Chore, Config
 
-# A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17). It has no `:`, `#`, or `/`, so no
-# other kind of reference can be read as one.
-KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
 MAX_KEY = 100
 # Set for the agents of canopy's own runs, as CANOPY_TICK_ID is for the overseer: the operator's commands refuse in
 # either, so an agent that follows injected text naively cannot reply or start a ticket as the operator (TRUST_MODEL

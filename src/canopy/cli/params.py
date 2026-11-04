@@ -19,8 +19,6 @@ from pydantic import ValidationError
 
 from canopy.chores import install
 from canopy.core import config, git_tools, workspace
-from canopy.loop import tools
-from canopy.loop.tools import KEY_RE
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -93,6 +91,10 @@ class TextType(click.ParamType[str, object]):
 
     @override
     def convert(self, value: object, param: click.Parameter | None, ctx: click.Context | None) -> str:
+        # Imported here: the overseer's tools are most of what a command that imports this module would load, and
+        # most commands take no free text.
+        from canopy.loop import tools  # noqa: PLC0415
+
         try:
             return tools.clean_text(str(value))
         except ValueError as e:
@@ -124,7 +126,7 @@ def chore_names() -> list[str]:
         return []
 
 
-TICKET_KEY = PatternType("KEY", KEY_RE, "ticket key")
+TICKET_KEY = PatternType("KEY", config.KEY_RE, "ticket key")
 REPO = PatternType("NAME", config.REPO_NAME_RE, "repository name", repo_names)
 CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", chore_names)
 # One of the example chores canopy ships, which `canopy chore install` sets up.
