@@ -138,6 +138,22 @@ function transcript(fields: Partial<Transcript> = {}): Transcript {
     }
 }
 
+// A shell call the agent ran in `workdir`, said to push the branch.
+function shellAt(workdir: string, command: string): TranscriptEntry {
+    return {
+        kind: 'tool',
+        call: 1,
+        at: AT,
+        tool: 'bash',
+        title: 'Push the branch',
+        input: JSON.stringify({ command, workdir }),
+        output: '',
+        status: 'completed',
+        duration_ms: 300,
+        cut: false,
+    }
+}
+
 // The transcript's search field.
 function find(): HTMLElement {
     return screen.getByRole('searchbox', { name: 'Find lines in the transcript' })
@@ -183,39 +199,30 @@ function before(a: string, b: string): boolean {
 }
 
 describe('TranscriptPanel', () => {
-    it("shortens a shell call's directory against a run's worktrees, the whole line on hover", () => {
+    it("names a shell call's directory from the run's worktrees, apart from its command, all of it on hover", () => {
         const slot = '/home/op/acme/.treehouse/web-3f9c2a1b/3/web'
         const worktree = { repo: 'web', path: '.treehouse/web-3f9c2a1b/3/web', absolute: slot }
-        const push: TranscriptEntry = {
-            kind: 'tool',
-            call: 1,
-            at: AT,
-            tool: 'bash',
-            title: 'Push the branch',
-            input: JSON.stringify({ command: 'git push', workdir: `${slot}/src` }),
-            output: '',
-            status: 'completed',
-            duration_ms: 300,
-            cut: false,
-        }
-        const { unmount } = render(
-            <TranscriptPanel transcript={transcript({ entries: [push] })} running={false} page="run" />,
-        )
-        expect(rows().getByText(`${slot}/src $ git push`)).toBeDefined()
+        const entries = [shellAt(`${slot}/src`, 'git push'), shellAt('/tmp/scratch', 'ls')]
+        const { unmount } = render(<TranscriptPanel transcript={transcript({ entries })} running={false} page="run" />)
+        // With no worktrees, as on a tick's page, each directory is whole and none is marked.
+        expect(
+            rows()
+                .getAllByTestId('shell-dir')
+                .map((d) => d.textContent),
+        ).toEqual([`${slot}/src`, '/tmp/scratch'])
         unmount()
 
         render(
-            <TranscriptPanel
-                transcript={transcript({ entries: [push] })}
-                running={false}
-                page="run"
-                worktrees={[worktree]}
-            />,
+            <TranscriptPanel transcript={transcript({ entries })} running={false} page="run" worktrees={[worktree]} />,
         )
-        const line = rows().getByText('src $ git push')
-        expect(line.closest('[title]')?.getAttribute('title')).toBe(`${slot}/src $ git push\nPush the branch`)
+        const [inside, outside] = rows().getAllByTestId('shell-dir')
+        expect(inside?.textContent).toBe('web/src')
+        expect(outside?.textContent).toBe('/tmp/scratch')
+        const line = inside?.closest('[title]')
+        expect(line?.textContent).toBe('web/src $ git push')
+        expect(line?.getAttribute('title')).toBe(`${slot}/src $ git push\nPush the branch`)
         // The input stays as the call wrote it.
-        expect(call('src $ git push').textContent).toContain(`${slot}/src`)
+        expect(call('web/src $ git push').textContent).toContain(`${slot}/src`)
     })
 
     it('shows a skeleton, with no search and no empty words, until the transcript arrives', () => {

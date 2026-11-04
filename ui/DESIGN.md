@@ -887,8 +887,10 @@ reader, so no table repeats them.
   its time from the session's first event. The agent's text keeps its line breaks, its reasoning muted and italic
   under a `thinking` label, folded past four lines as rich text folds. A tool call is a native `<details>` whose line
   says what it did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, the tool's name, and in
-  monospace a shell call's command, else the runtime's title, else its input's short values; under that, muted, its
-  error's first line in `status-failed` or an output of one short line; then how long it took. A canopy command that
+  monospace a shell call's command after the directory it ran in, muted: on a run's page named from its repository
+  inside the run's worktrees (`web $`, `web/src $`), whole in `status-blocked` outside them, so a call that wandered
+  off stands out; the line whole on hover. Else the runtime's title, else its input's short values; under that, muted,
+  its error's first line in `status-failed` or an output of one short line; then how long it took. A canopy command that
   printed a refusal is `failed`, with a `refused: <guard>` chip. It opens to its input and its output, JSON colored as
   a tick's output is, every value as written. A model call is a muted line with its number, its tokens `in · out`, and
   its cost, opening to its tokens by kind and the input and output sections By call shows, built only when opened. A

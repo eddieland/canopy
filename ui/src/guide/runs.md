@@ -125,15 +125,16 @@ The **Transcript** is the run's session, from its log, oldest first:
   **show N more lines** for the rest, since a model that thinks out loud rarely thinks briefly. **All open**, or a
   search that finds a line in the folded part, shows it whole;
 - each tool call, with what it did and how long it took; click one to see its input and output. A shell command that
-  names the directory it ran in shows it first, `app $ make test`, read against the run's worktrees: a command in the
-  worktree itself shows none, one under it shows the rest (`src $ npm test`), a run across repositories names the
-  repository (`web $ git status`), and anything else stays whole, so a command that wandered off stands out. Hover the
-  line for all of it, with what the agent said it was for. The input keeps the path as the agent wrote it. A canopy
-  command the harness refused is marked `refused`, with the guard. An overseer's `decide` names each ticket and its
-  action on its row, and opens to every decision on a line of its own with its rationale, so a tick that decided
-  twelve tickets in one call doesn't leave you reading them out of a JSON array. Its `ticket-set` does the same: each
-  ticket, or `ABC-1 (web)` for a unit, with what it sets on the row, and opened, each on a line with its phase, `done`,
-  every cursor and the item it passes, and the title;
+  names the directory it ran in shows it first, dimmed, so you read the command and still know where it ran. A
+  directory in one of the run's worktrees is named from its repository, `web $ git status` or `web/src $ npm test`,
+  not the forty characters of `.treehouse` before it. Anything else stays whole and turns amber: a command that
+  wandered off the worktree is usually the one you were looking for. Hover the line for all of it, with what the agent
+  said it was for. The input keeps the path as the agent wrote it. A canopy command the harness refused is marked
+  `refused`, with the guard. An overseer's `decide` names each ticket and its action on its row, and opens to every
+  decision on a line of its own with its rationale, so a tick that decided twelve tickets in one call doesn't leave
+  you reading them out of a JSON array. Its `ticket-set` does the same: each ticket, or `ABC-1 (web)` for a unit, with
+  what it sets on the row, and opened, each on a line with its phase, `done`, every cursor and the item it passes, and
+  the title;
 - each model call, with the tokens in and out, and its cost; click one to see what it was sent and what it did. The
   first call was sent canopy's prompt, and every later one what the tools returned since. In a run that switched
   models, the first call names its model, and so does each call where the model changed, By call too, so you can see
