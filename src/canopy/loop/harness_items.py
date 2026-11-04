@@ -301,7 +301,8 @@ def _stuck_check(ctx: Context, repo: str, url: str, head: str, now: datetime) ->
     return (
         f"`{name}` is still pending on {url} at {head[:12]}, over {STUCK_AFTER // timedelta(minutes=1)} minutes after "
         f"its other checks finished, holding it at ci_running; if it is not CI, give it a role in "
-        f'`[repos.{repo}.checks]`: `{key} = "merge"` for a merge queue, `"human"` for a sign-off, or `"ignore"`'
+        f'`[repos.{repo}.checks]`: `{key} = "merge"` for a merge queue, `"human"` for a sign-off, `"rollup"` for a job '
+        f'that only waits on the others, or `"ignore"`'
     )
 
 

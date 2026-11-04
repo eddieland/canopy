@@ -356,7 +356,7 @@ def test_a_resume_for_ci_alone_needs_a_failure_no_worker_had(
         assert found[1].startswith(f"every failed check at the head of {PR} (build) failed at that head at or behind")
 
 
-@pytest.mark.parametrize("role", ["human", "merge", "ignore"])
+@pytest.mark.parametrize("role", ["human", "merge", "ignore", "rollup"])
 def test_a_check_its_repository_says_is_not_ci_starts_no_resume_for_ci(
     canopy_env: CanopyEnv,
     observed: sqlite3.Connection,

@@ -64,6 +64,9 @@ class CheckRole(StrEnum):
     MERGE = "merge"
     #: Advisory or retired: left out of the checks.
     IGNORE = "ignore"
+    #: A job that only fans the others in, such as a required summary job, red whenever one of them is: left out of the
+    #: checks, which count each failure once already, in the job that failed.
+    ROLLUP = "rollup"
 
 
 def _summary(value: str) -> str:
