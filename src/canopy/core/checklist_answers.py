@@ -489,10 +489,12 @@ def contract_text(lists: Sequence[Checklist]) -> str:
             "",
             (
                 f'That JSON object also carries `"checklist":{{"<repository>":{entry}}}`: under each repository above, '
-                "each item of its list by its id. `pass` when the diff holds to it, `fixed` when this run committed "
-                "the fix, `held` when you left it failing, with a `reason` saying why in a sentence or two, at most "
-                f"{MAX_REASON} characters, and `n/a` when it is about nothing the diff changes. An item you leave out "
-                "is recorded unanswered."
+                "every item of its list by its id, none left out, whether or not your push was held. `pass` when you "
+                "held the diff to the rule and it holds, `fixed` when this run committed the fix, `held` when you left "
+                f"it failing, with a `reason` saying why in a sentence or two, at most {MAX_REASON} characters, and "
+                "`n/a` only when the diff touches none of the paths the item is about, or nothing its rule speaks of, "
+                "so there was nothing to hold it to. An item you checked is `pass`, `fixed`, or `held`, never `n/a`. "
+                "An item you leave out is not `n/a` either: canopy records it unanswered, which says you never looked."
             ),
         ],
     )

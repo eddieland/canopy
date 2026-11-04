@@ -76,7 +76,10 @@ def test_the_first_push_is_held_with_the_list_and_the_next_goes_through(
     printed = str(held["stderr"])
     assert printed.startswith(HELD)
     assert named_list(scenario.agent_log) in printed.splitlines()[0]
-    assert "`checklist`, under repo: pass, fixed, held with the reason, or n/a." in printed
+    assert (
+        "`checklist`, under repo, none left out: pass, fixed, held with the reason, or n/a only for an item whose "
+        "paths the diff does not touch." in printed
+    )
     assert f"\n\n{LIST}" in printed
     assert sent["returncode"] == 0
     assert "[canopy]" not in str(sent["stderr"])
@@ -255,10 +258,10 @@ def test_a_joint_runs_slots_are_each_held_with_their_own_list(ws_scenario: Scena
     _, api_held, api_sent, _, web_held, web_sent = ran(ws_scenario.agent_log)
     api, web = str(api_held["stderr"]), str(web_held["stderr"])
     assert (api.startswith(HELD), web.startswith(HELD)) == (True, True)
-    assert "under api:" in api
+    assert "under api, none" in api
     assert "\n\n## api-rule\nThe api's rule.\n" in api
     assert "web-rule" not in api
-    assert "under web:" in web
+    assert "under web, none" in web
     assert "\n\n## web-rule\nThe web's rule.\n" in web
     assert "api-rule" not in web
     assert (api_sent["returncode"], web_sent["returncode"]) == (0, 0)
