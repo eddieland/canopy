@@ -16,6 +16,7 @@ import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PromptPanel } from '@/components/prompt-panel'
 import { RichText } from '@/components/rich-text'
+import { RowList } from '@/components/rows'
 import { TranscriptPanel } from '@/components/transcript'
 import { WhenField } from '@/components/when-field'
 import { useTranscriptView } from '@/hooks/use-transcript-view'
@@ -94,11 +95,11 @@ function Loaded({ name, id }: { name: string; id: number }) {
                 {/* Left out with none: the description counts them (`no findings`), so a `0` would say it twice. */}
                 {data.findings.length > 0 && (
                     <ListPanel label="Findings" count={data.findings.length} data-testid="chore-run-findings">
-                        <ul className="divide-y">
+                        <RowList kind="finding" className="divide-y">
                             {data.findings.map((finding) => (
                                 <ChoreFindingRow key={finding.id} finding={finding} />
                             ))}
-                        </ul>
+                        </RowList>
                     </ListPanel>
                 )}
                 <TranscriptPanel

@@ -8,7 +8,7 @@ import { LinkOutIcon } from '@/components/link-out-icon'
 import { LinkedText } from '@/components/linked-text'
 import { ListPanel } from '@/components/list-panel'
 import { Notice } from '@/components/notice'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { Clipped } from '@/components/tip'
@@ -114,7 +114,7 @@ export function LeftFeedbackList({
                     Read these before you merge: leaving them was the overseer&apos;s call, not the reviewer&apos;s.
                 </p>
             )}
-            <ul className="divide-y" data-testid="left-feedback">
+            <RowList kind="left-feedback" className="divide-y" data-testid="left-feedback">
                 {items.map((item) => (
                     <LeftRow
                         key={`${item.pr_url}-${item.id}`}
@@ -123,7 +123,7 @@ export function LeftFeedbackList({
                         onSend={() => send.mutate([item.number])}
                     />
                 ))}
-            </ul>
+            </RowList>
             <Notice error={send.error} className="mx-3 mb-3">
                 {said}
             </Notice>

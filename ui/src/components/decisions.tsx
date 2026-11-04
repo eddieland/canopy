@@ -3,7 +3,7 @@ import { Age } from '@/components/age'
 import { ChoreLink } from '@/components/chore-link'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
@@ -27,7 +27,7 @@ export function Decisions({
     ownPr?: string
 }) {
     return (
-        <ul className="divide-y" data-testid="decisions">
+        <RowList kind={byTick ? 'own-decision' : 'decision'} className="divide-y" data-testid="decisions">
             {decisions.map((decision) => (
                 <ListRow
                     key={decision.id}
@@ -46,7 +46,7 @@ export function Decisions({
                     <RichText text={decision.rationale} lines={SUMMARY_LINES} className={rowLineFrom('action')} />
                 </ListRow>
             ))}
-        </ul>
+        </RowList>
     )
 }
 

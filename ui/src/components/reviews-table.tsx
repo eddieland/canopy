@@ -5,7 +5,7 @@ import { None } from '@/components/none'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewDraftChip } from '@/components/review-draft-chip'
 import { ReviewLink } from '@/components/review-link'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
@@ -45,7 +45,7 @@ export function ReviewsTable({
 }) {
     const waiting = requested.map((request) => <RequestedRow key={`requested-${request.pr_url}`} request={request} />)
     return (
-        <ul className="divide-y" data-testid="reviews">
+        <RowList kind={pr ? 'review' : 'own-review'} className="divide-y" data-testid="reviews">
             {!requestedLast && waiting}
             {requestGroups(reviews).flatMap((group) =>
                 group.map((review, i) => (
@@ -59,7 +59,7 @@ export function ReviewsTable({
                 )),
             )}
             {requestedLast && waiting}
-        </ul>
+        </RowList>
     )
 }
 

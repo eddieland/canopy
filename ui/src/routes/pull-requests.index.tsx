@@ -11,7 +11,7 @@ import { PullRequestFilterBar } from '@/components/pull-request-filter'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewDraftChip } from '@/components/review-draft-chip'
 import { ReviewLink } from '@/components/review-link'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
@@ -21,10 +21,8 @@ import { ordered, useListOrder } from '@/lib/list-order'
 import { phaseMeaning } from '@/lib/meanings'
 import { countText, filterWords, prQueryOf, pullRequestShown, reposOf } from '@/lib/pull-request-filter'
 import type { PullRequestFilter } from '@/lib/pull-request-filter'
-import { pullRequestLabel } from '@/lib/pull-request-label'
 import { repoListOf } from '@/lib/repo-filter'
 import { verdictText, verdictTone } from '@/lib/reviews'
-import { fitColumn } from '@/lib/rows'
 import { unseenOf, unseenText } from '@/lib/seen-reviews'
 import { cn } from '@/lib/utils'
 import { NO_TICKET } from '@/lib/words'
@@ -91,21 +89,11 @@ function PullRequestsPage() {
                 ) : shown.length === 0 ? (
                     <Empty size="panel">{`no PRs${filterWords(filter)}`}</Empty>
                 ) : (
-                    <ul
-                        className="divide-y"
-                        // The PR column as wide as the longest name, and the name's icon beside it: every PR's, so the
-                        // columns hold still as the filter narrows the list.
-                        style={fitColumn(
-                            'pr',
-                            data.map((pr) => pullRequestLabel(pr.url)),
-                            1.25,
-                        )}
-                        data-testid="pull-requests"
-                    >
+                    <RowList kind="pull-request" className="divide-y" data-testid="pull-requests">
                         {ordered('pull-requests', order, shown).map((pr) => (
                             <Row key={pr.url} pr={pr} />
                         ))}
-                    </ul>
+                    </RowList>
                 )}
             </Panel>
         </>

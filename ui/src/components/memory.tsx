@@ -19,7 +19,7 @@ import { Copyable, CopyButton } from '@/components/copy-button'
 import { Disclosure } from '@/components/disclosure'
 import { VersionForget } from '@/components/memory-actions'
 import { MemoryText } from '@/components/memory-text'
-import { RowLine, ListRow } from '@/components/rows'
+import { ListRow, RowLine, RowList } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
@@ -131,7 +131,7 @@ export function MemoryRows({
     const now = useNow()
     const served = new Set(digest?.ids)
     return (
-        <ul className="divide-y" data-testid="memory-rows">
+        <RowList kind={ticket || across ? 'memory-across' : 'memory'} className="divide-y" data-testid="memory-rows">
             {entries.map((entry) => (
                 <MemoryRow
                     key={entry.id}
@@ -149,7 +149,7 @@ export function MemoryRows({
                     onVersionSaid={onVersionSaid}
                 />
             ))}
-        </ul>
+        </RowList>
     )
 }
 

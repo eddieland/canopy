@@ -7,7 +7,7 @@ import { Age } from '@/components/age'
 import { ChoreLink, ChoreRunLink } from '@/components/chore-link'
 import { MarkedText } from '@/components/marked-text'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TaskLink, TaskRunLink } from '@/components/task-link'
@@ -85,11 +85,11 @@ function Results({ q }: { q: string }) {
                             {data.more.includes(source) ? `newest ${hits.length}` : hits.length}
                         </span>
                     </PanelHeader>
-                    <ul className="divide-y">
+                    <RowList kind="search-hit" className="divide-y">
                         {hits.map((hit) => (
                             <Row key={rowKey(hit)} hit={hit} words={data.words} />
                         ))}
-                    </ul>
+                    </RowList>
                 </Panel>
             ))}
         </div>

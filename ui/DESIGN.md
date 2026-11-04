@@ -468,21 +468,22 @@ just past it. A step comes in once the pane has room for it and what it sits bes
 the window widens. The wide screens' second column (Shape and space) stays the window's, at `2xl`, where the rail is
 whole either side.
 
-- **`ListRow`** (`src/components/rows.tsx`): a list's row, a CSS grid in its kind's columns (`ROW_COLUMNS` in
-  `src/lib/rows.ts`). Every column is fixed but one free column, which takes the rest and cuts its text to fit, so every
-  row of a list lines up whatever its cells hold. The free column never gets under 8rem: it holds the row's name, which
-  never vanishes; a kind whose name needs more sets a floor of its own. A column may be fitted instead of fixed: its
-  list sets its width to the longest of its cells, all in monospace, so its rows still share it. A cell never draws
-  over the next column: what will not fit its column, an id with nowhere to break, is cut there by the row, so no cell
-  has to remember to, and an id cut so is whole on hover. **A narrow list lets
+- **`ListRow`** (`src/components/rows.tsx`): a list's row, in a **`RowList`** that sets its kind's columns
+  (`ROW_COLUMNS` in `src/lib/rows.ts`), which every row shares as a subgrid. **Columns fit their list**: each is as wide
+  as its widest cell in that list, up to a most, rather than a width guessed from sample data, so a list of short ids
+  leaves the room to its title, and the rows still line up whatever their cells hold. One free column takes the rest
+  and cuts its text to fit; it never gets under 8rem, since it holds the row's name, which never vanishes, and a kind
+  whose name needs more sets a floor of its own. Lists stacked in one panel share one grid. A cell never draws over the
+  next column: what will not fit its column, an id with nowhere to break, is cut there by the row, so no cell has to
+  remember to, and an id cut so is whole on hover. **A narrow list lets
   columns go**, in the order its kind gives them, so it fits its panel wherever the panel sits: a column shows from the
   narrowest container size with room for it, the columns that go after it, and those that never do. The `Panel` is the
   container, so a list goes by its own width, not the window's; every column shows at `@4xl`, which a list in a 1280px
   window reaches. What goes under the head line, a summary, its links, an earlier run, is a **`RowLine`** that spans
   from a named column to the row's end, never a hand-computed indent: no `pl-[…]` in `src/routes` or `src/components`.
   What sits under a row outside it, a tool call's body, is a **`RowGrid`** of the same kind with a `RowLine` in it. A
-  new list is a new kind in `ROW_COLUMNS`, its columns written out there; an age column and a cost column are one
-  width in every kind, so they line up from one list to the next.
+  new list is a new kind in `ROW_COLUMNS`, its columns written out there; an age column and a cost column are fixed,
+  one width in every kind, so they line up from one list to the next.
 - **`Fields`** and **`Field`** (`src/components/fields.tsx`): a detail page's field list, a label column in
   `panel-label` type and the values beside it, in prose or, with `mono`, in monospace data. The rows sit on their first
   baseline, so a label stays level with the first line of a value that wraps.

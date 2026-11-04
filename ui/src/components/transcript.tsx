@@ -639,7 +639,7 @@ function Tool({
                         )}
                     />
                 </summary>
-                <RowGrid kind="transcript" className="pb-3">
+                <RowGrid kind="transcript" alone className="pb-3">
                     <RowLine from="text" className="flex flex-col gap-2">
                         {decisions !== null && <Decisions decisions={decisions} words={words} />}
                         {settings !== null && <Settings settings={settings} words={words} />}
@@ -720,7 +720,7 @@ function ModelCall({
                     />
                 </summary>
                 {open && split !== null && (
-                    <RowGrid kind="transcript" className="pb-2">
+                    <RowGrid kind="transcript" alone className="pb-2">
                         <dl className={cn(rowLineFrom('text'), 'flex flex-wrap gap-x-6 gap-y-1 font-mono text-xs')}>
                             {TOKEN_KINDS.map(([key, label]) => (
                                 <div key={key} className="flex items-baseline gap-2">
@@ -843,7 +843,7 @@ function CallBody({
 }) {
     return (
         // In a narrow panel the body takes the row's whole width; in a wider one it starts under the text.
-        <RowGrid kind="transcript" className="pb-3" data-testid="transcript-call-body">
+        <RowGrid kind="transcript" alone className="pb-3" data-testid="transcript-call-body">
             <RowLine from="text" className="flex flex-col gap-3 @max-lg:col-[time/end]">
                 <section className="flex flex-col gap-2" aria-label={`call ${call.n} input`}>
                     <Heading
