@@ -320,7 +320,8 @@ test.describe("Pulp's lettering", () => {
             await settled(page)
 
             await expect(title).toHaveCSS('font-family', /^"Bangers Title"/u)
-            expect((await title.boundingBox())?.height).toBe(before?.height)
+            // Within a pixel: the face's line box can land a fraction of one off the default's.
+            expect((await title.boundingBox())?.height).toBeCloseTo(before?.height ?? Number.NaN, 0)
             await page.goto('workspace/runs/39')
             await settled(page)
             await expect(page.getByRole('heading', { level: 1 })).toHaveCSS('font-family', /^"IBM Plex Mono Compact"/u)
