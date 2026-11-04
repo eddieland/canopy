@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import type { CSSProperties } from 'react'
 
 import { ciReportQuery } from '@/api/queries'
 import type {
@@ -264,16 +265,22 @@ function ciTiles(found: CiReport | undefined): ReadoutTile[] {
  * Each check by name, the worst first: its failure rate as a bar in the failed state's color, since red is a state
  * here, its red runs and its runs beside it, how often its next run on a new head passed after a red one, and how
  * often a rerun on a head it had been red on passed, flaky past `FLAKY_RERUNS` without anyone's say-so. The table
- * sizes to its content. Under it, what counts as red, and what the page cannot see.
+ * sizes to its content: each count column's values are as wide as its longest, on one line, so `12 of 14` neither
+ * wraps nor shifts its bar off the others'. Under it, what counts as red, and what the page cannot see.
  */
 function Checks({ checks, span }: { checks: CiCheck[]; span: string }) {
+    // In characters, since the cells are monospace: a fixed width wraps a long count however wide the panel is.
+    const widths = {
+        '--next-head-ch': longest(checks.map((c) => nextHeadText(c))),
+        '--reruns-ch': longest(checks.map((c) => rerunsText(c))),
+    } as CSSProperties
     return (
         <div className="flex flex-col gap-3 px-3 pb-3">
             {checks.length === 0 ? (
                 <Empty size="panel">no check run was observed in these {span}</Empty>
             ) : (
                 <PanelScroll label="Checks by name" className="max-h-96 overflow-x-auto">
-                    <table className="border-collapse text-sm" data-testid="ci-check-table">
+                    <table className="border-collapse text-sm" style={widths} data-testid="ci-check-table">
                         <thead className="sticky top-0 bg-surface [&_th]:pt-3">
                             <tr className="text-right">
                                 <th className="panel-label pb-1.5 text-left font-normal">check</th>
@@ -310,14 +317,22 @@ function Checks({ checks, span }: { checks: CiCheck[]; span: string }) {
                                     <td className="pl-3 text-left text-muted-foreground">
                                         <CellBar
                                             percent={(nextHeadShare(c) ?? 0) * 100}
-                                            valueClassName="readout w-12 text-right"
+                                            valueClassName={cn(
+                                                'readout min-w-12 text-right whitespace-nowrap',
+                                                'w-[calc(var(--next-head-ch)*1ch)]',
+                                            )}
                                         >
                                             {nextHeadText(c)}
                                         </CellBar>
                                     </td>
                                     <td className="pl-3 text-left">
                                         <span className="flex items-center gap-2">
-                                            <span className="readout w-12 text-right text-muted-foreground">
+                                            <span
+                                                className={cn(
+                                                    'readout min-w-12 shrink-0 text-right whitespace-nowrap',
+                                                    'w-[calc(var(--reruns-ch)*1ch)] text-muted-foreground',
+                                                )}
+                                            >
                                                 {rerunsText(c)}
                                             </span>
                                             {isFlaky(c) && <Chip tone="blocked">flaky</Chip>}
@@ -334,6 +349,11 @@ function Checks({ checks, span }: { checks: CiCheck[]; span: string }) {
             </p>
         </div>
     )
+}
+
+/** The length of the longest of `texts`, in characters; 0 for none. */
+function longest(texts: string[]): number {
+    return texts.reduce((most, text) => Math.max(most, text.length), 0)
 }
 
 /**

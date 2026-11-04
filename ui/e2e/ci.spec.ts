@@ -24,6 +24,35 @@ test("the nav opens CI under Reports, the week's checks the worst first", async 
     await expect(page.getByTestId('ci-limits')).toContainText('A commit status has no run id')
 })
 
+test('a long count stays on one line, its bar in line with the others', async ({ page }) => {
+    // A busy check's counts run past the mock's single digits: each column is as wide as its longest, so none wraps.
+    await page.route('**/api/reports/ci*', async (route) => {
+        const response = await route.fetch()
+        const report = (await response.json()) as { checks: Record<string, unknown>[] }
+        const [worst, next] = report.checks
+        if (worst === undefined || next === undefined) {
+            throw new Error('the mock has fewer than two checks')
+        }
+        Object.assign(worst, { followed: 14, passed: 12, reruns: 120, reruns_green: 103 })
+        Object.assign(next, { followed: 140, passed: 3 })
+        await route.fulfill({ response, json: report })
+    })
+    await page.goto('reports/ci')
+    await settled(page)
+    const rows = page.getByTestId('ci-check-table').getByTestId('ci-check')
+    await expect(rows.first().locator('td').nth(3)).toHaveText('12 of 14')
+    await expect(rows.first().locator('td').nth(4)).toHaveText('103 of 120flaky')
+    // Every row one line high, and the next head's bars starting where the others do, each within a pixel.
+    const boxes = await rows.evaluateAll((trs) =>
+        trs.map((tr) => ({
+            height: tr.getBoundingClientRect().height,
+            bar: tr.querySelectorAll('[data-testid=cell-bar]')[1]?.getBoundingClientRect().left ?? 0,
+        })),
+    )
+    expect(spread(boxes.map((box) => box.height))).toBeLessThan(1)
+    expect(spread(boxes.map((box) => box.bar))).toBeLessThan(1)
+})
+
 test('the red checks chart stacks each day by check, with a table of the same numbers', async ({ page }) => {
     await page.goto('reports/ci')
     await settled(page)
@@ -94,3 +123,8 @@ test('the window switches to 30 days, and the cooldown points to Health', async 
     await page.getByTestId('ci-cooldown-line').getByRole('link', { name: 'Health' }).click()
     await expect(page).toHaveURL(/\/reports\/health\?days=30$/u)
 })
+
+/** How far apart the largest and smallest of `values` are. */
+function spread(values: number[]): number {
+    return Math.max(...values) - Math.min(...values)
+}
