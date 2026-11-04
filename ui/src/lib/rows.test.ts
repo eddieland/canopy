@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { fitColumn, ROW_COLUMNS, ROW_TIERS, rowLayout, rowLineFrom, rowTemplate, rowTiers } from './rows'
+import { fitColumn, ROW_COLUMNS, ROW_TIERS, rowCells, rowLayout, rowLineFrom, rowTemplate, rowTiers } from './rows'
 import type { RowKind, RowTier } from './rows'
 
 const FREE = 'minmax(8rem,1fr)'
@@ -162,6 +162,16 @@ describe('rowLayout', () => {
         for (const columns of Object.values(ROW_COLUMNS)) {
             expect(columns.length).toBeLessThanOrEqual(8)
         }
+    })
+})
+
+describe('rowCells', () => {
+    it("holds each of the head line's cells to its column, and none of what goes under it", () => {
+        expect(rowCells('chore').split(' ')).toEqual([
+            '[&>:nth-child(-n+3)]:min-w-0',
+            '[&>:nth-child(-n+3)]:overflow-x-clip',
+            '[&>:nth-child(-n+3)]:text-ellipsis',
+        ])
     })
 })
 

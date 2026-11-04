@@ -17,17 +17,20 @@ const ENCLOSING = 'a[href], button, summary, label, [role="button"], [role="link
  * With no fact it is its child alone. Inside a link or a button, which is the keyboard's stop already, or inside an
  * element with a `title`, the fact is the child's own `title`, as it was before tips. `mono` sets the fact in
  * monospace, as the CLI prints it. `detail` goes on a line of its own under the fact, in the page's font: what a word
- * the fact spells means.
+ * the fact spells means. `whenCut` offers the fact only while the child's text is cut to fit (`useCut`): an id that
+ * its cell cuts, whole in its tip, as `Clipped` gives text.
  */
 export function Tip({
     fact,
     mono = false,
     detail,
+    whenCut = false,
     children,
 }: {
     fact: string | null | undefined
     mono?: boolean
     detail?: string | null
+    whenCut?: boolean
     children: ReactElement
 }) {
     const [open, setOpen] = useState(false)
@@ -40,12 +43,14 @@ export function Tip({
     // trigger scrolls; that scroll's event comes a frame after the focus opened the tip, so a close while it settles,
     // with the trigger still focused, is that scroll's.
     const settling = useRef(false)
-    const shown = fact === null || fact === undefined || fact === '' ? null : fact
+    const [cutRef, cut] = useCut()
+    const shown = fact === null || fact === undefined || fact === '' || (whenCut && !cut) ? null : fact
     const place = (element: HTMLElement | null) => {
         trigger.current = element
         if (element !== null) {
             setNested((element.parentElement?.closest(ENCLOSING) ?? null) !== null)
         }
+        return whenCut ? cutRef(element) : undefined
     }
     const own = shown !== null && !nested
     const change = (next: boolean) => {
@@ -147,10 +152,9 @@ export function Clipped({
     children,
     ...props
 }: Omit<ComponentProps<'span'>, 'ref' | 'title'> & { text: string; mono?: boolean; children?: ReactNode }) {
-    const [ref, cut] = useCut()
     return (
-        <Tip fact={cut ? text : null} mono={mono}>
-            <span ref={ref} className={cn('truncate', className)} {...props}>
+        <Tip fact={text} mono={mono} whenCut>
+            <span className={cn('truncate', className)} {...props}>
                 {children ?? text}
             </span>
         </Tip>
