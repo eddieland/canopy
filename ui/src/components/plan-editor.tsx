@@ -114,8 +114,8 @@ const SOURCE = [
  * header, swaps the document for its Markdown as plain text, to read or edit as written; `onChange` gets that text as
  * it is typed, and turning Markdown off reads it back into the document, where the comments find their passages again.
  * With `marks`, the Outline lets the operator mark each section read or a concern, and counts those left to read
- * (`src/lib/plan-marks.ts`). Without `comments`, the plan has no margin: it stands alone, read only, as an epic's
- * plan does, which takes no comments.
+ * (`src/lib/plan-marks.ts`). Without `comments`, the plan has no Comments panel and no margin kept for one: for a plan
+ * read only that takes no comments, as an epic's is.
  */
 export function PlanEditor({
     markdown,
