@@ -11,6 +11,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, model_validator
 
 from canopy.serve.schema import Attachments, CostTotal, Decision, Limit, Message, Model, Run, TicketSummary
+from canopy.serve.schema.desk import TicketDesk
 from canopy.serve.schema.draft import Draft
 from canopy.serve.schema.model import AgentModel, ModelRequest
 from canopy.serve.schema.persona import AgentPersona, PersonaRequest
@@ -149,6 +150,8 @@ class TicketDetail(Model):
     left_feedback: list[LeftFeedback] = []
     """The feedback on its PRs its `review` cursors passed with no worker that is still left, oldest first: unanswered
     on its thread, on a thread not resolved. `canopy send KEY N` sends one to a worker."""
+    desk: TicketDesk
+    """The operator's own checkout of its branch (DESIGN §18): what a desk would cover, and the desk while open."""
 
 
 class StartRequest(Model):

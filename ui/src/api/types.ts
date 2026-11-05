@@ -69,6 +69,14 @@ export type Stopped = Schemas['Stopped']
 export type Replied = Schemas['Replied']
 /** What a forget cleared: the ticket's branch and its units' PRs, which are the operator's to close and delete. */
 export type Forgot = Schemas['Forgot']
+/** The operator's desk on a ticket (DESIGN §18): the repositories one could cover, and the desk while open. */
+export type TicketDesk = Schemas['TicketDesk']
+/** A ticket's desk while open: its branch, each repository's slot, and how to open it in VS Code. */
+export type OpenDesk = Schemas['OpenDesk']
+/** What opening a ticket's desk did, or that it was already open, and the run working the ticket meanwhile. */
+export type DeskOpened = Schemas['DeskOpened']
+/** What closing a ticket's desk did: the repositories whose slots it returned, none when no desk was open. */
+export type DeskClosed = Schemas['DeskClosed']
 /** A limit `canopy grant` raises: a ticket's unit's runs of one kind, or a PR's review runs (DESIGN §22). */
 export type Limit = Schemas['Limit']
 /** What a grant recorded: one more run allowed, every earlier one still counted. The next tick decides. */

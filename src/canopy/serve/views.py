@@ -35,7 +35,7 @@ from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ModelsRead, ReviewRunStatus, RunKind, RunStatus
 from canopy.runs import attachments, drafts, worker
-from canopy.serve import checklist_views, draft_views, feedback_plan_views, memory_views
+from canopy.serve import checklist_views, desk_views, draft_views, feedback_plan_views, memory_views
 from canopy.serve.schema import (
     Attachment,
     Attachments,
@@ -739,6 +739,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         worker_models=_worker_models(backend, ctx, key),
         attachments=attachments_of(ctx, conversation.Ref(conversation.TICKET, key)),
         left_feedback=[left_feedback(p) for p in _left(ctx, key)],
+        desk=desk_views.ticket_desk(backend, ctx, key),
     )
 
 

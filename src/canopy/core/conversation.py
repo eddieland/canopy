@@ -122,6 +122,7 @@ VERBS: Mapping[str, tuple[str, ...]] = {
         "model",
         "attach",
         "detach",
+        "desk",
     ),
     PR: ("grant", "start", "stop", "show", "persona"),
     CHORE: ("reply", "dismiss", "show"),

@@ -64,6 +64,7 @@ function detail(messages: Message[], forgets: TicketForget[] = []): TicketDetail
         models: [],
         worker_models: [],
         left_feedback: [],
+        desk: { repos: [], open: null },
     }
 }
 

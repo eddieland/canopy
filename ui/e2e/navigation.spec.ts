@@ -517,9 +517,9 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     await expect(page.getByTestId('pool-api').getByRole('code')).toHaveText('canopy workspace sync')
 
     const web = page.getByTestId('pool-web')
-    await expect(web.getByTestId('worktrees').locator('li')).toHaveCount(5)
-    await expect(web.getByTestId('pool-size')).toHaveText('5 of size 4')
-    await expect(web.getByTestId('pool-over')).toContainText('1 slot past the declared size')
+    await expect(web.getByTestId('worktrees').locator('li')).toHaveCount(6)
+    await expect(web.getByTestId('pool-size')).toHaveText('6 of size 4')
+    await expect(web.getByTestId('pool-over')).toContainText('2 slots past the declared size')
     const working = web.getByTestId('worktree-1')
     await expect(working).toHaveAttribute('data-state', 'working')
     await expect(working).toContainText('agent/ABC-101-login')
@@ -543,6 +543,11 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     await expect(dirty).toHaveAttribute('data-state', 'dirty')
     await expect(dirty).toContainText('never reused while it has changes, and counts as busy')
     await expect(dirty).toContainText('discard them in the slot')
+    // ABC-103's desk holds the last, on its branch, and says how to close it.
+    const desk = web.getByTestId('worktree-6')
+    await expect(desk).toHaveAttribute('data-state', 'held')
+    await expect(desk).toContainText('agent/ABC-103-billing-v2')
+    await expect(desk).toContainText('held by your desk for ABC-103, on its branch; `canopy desk ABC-103 --close`')
 
     // Run 43 holds a slot in two pools; each names it.
     const mobile = page.getByTestId('pool-mobile')
@@ -778,19 +783,20 @@ test('a tick that does not exist, or a path that names none, says so', async ({ 
 test('the worktrees page counts every pool, and each pool shows its slots at a glance', async ({ page }) => {
     await page.goto('workspace/worktrees')
     await settled(page)
-    // The mock: web's two runs, a shell, an idle and a dirty slot; mobile's run 43 slot and a task's; api has no
-    // clone.
+    // The mock: web's two runs, a shell, an idle and a dirty slot, and ABC-103's desk; mobile's run 43 slot and a
+    // task's; api has no clone.
     await expect(page.getByTestId('counter-working')).toContainText('4')
-    await expect(page.getByTestId('counter-held')).toContainText('1')
+    await expect(page.getByTestId('counter-held')).toContainText('2')
     // The shell's slot has no lease: a process holds it.
     await expect(page.getByTestId('counter-held')).toContainText('1 in use')
     // The dirty slot and the unread pool both count, and the line names only what there is: its label, the value 2,
     // then the line.
     await expect(page.getByTestId('counter-needs')).toHaveText('Needs a look21 dirty · 1 pool unread')
-    await expect(page.getByTestId('counter-free')).toContainText('of 7 slots')
+    await expect(page.getByTestId('counter-free')).toContainText('of 8 slots')
     // The description is the pools' state: how many, and how fresh the read is.
-    await expect(page.getByText(/^3 pools · 7 slots · read \d+[smhd] ago$/u)).toBeVisible()
+    await expect(page.getByText(/^3 pools · 8 slots · read \d+[smhd] ago$/u)).toBeVisible()
     const strip = page.getByTestId('pool-web').getByTestId('slot-strip').locator('[data-state]')
-    await expect(strip).toHaveCount(5)
+    await expect(strip).toHaveCount(6)
     await expect(strip.nth(4)).toHaveAttribute('data-state', 'dirty')
+    await expect(strip.nth(5)).toHaveAttribute('data-state', 'held')
 })

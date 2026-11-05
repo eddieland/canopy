@@ -47,6 +47,7 @@ const DETAIL: TicketDetail = {
     models: [],
     worker_models: [],
     left_feedback: [],
+    desk: { repos: [], open: null },
 }
 
 // Every reply sent, each recorded as a new message answering the question.

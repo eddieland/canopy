@@ -21,6 +21,7 @@ export function RepoFilter({
     repos,
     chosen,
     onChoose,
+    label = 'Filter by repository',
 }: {
     /** The repositories to offer, sorted; those chosen among them. */
     repos: readonly string[]
@@ -28,6 +29,8 @@ export function RepoFilter({
     chosen: readonly string[]
     /** Hears the repositories chosen once one is picked. */
     onChoose: (chosen: string[]) => void
+    /** What the choice is, for a screen reader, which hears it and then what is chosen: a filter's, unless given. */
+    label?: string
 }) {
     const [open, setOpen] = useState(false)
     const [first, setFirst] = useState<readonly string[]>([])
@@ -48,7 +51,7 @@ export function RepoFilter({
                 setOpen(next)
             }}
         >
-            <PickerButton label={`Filter by repository: ${summary}`} quiet={chosen.length === 0}>
+            <PickerButton label={`${label}: ${summary}`} quiet={chosen.length === 0}>
                 {summary}
             </PickerButton>
             <PickerList {...REPOSITORIES}>
