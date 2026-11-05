@@ -1190,6 +1190,16 @@ def planner_does(
         yield
 
 
+def edits_plan(old: str, new: str) -> list[str]:
+    """A command for `planner_does` that edits the planner's plan file in place, as its edit tool does.
+
+    Returns:
+        The command: `old` replaced by `new`, the rest of the file untouched.
+    """
+    script = "import pathlib, sys; p = pathlib.Path(sys.argv[1]); p.write_text(p.read_text().replace(*sys.argv[2:]))"
+    return ["python3", "-c", script, plans.WRITTEN, old, new]
+
+
 def scripted(role: str, settings: Mapping[str, str], behavior: Behavior | None = None) -> Script:
     """Until the block ends, the fake agent in `role` (OVERSEER, WORKER, ...) reads `settings` and `behavior`.
 

@@ -28,7 +28,7 @@ import re
 import secrets
 import stat
 from dataclasses import dataclass
-from typing import IO, TYPE_CHECKING, Literal, TypedDict, assert_never
+from typing import IO, TYPE_CHECKING, Literal, Protocol, TypedDict, assert_never
 
 from canopy.core import conversation, db, records, sql
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
@@ -50,9 +50,15 @@ DIR_NAME = "plans"
 # go back.
 COPY = ".canopy-plan.md"
 REPLACED = COPY
-# The file a planner writes its plan to in its desk, the one file its definition lets it edit (DESIGN §25).
-# `.agents/agents/canopy-planner.md` names it too.
+# The file a planner writes its plan to in its desk, the one file its definition lets it edit (DESIGN §25). A revision
+# starts with it holding the plan it replaces, as `REPLACED` does, so the planner edits that plan rather than writing it
+# again. `.agents/agents/canopy-planner.md` names it too.
 WRITTEN = ".canopy-new-plan.md"
+#: Why a revision's plan was not recorded when its planner left `WRITTEN` as canopy seeded it (`unrevised`).
+UNREVISED = (
+    f"the planner reported done, but left its {WRITTEN} as the plan it replaces, though the operator asked for "
+    "changes; no plan was recorded"
+)
 # A plan's outline in a worker's prompt: its markdown headings outside fenced code, at most this many, each cut at
 # `MAX_HEADING` characters (DESIGN §25, Workers follow the plan).
 MAX_OUTLINE = 200
@@ -79,6 +85,20 @@ type TicketPart = Literal["title", "description"]
 
 # Why a file is not a plan, as `canopy show` and the refusals say it.
 type Problem = Literal["missing", "not a regular file", "unreadable", "not UTF-8", "empty", "over the bound"]
+
+
+class Replaced(Protocol):
+    """A plan a planner's run replaces, of a ticket or an epic: when it was made, and when it was approved."""
+
+    @property
+    def created_at(self) -> str:
+        """When the plan was recorded, as the journal holds it."""
+        ...
+
+    @property
+    def approved_at(self) -> str | None:
+        """When the plan was last approved, as the run started, or None if it was not."""
+        ...
 
 
 class PlanFileError(Exception):
@@ -611,6 +631,39 @@ def history(conn: sqlite3.Connection, key: str) -> list[records.Plan]:
         The plans' rows, oldest first.
     """
     return records.select(records.Plan).where("ticket_key = ?", key).order_by("id").all(conn)
+
+
+def unrevised(
+    conn: sqlite3.Connection,
+    subject: conversation.Ref,
+    replaced: Replaced,
+    *,
+    seed: str,
+    text: str,
+    started_at: str,
+) -> bool:
+    """Whether a revision's planner left its seeded file as it was, though the operator asked for changes (DESIGN §25).
+
+    A planner that replaces a plan starts with its file holding that plan's text, `seed`, and edits it. Left as it was,
+    the file still reads as a plan, so it is no revision when the operator wrote on `subject` after the plan it replaces
+    was made, or last approved, and by the time the run started: the messages the planner was given. An epic's reply
+    after its plan's approval asks for a new one, so it counts as any other.
+
+    Returns:
+        True when `text` is `seed` and the operator wrote since, but for a verb's instruction.
+    """
+    if text != seed:
+        return False
+    since = max(replaced.created_at, replaced.approved_at or "")
+    wrote = (
+        sql.select("1")
+        .from_("messages")
+        .where("subject_kind = ? AND subject_id = ? AND source = 'operator'", subject.kind, subject.id)
+        .where("at > ? AND at <= ?", since, started_at)
+        .where("coalesce(submission, '') NOT GLOB ?", f"{conversation.INSTRUCTION}*")
+        .limit(1)
+    )
+    return sql.execute(conn, wrote).fetchone() is not None
 
 
 def approve(

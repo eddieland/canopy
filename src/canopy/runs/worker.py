@@ -725,13 +725,15 @@ class _Progress:
 def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
     """Run the planner in a desk of worktrees at their bases, and write and record the plan it wrote (DESIGN §25).
 
-    The desk holds a copy of the plan this one replaces, the ticket's current plan, if its file still reads as a plan;
-    and for a member of an epic with an approved plan, a copy of that plan as approved, which the recorded plan names
-    as the epic plan it was written against (DESIGN §43).
+    The desk holds a copy of the plan this one replaces, the ticket's current plan, if its file still reads as a plan,
+    and the plan's file starts as that plan, for the planner to edit; and for a member of an epic with an approved
+    plan, a copy of that plan as approved, which the recorded plan names as the epic plan it was written against
+    (DESIGN §43).
 
     Returns:
         The planner's status; `timeout` if it timed out; `unknown` for a missing or invalid result line, or a `done`
-        whose file in the desk is not a plan; or `crashed` when the plan's own file could not be written.
+        whose file in the desk is not a plan or is the plan it replaces, unedited, though the operator asked for
+        changes (`plans.unrevised`); or `crashed` when the plan's own file could not be written.
 
     Raises:
         SetupError: the epic's approved plan is no longer as approved, so the planner is never run without it.
@@ -745,7 +747,8 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     key = str(run["ticket_key"])
     replaced = plans.current(ctx.conn, key)
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text if replaced is not None else None
-    desk_files = {plans.REPLACED: copy} if copy is not None else {}
+    # The plan's file starts as the plan it replaces, which the planner edits: a first plan's starts with none.
+    desk_files = {plans.REPLACED: copy, plans.WRITTEN: copy} if copy is not None else {}
     member = epics.member_epic(ctx.conn, ctx.state_dir, key)
     if member is not None:
         desk_files[epics.EPIC_COPY] = _epic_copy(ctx, member)
@@ -760,13 +763,39 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         return Outcome(RunStatus.UNKNOWN, None, "the planner's last line was not a valid plan result")
     if parsed.status != "done":
         return Outcome(RunStatus(parsed.status), parsed)
-    # Read before `_release` removes the desk: bounded, never through a link, and refused unless it is a plan.
+    written = _written_plan(ctx, run, parsed, replaced, copy)
+    if isinstance(written, Outcome):
+        return written
+    epic_plan_id = member.plan.id if member is not None else None
+    return _record_plan(ctx, run, parsed, written, log, epic_plan_id=epic_plan_id)
+
+
+def _written_plan(
+    ctx: Context,
+    run: sqlite3.Row,
+    parsed: PlanResult,
+    replaced: plans.Replaced | None,
+    seed: str | None,
+) -> str | Outcome:
+    """Read the plan a `done` planner wrote in its desk, before `_release` removes the desk (DESIGN §25).
+
+    Bounded, never through a link, and refused unless it is a plan. A revision's file started as `seed`, the text of the
+    plan `replaced`, and is refused too when it is still that though the operator wrote since (`plans.unrevised`).
+
+    Returns:
+        The plan's text, or the `unknown` outcome that records no plan, saying why.
+    """
+    key = str(run["ticket_key"])
     written = plans.read(desks.path(ctx.workspace.root, key) / plans.WRITTEN)
     if written.text is None:
         note = f"the planner reported done, but its {plans.WRITTEN} is {written.problem}; no plan was recorded"
         return Outcome(RunStatus.UNKNOWN, parsed, note)
-    epic_plan_id = member.plan.id if member is not None else None
-    return _record_plan(ctx, run, parsed, written.text, log, epic_plan_id=epic_plan_id)
+    if replaced is not None and seed is not None:
+        subject = conversation.Ref(conversation.TICKET, key)
+        started_at = str(run["started_at"])
+        if plans.unrevised(ctx.conn, subject, replaced, seed=seed, text=written.text, started_at=started_at):
+            return Outcome(RunStatus.UNKNOWN, parsed, plans.UNREVISED)
+    return written.text
 
 
 def _epic_copy(ctx: Context, member: epics.MemberEpic) -> str:
@@ -835,13 +864,15 @@ def _feedback_plan(
     Each slot is checked out at the ticket's branch, as its PR's head was pushed. Each PR is read whole through the
     `vcs` source first: the items the planner may cover are what that read observed, its reviews and threads, failed
     checks, conflicts, and merged blockers, written to its desk with a copy of the feedback plan this one replaces, if
-    the ticket has one, and what changed on its PRs since that plan saw them.
+    the ticket has one, which the plan's file starts as for the planner to edit, and what changed on its PRs since
+    that plan saw them.
     An item the result names that it was not given is refused, with a harness note; the rest are recorded with the
     plan, and with what the read saw, its snapshot (DESIGN §32, Planning again).
 
     Returns:
         The planner's status; `timeout` if it timed out; `unknown` for a missing or invalid result line, or a `done`
-        whose file in the desk is not a plan; or `crashed` when the plan's own file could not be written.
+        whose file in the desk is not a plan or is the plan it replaces, unedited, though the operator asked for
+        changes (`plans.unrevised`); or `crashed` when the plan's own file could not be written.
 
     Raises:
         SetupError: a PR could not be read whole, so the planner would plan from less than its feedback.
@@ -862,6 +893,7 @@ def _feedback_plan(
     not_ci = ci.not_ci(ctx.conn, ctx.workspace.check_roles, prs)
     snapshot = feedback_items.take(ctx.conn, prs, reviews, not_ci)
     offered = [*reviews, *feedback_items.raised(ctx.conn, key, prs, not_ci)]
+    replaced = feedback_plans.current(ctx.conn, key)
     desk_files = _feedback_desk(ctx, key, offered) | _place_attachments(run, slots, _attachment_copies(ctx, run))
     result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.plan_cmd, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
@@ -872,12 +904,11 @@ def _feedback_plan(
         return Outcome(RunStatus.UNKNOWN, None, "the planner's last line was not a valid feedback plan result")
     if parsed.status != "done":
         return Outcome(RunStatus(parsed.status), parsed)
-    written = plans.read(desks.path(ctx.workspace.root, key) / plans.WRITTEN)
-    if written.text is None:
-        note = f"the planner reported done, but its {plans.WRITTEN} is {written.problem}; no plan was recorded"
-        return Outcome(RunStatus.UNKNOWN, parsed, note)
+    written = _written_plan(ctx, run, parsed, replaced, desk_files.get(plans.WRITTEN))
+    if isinstance(written, Outcome):
+        return written
     matched = feedback_plans.match(offered, [feedback_plans.Named(i.id, i.proposal, i.reply) for i in parsed.items])
-    return _record_feedback_plan(ctx, run, parsed, written.text, matched=matched, snapshot=snapshot, log=log)
+    return _record_feedback_plan(ctx, run, parsed, written, matched=matched, snapshot=snapshot, log=log)
 
 
 def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Item]) -> dict[str, str]:
@@ -893,7 +924,9 @@ def _feedback_desk(ctx: Context, key: str, offered: Sequence[feedback_items.Item
         return desk_files
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text
     if copy is not None:
+        # The plan's file starts as the plan it replaces, which the planner edits, as a plan's does (`_plan`).
         desk_files[plans.REPLACED] = copy
+        desk_files[plans.WRITTEN] = copy
     changed = feedback_items.changes(ctx.conn, ctx.config.trust, replaced, ctx.workspace)
     if changed:
         desk_files[feedback_items.CHANGES] = feedback_items.changes_file(changed)

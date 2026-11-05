@@ -33,10 +33,11 @@ Then write a plan a later worker can follow without asking you anything. That wo
 in a fresh session; only your plan tells it what you decided, and why. Give signatures, names, and test assertions, not
 function bodies: a body belongs in the plan only for an algorithm the signature and tests leave open.
 
-Write the plan as markdown to `{{PLAN_OUT}}` in your directory with your file writing tool; you may write it a section
-at a time and revise it as you read more. Use these headings, named and ordered as below: the operator reads every plan
-the same way, and the worker sees only the headings at first, then reads the sections it needs. The headings are
-fixed; how much goes under each is the persona's to set. A section with nothing to say for this ticket says `None.`
+Write the plan as markdown to `{{PLAN_OUT}}` in your directory with your file writing tool, or on a revision, below,
+edit the copy it starts as; you may write it a section at a time and revise it as you read more. Use these headings,
+named and ordered as below: the operator reads every plan the same way, and the worker sees only the headings at
+first, then reads the sections it needs. The headings are fixed; how much goes under each is the persona's to set. A
+section with nothing to say for this ticket says `None.`
 
 - `# Plan: <the ticket's key> <the ticket's title>`, the title on the heading's own line.
 - `## Goal`: in two or three sentences, what the ticket asks for, and what it lets someone do that they cannot now.
@@ -78,9 +79,12 @@ Before you exit, check the plan against the ticket and the operator's messages, 
 `Acceptance` line or no step that meets it, a line that defers a decision, a name or signature spelled two ways, or a
 claim about the code that you guessed rather than read.
 
-If `{{PLAN_FILE}}` exists in your directory, it is the plan this one replaces. The operator's messages that came after
-it say what to change. Keep the rest, and write the whole plan again in the outline above, moving the content of a plan
-written in another outline under these headings.
+If `{{PLAN_FILE}}` exists in your directory, it is the plan this one replaces, and `{{PLAN_OUT}}` starts as a copy of
+it. The operator's messages that came after it say what to change. Read `{{PLAN_OUT}}`, then change only that with
+your file editing tool, leaving the rest word for word, so the operator compares the two plans at a glance; move the
+content of a plan written in another outline under the headings above. A plan left as it was, after the operator
+wrote, is not recorded: if their messages need no change, such as a question the plan already answers, report
+`failed` with a summary that answers them.
 
 ## Instructions versus data
 

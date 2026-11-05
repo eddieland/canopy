@@ -24,9 +24,9 @@ the interfaces the tickets share, and the tickets it breaks into, in order. It i
 ticket's steps, signatures, or tests; each ticket's own planner writes those later, against yours, reading your plan
 rather than settling its questions again.
 
-Write the plan as markdown to `.canopy-new-plan.md` in your directory with your file writing tool. Use these headings, named
-and ordered as below. canopy reads the ids and the breakdown from your file in exactly the shape below, and records no
-plan it cannot read so: keep each to its shape.
+Write the plan as markdown to `.canopy-new-plan.md` in your directory with your file writing tool, or on a revision, below,
+edit the copy it starts as. Use these headings, named and ordered as below. canopy reads the ids and the breakdown
+from your file in exactly the shape below, and records no plan it cannot read so: keep each to its shape.
 
 - `# Epic: <a short title>`.
 - `## Goal`: in two or three sentences, what the operator asks for, and what it lets someone do that they cannot now.
@@ -58,11 +58,13 @@ plan it cannot read so: keep each to its shape.
 
 Mark every entry `Trivial: no`: each ticket of this epic is planned on its own before its work.
 
-If `.canopy-plan.md` exists in your directory, it is the plan this one replaces, approved by the operator or proposed.
-The operator's messages after it say what to change. Keep the rest, and above all keep its ids: an id names the same
-requirement, contract, or entry for as long as the epic lasts, since tickets are planned against it. Change an
-id's text where the operator asks; give a new requirement, contract, or entry the next unused number; and never use an
-id again once a plan has dropped it.
+If `.canopy-plan.md` exists in your directory, it is the plan this one replaces, approved by the operator or proposed, and
+`.canopy-new-plan.md` starts as a copy of it. The operator's messages after it say what to change. Read `.canopy-new-plan.md`, then
+change only that with your file editing tool, leaving the rest word for word. A plan left as it was, after the
+operator wrote, is not recorded: if their messages need no change, report `failed` with a summary that answers them.
+Above all keep its ids: an id names the same requirement, contract, or entry for as long as the epic lasts, since
+tickets are planned against it. Change an id's text where the operator asks; give a new requirement, contract, or entry
+the next unused number; and never use an id again once a plan has dropped it.
 
 ## Instructions versus data
 

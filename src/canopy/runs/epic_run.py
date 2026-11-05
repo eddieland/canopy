@@ -2,7 +2,8 @@
 
 Checks each slot out at its repository's base, detached, makes the run's desk of links to them, and runs the planner,
 `runtime.plan_cmd`, with the epic's prompt: the planner reads, and writes only its plan, `.canopy-new-plan.md` in
-the desk. A copy of the epic's current plan, when it has one, waits beside it as the plan it replaces. On `done`,
+the desk. A copy of the epic's current plan, when it has one, waits beside it as the plan it replaces, and the plan's
+file starts as that plan, for the planner to edit. On `done`,
 the plan is kept only when canopy can read its ids and its breakdown in the outline's shape (`epic_outline`);
 then its file is written to the state directory and its row recorded `proposed`, for the operator alone to approve.
 Anything else records no plan. The desk is removed and the slots tidied and returned on every exit path this process
@@ -155,7 +156,9 @@ def _work(ctx: Context, run: records.EpicRun, out: TextIO, log: logs.TickAdapter
     trees = {slot.repo: Path(slot.slot_path) for slot in slots}
     for slot in slots:
         checkpoint.check_out(checkpoint.Git(ctx.runner, Path(slot.slot_path), slot.repo), slot.base_branch)
-    result, text = _run_agent(ctx, run, trees, out, log)
+    replaced = epics.current_plan(ctx.conn, run.epic_id)
+    desk_files = _desk_files(ctx, run, replaced)
+    result, text = _run_agent(ctx, run, trees, out, log, desk_files=desk_files)
     parsed = contract.last_line(EpicPlanResult, text)
     if result.timed_out:
         return Outcome(RunStatus.TIMEOUT, parsed, "the planner ran out of time")
@@ -163,7 +166,8 @@ def _work(ctx: Context, run: records.EpicRun, out: TextIO, log: logs.TickAdapter
         return Outcome(RunStatus.UNKNOWN, None, "the planner's result line could not be read")
     if parsed.status != "done":
         return Outcome(RunStatus(parsed.status), parsed)
-    return _keep(ctx, run, parsed, frozenset(trees), log)
+    seed = desk_files.get(plans.WRITTEN)
+    return _keep(ctx, run, parsed, frozenset(trees), log, replaced=replaced if seed is not None else None, seed=seed)
 
 
 def _keep(
@@ -172,16 +176,28 @@ def _keep(
     parsed: EpicPlanResult,
     repos: frozenset[str],
     log: logs.TickAdapter,
+    *,
+    replaced: records.EpicPlan | None = None,
+    seed: str | None = None,
 ) -> Outcome:
     """Keep the plan a `done` planner wrote, if canopy can read its ids and breakdown, as the epic's newest.
 
+    `replaced` is the plan this run replaces, and `seed` its text, which the plan's file started with.
+
     Returns:
-        `done` with the plan recorded; `unknown` when there is no plan canopy can read; `crashed` when it could not be
-        kept.
+        `done` with the plan recorded; `unknown` when there is no plan canopy can read, or the planner left the seeded
+        file as it was though the operator asked for changes; `crashed` when it could not be kept.
     """
     reading = plans.read(Path(run.desk_path) / plans.WRITTEN)
     if reading.text is None:
         return Outcome(RunStatus.UNKNOWN, parsed, f"its {plans.WRITTEN} is {reading.problem}; no plan was recorded")
+    subject = conversation.Ref(conversation.EPIC, str(run.epic_id))
+    if (
+        replaced is not None
+        and seed is not None
+        and plans.unrevised(ctx.conn, subject, replaced, seed=seed, text=reading.text, started_at=run.started_at)
+    ):
+        return Outcome(RunStatus.UNKNOWN, parsed, plans.UNREVISED)
     try:
         epic_outline.read(reading.text, repos=repos)
     except epic_outline.OutlineError as e:
@@ -196,19 +212,19 @@ def _keep(
     return Outcome(RunStatus.DONE, parsed, plan_id=plan.id)
 
 
-def _desk_files(ctx: Context, run: records.EpicRun) -> dict[str, str]:
-    """Return the files the desk starts with: the epic's current plan, as the plan this run replaces.
+def _desk_files(ctx: Context, run: records.EpicRun, current: records.EpicPlan | None) -> dict[str, str]:
+    """Return the files the desk starts with: the epic's current plan, as the plan this run replaces and as its file.
 
-    Read bounded and never through a link, as any plan is (DESIGN §25); one that is no longer a plan is left out.
+    Read bounded and never through a link, as any plan is (DESIGN §25); one that is no longer a plan is left out. The
+    plan's file starts as that plan, which the planner edits; a first plan's starts with none.
 
     Returns:
         The files by name, empty when the epic has no current plan.
     """
-    current = epics.current_plan(ctx.conn, run.epic_id)
     if current is None:
         return {}
     reading = plans.read(epics.plan_path(ctx.state_dir, run.epic_id, current.run_id))
-    return {plans.REPLACED: reading.text} if reading.text is not None else {}
+    return {plans.REPLACED: reading.text, plans.WRITTEN: reading.text} if reading.text is not None else {}
 
 
 def _run_agent(
@@ -217,8 +233,12 @@ def _run_agent(
     trees: Mapping[str, Path],
     out: TextIO,
     log: logs.TickAdapter,
+    *,
+    desk_files: Mapping[str, str],
 ) -> tuple[procs.Result, str]:
     """Run the planner's command in the run's desk with the epic's prompt, for the worker's timeout.
+
+    The desk starts with `desk_files`, by name, readable only by the operator.
 
     A planner reads and writes only its plan, so the places it reads config from must name none of the tracker
     server's tools (DESIGN §25). It reads its worktrees' history through canopy's read-only git tools. The session,
@@ -251,7 +271,7 @@ def _run_agent(
     argv = sandboxing.wrap(runtime, list(trees), "worker", command.argv, snapshot)
     try:
         desk = desks.make(ctx.workspace.root, epic_runs.desk_key(run.epic_id), trees.items())
-        for name, text in _desk_files(ctx, run).items():
+        for name, text in desk_files.items():
             logs.write_private(desk / name, text)
     except (desks.DeskError, OSError) as e:
         raise SetupError(str(e)) from e

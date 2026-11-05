@@ -24,6 +24,7 @@ from tests.canopy.helpers import (
     calls,
     commands_run,
     decisions,
+    edits_plan,
     has_deadline,
     in_tick,
     logged,
@@ -148,6 +149,68 @@ def test_a_new_plan_reads_the_one_it_replaces_as_it_stands_and_supersedes_it(
     ]
     assert plan_file(env, first.id).read_text() == edited
     assert plan_file(env, second.id).read_text() == "# Plan, again\n\nBlue it is."
+
+
+def test_a_revision_starts_as_the_plan_it_replaces_and_keeps_what_its_planner_does_not_edit(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """#2099: canopy seeds a revision's file with the plan it replaces, so the planner edits it, not rewrites it."""
+    env = scenario.env
+    # A first plan's file starts with none.
+    write = ["python3", "-c", "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2])"]
+    first = scenario.run(PLAN, worker=planner_does(["cat", plans.WRITTEN], [*write, plans.WRITTEN, TEXT], plan=None))
+    assert first.status == RunStatus.DONE
+    [[cat, _]] = commands_run(scenario.agent_log)
+    assert cat["returncode"] != 0
+    # The operator edits the plan, then asks for a change; the revision starts as the plan with their edit.
+    edited = TEXT.replace("## Tests", "## Tests, edited")
+    plan_file(env, first.id).write_text(edited)
+    scenario.operator("reply", KEY, "Blue, not red.")
+    edit = edits_plan("red", "blue")
+    second = scenario.run(PLAN, worker=planner_does(["cat", plans.WRITTEN], edit, plan=None))
+    assert second.status == RunStatus.DONE, second.row["result_json"]
+    [_, [cat, _]] = commands_run(scenario.agent_log)
+    assert cat["stdout"] == edited
+    # What the planner did not edit is the plan it replaces, byte for byte.
+    assert plan_file(env, second.id).read_bytes() == edited.replace("red", "blue").encode()
+    assert [(p.run_id, p.status) for p in plans.history(scenario.conn, KEY)] == [
+        (first.id, PlanStatus.SUPERSEDED),
+        (second.id, PlanStatus.PROPOSED),
+    ]
+    assert f"`{plans.WRITTEN}` starts as a copy of" in second.prompt
+
+
+def test_a_revision_left_as_it_was_seeded_after_the_operator_wrote_records_no_plan(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """#2099: a seeded file the planner never touched reads as a plan, but answers none of the operator's words."""
+    first = scenario.run(PLAN, worker=planner_does(plan=TEXT))
+    scenario.operator("reply", KEY, "Blue, not red.")
+    second = scenario.run(PLAN, worker=planner_does(plan=None))
+    assert second.status == RunStatus.UNKNOWN
+    assert plans.UNREVISED in str(second.row["result_json"])
+    # The plan it would have replaced still waits on the operator.
+    assert [(p.run_id, p.status) for p in plans.history(scenario.conn, KEY)] == [(first.id, PlanStatus.PROPOSED)]
+
+
+def test_a_revision_left_as_it_was_is_recorded_when_the_operator_asked_for_no_change(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """Planned again with no word from the operator since, the plan it replaces, unchanged, is the new plan."""
+    first = scenario.run(PLAN, worker=planner_does(plan=TEXT))
+    # A message after the run started is not one its planner was given.
+    working = scenario.starts(PLAN, worker=planner_does(plan=None))
+    scenario.operator("reply", KEY, "Blue, not red.")
+    second = working.finishes()
+    assert second.status == RunStatus.DONE, second.row["result_json"]
+    assert [(p.run_id, p.status) for p in plans.history(scenario.conn, KEY)] == [
+        (first.id, PlanStatus.SUPERSEDED),
+        (second.id, PlanStatus.PROPOSED),
+    ]
+    assert plan_file(scenario.env, second.id).read_text() == TEXT
 
 
 @pytest.mark.parametrize(
