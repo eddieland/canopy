@@ -147,6 +147,11 @@ type, and **Save** waits until you fix it.
 Repositories get a count of their own only when you pick one, so a workspace of fifty repositories shows the two that
 differ.
 
+If you know the key, or a word of its label, type it in the filter at the top: `flaky` leaves the one row about
+flaky checks, and the address keeps it, so `/settings/limits?q=flaky` is a link to exactly that. Anything you've
+changed and not saved stays in view whatever you type, so the filter can't hide a change from you. **Escape** empties
+it.
+
 The bands are listed beside the page, or over it in a narrow window, each with how many of its settings this
 workspace sets and how many you've changed and not saved yet, so you can see where you've customized things without
 scrolling four screens. Every row is a link to itself: `/settings/limits#policy.max_resume_attempts` opens the page at
