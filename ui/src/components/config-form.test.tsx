@@ -18,6 +18,7 @@ const WORKERS: ConfigKey = {
     looser: 'higher',
     forever_at_zero: false,
     choices: [],
+    default: 3,
 }
 const KICKS: ConfigKey = {
     name: 'trust.max_flaky_kicks',
@@ -28,6 +29,7 @@ const KICKS: ConfigKey = {
     looser: null,
     forever_at_zero: false,
     choices: [],
+    default: 0,
 }
 const SETTINGS: ConfigSettings = {
     keys: [WORKERS, KICKS],
@@ -218,6 +220,28 @@ describe('ConfigForm', () => {
         fireEvent.click(screen.getByRole('checkbox', { name: 'me' }))
         fireEvent.click(within(screen.getByRole('group', { name: 'Drop me?' })).getByRole('button', { name: 'Drop' }))
         expect(changes()).toEqual(['trust.authorized_repliers: me, bot → bot'])
+    })
+
+    it('shows a key away from its default with a reset, which is an ordinary change', async () => {
+        await renderForm()
+        expect(screen.getByText('default 0')).toBeTruthy()
+        fireEvent.click(button('Reset trust.max_flaky_kicks to its default'))
+        expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'trust.max_flaky_kicks' }).value).toBe('0')
+        expect(changes()).toEqual(['trust.max_flaky_kicks: 2 → 0'])
+        expect(screen.queryByRole('button', { name: 'Reset trust.max_flaky_kicks to its default' })).toBeNull()
+    })
+
+    it('withholds the reset of a stricter key whose default is looser than its value now', async () => {
+        const approve: ConfigKey = {
+            ...KICKS,
+            name: 'policy.planner_may_approve',
+            value: 'normal',
+            default: 'lenient',
+            choices: ['lenient', 'normal', 'strict', 'off'],
+        }
+        await renderForm({ ...SETTINGS, keys: [approve] })
+        expect(screen.getByText('default lenient')).toBeTruthy()
+        expect(screen.queryByRole('button', { name: /^Reset/u })).toBeNull()
     })
 })
 

@@ -161,6 +161,11 @@ workspace sets and how many you've changed and not saved yet, so you can see whe
 scrolling four screens. Every row is a link to itself: `/settings/limits#policy.max_resume_attempts` opens the page at
 that row and lights it for a moment, which is handy for a note to your future self.
 
+A setting you've moved off its default says what the default is, so you can tell how far from stock you've wandered,
+and **reset** puts the field back. It's an ordinary change: it shows in the bar and waits for **Save** like any other.
+On a setting that only gets stricter, reset shows up only when the default isn't looser than what you have, since the
+page won't loosen anything for you, reset or not, and it never drops a name the page would ask you about first.
+
 Change something and its row gets a line down its edge and says what it was, and a bar appears at the foot listing
 each change as `key: old → new`. When one of them only gets stricter from here, the bar says so before you save, since
 the page can't take it back: only an edit to the file can.

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation } from '@tanstack/react-router'
-import { LockKeyhole, Save } from 'lucide-react'
+import { LockKeyhole, RotateCcw, Save } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -28,6 +28,7 @@ import {
     CONFIG_QUERY_MAX,
     configForm,
     configQueryOf,
+    defaultText,
     dropAsks,
     groupedKeys,
     groupSlug,
@@ -36,6 +37,8 @@ import {
     oneWayText,
     pendingText,
     REPO_SLOTS,
+    resetDone,
+    resetDraft,
     savedText,
     SOURCE_MEANING,
     SOURCE_WORD,
@@ -173,6 +176,11 @@ function Form({
                 ?.scrollIntoView({ block: hash.startsWith('band-') ? 'start' : 'center' })
         }
     }, [hash])
+    // A reset types the key's default into its field, as the operator would: offered while it has something to do.
+    const resetFor = (setting: ConfigKey) => {
+        const to = resetDraft(setting)
+        return to === null || resetDone(setting, form.changes) ? undefined : () => draft(setting.name, to)
+    }
     // A row of a band whose keys only get stricter leaves that rule to the band's header (`ruled`).
     const row = ({ setting, label, unit }: LabelledKey, ruled: boolean) =>
         setting.name === REPO_SLOTS ? (
@@ -207,6 +215,7 @@ function Form({
                     every={settings.every}
                     changed={touched(setting.name)}
                     ruled={ruled}
+                    onReset={resetFor(setting)}
                 />
                 <ControlCell unit={unit}>
                     <Control
@@ -550,6 +559,7 @@ function KeyLabel({
     every,
     changed = false,
     ruled = false,
+    onReset,
 }: {
     setting: ConfigKey
     label: string
@@ -557,6 +567,8 @@ function KeyLabel({
     changed?: boolean
     /** Whether its band says once that its keys only get stricter, so the row need not. */
     ruled?: boolean
+    /** Sets its field back to its default, where the page may take it there; none offered otherwise. */
+    onReset?: (() => void) | undefined
 }) {
     // A repository's own counts list their old values in the save bar; a row of them says nothing of one.
     const was = changed && setting.name !== REPO_SLOTS ? `was ${valueText(setting.value, setting.name)}` : null
@@ -565,7 +577,7 @@ function KeyLabel({
             ? `--every ${every} sets the pace until the loop restarts`
             : null
     const bound = ruled && setting.kind === 'stricter' ? null : boundText(setting)
-    const rest = [bound, was, pace].filter(Boolean).join(' · ')
+    const rest = [bound, was, defaultText(setting), pace].filter(Boolean).join(' · ')
     return (
         <div className="flex min-w-0 flex-col gap-1">
             <span className="text-sm text-foreground">{label}</span>
@@ -573,6 +585,18 @@ function KeyLabel({
                 <code className="font-mono">{setting.name}</code>
                 <Chip word={SOURCE_WORD[setting.source]} meaning={SOURCE_MEANING[setting.source]} />
                 {rest === '' ? null : <span>{rest}</span>}
+                {onReset !== undefined && (
+                    <Button
+                        type="button"
+                        variant="link"
+                        aria-label={`Reset ${setting.name} to its default`}
+                        className="h-auto gap-1 p-0 text-2xs font-normal"
+                        onClick={onReset}
+                    >
+                        <RotateCcw aria-hidden className="size-3" />
+                        reset
+                    </Button>
+                )}
             </span>
         </div>
     )

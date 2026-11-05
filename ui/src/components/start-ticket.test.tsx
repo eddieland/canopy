@@ -46,6 +46,7 @@ function settings(plan: 'off' | 'approve'): ConfigSettings {
                 looser: null,
                 forever_at_zero: false,
                 choices: ['off', 'approve'],
+                default: 'off',
             },
         ],
         private_file: '/home/me/.config/canopy/private.toml',

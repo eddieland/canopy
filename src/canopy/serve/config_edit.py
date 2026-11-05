@@ -170,11 +170,13 @@ _STRICTER_BOOL = {"trust.rebase": False, "trust.commit_trailer": True}
 
 @dataclass(frozen=True)
 class Setting:
-    """One editable key as the files say now: its value, and which file it comes from."""
+    """One editable key as the files say now: its value, which file it comes from, and its value when none sets it."""
 
     key: Editable
     value: Value
     source: Source
+    #: The config model's default for the key, what it holds when no file sets it.
+    default: Value
 
 
 @dataclass(frozen=True)
@@ -229,7 +231,7 @@ def read(root: Path, user_file: Path) -> Settings:
         return "private" if found == private_file else "user"
 
     return Settings(
-        settings=tuple(Setting(e, value(cfg, e.name), source(e.name)) for e in EDITABLE),
+        settings=tuple(Setting(e, value(cfg, e.name), source(e.name), default(cfg, e.name)) for e in EDITABLE),
         private_file=private_file,
         user_file=user_file,
         workspace_file=shared_file,
@@ -324,7 +326,32 @@ def value(cfg: Config, name: str) -> Value:
         TypeError: the key holds something else, such as a table of tables: no editable key does.
     """
     section, _, key = name.partition(".")
-    found: object = getattr(getattr(cfg, section), key)
+    return _as_value(name, getattr(getattr(cfg, section), key))
+
+
+def default(cfg: Config, name: str) -> Value:
+    """The value key `name`, as `section.key`, holds when no file sets it: its config model's default.
+
+    Returns:
+        The default as `value` gives a value read.
+
+    Raises:
+        TypeError: the default is something else, as `value` raises for a value read.
+    """
+    section, _, key = name.partition(".")
+    field = type(getattr(cfg, section)).model_fields[key]
+    return _as_value(name, field.get_default(call_default_factory=True, validated_data={}))
+
+
+def _as_value(name: str, found: object) -> Value:
+    """`found`, the value of key `name` or its default, as the settings page shows one.
+
+    Returns:
+        A count, a switch, a choice, a list's entries, or counts by repository.
+
+    Raises:
+        TypeError: it is something else.
+    """
     if isinstance(found, dict):
         return {str(k): int(v) for k, v in found.items()}
     if isinstance(found, tuple) and all(isinstance(v, int) for v in found):

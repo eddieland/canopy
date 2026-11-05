@@ -88,6 +88,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "looser": "higher",
         "forever_at_zero": False,
         "choices": [],
+        "default": 2,
     }
     assert key(found, "policy.max_resume_attempts")["source"] == "workspace"
     assert key(found, "policy.max_implement_attempts")["source"] == "default"
@@ -100,6 +101,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "looser": "lower",
         "forever_at_zero": False,
         "choices": [],
+        "default": 15,
     }
     assert key(found, "capacity.repo_slots")["value"] == {"repo": 3}
     assert key(found, "trust.trusted_reviewers") | {"value": None} == {
@@ -111,6 +113,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "looser": None,
         "forever_at_zero": False,
         "choices": [],
+        "default": [],
     }
     assert key(found, "policy.planner_may_approve") == {
         "name": "policy.planner_may_approve",
@@ -121,12 +124,30 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "looser": None,
         "forever_at_zero": False,
         "choices": ["lenient", "normal", "strict", "off"],
+        "default": "off",
     }
     assert found["private_file"] == str(canopy_env.private_file)
     assert found["user_file"] == str(canopy_env.user_file)
     assert found["repos"] == ["repo"]
     assert found["every"] is None
     assert found["hash"] == config_edit.digest(canopy_env.private_file.read_bytes())
+
+
+def test_every_listed_key_carries_its_default_whatever_the_files_set(ctx: Context, canopy_env: CanopyEnv) -> None:
+    """Each key's default is the config model's, the value it shows when no file sets it."""
+    canopy_env.write_private(COMMENTED)
+    c, _ = signed_in_client(ctx)
+    found = settings(c)
+    canopy_env.write_private("")
+
+    bare = settings(c)
+
+    assert [k["default"] for k in keys_of(found)] == [k["value"] for k in keys_of(bare)]
+    reviewers = key(found, "trust.trusted_reviewers")
+    assert (reviewers["value"], reviewers["default"]) == (["alice", "lint-bot"], [])
+    assert key(found, "capacity.slots_per_repo")["default"] is None
+    assert key(found, "capacity.repo_slots")["default"] == {}
+    assert key(found, "spend.budget_alerts")["default"] == []
 
 
 def test_with_no_private_file_the_hash_is_an_empty_file_s(ctx: Context, canopy_env: CanopyEnv) -> None:
@@ -404,6 +425,7 @@ def test_a_monthly_budget_may_be_set_raised_to_its_ceiling_and_lowered(ctx: Cont
         "looser": "higher",
         "forever_at_zero": False,
         "choices": [],
+        "default": None,
     }
 
     assert save(c, headers, {"spend.monthly_budget_usd": 300}).status_code == 200
@@ -430,6 +452,7 @@ def test_a_retention_may_be_lengthened_shortened_to_its_floor_or_kept_forever(
         "looser": "lower",
         "forever_at_zero": True,
         "choices": [],
+        "default": 30,
     }
 
     assert save(c, headers, {"retention.run_files_days": 7}).status_code == 200
@@ -501,6 +524,7 @@ def test_the_budget_s_alerts_are_set_whole_to_anything_the_loader_takes(ctx: Con
         "looser": None,
         "forever_at_zero": False,
         "choices": [],
+        "default": [],
     }
 
     assert save(c, headers, {"spend.budget_alerts": [80, 50]}).status_code == 200
