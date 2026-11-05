@@ -412,6 +412,18 @@ export function rowLayout(kind: RowKind): { className: string; style: CSSPropert
 }
 
 /**
+ * The classes that hold each cell of a row's head line of `kind` to its column, its first cells, one per column: no
+ * wider than the column (`min-w-0`, where a grid's item is as wide as its content), and what still overflows it, a
+ * word with nowhere to break, cut with an ellipsis rather than drawn over the next column. A cell's text wraps as it
+ * did, and one that cuts itself to one line (`Clipped`) gives the whole in its tip. The classes are built here, so
+ * `index.css` lists them for Tailwind (`@source inline`).
+ */
+export function rowCells(kind: RowKind): string {
+    const head = `[&>:nth-child(-n+${ROW_COLUMNS[kind].length})]`
+    return `${head}:min-w-0 ${head}:overflow-x-clip ${head}:text-ellipsis`
+}
+
+/**
  * The style that sets a fitted column's width on a list (`fitted`), for the rows in it: room for the longest of
  * `names`, set in IBM Plex Mono at `text-xs`, and `besideRem` beside it (an icon), rounded up to a quarter rem and
  * never over the column's most. The rows of the list share it, so they still line up.

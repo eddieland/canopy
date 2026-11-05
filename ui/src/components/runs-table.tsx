@@ -400,7 +400,7 @@ function RunBody({
             ) : (
                 // On its subject's page the id leads the free column at a fixed width, so the chips still line up.
                 <span className="flex items-center gap-3">
-                    <RunLink id={run.id} className="w-14" />
+                    <RunLink id={run.id} className="w-14 shrink-0 truncate" />
                     <RunChips run={run} />
                 </span>
             )}

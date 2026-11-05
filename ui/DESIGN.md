@@ -472,7 +472,9 @@ whole either side.
   `src/lib/rows.ts`). Every column is fixed but one free column, which takes the rest and cuts its text to fit, so every
   row of a list lines up whatever its cells hold. The free column never gets under 8rem: it holds the row's name, which
   never vanishes; a kind whose name needs more sets a floor of its own. A column may be fitted instead of fixed: its
-  list sets its width to the longest of its cells, all in monospace, so its rows still share it. **A narrow list lets
+  list sets its width to the longest of its cells, all in monospace, so its rows still share it. A cell never draws
+  over the next column: what will not fit its column, an id with nowhere to break, is cut there by the row, so no cell
+  has to remember to, and an id cut so is whole on hover. **A narrow list lets
   columns go**, in the order its kind gives them, so it fits its panel wherever the panel sits: a column shows from the
   narrowest container size with room for it, the columns that go after it, and those that never do. The `Panel` is the
   container, so a list goes by its own width, not the window's; every column shows at `@4xl`, which a list in a 1280px
