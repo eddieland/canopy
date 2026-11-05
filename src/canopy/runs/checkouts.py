@@ -157,31 +157,42 @@ def open_desk(ctx: Context, key: str, repos: Collection[str] = ()) -> Desk:
 def close_desk(ctx: Context, desk: Desk, *, discard: bool = False) -> list[Unsafe]:
     """Close `desk`: return its slots and remove its directory, unless a slot has work origin lacks.
 
+    A slot whose lease is no longer the desk's, released by hand or leased since to a run, is dropped from the desk
+    without a look at its work, which is not the desk's. Each slot returned is dropped too, as it goes, so a close
+    that fails partway is finished by the next one.
+
     Returns:
         What each slot would lose, when any would and `discard` is not given: nothing is then returned or removed.
 
     Raises:
-        CheckoutError: A slot's lease is no longer the desk's, or its pool could not return it. What could be
-            returned was, and the desk is kept for the rest.
+        CheckoutError: A pool could not return a slot. What could be returned was, and the desk is kept for the
+            rest.
     """
+    ours: dict[str, tuple[Path, pools.Slot]] = {}
+    for name, slot in desk.slots.items():
+        try:
+            ours[name] = (slot, _lease_of(ctx, name, slot, desk.key))
+        except CheckoutError:
+            _forget(desk, name)
     if not discard:
-        unsafe = [u for name, slot in desk.slots.items() if (u := _unsafe(ctx, name, slot, desk.branch)) is not None]
+        unsafe = [u for name, (slot, _) in ours.items() if (u := _unsafe(ctx, name, slot, desk.branch)) is not None]
         if unsafe:
             return unsafe
     kept: list[str] = []
-    for name, slot in desk.slots.items():
+    for name, (slot, lease) in ours.items():
         try:
-            lease = _lease_of(ctx, name, slot, desk.key)
             git = checkpoint.Git(ctx.runner, slot, name)
             # Off the branch, so it can be deleted: a return resets the slot detached, but only after this.
             git.run("checkout", "--quiet", "--detach", "--force")
             git.result("branch", "--quiet", "--delete", "--force", desk.branch)
             outcome = ctx.pool(name).return_slot(slot, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
-        except (pools.PoolError, checkpoint.SetupError, CheckoutError) as e:
+        except (pools.PoolError, checkpoint.SetupError) as e:
             kept.append(f"{name}: {e}")
             continue
         if outcome is not pools.ReturnOutcome.RETURNED:
             kept.append(f"{name}: its pool {outcome.value} to return slot {slot}")
+            continue
+        _forget(desk, name)
     if kept:
         raise CheckoutError(f"{desk.key}'s desk is kept: " + "; ".join(kept))
     _remove(desk.path)
@@ -277,9 +288,24 @@ def _write(desk: Path, parent: Path, key: str, branch: str, slots: Mapping[str, 
     (desk / MARKER).write_text(marker.model_dump_json() + "\n", encoding="utf-8")
     for name, slot in slots.items():
         (desk / name).symlink_to(os.path.relpath(slot, desk), target_is_directory=True)
+    _write_workspace(desk / f"{key}{WORKSPACE_SUFFIX}", slots)
+
+
+def _write_workspace(file: Path, slots: Mapping[str, Path]) -> None:
+    """Write the editor's workspace file: a folder per slot, by the real path, which the editor's git reads best."""
     folders = [{"name": name, "path": str(slot)} for name, slot in slots.items()]
-    workspace = {"folders": folders}
-    (desk / f"{key}{WORKSPACE_SUFFIX}").write_text(json.dumps(workspace, indent=2) + "\n", encoding="utf-8")
+    file.write_text(json.dumps({"folders": folders}, indent=2) + "\n", encoding="utf-8")
+
+
+def _forget(desk: Desk, name: str) -> None:
+    """Drop repository `name`'s slot from the desk on disk: its link, and its line in the marker and workspace file."""
+    left = {n: s for n, s in desk.slots.items() if n != name}
+    link = desk.path / name
+    if link.is_symlink():
+        link.unlink()
+    marker = _Marker(branch=desk.branch, slots={n: str(s) for n, s in left.items()})
+    (desk.path / MARKER).write_text(marker.model_dump_json() + "\n", encoding="utf-8")
+    _write_workspace(desk.workspace_file, left)
 
 
 def _remove(desk: Path) -> None:

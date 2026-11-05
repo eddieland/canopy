@@ -59,7 +59,7 @@ def cmd_desk(click_ctx: click.Context, key: str, repos: tuple[str, ...], *, clos
         if close:
             return _close(ctx, key, found, discard=discard)
         if found is not None:
-            click.echo(f"{key}'s desk is already open.")
+            click.echo(f"{key}'s desk is already open" + ("; close it to change its repositories." if repos else "."))
             _show(found)
             return 0
         try:
