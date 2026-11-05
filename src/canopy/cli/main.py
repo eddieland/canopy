@@ -67,6 +67,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "_task": ("runs", "cmd_task"),
     "_epic": ("runs", "cmd_epic"),
     "workspace": ("workspace", "workspace_group"),
+    "desk": ("desk", "cmd_desk"),
     "chore": ("chores", "chore_group"),
     "_chore": ("chores", "cmd_chore_process"),
     "notify": ("notify", "notify_group"),

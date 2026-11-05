@@ -23,7 +23,7 @@ from canopy.cli.params import REPO
 from canopy.core import conversation, db, pool, pools, records, reports, workspace
 from canopy.core.vocab import PoolKind
 from canopy.infra.text import one_line, printable
-from canopy.runs import tasks
+from canopy.runs import checkouts, tasks
 
 if TYPE_CHECKING:
     import sqlite3
@@ -262,6 +262,8 @@ def _unreleasable(slot: pools.Slot, held: Mapping[str, str]) -> str:
         )
     if slot.lease_holder == pools.SYNC_HOLDER:
         return f"is held by {pools.SYNC_HOLDER}, a sync that did not finish; `canopy workspace sync` returns it"
+    if (key := checkouts.key_of(slot.lease_holder)) is not None:
+        return f"is held by your desk for {key}; `canopy desk {key} --close` returns it"
     if slot.lease_holder:
         return f"is held by {slot.lease_holder}, which is not canopy's"
     return f"is {slot.status}, and nothing holds it"
@@ -374,19 +376,32 @@ def _note(repo: str, kind: PoolKind, slot: pools.Slot, ref: str) -> str | None:
             "a failed seeding holds it, counted as busy: remove the file seeding collided with, then "
             f"`canopy workspace release {repo} {ref}`"
         )
-    if slot.lease_id and slot.lease_holder == pools.SYNC_HOLDER:
-        return "held by a sync that did not finish; the next `canopy workspace sync` returns it"
-    if slot.lease_id and slot.canopy_key is not None:
-        return (
-            f"no running run holds this lease; `canopy workspace release {repo} {ref}` returns it now, as the next "
-            "tick would"
-        )
+    if slot.lease_id and (held := _held_note(repo, slot, ref)) is not None:
+        return held
     if slot.status == pool.DIRTY:
         return (
             "has changes, so it is never reused and counts as busy: keep what you need, then discard them in the slot"
         )
     if slot.status == pool.DAMAGED and kind is PoolKind.CANOPY and not slot.lease_holder and not slot.path.exists():
         return f"its directory is gone; `canopy workspace remove-slot {repo} {ref}` forgets it"
+    return None
+
+
+def _held_note(repo: str, slot: pools.Slot, ref: str) -> str | None:
+    """What frees a leased `slot`, by who holds its lease: a sync, the operator's desk, or a run no longer running.
+
+    Returns:
+        The note, or None for a holder that is not canopy's.
+    """
+    if slot.lease_holder == pools.SYNC_HOLDER:
+        return "held by a sync that did not finish; the next `canopy workspace sync` returns it"
+    if (key := checkouts.key_of(slot.lease_holder)) is not None:
+        return f"held by your desk for {key}, on its branch; `canopy desk {key} --close` returns it"
+    if slot.canopy_key is not None:
+        return (
+            f"no running run holds this lease; `canopy workspace release {repo} {ref}` returns it now, as the next "
+            "tick would"
+        )
     return None
 
 

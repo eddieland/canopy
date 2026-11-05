@@ -133,6 +133,7 @@ and how to act on it.
 | Read the attention list | `canopy status` |
 | Read a ticket's conversation, or answer canopy there | `canopy show KEY`, `canopy reply KEY 'text'` |
 | Work a ticket privately, with no label and nothing written to it | `canopy start KEY`, then `canopy stop KEY` |
+| Check a ticket's branch out for yourself, a slot per repository, and open it in VS Code | `canopy desk KEY`, then `canopy desk KEY --close` |
 | Hand canopy one-off work in your own words | `canopy task submit 'TEXT'` |
 | Have canopy review a coworker's PR | `canopy start PR_URL --review` |
 | Pause and resume the loop | `canopy pause`, `canopy resume` |

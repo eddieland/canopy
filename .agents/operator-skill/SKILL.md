@@ -47,6 +47,7 @@ canopy runs only in a workspace, even for one repository. Run these anywhere in 
 | `canopy stop task:N [--now]` | No tick starts the task again, and a queued one is dropped; `--now` ends its run. |
 | `canopy start KEY` | Works a ticket privately: no label, and nothing canopy writes reaches the ticket. |
 | `canopy stop KEY [--now]` | No dispatch of a started ticket until `canopy start`; `--now` ends its run. |
+| `canopy desk KEY [--repo NAME]` | The operator's own checkout of a ticket's branch, a leased slot per repository, linked from `checkouts/KEY/` with a `.code-workspace`; `--close` returns the slots, `--discard` losing unpushed work. |
 | `canopy reply KEY [TEXT]` | Answers a ticket (TEXT, or stdin without it or with `-`); never posted to the ticket. A waiting loop wakes. |
 | `canopy reply chore:NAME TEXT` | A note the chore's next runs follow, such as a finding to leave out until a date. |
 | `canopy dismiss chore:NAME ID...` | Keeps findings off the attention list until the chore stops reporting them; `--undo`. |

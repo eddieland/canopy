@@ -245,6 +245,13 @@ is left as it is, and sync says why.
 `canopy workspace release REPO SLOT` frees a slot nothing running holds, and `canopy workspace remove-slot REPO SLOT`
 removes an idle one, keeping it when anything in it could be lost.
 
+To make a small change to a ticket's branch yourself, `canopy desk KEY` leases a slot of each repository the ticket has
+a unit in, checks the branch out in each, and links them from `checkouts/KEY/`, with a `KEY.code-workspace` that opens
+them in one VS Code window; `--repo NAME` takes one repository. Commit and push there as in any checkout. The slots
+stay yours, seeded as a worker's are, until `canopy desk KEY --close` returns them, which it refuses while a slot has
+uncommitted changes or commits origin lacks (`--discard` loses them). The loop goes on: a run of the ticket works in
+slots of its own and pushes to the same branch, so pull before you push, or `canopy stop KEY` a started ticket first.
+
 ## 5. A Bazel repository with several slots
 
 A large Bazel repository makes a cold slot expensive: a full build, every external repository downloaded again.

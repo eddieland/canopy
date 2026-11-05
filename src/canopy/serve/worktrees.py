@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, records
 from canopy.core.pools import AVAILABLE, HOLDER_PREFIX, QUARANTINED, SYNC_HOLDER, PoolError, Slot
-from canopy.runs import tasks
+from canopy.runs import checkouts, tasks
 from canopy.serve import views
 from canopy.serve.schema.worktree import Pool, Process, ReviewHold, TaskHold, Worktree, WorktreeState
 
@@ -48,6 +48,8 @@ _STALE = (
     "{name}` now"
 )
 _SYNC = "held while `canopy workspace sync` makes this pool's slots"
+# The operator's own checkout of a ticket's branch (DESIGN §18): only they close it.
+_DESK = "held by your desk for {key}, on its branch; `canopy desk {key} --close` returns it"
 # What a dirty slot blocks and what clears it (DESIGN §18, What a pool guarantees). No canopy command clears one: its
 # changes may be someone's work, so the operator keeps or discards them.
 _DIRTY = (
@@ -135,6 +137,8 @@ def worktree(
         note = _QUARANTINED.format(repo=repo, name=slot.name)
     elif leased and slot.lease_holder == SYNC_HOLDER:
         note = _SYNC
+    elif leased and (key := checkouts.key_of(slot.lease_holder)) is not None:
+        note = _DESK.format(key=key)
     elif leased and slot.lease_holder.startswith(HOLDER_PREFIX):
         note = _STALE.format(repo=repo, name=slot.name)
     elif state == "dirty":
