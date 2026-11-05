@@ -34,6 +34,7 @@ export const ROUTES = [
     'tasks/1',
     'tasks/4',
     'tasks/1/runs/1',
+    'epics',
     'pull-requests',
     `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`,
     'pull-requests/reviews',
@@ -77,9 +78,10 @@ export const WHOLE_ROUTES: readonly Route[] = [
 ]
 /**
  * The pages screenshotted in light as well: the shell, a list, and a detail page. Both themes draw from the same
- * tokens, so a few pages in light catch a light token gone wrong without doubling every image.
+ * tokens, so a few pages in light catch a light token gone wrong without doubling every image. Epics is here for its
+ * section's color, the newest, on the trail and on its title.
  */
-export const LIGHT_ROUTES: readonly Route[] = ['attention', 'workspace/runs', 'tickets/ABC-102']
+export const LIGHT_ROUTES: readonly Route[] = ['attention', 'workspace/runs', 'tickets/ABC-102', 'epics']
 /** The themes the app has; a page is screenshotted in light only if in LIGHT_ROUTES. */
 export const THEMES = ['light', 'dark'] as const
 /** Half an hour after the fixtures' T0 (canopy/serve/mock/): every age on a page is the same on every run. */

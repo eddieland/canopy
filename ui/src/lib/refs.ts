@@ -54,6 +54,11 @@ export function choreRunRef(name: string, id: number | string): string {
     return `${choreRef(name)}#${id}`
 }
 
+/** `epic:N`, work spanning several tickets, as `canopy show` reads it: `epic:2`. */
+export function epicRef(id: number | string): string {
+    return `epic:${id}`
+}
+
 /** A one-off task, as `canopy show` reads it: `task:4`. */
 export function taskRef(id: number | string): string {
     return `task:${id}`

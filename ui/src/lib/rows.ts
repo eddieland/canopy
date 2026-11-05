@@ -199,6 +199,18 @@ export const ROW_COLUMNS = {
         ['age', AGE, 2],
     ],
     /**
+     * An epic: where it stands (`waiting on you`, `planning`, `approved`, ...), its id, its repositories, its goal's
+     * first line, how many of its breakdown's entries are filed, and when it was submitted.
+     */
+    epic: [
+        ['state', fit(8), 4],
+        ['id', fit(5.5)],
+        ['repo', fit(10), 1],
+        ['title', FREE],
+        ['entries', fit(10), 3],
+        ['age', AGE, 2],
+    ],
+    /**
      * A worktree slot: its state, its number, what holds it, its branch and processes, and for how long. The branch
      * names the slot, so it never gets under its floor, and what holds it goes first: the branch names its ticket too.
      */
@@ -482,6 +494,7 @@ const FROM: Record<RowColumn, string> = {
     commit: 'col-[commit/end]',
     cost: 'col-[cost/end]',
     decisions: 'col-[decisions/end]',
+    entries: 'col-[entries/end]',
     facts: 'col-[facts/end]',
     findings: 'col-[findings/end]',
     from: 'col-[from/end]',

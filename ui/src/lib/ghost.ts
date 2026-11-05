@@ -29,6 +29,13 @@ export const GHOST_TIPS = {
         'Dear Traveler, a task asked a question. I said "ask Ikora". It did not.',
         'Scanning... no Fallen here. Just tasks. Somehow that is scarier.',
     ],
+    '/epics/': [
+        'Eyes up, Guardian. An epic is a raid: one goal, a lot of encounters, everyone has a job.',
+        'Grimoire: the requirements were numbered R1 to R3. R4 is said to exist. Nobody has seen it.',
+        'Field report: four entries in the breakdown, two filed. The other two are hiding. Like Hunters.',
+        'Dear Traveler, the plan named its contracts. Even the Vex keep fewer.',
+        'Scanning... one plan for the whole fireteam. Each ticket still plans its own loadout.',
+    ],
     '/tasks/$id': [
         "Eyes up, Guardian. It's a report. I can decrypt it, but it'll take a minute. Hold here.",
         "Grimoire: a draft PR is a Ghost that hasn't found its Guardian yet.",

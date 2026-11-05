@@ -42,6 +42,7 @@
     --section-workspace: oklch(0.45 0.15 272);
     --section-tickets: oklch(0.52 0.12 242);
     --section-tasks: oklch(0.505 0.125 115);
+    --section-epics: oklch(0.53 0.21 335);
     --section-pull-requests: oklch(0.54 0.21 302);
     --section-chores: oklch(0.535 0.14 50);
     --section-reports: oklch(0.525 0.105 95);
@@ -56,6 +57,7 @@
     --nav-label-workspace: color-mix(in oklab, var(--section-workspace), black var(--nav-label-shade));
     --nav-label-tickets: color-mix(in oklab, var(--section-tickets), black var(--nav-label-shade));
     --nav-label-tasks: color-mix(in oklab, var(--section-tasks), black var(--nav-label-shade));
+    --nav-label-epics: color-mix(in oklab, var(--section-epics), black var(--nav-label-shade));
     --nav-label-pull-requests: color-mix(in oklab, var(--section-pull-requests), black var(--nav-label-shade));
     --nav-label-chores: color-mix(in oklab, var(--section-chores), black var(--nav-label-shade));
     --nav-label-reports: color-mix(in oklab, var(--section-reports), black var(--nav-label-shade));
@@ -309,6 +311,7 @@
     --section-workspace: oklch(0.73 0.135 262);
     --section-tickets: oklch(0.77 0.13 242);
     --section-tasks: oklch(0.86 0.165 115);
+    --section-epics: oklch(0.74 0.2 335);
     --section-pull-requests: oklch(0.75 0.16 302);
     --section-chores: oklch(0.8 0.14 55);
     --section-reports: oklch(0.86 0.15 100);
@@ -516,13 +519,14 @@
     --aurora-height: 0.25rem;
     --aurora-image: linear-gradient(
         90deg,
-        var(--section-attention) 0 12.5%,
-        var(--section-tickets) 0 25%,
-        var(--section-tasks) 0 37.5%,
-        var(--section-pull-requests) 0 50%,
-        var(--section-workspace) 0 62.5%,
-        var(--section-chores) 0 75%,
-        var(--section-reports) 0 87.5%,
+        var(--section-attention) 0 11.111%,
+        var(--section-tickets) 0 22.222%,
+        var(--section-tasks) 0 33.333%,
+        var(--section-epics) 0 44.444%,
+        var(--section-pull-requests) 0 55.556%,
+        var(--section-workspace) 0 66.667%,
+        var(--section-chores) 0 77.778%,
+        var(--section-reports) 0 88.889%,
         var(--section-memory) 0
     );
     --wordmark-image: linear-gradient(var(--section-reports), var(--section-reports));
@@ -557,6 +561,7 @@
     --section-attention: oklch(0.53 0.21 8);
     --section-tickets: oklch(0.5 0.105 235);
     --section-tasks: oklch(0.51 0.13 125);
+    --section-epics: oklch(0.5 0.22 332);
     --section-pull-requests: oklch(0.5 0.22 302);
     --section-workspace: oklch(0.45 0.2 264);
     --section-chores: oklch(0.53 0.14 50);
@@ -586,16 +591,17 @@
     --aurora-height: 0.25rem;
     /* A print strip: the stepped blocks, each between ink gutters, as a comic's panels stand on a page. */
     --aurora-image:
-        repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 0 calc(12.5% - 1px), var(--ink) 0 12.5%),
+        repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 0 calc(11.111% - 1px), var(--ink) 0 11.111%),
         linear-gradient(
             90deg,
-            var(--section-attention) 0 12.5%,
-            var(--section-tickets) 0 25%,
-            var(--section-tasks) 0 37.5%,
-            var(--section-pull-requests) 0 50%,
-            var(--section-workspace) 0 62.5%,
-            var(--section-chores) 0 75%,
-            var(--section-reports) 0 87.5%,
+            var(--section-attention) 0 11.111%,
+            var(--section-tickets) 0 22.222%,
+            var(--section-tasks) 0 33.333%,
+            var(--section-epics) 0 44.444%,
+            var(--section-pull-requests) 0 55.556%,
+            var(--section-workspace) 0 66.667%,
+            var(--section-chores) 0 77.778%,
+            var(--section-reports) 0 88.889%,
             var(--section-memory) 0
         );
     --wordmark-image: linear-gradient(var(--section-reports), var(--section-reports));
@@ -772,6 +778,7 @@
     --section-attention: oklch(0.72 0.22 2);
     --section-tickets: oklch(0.76 0.16 242);
     --section-tasks: oklch(0.89 0.21 120);
+    --section-epics: oklch(0.72 0.22 335);
     --section-pull-requests: oklch(0.72 0.22 305);
     --section-workspace: oklch(0.7 0.19 275);
     --section-chores: oklch(0.79 0.18 52);
@@ -839,13 +846,14 @@
     --aurora-height: 0.25rem;
     --aurora-image: linear-gradient(
         90deg,
-        var(--section-attention) 0 12.5%,
-        var(--section-tickets) 0 25%,
-        var(--section-tasks) 0 37.5%,
-        var(--section-pull-requests) 0 50%,
-        var(--section-workspace) 0 62.5%,
-        var(--section-chores) 0 75%,
-        var(--section-reports) 0 87.5%,
+        var(--section-attention) 0 11.111%,
+        var(--section-tickets) 0 22.222%,
+        var(--section-tasks) 0 33.333%,
+        var(--section-epics) 0 44.444%,
+        var(--section-pull-requests) 0 55.556%,
+        var(--section-workspace) 0 66.667%,
+        var(--section-chores) 0 77.778%,
+        var(--section-reports) 0 88.889%,
         var(--section-memory) 0
     );
     --wordmark-image: linear-gradient(var(--section-reports), var(--section-reports));
@@ -861,6 +869,7 @@
     --section-attention: oklch(0.72 0.13 5);
     --section-tickets: oklch(0.72 0.06 230);
     --section-tasks: oklch(0.78 0.15 115);
+    --section-epics: oklch(0.72 0.15 335);
     --section-pull-requests: oklch(0.72 0.09 320);
     --section-workspace: oklch(0.68 0.06 260);
     --section-chores: oklch(0.74 0.15 52);
@@ -905,16 +914,17 @@
     --aurora-height: 0.25rem;
     /* A print strip: the stepped blocks, each between ink gutters, as a comic's panels stand on a page. */
     --aurora-image:
-        repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 0 calc(12.5% - 1px), var(--ink) 0 12.5%),
+        repeating-linear-gradient(90deg, var(--ink) 0 1px, transparent 0 calc(11.111% - 1px), var(--ink) 0 11.111%),
         linear-gradient(
             90deg,
-            var(--section-attention) 0 12.5%,
-            var(--section-tickets) 0 25%,
-            var(--section-tasks) 0 37.5%,
-            var(--section-pull-requests) 0 50%,
-            var(--section-workspace) 0 62.5%,
-            var(--section-chores) 0 75%,
-            var(--section-reports) 0 87.5%,
+            var(--section-attention) 0 11.111%,
+            var(--section-tickets) 0 22.222%,
+            var(--section-tasks) 0 33.333%,
+            var(--section-epics) 0 44.444%,
+            var(--section-pull-requests) 0 55.556%,
+            var(--section-workspace) 0 66.667%,
+            var(--section-chores) 0 77.778%,
+            var(--section-reports) 0 88.889%,
             var(--section-memory) 0
         );
     --wordmark-image: linear-gradient(var(--section-reports), var(--section-reports));
@@ -933,6 +943,7 @@
     --section-attention: oklch(0.74 0.165 4);
     --section-tickets: oklch(0.78 0.135 232);
     --section-tasks: oklch(0.86 0.2 120);
+    --section-epics: oklch(0.74 0.2 330);
     --section-pull-requests: oklch(0.74 0.155 300);
     --section-workspace: oklch(0.72 0.145 264);
     --section-chores: oklch(0.8 0.13 55);
@@ -1086,6 +1097,7 @@
     --color-section-workspace: var(--section-workspace);
     --color-section-tickets: var(--section-tickets);
     --color-section-tasks: var(--section-tasks);
+    --color-section-epics: var(--section-epics);
     --color-section-pull-requests: var(--section-pull-requests);
     --color-section-chores: var(--section-chores);
     --color-section-reports: var(--section-reports);

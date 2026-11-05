@@ -9,6 +9,7 @@ import chores from '@/guide/chores.md?raw'
 import codeReview from '@/guide/code-review.md?raw'
 import configFiles from '@/guide/config-files.md?raw'
 import dictation from '@/guide/dictation.md?raw'
+import epics from '@/guide/epics.md?raw'
 import glossary from '@/guide/glossary.md?raw'
 import howTheLoopWorks from '@/guide/how-the-loop-works.md?raw'
 import memory from '@/guide/memory.md?raw'
@@ -97,6 +98,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['tickets', tickets],
             ['plans', plans],
             ['tasks', tasks],
+            ['epics', epics],
             ['pull-requests', pullRequests],
             ['code-review', codeReview],
             ['checklists', checklists],
@@ -142,6 +144,7 @@ export const PAGE_GUIDES = {
     '/tasks/': 'tasks',
     '/tasks/$id': 'tasks#a-tasks-page',
     '/tasks/$id_/runs/$run': 'tasks#a-tasks-run',
+    '/epics/': 'epics',
     '/pull-requests/': 'pull-requests',
     '/pull-requests/pr': 'pull-requests#the-pull-requests-page',
     '/pull-requests/reviews/': 'pull-requests#the-reviews-page',

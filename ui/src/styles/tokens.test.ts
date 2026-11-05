@@ -62,6 +62,7 @@ const TEXT = [
     'section-workspace',
     'section-tickets',
     'section-tasks',
+    'section-epics',
     'section-pull-requests',
     'section-chores',
     'section-reports',
