@@ -37,5 +37,6 @@ test('?q= filters the rows to those whose label or key holds it, and Escape show
     const filter = page.getByRole('searchbox', { name: 'Filter settings by label or key' })
     await filter.press('Escape')
     await expect(page).not.toHaveURL(/q=/u)
+    await expect(filter).toHaveValue('')
     await expect(form.getByRole('textbox', { name: 'capacity.max_workers' })).toBeVisible()
 })
