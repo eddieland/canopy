@@ -181,7 +181,7 @@ function Form({
     }, [hash])
     // A reset types the key's default into its field, as the operator would: offered while it has something to do.
     const resetFor = (setting: ConfigKey) => {
-        const to = resetDraft(setting)
+        const to = resetDraft(setting, settings.keys)
         return to === null || resetDone(setting, form.changes) ? undefined : () => draft(setting.name, to)
     }
     // A row of a band whose keys only get stricter leaves that rule to the band's header (`ruled`).

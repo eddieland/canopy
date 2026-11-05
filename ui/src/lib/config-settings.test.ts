@@ -471,6 +471,19 @@ describe('defaults', () => {
         ).toBeNull()
     })
 
+    it('offer no reset the loader would refuse beside its pair', () => {
+        const idle: ConfigKey = { ...PACE, name: 'loop.idle_max_minutes', value: 200, default: 120, bound: 2 }
+        const pace: ConfigKey = { ...PACE, value: 150, default: 15 }
+        // Back to 120 would be under a pace of 150; the pace back to 15 stays under any idle wait.
+        expect(resetDraft(idle, [idle, pace])).toBeNull()
+        expect(resetDraft(pace, [idle, pace])).toBe('15')
+        expect(resetDraft(idle, [idle, { ...pace, value: 60 }])).toBe('120')
+        const every: ConfigKey = { ...PACE, name: 'connect.every_minutes', value: 2, default: 2 }
+        const age: ConfigKey = { ...PACE, name: 'connect.max_age_minutes', value: 60, default: 30, bound: 2 }
+        expect(resetDraft(age, [age, { ...every, value: 45 }])).toBeNull()
+        expect(resetDraft(age, [age, every])).toBe('30')
+    })
+
     it("know a reset done once the form's change is the default", () => {
         expect(resetDone({ ...KICKS, default: 0 }, { 'trust.max_flaky_kicks': 0 })).toBe(true)
         expect(resetDone({ ...KICKS, default: 0 }, {})).toBe(false)

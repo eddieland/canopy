@@ -117,12 +117,16 @@ export function defaultText(key: ConfigKey): string | null {
  * What a reset types into key's field, its default as the form holds it, for a key whose value is not its default;
  * null when the page cannot take it there: a default that unsets the key (an unmanaged pool, no budget) or removes a
  * repository's own count, a limit's default past its bound from the value now, a stricter key's default looser than
- * its value now, which only the file may set, or a list's default that drops an entry the page asks about first. A
- * reset is an ordinary change, saved as any other.
+ * its value now, which only the file may set, a list's default that drops an entry the page asks about first, or a
+ * default the loader would refuse beside its pair's value in `keys` (`PAIRS`). A reset is an ordinary change, saved as
+ * any other.
  */
-export function resetDraft(key: ConfigKey): ConfigDrafts[string] | null {
+export function resetDraft(key: ConfigKey, keys: ConfigKey[] = []): ConfigDrafts[string] | null {
     const { value, default: to } = key
     if (sameValue(value, to) || to === null || (typeof to === 'object' && !Array.isArray(to))) {
+        return null
+    }
+    if (typeof to === 'number' && !keepsPair(key.name, to, keys)) {
         return null
     }
     if (Array.isArray(to)) {
@@ -157,6 +161,27 @@ export function resetDraft(key: ConfigKey): ConfigDrafts[string] | null {
 export function resetDone(key: ConfigKey, changes: Record<string, ConfigValue>): boolean {
     const now = changes[key.name]
     return now !== undefined && sameValue(now, key.default)
+}
+
+/**
+ * The keys the loader holds in order, each `[low, high]`: an idle tick's longest wait is at least the pace, and an
+ * observation goes stale no sooner than the connectors poll (`Loop` and `Connect` in canopy/core/config.py).
+ */
+const PAIRS: [string, string][] = [
+    ['loop.interval_minutes', 'loop.idle_max_minutes'],
+    ['connect.every_minutes', 'connect.max_age_minutes'],
+]
+
+/** Whether `name` at `to` keeps the order the loader holds it to with its pair's value as read in `keys`. */
+function keepsPair(name: string, to: number, keys: ConfigKey[]): boolean {
+    const valueOf = (other: string) => keys.find((k) => k.name === other)?.value
+    return PAIRS.every(([low, high]) => {
+        const other = name === low ? valueOf(high) : name === high ? valueOf(low) : undefined
+        if (typeof other !== 'number') {
+            return true
+        }
+        return name === low ? to <= other : to >= other
+    })
 }
 
 /** Whether two values are the same, entry for entry. */
