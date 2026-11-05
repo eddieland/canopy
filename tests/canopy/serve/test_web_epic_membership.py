@@ -5,7 +5,9 @@ later approval dropped set apart; a ticket of no epic has none. Each of its plan
 planner read, by the hash it was approved by, and when a newer one has been approved since.
 """
 
-from canopy.core import epics
+from datetime import datetime
+
+from canopy.core import db, epics
 from canopy.serve.backend import Backend
 from canopy.serve.mock import epics as mock_epics
 from tests.canopy.helpers import present
@@ -29,12 +31,11 @@ def test_a_member_names_its_epic_and_entries_and_its_plan_the_epic_plan_it_follo
         "epic_id": APPROVED,
         "plan_id": followed.id,
         "sha256": followed.approved_sha256,
-        "approved_at": plans["newest"]["plan"]["epic_plan"]["approved_at"],
+        "approved_at": followed.approved_at,
         "newer_approved_at": None,
     }
-    assert plans["newest"]["plan"]["epic_plan"] == epic_plan
-    assert [p["epic_plan"] for p in plans["plans"]] == [epic_plan]
-    assert epic_plan["approved_at"] is not None
+    assert _timed(plans["newest"]["plan"]["epic_plan"]) == epic_plan
+    assert [_timed(p["epic_plan"]) for p in plans["plans"]] == [epic_plan]
 
 
 def test_a_member_of_no_entry_names_its_epic_alone(backend: Backend) -> None:
@@ -65,11 +66,18 @@ def test_a_plan_written_against_an_older_epic_plan_says_a_newer_one_was_approved
     assert newer.id != old.id
 
     # ABC-103's plan still names the plan its planner read, and says a newer one was approved since.
-    epic_plan = c.get("/api/tickets/ABC-103/plans").json()["newest"]["plan"]["epic_plan"]
+    epic_plan = _timed(c.get("/api/tickets/ABC-103/plans").json()["newest"]["plan"]["epic_plan"])
     assert (epic_plan["plan_id"], epic_plan["sha256"]) == (old.id, old.approved_sha256)
-    assert epic_plan["newer_approved_at"] is not None
-    assert epic_plan["newer_approved_at"] > epic_plan["approved_at"]
+    assert (epic_plan["approved_at"], epic_plan["newer_approved_at"]) == (old.approved_at, newer.approved_at)
     # B1 is still the newer plan's; B2 is not, so ABC-104 is a member of the entries left, none.
     assert c.get("/api/tickets/ABC-103").json()["membership"]["entries"] == ["B1"]
     membership = c.get("/api/tickets/ABC-104").json()["membership"]
     assert (membership["entries"], membership["dropped"]) == ([], ["B2"])
+
+
+def _timed(epic_plan: dict[str, object]) -> dict[str, object]:
+    """Return `epic_plan` as the API sent it, its times in the journal's own format, to compare with its rows."""
+    return {
+        k: db.format_time(datetime.fromisoformat(v)) if k.endswith("_at") and isinstance(v, str) else v
+        for k, v in epic_plan.items()
+    }

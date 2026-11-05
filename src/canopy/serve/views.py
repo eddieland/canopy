@@ -757,6 +757,9 @@ def membership(ctx: Context, key: str) -> TicketMembership | None:
     if member is None:
         return None
     found = epics.member_epic(ctx.conn, ctx.state_dir, key)
+    if found is not None and found.epic_id != member.epic_id:
+        # It reads the membership again: one the operator replaced between the two reads is not mixed with this one.
+        found = None
     return TicketMembership(
         epic_id=member.epic_id,
         entries=list(found.entries) if found is not None else epics.entries_of(ctx.conn, member.id),
