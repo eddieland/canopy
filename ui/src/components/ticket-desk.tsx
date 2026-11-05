@@ -55,8 +55,9 @@ export function TicketDesk({
         onSuccess: (closed) => {
             setSaid(deskClosedText(ticketKey, closed))
             setDiscarding(false)
-            void refreshDesk(client, ticketKey)
         },
+        // A close refused partway has returned some slots already, and a refusal leaves the desk as it was: read both.
+        onSettled: () => void refreshDesk(client, ticketKey),
     })
     if (desk.open === null && desk.repos.length === 0) {
         return null

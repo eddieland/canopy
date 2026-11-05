@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
 import type { DeskOpened, OpenDesk, TicketDesk as TicketDeskData } from '@/api/types'
@@ -48,9 +48,9 @@ afterEach(() => {
     cleanup()
 })
 
-function renderDesk(desk: TicketDeskData) {
+function renderDesk(desk: TicketDeskData, client = new QueryClient()) {
     return render(
-        <QueryClientProvider client={new QueryClient()}>
+        <QueryClientProvider client={client}>
             <TicketDesk ticketKey="ABC-1" desk={desk} />
         </QueryClientProvider>,
     )
@@ -128,6 +128,24 @@ describe('TicketDesk', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Close desk' }))
         expect(await screen.findByText("ABC-1's desk is closed; its slots are returned: api, web.")).toBeDefined()
         expect(sent).toEqual([{ path: '/api/tickets/ABC-1/desk/close', body: { discard: false } }])
+    })
+
+    it('reads the ticket and the worktrees again after a refused close, which may have returned slots', async () => {
+        answers = [
+            Response.json(
+                { detail: { guard: 'desk_failed', reason: "ABC-1's desk is kept: web: its pool refused" } },
+                { status: 409 },
+            ),
+        ]
+        const client = new QueryClient()
+        const invalidate = vi.spyOn(client, 'invalidateQueries')
+        renderDesk({ repos: ['api', 'web'], open: OPEN }, client)
+        fireEvent.click(screen.getByRole('button', { name: 'Close desk' }))
+        expect((await screen.findByRole('alert')).textContent).toContain('refused (desk_failed)')
+        expect(invalidate.mock.calls.map(([filters]) => filters?.queryKey)).toEqual([
+            ['ticket', 'ABC-1'],
+            ['worktrees'],
+        ])
     })
 
     it('offers to discard work origin lacks once a close is refused for it, with the key typed out', async () => {
