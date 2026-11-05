@@ -192,8 +192,9 @@ def add(
     wanted = list(dict.fromkeys(keys))
     for key in wanted:
         _check_key(key, "a ticket key")
-    named = _entries(conn, state_dir, epic_id, entries) if entries is not None else None
     with db.transaction(conn):
+        # Inside the write's transaction, so an approval cannot replace the outline between the check and the write.
+        named = _entries(conn, state_dir, epic_id, entries) if entries is not None else None
         added: list[str] = []
         already: list[str] = []
         for key in wanted:
