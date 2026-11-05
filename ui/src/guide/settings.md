@@ -139,7 +139,7 @@ but not on, and cut the reruns of flaky checks but not raise them. A stolen sess
 steering your workers after you changed the secret, so adding one stays an edit to the file. The band says that once,
 with a lock, and a setting already as strict as it goes shows its value beside a lock rather than a row of greyed-out
 buttons, which looked broken and wasn't. Unchecking an authorized replier, or a list's last name, asks first: if that
-name is yours, your replies from Slack stop reaching workers, and the page can't put it back.
+name is yours, your replies on the ticket stop reaching workers, and the page can't put it back.
 
 Each row's chip says where its value comes from, `this workspace`, `user`, `workspace`, or `default` (hover it, or
 the page's title, for what each means), and the line beside it says how far the page will take it. Units sit after the

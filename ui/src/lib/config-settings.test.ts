@@ -409,7 +409,7 @@ describe("the page's header", () => {
 })
 
 describe('the trust ratchet', () => {
-    it('know a stricter key at its strictest, which the page can take no further', () => {
+    it('knows a stricter key at its strictest, which the page can take no further', () => {
         expect(strictest({ ...STACKING, value: 'never' })).toBe(true)
         expect(strictest(STACKING)).toBe(false)
         expect(strictest({ ...REBASE, value: false })).toBe(true)
@@ -421,14 +421,14 @@ describe('the trust ratchet', () => {
         expect(strictest({ ...WORKERS, value: 0 })).toBe(false)
     })
 
-    it('say a locked value in words, a switch by what it does', () => {
+    it('says a locked value in words, a switch by what it does', () => {
         expect(lockedText({ ...REBASE, value: false })).toBe('rebase off')
         expect(lockedText({ ...REBASE, name: 'trust.commit_trailer', value: true })).toBe('add trailer on')
         expect(lockedText({ ...STACKING, value: 'never' })).toBe('never')
         expect(lockedText({ ...REVIEWERS, value: [] })).toBe('none')
     })
 
-    it('ask before dropping any authorized replier, or the last entry of a list', () => {
+    it('asks before dropping any authorized replier, or the last entry of a list', () => {
         const repliers: ConfigKey = { ...REVIEWERS, name: 'trust.authorized_repliers', value: ['me', 'bot'] }
         expect(dropAsks(repliers, 'bot', ['me', 'bot'])).toBe(true)
         expect(dropAsks(REVIEWERS, 'alice', ['alice', 'lint-bot'])).toBe(false)
