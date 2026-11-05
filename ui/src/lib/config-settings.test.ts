@@ -4,10 +4,12 @@ import type { ConfigKey, ConfigSaved } from '@/api/types'
 
 import {
     boundText,
+    byPart,
     changeList,
     CONFIG_GROUPS,
     configForm,
     groupedKeys,
+    groupSlug,
     oneWay,
     oneWayText,
     pendingText,
@@ -237,15 +239,45 @@ describe('budget alerts', () => {
 })
 
 describe('config groups', () => {
-    it('put each key in its panel with its words, and a key no panel names in Other', () => {
+    it('put each key in its band with its words, and a key no band names in Other', () => {
         const odd: ConfigKey = { ...WORKERS, name: 'capacity.max_something_new' }
         const found = groupedKeys([REVIEWERS, WORKERS, odd, PACE])
-        expect(found.map((g) => g.group.title)).toEqual(['Capacity', 'Pace', 'Trust', 'Other'])
+        expect(found.map((g) => g.group.title)).toEqual(['Capacity', 'Timing', 'Guardrails', 'Other'])
         expect(found[0]?.keys).toEqual([{ setting: WORKERS, label: 'Workers at once' }])
+        expect(found[1]?.keys).toEqual([{ setting: PACE, label: 'Minutes between ticks', part: 'Pace' }])
         expect(found[3]?.keys).toEqual([{ setting: odd, label: 'capacity.max_something_new' }])
     })
 
-    it('name every key the server edits in some panel', () => {
+    it('keep a part when the key that names it is not sent, and cut a band into its parts in order', () => {
+        const idle: ConfigKey = { ...PACE, name: 'loop.idle_max_minutes' }
+        const cooldown: ConfigKey = { ...PACE, name: 'policy.ci_cooldown_minutes' }
+        const settle: ConfigKey = { ...PACE, name: 'review.settle_minutes' }
+        const [timing] = groupedKeys([settle, idle, cooldown])
+        expect(timing?.keys.map((k) => [k.setting.name, k.part])).toEqual([
+            ['loop.idle_max_minutes', 'Pace'],
+            ['policy.ci_cooldown_minutes', 'Waits'],
+            ['review.settle_minutes', 'Waits'],
+        ])
+        expect(byPart(timing?.keys ?? []).map((p) => [p.part, p.keys.map((k) => k.setting.name)])).toEqual([
+            ['Pace', ['loop.idle_max_minutes']],
+            ['Waits', ['policy.ci_cooldown_minutes', 'review.settle_minutes']],
+        ])
+        const [capacity] = groupedKeys([WORKERS, PER_REPO])
+        expect(byPart(capacity?.keys ?? []).map((p) => p.part)).toEqual([undefined])
+    })
+
+    it('hold five bands, the minutes in one', () => {
+        expect(CONFIG_GROUPS.map((g) => g.title)).toEqual([
+            'Capacity',
+            'Attempts',
+            'Timing',
+            'Retention & budget',
+            'Guardrails',
+        ])
+        expect(groupSlug('Retention & budget')).toBe('retention-budget')
+    })
+
+    it('name every key the server edits in some band', () => {
         const named = CONFIG_GROUPS.flatMap((g) => g.keys.map((k) => k.name))
         expect(new Set(named).size).toBe(named.length)
         expect(named).toHaveLength(49)
