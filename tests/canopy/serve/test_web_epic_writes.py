@@ -96,7 +96,7 @@ def test_a_plan_whose_ids_will_not_read_or_reuse_a_dropped_one_is_refused_naming
     )
 
 
-def test_an_approval_is_refused_while_a_plan_run_works_and_with_no_plan(backend: Backend) -> None:
+def test_an_approval_is_refused_while_a_plan_run_works_for_no_epic_and_for_no_hash(backend: Backend) -> None:
     c, headers = signed_in_to(backend)
     body = {"read_sha256": "0" * 64}
     assert refused(c.post(f"/api/epics/{PLANNING}/plan/approval", json=body, headers=headers)).startswith("planning:")
