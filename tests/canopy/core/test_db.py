@@ -4,7 +4,7 @@ import re
 import sqlite3
 import typing
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from collections.abc import Set as AbstractSet
 from importlib.metadata import version
 from pathlib import Path
@@ -458,31 +458,30 @@ def test_the_loops_reads_at_each_wait_step_and_tick_are_found_by_index(tmp_path:
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
     since = "2026-01-01T00:00:00.000Z"
-    statements: list[str] = []
-    conn.set_trace_callback(statements.append)
-    db.latest_message_id(conn, source="operator", subject_kind=db.SUBJECT_TICKET)
-    db.runs_moved_after(conn, since)
-    db.runs_ended_after(conn, since)
-    db.starts_moved_after(conn, since)
-    review_requests.made_after(conn, since)
-    db.open_tickets(conn)
-    db.recently_done(conn, since)
-    db.abandon_unfinished_ticks(conn)
-    policy.ticket_attempts(conn, "resume")
-    recorded_runs.holding(conn)
-    recorded_runs.close_unstarted(conn, tick_id=1)
-    conn.set_trace_callback(None)
-    # Each grows with the journal's history; the run tables of epics and tasks' own stay a few hundred rows a year.
-    history = {"messages", "runs", "chore_runs", "review_runs", "task_runs", "starts", "review_requests", "tickets"}
-    history |= {"decisions", "ticks", "recorded_runs"}
-    for statement in statements:
-        plan = [str(r["detail"]) for r in conn.execute(f"EXPLAIN QUERY PLAN {statement}")]
-        scans = [
-            step
-            for step in plan
-            if step.startswith("SCAN ") and step.split()[1] in history and "COVERING INDEX" not in step
-        ]
-        assert scans == [], (statement, plan)
+    reads: dict[str, Callable[[], object]] = {
+        "newest operator message": lambda: db.latest_message_id(conn, source="operator", subject_kind="ticket"),
+        "runs moved": lambda: db.runs_moved_after(conn, since),
+        "runs ended": lambda: db.runs_ended_after(conn, since),
+        "starts moved": lambda: db.starts_moved_after(conn, since),
+        "review requested": lambda: review_requests.made_after(conn, since),
+        "open tickets": lambda: db.open_tickets(conn),
+        "recently done": lambda: db.recently_done(conn, since),
+        "abandoned ticks": lambda: db.abandon_unfinished_ticks(conn),
+        "attempts": lambda: policy.ticket_attempts(conn, "resume"),
+        "waiting runs": lambda: recorded_runs.holding(conn),
+        "unstarted runs": lambda: recorded_runs.close_unstarted(conn, tick_id=1),
+    }
+    for name, read in reads.items():
+        statements: list[str] = []
+        conn.set_trace_callback(statements.append)
+        read()
+        conn.set_trace_callback(None)
+        assert statements, f"{name} ran no statement"
+        for statement in statements:
+            plan = [str(r["detail"]) for r in conn.execute(f"EXPLAIN QUERY PLAN {statement}")]
+            # A plan names a table by its alias where the query gives one, so every scan counts, whatever it names.
+            scans = [step for step in plan if step.startswith("SCAN ") and "COVERING INDEX" not in step]
+            assert scans == [], (name, statement, plan)
 
 
 def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: Path, journals: Journals) -> None:

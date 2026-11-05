@@ -1,3 +1,3 @@
--- sha256 of 0005_loop_indexes.sql: 9a9a8a3cdd1f221e38c0774d2b64b847beef1848a26ac42b22b368875b7f2be4
+-- sha256 of 0005_loop_indexes.sql: 8477eac8a36ec1f592d2d62580b5e111272d756443e669db5780d2669c11fa0d
 
 -- Creates no table, so seeds no row.

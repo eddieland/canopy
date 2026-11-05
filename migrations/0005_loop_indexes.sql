@@ -11,6 +11,10 @@ CREATE INDEX chore_runs_ended ON chore_runs(ended_at);
 
 CREATE INDEX task_runs_ended ON task_runs(ended_at);
 
+CREATE INDEX epic_runs_started ON epic_runs(started_at);
+
+CREATE INDEX epic_runs_ended ON epic_runs(ended_at);
+
 CREATE INDEX starts_started ON starts(started_at);
 
 CREATE INDEX starts_stopped ON starts(stopped_at);
