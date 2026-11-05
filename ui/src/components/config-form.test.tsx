@@ -96,5 +96,6 @@ describe('ConfigForm', () => {
         type('capacity.max_workers', '3')
         expect(screen.getByTestId('config-pending').textContent).toBe('No unsaved changes')
         expect(button('Discard').disabled).toBe(true)
+        expect(button('Save').disabled).toBe(true)
     })
 })
