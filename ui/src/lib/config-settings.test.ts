@@ -461,6 +461,7 @@ describe('defaults', () => {
         expect(resetDraft({ ...REBASE, value: false, default: true })).toBeNull()
         expect(resetDraft({ ...STACKING, value: 'auto', default: 'never' })).toBe('never')
         expect(resetDraft({ ...STACKING, value: 'never', default: 'auto' })).toBeNull()
+        expect(resetDraft({ ...STACKING, value: 'sometimes', default: 'often' })).toBeNull()
         expect(resetDraft({ ...REVIEWERS, default: ['alice'] })).toEqual(['alice'])
         expect(resetDraft({ ...REVIEWERS, default: ['carol'] })).toBeNull()
         // Emptying a list, or dropping an authorized replier, asks first: the operator unchecks those, never a reset.

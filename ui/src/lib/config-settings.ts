@@ -141,9 +141,10 @@ export function resetDraft(key: ConfigKey): ConfigDrafts[string] | null {
         return key.kind !== 'stricter' || to === STRICTER_ON[key.name] ? to : null
     }
     if (typeof to === 'string') {
-        // A choice moves only later, toward stricter.
+        // A choice moves only later, toward stricter; one the page does not list, now or as the default, stays put.
         const now = typeof value === 'string' ? key.choices.indexOf(value) : -1
-        return key.choices.indexOf(to) >= now ? to : null
+        const then = key.choices.indexOf(to)
+        return now !== -1 && then >= now ? to : null
     }
     const was = typeof value === 'number' ? value : null
     if (key.kind === 'stricter') {
