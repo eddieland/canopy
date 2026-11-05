@@ -234,6 +234,9 @@ cmd = ""
 # port = 8765
 # url = "http://localhost:9000/"                # where those links open it, such as an SSH forward's port;
 #                                               # it replaces the whole address, so add base_path if you set one
+# Dictation in the web UI's fields: a command on this machine that prints the text of the recording at {audio}, a
+# 16 kHz mono WAV. {vocabulary} is optional: the repositories, ticket keys, and titles canopy expects to hear.
+# dictation_cmd = "whisper-cli -m /opt/whisper/ggml-large-v3-turbo.bin -nt -np -f {audio} --prompt {vocabulary}"
 
 # Required: the program that reads your tracker into canopy's journal, a tracker source (DESIGN §30). canopy reads no
 # ticket any other way, so config refuses a workspace without one. Exactly one, canopy's Jira Cloud reader here. It

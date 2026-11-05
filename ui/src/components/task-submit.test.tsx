@@ -43,6 +43,7 @@ function renderForm(repos: string[], tasks: Pick<TaskSummary, 'repo'>[] = [], fi
     const client = new QueryClient()
     const meta: Meta = {
         branch_urls: {},
+        dictation: false,
         build: null,
         mock: false,
         ticket_url: null,

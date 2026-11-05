@@ -1179,6 +1179,7 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/tasks/{task_id}/runs/{run_id}/report",
         "/api/tickets/{key}/attachments/{name}",
         "/api/tasks/{task_id}/attachments/{name}",
+        "/api/dictation",
         "/api/ticks",
         "/api/ticks/{tick_id}",
         "/api/ticks/{tick_id}/transcript",

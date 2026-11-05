@@ -99,8 +99,9 @@ nothing, check you didn't leave it paused last night.
 
 The loop reads its config when it starts. `kill -HUP` on its pid, or **Reload** in [Settings](settings#config), reads
 it again; a tick that's running finishes on the config it started with. A config that doesn't load leaves the loop on
-the one it had and says why. Changes to `serve.*` wait for a restart, since the web server starts once, with the loop.
-[Config files](config-files) has the keys.
+the one it had and says why. Changes to `serve.*` wait for a restart, since the web server starts once, with the loop;
+`serve.dictation_cmd` is the exception, which a reload picks up ([Dictation](dictation)). [Config files](config-files)
+has the keys.
 
 ## Garbage collection
 

@@ -133,6 +133,11 @@ and its controls TRUST_MODEL T8's.
 - Every value from the journal or a run's log is untrusted and rendered as text (D113). `canopy.serve` alone imports
   the web stack, and calls out to nothing, so T2's "no outbound call" stands. No read costs more as the journal ages,
   but the spend's all-time total and search.
+- Its text fields take dictation when the operator names a command for it (`serve.dictation_cmd`, private): the page
+  records them, sends a short WAV, and the server runs their command on it, as it runs the runtime's model list, with
+  the words it expects to hear: the repositories and the tickets at work. The text goes back to the field, never sent
+  by itself, and canopy keeps neither the audio nor the text. Rejected: the browser's own speech recognition, which in
+  Chrome sends the audio to Google; and a model inside canopy, which would make the harness a speech stack.
 
 ### Search
 
@@ -145,7 +150,7 @@ times the text.
 Private tickets and tracker comments changed TRUST_MODEL T1 and T6, and the web UI added T8. Operator messages on
 public tickets (D089) changed T1: one authorizes a `resume` as an authorized reply does. Seen marks changed T8: the web
 writes what no CLI verb does (D127). Limits and trust (M41) changed T8 too: the web writes a few config keys, limits
-within bounds and trust only stricter (D128).
+within bounds and trust only stricter (D128). Dictation changed T8: the web runs the operator's own command on a recording.
 
 ### Open
 

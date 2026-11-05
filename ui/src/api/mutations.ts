@@ -9,6 +9,7 @@ import type {
     AgentPersona,
     Attached,
     Detached,
+    Dictated,
     ChoreTried,
     ConfigReload,
     ConfigSaved,
@@ -762,6 +763,21 @@ export async function detachFile(subject: AttachmentSubject, name: string): Prom
     return unwrap(
         await api.DELETE('/api/tasks/{task_id}/attachments/{name}', {
             params: { path: { task_id: subject.id, name } },
+        }),
+    )
+}
+
+/**
+ * A recording of the operator, a 16 kHz mono WAV (`speechWav`), made text by `serve.dictation_cmd` on the loop's
+ * machine. It records nothing: the text comes back for the field alone, which the operator reads before sending it.
+ */
+export async function dictate(recording: Blob): Promise<Dictated> {
+    return unwrap(
+        await api.POST('/api/dictation', {
+            // The schema names the body a string of bytes; the recording is sent as itself, not as JSON or text.
+            body: '',
+            bodySerializer: () => recording,
+            headers: { 'Content-Type': 'audio/wav' },
         }),
     )
 }

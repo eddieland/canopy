@@ -1099,6 +1099,51 @@ def check_base_path(value: str) -> str:
     return value
 
 
+#: Where `serve.dictation_cmd` takes the path of the recording it transcribes: a WAV file canopy checked.
+AUDIO = "{audio}"
+#: Where `serve.dictation_cmd` takes the words canopy expects to hear, such as the workspace's repositories and its
+#: tickets' keys and titles, for a model that takes a hint (DESIGN §22).
+VOCABULARY = "{vocabulary}"
+_DICTATION_PLACEHOLDER_RE = re.compile(r"\{audio\}|\{vocabulary\}")
+
+
+def dictation_words(template: str) -> list[str]:
+    """Split `serve.dictation_cmd` into words with shell word rules. No shell runs (D023). Empty means no dictation.
+
+    Returns:
+        The command's words, its placeholders not yet replaced, or an empty list when `template` is empty.
+
+    Raises:
+        ValueError: The template has an unclosed quote, does not place `{audio}` exactly once, places `{vocabulary}`
+            more than once, or holds an agent command's placeholder.
+    """
+    words = shlex.split(template)
+    if not words:
+        return []
+    if sum(w.count(AUDIO) for w in words) != 1:
+        raise ValueError(f"must contain {AUDIO} exactly once, where the recording's path goes")
+    if sum(w.count(VOCABULARY) for w in words) > 1:
+        raise ValueError(f"must contain {VOCABULARY} at most once")
+    if any(_PLACEHOLDER_RE.search(w) for w in words):
+        raise ValueError(f"must not contain {PROMPT}, {DEFINITIONS_DIR}, or {TITLE}; dictation runs no agent")
+    return words
+
+
+def render_dictation(template: str, audio: Path, vocabulary: str) -> list[str]:
+    """Turn `serve.dictation_cmd` into argv, its placeholders replaced inside each word in one pass. No shell runs.
+
+    Returns:
+        The argv to run.
+    """
+    values = {AUDIO: str(audio), VOCABULARY: vocabulary}
+    return [_DICTATION_PLACEHOLDER_RE.sub(lambda m: values[m.group(0)], w) for w in dictation_words(template)]
+
+
+def _dictation_command(value: str) -> str:
+    dictation_words(value)
+    return value
+
+
 #: The longest `serve.url`: the links built on it must fit in a notification.
 MAX_UI_URL = 200
 # A URL's own characters, so a link built on it needs no escaping in a notification's markup: no space, `|`, `<`, `>`,
@@ -1165,7 +1210,7 @@ class Telemetry(Section):
 class Serve(Section):
     """The `[serve]` table: the web UI `canopy loop` serves (DESIGN §22).
 
-    Every key is private: it opens a listener on the operator's machine (TRUST_MODEL T8).
+    Every key is private: it opens a listener on the operator's machine, or runs a command there (TRUST_MODEL T8).
     """
 
     enabled: Annotated[StrictBool, Scope.PRIVATE] = True
@@ -1176,6 +1221,9 @@ class Serve(Section):
     # proxy's address. It replaces that whole address, so it includes `base_path` if the UI is served under one. It
     # moves only the links; the server still listens on `bind`, and still checks the Host header.
     url: Annotated[Annotated[StrictStr, AfterValidator(_ui_url)] | None, Scope.PRIVATE] = None
+    #: The command that turns the operator's speech into text for the web UI's fields: empty, the default, offers no
+    #: dictation. It runs on the loop's machine with `{audio}` replaced by a recording's path, and prints the text.
+    dictation_cmd: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_dictation_command)] = ""
 
 
 class Paths(Section):

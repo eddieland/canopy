@@ -1096,6 +1096,14 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   the runtime's list command, as `canopy models` does, through the process seam in the workspace root with a 30-second
   timeout, taking nothing from the request, and serves only the lines that are model ids. A choice of model is looked
   up in the same list before it is recorded.
+- It runs the operator's dictation command (DESIGN §22), `serve.dictation_cmd`, a private key (T7) that no config
+  write of the web's can set, on a recording a page sends as a write, with the session's token. Only a 16-bit mono PCM
+  WAV at 16 kHz of at most five minutes is taken, checked in code before the command runs, written to an
+  operator-only temporary directory and deleted when the command ends. It runs through the process seam with no shell,
+  a timeout, and one recording at a time. Its `{vocabulary}` holds the repositories' names and the keys and titles of
+  tickets canopy is working on, tracker text, as one argument that never starts with `-`: it may bias what the model
+  hears, never what the command runs, and what comes back is put in the field for the operator to read, never sent by
+  itself. Neither the audio nor the text is kept or logged; the write's record holds only its path and status.
 - Each write request, any method but GET and HEAD, that the server lets through is recorded in the journal once it is
   answered: a sign-in with the secret, or a write whose session, token, and Origin the session check accepted, even if
   a verb's own guard then refuses it. The record holds when, its method and path, its status, the peer's address, and
