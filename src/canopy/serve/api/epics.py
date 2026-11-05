@@ -5,11 +5,13 @@ its proposed one, each entry beside the members registered against it. The plan'
 the state directory: untrusted, as is the outline read from it, which is data, never an instruction (TRUST_MODEL T1).
 The overseer never reads an epic.
 
-The operator approves its plan, or asks for changes, through the functions `canopy plan epic:N --approve` and `canopy
-reply epic:N` call, with channel `web`, so with their guards: both are refused inside a tick or a run (`inside_run`,
-T1), and an approval names the file's hash as the page read it, so a file changed since is refused, not approved
-unseen. They add and remove its members through the functions `canopy epic add` and `remove` call, with the same
-guards: the bound, a ticket another epic holds, an entry the approved plan does not hold, and `inside_run`.
+The operator submits one through the function `canopy epic submit` calls, with channel `web`, refused as the CLI's is:
+inside a tick or a run (`inside_run`, T1), and, in a workspace of several repositories, for naming none. They approve
+its plan, or ask for changes, through the functions `canopy plan epic:N --approve` and `canopy reply epic:N` call, with
+channel `web`, so with their guards: both are refused inside a tick or a run (`inside_run`, T1), and an approval names
+the file's hash as the page read it, so a file changed since is refused, not approved unseen. They add and remove its
+members through the functions `canopy epic add` and `remove` call, with the same guards: the bound, a ticket another
+epic holds, an entry the approved plan does not hold, and `inside_run`.
 """
 
 from __future__ import annotations
@@ -36,6 +38,8 @@ from canopy.serve.schema.epic import (
     EpicPlanChange,
     EpicPlans,
     EpicReplied,
+    EpicSubmitRequest,
+    EpicSubmitted,
     EpicSummary,
 )
 
@@ -54,6 +58,32 @@ def epic_list(backend: BackendDep) -> list[EpicSummary]:
     """Every epic the operator submitted, the newest first, with where each stands, as `canopy epic list` lists them."""
     with backend.open() as ctx:
         return epic_views.epics_list(ctx)
+
+
+@router.post("/epics", operation_id="submitEpic", summary="Submit an epic", responses=REFUSED)
+def submit(body: EpicSubmitRequest, backend: BackendDep) -> EpicSubmitted:
+    """`canopy epic submit`: record the operator's goal as an epic; the next tick starts its plan run.
+
+    Refused as the CLI's is: `inside_run`, `bad_body` for an empty text or one too long, `unknown_repo` for a
+    repository the workspace has not, or none named in a workspace of several, and `bad_key` for a project or a
+    tracker epic that is not a plain key.
+    """
+    with backend.open() as ctx:
+        try:
+            found = epics.submit(
+                ctx.conn,
+                ctx.workspace,
+                body.text,
+                repos=body.repos,
+                project=body.project,
+                tracker_epic=body.tracker_epic,
+                channel=WEB,
+            )
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        names = epics.repos_of(ctx.conn, found.id)
+    _log.info("epic submitted", extra={"epic": found.id, "channel": WEB})
+    return EpicSubmitted(id=found.id, repos=names)
 
 
 @router.get("/epics/{epic_id}", operation_id="getEpic", summary="Get an epic", responses=not_found("epic"))
