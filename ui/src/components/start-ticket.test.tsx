@@ -44,6 +44,7 @@ function settings(plan: 'off' | 'approve'): ConfigSettings {
                 kind: 'stricter',
                 bound: null,
                 looser: null,
+                forever_at_zero: false,
                 choices: ['off', 'approve'],
             },
         ],

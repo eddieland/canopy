@@ -29,11 +29,11 @@ const STRICTER_ON: Record<string, boolean> = { 'trust.rebase': false, 'trust.com
 const UNSET: Record<string, string> = { 'spend.monthly_budget_usd': 'none' }
 
 /**
- * The limits and trust settings the loop reads from the user config, edited in place (DESIGN §22, M41): counts and
- * paces within the bounds the server sets, and trust settings only toward stricter. The keys come in panels by what
- * they govern (`CONFIG_GROUPS`), each in words over its name in the file, and one save bar, kept in view at the page's
- * foot, writes every change at once. A save writes the user file alone, keeping its comments, then asks the loop to
- * read it again as Reload does.
+ * The Loop settings form: the keys the loop reads that the web UI may change, edited in place (DESIGN §22, M41):
+ * counts, paces, and retentions within the bounds the server sets, and trust settings only toward stricter. The keys
+ * come in panels by what they govern (`CONFIG_GROUPS`), each in words over its name in the file, and one save bar,
+ * kept in view at the page's foot, writes every change at once. A save writes the workspace's private file alone,
+ * keeping its comments, then asks the loop to read it again as Reload does.
  */
 export function ConfigForm() {
     const client = useQueryClient()
@@ -98,7 +98,7 @@ function Form({
     return (
         <form
             className="flex flex-col gap-6"
-            aria-label="Limits and trust"
+            aria-label="Loop settings"
             data-testid="config-form"
             onSubmit={(event) => {
                 event.preventDefault()

@@ -59,7 +59,7 @@ import { useTheme } from '@/theme/use-theme'
 
 /**
  * What this browser keeps (the theme, the clock, a plan's text size, the send key, chores' findings on the attention
- * list, the review personas, the fun, the session), the limits and trust settings of the workspace's config, and
+ * list, the review personas, the fun, the session), the loop settings of the workspace's config, and
  * reloading the loop's config.
  */
 export const Route = createFileRoute('/settings')({
@@ -111,7 +111,7 @@ function SettingsPage() {
             <PageHeader title="Settings">
                 The theme, the clock, a plan&apos;s text size, the send key, chores&apos; findings on the attention
                 list, your review personas, and the fun are kept in this browser. Everything else canopy reads from its
-                config files, whose limits and trust settings can be changed here.
+                config files, whose loop settings can be changed here.
             </PageHeader>
             <ThemePanel />
             <ClockPanel />
@@ -795,15 +795,16 @@ function AttentionPanel() {
     )
 }
 
-/** Where the limits and trust settings are changed: a page of their own, as many as they are. */
+/** Where the loop settings are changed: a page of their own, as many as they are. */
 function LimitsPanel() {
     return (
         <Panel>
-            <PanelHeader label="Limits and trust" />
+            <PanelHeader label="Loop settings" />
             <div className="flex items-center justify-between gap-4 p-3">
                 <p className="text-sm text-muted-foreground">
                     How many workers, chores, and reviews run, how often a ticket is tried, how often the loop ticks,
-                    and whose words it acts on. Changed in this workspace&apos;s own config.toml, its comments kept.
+                    how long it keeps its history, and whose words it acts on. Changed in this workspace&apos;s own
+                    config.toml, its comments kept.
                 </p>
                 <Button asChild variant="outline" data-testid="limits-open">
                     <Link to="/settings/limits">
