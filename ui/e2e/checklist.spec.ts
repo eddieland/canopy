@@ -69,6 +69,18 @@ test('a held count opens the runs that held the item, each with the reason it ga
     await expect(page).toHaveURL(/\/workspace\/runs\/38$/u)
 })
 
+test('a held count shows its runs on hover, and they stay while the pointer moves onto them', async ({ page }) => {
+    await page.goto('reports/checklist')
+    await settled(page)
+    const noAny = page.getByTestId('checklist-item').filter({ hasText: 'no-any' })
+    await noAny.getByRole('button', { name: '1 held: the runs' }).hover()
+    const runs = page.getByTestId('checklist-runs')
+    await expect(runs.getByRole('link')).toHaveText(['run:38'])
+    await runs.getByRole('link', { name: 'run:38' }).hover()
+    await runs.getByRole('link', { name: 'run:38' }).click()
+    await expect(page).toHaveURL(/\/workspace\/runs\/38$/u)
+})
+
 test("the sort orders each list's items, and an item's name shows its answers by week", async ({ page }) => {
     await page.goto('reports/checklist')
     await settled(page)

@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import type { AnyRouter } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { keys } from '@/api/queries'
 import type { ChecklistCounts, ChecklistItemCounts } from '@/api/types'
@@ -176,6 +176,41 @@ describe('the checklist page', () => {
         expect(screen.getByText(/the newest 2 of 3/u)).toBeTruthy()
         // A fixed count with no runs sent is a figure alone.
         expect(screen.queryByRole('button', { name: '4 fixed: the runs' })).toBeNull()
+    })
+
+    it('opens the runs on a mouse resting on the count, and closes them once it leaves', async () => {
+        await renderPage()
+        const count = await screen.findByRole('button', { name: '3 held: the runs' })
+        fireEvent.pointerEnter(count, { pointerType: 'mouse' })
+        const runs = await screen.findByTestId('checklist-runs')
+        expect(
+            within(runs)
+                .getAllByRole('link')
+                .map((a) => a.textContent),
+        ).toEqual(['run:42', 'task:6#2'])
+        // Opened by a hover, it leaves the focus where it was.
+        expect(runs.contains(document.activeElement)).toBe(false)
+        fireEvent.pointerLeave(count, { pointerType: 'mouse' })
+        await waitFor(() => expect(screen.queryByTestId('checklist-runs')).toBeNull())
+    })
+
+    it('keeps the runs a hover opened open on a click, past the pointer leaving', async () => {
+        await renderPage()
+        const count = await screen.findByRole('button', { name: '3 held: the runs' })
+        fireEvent.pointerEnter(count, { pointerType: 'mouse' })
+        await screen.findByTestId('checklist-runs')
+        vi.useFakeTimers()
+        try {
+            fireEvent.click(count)
+            fireEvent.pointerLeave(count, { pointerType: 'mouse' })
+            // Well past the moment a hover's runs close once the pointer leaves.
+            act(() => {
+                vi.advanceTimersByTime(1000)
+            })
+            expect(screen.getByTestId('checklist-runs')).toBeTruthy()
+        } finally {
+            vi.useRealTimers()
+        }
     })
 
     it("orders each list's items by the sort the search names, ties in the list's order", async () => {

@@ -223,10 +223,12 @@ may just not have met the diff that fails it. The rest say nothing. A lot of **u
 never pushed, so were never asked: canopy counts every item of a run it gave a list to, pushed or not, and errs toward
 too many.
 
-A **held** count is a link: it opens the runs that held the item, newest first, each with the reason its worker gave,
-cut to a line. The [run's page](runs#a-runs-page) has the reason whole, and `canopy show run:ID` prints it, or
-`task:N` for a task's. **fixed** opens its runs the same way, which is the list earning its keep. Up to twenty runs
-each; the count says how many there were in all.
+A **held** count is a link: hover it and it shows the runs that held the item, newest first, each with the reason its
+worker gave, cut to a line. They stay while the pointer moves onto them, so you can follow one; click the count to keep
+them open until you click elsewhere, which is also how a tap or the keyboard opens them. The
+[run's page](runs#a-runs-page) has the reason whole, and `canopy show run:ID` prints it, or `task:N` for a task's.
+**fixed** opens its runs the same way, which is the list earning its keep. Up to twenty runs each; the count says how
+many there were in all.
 
 The order buttons in **By item**'s header sort each repository's items: **list order**, the order of your file, or the
 most **held**, the largest **n/a share**, or the most **unanswered** first. With lists in more than one repository,
