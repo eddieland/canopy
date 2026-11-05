@@ -21,6 +21,19 @@ function litEntries(page: Page): Promise<string[]> {
         )
 }
 
+/** The board's entries lit now, and whether each place `id` shows is lit, read at one instant. */
+function lit(page: Page, id: string): Promise<{ entries: string[]; id: boolean[] }> {
+    return page.evaluate((name) => {
+        const entries = [...document.querySelectorAll<HTMLElement>('[data-testid^="entry-B"]')]
+            .filter((row) => row.dataset.lit !== undefined)
+            .map((row) => row.dataset.testid ?? '')
+        const ids = [...document.querySelectorAll<HTMLElement>('main span')]
+            .filter((span) => span.textContent === name && span.children.length === 0)
+            .map((span) => span.dataset.lit !== undefined)
+        return { entries, id: ids }
+    }, id)
+}
+
 test("the list opens an epic's page, which leads with its breakdown beside its members", async ({ page }) => {
     await page.goto('epics')
     await settled(page)
@@ -38,13 +51,14 @@ test("the list opens an epic's page, which leads with its breakdown beside its m
 test('pointing at a requirement lights the entries that cover it, and the id wherever it shows', async ({ page }) => {
     await page.goto('epics/1')
     await settled(page)
+    // Each member's link out comes with the server's meta, after the page, and widens the board as it comes: hovered
+    // before it, the board could move from under the mouse.
+    await expect(page.getByRole('link', { name: 'ABC-103 in the tracker' })).toBeVisible()
     const outline = page.getByTestId('epic-outline')
     const r1 = outline.getByText('R1', { exact: true })
     await r1.hover()
-    await expect.poll(() => litEntries(page)).toEqual(['entry-B1', 'entry-B3'])
-    for (const id of await page.getByText('R1', { exact: true }).all()) {
-        await expect(id).toHaveAttribute('data-lit', '')
-    }
+    // The entries and the id are read at one instant, so they are told lit by the same pointing.
+    await expect.poll(() => lit(page, 'R1')).toEqual({ entries: ['entry-B1', 'entry-B3'], id: [true, true, true] })
     // Lighting only adds: every entry still reads as it did, its members and none yet among them.
     await expect(page.getByTestId('entry-B2').getByRole('link', { name: 'ABC-104', exact: true })).toBeVisible()
     await expect(page.getByTestId('entry-B4')).toContainText('none yet')
