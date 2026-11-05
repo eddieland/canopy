@@ -114,9 +114,14 @@ def test_close_returns_the_slots_unless_work_would_be_lost(
     (web / "more.txt").write_text("more\n")
     kept = ws_scenario.operator("desk", KEY, "--close", code=1)
     assert "api has 1 commit origin lacks; web has 1 uncommitted change and 1 commit origin lacks." in kept.err
+    # A slot moved off the branch, detached here, still holds the branch's commit: close deletes the branch.
+    (web / "more.txt").unlink()
+    git("checkout", "--quiet", "--detach", f"origin/{BRANCH}", cwd=web)
+    kept = ws_scenario.operator("desk", KEY, "--close", code=1)
+    assert "api has 1 commit origin lacks; web has 1 commit origin lacks." in kept.err
+    git("checkout", "--quiet", BRANCH, cwd=web)
 
     # Pushed, the desk closes: the slots go back, the local branch with them, and the directory is gone.
-    (web / "more.txt").unlink()
     for slot in (api, web):
         git("push", "--quiet", "origin", BRANCH, cwd=slot)
     closed = ws_scenario.operator("desk", KEY, "--close")

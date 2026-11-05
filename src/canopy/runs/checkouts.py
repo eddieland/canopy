@@ -236,14 +236,18 @@ def _check_out(ctx: Context, name: str, slot: Path, branch: str) -> None:
 
 
 def _unsafe(ctx: Context, name: str, slot: Path, branch: str) -> Unsafe | None:
-    """What closing would lose in `slot`: its uncommitted changes, and HEAD's commits `origin/<branch>` lacks.
+    """What closing would lose in `slot`: its uncommitted changes, and the commits `origin/<branch>` lacks.
+
+    The commits are those on the desk's branch or at HEAD, since close deletes the branch and resets the slot: one
+    the operator moved to another branch, or detached, still loses what its branch holds.
 
     Returns:
         The count of each, or None when there is nothing to lose. A slot git cannot read counts as unsafe.
     """
     git = checkpoint.Git(ctx.runner, slot, name)
     status = git.result("status", "--porcelain", "--untracked-files=all")
-    ahead = git.result("rev-list", "--count", f"refs/remotes/origin/{branch}..HEAD")
+    held = [ref for ref in (f"refs/heads/{branch}", "HEAD") if git.ok("rev-parse", "--verify", "--quiet", ref)]
+    ahead = git.result("rev-list", "--count", *held, "--not", f"refs/remotes/origin/{branch}")
     for result in (status, ahead):
         if not result.ok:
             return Unsafe(name, 0, 0, error=(result.stderr.strip() or f"git exited {result.returncode}")[:200])
