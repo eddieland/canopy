@@ -63,6 +63,51 @@ export function settingsLine(keys: ConfigKey[]): string {
         .join(' · ')
 }
 
+/** The trust switches, and the side the page may move each to: the stricter one (TRUST_MODEL T8). */
+export const STRICTER_ON: Record<string, boolean> = { 'trust.rebase': false, 'trust.commit_trailer': true }
+
+/** What each trust switch turns on, named for its checkbox: the behavior, never `on`. */
+export const SWITCH_NAME: Record<string, string> = { 'trust.rebase': 'rebase', 'trust.commit_trailer': 'add trailer' }
+
+/**
+ * Whether a key that only gets stricter is at its strictest already, so the page can take it no further: a choice at
+ * its last, a switch on its stricter side, a list with no entry left, or a count at 0.
+ */
+export function strictest(key: ConfigKey): boolean {
+    if (key.kind !== 'stricter') {
+        return false
+    }
+    const { value } = key
+    if (key.choices.length > 0) {
+        return value === key.choices.at(-1)
+    }
+    if (typeof value === 'boolean') {
+        return value === STRICTER_ON[key.name]
+    }
+    if (Array.isArray(value)) {
+        return value.length === 0
+    }
+    return value === 0
+}
+
+/** A key at its strictest, in words for its locked readout: a switch by what it does, `rebase off`. */
+export function lockedText(key: ConfigKey): string {
+    const { name, value } = key
+    if (typeof value === 'boolean') {
+        return `${SWITCH_NAME[name] ?? name} ${value ? 'on' : 'off'}`
+    }
+    return valueText(value, name)
+}
+
+/**
+ * Whether dropping `entry` from stricter list `key`, which keeps `kept` now, asks first: any authorized replier, since
+ * the page does not know which login is the operator's and losing it ends the reply path, and a list's last entry.
+ * Only an edit to the file adds either back.
+ */
+export function dropAsks(key: ConfigKey, entry: string, kept: readonly string[]): boolean {
+    return key.name === 'trust.authorized_repliers' || (kept.length === 1 && kept[0] === entry)
+}
+
 /** How far the page may take a limit, or that a trust setting only gets stricter. */
 export function boundText(key: ConfigKey): string {
     if (key.kind === 'stricter') {
@@ -354,6 +399,11 @@ export interface ConfigGroup {
     /** One line under the label on what the keys in it govern. */
     blurb: string
     /**
+     * Whether its keys only get stricter from the page: the band's header says so once, with a lock, instead of each
+     * row.
+     */
+    oneWay?: boolean
+    /**
      * The keys it shows, in order, by name, each with its label in words, the unit its field is in, and the part of the
      * band it heads, if the band is in labelled parts: a key with a `part` starts that part, and the keys after it are
      * in it.
@@ -436,7 +486,8 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
     },
     {
         title: 'Guardrails',
-        blurb: 'Which work waits on a plan you approve, and whose words workers act on. Only stricter from here.',
+        blurb: 'Which work waits on a plan you approve, and whose words workers act on.',
+        oneWay: true,
         keys: [
             { name: 'policy.plan', label: 'Before a ticket is implemented' },
             { name: 'policy.feedback_plan', label: 'Before a resume acts on review feedback' },

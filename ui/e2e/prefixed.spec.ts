@@ -196,9 +196,9 @@ test('the settings page saves a limit and drops a trusted reviewer, but offers n
     await form.getByTestId('config-discard').click()
     await expect(workers).toHaveValue(before)
     await expect(form.getByTestId('config-save-bar')).toHaveCount(0)
-    // A choice moves only toward stricter: one looser than the value in force is not offered, and picking the value
-    // back leaves nothing to save.
-    await expect(form.getByTestId('policy.planner_may_approve-lenient')).toBeDisabled()
+    // A choice moves only toward stricter, and one already at its strictest is its value beside a lock; picking the
+    // value back leaves nothing to save.
+    await expect(form.getByTestId('policy.planner_may_approve-locked')).toContainText('off')
     await form.getByTestId('policy.plan-approve').click()
     await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
     await expect(form.getByTestId('config-one-way')).toHaveText('policy.plan: only an edit to config.toml undoes this')
@@ -231,12 +231,12 @@ test('the settings page saves a limit and drops a trusted reviewer, but offers n
         "Saved capacity.max_workers, capacity.repo_slots, trust.trusted_reviewers to this workspace's config.",
     )
     await expect(slots.getByTestId('capacity.repo_slots.api')).toHaveValue('3')
-    // Read again from the file: the reviewer is gone, and only the stricter side of a trust switch is offered.
+    // Read again from the file: the reviewer is gone, and a trust switch at its stricter side is locked.
     await expect(workers).toHaveValue(after)
     await expect(form.getByTestId('trust.trusted_reviewers-lint-bot')).toHaveCount(0)
     await expect(form.getByTestId('trust.trusted_reviewers-canopy:review')).toBeChecked()
-    await expect(form.getByTestId('trust.rebase')).toBeDisabled()
-    await expect(form.getByTestId('trust.commit_trailer')).toBeDisabled()
+    await expect(form.getByTestId('trust.rebase-locked')).toContainText('rebase off')
+    await expect(form.getByTestId('trust.commit_trailer-locked')).toContainText('add trailer on')
 
     // A retention shortens only to its floor, but keeping it forever is always allowed.
     const runFiles = form.getByTestId('retention.run_files_days')

@@ -28,8 +28,10 @@ import {
     CONFIG_QUERY_MAX,
     configForm,
     configQueryOf,
+    dropAsks,
     groupedKeys,
     groupSlug,
+    lockedText,
     oneWay,
     oneWayText,
     pendingText,
@@ -37,6 +39,8 @@ import {
     savedText,
     SOURCE_MEANING,
     SOURCE_WORD,
+    strictest,
+    SWITCH_NAME,
     unsetText,
     valueText,
 } from '@/lib/config-settings'
@@ -44,8 +48,6 @@ import type { ConfigChange, ConfigDrafts, LabelledKey } from '@/lib/config-setti
 import { SECTION_TEXT } from '@/lib/sections'
 import { cn } from '@/lib/utils'
 
-// The trust switches, and the side the page may move each to: the stricter one (TRUST_MODEL T8).
-const STRICTER_ON: Record<string, boolean> = { 'trust.rebase': false, 'trust.commit_trailer': true }
 // How many changes the save bar lists before it folds the rest away.
 const LISTED = 3
 // The save bar's list of changes, folded in two past `LISTED`.
@@ -171,7 +173,8 @@ function Form({
                 ?.scrollIntoView({ block: hash.startsWith('band-') ? 'start' : 'center' })
         }
     }, [hash])
-    const row = ({ setting, label, unit }: LabelledKey) =>
+    // A row of a band whose keys only get stricter leaves that rule to the band's header (`ruled`).
+    const row = ({ setting, label, unit }: LabelledKey, ruled: boolean) =>
         setting.name === REPO_SLOTS ? (
             <RepoSlots
                 key={setting.name}
@@ -198,7 +201,13 @@ function Form({
                     }
                 }}
             >
-                <KeyLabel setting={setting} label={label} every={settings.every} changed={touched(setting.name)} />
+                <KeyLabel
+                    setting={setting}
+                    label={label}
+                    every={settings.every}
+                    changed={touched(setting.name)}
+                    ruled={ruled}
+                />
                 <ControlCell unit={unit}>
                     <Control
                         setting={setting}
@@ -285,6 +294,16 @@ function Form({
                                         {group.title}
                                     </h2>
                                     <p className="text-xs text-muted-foreground">{group.blurb}</p>
+                                    {group.oneWay === true && (
+                                        <p
+                                            className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                                            data-testid="config-one-way-rule"
+                                        >
+                                            <LockKeyhole aria-hidden className="size-3 shrink-0" />
+                                            Only stricter from here: loosening one, adding a name, or raising a count is
+                                            an edit to config.toml.
+                                        </p>
+                                    )}
                                 </div>
                                 <Panel>
                                     {byPart(shown).map(({ part, keys: inPart }) => (
@@ -303,7 +322,9 @@ function Form({
                                                     {part}
                                                 </h3>
                                             )}
-                                            <ul className="divide-y">{inPart.map((k) => row(k))}</ul>
+                                            <ul className="divide-y">
+                                                {inPart.map((k) => row(k, group.oneWay === true))}
+                                            </ul>
                                         </section>
                                     ))}
                                 </Panel>
@@ -528,11 +549,14 @@ function KeyLabel({
     label,
     every,
     changed = false,
+    ruled = false,
 }: {
     setting: ConfigKey
     label: string
     every: number | null
     changed?: boolean
+    /** Whether its band says once that its keys only get stricter, so the row need not. */
+    ruled?: boolean
 }) {
     // A repository's own counts list their old values in the save bar; a row of them says nothing of one.
     const was = changed && setting.name !== REPO_SLOTS ? `was ${valueText(setting.value, setting.name)}` : null
@@ -540,7 +564,8 @@ function KeyLabel({
         setting.name === 'loop.interval_minutes' && every !== null
             ? `--every ${every} sets the pace until the loop restarts`
             : null
-    const rest = [boundText(setting), was, pace].filter(Boolean).join(' · ')
+    const bound = ruled && setting.kind === 'stricter' ? null : boundText(setting)
+    const rest = [bound, was, pace].filter(Boolean).join(' · ')
     return (
         <div className="flex min-w-0 flex-col gap-1">
             <span className="text-sm text-foreground">{label}</span>
@@ -687,29 +712,12 @@ function Control({
             />
         )
     }
+    if (strictest(setting)) {
+        return <Locked name={name} text={lockedText(setting)} />
+    }
     if (Array.isArray(value)) {
         // A stricter key's entries are names; only the budget's alerts, drawn above, are numbers.
-        const entries = value.map(String)
-        const kept = Array.isArray(draft) ? draft : entries
-        if (entries.length === 0) {
-            return <span className="text-xs text-muted-foreground">none</span>
-        }
-        return (
-            <fieldset aria-label={name} className="flex flex-wrap gap-3 @xl:justify-end">
-                {entries.map((entry) => (
-                    <label key={entry} className="inline-flex items-center gap-2 font-mono text-xs">
-                        <Checkbox
-                            checked={kept.includes(entry)}
-                            data-testid={`${name}-${entry}`}
-                            onCheckedChange={(checked) =>
-                                onDraft(entries.filter((e) => (e === entry ? checked === true : kept.includes(e))))
-                            }
-                        />
-                        {entry}
-                    </label>
-                ))}
-            </fieldset>
-        )
+        return <Entries setting={setting} entries={value.map(String)} draft={draft} onDraft={onDraft} />
     }
     if (setting.choices.length > 0) {
         // Loosest first: a choice before the one the files give now is looser, and the page does not offer it.
@@ -736,17 +744,16 @@ function Control({
         )
     }
     if (typeof value === 'boolean') {
-        const strict = STRICTER_ON[name]
+        // On its looser side, or it would be locked: named for what it does, never `on`.
         return (
             <label htmlFor={`${name}-field`} className="inline-flex items-center gap-2 text-xs">
                 <Checkbox
                     id={`${name}-field`}
                     checked={typeof draft === 'boolean' ? draft : value}
-                    disabled={value === strict}
                     data-testid={name}
                     onCheckedChange={(checked) => onDraft(checked === true)}
                 />
-                on
+                {SWITCH_NAME[name] ?? name}
             </label>
         )
     }
@@ -758,6 +765,97 @@ function Control({
             error={error}
             onText={onDraft}
         />
+    )
+}
+
+/**
+ * A key at its strictest, which the page can take no further: its value as text beside a lock, and how it loosens,
+ * rather than a control whose every other choice is disabled, which reads as broken.
+ */
+function Locked({ name, text }: { name: string; text: string }) {
+    return (
+        <span className="flex flex-col items-start gap-0.5 @xl:items-end" data-testid={`${name}-locked`}>
+            <span className="inline-flex items-center gap-1.5 font-mono text-xs text-foreground">
+                <LockKeyhole aria-hidden className="size-3 shrink-0 text-muted-foreground" />
+                {text}
+            </span>
+            <span className="text-2xs text-muted-foreground">strictest · loosen in config.toml</span>
+        </span>
+    )
+}
+
+/**
+ * A stricter list's entries, each kept or dropped by its checkbox. Dropping one only the file adds back asks first,
+ * inline (`dropAsks`): any authorized replier, and the list's last entry.
+ */
+function Entries({
+    setting,
+    entries,
+    draft,
+    onDraft,
+}: {
+    setting: ConfigKey
+    entries: string[]
+    draft: ConfigDrafts[string] | undefined
+    onDraft: (value: ConfigDrafts[string]) => void
+}) {
+    const { name } = setting
+    const kept = Array.isArray(draft) ? draft : entries
+    // The entry whose drop waits on the operator's word.
+    const [asking, setAsking] = useState<string>()
+    const keep = (entry: string, on: boolean) => onDraft(entries.filter((e) => (e === entry ? on : kept.includes(e))))
+    return (
+        <div className="flex flex-col items-start gap-2 @xl:items-end">
+            <fieldset aria-label={name} className="flex flex-wrap gap-3 @xl:justify-end">
+                {entries.map((entry) => (
+                    <label key={entry} className="inline-flex items-center gap-2 font-mono text-xs">
+                        <Checkbox
+                            checked={kept.includes(entry) && asking !== entry}
+                            data-testid={`${name}-${entry}`}
+                            onCheckedChange={(checked) => {
+                                if (checked !== true && dropAsks(setting, entry, kept)) {
+                                    setAsking(entry)
+                                } else {
+                                    setAsking(undefined)
+                                    keep(entry, checked === true)
+                                }
+                            }}
+                        />
+                        {entry}
+                    </label>
+                ))}
+            </fieldset>
+            {asking !== undefined && (
+                <fieldset
+                    aria-label={`Drop ${asking}?`}
+                    className="flex flex-col gap-2 rounded-md border border-status-failed/40 p-2 text-xs"
+                    data-testid={`${name}-confirm`}
+                >
+                    <p>
+                        Drop <code className="font-mono">{asking}</code>? Only an edit to config.toml adds it back
+                        {name === 'trust.authorized_repliers'
+                            ? ": if it's your login, your replies stop reaching workers."
+                            : '.'}
+                    </p>
+                    <span className="flex gap-2">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                                keep(asking, false)
+                                setAsking(undefined)
+                            }}
+                        >
+                            Drop
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => setAsking(undefined)}>
+                            Keep
+                        </Button>
+                    </span>
+                </fieldset>
+            )}
+        </div>
     )
 }
 

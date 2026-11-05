@@ -4,6 +4,9 @@ import type { ConfigKey, ConfigSaved } from '@/api/types'
 
 import {
     bandCounts,
+    dropAsks,
+    lockedText,
+    strictest,
     bandsMatching,
     boundText,
     byPart,
@@ -396,5 +399,33 @@ describe("the page's header", () => {
             '4 settings · 2 set in this workspace · 1 from your user config',
         )
         expect(settingsLine([REBASE])).toBe('1 setting')
+    })
+})
+
+describe('the trust ratchet', () => {
+    it('know a stricter key at its strictest, which the page can take no further', () => {
+        expect(strictest({ ...STACKING, value: 'never' })).toBe(true)
+        expect(strictest(STACKING)).toBe(false)
+        expect(strictest({ ...REBASE, value: false })).toBe(true)
+        expect(strictest(REBASE)).toBe(false)
+        expect(strictest({ ...REVIEWERS, value: [] })).toBe(true)
+        expect(strictest(REVIEWERS)).toBe(false)
+        expect(strictest({ ...KICKS, value: 0 })).toBe(true)
+        expect(strictest(KICKS)).toBe(false)
+        expect(strictest({ ...WORKERS, value: 0 })).toBe(false)
+    })
+
+    it('say a locked value in words, a switch by what it does', () => {
+        expect(lockedText({ ...REBASE, value: false })).toBe('rebase off')
+        expect(lockedText({ ...REBASE, name: 'trust.commit_trailer', value: true })).toBe('add trailer on')
+        expect(lockedText({ ...STACKING, value: 'never' })).toBe('never')
+        expect(lockedText({ ...REVIEWERS, value: [] })).toBe('none')
+    })
+
+    it('ask before dropping any authorized replier, or the last entry of a list', () => {
+        const repliers: ConfigKey = { ...REVIEWERS, name: 'trust.authorized_repliers', value: ['me', 'bot'] }
+        expect(dropAsks(repliers, 'bot', ['me', 'bot'])).toBe(true)
+        expect(dropAsks(REVIEWERS, 'alice', ['alice', 'lint-bot'])).toBe(false)
+        expect(dropAsks(REVIEWERS, 'alice', ['alice'])).toBe(true)
     })
 })
