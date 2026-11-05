@@ -8,7 +8,9 @@ from pathlib import Path
 import httpx2
 from fastapi.testclient import TestClient
 
+from canopy.core import db, epics, records
 from canopy.core.context import Context
+from canopy.core.vocab import RunStatus
 from canopy.loop import reread, tick_now, web
 from canopy.serve import mock as serve_mock
 from canopy.serve.app import create_app
@@ -83,3 +85,23 @@ def refused(response: httpx2.Response) -> str:
     assert response.status_code == 409, response.text
     detail = response.json()["detail"]
     return f"{detail['guard']}: {detail['reason']}"
+
+
+def start_epic_run(ctx: Context, epic_id: int) -> int:
+    """Record a plan run of the epic, running, as a tick starts one: return its id."""
+    insert = records.insert(
+        records.EpicRun,
+        epic_id=epic_id,
+        tick_id=2,
+        desk_path="",
+        started_at=db.now(),
+        log_path="",
+    )
+    return db.rowid(insert.run(ctx.conn))
+
+
+def replan_epic(ctx: Context, epic_id: int, text: str) -> None:
+    """Have a plan run of the epic write `text`, recorded as its newest plan, as a run that ends `done` does."""
+    run_id = start_epic_run(ctx, epic_id)
+    epics.record_plan(ctx.conn, epic_id, run_id, epics.write_plan(ctx.state_dir, epic_id, run_id, text))
+    records.update(records.EpicRun).set(status=RunStatus.DONE, ended_at=db.now()).where("id = ?", run_id).run(ctx.conn)

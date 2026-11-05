@@ -86,15 +86,19 @@ def epic_plans(ctx: Context, epic_id: int) -> EpicPlans | None:
     status and hashes.
 
     Returns:
-        The plan run writing its next plan, if one is, and every plan, the oldest first.
+        The plan run writing its next plan, if one is, every plan, the oldest first, and when the operator asked for
+        changes the next tick's plan run reads.
     """
     if epics.get(ctx.conn, epic_id) is None:
         return None
     running = next((r.id for r in epic_runs.runs_of(ctx.conn, epic_id) if r.status is RunStatus.RUNNING), None)
+    replies = epics.messages_of(ctx.conn, epic_id)
+    asked = replies[-1].at if replies and epic_id in _due(ctx) else None
     return EpicPlans(
         epic_id=epic_id,
         planning=running,
         plans=[_plan_file(ctx, p) for p in epics.plans_of(ctx.conn, epic_id)],
+        changes_asked=db.parse_time(asked) if asked is not None else None,
     )
 
 

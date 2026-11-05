@@ -1,4 +1,4 @@
-"""The API's types for epics (DESIGN §43): the list, an epic's page with its breakdown, and its plans.
+"""The API's types for epics (DESIGN §43): the list, an epic's page with its breakdown, its plans, and their approval.
 
 Built on `schema.Model`, as every API type is (schema/__init__.py). An epic's text and replies are the operator's; its
 plan, the outline read from it, and what its plan runs said are an agent's: untrusted text, which the UI renders as
@@ -244,3 +244,50 @@ class EpicPlans(Model):
     """The plan run writing its next plan now; None when none runs."""
     plans: list[EpicPlanFile]
     """Every plan it has had, the oldest first."""
+    changes_asked: datetime | None = None
+    """When the operator last replied, asking for changes, while the next tick starts a plan run that reads it; None
+    while no run is due for a reply: none was sent, a run took it, or the epic has had `policy.max_plan_attempts`."""
+
+
+class EpicPlanApproval(Model):
+    """The operator's approval of an epic's waiting plan, with its file's hash as the page read it."""
+
+    read_sha256: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    """The plan file's SHA-256 when the page read it: a file changed since is refused, never approved unseen."""
+
+
+class EpicPlanChange(Model):
+    """What an approval changed from the plan approved before it, as `canopy plan epic:N --approve` lists it."""
+
+    added: list[str]
+    """The ids the new plan adds, by kind and number."""
+    removed: list[str]
+    """The ids it removes, never used again."""
+    changed: list[str]
+    """The ids whose text it changed."""
+
+
+class EpicPlanApproved(Model):
+    """What approving an epic's plan did: the plan approved, and what it changed from the one approved before."""
+
+    plan: int
+    """The plan approved."""
+    run_id: int
+    """The plan run that wrote it."""
+    change: EpicPlanChange | None = None
+    """What it changed from the plan approved before it; None for the epic's first approved plan."""
+
+
+class EpicReplied(Model):
+    """What a reply to an epic recorded, as `canopy reply epic:N` says: the message, and what starts its next plan."""
+
+    message_id: int
+    """The message the reply is."""
+    new: bool
+    """Whether it was recorded now, rather than by an earlier submission with the same id."""
+    running_run: int | None = None
+    """A plan run of the epic still working: the first tick after it ends starts the next. None: the next tick does."""
+    plan_runs: int
+    """How many plan runs the epic has had."""
+    max_plan_attempts: int
+    """`policy.max_plan_attempts`: once it has had that many, no plan run starts again, for this reply or any."""

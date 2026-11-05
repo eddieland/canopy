@@ -349,12 +349,14 @@ def approve(
     *,
     repos: AbstractSet[str],
     channel: str,
+    read_sha256: str | None = None,
 ) -> Approved:
     """Approve epic `epic_id`'s waiting plan, as its file stands, the operator's edits included (§43).
 
     Only the operator approves one, and only a `proposed` plan whose ids and breakdown read in the outline's shape, in
     `repos`, and that uses no id an earlier approved plan dropped. A copy of the approved text is kept beside its file,
-    as what the next approval is compared with.
+    as what the next approval is compared with. With `read_sha256`, the file's hash as a page read it, a file changed
+    since is refused rather than approved unseen.
 
     Returns:
         The plan approved, and what it changed from the plan approved before it.
@@ -362,8 +364,9 @@ def approve(
     Raises:
         Refused: `inside_run` inside a tick or a run, `unknown_epic` for no such epic, `planning` while a
             plan run of it runs, `no_plan` when no plan waits on the operator, `unreadable_plan` when its file is not
-            a plan, `bad_outline` when its ids or breakdown cannot be read, `approved_changed` when an earlier
-            approved plan's copy is not what was approved, and `reused_id` for an id an earlier approval dropped.
+            a plan, `stale` when it is not the file `read_sha256` names, `bad_outline` when its ids or breakdown
+            cannot be read, `approved_changed` when an earlier approved plan's copy is not what was approved, and
+            `reused_id` for an id an earlier approval dropped.
         PlanFileError: the approved copy could not be written: the epic's directory is not the operator's own.
         DatabaseError: the approval was not recorded, which nothing but a broken journal does.
     """
@@ -383,6 +386,8 @@ def approve(
         reading = plans.read(plan_path(state_dir, epic_id, current.run_id))
         if reading.text is None or reading.sha256 is None:
             raise Refused("unreadable_plan", f"epic:{epic_id}'s plan file is {reading.problem}")
+        if read_sha256 is not None and reading.sha256 != read_sha256:
+            raise Refused("stale", f"epic:{epic_id}'s plan file changed since you read it; read it again to approve it")
         try:
             outline = epic_outline.read(reading.text, repos=repos)
         except epic_outline.OutlineError as e:
