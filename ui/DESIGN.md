@@ -756,7 +756,9 @@ reader, so no table repeats them.
 - **The answer bar** (the checklist page's By item) is an item's answers as one rounded bar, each answer its share of
   the runs reminded in its answer fill, in `canopy checklist`'s order. Every bar is the same length, since the share is
   the point, not the count; the counts stay in the row's columns, and in words in the bar's tip and for a screen reader.
-  A held or fixed count opens a `Popover` of the runs behind it.
+  A held or fixed count opens a `Popover` of the runs behind it, on a mouse's hover after half a second as a tip does,
+  staying while the pointer moves onto it, and on a click, a tap, or the keyboard, which keep it until a click outside
+  or Escape. A hover leaves the focus where it was.
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
   with its unit's phase, its ticket, then the page's own figures.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a

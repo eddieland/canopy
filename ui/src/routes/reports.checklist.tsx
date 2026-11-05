@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useEffect, useRef, useState } from 'react'
+import type { PointerEvent } from 'react'
 
 import { checklistCountsQuery } from '@/api/queries'
 import type { ChecklistCounts, ChecklistItemCounts, ChecklistRun, ChecklistWeek } from '@/api/types'
@@ -378,26 +380,99 @@ function AnswerBar({ item }: { item: ChecklistItemCounts }) {
     )
 }
 
+// How long a pointer rests on a count before its runs open, as long as a tip waits (tip.tsx), so a pointer crossing
+// the table opens nothing on its way.
+const HOVER_OPEN_MS = 500
+// How long the runs stay once the pointer leaves the count, long enough to move it onto them.
+const HOVER_CLOSE_MS = 150
+
 /**
  * An answer's count. A held or fixed count of some opens the runs that gave it, the newest first, a held one's reason
- * under its run: why it held is the worker's word, and the run has it whole. The rest are figures alone.
+ * under its run: why it held is the worker's word, and the run has it whole. The rest are figures alone. The runs open
+ * when a mouse rests on the count, and close when it leaves both the count and them; a click keeps them open until a
+ * click outside or Escape, and a tap or the keyboard opens them as a click does.
  */
 function AnswerCount({ item, column }: { item: ChecklistItemCounts; column: AnswerColumn }) {
+    // Open from a hover, which leaving closes and which keeps the focus where it was, or from a click, which only a
+    // click outside or Escape closes.
+    const [open, setOpen] = useState<'hover' | 'click' | null>(null)
+    // What opened them last, read as they close, when `open` is already null.
+    const openedBy = useRef<'hover' | 'click'>('click')
+    const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+    useEffect(() => () => clearTimeout(timer.current), [])
     const count = item[column.key]
     const runs = column.key === 'held' ? item.held_runs : column.key === 'fixed' ? item.fixed_runs : []
     if (count === 0 || runs.length === 0) {
         return count
     }
+    const openAs = (how: 'hover' | 'click') => {
+        openedBy.current = how
+        setOpen(how)
+    }
+    // A touch's pointer enters as it taps: only a mouse hovers, so a tap opens them as a click does.
+    const enter = (event: PointerEvent) => {
+        if (event.pointerType !== 'mouse') {
+            return
+        }
+        clearTimeout(timer.current)
+        if (open === null) {
+            timer.current = setTimeout(() => openAs('hover'), HOVER_OPEN_MS)
+        }
+    }
+    const leave = (event: PointerEvent) => {
+        if (event.pointerType !== 'mouse') {
+            return
+        }
+        clearTimeout(timer.current)
+        timer.current = setTimeout(() => setOpen((was) => (was === 'hover' ? null : was)), HOVER_CLOSE_MS)
+    }
     return (
-        <Popover>
+        <Popover
+            open={open !== null}
+            onOpenChange={(next) => {
+                clearTimeout(timer.current)
+                if (next) {
+                    openAs('click')
+                } else {
+                    setOpen(null)
+                }
+            }}
+        >
             <PopoverTrigger
                 className="rounded-sm text-accent underline-offset-4 hover:underline"
                 aria-label={`${count} ${column.label}: the runs`}
                 data-testid={`checklist-${column.key}-runs`}
+                onPointerEnter={enter}
+                onPointerLeave={leave}
+                onClick={(event) => {
+                    // A click on runs a hover opened keeps them open, rather than closing them under the pointer.
+                    if (open === 'hover') {
+                        event.preventDefault()
+                        clearTimeout(timer.current)
+                        openAs('click')
+                    }
+                }}
             >
                 {count}
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-96 p-3 text-left font-sans">
+            <PopoverContent
+                align="end"
+                className="w-96 p-3 text-left font-sans"
+                onPointerEnter={enter}
+                onPointerLeave={leave}
+                // Runs a hover opened leave the focus where it was, as they open and as they close: a passing pointer
+                // takes nothing from the keyboard. Radix would move it into them, and back to the count after.
+                onOpenAutoFocus={(event) => {
+                    if (openedBy.current === 'hover') {
+                        event.preventDefault()
+                    }
+                }}
+                onCloseAutoFocus={(event) => {
+                    if (openedBy.current === 'hover') {
+                        event.preventDefault()
+                    }
+                }}
+            >
                 <p className="panel-label pb-2">
                     {column.label} · {item.item}
                     {count > runs.length && ` · the newest ${runs.length} of ${count}`}
