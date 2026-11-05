@@ -17,15 +17,27 @@ GitHub is a [tracker epic](glossary#tracker-epic), and it never becomes one of c
 
 ## Submitting one
 
-From the shell, for now:
+**New epic**, at the top of [Epics](/epics), takes the goal in your own words: what is true once it's done, and why.
+Write it as you would a reply, with the same toolbar, and the same microphone where canopy offers dictation. Under it:
+
+- **The repositories its plan reads**, picked from the workspace's. With several, name each one the work touches; the
+  form won't send until you do, since a planner guessing which repositories matter is how a plan misses one. A
+  workspace of one needs no choice.
+- **Tracker project**, optional: where its tickets are filed. With none, the epic files no tickets.
+- **Tracker epic**, optional: a [tracker epic](glossary#tracker-epic) whose tickets are put to you as suggestions.
+  They're only that: none becomes a member until you add it.
+
+**Submit**, or the send key, records it and opens the epic's page, `queued`: the next tick starts its plan run, before
+the overseer, within `capacity.max_workers`. A submission refuses as the command does, naming the guard: an empty goal,
+a repository the workspace hasn't got, a project or tracker epic that isn't a plain key, and anything sent from inside
+a tick or a run.
+
+From the shell it is the same:
 
 ```sh
 canopy epic submit "Let customers export their invoices as CSV, from the API and the web app." \
-    --repo api --repo web
+    --repo api --repo web --project ABC
 ```
-
-Name each repository its plan reads with `--repo`, and the tracker project its tickets belong in with `--project KEY`.
-The next tick starts its plan run, before the overseer, within `capacity.max_workers`.
 
 ## Its plan
 

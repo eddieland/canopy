@@ -83,6 +83,7 @@ export const TIPS = {
         'Dear diary, the operator approved one plan for the whole thing. I have never had a plan.',
         'Hot take: a requirement with an id is a promise with a receipt.',
         'Haiku: one goal, many stops / a line drawn across the map / I am the next stop',
+        "Pro tip: write the goal as what's true once it's done. The planner can't read your mind. I've tried.",
     ],
     '/epics/$id': [
         "It looks like you're reading a breakdown. Would you like me to file every entry as B1?",

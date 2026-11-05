@@ -2,13 +2,16 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { epicsQuery } from '@/api/queries'
-import { Code } from '@/components/code'
 import { EpicRow } from '@/components/epic-row'
+import { EpicSubmitForm } from '@/components/epic-submit'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RowList } from '@/components/rows'
 import { counted } from '@/lib/descriptions'
 
-/** Every epic the operator submitted, the newest first, each with where its plan stands and how much of it is filed. */
+/**
+ * Every epic the operator submitted, the newest first, each with where its plan stands and how much of it is filed,
+ * under the form that submits one.
+ */
 export const Route = createFileRoute('/epics/')({
     component: EpicsPage,
 })
@@ -24,6 +27,10 @@ function EpicsPage() {
                 each ticket you add as a member is planned against it. Being a member authorizes no work on a ticket.
             </PageHeader>
             <Panel>
+                <PanelHeader label="New epic" />
+                <EpicSubmitForm />
+            </Panel>
+            <Panel>
                 <PanelHeader label="Epics">
                     {data !== undefined && (
                         <span className="readout text-xs text-muted-foreground" data-testid="epics-count">
@@ -34,9 +41,7 @@ function EpicsPage() {
                 {data === undefined ? (
                     <PanelLoading query={query} className="min-h-72" />
                 ) : data.length === 0 ? (
-                    <Empty size="panel">
-                        no epics yet: <Code>canopy epic submit TEXT</Code> hands canopy one
-                    </Empty>
+                    <Empty size="panel">no epics yet: one you submit above is planned at the next tick</Empty>
                 ) : (
                     <RowList kind="epic" className="divide-y" data-testid="epics">
                         {data.map((epic) => (

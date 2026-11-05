@@ -45,10 +45,11 @@ describe('the epics page', () => {
         expect(screen.getByTestId('epics-count').textContent).toBe('3 epics')
     })
 
-    it('names the command that submits one while there are none', async () => {
+    it('says one submitted from its form is planned at the next tick while there are none', async () => {
         await renderPage([])
         const empty = await screen.findByText(/^no epics yet/u)
-        expect(empty.textContent).toBe('no epics yet: canopy epic submit TEXT hands canopy one')
+        expect(empty.textContent).toBe('no epics yet: one you submit above is planned at the next tick')
         expect(screen.queryByTestId('epics')).toBeNull()
+        expect(screen.getByRole('form', { name: 'Submit an epic' })).toBeTruthy()
     })
 })
