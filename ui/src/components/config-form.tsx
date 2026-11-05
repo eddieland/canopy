@@ -93,6 +93,7 @@ function Form({
     const [drafts, setDrafts] = useState<ConfigDrafts>({})
     const form = configForm(settings.keys, drafts)
     const pending = Object.keys(form.changes).length
+    const errors = Object.keys(form.errors).length
     const draft = (name: string, value: ConfigDrafts[string]) => setDrafts({ ...drafts, [name]: value })
     const perRepo = settings.keys.find((k) => k.name === 'capacity.slots_per_repo')?.value
     return (
@@ -125,16 +126,21 @@ function Form({
                                         repos={settings.repos}
                                         perRepo={typeof perRepo === 'number' ? perRepo : null}
                                         draft={drafts[setting.name]}
+                                        errors={form.errors}
                                         onDraft={(value) => draft(setting.name, value)}
                                     />
                                 ) : (
-                                    <li key={setting.name} className="flex items-center justify-between gap-4 p-3">
-                                        <KeyLabel setting={setting} label={label} every={settings.every} />
-                                        <Control
-                                            setting={setting}
-                                            draft={drafts[setting.name]}
-                                            onDraft={(value) => draft(setting.name, value)}
-                                        />
+                                    <li key={setting.name} className="flex flex-col gap-1 p-3">
+                                        <div className="flex items-center justify-between gap-4">
+                                            <KeyLabel setting={setting} label={label} every={settings.every} />
+                                            <Control
+                                                setting={setting}
+                                                draft={drafts[setting.name]}
+                                                error={form.errors[setting.name]}
+                                                onDraft={(value) => draft(setting.name, value)}
+                                            />
+                                        </div>
+                                        <FieldError name={setting.name} error={form.errors[setting.name]} />
                                     </li>
                                 ),
                             )}
@@ -147,19 +153,16 @@ function Form({
                 <div className="flex items-center justify-between gap-4 p-3">
                     <div className="flex min-w-0 flex-col gap-1">
                         <p className="text-sm text-foreground" data-testid="config-pending">
-                            {pendingText(pending)}
+                            {pendingText(pending, errors)}
                         </p>
-                        <Notice
-                            error={form.invalid.length > 0 ? `${form.invalid.join(', ')}: a whole number` : refused}
-                        >
-                            {saved ? savedText(saved) : null}
-                        </Notice>
+                        {/* A field in error says why on its own row; this is what the server said of a save. */}
+                        <Notice error={refused}>{saved ? savedText(saved) : null}</Notice>
                     </div>
                     <span className="flex shrink-0 items-center gap-2">
                         <Button
                             type="button"
                             variant="ghost"
-                            disabled={Object.keys(drafts).length === 0 || saving}
+                            disabled={pending + errors === 0 || saving}
                             data-testid="config-discard"
                             onClick={() => setDrafts({})}
                         >
@@ -167,7 +170,9 @@ function Form({
                         </Button>
                         <Button
                             type="submit"
-                            disabled={pending === 0 || form.invalid.length > 0 || saving}
+                            disabled={pending === 0 || errors > 0 || saving}
+                            // A disabled action has nothing to lift: the accent's glow goes with its fill's strength.
+                            className="disabled:shadow-none"
                             data-testid="config-save"
                         >
                             <Save />
@@ -207,6 +212,7 @@ function RepoSlots({
     repos,
     perRepo,
     draft,
+    errors,
     onDraft,
 }: {
     setting: ConfigKey
@@ -214,6 +220,7 @@ function RepoSlots({
     repos: string[]
     perRepo: number | null
     draft: ConfigDrafts[string] | undefined
+    errors: Record<string, string>
     onDraft: (value: ConfigDrafts[string]) => void
 }) {
     const { name, value } = setting
@@ -233,14 +240,18 @@ function RepoSlots({
             ) : (
                 <ul className="flex flex-col gap-1">
                     {shown.map((repo) => (
-                        <li key={repo} className="flex items-center justify-between gap-4">
-                            <span className="font-mono text-xs text-foreground">{repo}</span>
-                            <Count
-                                name={`${name}.${repo}`}
-                                text={typed[repo] ?? String(counts[repo] ?? '')}
-                                placeholder={fallback}
-                                onText={(text) => onDraft({ ...typed, [repo]: text })}
-                            />
+                        <li key={repo} className="flex flex-col gap-1">
+                            <div className="flex items-center justify-between gap-4">
+                                <span className="font-mono text-xs text-foreground">{repo}</span>
+                                <Count
+                                    name={`${name}.${repo}`}
+                                    text={typed[repo] ?? String(counts[repo] ?? '')}
+                                    placeholder={fallback}
+                                    error={errors[`${name}.${repo}`]}
+                                    onText={(text) => onDraft({ ...typed, [repo]: text })}
+                                />
+                            </div>
+                            <FieldError name={`${name}.${repo}`} error={errors[`${name}.${repo}`]} />
                         </li>
                     ))}
                 </ul>
@@ -272,10 +283,12 @@ function RepoSlots({
 function Control({
     setting,
     draft,
+    error,
     onDraft,
 }: {
     setting: ConfigKey
     draft: ConfigDrafts[string] | undefined
+    error: string | undefined
     onDraft: (value: ConfigDrafts[string]) => void
 }) {
     const { name, value } = setting
@@ -283,6 +296,7 @@ function Control({
         return (
             <Input
                 aria-label={name}
+                {...invalid(name, error)}
                 value={typeof draft === 'string' ? draft : Array.isArray(value) ? value.join(', ') : ''}
                 placeholder="none"
                 className="readout h-8 w-40 text-right"
@@ -359,26 +373,33 @@ function Control({
             name={name}
             text={typeof draft === 'string' ? draft : typeof value === 'number' ? String(value) : ''}
             placeholder={value === null ? (UNSET[name] ?? 'unmanaged') : ''}
+            error={error}
             onText={onDraft}
         />
     )
 }
 
-/** A whole number's field, its value the text as typed: the form names one that is not a whole number. */
+/**
+ * A whole number's field, its value the text as typed: one the form would not send, `error` says why under its row,
+ * and the field is marked invalid and points to it.
+ */
 function Count({
     name,
     text,
     placeholder,
+    error,
     onText,
 }: {
     name: string
     text: string
     placeholder: string
+    error: string | undefined
     onText: (text: string) => void
 }) {
     return (
         <Input
             aria-label={name}
+            {...invalid(name, error)}
             inputMode="numeric"
             value={text}
             placeholder={placeholder}
@@ -386,5 +407,27 @@ function Count({
             data-testid={name}
             onChange={(event) => onText(event.currentTarget.value)}
         />
+    )
+}
+
+/** The id of the line that says why field `name` holds what the form would not send. */
+function errorId(name: string): string {
+    return `${name}-error`
+}
+
+/** A field's attributes while it holds what the form would not send: marked invalid, and pointing to why. */
+function invalid(name: string, error: string | undefined): { 'aria-invalid'?: true; 'aria-describedby'?: string } {
+    return error === undefined ? {} : { 'aria-invalid': true, 'aria-describedby': errorId(name) }
+}
+
+/** Why field `name` holds what the form would not send, under its row, in the failure color; nothing when fine. */
+function FieldError({ name, error }: { name: string; error: string | undefined }) {
+    if (error === undefined) {
+        return null
+    }
+    return (
+        <p id={errorId(name)} className="text-right text-xs text-status-failed" data-testid={errorId(name)}>
+            {error}
+        </p>
     )
 }

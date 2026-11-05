@@ -8,6 +8,8 @@ const FIELD = [
     'w-full rounded-md border border-control bg-surface-raised px-2.5 text-sm text-foreground outline-none',
     'placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
     'disabled:opacity-50',
+    // A field holding what its form would not send wears the failure color; its form says why beside it.
+    'aria-invalid:border-status-failed aria-invalid:focus-visible:ring-status-failed/30',
 ]
 
 // A search field's two sizes (ui/DESIGN.md, "Primitives"): in the rail or over a list, and in a panel's own line,

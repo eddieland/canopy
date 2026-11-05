@@ -527,9 +527,10 @@ whole either side.
   no status color, but one the runtime no longer lists, `status-failed`, since it refuses the next run.
 - **`Input`**, **`Textarea`**, and **`SearchField`** (`src/components/input.tsx`): every text field, on
   `surface-raised` with a hairline and the accent's focus ring. An `Input` is one height everywhere, a form's, beside
-  its default buttons. A field to search or filter with is a `SearchField`: a magnifier, the field, what it says at its
-  end (a count), and a ghost clear button while it holds text, in the place of what sits there empty. No page builds a
-  field by hand.
+  its default buttons. One holding what its form would not send is `aria-invalid`, which draws its border in
+  `status-failed`, and says why on its own line under it, as soon as it is typed, never only on submit. A field to
+  search or filter with is a `SearchField`: a magnifier, the field, what it says at its end (a count), and a ghost clear
+  button while it holds text, in the place of what sits there empty. No page builds a field by hand.
 - **`MarkdownField`** (`src/components/markdown-field.tsx`): a field the operator writes to an agent in, in the Markdown
   `RichText` draws and nothing more, from a `Toolbar` under the text and ⌘B and ⌘E, the rest typed, so what is written
   reads in the thread as it did in the field. It is one box, the text then the toolbar under a hairline, so Tab reaches

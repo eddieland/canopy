@@ -52,22 +52,29 @@ export function boundText(key: ConfigKey): string {
     return `at most ${key.bound} from here`
 }
 
-/** What a save would send, and the fields whose text is not a whole number, which keep it from being sent. */
+/** What a save would send, and the fields whose text the page would not send, which keep it from being sent. */
 export interface ConfigForm {
     /** Each touched key whose value differs from the one read. */
     changes: Record<string, ConfigValue>
-    /** The keys, and `capacity.repo_slots.<repo>` entries, typed as something other than a whole number. */
-    invalid: string[]
+    /**
+     * Each field the page would not send, by its name (a key, or `capacity.repo_slots.<repo>`), with why: not a whole
+     * number, or past how far the page may take it.
+     */
+    errors: Record<string, string>
 }
 
 /**
  * The changes a save sends: each touched key whose value differs from the one read. `capacity.repo_slots` sends only
- * the repositories whose count changed, and a list the entries kept. A count left empty changes nothing; one that is
- * not a whole number is named in `invalid`. The server checks the rest: bounds, and what the loader refuses.
+ * the repositories whose count changed, and a list the entries kept. A count left empty changes nothing when the file
+ * sets none, and is named in `errors` when it does, as is a repository picked and left empty. A count that is not a
+ * whole number, or that the server would refuse as past its bound, is named in `errors` with why, as the server checks
+ * it: a limit past its bound and looser than the value read, or a stricter count raised. The server checks again on
+ * save, and checks what the loader refuses.
  */
 export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm {
     const changes: Record<string, ConfigValue> = {}
-    const invalid: string[] = []
+    const errors: Record<string, string> = {}
+    const perRepo = keys.find((k) => k.name === 'capacity.slots_per_repo')?.value
     for (const key of keys) {
         const draft = drafts[key.name]
         if (draft === undefined) {
@@ -77,7 +84,7 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
             // The budget's alerts, typed as a list: sent whole, the loader checking each.
             const percents = wholeNumbers(draft)
             if (percents === 'invalid') {
-                invalid.push(key.name)
+                errors[key.name] = 'whole percentages, comma separated'
             } else if (!sameNumbers(percents, key.value)) {
                 changes[key.name] = percents
             }
@@ -93,10 +100,14 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
                 typeof key.value === 'object' && key.value !== null && !Array.isArray(key.value) ? key.value : {}
             const slots: Record<string, number> = {}
             for (const [repo, text] of Object.entries(draft)) {
+                // A repository with no count of its own has the slots per repository, as the server reads it.
+                const before = was[repo] ?? (typeof perRepo === 'number' ? perRepo : null)
                 const count = wholeNumber(text, was[repo] ?? null)
-                if (count === 'invalid') {
-                    invalid.push(`${key.name}.${repo}`)
-                } else if (count !== null) {
+                // A repository just picked has no count of its own yet: empty, it is a draft to type or discard.
+                const error = countError(key, text, was[repo] ?? null, before, count, true)
+                if (error !== null) {
+                    errors[`${key.name}.${repo}`] = error
+                } else if (typeof count === 'number') {
                     slots[repo] = count
                 }
             }
@@ -104,10 +115,12 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
                 changes[key.name] = slots
             }
         } else if (typeof draft === 'string') {
-            const count = wholeNumber(draft, typeof key.value === 'number' ? key.value : null)
-            if (count === 'invalid') {
-                invalid.push(key.name)
-            } else if (count !== null) {
+            const was = typeof key.value === 'number' ? key.value : null
+            const count = wholeNumber(draft, was)
+            const error = countError(key, draft, was, was, count, false)
+            if (error !== null) {
+                errors[key.name] = error
+            } else if (typeof count === 'number') {
                 changes[key.name] = count
             }
         } else if (Array.isArray(draft)) {
@@ -117,7 +130,62 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
             }
         }
     }
-    return { changes, invalid }
+    return { changes, errors }
+}
+
+/**
+ * Why a count's field, typed as `text` and read as `count`, holds what the page would not send: not a whole number,
+ * empty where the field was added to be typed in (`added`, a repository just picked) or emptied of a value the file
+ * sets (which the page cannot unset), either of which would otherwise leave a blank field with nothing to save or
+ * discard, or past how far the page may take it from `before`, the value the server checks from. Null when the
+ * server would take it, or when nothing changed.
+ */
+function countError(
+    key: ConfigKey,
+    text: string,
+    was: number | null,
+    before: number | null,
+    count: number | 'invalid' | null,
+    added: boolean,
+): string | null {
+    if (count === 'invalid') {
+        return 'not a whole number'
+    }
+    if (count === null) {
+        if (text.trim() !== '') {
+            return null
+        }
+        if (was !== null) {
+            return `empty: type a count, or Discard to keep ${was}`
+        }
+        return added ? 'empty: type a count, or Discard' : null
+    }
+    return pastText(key, before, count)
+}
+
+/**
+ * Why the page would not send `now` for `key`, whose value read was `was`, as the server's own check (`_past` and
+ * `_stricter` in `canopy/serve/config_edit.py`) refuses it; null when the server would take it. A limit is refused
+ * only past its bound and looser than `was`, so a value the file set past the bound stays as it is.
+ */
+function pastText(key: ConfigKey, was: number | null, now: number): string | null {
+    if (key.kind === 'stricter') {
+        return was !== null && now > was ? `only fewer from here: at most ${was}; set more in the file` : null
+    }
+    if (key.kind !== 'limit' || key.bound === null) {
+        return null
+    }
+    const { bound } = key
+    if (key.looser === 'higher') {
+        return now > bound && (was === null || now > was) ? `at most ${bound} from here; set more in the file` : null
+    }
+    if (key.forever_at_zero) {
+        // Forever is the strictest: always allowed, and any count of days looser than it.
+        return now !== 0 && now < bound && (was === null || was === 0 || now < was)
+            ? `at least ${bound}, or 0 for forever, from here; set less in the file`
+            : null
+    }
+    return now < bound && (was === null || now < was) ? `at least ${bound} from here; set less in the file` : null
 }
 
 /** The whole numbers `text` lists, split on commas and spaces; none when empty; `invalid` when one is not a number. */
@@ -344,10 +412,15 @@ export function groupedKeys(keys: ConfigKey[]): { group: ConfigGroup; keys: Labe
     return found
 }
 
-/** How many keys a save would change, in words for the save bar. */
-export function pendingText(count: number): string {
+/**
+ * How many keys a save would change, and how many fields need fixing before it can, in words for the save bar. A field
+ * in error counts as a change, since it is one the operator made.
+ */
+export function pendingText(changes: number, errors = 0): string {
+    const count = changes + errors
     if (count === 0) {
         return 'No unsaved changes'
     }
-    return count === 1 ? '1 unsaved change' : `${count} unsaved changes`
+    const changed = count === 1 ? '1 unsaved change' : `${count} unsaved changes`
+    return errors === 0 ? changed : `${changed}, ${errors} to fix before saving`
 }
