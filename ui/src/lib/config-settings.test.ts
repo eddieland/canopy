@@ -277,7 +277,7 @@ describe('config groups', () => {
         expect(groupSlug('Retention & budget')).toBe('retention-budget')
     })
 
-    it('name every key the server edits in some panel', () => {
+    it('name every key the server edits in some band', () => {
         const named = CONFIG_GROUPS.flatMap((g) => g.keys.map((k) => k.name))
         expect(new Set(named).size).toBe(named.length)
         expect(named).toHaveLength(49)
