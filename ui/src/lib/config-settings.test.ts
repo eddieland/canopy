@@ -87,7 +87,7 @@ function changes(drafts: Parameters<typeof configForm>[1]): ReturnType<typeof co
 describe('config settings', () => {
     it('send only the keys touched and changed', () => {
         expect(changes({})).toEqual({})
-        expect(changes({ 'capacity.max_workers': '2', 'loop.interval_minutes': ' ' })).toEqual({})
+        expect(changes({ 'capacity.max_workers': '2', 'capacity.slots_per_repo': ' ' })).toEqual({})
         expect(changes({ 'capacity.max_workers': ' 3 ', 'trust.rebase': false })).toEqual({
             'capacity.max_workers': 3,
             'trust.rebase': false,
@@ -158,6 +158,15 @@ describe('config settings', () => {
             changes: { 'trust.max_flaky_kicks': 0 },
             errors: {},
         })
+    })
+
+    it('name a count emptied of a value the file sets, which the page cannot unset', () => {
+        expect(configForm(KEYS, { 'capacity.max_workers': ' ', 'capacity.repo_slots': { web: '' } }).errors).toEqual({
+            'capacity.max_workers': 'empty: type a count, or Discard to keep 2',
+            'capacity.repo_slots.web': 'empty: type a count, or Discard to keep 4',
+        })
+        // A repository given no count of its own yet, or a pool left unmanaged, holds nothing to keep.
+        expect(changes({ 'capacity.repo_slots': { api: '' }, 'capacity.slots_per_repo': '' })).toEqual({})
     })
 
     it('give an unmanaged pool a count only when one is typed', () => {
