@@ -168,12 +168,14 @@ def close_desk(ctx: Context, desk: Desk, *, discard: bool = False) -> list[Unsaf
         CheckoutError: A pool could not return a slot. What could be returned was, and the desk is kept for the
             rest.
     """
+    # What the desk still holds, as each slot dropped leaves it: the marker is rewritten from this, not from `desk`.
+    left = dict(desk.slots)
     ours: dict[str, tuple[Path, pools.Slot]] = {}
     for name, slot in desk.slots.items():
         try:
             ours[name] = (slot, _lease_of(ctx, name, slot, desk.key))
         except CheckoutError:
-            _forget(desk, name)
+            _forget(desk, left, name)
     if not discard:
         unsafe = [u for name, (slot, _) in ours.items() if (u := _unsafe(ctx, name, slot, desk.branch)) is not None]
         if unsafe:
@@ -192,7 +194,7 @@ def close_desk(ctx: Context, desk: Desk, *, discard: bool = False) -> list[Unsaf
         if outcome is not pools.ReturnOutcome.RETURNED:
             kept.append(f"{name}: its pool {outcome.value} to return slot {slot}")
             continue
-        _forget(desk, name)
+        _forget(desk, left, name)
     if kept:
         raise CheckoutError(f"{desk.key}'s desk is kept: " + "; ".join(kept))
     _remove(desk.path)
@@ -297,9 +299,12 @@ def _write_workspace(file: Path, slots: Mapping[str, Path]) -> None:
     file.write_text(json.dumps({"folders": folders}, indent=2) + "\n", encoding="utf-8")
 
 
-def _forget(desk: Desk, name: str) -> None:
-    """Drop repository `name`'s slot from the desk on disk: its link, and its line in the marker and workspace file."""
-    left = {n: s for n, s in desk.slots.items() if n != name}
+def _forget(desk: Desk, left: dict[str, Path], name: str) -> None:
+    """Drop repository `name`'s slot from `left`, what the desk still holds, and from the desk on disk.
+
+    Its link goes, and the marker and workspace file are written from `left` without it.
+    """
+    del left[name]
     link = desk.path / name
     if link.is_symlink():
         link.unlink()
