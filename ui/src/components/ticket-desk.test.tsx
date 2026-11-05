@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -75,9 +75,15 @@ describe('TicketDesk', () => {
         expect(sent).toEqual([{ path: '/api/tickets/ABC-1/desk', body: { repos: [] } }])
     })
 
-    it('offers a choice of repositories when the branch is in more than one', () => {
+    it('offers a choice of repositories when the branch is in more than one, and opens on the one chosen', async () => {
+        answers = [opened()]
         renderDesk({ repos: ['api', 'web'], open: null })
-        expect(screen.getByRole('button', { name: 'Repositories at the desk: every repository' })).toBeDefined()
+        fireEvent.click(screen.getByRole('button', { name: 'Repositories at the desk: every repository' }))
+        fireEvent.click(within(screen.getByRole('listbox')).getByRole('option', { name: 'web' }))
+        expect(screen.getByRole('button', { name: 'Repositories at the desk: web' })).toBeDefined()
+        fireEvent.click(screen.getByRole('button', { name: 'Open desk' }))
+        expect(await screen.findByText("ABC-1's desk is open.")).toBeDefined()
+        expect(sent).toEqual([{ path: '/api/tickets/ABC-1/desk', body: { repos: ['web'] } }])
     })
 
     it('says a run of the ticket pushes to the same branch meanwhile', async () => {

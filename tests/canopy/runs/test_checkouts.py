@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import mock
 
 from canopy.cli.main import main
-from canopy.core import pools, treehouse
+from canopy.core import pools, records, treehouse
 from canopy.core.pools import ReturnOutcome
 from canopy.runs import checkouts
 from tests.canopy.conftest import Ws, bare_origin, map_text, turn_off_auto_maintenance
@@ -75,6 +75,9 @@ def test_a_desk_for_one_repository_and_what_is_refused(
     tracker_holds(ws_scenario.conn, "PROJ-2")
     no_branch = ws_scenario.operator("desk", "PROJ-2", code=1)
     assert "PROJ-2 has no branch in the journal yet" in no_branch.err
+    records.insert(records.TicketUnit, ticket_key="PROJ-2", repo="gone", branch="agent/PROJ-2").run(ws_scenario.conn)
+    unmapped = ws_scenario.operator("desk", "PROJ-2", code=1)
+    assert "PROJ-2 has a branch only in gone, which the map no longer lists" in unmapped.err
     implemented(ws_scenario)
     not_mapped = ws_scenario.operator("desk", KEY, "--repo", "docs", code=1)
     assert "the map lists no repository docs" in not_mapped.err
