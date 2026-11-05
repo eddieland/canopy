@@ -15,6 +15,8 @@ from canopy.runs import epic_runs, epic_starts
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
+    commands_run,
+    edits_plan,
     epic_planning,
     in_tick,
     inline_context,
@@ -133,6 +135,33 @@ def test_a_plan_canopy_cannot_read_is_not_recorded(inline: Context, plan: str | 
     assert run.status is RunStatus.UNKNOWN
     assert note in json.loads(present(run.result_json))["harness"]
     assert epics.plans_of(inline.conn, 1) == []
+
+
+def test_a_revision_starts_as_the_plan_it_replaces_and_is_refused_left_so(inline: Context, agent_log: Path) -> None:
+    """#2099: an epic's revision starts with its file as the plan it replaces; left so after a reply, it is no plan."""
+    assert operator("epic", "submit", GOAL) == 0
+    [started] = start(inline)
+    with planner_does(plan=PLAN):
+        run_plan(started.run_id)
+    assert operator("reply", "epic:1", "Say where the store moves.") == 0
+    [untouched] = start(inline)
+    with planner_does(["cat", plans.WRITTEN], plan=None):
+        run_plan(untouched.run_id)
+    run = present(epic_runs.get_run(inline.conn, untouched.run_id))
+    assert run.status is RunStatus.UNKNOWN
+    assert plans.UNREVISED in json.loads(present(run.result_json))["harness"]
+    [*_, [cat]] = commands_run(agent_log)
+    assert cat["stdout"] == PLAN
+    assert [p.run_id for p in epics.plans_of(inline.conn, 1)] == [started.run_id]
+    # Edited, it is the new plan, and what its planner did not edit is the plan it replaces.
+    assert operator("reply", "epic:1", "Say where the store moves, please.") == 0
+    [edited] = start(inline)
+    with planner_does(edits_plan("The store moves.", "The store moves to Redis."), plan=None):
+        run_plan(edited.run_id)
+    plan = present(epics.current_plan(inline.conn, 1))
+    assert plan.run_id == edited.run_id
+    path = epics.plan_path(inline.state_dir, 1, edited.run_id)
+    assert path.read_text() == PLAN.replace("The store moves.", "The store moves to Redis.")
 
 
 def test_a_blocked_planner_records_its_question_and_no_plan(inline: Context) -> None:

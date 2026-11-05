@@ -32,6 +32,7 @@ from tests.canopy.helpers import (
     commands_run,
     comment,
     context,
+    edits_plan,
     github_has,
     minute,
     personas_dir,
@@ -299,6 +300,29 @@ def test_a_waiting_plan_is_planned_again_only_once_the_operator_asks_for_changes
         (again.id, PlanStatus.PROPOSED),
     ]
     assert "Accept bob's point instead." in again.prompt
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_feedback_plan_revision_starts_as_the_plan_it_replaces_and_is_refused_left_so(
+    scenario: Scenario,
+    github_state: Path,
+) -> None:
+    """#2099: a revision's file starts as the feedback plan it replaces; left so after the operator wrote, no plan."""
+    with_a_pr(scenario)
+    first = feedback_planned(scenario, github_state)
+    scenario.operator("reply", KEY, "Accept bob's point instead.")
+    untouched = scenario.run(FEEDBACK_PLAN, worker=planner_does(["cat", plans.WRITTEN], plan=None, result=PLANNED))
+    assert untouched.status == RunStatus.UNKNOWN
+    assert plans.UNREVISED in str(untouched.row["result_json"])
+    [*_, [cat]] = commands_run(scenario.agent_log)
+    assert cat["stdout"] == TEXT
+    assert [(p.run_id, p.status) for p in feedback_plans.history(scenario.conn, KEY)] == [(first, PlanStatus.PROPOSED)]
+    # Edited, it is the new plan, and what its planner did not edit is the plan it replaces.
+    scenario.operator("reply", KEY, "Accept bob's point instead, please.")
+    edit = edits_plan("Rename it.", "Rename it to fetch.")
+    edited = scenario.run(FEEDBACK_PLAN, worker=planner_does(edit, plan=None, result=PLANNED))
+    assert edited.status == RunStatus.DONE, edited.row["result_json"]
+    assert plan_file(scenario.env, edited.id).read_text() == TEXT.replace("Rename it.", "Rename it to fetch.")
 
 
 @pytest.mark.usefixtures("git_pool")

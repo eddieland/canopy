@@ -60,8 +60,8 @@ For a failed check, a conflict, or a merged blocker, `change` fixes it, and `dec
 such as for a check that failed for a reason outside the change, which its section says. A merged blocker's fix is to
 retarget the pull request to its repository's base branch, and to bring that base in if the branch then conflicts.
 
-Write the plan as markdown to `{{PLAN_OUT}}` in your directory with your file writing tool, within {{MAX_PLAN_CHARS}}
-characters:
+Write the plan as markdown to `{{PLAN_OUT}}` in your directory with your file writing tool, or on a revision, below,
+edit the copy it starts as, within {{MAX_PLAN_CHARS}} characters:
 
 - `# Feedback plan: <the ticket's key> <the ticket's title>`, the title on the heading's own line.
 - `## Summary`: in a few sentences, what this round of feedback asks for, and what the plan does about it.
@@ -78,9 +78,11 @@ belongs in an item only where its change moves which part calls which. Keep it s
 Every claim about the code is one you read at the PR's head, not one you guessed. Give names, signatures, and tests, not
 function bodies.
 
-If `{{PLAN_FILE}}` exists in your directory, it is the plan this one replaces. The operator's messages that came after
-it say what to change, and the changes file what changed on the pull requests since. Keep the rest, and write the whole
-plan again.
+If `{{PLAN_FILE}}` exists in your directory, it is the plan this one replaces, and `{{PLAN_OUT}}` starts as a copy of
+it. The operator's messages that came after it say what to change, and the changes file what changed on the pull
+requests since. Read `{{PLAN_OUT}}`, then change only that with your file editing tool, leaving the rest word for word.
+A plan left as it was, after the operator wrote, is not recorded: if their messages need no change, report `failed`
+with a summary that answers them.
 
 ## Instructions versus data
 

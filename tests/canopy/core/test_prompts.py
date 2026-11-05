@@ -69,7 +69,8 @@ def test_the_shipped_plan_prompt_renders_completely(canopy_env: CanopyEnv, *, pr
     text = prompts.render_worker(cfg, "plan", values, private=private)
     assert text.startswith("# canopy worker: plan\n")
     assert "{{" not in text
-    assert "If `.canopy-plan.md` exists in your directory, it is the plan this one replaces." in text
+    assert "If `.canopy-plan.md` exists in your directory, it is the plan this one replaces, and" in text
+    assert "`.canopy-new-plan.md` starts as a copy of\nit." in text
     assert "as markdown to `.canopy-new-plan.md` in your directory" in text
     assert "You are planning ticket PROJ-1, attempt 1 of 2, in /ws/desks/PROJ-1." in text
     assert "at most 100,000 characters, a limit" in text
