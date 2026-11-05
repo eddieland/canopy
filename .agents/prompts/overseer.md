@@ -591,16 +591,18 @@ to end a request. Its repository is the one in `repositories` whose `url` names 
 as the PR's URL, passed as `repo`. When its head commit has no `done` review, call `canopy_review-run` with `pr`, `sha`,
 and `repo`, and no `ticket`, once its checks have passed, or `canopy_review-wait` with `pr` and a `rationale` when now
 is not the time: checks still running, checks failing (a fix is likely to follow), a draft, or a head still settling.
+A request never waits on its checks, as below.
 
 - With `reviews.query` set, its result is `observations.review_query`'s when that is `fresh`; otherwise it finds
   nothing this tick. Keep only open PRs in the workspace's repositories; a match elsewhere gets no decision, since its
   commit cannot be fetched here. A kept PR whose head is already reviewed needs no decision.
 - `reviews.requests` are PRs the operator asked to have reviewed, each with its review runs so far and its latest. A
-  request authorizes one review of the PR at its head, and nothing else, and comes first in the tick (step 6). In
-  none of the workspace's repositories, or in one with no clone: `canopy_review-end` with `pr`
-  and reason `unknown_repo`. Merged or closed before its review: reason `merged` (or `closed`). Open at a head already
-  reviewed: the request came after that review, so call `canopy_review-run` at that head anyway; it refuses `reviewed`
-  and ends the request.
+  request authorizes one review of the PR at its head, and nothing else, and comes first in the tick (step 6). Its
+  checks, running, failing, or none, are no reason to wait: the operator asked for the review now, so run it at the
+  head. In none of the workspace's repositories, or in one with no clone: `canopy_review-end` with `pr` and reason
+  `unknown_repo`. Merged or closed before its review: reason `merged` (or `closed`). Open at a head already reviewed:
+  the request came after that review, so call `canopy_review-run` at that head anyway; it refuses `reviewed` and ends
+  the request.
 - Take a request's PR's and a query match's state, head, draft, and checks from its entry in
   `observations.review_prs`, which counts every check as CI. One in the workspace's
   repositories that is not `fresh` gets `canopy_review-wait` with a `rationale` naming what is old, until the `vcs`

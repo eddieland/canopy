@@ -40,8 +40,8 @@ dispatches carry fixed contexts, never model-written text, and pass §8's guards
   force; `wait` while the unit is stacked on a blocker whose own PR is red. A check that ran during a notice stays the
   overseer's even after the notice ends: whether the notice explains it is judgment, which §8 keeps out of code.
 - `review run` for `review_pending`, and for the review query's PRs and the operator's requests at an unreviewed head;
-  `review wait` for a draft or pending checks; a request's end when its PR merged or closed, or is in no repository of
-  the workspace (§21).
+  `review wait` for a draft, or a query match's pending checks; a request's end when its PR merged or closed, or is in
+  no repository of the workspace (§21).
 - `chore run` for a due chore with no `when` (§19).
 
 A ticket is the harness's only when every row that holds for it and for each of its units is one the harness decides,
