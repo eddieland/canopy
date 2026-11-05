@@ -25,11 +25,25 @@ export const DEFAULT_CHECKLIST_DAYS = 14
 /** The windows the page offers, in days, shortest first: a week, the two weeks the page opens on, a month. */
 export const CHECKLIST_WINDOWS: readonly number[] = [7, DEFAULT_CHECKLIST_DAYS, 30]
 
-// The fewest runs given an item before the page says it may be one to drop: under ten, a rule that never failed may
-// only not have met the diff that fails it yet. Not config: it is the guide's advice applied, not a setting.
-const VERDICT_MIN_REMINDED = 10
-// The fewest `held` answers that make an item one to argue: once is a run's judgment, twice is a pattern.
-const ARGUE_MIN_HELD = 2
+// The verdict's thresholds. Not config: they are the guide's advice applied, not settings. Every share is of the
+// answers where the item applied (pass, fixed, or held), since an n/a is the item's paths at work, not a rule kept.
+//
+// The answers where an item applied, none failing, before the page says it may be one to drop: under thirty, a rule
+// that fails one diff in ten still shows no failure one time in twenty-five, and with ten, one time in three.
+const DROP_MIN_APPLIED = 30
+// The tickets whose runs held an item before it is one to argue: a ticket's runs hold it over the same diff, so they
+// are one disagreement, however many runs.
+const ARGUE_MIN_TICKETS = 2
+// The fixes before an item is one earning its place: once may be chance.
+const EARNING_MIN_FIXED = 2
+// The share of the answers where it applied that an item must be held, or fixed, at least, for `argue` or `earning`:
+// the low end of its 95% interval, so a few answers out of many say nothing, and the same share of few says less than
+// of many.
+const SHARE_FLOOR = 0.05
+// The answers before the page says an item without paths is mostly n/a: under ten, mostly may be a few diffs' luck.
+const NARROW_MIN_ANSWERED = 10
+// The share of the runs given an item that may say nothing of it before the rest are too few to judge it by.
+const MAX_UNANSWERED_SHARE = 1 / 3
 
 /** An answer's count, as the table's columns and `canopy checklist` name it, after the runs reminded. */
 export interface AnswerColumn {
@@ -136,34 +150,78 @@ export function checklistFigures(items: readonly ChecklistItemCounts[]): Checkli
 
 /** What the page makes of an item's answers, after its bar: the guide's advice on reading them, applied. */
 export interface Verdict {
-    /** The word: `drop?` for an item that may not earn its place, `argue` for one runs keep holding. */
-    word: 'drop?' | 'argue'
+    /**
+     * The word: `argue` for an item runs keep holding, `earning` for one they keep fixing, `narrow` for one without
+     * paths that is mostly about other diffs, `drop?` for one that never fails where it applies, and `too few` for one
+     * the answers cannot judge yet.
+     */
+    word: 'argue' | 'earning' | 'narrow' | 'drop?' | 'too few'
     /** Why, in its tip: what the answers were. */
     why: string
 }
 
 /**
- * What the guide would say of an item, or null for nothing to say. Held at least twice: `argue`, with whoever wrote
- * it. Given at least ten times and mostly n/a, or never failing (no fixed and no held): `drop?`, or reword it.
+ * What the guide would say of an item, or null for nothing to say: it fails now and then, and neither often enough to
+ * argue about nor to call it earning its place. Rates, not counts, so a longer window or a busier repository says no
+ * more than a shorter one, each of the answers where the item applied.
  */
 export function checklistVerdict(item: ChecklistItemCounts): Verdict | null {
-    if (item.held >= ARGUE_MIN_HELD) {
-        return { word: 'argue', why: `Held ${item.held} times: runs keep finding the rule wrong for the diff` }
-    }
-    if (item.reminded < VERDICT_MIN_REMINDED) {
+    if (item.reminded === 0) {
         return null
     }
-    const answered = item.reminded - item.unanswered
-    if (answered > 0 && item.not_applicable * 2 > answered) {
+    if (item.unanswered > item.reminded * MAX_UNANSWERED_SHARE) {
         return {
-            word: 'drop?',
-            why: `n/a ${item.not_applicable} of ${answered} answers: it is about diffs the runs rarely make`,
+            word: 'too few',
+            why: `${item.unanswered} of ${item.reminded} runs said nothing of it: too few answers are left to judge`,
         }
     }
-    if (answered > 0 && item.fixed + item.held === 0) {
-        return { word: 'drop?', why: `Never failed in ${answered} answers: the runs pay tokens to agree with it` }
+    const applied = item.passed + item.fixed + item.held
+    if (item.held_by >= ARGUE_MIN_TICKETS && shareAtLeast(item.held, applied) >= SHARE_FLOOR) {
+        return {
+            word: 'argue',
+            why:
+                `Held ${item.held} of ${applied} times it applied, over ${item.held_by} tickets: ` +
+                'runs keep finding the rule wrong for the diff',
+        }
     }
-    return null
+    if (item.fixed >= EARNING_MIN_FIXED && shareAtLeast(item.fixed, applied) >= SHARE_FLOOR) {
+        return {
+            word: 'earning',
+            why: `Fixed ${item.fixed} of ${applied} times it applied: each a review comment nobody had to write`,
+        }
+    }
+    const answered = item.reminded - item.unanswered
+    if (item.paths?.length === 0 && answered >= NARROW_MIN_ANSWERED && item.not_applicable * 2 > answered) {
+        return {
+            word: 'narrow',
+            why: `n/a ${item.not_applicable} of ${answered} answers, and it names no paths: give it the ones it is for`,
+        }
+    }
+    if (item.fixed + item.held > 0) {
+        return null
+    }
+    if (applied >= DROP_MIN_APPLIED) {
+        return { word: 'drop?', why: `Never failed in ${applied} answers where it applied: runs pay tokens to agree` }
+    }
+    if (applied === 0) {
+        return { word: 'too few', why: 'It has not applied to a diff yet' }
+    }
+    const kept = `under ${DROP_MIN_APPLIED}, a rule kept and a rule not yet met look alike`
+    return { word: 'too few', why: `No failure in ${applied} answers where it applied: ${kept}` }
+}
+
+/**
+ * The low end of the 95% Wilson score interval of `k` in `n`: the smallest the share may well be, given so few. Of
+ * 2 in 2, about a third; of 2 in 40, about one in seventy.
+ */
+function shareAtLeast(k: number, n: number): number {
+    if (n === 0) {
+        return 0
+    }
+    const z = 1.96
+    const p = k / n
+    const spread = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n))
+    return (p + (z * z) / (2 * n) - spread) / (1 + (z * z) / n)
 }
 
 /** How the By item table orders each repository's items. */

@@ -29,6 +29,7 @@ from canopy.serve.mock import T0, history
 from tests.canopy.helpers import (
     answered,
     check_ran,
+    checklists_dir,
     context,
     earlier,
     feedback_left,
@@ -40,7 +41,7 @@ from tests.canopy.helpers import (
     worker_ran,
 )
 from tests.canopy.web_helpers import client, signed_in_client
-from tests.conftest import CanopyEnv
+from tests.conftest import REPO_NAME, CanopyEnv
 
 
 def test_the_monthly_report_reads_local_months_oldest_first(backend: Backend) -> None:
@@ -208,6 +209,28 @@ def test_the_checklist_counts_each_repositorys_items_as_the_cli_does(ctx: Contex
     assert c.get("/api/reports/checklist", params={"repo": "docs"}).json()["items"] == []
     for bad in ({"days": 0}, {"days": spend.MAX_DAYS + 1}, {"repo": "Not a repo"}):
         assert c.get("/api/reports/checklist", params=bad).status_code == 422
+
+
+def test_each_item_carries_the_paths_its_list_names_now_and_the_tickets_that_held_it(canopy_env: CanopyEnv) -> None:
+    """Empty for every path; None for an item the list no longer holds, or a repository the workspace does not map."""
+    (checklists_dir(canopy_env) / f"{REPO_NAME}.md").write_text(
+        "## general-types\nThe most general type.\n\n## companion\npaths: migrations/\n\nA companion.\n",
+    )
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    now = datetime.now(UTC)
+    a = ItemAnswer
+    answered(ctx.conn, earlier(now, 1), REPO_NAME, general_types=a.HELD, companion=a.NOT_APPLICABLE, gone=a.PASSED)
+    answered(ctx.conn, earlier(now, 0), REPO_NAME, general_types=a.HELD, companion=a.FIXED, gone=a.PASSED)
+    answered(ctx.conn, earlier(now, 0), "api", general_types=a.HELD, key="PROJ-2")
+    c, _ = signed_in_client(ctx)
+    found = c.get("/api/reports/checklist").json()["items"]
+    assert [(i["repo"], i["item"], i["paths"], i["held"], i["held_by"]) for i in found] == [
+        ("api", "general-types", None, 1, 1),
+        (REPO_NAME, "general-types", [], 2, 1),
+        (REPO_NAME, "companion", ["migrations/"], 0, 0),
+        (REPO_NAME, "gone", None, 0, 0),
+    ]
 
 
 def test_the_checklist_names_the_runs_behind_each_held_and_fixed_answer_and_counts_each_week(ctx: Context) -> None:
