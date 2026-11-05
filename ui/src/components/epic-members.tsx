@@ -69,7 +69,6 @@ export function MemberForm({
             aria-label={picked.length === 1 ? `Register a ticket against ${picked[0] ?? ''}` : 'Add a ticket'}
             className={cn('flex flex-col gap-2', className)}
             onSubmit={submit}
-            data-testid="member-form"
         >
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                 <Input
@@ -115,7 +114,7 @@ export function MemberForm({
                     </Button>
                 </span>
             </div>
-            <p className="text-xs text-muted-foreground" data-testid="member-form-note">
+            <p className="text-xs text-muted-foreground">
                 {why === null ? null : `${why} `}
                 Adding a ticket authorizes no work: a member is worked once you label it or start it. Registering a
                 member again replaces its entries
@@ -172,7 +171,7 @@ export function RemoveQuestion({
 }) {
     const { busy, failure, act } = useWrite(epic, onDone)
     return (
-        <div className={cn('flex flex-col gap-1.5', className)} data-testid="remove-question">
+        <div className={cn('flex flex-col gap-1.5', className)}>
             <div className="flex flex-wrap items-center gap-2">
                 <Button
                     variant="destructive"
