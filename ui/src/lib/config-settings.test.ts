@@ -17,6 +17,7 @@ import {
     oneWayText,
     pendingText,
     savedText,
+    settingsLine,
     SOURCE_MEANING,
     SOURCE_WORD,
     valueText,
@@ -386,5 +387,14 @@ describe('the filter', () => {
         expect(configQueryOf('  ')).toBeUndefined()
         expect(configQueryOf(3)).toBeUndefined()
         expect(configQueryOf('x'.repeat(150))).toHaveLength(100)
+    })
+})
+
+describe("the page's header", () => {
+    it('say in one line how many settings there are, and where those set come from', () => {
+        expect(settingsLine([WORKERS, { ...PACE, source: 'private' }, REBASE, ALERTS])).toBe(
+            '4 settings · 2 set in this workspace · 1 from your user config',
+        )
+        expect(settingsLine([REBASE])).toBe('1 setting')
     })
 })

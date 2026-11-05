@@ -7,6 +7,7 @@ import type { ReactNode } from 'react'
 import { refreshReloaded, saveConfig } from '@/api/mutations'
 import { configQuery } from '@/api/queries'
 import type { ConfigKey, ConfigSaved, ConfigSettings, ConfigValue } from '@/api/types'
+import { CopyButton } from '@/components/copy-button'
 import { Disclosure } from '@/components/disclosure'
 import { FilterField } from '@/components/filter-field'
 import { Input } from '@/components/input'
@@ -105,15 +106,22 @@ export function ConfigForm({
 }
 
 /**
- * The path of the workspace's private config, the file a save writes, as the page read it, for the page's header;
- * just its name while the first read is on its way.
+ * The path of the workspace's private config, the file a save writes, as the page read it, for the page's header, with
+ * a button that copies it. Nothing until the read names it, so the page never points at a file it has not read.
  */
 export function ConfigFile() {
     const path = useQuery(configQuery).data?.private_file
+    if (path === undefined) {
+        return null
+    }
     return (
-        <code className="font-mono text-xs" data-testid="config-private-file">
-            {path ?? 'config.toml'}
-        </code>
+        <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+            saves to
+            <code className="truncate font-mono" data-testid="config-private-file" title={path}>
+                {path}
+            </code>
+            <CopyButton text={path} label="config path" />
+        </span>
     )
 }
 
