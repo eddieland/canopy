@@ -13,22 +13,24 @@ import type {
     CiReport,
 } from '@/api/types'
 import { Age } from '@/components/age'
-import { CellBar, CellBarHead } from '@/components/cell-bar'
 import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
-import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { PullRequestTable } from '@/components/pull-request-table'
 import type { PullRequestColumn } from '@/components/pull-request-table'
 import { ReadoutTiles } from '@/components/readout-tiles'
 import type { ReadoutTile } from '@/components/readout-tiles'
+import { ReportTable } from '@/components/report-table'
+import type { ReportColumn } from '@/components/report-table'
 import { RunLink } from '@/components/run-link'
 import { Chip, Word } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
-import { Clipped, Hinted } from '@/components/tip'
+import { Clipped } from '@/components/tip'
 import { WindowToggle } from '@/components/window-toggle'
+import type { DayChartSeries } from '@/lib/chart'
 import {
     CI_WINDOWS,
     ciBars,
@@ -59,6 +61,7 @@ import {
     VERDICTS_TEXT,
 } from '@/lib/ci'
 import { useClock } from '@/lib/clock'
+import type { Clock } from '@/lib/clock'
 import { counted } from '@/lib/descriptions'
 import { pointsChange, readoutDelta, wholeChange } from '@/lib/readout-delta'
 import { windowBefore, windowName } from '@/lib/report-window'
@@ -272,55 +275,15 @@ function Checks({ checks, span }: { checks: CiCheck[]; span: string }) {
             {checks.length === 0 ? (
                 <Empty size="panel">no check run was observed in these {span}</Empty>
             ) : (
-                <PanelScroll label="Checks by name" className="max-h-96 overflow-x-auto">
-                    <table className="border-collapse text-sm" data-testid="ci-check-table">
-                        <thead className="sticky top-0 bg-surface [&_th]:pt-3">
-                            <tr className="text-right">
-                                <th className="panel-label pb-1.5 text-left font-normal">check</th>
-                                <CellBarHead>
-                                    <Hinted hint={RATE_HINT}>failure rate</Hinted>
-                                </CellBarHead>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">red</th>
-                                <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
-                                <CellBarHead>
-                                    <Hinted hint={NEXT_HEAD_HINT}>next head green</Hinted>
-                                </CellBarHead>
-                                <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
-                                    <Hinted hint={RERUNS_HINT}>same-head reruns</Hinted>
-                                </th>
-                                <td aria-hidden />
-                            </tr>
-                        </thead>
-                        <tbody className="font-mono text-xs">
-                            {checks.map((c) => (
-                                <tr key={c.name} className="text-right" data-testid="ci-check">
-                                    <th scope="row" className="py-0.5 text-left font-normal">
-                                        <Clipped text={c.name} className="block max-w-64" />
-                                    </th>
-                                    <CellBar
-                                        percent={(failureShare(c) ?? 0) * 100}
-                                        fill="bg-status-failed"
-                                        className="readout"
-                                    >
-                                        {failureRate(c)}
-                                    </CellBar>
-                                    <td className={cn('readout pl-3', c.red > 0 && 'text-status-failed')}>{c.red}</td>
-                                    <td className="readout pl-3 text-muted-foreground">{c.runs}</td>
-                                    <CellBar
-                                        percent={(nextHeadShare(c) ?? 0) * 100}
-                                        className="readout text-muted-foreground"
-                                    >
-                                        {nextHeadText(c)}
-                                    </CellBar>
-                                    <td className="readout pl-3 whitespace-nowrap text-muted-foreground">
-                                        {rerunsText(c)}
-                                    </td>
-                                    <td className="pl-2">{isFlaky(c) && <Chip tone="blocked">flaky</Chip>}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </PanelScroll>
+                <ReportTable
+                    rows={checks}
+                    columns={CHECK_COLUMNS}
+                    rowKey={(c) => c.name}
+                    label="Checks by name"
+                    className="max-h-96"
+                    testId="ci-check-table"
+                    rowTestId="ci-check"
+                />
             )}
             <p className="text-xs text-muted-foreground" data-testid="ci-limits">
                 {VERDICTS_TEXT} {LIMITS_TEXT}
@@ -349,28 +312,15 @@ function GreenFirst({ found, span }: { found: CiReport; span: string }) {
                 label="Green first time by day"
                 className="max-h-60 overflow-x-auto"
             >
-                <table className="border-collapse text-sm" data-testid="ci-green-first-table">
-                    <thead className="sticky top-0 bg-surface">
-                        <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">day</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">heads</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">green first time</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">rate</th>
-                        </tr>
-                    </thead>
-                    <tbody className="font-mono text-xs">
-                        {found.per_day.toReversed().map((day: CiDay) => (
-                            <tr key={day.day} className="text-right" data-testid={`ci-green-day-${day.day}`}>
-                                <th scope="row" className="readout py-0.5 text-left font-normal">
-                                    {dayName(day, clock)}
-                                </th>
-                                <td className="readout pl-3 text-muted-foreground">{day.heads}</td>
-                                <td className="readout pl-3">{day.green_first}</td>
-                                <td className="readout pl-3 text-muted-foreground">{greenFirstRateText(day)}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <ReportTable
+                    rows={found.per_day.toReversed()}
+                    columns={greenFirstColumns(clock)}
+                    rowKey={(day) => day.day}
+                    label="Green first time by day"
+                    scroll={false}
+                    testId="ci-green-first-table"
+                    rowTestId={(day) => `ci-green-day-${day.day}`}
+                />
             </ChartTable>
         </div>
     )
@@ -397,36 +347,15 @@ function ByDay({ found, span }: { found: CiReport; span: string }) {
                 label="Red checks by day"
                 className="max-h-60 overflow-x-auto"
             >
-                <table className="w-full border-collapse text-sm" data-testid="ci-table">
-                    <thead className="sticky top-0 bg-surface">
-                        <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">day</th>
-                            {series.map((s) => (
-                                <th key={s.key} className="panel-label pb-1.5 pl-3 font-normal">
-                                    {s.label}
-                                </th>
-                            ))}
-                            <th className="panel-label pb-1.5 pl-3 font-normal">red</th>
-                        </tr>
-                    </thead>
-                    <tbody className="font-mono text-xs">
-                        {found.per_day.toReversed().map((day: CiDay) => (
-                            <tr key={day.day} className="text-right" data-testid={`ci-day-${day.day}`}>
-                                <th scope="row" className="readout py-0.5 text-left font-normal">
-                                    {dayName(day, clock)}
-                                </th>
-                                {series.map((s, i) => (
-                                    <td key={s.key} className="readout pl-3 text-muted-foreground">
-                                        {day.red[i] ?? 0}
-                                    </td>
-                                ))}
-                                <td className={cn('readout pl-3', redSum(day) > 0 && 'text-status-failed')}>
-                                    {redSum(day)}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <ReportTable
+                    rows={found.per_day.toReversed()}
+                    columns={redDayColumns(series, clock)}
+                    rowKey={(day) => day.day}
+                    label="Red checks by day"
+                    scroll={false}
+                    testId="ci-table"
+                    rowTestId={(day) => `ci-day-${day.day}`}
+                />
             </ChartTable>
         </div>
     )
@@ -442,62 +371,136 @@ function Fixes({ fixes, span }: { fixes: CiFix[]; span: string }) {
         return <Empty size="panel">no resume for CI started in these {span}</Empty>
     }
     return (
-        <PanelScroll label="Fix-CI resumes" className="max-h-96 overflow-x-auto px-3 pb-3">
-            <table className="w-full border-collapse text-sm" data-testid="ci-fix-table">
-                <thead className="sticky top-0 bg-surface [&_th]:pt-3">
-                    <tr className="text-left">
-                        <th className="panel-label pb-1.5 font-normal">run</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">ticket</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">ended</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">
-                            <Hinted hint={FIXED_HINT}>checks, then the next head</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal whitespace-nowrap">
-                            <Hinted hint={TO_GREEN_HINT}>to green</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">spent</th>
-                        <th className="panel-label pb-1.5 pl-3 text-right font-normal">started</th>
-                    </tr>
-                </thead>
-                <tbody className="text-xs">
-                    {fixes.map((f) => (
-                        <tr key={f.run_id} className="align-top" data-testid={`ci-fix-${f.run_id}`}>
-                            <th scope="row" className="py-0.5 text-left font-normal whitespace-nowrap">
-                                <RunLink id={f.run_id} />
-                                {f.kind !== 'resume' && (
-                                    <Word word={f.kind} className="ml-2 font-mono text-muted-foreground" />
-                                )}
-                            </th>
-                            <td className="pl-3 whitespace-nowrap">
-                                <TicketLink ticketKey={f.ticket_key} />
-                            </td>
-                            <td className="pl-3 font-mono whitespace-nowrap text-muted-foreground">
-                                <Word word={f.status} />
-                            </td>
-                            <td className="w-full pl-3">
-                                <FixedChecks checks={f.checks} />
-                            </td>
-                            <td
-                                className={cn(
-                                    'readout pl-3 text-right whitespace-nowrap',
-                                    fixToGreenText(f) === 'still red' && 'text-status-failed',
-                                )}
-                            >
-                                {fixToGreenText(f)}
-                            </td>
-                            <td className="readout pl-3 text-right text-muted-foreground">
-                                <Cost usd={f.cost_usd} />
-                            </td>
-                            <td className="pl-3 text-right whitespace-nowrap">
-                                <Age at={f.started_at} variant="ago" />
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </PanelScroll>
+        <ReportTable
+            rows={fixes}
+            columns={FIX_COLUMNS}
+            rowKey={(f) => String(f.run_id)}
+            label="Fix-CI resumes"
+            top
+            testId="ci-fix-table"
+            rowTestId={(f) => `ci-fix-${f.run_id}`}
+        />
     )
 }
+
+/**
+ * The checks table's columns: the check, its failure rate as a bar in the failed state's color, its red runs and its
+ * runs, how often its next head went green, how often a rerun on the same head did, and the flaky chip after it.
+ */
+const CHECK_COLUMNS: ReportColumn<CiCheck>[] = [
+    {
+        key: 'check',
+        kind: 'free',
+        label: 'check',
+        cell: (c) => <Clipped text={c.name} mono className="block font-mono" />,
+    },
+    {
+        key: 'rate',
+        kind: 'bar',
+        label: 'failure rate',
+        hint: RATE_HINT,
+        cell: failureRate,
+        bar: (c) => (failureShare(c) ?? 0) * 100,
+        fill: 'bg-status-failed',
+    },
+    { key: 'red', kind: 'figure', label: 'red', cell: (c) => c.red, tone: (c) => c.red > 0 && 'text-status-failed' },
+    { key: 'runs', kind: 'figure', label: 'runs', cell: (c) => c.runs, muted: true },
+    {
+        key: 'next',
+        kind: 'bar',
+        label: 'next head green',
+        hint: NEXT_HEAD_HINT,
+        cell: nextHeadText,
+        bar: (c) => (nextHeadShare(c) ?? 0) * 100,
+        muted: true,
+    },
+    { key: 'reruns', kind: 'figure', label: 'same-head reruns', hint: RERUNS_HINT, cell: rerunsText, muted: true },
+    { key: 'flaky', kind: 'word', label: null, cell: (c) => isFlaky(c) && <Chip tone="blocked">flaky</Chip> },
+]
+
+/** A day table's first column: the day, or the hour in a day's window. */
+function dayColumn(clock: Clock): ReportColumn<CiDay> {
+    return {
+        key: 'day',
+        kind: 'name',
+        label: 'day',
+        cell: (day) => <span className="readout">{dayName(day, clock)}</span>,
+    }
+}
+
+/** The green-first table's columns: the day, its heads, how many went green first time, and the rate. */
+function greenFirstColumns(clock: Clock): ReportColumn<CiDay>[] {
+    return [
+        dayColumn(clock),
+        { key: 'heads', kind: 'figure', label: 'heads', cell: (day) => day.heads, muted: true },
+        { key: 'green', kind: 'figure', label: 'green first time', cell: (day) => day.green_first },
+        { key: 'rate', kind: 'figure', label: 'rate', cell: greenFirstRateText, muted: true },
+    ]
+}
+
+/** The red-by-day table's columns: the day, a column per series of the chart's, and the day's red runs. */
+function redDayColumns(series: readonly DayChartSeries[], clock: Clock): ReportColumn<CiDay>[] {
+    return [
+        dayColumn(clock),
+        ...series.map((s, i): ReportColumn<CiDay> => ({
+            key: s.key,
+            kind: 'figure',
+            label: s.label,
+            cell: (day) => day.red[i] ?? 0,
+            muted: true,
+        })),
+        {
+            key: 'red',
+            kind: 'figure',
+            label: 'red',
+            cell: redSum,
+            tone: (day) => redSum(day) > 0 && 'text-status-failed',
+        },
+    ]
+}
+
+/**
+ * The fixes table's columns: the run, its ticket, how it ended, its red checks with how each ran on the next head,
+ * how long its PR took to go green, what it cost, and when it started.
+ */
+const FIX_COLUMNS: ReportColumn<CiFix>[] = [
+    {
+        key: 'run',
+        kind: 'name',
+        label: 'run',
+        cell: (f) => (
+            <>
+                <RunLink id={f.run_id} />
+                {f.kind !== 'resume' && <Word word={f.kind} className="ml-2 font-mono text-muted-foreground" />}
+            </>
+        ),
+    },
+    { key: 'ticket', kind: 'word', label: 'ticket', cell: (f) => <TicketLink ticketKey={f.ticket_key} /> },
+    {
+        key: 'ended',
+        kind: 'word',
+        label: 'ended',
+        cell: (f) => <Word word={f.status} className="font-mono" />,
+        muted: true,
+    },
+    {
+        key: 'checks',
+        kind: 'free',
+        label: 'checks, then the next head',
+        hint: FIXED_HINT,
+        cell: (f) => <FixedChecks checks={f.checks} />,
+    },
+    {
+        key: 'green',
+        kind: 'figure',
+        label: 'to green',
+        hint: TO_GREEN_HINT,
+        cell: fixToGreenText,
+        tone: (f) => fixToGreenText(f) === 'still red' && 'text-status-failed',
+    },
+    { key: 'spent', kind: 'figure', label: 'spent', cell: (f) => <Cost usd={f.cost_usd} />, muted: true },
+    { key: 'started', kind: 'age', label: 'started', cell: (f) => <Age at={f.started_at} variant="ago" /> },
+]
 
 /** A fix's red checks, each with its PR and how its first run on the next head ended, in that state's color. */
 function FixedChecks({ checks }: { checks: CiFixedCheck[] }) {

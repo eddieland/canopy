@@ -551,16 +551,16 @@ whole either side.
   it waits on the operator, a header of its `panel-label` and what names it, its text, then its verbs in a row under
   it, `sm` buttons with the CLI's command on hover, `Edit` outline and `Drop` ghost. `Edit` opens a `Textarea` with its
   count against the bound, `Save` disabled past it, and `Cancel`.
-- **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel where its rows name
-  something that wants the room; one with a short name and a few figures sizes to its content at the panel's left, so
-  a row reads in one glance. Its column heads are in `panel-label` type, its figures right-aligned readouts. A row head
-  that names something is its name in medium weight, as `TicketTitle` sets a ticket's title, after its reference in its
-  monospace link. Its panel's header repeats none of its rows. A report's table is a `ReportTable`
-  (`src/components/report-table.tsx`, on `ui/table`), its columns each of a kind, which sets how its head and cells sit:
-  the row's `name`, `free` text that takes the room left and is cut, a `figure`, a `bar` (`CellBar`), or a `word`; a
-  table is not written by hand, so the rule holds in one place. Rows in groups stay one table, so their columns line up:
-  a `tbody` per group, headed by a row whose `rowgroup` cell names it, with the group's own figures in its columns where
-  it has them.
+- **A table of figures** (a chore's spend, the Spend page's) is as wide as its content and never wider than its panel,
+  so a row's figures sit by what it names and the row reads in one glance; a column of text grows to its text, using the
+  panel's room, and is cut only where the panel runs out, never stretched past its text. Its column heads are in
+  `panel-label` type, its figures right-aligned readouts. A row head that names something is its name in medium weight,
+  as `TicketTitle` sets a ticket's title, after its reference in its monospace link. Its panel's header repeats none of
+  its rows. A report's table is a `ReportTable` (`src/components/report-table.tsx`, on `ui/table`), its columns each of
+  a kind, which sets how its head and cells sit: the row's `name`, `free` text, cut only past the panel, a `figure`, a
+  `bar` (`CellBar`), or a `word`; a table is not written by hand, so the rule holds in one place. Rows in groups stay
+  one table, so their columns line up: a `tbody` per group, headed by a row whose `rowgroup` cell names it, with the
+  group's own figures in its columns where it has them.
 - **Readout tiles** (`ReadoutTiles`, `src/components/readout-tiles.tsx`) are a report window's headline figures: its
   sums, not a count of what is now, so they are not `Counter`s. Each is a `panel-label` name over a `readout text-xl`
   figure, what it counts in the name's tip, and, when the page has the window before's figure, a muted line under it
