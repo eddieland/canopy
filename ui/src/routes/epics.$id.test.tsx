@@ -73,6 +73,18 @@ describe("an epic's page", () => {
         )
     })
 
+    it.each([1, 2])("opens epic:%i's plan from its header", async (id) => {
+        await renderPage(String(id))
+        const open = await screen.findByRole('link', { name: 'Open plan' })
+        expect(open.getAttribute('href')).toBe(`/epics/${String(id)}/plan`)
+    })
+
+    it('offers no plan to open before a plan run records one', async () => {
+        await renderPage('3')
+        await screen.findByTestId('epic-board')
+        expect(screen.queryByRole('link', { name: 'Open plan' })).toBeNull()
+    })
+
     it('leads with the breakdown, then its conversation, requirements and contracts, and plan runs', async () => {
         await renderPage('1')
         await screen.findByTestId('epic-board')

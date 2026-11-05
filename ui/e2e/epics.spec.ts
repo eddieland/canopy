@@ -73,6 +73,40 @@ test("a proposed epic's board is marked proposed, and a planning one names its p
     await expect(page.getByTestId('plan-run-working')).toContainText('epic:3#4 is writing its plan')
 })
 
+test("a proposed epic's mark opens its plan, read only, and Back returns to the board", async ({ page }) => {
+    await page.goto('epics/2')
+    await settled(page)
+    await page.getByRole('link', { name: 'Open the proposed plan' }).click()
+    await expect(page).toHaveURL(/\/epics\/2\/plan$/u)
+    await settled(page)
+    const plan = page.getByRole('textbox', { name: 'Plan' })
+    await expect(plan).toContainText('the copy goes when its customer does')
+    await expect(plan).toHaveAttribute('contenteditable', 'false')
+    await expect(page.getByRole('heading', { name: 'Comments' })).toHaveCount(0)
+    // What changed since the plan the reply replaced is marked as the page opens; the earlier plan stays folded.
+    await expect(page.getByRole('button', { name: 'Changes since plan 2' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('earlier-plans').getByRole('textbox')).toHaveCount(0)
+    await page.getByRole('button', { name: 'Show plan 2' }).click()
+    await expect(page.getByTestId('earlier-plans').getByRole('textbox', { name: 'Plan' })).toContainText(
+        'Sync on launch and on pull to refresh only.',
+    )
+    await page.goBack()
+    await expect(page).toHaveURL(/\/epics\/2$/u)
+    await expect(page.getByTestId('epic-board')).toBeVisible()
+})
+
+test("an approved epic's header opens its plan", async ({ page }) => {
+    await page.goto('epics/1')
+    await settled(page)
+    await page.getByRole('link', { name: 'Open plan' }).click()
+    await expect(page).toHaveURL(/\/epics\/1\/plan$/u)
+    await settled(page)
+    await expect(page.getByRole('textbox', { name: 'Plan' })).toContainText('Every billing call goes to v2')
+    await expect(
+        page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'epic:1' }),
+    ).toBeVisible()
+})
+
 test('an epic canopy has no record of is missing', async ({ page }) => {
     await page.goto('epics/999')
     await settled(page)

@@ -34,6 +34,8 @@ export const keys = {
     chores: ['chores'] as const,
     epics: ['epics'] as const,
     epic: (id: number) => ['epic', id] as const,
+    // Under the epic's, so whatever marks an epic stale marks its plans stale too: a plan run's end changes both.
+    epicPlans: (id: number) => ['epic', id, 'plans'] as const,
     tasks: ['tasks'] as const,
     // A task's page, and its runs' reports, pages, and transcripts under it, so the stream's `task.changed` marks
     // them all stale: a run that started, called a model, or ended moves its task's summary.
@@ -398,6 +400,16 @@ export function epicQuery(id: number) {
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/epics/{epic_id}', { params: { path: { epic_id: id } }, signal })),
         // An epic from another page's data is a different epic: never show it while this one loads.
+        placeholderData: undefined,
+    })
+}
+
+/** An epic's plans, each as its file stands, the oldest first, and the plan run writing the next, if one is. */
+export function epicPlansQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.epicPlans(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/epics/{epic_id}/plans', { params: { path: { epic_id: id } }, signal })),
         placeholderData: undefined,
     })
 }

@@ -7,6 +7,7 @@ import type {
     ChoreSummary,
     Draft,
     EpicDetail,
+    EpicPlans,
     EpicSummary,
     FeedbackPlan,
     FeedbackPlanItem,
@@ -618,6 +619,110 @@ export const mockEpicDetails: EpicDetail[] = [
         outline: null,
     },
 ]
+
+/** Epic 1's plan as its planner wrote it, and as the operator approved it. */
+const BILLING_PLAN = `# Billing on v2
+
+## Goal
+
+Every billing call goes to v2, a failed call is retried from a queue, and the v1 flag is gone.
+
+## Requirements
+
+- **R1.** Every billing call in web and mobile goes to the v2 endpoint.
+- **R2.** A billing call that fails while v2 is down is queued and retried, never shown to the customer as an error.
+- **R3.** Nothing reads the \`billing_v1\` flag, and api no longer serves it.
+
+## Breakdown
+
+### B1. A v2 billing client in web
+
+- Covers: R1
+- Provides: C1
+`
+
+/** Epic 2's first plan, which the operator's reply superseded. */
+const OFFLINE_FIRST = `# Offline order history
+
+## Goal
+
+The order history reads from a local copy when the app is offline.
+
+## Decisions
+
+- Sync on launch and on pull to refresh only.
+`
+
+/** Epic 2's second plan, written after the reply, which waits on the operator. */
+const OFFLINE_SECOND = `# Offline order history
+
+## Goal
+
+The mobile app's order history reads from a local copy when it is offline, and the copy goes when its customer does.
+
+## Decisions
+
+- The web account page is left as it is: it reads the same API the copy syncs from.
+`
+
+/**
+ * The mock journal's three epics' plans as `GET /api/epics/{id}/plans` sends each, the oldest plan first: epic 1's
+ * approved plan; epic 2's superseded plan, then the proposed one; and epic 3's none, its plan run at work.
+ */
+export const mockEpicPlans: EpicPlans[] = [
+    {
+        epic_id: 1,
+        planning: null,
+        plans: [
+            {
+                plan: mockEpicDetails[0]?.plan ?? missing('epic 1 plan'),
+                path: '.canopy/plans/epics/1/run-1.md',
+                text: BILLING_PLAN,
+                problem: null,
+                sha256: '9f2c4e81b07d3a65c1e8f4a2d9b0c7e3f6a1d4b8e2c5f9a07b3d6e1c4f8a2b5d',
+                edited: false,
+                changed_since_approval: false,
+            },
+        ],
+    },
+    {
+        epic_id: 2,
+        planning: null,
+        plans: [
+            {
+                plan: {
+                    id: 2,
+                    run_id: 2,
+                    status: 'superseded',
+                    created_at: '2026-10-08T08:00:00Z',
+                    approved_at: null,
+                    approved_channel: null,
+                },
+                path: '.canopy/plans/epics/2/run-2.md',
+                text: OFFLINE_FIRST,
+                problem: null,
+                sha256: '4b7e1d9a3c6f0e2b8d5a1c4f7e0b3d6a9c2f5e8b1d4a7c0f3e6b9d2a5c8f1e4b',
+                edited: false,
+                changed_since_approval: false,
+            },
+            {
+                plan: mockEpicDetails[1]?.plan ?? missing('epic 2 plan'),
+                path: '.canopy/plans/epics/2/run-3.md',
+                text: OFFLINE_SECOND,
+                problem: null,
+                sha256: 'd1a4c7f0e3b6d9a2c5f8e1b4d7a0c3f6e9b2d5a8c1f4e7b0d3a6c9f2e5b8d1a4',
+                edited: false,
+                changed_since_approval: false,
+            },
+        ],
+    },
+    { epic_id: 3, planning: 4, plans: [] },
+]
+
+// A mock that should be there and is not: a test's mistake, said as one.
+function missing(what: string): never {
+    throw new Error(`no mock ${what}`)
+}
 
 /** Four tasks, the newest first as `GET /api/tasks` sends them: queued, running, waiting on a reply, and done. */
 export const mockTasks: TaskSummary[] = [

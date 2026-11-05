@@ -91,6 +91,14 @@ export const TIPS = {
         'Hot take: "trivial" is a promise the plan makes so the ticket does not have to.',
         'Haiku: covers R1 / provides C1, uses none / a stop on the line',
     ],
+    '/epics/$id_/plan': [
+        "It looks like you're reading an epic's plan. There's no margin to comment in. I checked twice.",
+        'Unhelpful tip: the hash changes if you edit the file. So does the plan. That is the point of a hash.',
+        'Fun fact: the earlier plans fold up so the newest one can pretend it was the first.',
+        'Dear diary, read a whole plan for four tickets. None of them is filed. Neither am I.',
+        'Hot take: a plan nobody can comment on is a plan that has to be right. No pressure.',
+        'Haiku: the old plan, folded / the new one waits on your word / I wait on the next',
+    ],
     '/tasks/$id': [
         "It looks like you're reading a report. Would you like me to skim it and nod?",
         'Unhelpful tip: copy the commit, not the branch. Branches move. I would know, I am mostly branch.',

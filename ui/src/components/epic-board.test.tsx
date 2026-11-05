@@ -112,6 +112,16 @@ describe('EpicBoard', () => {
         expect(within(shown).getAllByText('none yet')).toHaveLength(3)
     })
 
+    it.each([
+        [1, 'approved'],
+        [2, 'proposed'],
+    ])("opens epic:%i's plan from its mark, %s", async (id, source) => {
+        const shown = await board(detail(id))
+        const mark = within(shown).getByRole('link', { name: `Open the ${source} plan` })
+        expect(mark.getAttribute('href')).toBe(`/epics/${String(id)}/plan`)
+        expect(mark.textContent).toBe(source)
+    })
+
     it('says a plan that does not read is its problem, in a Notice, and draws no half of it', async () => {
         const outline = detail(1).outline
         if (outline === null) {
