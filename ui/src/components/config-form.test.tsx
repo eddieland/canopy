@@ -103,9 +103,17 @@ describe('ConfigForm', () => {
         renderForm()
         expect(screen.queryByText(/was 3/u)).toBeNull()
         type('capacity.max_workers', '5')
-        expect(screen.getByText(/· from your user config.* · was 3$/u)).toBeTruthy()
+        expect(screen.getByText('at most 32 from here · was 3')).toBeTruthy()
         expect(changes()).toEqual(['capacity.max_workers: 3 → 5'])
         expect(screen.queryByTestId('config-one-way')).toBeNull()
+    })
+
+    it("names each row's source in a chip, and puts a minute's unit after its field", () => {
+        renderForm({ ...SETTINGS, keys: [WORKERS, KICKS, { ...WORKERS, name: 'loop.interval_minutes', bound: 2 }] })
+        expect(screen.getAllByText('user')).toHaveLength(2)
+        expect(screen.getByText('default')).toBeTruthy()
+        expect(screen.getByText('min')).toBeTruthy()
+        expect(screen.getByText('Time between ticks')).toBeTruthy()
     })
 
     it('warns that only the file undoes a stricter change', () => {
