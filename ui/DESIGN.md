@@ -1175,12 +1175,14 @@ reader, so no table repeats them.
   in its header, and a switch is named for what it does, never `on`. Dropping an entry only the file adds back, an
   authorized replier or a list's last, asks first, inline. A list keyed by repository lists only the repositories with a
   value of their own and a repository picker to give another one, so a workspace of many repositories does not get a
-  field per repository. A changed row wears an accent hairline at its start and its old value in its meta line. One save
-  bar, sticky at the page's foot, appears once something changed, so the page at rest shows no actions it cannot take
-  and a change far down the page is never left unseen; its height is held at the page's end, so its coming moves
-  nothing. It lists each change as `key: old → new`, folding the rest past a few, and warns when a change is one only
-  the file undoes, before Discard and Save. A save reads the file again, and the bar stays while its `Notice` keeps what
-  the save did over the fresh form.
+  field per repository. A changed row wears an accent hairline at its start and its old value in its meta line. A row
+  whose value is not its default says the default, and offers a reset where the page may take it there (within its
+  bound, or toward stricter); a reset is an ordinary change, listed and saved as any other. One save bar, sticky at the
+  page's foot, appears once something changed, so the page at rest shows no actions it cannot take and a change far down
+  the page is never left unseen; its height is held at the page's end, so its coming moves nothing. It lists each change
+  as `key: old → new`, folding the rest past a few, and warns when a change is one only the file undoes, before Discard
+  and Save. A save reads the file again, and the bar stays while its `Notice` keeps what the save did over the fresh
+  form.
 - **An action** is a button in the foot of its subject's identity panel (the detail skeleton, above), under a
   ticket's reply (The answer, above), or under its form, with one line under it (`Notice`): what the action did, in the
   CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks once more

@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest'
 import type { ConfigKey, ConfigSaved } from '@/api/types'
 
 import {
+    defaultText,
+    resetDone,
+    resetDraft,
     bandCounts,
     dropAsks,
     lockedText,
@@ -35,6 +38,7 @@ const WORKERS: ConfigKey = {
     looser: 'higher',
     forever_at_zero: false,
     choices: [],
+    default: 2,
 }
 const SLOTS: ConfigKey = {
     name: 'capacity.repo_slots',
@@ -45,6 +49,7 @@ const SLOTS: ConfigKey = {
     looser: 'higher',
     forever_at_zero: false,
     choices: [],
+    default: {},
 }
 const PER_REPO: ConfigKey = { ...WORKERS, name: 'capacity.slots_per_repo', value: null }
 const PACE: ConfigKey = { ...WORKERS, name: 'loop.interval_minutes', value: 15, bound: 5, looser: 'lower' }
@@ -59,6 +64,7 @@ const REVIEWERS: ConfigKey = {
     looser: null,
     forever_at_zero: false,
     choices: [],
+    default: [],
 }
 const REBASE: ConfigKey = { ...REVIEWERS, name: 'trust.rebase', value: true, source: 'default' }
 const STACKING: ConfigKey = {
@@ -427,5 +433,59 @@ describe('the trust ratchet', () => {
         expect(dropAsks(repliers, 'bot', ['me', 'bot'])).toBe(true)
         expect(dropAsks(REVIEWERS, 'alice', ['alice', 'lint-bot'])).toBe(false)
         expect(dropAsks(REVIEWERS, 'alice', ['alice'])).toBe(true)
+    })
+})
+
+describe('defaults', () => {
+    it("say a key's default once its value is not it", () => {
+        expect(defaultText(WORKERS)).toBeNull()
+        expect(defaultText({ ...WORKERS, value: 5 })).toBe('default 2')
+        expect(defaultText({ ...PER_REPO, value: 3, default: null })).toBe('default unmanaged')
+    })
+
+    it('reset a limit to its default within its bound, and offer none past it or to unset it', () => {
+        expect(resetDraft({ ...WORKERS, value: 5 })).toBe('2')
+        expect(resetDraft(WORKERS)).toBeNull()
+        // A pace's default under the page's floor would loosen it past the bound.
+        expect(resetDraft({ ...PACE, value: 15, default: 3 })).toBeNull()
+        expect(resetDraft({ ...PER_REPO, value: 3, default: null })).toBeNull()
+        expect(resetDraft({ ...SLOTS, default: {} })).toBeNull()
+        expect(resetDraft({ ...ALERTS, default: [] })).toBe('')
+    })
+
+    it('reset a stricter key only where its default is no looser than its value now', () => {
+        expect(resetDraft({ ...KICKS, default: 0 })).toBe('0')
+        expect(resetDraft({ ...KICKS, value: 1, default: 2 })).toBeNull()
+        expect(resetDraft({ ...REBASE, value: true, default: false })).toBe(false)
+        expect(resetDraft({ ...REBASE, name: 'trust.commit_trailer', value: false, default: true })).toBe(true)
+        expect(resetDraft({ ...REBASE, value: false, default: true })).toBeNull()
+        expect(resetDraft({ ...STACKING, value: 'auto', default: 'never' })).toBe('never')
+        expect(resetDraft({ ...STACKING, value: 'never', default: 'auto' })).toBeNull()
+        expect(resetDraft({ ...STACKING, value: 'sometimes', default: 'often' })).toBeNull()
+        expect(resetDraft({ ...REVIEWERS, default: ['alice'] })).toEqual(['alice'])
+        expect(resetDraft({ ...REVIEWERS, default: ['carol'] })).toBeNull()
+        // Emptying a list, or dropping an authorized replier, asks first: the operator unchecks those, never a reset.
+        expect(resetDraft({ ...REVIEWERS, default: [] })).toBeNull()
+        expect(
+            resetDraft({ ...REVIEWERS, name: 'trust.authorized_repliers', value: ['me', 'bot'], default: ['me'] }),
+        ).toBeNull()
+    })
+
+    it('offer no reset the loader would refuse beside its pair', () => {
+        const idle: ConfigKey = { ...PACE, name: 'loop.idle_max_minutes', value: 200, default: 120, bound: 2 }
+        const pace: ConfigKey = { ...PACE, value: 150, default: 15 }
+        // Back to 120 would be under a pace of 150; the pace back to 15 stays under any idle wait.
+        expect(resetDraft(idle, [idle, pace])).toBeNull()
+        expect(resetDraft(pace, [idle, pace])).toBe('15')
+        expect(resetDraft(idle, [idle, { ...pace, value: 60 }])).toBe('120')
+        const every: ConfigKey = { ...PACE, name: 'connect.every_minutes', value: 2, default: 2 }
+        const age: ConfigKey = { ...PACE, name: 'connect.max_age_minutes', value: 60, default: 30, bound: 2 }
+        expect(resetDraft(age, [age, { ...every, value: 45 }])).toBeNull()
+        expect(resetDraft(age, [age, every])).toBe('30')
+    })
+
+    it("know a reset done once the form's change is the default", () => {
+        expect(resetDone({ ...KICKS, default: 0 }, { 'trust.max_flaky_kicks': 0 })).toBe(true)
+        expect(resetDone({ ...KICKS, default: 0 }, {})).toBe(false)
     })
 })

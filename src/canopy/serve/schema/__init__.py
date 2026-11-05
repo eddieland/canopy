@@ -890,6 +890,9 @@ class ConfigKey(Model):
     choices: list[str]
     """A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
     key."""
+    default: ConfigValue
+    """Its value when no file sets it, the config model's default: what the page may reset it to, within its bound or
+    toward stricter."""
 
 
 class ConfigSettings(Model):

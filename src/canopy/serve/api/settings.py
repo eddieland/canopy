@@ -53,6 +53,7 @@ def read_config(backend: BackendDep) -> ConfigSettings:
                 looser=s.key.looser,
                 forever_at_zero=s.key.forever_at_zero,
                 choices=list(s.key.choices),
+                default=_shown(s.default),
             )
             for s in found.settings
         ],

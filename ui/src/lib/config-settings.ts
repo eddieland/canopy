@@ -108,6 +108,87 @@ export function dropAsks(key: ConfigKey, entry: string, kept: readonly string[])
     return key.name === 'trust.authorized_repliers' || (kept.length === 1 && kept[0] === entry)
 }
 
+/** A key's default in words for its row, `default 2`, once its value is not the default; null while it is. */
+export function defaultText(key: ConfigKey): string | null {
+    return sameValue(key.value, key.default) ? null : `default ${valueText(key.default, key.name)}`
+}
+
+/**
+ * What a reset types into key's field, its default as the form holds it, for a key whose value is not its default;
+ * null when the page cannot take it there: a default that unsets the key (an unmanaged pool, no budget) or removes a
+ * repository's own count, a limit's default past its bound from the value now, a stricter key's default looser than
+ * its value now, which only the file may set, a list's default that drops an entry the page asks about first, or a
+ * default the loader would refuse beside its pair's value in `keys` (`PAIRS`). A reset is an ordinary change, saved as
+ * any other.
+ */
+export function resetDraft(key: ConfigKey, keys: ConfigKey[] = []): ConfigDrafts[string] | null {
+    const { value, default: to } = key
+    if (sameValue(value, to) || to === null || (typeof to === 'object' && !Array.isArray(to))) {
+        return null
+    }
+    if (typeof to === 'number' && !keepsPair(key.name, to, keys)) {
+        return null
+    }
+    if (Array.isArray(to)) {
+        const entries = to.map(String)
+        if (key.kind === 'free') {
+            return entries.join(', ')
+        }
+        // A stricter list only loses entries: back to its default only if every default entry is still there, and
+        // never by dropping one the page asks about first (`dropAsks`), which stays the operator's own uncheck.
+        const now = Array.isArray(value) ? value.map(String) : []
+        const dropped = now.filter((e) => !entries.includes(e))
+        const asks = entries.length === 0 || dropped.some((e) => dropAsks(key, e, now))
+        return entries.every((e) => now.includes(e)) && !asks ? entries : null
+    }
+    if (typeof to === 'boolean') {
+        return key.kind !== 'stricter' || to === STRICTER_ON[key.name] ? to : null
+    }
+    if (typeof to === 'string') {
+        // A choice moves only later, toward stricter; one the page does not list, now or as the default, stays put.
+        const now = typeof value === 'string' ? key.choices.indexOf(value) : -1
+        const then = key.choices.indexOf(to)
+        return now !== -1 && then >= now ? to : null
+    }
+    const was = typeof value === 'number' ? value : null
+    if (key.kind === 'stricter') {
+        return was === null || to <= was ? String(to) : null
+    }
+    return pastText(key, was, to) === null ? String(to) : null
+}
+
+/** Whether the form's `changes` already take key back to its default, so its reset has nothing left to do. */
+export function resetDone(key: ConfigKey, changes: Record<string, ConfigValue>): boolean {
+    const now = changes[key.name]
+    return now !== undefined && sameValue(now, key.default)
+}
+
+/**
+ * The keys the loader holds in order, each `[low, high]`: an idle tick's longest wait is at least the pace, and an
+ * observation goes stale no sooner than the connectors poll (`Loop` and `Connect` in canopy/core/config.py).
+ */
+const PAIRS: [string, string][] = [
+    ['loop.interval_minutes', 'loop.idle_max_minutes'],
+    ['connect.every_minutes', 'connect.max_age_minutes'],
+]
+
+/** Whether `name` at `to` keeps the order the loader holds it to with its pair's value as read in `keys`. */
+function keepsPair(name: string, to: number, keys: ConfigKey[]): boolean {
+    const valueOf = (other: string) => keys.find((k) => k.name === other)?.value
+    return PAIRS.every(([low, high]) => {
+        const other = name === low ? valueOf(high) : name === high ? valueOf(low) : undefined
+        if (typeof other !== 'number') {
+            return true
+        }
+        return name === low ? to <= other : to >= other
+    })
+}
+
+/** Whether two values are the same, entry for entry. */
+function sameValue(a: ConfigValue, b: ConfigValue): boolean {
+    return JSON.stringify(a) === JSON.stringify(b)
+}
+
 /** How far the page may take a limit, or that a trust setting only gets stricter. */
 export function boundText(key: ConfigKey): string {
     if (key.kind === 'stricter') {
