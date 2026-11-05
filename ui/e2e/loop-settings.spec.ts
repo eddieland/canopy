@@ -30,7 +30,7 @@ test('?q= filters the rows to those whose label or key holds it, and Escape show
     await settled(page)
     const form = page.getByRole('form', { name: 'Loop settings' })
     await expect(form.getByRole('listitem')).toHaveCount(1)
-    await expect(form.getByRole('textbox', { name: 'trust.max_flaky_kicks' })).toBeVisible()
+    await expect(form.getByRole('listitem')).toContainText('trust.max_flaky_kicks')
     await expect(
         page.getByRole('navigation', { name: 'Bands' }).getByRole('link', { name: 'Capacity' }),
     ).toHaveAttribute('data-hidden', 'true')

@@ -200,6 +200,27 @@ describe('ConfigForm', () => {
             '',
         )
     })
+
+    it('shows a key at its strictest as its value beside a lock, not as a control', async () => {
+        await renderForm({ ...SETTINGS, keys: [{ ...KICKS, value: 0 }] })
+        expect(screen.queryByRole('textbox', { name: 'trust.max_flaky_kicks' })).toBeNull()
+        expect(screen.getByText('strictest · loosen in config.toml')).toBeTruthy()
+        expect(screen.getByText('0')).toBeTruthy()
+    })
+
+    it('asks before dropping an authorized replier, and drops it only on Drop', async () => {
+        const repliers: ConfigKey = { ...KICKS, name: 'trust.authorized_repliers', value: ['me', 'bot'] }
+        await renderForm({ ...SETTINGS, keys: [repliers] })
+        fireEvent.click(screen.getByRole('checkbox', { name: 'me' }))
+        const asking = screen.getByRole('group', { name: 'Drop me?' })
+        expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+        fireEvent.click(within(asking).getByRole('button', { name: 'Keep' }))
+        expect(screen.queryByRole('group', { name: 'Drop me?' })).toBeNull()
+        expect(screen.getByRole('checkbox', { name: 'me' }).getAttribute('aria-checked')).toBe('true')
+        fireEvent.click(screen.getByRole('checkbox', { name: 'me' }))
+        fireEvent.click(within(screen.getByRole('group', { name: 'Drop me?' })).getByRole('button', { name: 'Drop' }))
+        expect(changes()).toEqual(['trust.authorized_repliers: me, bot → bot'])
+    })
 })
 
 /** A count like `capacity.max_workers`, named `name`. */

@@ -132,12 +132,14 @@ shows what a run did. If you want last Tuesday gone, the file still takes 1. Bel
 [spend page](reports#the-spend-page) tracks, with any alerts short of or past it. You can add and drop alerts freely:
 the 100% one isn't in the list, so dropping everything still leaves it.
 
-**Guardrails** holds the settings that only get stricter from here. You can make tickets wait on a plan you approve,
-or take a planner's say over its own plan away, but not the reverse. You can drop a trusted reviewer or an authorized
-replier, never add one, have workers draft their review replies for you instead of posting them, turn `trust.rebase`
-off but not on, and cut the reruns of flaky checks but not raise them. A stolen session that could add a replier would
-keep steering your workers after you changed the secret, so adding one stays an edit to the file. A choice that would
-loosen is greyed out, so there's no button to find out the hard way.
+**Guardrails** holds the settings that only get stricter from here. You can make tickets wait on a plan you approve, or
+take a planner's say over its own plan away, but not the reverse. You can drop a trusted reviewer or an authorized
+replier, never add one, have workers draft their review replies for you instead of posting them, turn `trust.rebase` off
+but not on, and cut the reruns of flaky checks but not raise them. A stolen session that could add a replier would keep
+steering your workers after you changed the secret, so adding one stays an edit to the file. The band says that once,
+with a lock, and a setting already as strict as it goes shows its value beside a lock rather than a row of greyed-out
+buttons, which looked broken and wasn't. Unchecking an authorized replier, or a list's last name, asks first: if that
+name is yours, your replies on the ticket stop reaching workers, and the page can't put it back.
 
 Each row's chip says where its value comes from, `this workspace`, `user`, `workspace`, or `default` (hover it, or
 the page's title, for what each means), and the line beside it says how far the page will take it. Units sit after the
