@@ -238,6 +238,83 @@ export function savedText(saved: ConfigSaved): string {
     return parts.join(' ')
 }
 
+/** One change a save would make, for the save bar: a key, or one repository's own count, from the value read. */
+export interface ConfigChange {
+    /** The key, or `capacity.repo_slots.<repo>`. */
+    name: string
+    /** Its value read, in words. */
+    old: string
+    /** The value a save would write, in words. */
+    new: string
+}
+
+/**
+ * Each change a save would make, in the order the server lists the keys, for the save bar to list as `key: old → new`
+ * and count. `capacity.repo_slots` lists each repository whose count changed on its own, from the count it has now: its
+ * own, else the slots per repository.
+ */
+export function changeList(keys: ConfigKey[], changes: Record<string, ConfigValue>): ConfigChange[] {
+    const found: ConfigChange[] = []
+    // A repository with no count of its own has the slots per repository, as the server reads it.
+    const perRepo = keys.find((k) => k.name === 'capacity.slots_per_repo')?.value
+    for (const key of keys) {
+        const now = changes[key.name]
+        if (now === undefined) {
+            continue
+        }
+        if (typeof now === 'object' && now !== null && !Array.isArray(now)) {
+            const was =
+                typeof key.value === 'object' && key.value !== null && !Array.isArray(key.value) ? key.value : {}
+            for (const [repo, count] of Object.entries(now)) {
+                found.push({
+                    name: `${key.name}.${repo}`,
+                    old: valueText(was[repo] ?? (typeof perRepo === 'number' ? perRepo : null), key.name),
+                    new: String(count),
+                })
+            }
+        } else {
+            found.push({ name: key.name, old: valueText(key.value, key.name), new: valueText(now, key.name) })
+        }
+    }
+    return found
+}
+
+/**
+ * The keys a save would change that only get stricter from the page: ones only an edit to the file undoes, so the save
+ * bar says so before the save.
+ */
+export function oneWay(keys: ConfigKey[], changes: Record<string, ConfigValue>): string[] {
+    return keys.filter((k) => k.kind === 'stricter' && k.name in changes).map((k) => k.name)
+}
+
+/** What the save bar says of the stricter keys a save would change, `names`: that only the file undoes them. */
+export function oneWayText(names: string[]): string {
+    return `${names.join(', ')}: only an edit to config.toml undoes ${names.length === 1 ? 'this' : 'these'}`
+}
+
+/** What an unset key is, in words: an unmanaged pool for the pools' counts, no budget for the budget. */
+export function unsetText(name: string): string {
+    return name === 'spend.monthly_budget_usd' ? 'none' : 'unmanaged'
+}
+
+/** Key `name`'s value in words: a count or a choice as it is, a switch on or off, a list's entries, or unset. */
+export function valueText(value: ConfigValue, name: string): string {
+    if (value === null) {
+        return unsetText(name)
+    }
+    if (typeof value === 'boolean') {
+        return value ? 'on' : 'off'
+    }
+    if (Array.isArray(value)) {
+        return value.length === 0 ? 'none' : value.join(', ')
+    }
+    if (typeof value === 'object') {
+        const counts = Object.entries(value)
+        return counts.length === 0 ? 'none' : counts.map(([repo, n]) => `${repo} ${n}`).join(', ')
+    }
+    return String(value)
+}
+
 /** One of the Loop settings page's panels: what its keys are about, and each key's name in words. */
 export interface ConfigGroup {
     /** The panel's label. */

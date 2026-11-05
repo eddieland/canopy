@@ -182,25 +182,28 @@ test('the settings page saves a limit and drops a trusted reviewer, but offers n
     await page.getByTestId('limits-open').click()
     await expect(page).toHaveURL(/\/canopy\/settings\/limits$/u)
     const form = page.getByTestId('config-form')
-    await expect(form.getByTestId('config-pending')).toHaveText('No unsaved changes')
+    // The save bar comes once something changed.
+    await expect(form.getByTestId('config-save-bar')).toHaveCount(0)
     const workers = form.getByTestId('capacity.max_workers')
     // The count the mock's fixtures set, whatever it is: the test raises it by one, so it holds when they change.
     await expect(workers).toHaveValue(/^\d+$/u)
     const before = await workers.inputValue()
     const after = String(Number(before) + 1)
-    await expect(form.getByTestId('config-save')).toBeDisabled()
 
     await workers.fill(after)
     await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
+    await expect(form.getByTestId('config-changes')).toHaveText(`capacity.max_workers: ${before} → ${after}`)
     await form.getByTestId('config-discard').click()
     await expect(workers).toHaveValue(before)
+    await expect(form.getByTestId('config-save-bar')).toHaveCount(0)
     // A choice moves only toward stricter: one looser than the value in force is not offered, and picking the value
     // back leaves nothing to save.
     await expect(form.getByTestId('policy.planner_may_approve-lenient')).toBeDisabled()
     await form.getByTestId('policy.plan-approve').click()
     await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
+    await expect(form.getByTestId('config-one-way')).toHaveText('policy.plan: only an edit to config.toml undoes this')
     await form.getByTestId('policy.plan-off').click()
-    await expect(form.getByTestId('config-pending')).toHaveText('No unsaved changes')
+    await expect(form.getByTestId('config-save-bar')).toHaveCount(0)
     // A field the server would refuse says why on its own row, and keeps Save off.
     await workers.fill('many')
     await expect(workers).toHaveAttribute('aria-invalid', 'true')

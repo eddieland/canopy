@@ -549,7 +549,8 @@ whole either side.
   hairline, default-size buttons in a line, then the line that says what they will do, then what one did (`Notice`).
   A `sticky` foot stays at the bottom of the page while its panel scrolls over it, opaque on `surface`; the page's
   scroll padding keeps what Tab moves to above it. A bar of actions never floats in a box of its own: it is its
-  panel's foot.
+  panel's foot. A config page's save bar is the one exception (below): it saves a whole page of panels, so it floats
+  over them, and only once something changed.
 - **A draft's card** (`DraftCardFrame`, `src/components/draft-card.tsx`): text canopy holds that would post as the
   operator on a PR, a thread's reply or a review's comment, is one card: `surface`, a `status-blocked/40` border while
   it waits on the operator, a header of its `panel-label` and what names it, its text, then its verbs in a row under
@@ -1161,9 +1162,12 @@ reader, so no table repeats them.
   and how far the page may take it, and its control at the row's end. A switch already on its stricter side is
   disabled, not hidden, so the page still says what it is. A list keyed by repository lists only the repositories with
   a value of their own and a repository picker to give another one, so a workspace of many repositories does not get a
-  field per repository. One save bar, sticky at the page's foot so a change far down the page is never left unseen,
-  says how many changes wait, with Discard and Save, each disabled until something changed. A save reads the file
-  again, and the `Notice` keeps what the save did over the fresh form.
+  field per repository. A changed row wears an accent hairline at its start and its old value in its meta line. One
+  save bar, sticky at the page's foot, appears once something changed, so the page at rest shows no actions it cannot
+  take and a change far down the page is never left unseen; its height is held at the page's end, so its coming moves
+  nothing. It lists each change as `key: old → new`, folding the rest past a few, and warns when a change is one only
+  the file undoes, before Discard and Save. A save reads the file again, and the bar stays while its `Notice` keeps
+  what the save did over the fresh form.
 - **An action** is a button in the foot of its subject's identity panel (the detail skeleton, above), under a
   ticket's reply (The answer, above), or under its form, with one line under it (`Notice`): what the action did, in the
   CLI's words, or its refusal in `status-failed`, naming the guard. An action that kills something asks once more
