@@ -61,11 +61,15 @@ export function entriesFiled(epic: Pick<EpicSummary, 'entries' | 'entries_with_m
 }
 
 // An epic's id as its page's path holds it: a whole number, as `canopy show epic:N` reads one.
-const EPIC_ID = /^[1-9]\d{0,15}$/u
+const EPIC_ID = /^[1-9]\d*$/u
 
-/** The epic a page's path names, or undefined for anything that is not a whole number, which names no epic. */
+/**
+ * The epic a page's path names, or undefined for anything that is not a whole number, which names no epic, and for one
+ * past what a number here holds exactly, which would read as another epic's id.
+ */
 export function epicId(text: string): number | undefined {
-    return EPIC_ID.test(text) ? Number(text) : undefined
+    const id = EPIC_ID.test(text) ? Number(text) : undefined
+    return id !== undefined && Number.isSafeInteger(id) ? id : undefined
 }
 
 /** Whether `entry` cites `id`: covers it (an `R`), provides or uses it (a `C`), or is it or comes after it (a `B`). */
@@ -105,21 +109,29 @@ function named(ids: readonly string[]): string {
     return ids.length === 0 ? 'no entry' : ids.join(', ')
 }
 
-/** The members the board has no row for: those of no entry, and those registered against entries since dropped. */
+/**
+ * The members the board has no row for: those of no entry, those registered against entries since dropped, and, while
+ * the board has no rows to place them on, those registered against its entries.
+ */
 export interface Unplaced {
     /** The members registered against no entry: tickets the breakdown did not foresee. */
     none: EpicMember[]
     /** The members registered against an entry the approved plan no longer holds, whatever else they fulfil. */
     dropped: EpicMember[]
+    /** The members registered against entries the board cannot show, with no plan it can read; else none. */
+    registered: EpicMember[]
 }
 
 /**
  * The members the breakdown does not place, as the board lists them under it: a member of no entry is one with neither
- * an entry nor a dropped one; a member with a dropped entry is listed for it, whether or not it fulfils others.
+ * an entry nor a dropped one; a member with a dropped entry is listed for it, whether or not it fulfils others. While
+ * the board has no rows (`rows` false: no plan yet, or one that does not read), a member registered against entries is
+ * listed too, so no member goes missing from the page.
  */
-export function unplaced(members: readonly EpicMember[]): Unplaced {
+export function unplaced(members: readonly EpicMember[], rows = true): Unplaced {
     return {
         none: members.filter((member) => member.entries.length === 0 && member.dropped.length === 0),
         dropped: members.filter((member) => member.dropped.length > 0),
+        registered: rows ? [] : members.filter((member) => member.entries.length > 0),
     }
 }

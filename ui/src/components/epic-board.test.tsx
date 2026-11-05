@@ -92,6 +92,8 @@ describe('EpicBoard', () => {
         expect(within(none).getByRole('link', { name: 'ABC-100' })).toBeTruthy()
         expect(within(none).getByText('Fix the flaky checkout test')).toBeTruthy()
         expect(within(shown).queryByTestId('members-of-dropped-entries')).toBeNull()
+        // The rest are on the board's rows, so not listed again.
+        expect(within(shown).queryByTestId('members-of-entries')).toBeNull()
     })
 
     it('lists a member registered against an entry the approved plan dropped, with the entry', async () => {
@@ -120,6 +122,12 @@ describe('EpicBoard', () => {
         expect(within(shown).getByRole('alert').textContent).toBe('its plan does not read: B2 is repeated')
         expect(within(shown).queryByTestId('breakdown')).toBeNull()
         expect(screen.getByText('none read: its plan does not read, as its breakdown says')).toBeTruthy()
+        // The members registered against its entries are still on the page, with the entries they fulfil.
+        const registered = within(shown).getByTestId('members-of-entries')
+        expect(within(registered).getByRole('link', { name: 'ABC-103' })).toBeTruthy()
+        expect(registered.textContent).toContain('registered against B1')
+        expect(within(registered).getByRole('link', { name: 'ABC-104' })).toBeTruthy()
+        expect(within(shown).getByTestId('members-of-no-entry').textContent).toContain('ABC-100')
     })
 
     it('is one line naming the plan run at work while there is no plan yet', async () => {

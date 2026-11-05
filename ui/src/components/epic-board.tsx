@@ -85,7 +85,7 @@ export function EpicBoard({ detail }: { detail: EpicDetail }) {
             ) : (
                 <Notice error={outline.problem} subject="its plan does not read" className="p-3" />
             )}
-            <Unplaced members={detail.members} />
+            <Unplaced members={detail.members} rows={outline?.problem === null} />
         </Panel>
     )
 }
@@ -220,14 +220,30 @@ function MemberLine({ member }: { member: EpicMember }) {
 }
 
 /**
- * The members the board has no row for, under it: those registered against no entry, each with its title, since no
- * entry names what it is for; and those registered against an entry the approved plan no longer holds, with the
- * entries it lost. Neither shows while it has none.
+ * The members the board has no row for, under it: while it has no rows (`rows` false), those registered against its
+ * entries, with them, so a plan that does not read hides no member; those registered against no entry, each with its
+ * title, since no entry names what it is for; and those registered against an entry the approved plan no longer holds,
+ * with the entries it lost. None shows while it has none.
  */
-function Unplaced({ members }: { members: readonly EpicMember[] }) {
-    const { none, dropped } = unplaced(members)
+function Unplaced({ members, rows }: { members: readonly EpicMember[]; rows: boolean }) {
+    const { none, dropped, registered } = unplaced(members, rows)
     return (
         <>
+            {registered.length > 0 && (
+                <section className="flex flex-col gap-2 border-t px-3 py-2.5" data-testid="members-of-entries">
+                    <h3 className="panel-label">Members of its entries</h3>
+                    <ul className="flex flex-col gap-1.5 text-xs">
+                        {registered.map((member) => (
+                            <li key={member.key} className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5">
+                                <MemberLine member={member} />
+                                <span className="text-muted-foreground">
+                                    registered against <span className="readout">{member.entries.join(', ')}</span>
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
             {none.length > 0 && (
                 <section className="flex flex-col gap-2 border-t px-3 py-2.5" data-testid="members-of-no-entry">
                     <h3 className="panel-label">Members of no entry</h3>

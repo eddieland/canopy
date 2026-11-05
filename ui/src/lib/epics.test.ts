@@ -53,6 +53,9 @@ const billing = mockEpicDetails[0]?.outline?.entries ?? []
 
 describe('epicId', () => {
     it('reads a whole number, and nothing else, as an epic', () => {
+        expect(epicId('9007199254740991')).toBe(Number.MAX_SAFE_INTEGER)
+        // One past it would read as another epic's id.
+        expect(epicId('9007199254740993')).toBeUndefined()
         expect(['1', '42', '0', '01', '1.5', 'abc', '', '-1'].map((text) => epicId(text))).toEqual([
             1,
             42,
@@ -117,5 +120,12 @@ describe('unplaced', () => {
         ])
         expect(found.none.map((m) => m.key)).toEqual(['ABC-2'])
         expect(found.dropped.map((m) => m.key)).toEqual(['ABC-3', 'ABC-4'])
+        expect(found.registered).toEqual([])
+    })
+
+    it('lists the members registered against entries while the board has no rows to show them on', () => {
+        const found = unplaced([member('ABC-1', ['B1']), member('ABC-2', [])], false)
+        expect(found.registered.map((m) => m.key)).toEqual(['ABC-1'])
+        expect(found.none.map((m) => m.key)).toEqual(['ABC-2'])
     })
 })

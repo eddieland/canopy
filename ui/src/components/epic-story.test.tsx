@@ -76,11 +76,15 @@ describe('EpicStory', () => {
             question: 'Keep the `flags` table as a fallback?',
         }
         let items = await story(detail(3, { runs: [asked] }))
-        expect(within(items[1] ?? document.body).getByText('waiting on you')).toBeTruthy()
-        expect(items[1]?.textContent).toContain('question')
+        const open = screen.getByTestId('plan-run-4')
+        expect(items).toContain(open)
+        expect(within(open).getByText('waiting on you')).toBeTruthy()
+        expect(open.textContent).toContain('question')
         cleanup()
         const reply = { ...detail(2).messages[0], id: 21, at: '2026-10-08T12:20:00Z' } as EpicDetail['messages'][number]
         items = await story(detail(3, { runs: [asked], messages: [reply] }))
-        expect(within(items[1] ?? document.body).queryByText('waiting on you')).toBeNull()
+        const answered = screen.getByTestId('plan-run-4')
+        expect(items).toContain(answered)
+        expect(within(answered).queryByText('waiting on you')).toBeNull()
     })
 })

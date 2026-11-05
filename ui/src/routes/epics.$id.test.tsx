@@ -2,21 +2,36 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import type { AnyRouter } from '@tanstack/react-router'
 import { cleanup, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mockEpicDetails } from '@/api/mocks'
 import { keys } from '@/api/queries'
 
 import { Route } from './epics.$id'
 
-afterEach(() => {
-    cleanup()
+// Half an hour after the mock journal's T0, as the screenshots are taken: epic 1 was submitted 12h before.
+const NOW = new Date('2026-10-08T12:30:00Z')
+
+beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(NOW)
 })
 
-/** An epic's page at `id`, every mock epic already read. */
-async function renderPage(id: string) {
-    // Nothing reads the server: the epics are the ones set here, and every other query stays off.
-    const client = new QueryClient({ defaultOptions: { queries: { enabled: false } } })
+afterEach(() => {
+    cleanup()
+    vi.useRealTimers()
+})
+
+/**
+ * An epic's page at `id`, every mock epic already read. Every query is enabled, as on the page, and nothing is stale,
+ * so only a query the page starts that has no data reads the server; what the shell's parts read (the attention list,
+ * the latest tick, the server's meta) is read already.
+ */
+async function renderPage(id: string): Promise<QueryClient> {
+    const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
+    client.setQueryData(keys.attention, [])
+    client.setQueryData(keys.tick, { tick: null, acknowledged: null })
+    client.setQueryData(keys.meta, {})
     for (const detail of mockEpicDetails) {
         client.setQueryData(keys.epic(detail.epic.id), detail)
     }
@@ -32,6 +47,17 @@ async function renderPage(id: string) {
             <RouterProvider router={router as AnyRouter} />
         </QueryClientProvider>,
     )
+    return client
+}
+
+/** The one line of text, among the page's, that reads `text` whole and starts with it, its deepest holder. */
+function line(text: string): HTMLElement {
+    return screen.getByText(
+        (_, element) =>
+            element !== null &&
+            element.textContent.startsWith(text) &&
+            ![...element.children].some((child) => child.textContent.startsWith(text)),
+    )
 }
 
 describe("an epic's page", () => {
@@ -42,8 +68,9 @@ describe("an epic's page", () => {
             'epic:1 Move billing to the v2 API everywhere it is called, web and mobile both, and retire v1 once ' +
                 'nothing reads it.',
         )
-        const header = title.closest('header') ?? document.body
-        expect(header.textContent).toContain('approved · 2 of 4 entries filed · members 3 of at most 8 · submitted')
+        expect(line('approved ·').textContent).toBe(
+            'approved · 2 of 4 entries filed · members 3 of at most 8 · submitted 12h ago',
+        )
     })
 
     it('leads with the breakdown, then its conversation, requirements and contracts, and plan runs', async () => {
@@ -58,9 +85,21 @@ describe("an epic's page", () => {
         expect(within(screen.getByTestId('epic-runs')).getByText('epic:1#1')).toBeTruthy()
     })
 
-    it.each(['abc', '0', '1.5'])('names no epic at %s, and asks the server for none', async (id) => {
-        await renderPage(id)
-        expect((await screen.findByText(`canopy has no epic:${id}`)).textContent).toBe(`canopy has no epic:${id}`)
-        expect(screen.queryByTestId('epic-board')).toBeNull()
-    })
+    it.each(['abc', '0', '1.5', '9007199254740993'])(
+        'names no epic at %s, and asks the server for none',
+        async (id) => {
+            const client = await renderPage(id)
+            expect((await screen.findByText(`canopy has no epic:${id}`)).textContent).toBe(`canopy has no epic:${id}`)
+            expect(screen.queryByTestId('epic-board')).toBeNull()
+            // Nothing read an epic for it: no epic's query but the ones set here was ever fetched, or is being.
+            const asked = client
+                .getQueryCache()
+                .findAll({ queryKey: ['epic'] })
+                .filter((query) => query.state.dataUpdateCount === 0)
+            expect(asked.map((query) => query.state.fetchStatus)).toEqual(asked.map(() => 'idle'))
+            expect(
+                asked.every((query) => query.state.errorUpdateCount === 0 && query.state.fetchFailureCount === 0),
+            ).toBe(true)
+        },
+    )
 })
