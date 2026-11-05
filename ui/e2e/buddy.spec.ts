@@ -312,14 +312,14 @@ test.describe('turned on', () => {
     test('Sprig sits out a window whose rail has no room for it, and covers nothing in one that has', async ({
         page,
     }) => {
-        await page.setViewportSize({ width: 1280, height: 850 })
+        await page.setViewportSize({ width: 1280, height: 700 })
         await page.goto('attention')
         await settled(page)
         const buddy = page.getByTestId('buddy')
         await expect(buddy).toBeHidden()
         await expect(page.getByTestId('buddy-sprig')).toBeHidden()
 
-        await page.setViewportSize({ width: 1280, height: 850 })
+        await page.setViewportSize({ width: 1280, height: 1260 })
         await expect(buddy).toHaveAttribute('data-room', 'roomy')
         await askSprig(page)
         const sprig = await buddy.boundingBox()
@@ -401,7 +401,7 @@ test.describe('turned on', () => {
 
     test('a tight rail lets the tips Sprig would offer unasked pass, and a roomy one shows them', async ({ page }) => {
         await page.clock.install()
-        await page.setViewportSize({ width: 1280, height: 850 })
+        await page.setViewportSize({ width: 1280, height: 980 })
         await page.goto('attention')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')
@@ -409,7 +409,7 @@ test.describe('turned on', () => {
         await page.clock.runFor(LONGEST_WAIT * 2 * 1000)
         await expect(tip).toBeHidden()
 
-        await page.setViewportSize({ width: 1280, height: 850 })
+        await page.setViewportSize({ width: 1280, height: 1260 })
         await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'roomy')
         await waitForTip(page, tip)
         await page.clock.runFor(21_000)
