@@ -12,9 +12,11 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import db
+from canopy.core import db, recorded_runs
 from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import resources
+from canopy.reviews import review_requests
+from canopy.runs import policy
 from canopy.runtime.report import ToolUse, Usage
 from canopy.serve import pr_list
 from tests.canopy.helpers import DEAD_PID, journal_at, old_ticket, present, shipped_through
@@ -445,6 +447,42 @@ def test_a_tickets_decisions_are_found_by_index(tmp_path: Path, journals: Journa
         plan = [str(r["detail"]) for r in conn.execute(f"EXPLAIN QUERY PLAN {statement}")]
         assert any("USING INDEX decisions_ticket" in step for step in plan), plan
         assert not any(step.startswith("SCAN d") for step in plan), plan
+
+
+def test_the_loops_reads_at_each_wait_step_and_tick_are_found_by_index(tmp_path: Path, journals: Journals) -> None:
+    """The wait's probes, and a tick's reads of every ticket, read no table of the journal's history whole.
+
+    A probe that finds nothing, as an idle wait's do twice a second, would otherwise read to the end of its table. A
+    read of every ticket's attempts may read an index whole, which holds the two columns it needs and not the rows.
+    """
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    since = "2026-01-01T00:00:00.000Z"
+    statements: list[str] = []
+    conn.set_trace_callback(statements.append)
+    db.latest_message_id(conn, source="operator", subject_kind=db.SUBJECT_TICKET)
+    db.runs_moved_after(conn, since)
+    db.runs_ended_after(conn, since)
+    db.starts_moved_after(conn, since)
+    review_requests.made_after(conn, since)
+    db.open_tickets(conn)
+    db.recently_done(conn, since)
+    db.abandon_unfinished_ticks(conn)
+    policy.ticket_attempts(conn, "resume")
+    recorded_runs.holding(conn)
+    recorded_runs.close_unstarted(conn, tick_id=1)
+    conn.set_trace_callback(None)
+    # Each grows with the journal's history; the run tables of epics and tasks' own stay a few hundred rows a year.
+    history = {"messages", "runs", "chore_runs", "review_runs", "task_runs", "starts", "review_requests", "tickets"}
+    history |= {"decisions", "ticks", "recorded_runs"}
+    for statement in statements:
+        plan = [str(r["detail"]) for r in conn.execute(f"EXPLAIN QUERY PLAN {statement}")]
+        scans = [
+            step
+            for step in plan
+            if step.startswith("SCAN ") and step.split()[1] in history and "COVERING INDEX" not in step
+        ]
+        assert scans == [], (statement, plan)
 
 
 def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: Path, journals: Journals) -> None:
