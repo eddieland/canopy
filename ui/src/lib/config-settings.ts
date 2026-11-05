@@ -67,8 +67,9 @@ export interface ConfigForm {
  * The changes a save sends: each touched key whose value differs from the one read. `capacity.repo_slots` sends only
  * the repositories whose count changed, and a list the entries kept. A count left empty changes nothing when the file
  * sets none, and is named in `errors` when it does. A count that is not a whole number, or that the server would
- * refuse as past its bound, is named in `errors` with why, as the server checks it: a limit past its bound and looser than the value read, or a stricter count raised. The server
- * checks again on save, and checks what the loader refuses.
+ * refuse as past its bound, is named in `errors` with why, as the server checks it: a limit past its bound and looser
+ * than the value read, or a stricter count raised. The server checks again on save, and checks what the loader
+ * refuses.
  */
 export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm {
     const changes: Record<string, ConfigValue> = {}
