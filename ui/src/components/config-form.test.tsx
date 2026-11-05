@@ -1,9 +1,10 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { QueryClient } from '@tanstack/react-query'
+import { cleanup, fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { configQuery } from '@/api/queries'
 import type { ConfigKey, ConfigSettings } from '@/api/types'
+import { renderRouted } from '@/test-utils'
 
 import { ConfigForm } from './config-form'
 
@@ -40,14 +41,10 @@ const SETTINGS: ConfigSettings = {
 afterEach(cleanup)
 
 /** The form over `settings`, read already and kept fresh, so it draws at once and asks the server nothing. */
-function renderForm(settings: ConfigSettings = SETTINGS) {
+function renderForm(settings: ConfigSettings = SETTINGS): ReturnType<typeof renderRouted> {
     const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
     client.setQueryData(configQuery.queryKey, settings)
-    return render(
-        <QueryClientProvider client={client}>
-            <ConfigForm />
-        </QueryClientProvider>,
-    )
+    return renderRouted(<ConfigForm />, { at: '/settings/limits', client })
 }
 
 /** The form's button named `name`. */
@@ -67,8 +64,8 @@ describe('ConfigForm', () => {
         ['trust.max_flaky_kicks', '3', 'only fewer from here: at most 2; set more in the file'],
         ['trust.max_flaky_kicks', '1.5', 'not a whole number'],
         ['capacity.max_workers', '', 'empty: type a count, or Discard to keep 3'],
-    ])('marks %s holding %s invalid, says why under it, and keeps Save off', (name, text, why) => {
-        renderForm()
+    ])('marks %s holding %s invalid, says why under it, and keeps Save off', async (name, text, why) => {
+        await renderForm()
         type(name, text)
         const field = screen.getByRole('textbox', { name, description: why })
         expect(field.getAttribute('aria-invalid')).toBe('true')
@@ -81,8 +78,8 @@ describe('ConfigForm', () => {
     it.each([
         ['capacity.max_workers', '32'],
         ['trust.max_flaky_kicks', '1'],
-    ])('takes %s at %s, within how far the page may take it', (name, text) => {
-        renderForm()
+    ])('takes %s at %s, within how far the page may take it', async (name, text) => {
+        await renderForm()
         type(name, text)
         const field = screen.getByRole('textbox', { name, description: '' })
         expect(field.getAttribute('aria-invalid')).toBeNull()
@@ -90,8 +87,8 @@ describe('ConfigForm', () => {
         expect(screen.getByTestId('config-pending').textContent).toBe('1 unsaved change')
     })
 
-    it('shows the save bar only once something changed, and takes it away when it is typed back', () => {
-        renderForm()
+    it('shows the save bar only once something changed, and takes it away when it is typed back', async () => {
+        await renderForm()
         expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
         type('capacity.max_workers', '4')
         expect(button('Save').disabled).toBe(false)
@@ -99,8 +96,8 @@ describe('ConfigForm', () => {
         expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
     })
 
-    it('marks a changed row with its value as read, and lists the change in the bar', () => {
-        renderForm()
+    it('marks a changed row with its value as read, and lists the change in the bar', async () => {
+        await renderForm()
         expect(screen.queryByText(/was 3/u)).toBeNull()
         type('capacity.max_workers', '5')
         expect(screen.getByText('at most 32 from here · was 3')).toBeTruthy()
@@ -108,31 +105,52 @@ describe('ConfigForm', () => {
         expect(screen.queryByTestId('config-one-way')).toBeNull()
     })
 
-    it("names each row's source in a chip, and puts a minute's unit after its field", () => {
-        renderForm({ ...SETTINGS, keys: [WORKERS, KICKS, { ...WORKERS, name: 'loop.interval_minutes', bound: 2 }] })
+    it("names each row's source in a chip, and puts a minute's unit after its field", async () => {
+        await renderForm({
+            ...SETTINGS,
+            keys: [WORKERS, KICKS, { ...WORKERS, name: 'loop.interval_minutes', bound: 2 }],
+        })
         expect(screen.getAllByText('user')).toHaveLength(2)
         expect(screen.getByText('default')).toBeTruthy()
         expect(screen.getByText('min')).toBeTruthy()
         expect(screen.getByText('Time between ticks')).toBeTruthy()
     })
 
-    it('warns that only the file undoes a stricter change', () => {
-        renderForm()
+    it('warns that only the file undoes a stricter change', async () => {
+        await renderForm()
         type('trust.max_flaky_kicks', '1')
         expect(screen.getByTestId('config-one-way').textContent).toBe(
             'trust.max_flaky_kicks: only an edit to config.toml undoes this',
         )
     })
 
-    it('folds the list of changes away past three', () => {
+    it('folds the list of changes away past three', async () => {
         const counts = ['a', 'b', 'c', 'd', 'e'].map((n) => count(`capacity.max_${n}`))
-        renderForm({ ...SETTINGS, keys: counts })
+        await renderForm({ ...SETTINGS, keys: counts })
         for (const key of counts) {
             type(key.name, '4')
         }
         expect(changes()).toEqual(['capacity.max_a: 3 → 4', 'capacity.max_b: 3 → 4', 'capacity.max_c: 3 → 4'])
         fireEvent.click(button('Show 2 more'))
         expect(screen.getByText('capacity.max_e: 3 → 4')).toBeTruthy()
+    })
+
+    it("indexes the bands, counting each one's keys set in this workspace and its rows changed", async () => {
+        await renderForm({ ...SETTINGS, keys: [{ ...WORKERS, source: 'private' }, KICKS] })
+        const index = screen.getByRole('navigation', { name: 'Bands' })
+        expect(
+            within(index)
+                .getAllByRole('link')
+                .map((link) => link.textContent),
+        ).toEqual(['Capacity1 set', 'Guardrails'])
+        type('trust.max_flaky_kicks', '1')
+        expect(within(index).getByRole('link', { name: /^Guardrails/u }).textContent).toBe('Guardrails1 unsaved')
+    })
+
+    it('makes each row the anchor of its key', async () => {
+        await renderForm()
+        const row = document.querySelector<HTMLElement>('[id="capacity.max_workers"]')
+        expect(row && within(row).getByRole('textbox', { name: 'capacity.max_workers' })).toBeTruthy()
     })
 })
 

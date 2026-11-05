@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { ConfigKey, ConfigSaved } from '@/api/types'
 
 import {
+    bandCounts,
     boundText,
     byPart,
     changeList,
@@ -330,5 +331,15 @@ describe('the save bar', () => {
         expect(valueText([], 'trust.trusted_reviewers')).toBe('none')
         expect(valueText({ web: 4, api: 2 }, 'capacity.repo_slots')).toBe('web 4, api 2')
         expect(valueText(true, 'trust.rebase')).toBe('on')
+    })
+})
+
+describe('the band index', () => {
+    it("count a band's keys set in this workspace, and apart from them its rows changed and unsaved", () => {
+        const set: ConfigKey = { ...WORKERS, source: 'private' }
+        const keys = groupedKeys([set, PER_REPO, { ...SLOTS, source: 'private' }])[0]?.keys ?? []
+        expect(bandCounts(keys, () => false)).toEqual({ set: 2, changed: 0 })
+        expect(bandCounts(keys, (name) => name !== 'capacity.max_workers')).toEqual({ set: 2, changed: 2 })
+        expect(bandCounts([], () => true)).toEqual({ set: 0, changed: 0 })
     })
 })

@@ -485,6 +485,22 @@ export function byPart(keys: LabelledKey[]): { part: string | undefined; keys: L
     return parts
 }
 
+/** What a band's entry in the page's index counts: its keys set in this workspace, and its rows changed and unsaved. */
+export interface BandCounts {
+    /** Keys whose value this workspace's own config sets (source `private`). */
+    set: number
+    /** Rows the operator changed and has not saved, a field in error among them. */
+    changed: number
+}
+
+/** How many of a band's keys this workspace sets, and how many `changed` says hold an unsaved change. */
+export function bandCounts(keys: LabelledKey[], changed: (name: string) => boolean): BandCounts {
+    return {
+        set: keys.filter((k) => k.setting.source === 'private').length,
+        changed: keys.filter((k) => changed(k.setting.name)).length,
+    }
+}
+
 /** A band's title as a page's id and test id: `Retention & budget` is `retention-budget`. */
 export function groupSlug(title: string): string {
     return title.toLowerCase().replaceAll(/[^a-z0-9]+/gu, '-')
