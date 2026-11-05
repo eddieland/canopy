@@ -10,26 +10,32 @@ export type ConfigDrafts = Record<string, string | boolean | string[] | Record<s
 /** The key whose value is a count per repository, which the form shows a field for each. */
 export const REPO_SLOTS = 'capacity.repo_slots'
 
-/**
- * Where a key's value comes from, in the page's words. One from the user config is saved to this workspace's own file,
- * where it overrides the user config here alone, so the page says so before the save.
- */
-export function sourceText(key: ConfigKey): string {
-    switch (key.source) {
-        case 'private': {
-            return "set in this workspace's config"
-        }
-        case 'user': {
-            return 'from your user config; a change here is for this workspace only'
-        }
-        case 'workspace': {
-            return 'set in the workspace file'
-        }
-        case 'default': {
-            return 'default'
-        }
-    }
+/** Every place a key's value can come from, nearest first. */
+const SOURCES: ConfigKey['source'][] = ['private', 'user', 'workspace', 'default']
+
+/** Where a key's value comes from, as each row's chip names it: short, since every row has one. */
+export const SOURCE_WORD: Record<ConfigKey['source'], string> = {
+    private: 'this workspace',
+    user: 'user',
+    workspace: 'workspace',
+    default: 'default',
 }
+
+/**
+ * What each source's chip means, for its tip and the page's help. One from the user config is saved to this
+ * workspace's own file, where it overrides the user config here alone, so the chip's tip says so before the save.
+ */
+export const SOURCE_MEANING: Record<ConfigKey['source'], string> = {
+    private: "set in this workspace's own config, the file a save writes",
+    user: 'from your user config, which serves every workspace; a change here is saved for this workspace only',
+    workspace: 'set in the shared workspace file, which the page never writes',
+    default: "set in no file: canopy's default",
+}
+
+/** What each row's chip means, said once, for the page's help: each source's word and its meaning. */
+export const SOURCES_HELP = `Each row's chip says where its value comes from: ${SOURCES.map(
+    (source) => `${SOURCE_WORD[source]}, ${SOURCE_MEANING[source]}`,
+).join('; ')}.`
 
 /** How far the page may take a limit, or that a trust setting only gets stricter. */
 export function boundText(key: ConfigKey): string {
@@ -322,10 +328,11 @@ export interface ConfigGroup {
     /** One line under the label on what the keys in it govern. */
     blurb: string
     /**
-     * The keys it shows, in order, by name, each with its label in words, and the part of the band it heads, if the
-     * band is in labelled parts: a key with a `part` starts that part, and the keys after it are in it.
+     * The keys it shows, in order, by name, each with its label in words, the unit its field is in, and the part of the
+     * band it heads, if the band is in labelled parts: a key with a `part` starts that part, and the keys after it are
+     * in it.
      */
-    keys: { name: string; label: string; part?: string }[]
+    keys: { name: string; label: string; unit?: string; part?: string }[]
 }
 
 /**
@@ -342,12 +349,12 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'capacity.max_reviews', label: 'Review runs at once' },
             { name: 'capacity.max_tasks', label: 'Task runs at once' },
             { name: 'capacity.max_reviews_per_day', label: 'Reviews a day' },
-            { name: 'loop.min_free_disk_mib', label: 'Free disk a tick needs to dispatch, in MiB' },
+            { name: 'loop.min_free_disk_mib', label: 'Free disk a tick needs to dispatch', unit: 'MiB' },
             { name: 'capacity.slots_per_repo', label: 'Slots per repository' },
             { name: REPO_SLOTS, label: 'Repositories with a count of their own' },
             { name: 'policy.max_attachments', label: 'Files attached per ticket or task' },
-            { name: 'policy.max_attachment_kib', label: 'KiB per attached file' },
-            { name: 'policy.max_attachments_total_kib', label: 'KiB attached per ticket or task' },
+            { name: 'policy.max_attachment_kib', label: 'Size of one attached file', unit: 'KiB' },
+            { name: 'policy.max_attachments_total_kib', label: 'Attached to one ticket or task in all', unit: 'KiB' },
         ],
     },
     {
@@ -368,36 +375,37 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
         title: 'Timing',
         blurb: 'How often the loop ticks and looks around, how long it holds off, and how long a run may take.',
         keys: [
-            { name: 'loop.interval_minutes', label: 'Minutes between ticks', part: 'Pace' },
-            { name: 'loop.idle_max_minutes', label: 'Longest wait when idle, in minutes' },
-            { name: 'loop.min_gap_minutes', label: 'Shortest gap between two ticks, in minutes' },
-            { name: 'tracker.query_every_minutes', label: 'Shortest gap between tracker queries, in minutes' },
-            { name: 'connect.every_minutes', label: 'Minutes between connector polls' },
-            { name: 'connect.max_age_minutes', label: 'Minutes before an observation is stale' },
+            { name: 'loop.interval_minutes', label: 'Time between ticks', unit: 'min', part: 'Pace' },
+            { name: 'loop.idle_max_minutes', label: 'Longest wait when idle', unit: 'min' },
+            { name: 'loop.min_gap_minutes', label: 'Shortest gap between two ticks', unit: 'min' },
+            { name: 'tracker.query_every_minutes', label: 'Shortest gap between tracker queries', unit: 'min' },
+            { name: 'connect.every_minutes', label: 'Time between connector polls', unit: 'min' },
+            { name: 'connect.max_age_minutes', label: 'Age at which an observation is stale', unit: 'min' },
             {
                 name: 'policy.ci_cooldown_minutes',
-                label: 'Wait after red CI before a resume, in minutes',
+                label: 'Wait after red CI before a resume',
+                unit: 'min',
                 part: 'Waits',
             },
-            { name: 'policy.feedback_quiet_minutes', label: 'Wait for quiet before a feedback plan, in minutes' },
-            { name: 'policy.feedback_ci_wait_minutes', label: 'Wait on pending checks before feedback, in minutes' },
-            { name: 'review.settle_minutes', label: "Wait for a PR's head to settle before its review, in minutes" },
-            { name: 'runtime.worker_timeout_minutes', label: 'Worker run, in minutes', part: 'Timeouts' },
-            { name: 'runtime.review_timeout_minutes', label: 'Review run, in minutes' },
-            { name: 'runtime.overseer_timeout_minutes', label: 'Overseer tick, in minutes' },
-            { name: 'runtime.setup_timeout_minutes', label: "A slot's setup command, in minutes" },
+            { name: 'policy.feedback_quiet_minutes', label: 'Wait for quiet before a feedback plan', unit: 'min' },
+            { name: 'policy.feedback_ci_wait_minutes', label: 'Wait on pending checks before feedback', unit: 'min' },
+            { name: 'review.settle_minutes', label: "Wait for a PR's head to settle before its review", unit: 'min' },
+            { name: 'runtime.worker_timeout_minutes', label: 'Worker run', unit: 'min', part: 'Timeouts' },
+            { name: 'runtime.review_timeout_minutes', label: 'Review run', unit: 'min' },
+            { name: 'runtime.overseer_timeout_minutes', label: 'Overseer tick', unit: 'min' },
+            { name: 'runtime.setup_timeout_minutes', label: "A slot's setup command", unit: 'min' },
         ],
     },
     {
         title: 'Retention & budget',
         blurb: 'How long canopy keeps its own history, 0 for forever, and what a month of agent runs should cost.',
         keys: [
-            { name: 'retention.run_files_days', label: "Days to keep a run's log, prompt, and diff" },
-            { name: 'retention.tick_files_days', label: "Days to keep a tick's log and prompt" },
-            { name: 'retention.journal_days', label: "Days to keep the journal's old rows" },
-            { name: 'retention.memory_days', label: 'Days to keep a retired note or proposal' },
-            { name: 'spend.monthly_budget_usd', label: 'Monthly budget, in US dollars' },
-            { name: 'spend.budget_alerts', label: 'Also alert at, in percent of the budget' },
+            { name: 'retention.run_files_days', label: "Keep a run's log, prompt, and diff", unit: 'days' },
+            { name: 'retention.tick_files_days', label: "Keep a tick's log and prompt", unit: 'days' },
+            { name: 'retention.journal_days', label: "Keep the journal's old rows", unit: 'days' },
+            { name: 'retention.memory_days', label: 'Keep a retired note or proposal', unit: 'days' },
+            { name: 'spend.monthly_budget_usd', label: 'Monthly budget', unit: '$' },
+            { name: 'spend.budget_alerts', label: 'Also alert at these shares of the budget', unit: '%' },
         ],
     },
     {
@@ -424,6 +432,8 @@ export interface LabelledKey {
     setting: ConfigKey
     /** Its name in words. */
     label: string
+    /** The unit its field is in, shown after the field (`min`, `days`), if it has one. */
+    unit?: string
     /** The labelled part of its band it is in, if its band is in parts. */
     part?: string
 }
@@ -444,7 +454,12 @@ export function groupedKeys(keys: ConfigKey[]): { group: ConfigGroup; keys: Labe
             part = key.part ?? part
             const setting = byName.get(key.name)
             if (setting !== undefined) {
-                shown.push(part === undefined ? { setting, label: key.label } : { setting, label: key.label, part })
+                shown.push({
+                    setting,
+                    label: key.label,
+                    ...(key.unit === undefined ? {} : { unit: key.unit }),
+                    ...(part === undefined ? {} : { part }),
+                })
                 placed.add(key.name)
             }
         }

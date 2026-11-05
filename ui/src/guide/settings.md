@@ -137,11 +137,13 @@ off but not on, and cut the reruns of flaky checks but not raise them. A stolen 
 keep steering your workers after you changed the secret, so adding one stays an edit to the file. A choice that would
 loosen is greyed out, so there's no button to find out the hard way.
 
-Each row says where its value comes from and how far the page will take it. Counts stop at a ceiling (32 workers, 10
-attempts, a $10,000 budget) and paces and retentions at a floor (a tick every 2 minutes, a week of run files); the
-file can still set anything, so the page is for the changes you actually make, not for setting a record. Type past one,
-or something that isn't a whole number, and the field turns red and says why under it as you type, and **Save** waits
-until you fix it.
+Each row's chip says where its value comes from, `this workspace`, `user`, `workspace`, or `default` (hover it, or
+the page's title, for what each means), and the line beside it says how far the page will take it. Units sit after the
+field, as on the rest of Settings, so a label says what a value is and the field says in what. Counts stop at a
+ceiling (32 workers, 10 attempts, a $10,000 budget) and paces and retentions at a floor (a tick every 2 minutes, a week
+of run files); the file can still set anything, so the page is for the changes you actually make, not for setting a
+record. Type past one, or something that isn't a whole number, and the field turns red and says why under it as you
+type, and **Save** waits until you fix it.
 Repositories get a count of their own only when you pick one, so a workspace of fifty repositories shows the two that
 differ.
 

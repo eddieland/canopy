@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { LockKeyhole, Save } from 'lucide-react'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { refreshReloaded, saveConfig } from '@/api/mutations'
 import { configQuery } from '@/api/queries'
@@ -8,8 +9,9 @@ import type { ConfigKey, ConfigSaved, ConfigSettings, ConfigValue } from '@/api/
 import { Disclosure } from '@/components/disclosure'
 import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
-import { Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Panel, PanelSkeleton } from '@/components/panel'
 import { RepoSelect } from '@/components/repo-picker'
+import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
@@ -26,11 +28,13 @@ import {
     pendingText,
     REPO_SLOTS,
     savedText,
-    sourceText,
+    SOURCE_MEANING,
+    SOURCE_WORD,
     unsetText,
     valueText,
 } from '@/lib/config-settings'
 import type { ConfigChange, ConfigDrafts, LabelledKey } from '@/lib/config-settings'
+import { SECTION_TEXT } from '@/lib/sections'
 import { cn } from '@/lib/utils'
 
 // The trust switches, and the side the page may move each to: the stricter one (TRUST_MODEL T8).
@@ -39,6 +43,11 @@ const STRICTER_ON: Record<string, boolean> = { 'trust.rebase': false, 'trust.com
 const LISTED = 3
 // The save bar's list of changes, folded in two past `LISTED`.
 const CHANGES = 'flex min-w-0 max-w-full flex-col font-mono text-xs text-muted-foreground'
+// Every field's box, one width, so the control column has one edge.
+const FIELD_WIDTH = 'readout h-8 w-28 text-right'
+// A row: its label, then its control in one fixed column, which every row shares so the controls line up; stacked
+// in a panel too narrow for both.
+const ROW = 'grid gap-x-6 gap-y-2 p-3 @xl:grid-cols-[minmax(0,1fr)_18rem] @xl:items-center'
 // A changed row's mark: an accent hairline at its start, drawn over its padding, so nothing in it moves.
 const CHANGED_ROW = 'relative before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-accent'
 
@@ -118,7 +127,7 @@ function Form({
     const stricter = oneWay(settings.keys, form.changes)
     const draft = (name: string, value: ConfigDrafts[string]) => setDrafts({ ...drafts, [name]: value })
     const perRepo = settings.keys.find((k) => k.name === 'capacity.slots_per_repo')?.value
-    const row = ({ setting, label }: LabelledKey) =>
+    const row = ({ setting, label, unit }: LabelledKey) =>
         setting.name === REPO_SLOTS ? (
             <RepoSlots
                 key={setting.name}
@@ -134,24 +143,24 @@ function Form({
         ) : (
             <li
                 key={setting.name}
-                className={cn('flex flex-col gap-1 p-3', touched(setting.name) && CHANGED_ROW)}
+                className={cn(ROW, touched(setting.name) && CHANGED_ROW)}
                 data-changed={touched(setting.name) || undefined}
             >
-                <div className="flex items-center justify-between gap-4">
-                    <KeyLabel setting={setting} label={label} every={settings.every} changed={touched(setting.name)} />
+                <KeyLabel setting={setting} label={label} every={settings.every} changed={touched(setting.name)} />
+                <ControlCell unit={unit}>
                     <Control
                         setting={setting}
                         draft={drafts[setting.name]}
                         error={form.errors[setting.name]}
                         onDraft={(value) => draft(setting.name, value)}
                     />
-                </div>
+                </ControlCell>
                 <FieldError name={setting.name} error={form.errors[setting.name]} />
             </li>
         )
     return (
         <form
-            className="flex flex-col gap-6"
+            className="flex max-w-4xl flex-col gap-8"
             aria-label="Loop settings"
             data-testid="config-form"
             onSubmit={(event) => {
@@ -159,20 +168,28 @@ function Form({
                 onSave(form.changes)
             }}
         >
-            <div className="grid items-start gap-6 xl:grid-cols-2">
-                {groupedKeys(settings.keys).map(({ group, keys: shown }) => (
-                    <Panel
-                        key={group.title}
-                        // Guardrails' lists of names want the width; the counts sit two bands to a row.
-                        className={group.title === 'Guardrails' ? 'xl:col-span-2' : undefined}
-                        data-testid={`config-group-${groupSlug(group.title)}`}
-                    >
-                        <PanelHeader label={group.title} />
-                        <p className="border-b px-3 py-2 text-xs text-muted-foreground">{group.blurb}</p>
+            {groupedKeys(settings.keys).map(({ group, keys: shown }) => (
+                <section
+                    key={group.title}
+                    aria-labelledby={`band-${groupSlug(group.title)}`}
+                    className="flex flex-col gap-2"
+                    data-testid={`config-group-${groupSlug(group.title)}`}
+                >
+                    {/* A band's heading stands over its panel, a step above the rows' labels, in Settings' color. */}
+                    <div className="flex flex-col gap-0.5">
+                        <h2
+                            id={`band-${groupSlug(group.title)}`}
+                            className={cn('text-base font-semibold', SECTION_TEXT['/settings'])}
+                        >
+                            {group.title}
+                        </h2>
+                        <p className="text-xs text-muted-foreground">{group.blurb}</p>
+                    </div>
+                    <Panel>
                         {byPart(shown).map(({ part, keys: inPart }) => (
                             <section key={part ?? ''} className="border-b last:border-b-0" aria-label={part}>
                                 {part !== undefined && (
-                                    <h3 className="border-b px-3 pt-3 pb-1.5 panel-label text-muted-foreground">
+                                    <h3 className="border-b bg-surface-raised/50 px-3 py-2 panel-label text-foreground">
                                         {part}
                                     </h3>
                                 )}
@@ -180,8 +197,8 @@ function Form({
                             </section>
                         ))}
                     </Panel>
-                ))}
-            </div>
+                </section>
+            ))}
             {/* Kept in view at the page's foot once something changed, so a change made far down the page is never
                 left unsaved unseen. Until then its height is held at the page's end, so its coming moves nothing. */}
             {barShown ? (
@@ -295,8 +312,8 @@ function ChangeLine({ change }: { change: ConfigChange }) {
 }
 
 /**
- * A key in words, and under it its name in the file, where its value comes from, how far the page may take it, and,
- * once `changed`, its value as read.
+ * A key in words, and under it its name in the file, a chip for where its value comes from, how far the page may take
+ * it, and, once `changed`, its value as read.
  */
 function KeyLabel({
     setting,
@@ -311,16 +328,18 @@ function KeyLabel({
 }) {
     // A repository's own counts list their old values in the save bar; a row of them says nothing of one.
     const was = changed && setting.name !== REPO_SLOTS ? `was ${valueText(setting.value, setting.name)}` : null
+    const pace =
+        setting.name === 'loop.interval_minutes' && every !== null
+            ? `--every ${every} sets the pace until the loop restarts`
+            : null
+    const rest = [boundText(setting), was, pace].filter(Boolean).join(' · ')
     return (
-        <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex min-w-0 flex-col gap-1">
             <span className="text-sm text-foreground">{label}</span>
-            <span className="text-2xs text-muted-foreground">
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-muted-foreground">
                 <code className="font-mono">{setting.name}</code>
-                {' · '}
-                {[sourceText(setting), boundText(setting), was].filter(Boolean).join(' · ')}
-                {setting.name === 'loop.interval_minutes' && every !== null
-                    ? ` · --every ${every} sets the pace until the loop restarts`
-                    : null}
+                <Chip word={SOURCE_WORD[setting.source]} meaning={SOURCE_MEANING[setting.source]} />
+                {rest === '' ? null : <span>{rest}</span>}
             </span>
         </div>
     )
@@ -357,22 +376,18 @@ function RepoSlots({
     const offered = repos.filter((r) => !shown.includes(r))
     const fallback = perRepo === null ? 'unmanaged' : String(perRepo)
     return (
-        <li
-            className={cn('flex flex-col gap-2 p-3', changed && CHANGED_ROW)}
-            data-changed={changed || undefined}
-            data-testid="repo-slots"
-        >
+        <li className={cn(ROW, changed && CHANGED_ROW)} data-changed={changed || undefined} data-testid="repo-slots">
             <KeyLabel setting={setting} label={label} every={null} changed={changed} />
             {shown.length === 0 ? (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground @xl:col-start-1">
                     no repository has its own count yet: each pool has the slots per repository ({fallback})
                 </p>
             ) : (
-                <ul className="flex flex-col gap-1">
+                <ul className="col-span-full flex flex-col gap-1">
                     {shown.map((repo) => (
-                        <li key={repo} className="flex flex-col gap-1">
-                            <div className="flex items-center justify-between gap-4">
-                                <span className="font-mono text-xs text-foreground">{repo}</span>
+                        <li key={repo} className="grid gap-x-6 gap-y-1 @xl:grid-cols-[minmax(0,1fr)_18rem]">
+                            <span className="self-center font-mono text-xs text-foreground">{repo}</span>
+                            <ControlCell>
                                 <Count
                                     name={`${name}.${repo}`}
                                     text={typed[repo] ?? String(counts[repo] ?? '')}
@@ -380,14 +395,14 @@ function RepoSlots({
                                     error={errors[`${name}.${repo}`]}
                                     onText={(text) => onDraft({ ...typed, [repo]: text })}
                                 />
-                            </div>
+                            </ControlCell>
                             <FieldError name={`${name}.${repo}`} error={errors[`${name}.${repo}`]} />
                         </li>
                     ))}
                 </ul>
             )}
             {offered.length > 0 && (
-                <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span className="col-span-full flex items-center gap-2 text-xs text-muted-foreground">
                     Give another its own count:
                     <RepoSelect
                         choices={offered}
@@ -403,6 +418,19 @@ function RepoSlots({
                 </span>
             )}
         </li>
+    )
+}
+
+/**
+ * A row's control column: its control at the column's end, then its unit (`min`, `days`) in a slot every row keeps,
+ * empty or not, so the fields' right edges line up down the page.
+ */
+function ControlCell({ unit, children }: { unit?: string | undefined; children: ReactNode }) {
+    return (
+        <div className="flex items-center gap-2 @xl:justify-end">
+            {children}
+            <span className="readout w-8 shrink-0 text-xs text-muted-foreground">{unit}</span>
+        </div>
     )
 }
 
@@ -429,7 +457,7 @@ function Control({
                 {...invalid(name, error)}
                 value={typeof draft === 'string' ? draft : Array.isArray(value) ? value.join(', ') : ''}
                 placeholder="none"
-                className="readout h-8 w-40 text-right"
+                className={FIELD_WIDTH}
                 data-testid={name}
                 onChange={(event) => onDraft(event.currentTarget.value)}
             />
@@ -443,7 +471,7 @@ function Control({
             return <span className="text-xs text-muted-foreground">none</span>
         }
         return (
-            <fieldset aria-label={name} className="flex flex-wrap justify-end gap-3">
+            <fieldset aria-label={name} className="flex flex-wrap gap-3 @xl:justify-end">
                 {entries.map((entry) => (
                     <label key={entry} className="inline-flex items-center gap-2 font-mono text-xs">
                         <Checkbox
@@ -533,7 +561,7 @@ function Count({
             inputMode="numeric"
             value={text}
             placeholder={placeholder}
-            className="readout h-8 w-24 text-right"
+            className={FIELD_WIDTH}
             data-testid={name}
             onChange={(event) => onText(event.currentTarget.value)}
         />
@@ -556,7 +584,11 @@ function FieldError({ name, error }: { name: string; error: string | undefined }
         return null
     }
     return (
-        <p id={errorId(name)} className="text-right text-xs text-status-failed" data-testid={errorId(name)}>
+        <p
+            id={errorId(name)}
+            className="col-span-full text-xs text-status-failed @xl:text-right"
+            data-testid={errorId(name)}
+        >
             {error}
         </p>
     )

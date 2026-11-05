@@ -14,7 +14,8 @@ import {
     oneWayText,
     pendingText,
     savedText,
-    sourceText,
+    SOURCE_MEANING,
+    SOURCE_WORD,
     valueText,
 } from './config-settings'
 
@@ -190,10 +191,9 @@ describe('config settings', () => {
     })
 
     it('say where a value comes from and how far the page may take it', () => {
-        expect(sourceText(WORKERS)).toBe('from your user config; a change here is for this workspace only')
-        expect(sourceText({ ...WORKERS, source: 'private' })).toBe("set in this workspace's config")
-        expect(sourceText({ ...WORKERS, source: 'workspace' })).toBe('set in the workspace file')
-        expect(sourceText(REBASE)).toBe('default')
+        // A chip's word is short, every row has one; what it means is its tip, and the page's help.
+        expect(Object.values(SOURCE_WORD)).toEqual(['this workspace', 'user', 'workspace', 'default'])
+        expect(SOURCE_MEANING.user).toContain('a change here is saved for this workspace only')
         expect(boundText(WORKERS)).toBe('at most 8 from here')
         expect(boundText(PACE)).toBe('at least 5 from here')
         expect(boundText(QUERY)).toBe('')
@@ -244,7 +244,7 @@ describe('config groups', () => {
         const found = groupedKeys([REVIEWERS, WORKERS, odd, PACE])
         expect(found.map((g) => g.group.title)).toEqual(['Capacity', 'Timing', 'Guardrails', 'Other'])
         expect(found[0]?.keys).toEqual([{ setting: WORKERS, label: 'Workers at once' }])
-        expect(found[1]?.keys).toEqual([{ setting: PACE, label: 'Minutes between ticks', part: 'Pace' }])
+        expect(found[1]?.keys).toEqual([{ setting: PACE, label: 'Time between ticks', unit: 'min', part: 'Pace' }])
         expect(found[3]?.keys).toEqual([{ setting: odd, label: 'capacity.max_something_new' }])
     })
 

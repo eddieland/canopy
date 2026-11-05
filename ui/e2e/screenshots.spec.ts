@@ -334,7 +334,7 @@ test('settings/limits with changes waiting', async ({ page }) => {
 
 // A narrow window, about the narrowest the UI holds up in (DESIGN.md): the behaviour specs hold that it fits, these
 // how it looks. The ticket page whole, for the strip rail, its one column, and the lists in its panels; the tickets,
-// PRs, reviews, and worktrees lists for the columns they let go.
+// PRs, reviews, and worktrees lists for the columns they let go; Loop settings for its rows, stacked where they must.
 test.describe('in a narrow window', () => {
     test.use({ viewport: { width: 820, height: 900 } })
 
@@ -343,7 +343,13 @@ test.describe('in a narrow window', () => {
         await screenshotWhole(page, 'tickets-ABC-102-narrow-dark.png')
     })
 
-    for (const route of ['tickets', 'pull-requests', 'pull-requests/reviews', 'workspace/worktrees']) {
+    for (const route of [
+        'tickets',
+        'pull-requests',
+        'pull-requests/reviews',
+        'workspace/worktrees',
+        'settings/limits',
+    ]) {
         test(`${route} narrow`, async ({ page }) => {
             await openInDark(page, route)
             await screenshotMain(page, `${route.replaceAll('/', '-')}-narrow-dark.png`)
