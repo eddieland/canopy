@@ -68,7 +68,7 @@ color a run in that state wears:
 
 Hover the word for its spelling in the CLI and what it means. Then come `epic:N`, its repositories, your goal's first
 line, how many of its breakdown's entries have a member (`2 of 4 entries filed`; `no breakdown` before it has a plan,
-and `breakdown unreadable` for a plan whose ids repeat or won't parse), and how long ago you submitted it.
+and `breakdown unreadable` for a plan canopy can't read: its file is gone, or its ids repeat or won't parse), and how long ago you submitted it.
 
 From the shell, `canopy epic list` lists them and `canopy show epic:N` prints one, its breakdown with each entry's
 members.

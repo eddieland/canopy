@@ -49,7 +49,7 @@ export function epicTitle(text: string): string {
 
 /**
  * How much of an epic's breakdown has members, as its row reads it: `2 of 4 entries filed`. With no breakdown to count,
- * an epic whose plan is proposed or approved has one canopy cannot read (its ids repeat or will not parse), and says
+ * an epic whose plan is proposed or approved has one canopy cannot read (its file, or its ids), and says
  * `breakdown unreadable`; any other has no plan yet, `no breakdown`.
  */
 export function entriesFiled(epic: Pick<EpicSummary, 'entries' | 'entries_with_members' | 'standing'>): string {
