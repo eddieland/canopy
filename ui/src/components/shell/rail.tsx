@@ -26,8 +26,8 @@ import { cn } from '@/lib/utils'
 // Where the version links: every release's notes, newest first.
 const RELEASES = 'https://github.com/eddieland/canopy/releases'
 
-// Rows the rail lists before `+N more`: with the nav and the spend, four keep the sticky part within an 800px window.
-const RAIL_ROWS = 4
+// Rows the rail lists before `+N more`: with the nav and the spend, three keep the sticky part within an 800px window.
+const RAIL_ROWS = 3
 
 // What `+N more` says on hover, by the page it opens.
 const MORE_TITLE = {

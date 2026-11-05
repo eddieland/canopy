@@ -13,14 +13,13 @@ test('the rail lists what is working now, the running runs, chore runs, and task
     await page.goto('tickets')
     await settled(page)
     const working = page.getByTestId('rail-working')
-    // Four rows, then `+1 more`: ABC-102's run, waiting on you, comes after the four running.
-    await expect(working.getByRole('link')).toHaveCount(5)
+    // Three rows, then `+2 more`: ABC-104's run, then ABC-102's, waiting on you, come after the first three running.
+    await expect(working.getByRole('link')).toHaveCount(4)
     // The chore run started ten minutes before the worker runs, and task 6's run between them.
     await expect(working.getByRole('link').first()).toContainText('build-health')
     await expect(working.getByRole('link').nth(1)).toContainText('ABC-101')
     await expect(working.getByRole('link').nth(2)).toContainText('task:6#6')
-    await expect(working.getByRole('link').nth(3)).toContainText('ABC-104')
-    await expect(working.getByRole('link', { name: '+1 more' })).toHaveAttribute('href', /\/workspace\/runs$/u)
+    await expect(working.getByRole('link', { name: '+2 more' })).toHaveAttribute('href', /\/workspace\/runs$/u)
     await expect(page.getByTestId('rail-run-41')).toContainText('Sign in with SSO')
     await expect(page.getByTestId('rail-chore-build-health')).toContainText('chore run #4')
     await expect(page.getByTestId('rail-task-6')).toContainText("Add a dark launch screen to match the app's theme.")
@@ -40,14 +39,14 @@ test('the rail lists what is working now, the running runs, chore runs, and task
 test("a worker run's row says what it is doing, as a quip until Settings turns them off", async ({ page }) => {
     await page.goto('settings')
     await settled(page)
-    // Run 43 resumes for a failed check and review feedback together. Run 42, waiting on the operator, is past the four
-    // rows the rail shows, so the unit tests hold its plain words.
-    const resuming = page.getByTestId('rail-phase-43')
-    await expect(resuming).toHaveAttribute('title', 'fixing CI, addressing review')
-    await expect(resuming).toHaveText(/CI.* \+1$/u)
+    // Run 41 implements. Runs 43 and 42 are past the three rows the rail shows, so the unit tests hold a resume's words
+    // (`src/lib/run-phase.test.ts`).
+    const implementing = page.getByTestId('rail-phase-41')
+    await expect(implementing).toHaveAttribute('title', 'implementing')
+    await expect(implementing).not.toHaveText('implementing')
 
     await page.getByTestId('fun-quips').click()
-    await expect(resuming).toHaveText('fixing CI, addressing review')
+    await expect(implementing).toHaveText('implementing')
     await page.reload()
     await settled(page)
     await expect(page.getByTestId('fun-quips')).not.toBeChecked()

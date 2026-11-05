@@ -203,7 +203,7 @@ Rules:
   working is every agent run running, then the worker runs waiting on the operator's answer, each oldest first, a
   ticket's latest run alone: its state's dot, what it works on, how long it has run (or `waiting on you` in
   `status-blocked`, the whole row on a question's tint so it shows from across the room), and under it what names it,
-  opening the run's page; at most four, then `+N more` to the page of the rest, so the sticky part fits an 800px
+  opening the run's page; at most three, then `+N more` to the page of the rest, so the sticky part fits an 800px
   window. The spend is the last 24 hours and the last 30 days, from the stream, two rows set alike so neither reads as
   a different kind of figure, the figures right-aligned readouts so they line up at four digits as at one; the 30 days
   is shown nowhere else but what Fun buys with the lifetime total. The foot sits at the foot of the sticky column, so
