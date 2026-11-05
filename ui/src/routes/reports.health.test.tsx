@@ -201,7 +201,7 @@ describe('the health page', () => {
         const guard = await screen.findByTestId('health-refusal')
         expect(within(guard).getByRole('rowheader', { name: 'running' })).toBeTruthy()
         const [ask] = within(guard).getAllByTestId('health-ask')
-        expect(cells(ask as HTMLElement)).toEqual(['PROJ-2', 'resume', '5', 'tick:9'])
+        expect(cells(ask as HTMLElement)).toEqual(['PROJ-2', 'resume', '5', 'tick:9', ''])
         expect(within(ask as HTMLElement).getByRole('link', { name: 'PROJ-2' })).toBeTruthy()
     })
 

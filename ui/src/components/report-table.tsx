@@ -39,7 +39,23 @@ export interface ReportColumn<T> {
     fill?: string | ((row: T) => string | undefined)
     /** What sits over its head, in a head row of its own, such as a sparkline of its figures across the rows. */
     over?: ReactNode
+    /**
+     * For a `bar`: whether a row's cell holds no figure but words or chips, laid from the left across the figure's
+     * cell and the bar's, as a group's rows say how they ended under their head's share.
+     */
+    across?: (row: T) => boolean
 }
+
+/**
+ * A group of a `ReportTable`'s rows, a `tbody` of its own under a head (ui/DESIGN.md, "A table of figures"): `head`,
+ * a line across the table naming it, or `headRow`, one of the table's rows whose first cell names the group, for a
+ * group with figures of its own in the columns. Its rows sit indented under it; `testId` is its `tbody`'s.
+ */
+export type ReportGroup<T> = {
+    key: string
+    rows: readonly T[]
+    testId?: string
+} & ({ head: ReactNode } | { headRow: T })
 
 // The column names stick inside the padded scrolling region. A sticky head sticks inside the region's padding, so the
 // rows scrolling under it would show in a strip above it: the region's top padding is the head's first row's instead.
@@ -75,10 +91,12 @@ const CELL: Record<Exclude<ReportColumnKind, 'bar'>, string> = {
  * of someone else's (`ChartTable`). `rowKey` keys a row; the table's test id is `testId`, each row's `rowTestId`'s, or
  * what it makes of the row. `top` sets each row's cells at its top, for a row whose free cell stacks rows of its own. A
  * row `ruled` says is set apart from those above it by a rule, as a total or the rest is. A column's `over` sits over
- * its head, in a head row of its own. A page shows its own `Empty` in its place when it has no rows.
+ * its head, in a head row of its own. In place of `rows` it takes `groups`, each a `tbody` under its head, so the
+ * groups' columns line up. A page shows its own `Empty` in its place when it has no rows.
  */
 export function ReportTable<T>({
     rows,
+    groups,
     columns,
     rowKey,
     label,
@@ -88,8 +106,7 @@ export function ReportTable<T>({
     ruled,
     testId,
     rowTestId,
-}: {
-    rows: readonly T[]
+}: ({ rows: readonly T[]; groups?: never } | { rows?: never; groups: readonly ReportGroup<T>[] }) & {
     columns: readonly ReportColumn<T>[]
     rowKey: (row: T) => string
     label: string
@@ -116,19 +133,37 @@ export function ReportTable<T>({
                     ))}
                 </TableRow>
             </TableHeader>
-            <TableBody>
-                {rows.map((row) => (
-                    <TableRow
-                        key={rowKey(row)}
-                        className={cn(top && 'align-top', ruled?.(row) === true && 'border-t border-border')}
-                        data-testid={typeof rowTestId === 'function' ? rowTestId(row) : rowTestId}
-                    >
-                        {columns.map((column, i) => (
-                            <ColumnCell key={column.key} column={column} row={row} first={i === 0} />
+            {groups === undefined ? (
+                <TableBody>
+                    {rows.map((row) => (
+                        <ReportRow
+                            key={rowKey(row)}
+                            row={row}
+                            columns={columns}
+                            top={top}
+                            className={cn(ruled?.(row) === true && 'border-t border-border')}
+                            testId={typeof rowTestId === 'function' ? rowTestId(row) : rowTestId}
+                        />
+                    ))}
+                </TableBody>
+            ) : (
+                groups.map((group, i) => (
+                    <TableBody key={group.key} data-testid={group.testId}>
+                        <GroupHead group={group} columns={columns} later={i > 0} />
+                        {group.rows.map((row) => (
+                            <ReportRow
+                                key={rowKey(row)}
+                                row={row}
+                                columns={columns}
+                                top={top}
+                                place="member"
+                                className={cn(ruled?.(row) === true && 'border-t border-border')}
+                                testId={typeof rowTestId === 'function' ? rowTestId(row) : rowTestId}
+                            />
                         ))}
-                    </TableRow>
-                ))}
-            </TableBody>
+                    </TableBody>
+                ))
+            )}
         </Table>
     )
     return scroll ? (
@@ -149,6 +184,65 @@ function ColumnOver<T>({ column, first }: { column: ReportColumn<T>; first: bool
     )
 }
 
+// Where a row sits: alone, as a group's head, or among a group's rows, under its head.
+type Place = 'alone' | 'head' | 'member'
+
+/**
+ * A group's head: its row of the columns, its first cell the group's head, or its `head` in one cell across the
+ * table. A group after the first stands apart from the one before it.
+ */
+function GroupHead<T>({
+    group,
+    columns,
+    later,
+}: {
+    group: ReportGroup<T>
+    columns: readonly ReportColumn<T>[]
+    later: boolean
+}) {
+    if ('headRow' in group) {
+        return <ReportRow row={group.headRow} columns={columns} place="head" className={cn(later && '[&>*]:pt-3')} />
+    }
+    // A bar's column is two cells, its figure's and its bar's.
+    const span = columns.reduce((n, column) => n + (column.kind === 'bar' ? 2 : 1), 0)
+    return (
+        <TableRow>
+            <th
+                scope="rowgroup"
+                colSpan={span}
+                className={cn('pb-0.5 text-left font-medium text-foreground', later && 'pt-3')}
+            >
+                {group.head}
+            </th>
+        </TableRow>
+    )
+}
+
+/** A row of the table, its cells in its columns, its first its head. */
+function ReportRow<T>({
+    row,
+    columns,
+    top = false,
+    place = 'alone',
+    className,
+    testId,
+}: {
+    row: T
+    columns: readonly ReportColumn<T>[]
+    top?: boolean
+    place?: Place
+    className?: string
+    testId?: string | undefined
+}) {
+    return (
+        <TableRow className={cn(top && 'align-top', className)} data-testid={testId}>
+            {columns.map((column, i) => (
+                <ColumnCell key={column.key} column={column} row={row} first={i === 0} place={place} />
+            ))}
+        </TableRow>
+    )
+}
+
 function ColumnHead<T>({ column, first }: { column: ReportColumn<T>; first: boolean }) {
     if (column.label === null) {
         return <td aria-hidden />
@@ -160,9 +254,26 @@ function ColumnHead<T>({ column, first }: { column: ReportColumn<T>; first: bool
     return <TableHead className={cn(HEAD_ALIGN[column.kind], !first && 'pl-3')}>{name}</TableHead>
 }
 
-function ColumnCell<T>({ column, row, first }: { column: ReportColumn<T>; row: T; first: boolean }) {
+function ColumnCell<T>({
+    column,
+    row,
+    first,
+    place,
+}: {
+    column: ReportColumn<T>
+    row: T
+    first: boolean
+    place: Place
+}) {
     const tone = cn(column.muted === true && 'text-muted-foreground', column.tone?.(row))
     const content = <Tipped fact={column.tip?.(row)}>{column.cell(row)}</Tipped>
+    if (column.kind === 'bar' && column.across?.(row) === true) {
+        return (
+            <TableCell colSpan={2} className={cn('pl-3 text-left', tone)}>
+                {content}
+            </TableCell>
+        )
+    }
     if (column.kind === 'bar') {
         return (
             <CellBar
@@ -177,7 +288,15 @@ function ColumnCell<T>({ column, row, first }: { column: ReportColumn<T>; row: T
     const className = cn(CELL[column.kind], !first && 'pl-3', tone)
     const held = column.kind === 'free' ? <Free>{content}</Free> : content
     return first ? (
-        <th scope="row" className={cn('py-0.5 font-normal', className)}>
+        <th
+            scope={place === 'head' ? 'rowgroup' : 'row'}
+            className={cn(
+                'py-0.5',
+                place === 'head' ? 'font-medium text-foreground' : 'font-normal',
+                className,
+                place === 'member' && 'pl-4',
+            )}
+        >
             {held}
         </th>
     ) : (
