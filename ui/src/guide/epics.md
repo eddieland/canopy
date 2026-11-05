@@ -43,16 +43,19 @@ on its fortieth try.
 
 ## Its members
 
-A member is a ticket you add to the epic, usually one you filed for an entry of the approved plan:
+A member is a ticket you add to the epic, usually one you filed for an entry of the approved plan. You add one from
+[the epic's page](#an-epics-page): **Register a ticket** beside an entry's `none yet`, or **Add a ticket** under the
+breakdown. A ticket is a member of one epic at most, and an epic holds `policy.max_epic_tickets` at most. Being a
+member authorizes no work: a member is worked once you label it or start it, like any other ticket, and then its
+planner reads the epic's approved plan beside its own ticket.
+
+In a terminal, name the entries it fulfils with `--entry`, once for each, or `--no-entry` for one the breakdown didn't
+foresee, and `canopy epic remove` takes it out again:
 
 ```sh
 canopy epic add epic:2 ABC-140 --entry B1
+canopy epic remove epic:2 ABC-140
 ```
-
-Name the entries it fulfils with `--entry`, once for each, or `--no-entry` for one the breakdown didn't foresee.
-`canopy epic remove epic:2 ABC-140` takes it out again. A ticket is a member of one epic at most, and an epic holds
-`policy.max_epic_tickets` at most. Being a member authorizes no work: a member is worked once you label it or start
-it, like any other ticket, and then its planner reads the epic's approved plan beside its own ticket.
 
 ## The list
 
@@ -91,6 +94,15 @@ you approve a plan, the board is the proposed plan's, marked `proposed`, and eve
 plan yet, the board is one line: the plan run writing it, or what starts the next. A plan canopy can't read says why
 in place of the rows. Under the board come the members it has no row for: those of no entry, with their titles, and
 those registered against an entry the approved plan has since dropped.
+
+Once its plan is approved, an entry with no member offers **Register a ticket**: type the ticket's key, and the entries
+it fulfils are checked, that entry first; check more if it fulfils several. **Add a ticket**, under the board, does the
+same with none checked, for one ticket of several entries, or of none, one the breakdown didn't foresee. Before a plan
+is approved there are no entries to choose, so a ticket you add then is a member of no entry until you register it
+again. Registering a member again replaces its entries, so the same form moves a ticket from one entry to another.
+Hover a member and its **×** removes it, once you say so: the ticket and its work stay as they are, and only its
+membership ends. Each refuses as its command does: a ticket another epic holds, an epic already at
+`policy.max_epic_tickets`, an entry the approved plan doesn't hold, and anything done from inside a tick or a run.
 
 Point at any `R`, `C`, or `B` id on the page, with the mouse or by tabbing to it, and it lights up wherever it shows,
 with every entry that cites it: a requirement lights the entries that cover it, a contract the ones that provide and

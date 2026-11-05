@@ -705,7 +705,11 @@ reader, so no table repeats them.
   muted. A narrow window wraps a row's cells and never stacks an entry into a card. Its mark says which plan it is read
   from, `proposed` in `status-blocked`, and opens that plan; with no plan it is one line, and a plan that does not read
   is a `Notice`. Under
-  it, the members it has no row for. Then the story (`EpicStory`, a task's story's bubbles) beside the requirements and
+  it, the members it has no row for. The members are the operator's to change there, as `canopy epic add` and
+  `remove` change them: an approved entry's `none yet` offers Register a ticket, which opens its form in a row of its
+  own under the entry, and the board's foot Add a ticket, for several entries or none; a member's Remove, a muted ghost
+  shown on its line's hover or focus, asks under its row before it removes. Where a ticket is added, the form says
+  that adding authorizes no work. Then the story (`EpicStory`, a task's story's bubbles) beside the requirements and
   contracts, and the plan runs. Pointing at an `R`, `C`, or `B` id anywhere on the page (`OutlineId`) lights it in the
   accent and the rows that cite it in the accent's tint, with no delay: fun that only adds, never dimming the rest, and
   whose facts each id's tip says in words. Its plan's text is on a page of its own, `/epics/$id/plan` (`EpicPlan`),

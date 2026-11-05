@@ -8,6 +8,8 @@ import type {
     ChoreTried,
     ConfigReload,
     Dismissed,
+    EpicMemberAdded,
+    EpicMemberRemoved,
     EpicPlanApproved,
     EpicReplied,
     Draft,
@@ -631,6 +633,21 @@ export function epicRepliedText(id: number, replied: EpicReplied): string {
         next = 'Its plan run is still working; the first tick after it ends starts the next, with your reply.'
     }
     return `${head} ${next}`
+}
+
+/**
+ * What adding a ticket to an epic did, as `canopy epic add` says it (canopy/cli/epics.py): that it was added, or was a
+ * member already, then the entries it is now registered against, or no entry.
+ */
+export function epicMemberAddedText(id: number, added: EpicMemberAdded): string {
+    const head = added.added ? `Added ${added.key} to ${epicRef(id)}.` : `Already a member: ${added.key}.`
+    const named = added.entries.length === 0 ? 'no entry' : added.entries.join(', ')
+    return `${head} Registered ${added.key} against ${named}.`
+}
+
+/** What removing a ticket from an epic did, as `canopy epic remove` says it (canopy/cli/epics.py). */
+export function epicMemberRemovedText(id: number, removed: EpicMemberRemoved): string {
+    return `Removed ${removed.key} from ${epicRef(id)}.`
 }
 
 /** What the operator's word on a plan did, as `canopy plan` says it (canopy/cli/plans.py). */

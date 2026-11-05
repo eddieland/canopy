@@ -15,6 +15,8 @@ import {
     draftsStagedToast,
     editedText,
     epicApprovedText,
+    epicMemberAddedText,
+    epicMemberRemovedText,
     epicRepliedText,
     failedText,
     forgotText,
@@ -382,6 +384,20 @@ describe('outcomes', () => {
             'Recorded message 21 on epic:2. It has had 3 plan runs, policy.max_plan_attempts; none starts again for ' +
                 'this reply.',
         )
+    })
+
+    it('says what adding a ticket to an epic did, as `canopy epic add` does', () => {
+        expect(epicMemberAddedText(1, { key: 'ABC-105', added: true, entries: ['B3'] })).toBe(
+            'Added ABC-105 to epic:1. Registered ABC-105 against B3.',
+        )
+        // Registered again: its entries replaced, or none.
+        expect(epicMemberAddedText(1, { key: 'ABC-103', added: false, entries: ['B1', 'B3'] })).toBe(
+            'Already a member: ABC-103. Registered ABC-103 against B1, B3.',
+        )
+        expect(epicMemberAddedText(2, { key: 'ABC-140', added: true, entries: [] })).toBe(
+            'Added ABC-140 to epic:2. Registered ABC-140 against no entry.',
+        )
+        expect(epicMemberRemovedText(1, { key: 'ABC-104' })).toBe('Removed ABC-104 from epic:1.')
     })
 
     it('says what a word on a plan did, as `canopy plan` does', () => {

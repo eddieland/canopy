@@ -177,6 +177,54 @@ test("asking for changes to an epic's plan is a reply, and says what it starts",
     expect(replies).toEqual([{ body: 'Say how the copy clears offline.', submission: expect.any(String) as unknown }])
 })
 
+test("a ticket registered on an entry's none yet fills it, and a member is removed once asked", async ({ page }) => {
+    // The root server's journal never changes: each write is answered here, as canopy epic add and remove would, and
+    // the epic reads as they left it once they are made.
+    const writes: unknown[] = []
+    await page.route('**/api/epics/1/members', async (route) => {
+        writes.push(route.request().postDataJSON())
+        await route.fulfill({ json: { key: 'ABC-105', added: true, entries: ['B3'] } })
+    })
+    await page.route('**/api/epics/1/members/ABC-104', async (route) => {
+        writes.push(route.request().method())
+        await route.fulfill({ json: { key: 'ABC-104' } })
+    })
+    await page.route('**/api/epics/1', async (route) => {
+        const detail = (await (await route.fetch()).json()) as {
+            members: { key: string }[]
+            outline: { entries: { id: string; members: string[] }[] }
+        }
+        for (const entry of detail.outline.entries) {
+            if (entry.id === 'B3' && writes.length > 0) {
+                entry.members = ['ABC-105']
+            }
+            if (entry.id === 'B2' && writes.includes('DELETE')) {
+                entry.members = []
+            }
+        }
+        await route.fulfill({ json: detail })
+    })
+    await page.goto('epics/1')
+    await settled(page)
+    const b3 = page.getByTestId('entry-B3')
+    await b3.getByRole('button', { name: 'Register a ticket' }).click()
+    const form = page.getByRole('form', { name: 'Register a ticket against B3' })
+    await expect(form.getByRole('textbox', { name: 'Ticket key' })).toBeFocused()
+    await form.getByRole('textbox', { name: 'Ticket key' }).fill('ABC-105')
+    await form.getByRole('button', { name: 'Add and register' }).click()
+    const foot = page.getByTestId('members-foot')
+    await expect(foot).toContainText('Added ABC-105 to epic:1. Registered ABC-105 against B3.')
+    await expect(b3).not.toContainText('none yet')
+    expect(writes).toEqual([{ key: 'ABC-105', entries: ['B3'] }])
+
+    const b2 = page.getByTestId('entry-B2')
+    await b2.hover()
+    await b2.getByRole('button', { name: 'Remove ABC-104' }).click()
+    await page.getByRole('button', { name: 'Remove ABC-104 from epic:1' }).click()
+    await expect(foot).toContainText('Removed ABC-104 from epic:1.')
+    await expect(b2).toContainText('none yet')
+})
+
 test("an approved epic's header opens its plan", async ({ page }) => {
     await page.goto('epics/1')
     await settled(page)
