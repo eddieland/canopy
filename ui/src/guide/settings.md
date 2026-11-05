@@ -147,6 +147,11 @@ type, and **Save** waits until you fix it.
 Repositories get a count of their own only when you pick one, so a workspace of fifty repositories shows the two that
 differ.
 
+The bands are listed beside the page, or over it in a narrow window, each with how many of its settings this
+workspace sets and how many you've changed and not saved yet, so you can see where you've customized things without
+scrolling four screens. Every row is a link to itself: `/settings/limits#policy.max_resume_attempts` opens the page at
+that row and lights it for a moment, which is handy for a note to your future self.
+
 Change something and its row gets a line down its edge and says what it was, and a bar appears at the foot listing
 each change as `key: old → new`. When one of them only gets stricter from here, the bar says so before you save, since
 the page can't take it back: only an edit to the file can.

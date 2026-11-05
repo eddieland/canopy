@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link, useLocation } from '@tanstack/react-router'
 import { LockKeyhole, Save } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { refreshReloaded, saveConfig } from '@/api/mutations'
@@ -17,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
+    bandCounts,
     boundText,
     byPart,
     changeList,
@@ -57,7 +59,8 @@ const CHANGED_ROW = 'relative before:absolute before:inset-y-0 before:left-0 bef
  * come in bands by what they govern (`CONFIG_GROUPS`), a band of several kinds in labelled parts, each key in words
  * over its name in the file. A changed row is marked, and a save bar, kept in view at the page's foot once something
  * changed, lists the changes and writes them at once. A save writes the workspace's private file alone, keeping its
- * comments, then asks the loop to read it again as Reload does.
+ * comments, then asks the loop to read it again as Reload does. An index of the bands sits beside the form, sticking as
+ * it scrolls, or in a line over it in a narrower pane; each row is its key's anchor, `#policy.max_resume_attempts`.
  */
 export function ConfigForm() {
     const client = useQueryClient()
@@ -127,6 +130,20 @@ function Form({
     const stricter = oneWay(settings.keys, form.changes)
     const draft = (name: string, value: ConfigDrafts[string]) => setDrafts({ ...drafts, [name]: value })
     const perRepo = settings.keys.find((k) => k.name === 'capacity.slots_per_repo')?.value
+    const bands = groupedKeys(settings.keys)
+    const inView = useBandInView(bands.map(({ group }) => bandId(group.title)).join(' '))
+    // The row the page was opened at (`#capacity.max_workers`): scrolled to, and lit once, until its light has played.
+    const hash = useLocation({ select: (location) => location.hash })
+    const [lit, setLit] = useState<string>()
+    const target = hash === lit ? undefined : hash
+    useEffect(() => {
+        if (hash !== '') {
+            // A band's top, as the index links to it; a row in the middle of the page, where its light is seen.
+            document
+                .querySelector(`#${CSS.escape(hash)}`)
+                ?.scrollIntoView({ block: hash.startsWith('band-') ? 'start' : 'center' })
+        }
+    }, [hash])
     const row = ({ setting, label, unit }: LabelledKey) =>
         setting.name === REPO_SLOTS ? (
             <RepoSlots
@@ -137,14 +154,22 @@ function Form({
                 perRepo={typeof perRepo === 'number' ? perRepo : null}
                 draft={drafts[setting.name]}
                 changed={touched(setting.name)}
+                lit={target === setting.name}
+                onLit={() => setLit(setting.name)}
                 errors={form.errors}
                 onDraft={(value) => draft(setting.name, value)}
             />
         ) : (
             <li
                 key={setting.name}
-                className={cn(ROW, touched(setting.name) && CHANGED_ROW)}
+                id={setting.name}
+                className={cn(ROW, touched(setting.name) && CHANGED_ROW, target === setting.name && 'animate-lit')}
                 data-changed={touched(setting.name) || undefined}
+                onAnimationEnd={(event) => {
+                    if (event.target === event.currentTarget) {
+                        setLit(setting.name)
+                    }
+                }}
             >
                 <KeyLabel setting={setting} label={label} every={settings.every} changed={touched(setting.name)} />
                 <ControlCell unit={unit}>
@@ -159,80 +184,188 @@ function Form({
             </li>
         )
     return (
-        <form
-            className="flex max-w-4xl flex-col gap-8"
-            aria-label="Loop settings"
-            data-testid="config-form"
-            onSubmit={(event) => {
-                event.preventDefault()
-                onSave(form.changes)
-            }}
-        >
-            {groupedKeys(settings.keys).map(({ group, keys: shown }) => (
-                <section
-                    key={group.title}
-                    aria-labelledby={`band-${groupSlug(group.title)}`}
-                    className="flex flex-col gap-2"
-                    data-testid={`config-group-${groupSlug(group.title)}`}
+        <div className="@container">
+            {/* Two columns once the pane has room for the index beside the form at full size, about 72rem. Written
+                out, so Tailwind finds them. */}
+            <div className="grid grid-cols-1 gap-x-8 gap-y-6 @min-[72rem]:grid-cols-[12rem_minmax(0,56rem)]">
+                <nav
+                    aria-label="Bands"
+                    className={cn(
+                        'flex flex-wrap gap-x-4 gap-y-1',
+                        '@min-[72rem]:sticky @min-[72rem]:top-0 @min-[72rem]:flex-col @min-[72rem]:self-start',
+                    )}
+                    data-testid="config-index"
                 >
-                    {/* A band's heading stands over its panel, a step above the rows' labels, in Settings' color. */}
-                    <div className="flex flex-col gap-0.5">
-                        <h2
-                            id={`band-${groupSlug(group.title)}`}
-                            className={cn('text-base font-semibold', SECTION_TEXT['/settings'])}
-                        >
-                            {group.title}
-                        </h2>
-                        <p className="text-xs text-muted-foreground">{group.blurb}</p>
-                    </div>
-                    <Panel>
-                        {byPart(shown).map(({ part, keys: inPart }) => (
-                            <section key={part ?? ''} className="border-b last:border-b-0" aria-label={part}>
-                                {part !== undefined && (
-                                    <h3 className="border-b bg-surface-raised/50 px-3 py-2 panel-label text-foreground">
-                                        {part}
-                                    </h3>
-                                )}
-                                <ul className="divide-y">{inPart.map((k) => row(k))}</ul>
-                            </section>
-                        ))}
-                    </Panel>
-                </section>
-            ))}
-            {/* Kept in view at the page's foot once something changed, so a change made far down the page is never
-                left unsaved unseen. Until then its height is held at the page's end, so its coming moves nothing. */}
-            {barShown ? (
-                <Panel className="sticky bottom-4 z-10 min-h-16 shadow-float" data-testid="config-save-bar">
-                    <div className="flex items-start justify-between gap-4 p-3">
-                        <div className="flex min-w-0 flex-col gap-1">
-                            <p className="text-sm text-foreground" data-testid="config-pending">
-                                {pendingText(pending, errors)}
-                            </p>
-                            <ChangeList changes={changed} />
-                            {stricter.length > 0 && (
-                                <p
-                                    className="flex items-center gap-1.5 text-xs text-status-blocked"
-                                    data-testid="config-one-way"
-                                >
-                                    <LockKeyhole aria-hidden className="size-3 shrink-0" />
-                                    {oneWayText(stricter)}
-                                </p>
-                            )}
-                            {/* A field in error says why on its own row; this is what the server said of a save. */}
-                            <Notice error={refused}>{saved ? savedText(saved) : null}</Notice>
-                        </div>
-                        <SaveActions
-                            pending={pending}
-                            errors={errors}
-                            saving={saving}
-                            onDiscard={() => setDrafts({})}
+                    {bands.map(({ group, keys: shown }) => (
+                        <BandLink
+                            key={group.title}
+                            title={group.title}
+                            current={inView === bandId(group.title)}
+                            {...bandCounts(shown, touched)}
                         />
-                    </div>
-                </Panel>
-            ) : (
-                <div aria-hidden className="min-h-16" />
+                    ))}
+                </nav>
+                <form
+                    className="flex max-w-4xl min-w-0 flex-col gap-8"
+                    aria-label="Loop settings"
+                    data-testid="config-form"
+                    onSubmit={(event) => {
+                        event.preventDefault()
+                        onSave(form.changes)
+                    }}
+                >
+                    {bands.map(({ group, keys: shown }) => (
+                        <section
+                            key={group.title}
+                            id={bandId(group.title)}
+                            aria-labelledby={`${bandId(group.title)}-heading`}
+                            className="flex scroll-mt-4 flex-col gap-2"
+                            data-testid={`config-group-${groupSlug(group.title)}`}
+                        >
+                            {/* A band's heading stands over its panel, a step above the rows' labels, in Settings'
+                                color. */}
+                            <div className="flex flex-col gap-0.5">
+                                <h2
+                                    id={`${bandId(group.title)}-heading`}
+                                    className={cn('text-base font-semibold', SECTION_TEXT['/settings'])}
+                                >
+                                    {group.title}
+                                </h2>
+                                <p className="text-xs text-muted-foreground">{group.blurb}</p>
+                            </div>
+                            <Panel>
+                                {byPart(shown).map(({ part, keys: inPart }) => (
+                                    <section key={part ?? ''} className="border-b last:border-b-0" aria-label={part}>
+                                        {part !== undefined && (
+                                            <h3
+                                                className={cn(
+                                                    'border-b bg-surface-raised/50 px-3 py-2',
+                                                    'panel-label text-foreground',
+                                                )}
+                                            >
+                                                {part}
+                                            </h3>
+                                        )}
+                                        <ul className="divide-y">{inPart.map((k) => row(k))}</ul>
+                                    </section>
+                                ))}
+                            </Panel>
+                        </section>
+                    ))}
+                    {/* Kept in view at the page's foot once something changed, so a change made far down the
+                        page is never left unsaved unseen. Until then its height is held at the page's end, so its
+                        coming moves nothing. */}
+                    {barShown ? (
+                        <Panel className="sticky bottom-4 z-10 min-h-16 shadow-float" data-testid="config-save-bar">
+                            <div className="flex items-start justify-between gap-4 p-3">
+                                <div className="flex min-w-0 flex-col gap-1">
+                                    <p className="text-sm text-foreground" data-testid="config-pending">
+                                        {pendingText(pending, errors)}
+                                    </p>
+                                    <ChangeList changes={changed} />
+                                    {stricter.length > 0 && (
+                                        <p
+                                            className="flex items-center gap-1.5 text-xs text-status-blocked"
+                                            data-testid="config-one-way"
+                                        >
+                                            <LockKeyhole aria-hidden className="size-3 shrink-0" />
+                                            {oneWayText(stricter)}
+                                        </p>
+                                    )}
+                                    {/* A field in error says why on its own row; this is what the server said of a
+                                        save. */}
+                                    <Notice error={refused}>{saved ? savedText(saved) : null}</Notice>
+                                </div>
+                                <SaveActions
+                                    pending={pending}
+                                    errors={errors}
+                                    saving={saving}
+                                    onDiscard={() => setDrafts({})}
+                                />
+                            </div>
+                        </Panel>
+                    ) : (
+                        <div aria-hidden className="min-h-16" />
+                    )}
+                </form>
+            </div>
+        </div>
+    )
+}
+
+/** A band's id on the page, which its index entry links to: `band-retention-budget`. */
+function bandId(title: string): string {
+    return `band-${groupSlug(title)}`
+}
+
+/**
+ * The band most in view, by its id, of the bands `ids` names (space-separated, in page order): the first whose panel
+ * crosses the top half of the page's scroll. Undefined until the page has scrolled them into view, or where the browser
+ * cannot say.
+ */
+function useBandInView(ids: string): string | undefined {
+    const [shown, setShown] = useState<ReadonlySet<string>>(new Set())
+    useEffect(() => {
+        if (typeof IntersectionObserver === 'undefined') {
+            return
+        }
+        const observer = new IntersectionObserver(
+            (entries) =>
+                setShown((was) => {
+                    const now = new Set(was)
+                    for (const entry of entries) {
+                        if (entry.isIntersecting) {
+                            now.add(entry.target.id)
+                        } else {
+                            now.delete(entry.target.id)
+                        }
+                    }
+                    return now
+                }),
+            // The top half of the scroll: a band counts once it reaches there, and until it leaves the top.
+            { rootMargin: '0px 0px -50% 0px' },
+        )
+        for (const id of ids.split(' ')) {
+            const band = document.querySelector(`#${CSS.escape(id)}`)
+            if (band !== null) {
+                observer.observe(band)
+            }
+        }
+        return () => observer.disconnect()
+    }, [ids])
+    return ids.split(' ').find((id) => shown.has(id))
+}
+
+/**
+ * A band's entry in the page's index: its title, linking to it, then how many of its keys this workspace sets and how
+ * many of its rows wait unsaved, each left out at none. The band most in view is marked current, in the foreground.
+ */
+function BandLink({ title, current, set, changed }: { title: string; current: boolean; set: number; changed: number }) {
+    return (
+        <Link
+            to="/settings/limits"
+            hash={bandId(title)}
+            // Only the band the address names is the link to where you are, not all five: they share a path.
+            activeOptions={{ includeHash: true }}
+            data-current={current || undefined}
+            className={cn(
+                'flex items-baseline gap-2 py-0.5 text-sm text-muted-foreground hover:text-foreground',
+                'data-current:text-foreground',
             )}
-        </form>
+            data-testid={`config-index-${groupSlug(title)}`}
+        >
+            <span className={cn(current && 'font-medium')}>{title}</span>
+            {set > 0 && (
+                <span className="readout text-2xs" title={`${set} set in this workspace`}>
+                    {set} set
+                </span>
+            )}
+            {changed > 0 && (
+                <span className="readout text-2xs text-accent" title={`${changed} changed, not saved`}>
+                    {changed} unsaved
+                </span>
+            )}
+        </Link>
     )
 }
 
@@ -356,6 +489,8 @@ function RepoSlots({
     perRepo,
     draft,
     changed,
+    lit,
+    onLit,
     errors,
     onDraft,
 }: {
@@ -365,6 +500,10 @@ function RepoSlots({
     perRepo: number | null
     draft: ConfigDrafts[string] | undefined
     changed: boolean
+    /** Whether the page was opened at this row, which lights once. */
+    lit: boolean
+    /** Called once its light has played. */
+    onLit: () => void
     errors: Record<string, string>
     onDraft: (value: ConfigDrafts[string]) => void
 }) {
@@ -376,7 +515,17 @@ function RepoSlots({
     const offered = repos.filter((r) => !shown.includes(r))
     const fallback = perRepo === null ? 'unmanaged' : String(perRepo)
     return (
-        <li className={cn(ROW, changed && CHANGED_ROW)} data-changed={changed || undefined} data-testid="repo-slots">
+        <li
+            id={name}
+            className={cn(ROW, changed && CHANGED_ROW, lit && 'animate-lit')}
+            data-changed={changed || undefined}
+            data-testid="repo-slots"
+            onAnimationEnd={(event) => {
+                if (event.target === event.currentTarget) {
+                    onLit()
+                }
+            }}
+        >
             <KeyLabel setting={setting} label={label} every={null} changed={changed} />
             {shown.length === 0 ? (
                 <p className="text-xs text-muted-foreground @xl:col-start-1">
@@ -514,9 +663,9 @@ function Control({
     if (typeof value === 'boolean') {
         const strict = STRICTER_ON[name]
         return (
-            <label htmlFor={name} className="inline-flex items-center gap-2 text-xs">
+            <label htmlFor={`${name}-field`} className="inline-flex items-center gap-2 text-xs">
                 <Checkbox
-                    id={name}
+                    id={`${name}-field`}
                     checked={typeof draft === 'boolean' ? draft : value}
                     disabled={value === strict}
                     data-testid={name}
