@@ -89,11 +89,50 @@ describe('ConfigForm', () => {
         expect(screen.getByTestId('config-pending').textContent).toBe('1 unsaved change')
     })
 
-    it('says there is nothing to save, with Discard off, once a field is typed back to its value', () => {
+    it('shows the save bar only once something changed, and takes it away when it is typed back', () => {
         renderForm()
+        expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
         type('capacity.max_workers', '4')
+        expect(button('Save').disabled).toBe(false)
         type('capacity.max_workers', '3')
-        expect(screen.getByTestId('config-pending').textContent).toBe('No unsaved changes')
-        expect(button('Discard').disabled).toBe(true)
+        expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    })
+
+    it('marks a changed row with its value as read, and lists the change in the bar', () => {
+        renderForm()
+        expect(screen.queryByText(/was 3/u)).toBeNull()
+        type('capacity.max_workers', '5')
+        expect(screen.getByText(/· from your user config.* · was 3$/u)).toBeTruthy()
+        expect(changes()).toEqual(['capacity.max_workers: 3 → 5'])
+        expect(screen.queryByTestId('config-one-way')).toBeNull()
+    })
+
+    it('warns that only the file undoes a stricter change', () => {
+        renderForm()
+        type('trust.max_flaky_kicks', '1')
+        expect(screen.getByTestId('config-one-way').textContent).toBe(
+            'trust.max_flaky_kicks: only an edit to config.toml undoes this',
+        )
+    })
+
+    it('folds the list of changes away past three', () => {
+        const counts = ['a', 'b', 'c', 'd', 'e'].map((n) => count(`capacity.max_${n}`))
+        renderForm({ ...SETTINGS, keys: counts })
+        for (const key of counts) {
+            type(key.name, '4')
+        }
+        expect(changes()).toEqual(['capacity.max_a: 3 → 4', 'capacity.max_b: 3 → 4', 'capacity.max_c: 3 → 4'])
+        fireEvent.click(button('Show 2 more'))
+        expect(screen.getByText('capacity.max_e: 3 → 4')).toBeTruthy()
     })
 })
+
+/** A count like `capacity.max_workers`, named `name`. */
+function count(name: string): ConfigKey {
+    return { ...WORKERS, name }
+}
+
+/** The changes the save bar lists, a line each, as shown. */
+function changes(): (string | null)[] {
+    return [...screen.getByTestId('config-changes').querySelectorAll('li')].map((li) => li.textContent)
+}

@@ -4,12 +4,16 @@ import type { ConfigKey, ConfigSaved } from '@/api/types'
 
 import {
     boundText,
+    changeList,
     CONFIG_GROUPS,
     configForm,
     groupedKeys,
+    oneWay,
+    oneWayText,
     pendingText,
     savedText,
     sourceText,
+    valueText,
 } from './config-settings'
 
 const WORKERS: ConfigKey = {
@@ -242,5 +246,45 @@ describe('config groups', () => {
         // A field in error is a change too, so the bar never says there is none beside an enabled Discard.
         expect(pendingText(0, 1)).toBe('1 unsaved change, 1 to fix before saving')
         expect(pendingText(2, 1)).toBe('3 unsaved changes, 1 to fix before saving')
+    })
+})
+
+describe('the save bar', () => {
+    it('list each change as its key, its value read, and the one a save writes, in the order the keys come', () => {
+        const keys = [...KEYS, STACKING]
+        const { changes: changed } = configForm(keys, {
+            'trust.rebase': false,
+            'capacity.max_workers': '5',
+            'capacity.repo_slots': { web: '6', api: '2' },
+            'trust.trusted_reviewers': ['alice'],
+            'policy.stacking': 'never',
+            'capacity.slots_per_repo': '3',
+        })
+        expect(changeList(keys, changed)).toEqual([
+            { name: 'capacity.max_workers', old: '2', new: '5' },
+            { name: 'capacity.repo_slots.web', old: '4', new: '6' },
+            { name: 'capacity.repo_slots.api', old: 'unmanaged', new: '2' },
+            { name: 'capacity.slots_per_repo', old: 'unmanaged', new: '3' },
+            { name: 'trust.trusted_reviewers', old: 'alice, lint-bot', new: 'alice' },
+            { name: 'trust.rebase', old: 'on', new: 'off' },
+            { name: 'policy.stacking', old: 'auto', new: 'never' },
+        ])
+    })
+
+    it('name the stricter keys a save changes, which only the file undoes, and nothing else', () => {
+        expect(oneWay(KEYS, { 'capacity.max_workers': 5 })).toEqual([])
+        expect(oneWay(KEYS, { 'capacity.max_workers': 5, 'trust.rebase': false })).toEqual(['trust.rebase'])
+        expect(oneWayText(['trust.rebase'])).toBe('trust.rebase: only an edit to config.toml undoes this')
+        expect(oneWayText(['trust.rebase', 'policy.plan'])).toBe(
+            'trust.rebase, policy.plan: only an edit to config.toml undoes these',
+        )
+    })
+
+    it('say a value in words', () => {
+        expect(valueText(null, 'spend.monthly_budget_usd')).toBe('none')
+        expect(valueText(null, 'capacity.slots_per_repo')).toBe('unmanaged')
+        expect(valueText([], 'trust.trusted_reviewers')).toBe('none')
+        expect(valueText({ web: 4, api: 2 }, 'capacity.repo_slots')).toBe('web 4, api 2')
+        expect(valueText(true, 'trust.rebase')).toBe('on')
     })
 })

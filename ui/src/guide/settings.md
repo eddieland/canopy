@@ -144,6 +144,10 @@ until you fix it.
 Repositories get a count of their own only when you pick one, so a workspace of fifty repositories shows the two that
 differ.
 
+Change something and its row gets a line down its edge and says what it was, and a bar appears at the foot listing
+each change as `key: old → new`. When one of them only gets stricter from here, the bar says so before you save, since
+the page can't take it back: only an edit to the file can.
+
 **Save** writes `.canopy/config.toml`, this workspace's own file, editing it in place so your comments and layout stay,
 then reloads the loop as **Reload** below does. It never touches `canopy-workspace.toml` or
 `~/.config/canopy/config.toml`; a value that came from the latter is copied into the workspace's file, where it wins for

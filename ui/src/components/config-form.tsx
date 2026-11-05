@@ -1,38 +1,51 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Save } from 'lucide-react'
+import { LockKeyhole, Save } from 'lucide-react'
 import { useState } from 'react'
 
 import { refreshReloaded, saveConfig } from '@/api/mutations'
 import { configQuery } from '@/api/queries'
 import type { ConfigKey, ConfigSaved, ConfigSettings, ConfigValue } from '@/api/types'
+import { Disclosure } from '@/components/disclosure'
 import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { RepoSelect } from '@/components/repo-picker'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
     boundText,
+    changeList,
     configForm,
     groupedKeys,
+    oneWay,
+    oneWayText,
     pendingText,
     REPO_SLOTS,
     savedText,
     sourceText,
+    unsetText,
+    valueText,
 } from '@/lib/config-settings'
-import type { ConfigDrafts } from '@/lib/config-settings'
+import type { ConfigChange, ConfigDrafts } from '@/lib/config-settings'
+import { cn } from '@/lib/utils'
 
 // The trust switches, and the side the page may move each to: the stricter one (TRUST_MODEL T8).
 const STRICTER_ON: Record<string, boolean> = { 'trust.rebase': false, 'trust.commit_trailer': true }
-// What an unset count's field says it is: an unmanaged pool for the pools' counts, no budget for the budget.
-const UNSET: Record<string, string> = { 'spend.monthly_budget_usd': 'none' }
+// How many changes the save bar lists before it folds the rest away.
+const LISTED = 3
+// The save bar's list of changes, folded in two past `LISTED`.
+const CHANGES = 'flex min-w-0 max-w-full flex-col font-mono text-xs text-muted-foreground'
+// A changed row's mark: an accent hairline at its start, drawn over its padding, so nothing in it moves.
+const CHANGED_ROW = 'relative before:absolute before:inset-y-0 before:left-0 before:w-0.5 before:bg-accent'
 
 /**
  * The Loop settings form: the keys the loop reads that the web UI may change, edited in place (DESIGN §22, M41):
  * counts, paces, and retentions within the bounds the server sets, and trust settings only toward stricter. The keys
- * come in panels by what they govern (`CONFIG_GROUPS`), each in words over its name in the file, and one save bar,
- * kept in view at the page's foot, writes every change at once. A save writes the workspace's private file alone,
+ * come in panels by what they govern (`CONFIG_GROUPS`), each in words over its name in the file. A changed row is
+ * marked, and a save bar, kept in view at the page's foot once something changed, lists the changes and writes them at
+ * once. A save writes the workspace's private file alone,
  * keeping its comments, then asks the loop to read it again as Reload does.
  */
 export function ConfigForm() {
@@ -94,6 +107,11 @@ function Form({
     const form = configForm(settings.keys, drafts)
     const pending = Object.keys(form.changes).length
     const errors = Object.keys(form.errors).length
+    const touched = (name: string) =>
+        name in form.changes || Object.keys(form.errors).some((n) => n === name || n.startsWith(`${name}.`))
+    // Shown once something changed, and kept while a save's outcome has something to say.
+    const barShown = pending + errors > 0 || saved !== undefined || refused !== null
+    const stricter = oneWay(settings.keys, form.changes)
     const draft = (name: string, value: ConfigDrafts[string]) => setDrafts({ ...drafts, [name]: value })
     const perRepo = settings.keys.find((k) => k.name === 'capacity.slots_per_repo')?.value
     return (
@@ -126,13 +144,23 @@ function Form({
                                         repos={settings.repos}
                                         perRepo={typeof perRepo === 'number' ? perRepo : null}
                                         draft={drafts[setting.name]}
+                                        changed={touched(setting.name)}
                                         errors={form.errors}
                                         onDraft={(value) => draft(setting.name, value)}
                                     />
                                 ) : (
-                                    <li key={setting.name} className="flex flex-col gap-1 p-3">
+                                    <li
+                                        key={setting.name}
+                                        className={cn('flex flex-col gap-1 p-3', touched(setting.name) && CHANGED_ROW)}
+                                        data-changed={touched(setting.name) || undefined}
+                                    >
                                         <div className="flex items-center justify-between gap-4">
-                                            <KeyLabel setting={setting} label={label} every={settings.every} />
+                                            <KeyLabel
+                                                setting={setting}
+                                                label={label}
+                                                every={settings.every}
+                                                changed={touched(setting.name)}
+                                            />
                                             <Control
                                                 setting={setting}
                                                 draft={drafts[setting.name]}
@@ -148,52 +176,142 @@ function Form({
                     </Panel>
                 ))}
             </div>
-            {/* Kept in view at the page's foot, so a change made far down the page is never left unsaved unseen. */}
-            <Panel className="sticky bottom-4 z-10 shadow-float" data-testid="config-save-bar">
-                <div className="flex items-center justify-between gap-4 p-3">
-                    <div className="flex min-w-0 flex-col gap-1">
-                        <p className="text-sm text-foreground" data-testid="config-pending">
-                            {pendingText(pending, errors)}
-                        </p>
-                        {/* A field in error says why on its own row; this is what the server said of a save. */}
-                        <Notice error={refused}>{saved ? savedText(saved) : null}</Notice>
+            {/* Kept in view at the page's foot once something changed, so a change made far down the page is never
+                left unsaved unseen. Until then its height is held at the page's end, so its coming moves nothing. */}
+            {barShown ? (
+                <Panel className="sticky bottom-4 z-10 min-h-16 shadow-float" data-testid="config-save-bar">
+                    <div className="flex items-start justify-between gap-4 p-3">
+                        <div className="flex min-w-0 flex-col gap-1">
+                            <p className="text-sm text-foreground" data-testid="config-pending">
+                                {pendingText(pending, errors)}
+                            </p>
+                            <ChangeList changes={changeList(settings.keys, form.changes)} />
+                            {stricter.length > 0 && (
+                                <p
+                                    className="flex items-center gap-1.5 text-xs text-status-blocked"
+                                    data-testid="config-one-way"
+                                >
+                                    <LockKeyhole aria-hidden className="size-3 shrink-0" />
+                                    {oneWayText(stricter)}
+                                </p>
+                            )}
+                            {/* A field in error says why on its own row; this is what the server said of a save. */}
+                            <Notice error={refused}>{saved ? savedText(saved) : null}</Notice>
+                        </div>
+                        <SaveActions
+                            pending={pending}
+                            errors={errors}
+                            saving={saving}
+                            onDiscard={() => setDrafts({})}
+                        />
                     </div>
-                    <span className="flex shrink-0 items-center gap-2">
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            disabled={pending + errors === 0 || saving}
-                            data-testid="config-discard"
-                            onClick={() => setDrafts({})}
-                        >
-                            Discard
-                        </Button>
-                        <Button
-                            type="submit"
-                            disabled={pending === 0 || errors > 0 || saving}
-                            // A disabled action has nothing to lift: the accent's glow goes with its fill's strength.
-                            className="disabled:shadow-none"
-                            data-testid="config-save"
-                        >
-                            <Save />
-                            Save
-                        </Button>
-                    </span>
-                </div>
-            </Panel>
+                </Panel>
+            ) : (
+                <div aria-hidden className="min-h-16" />
+            )}
         </form>
     )
 }
 
-/** A key in words, and under it its name in the file, where its value comes from, and how far the page may take it. */
-function KeyLabel({ setting, label, every }: { setting: ConfigKey; label: string; every: number | null }) {
+/** The save bar's Discard and Save, each off until something changed; Save off too while a field is in error. */
+function SaveActions({
+    pending,
+    errors,
+    saving,
+    onDiscard,
+}: {
+    pending: number
+    errors: number
+    saving: boolean
+    onDiscard: () => void
+}) {
+    return (
+        <span className="flex shrink-0 items-center gap-2">
+            <Button
+                type="button"
+                variant="ghost"
+                disabled={pending + errors === 0 || saving}
+                data-testid="config-discard"
+                onClick={onDiscard}
+            >
+                Discard
+            </Button>
+            <Button
+                type="submit"
+                disabled={pending === 0 || errors > 0 || saving}
+                // A disabled action has nothing to lift: the accent's glow goes with its fill's strength.
+                className="disabled:shadow-none"
+                data-testid="config-save"
+            >
+                <Save />
+                Save
+            </Button>
+        </span>
+    )
+}
+
+/**
+ * What a save would change, one `key: old → new` a line, in the CLI's monospace; past `LISTED`, the rest folded under
+ * a disclosure, so a long list never pushes Save off the screen.
+ */
+function ChangeList({ changes }: { changes: ConfigChange[] }) {
+    const [open, setOpen] = useState(false)
+    if (changes.length === 0) {
+        return null
+    }
+    const rest = changes.slice(LISTED)
+    return (
+        <Collapsible open={open} onOpenChange={setOpen} className="flex flex-col items-start gap-0.5">
+            <ul className={CHANGES} data-testid="config-changes">
+                {changes.slice(0, LISTED).map((c) => (
+                    <ChangeLine key={c.name} change={c} />
+                ))}
+            </ul>
+            <CollapsibleContent asChild>
+                <ul className={CHANGES}>
+                    {rest.map((c) => (
+                        <ChangeLine key={c.name} change={c} />
+                    ))}
+                </ul>
+            </CollapsibleContent>
+            {rest.length > 0 && <Disclosure open={open} what={`${rest.length} more`} className="-ml-2" />}
+        </Collapsible>
+    )
+}
+
+/** One change a save would make, as `key: old → new`. */
+function ChangeLine({ change }: { change: ConfigChange }) {
+    return (
+        <li className="truncate">
+            {change.name}: {change.old} → {change.new}
+        </li>
+    )
+}
+
+/**
+ * A key in words, and under it its name in the file, where its value comes from, how far the page may take it, and,
+ * once `changed`, its value as read.
+ */
+function KeyLabel({
+    setting,
+    label,
+    every,
+    changed = false,
+}: {
+    setting: ConfigKey
+    label: string
+    every: number | null
+    changed?: boolean
+}) {
+    // A repository's own counts list their old values in the save bar; a row of them says nothing of one.
+    const was = changed && setting.name !== REPO_SLOTS ? `was ${valueText(setting.value, setting.name)}` : null
     return (
         <div className="flex min-w-0 flex-col gap-0.5">
             <span className="text-sm text-foreground">{label}</span>
             <span className="text-2xs text-muted-foreground">
                 <code className="font-mono">{setting.name}</code>
                 {' · '}
-                {[sourceText(setting), boundText(setting)].filter(Boolean).join(' · ')}
+                {[sourceText(setting), boundText(setting), was].filter(Boolean).join(' · ')}
                 {setting.name === 'loop.interval_minutes' && every !== null
                     ? ` · --every ${every} sets the pace until the loop restarts`
                     : null}
@@ -212,6 +330,7 @@ function RepoSlots({
     repos,
     perRepo,
     draft,
+    changed,
     errors,
     onDraft,
 }: {
@@ -220,6 +339,7 @@ function RepoSlots({
     repos: string[]
     perRepo: number | null
     draft: ConfigDrafts[string] | undefined
+    changed: boolean
     errors: Record<string, string>
     onDraft: (value: ConfigDrafts[string]) => void
 }) {
@@ -231,8 +351,12 @@ function RepoSlots({
     const offered = repos.filter((r) => !shown.includes(r))
     const fallback = perRepo === null ? 'unmanaged' : String(perRepo)
     return (
-        <li className="flex flex-col gap-2 p-3" data-testid="repo-slots">
-            <KeyLabel setting={setting} label={label} every={null} />
+        <li
+            className={cn('flex flex-col gap-2 p-3', changed && CHANGED_ROW)}
+            data-changed={changed || undefined}
+            data-testid="repo-slots"
+        >
+            <KeyLabel setting={setting} label={label} every={null} changed={changed} />
             {shown.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
                     no repository has its own count yet: each pool has the slots per repository ({fallback})
@@ -372,7 +496,7 @@ function Control({
         <Count
             name={name}
             text={typeof draft === 'string' ? draft : typeof value === 'number' ? String(value) : ''}
-            placeholder={value === null ? (UNSET[name] ?? 'unmanaged') : ''}
+            placeholder={value === null ? unsetText(name) : ''}
             error={error}
             onText={onDraft}
         />
