@@ -35,13 +35,15 @@ export interface ReportColumn<T> {
     tone?: (row: T) => string | false | undefined
     /** For a `bar`: a row's figure as a share of the column's largest, 0 to 100 (`barPercent`). */
     bar?: (row: T) => number
-    /** For a `bar`: the bar's fill, `muted-foreground` unless the series has its own. */
-    fill?: string
+    /** For a `bar`: the bar's fill, `muted-foreground` unless the series has its own, or a row's own series'. */
+    fill?: string | ((row: T) => string | undefined)
+    /** What sits over its head, in a head row of its own, such as a sparkline of its figures across the rows. */
+    over?: ReactNode
 }
 
 // The column names stick inside the padded scrolling region. A sticky head sticks inside the region's padding, so the
-// rows scrolling under it would show in a strip above it: the region's top padding is the head's cells' instead.
-const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
+// rows scrolling under it would show in a strip above it: the region's top padding is the head's first row's instead.
+const PADDED_HEAD = 'sticky top-0 bg-surface [&>tr:first-child>*]:pt-3'
 
 // The head of a table in a region of someone else's, such as a chart's folded table (`ChartTable`), unpadded.
 const BARE_HEAD = 'sticky top-0 bg-surface'
@@ -72,7 +74,8 @@ const CELL: Record<Exclude<ReportColumnKind, 'bar'>, string> = {
  * reader, in a region of `className` (`max-h-96 px-3 pb-3` unless given); with `scroll` false it is bare, for a region
  * of someone else's (`ChartTable`). `rowKey` keys a row; the table's test id is `testId`, each row's `rowTestId`'s, or
  * what it makes of the row. `top` sets each row's cells at its top, for a row whose free cell stacks rows of its own. A
- * page shows its own `Empty` in its place when it has no rows.
+ * row `ruled` says is set apart from those above it by a rule, as a total or the rest is. A column's `over` sits over
+ * its head, in a head row of its own. A page shows its own `Empty` in its place when it has no rows.
  */
 export function ReportTable<T>({
     rows,
@@ -82,6 +85,7 @@ export function ReportTable<T>({
     className = 'max-h-96 px-3 pb-3',
     scroll = true,
     top = false,
+    ruled,
     testId,
     rowTestId,
 }: {
@@ -92,12 +96,20 @@ export function ReportTable<T>({
     className?: string
     scroll?: boolean
     top?: boolean
+    ruled?: (row: T) => boolean
     testId?: string
     rowTestId?: string | ((row: T) => string)
 }) {
     const table = (
         <Table className="max-w-full" data-testid={testId}>
             <TableHeader className={scroll ? PADDED_HEAD : BARE_HEAD}>
+                {columns.some((column) => column.over !== undefined) && (
+                    <TableRow>
+                        {columns.map((column, i) => (
+                            <ColumnOver key={column.key} column={column} first={i === 0} />
+                        ))}
+                    </TableRow>
+                )}
                 <TableRow>
                     {columns.map((column, i) => (
                         <ColumnHead key={column.key} column={column} first={i === 0} />
@@ -108,7 +120,7 @@ export function ReportTable<T>({
                 {rows.map((row) => (
                     <TableRow
                         key={rowKey(row)}
-                        className={cn(top && 'align-top')}
+                        className={cn(top && 'align-top', ruled?.(row) === true && 'border-t border-border')}
                         data-testid={typeof rowTestId === 'function' ? rowTestId(row) : rowTestId}
                     >
                         {columns.map((column, i) => (
@@ -128,6 +140,15 @@ export function ReportTable<T>({
     )
 }
 
+// What sits over a column's head, the eye's: a bar's over its figure's cell and its bar's both.
+function ColumnOver<T>({ column, first }: { column: ReportColumn<T>; first: boolean }) {
+    return (
+        <td aria-hidden colSpan={column.kind === 'bar' ? 2 : 1} className={cn('pb-1', !first && 'pl-3')}>
+            {column.over}
+        </td>
+    )
+}
+
 function ColumnHead<T>({ column, first }: { column: ReportColumn<T>; first: boolean }) {
     if (column.label === null) {
         return <td aria-hidden />
@@ -144,7 +165,11 @@ function ColumnCell<T>({ column, row, first }: { column: ReportColumn<T>; row: T
     const content = <Tipped fact={column.tip?.(row)}>{column.cell(row)}</Tipped>
     if (column.kind === 'bar') {
         return (
-            <CellBar percent={column.bar?.(row) ?? 0} fill={column.fill} className={cn('readout', tone)}>
+            <CellBar
+                percent={column.bar?.(row) ?? 0}
+                fill={typeof column.fill === 'function' ? column.fill(row) : column.fill}
+                className={cn('readout', tone)}
+            >
                 {content}
             </CellBar>
         )
