@@ -399,8 +399,13 @@ def _member_plan(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], 
         epic_plan_id=followed.id if followed is not None else None,
     )
     plan_id = db.rowid(plan.run(conn))
-    # Its implement, run 38, followed the plan.
-    records.update(records.Run).set(plan_id=plan_id).where("id = ?", 38).run(conn)
+    # Its implement, its first, followed the plan.
+    implement = records.update(records.Run).set(plan_id=plan_id)
+    implement.where(
+        "id = (SELECT min(id) FROM runs WHERE ticket_key = ? AND kind = ?)",
+        "ABC-103",
+        RunKind.IMPLEMENT,
+    ).run(conn)
 
 
 def _register(conn: sqlite3.Connection, member_id: int, entries: Sequence[str]) -> None:
