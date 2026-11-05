@@ -190,10 +190,12 @@ def test_stale_canopy_lease_is_returned_and_others_are_not(
         slots = [
             {"name": "1", "path": "/pool/1/repo", "status": "leased", "lease_id": "a", "lease_holder": "canopy:P-1"},
             {"name": "2", "path": "/pool/2/repo", "status": "leased", "lease_id": "b", "lease_holder": "someone-else"},
+            {"name": "3", "path": "/pool/3/repo", "status": "leased", "lease_id": "c", "lease_holder": "operator:P-2"},
         ]
         treehouse_state.write_text(pool_state(canopy_env.repo, slots))
         assert main(["tick", "--dry-run"]) == 0
-        assert [s["status"] for s in pool(treehouse_state)] == ["available", "leased"]
+        # The operator's desk (DESIGN §18) holds its slot as long as they do.
+        assert [s["status"] for s in pool(treehouse_state)] == ["available", "leased", "leased"]
         log = (canopy_env.state_dir / "canopy.log").read_text()
         assert "canopy lease with no running worker; returned" in log
 
