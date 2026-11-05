@@ -63,7 +63,7 @@ recording to a hosted service works too, and sends your voice there; that's betw
 gets 3 minutes before it's stopped.
 
 The key is private: the shared workspace file can't set it, since it runs a command. Nor can the
-[Settings](settings#limits-and-trust) page, for the same reason. Unset, no box shows a microphone.
+[Loop settings](settings#loop-settings) page, for the same reason. Unset, no box shows a microphone.
 
 ## From another computer
 
