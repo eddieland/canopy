@@ -456,7 +456,9 @@ def test_overseer_refuses_to_start_when_the_workspace_defines_its_agent(scenario
     failed = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert only_tick(scenario.conn).id == failed.tick.id
     assert failed.tick.status == "overseer_failed"
-    assert f"defines one of canopy's agents or its MCP server `canopy` ({config})" in failed.tick.summary
+    assert f"defines one of canopy's agents or one of its MCP servers, `canopy` or `canopy_*` ({config})" in (
+        failed.tick.summary
+    )
     assert not scenario.agent_log.exists()
 
 
