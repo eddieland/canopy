@@ -261,9 +261,9 @@ describe('config groups', () => {
             ['policy.ci_cooldown_minutes', 'Waits'],
             ['review.settle_minutes', 'Waits'],
         ])
-        expect(byPart(timing?.keys ?? []).map((p) => [p.part, p.keys.length])).toEqual([
-            ['Pace', 1],
-            ['Waits', 2],
+        expect(byPart(timing?.keys ?? []).map((p) => [p.part, p.keys.map((k) => k.setting.name)])).toEqual([
+            ['Pace', ['loop.idle_max_minutes']],
+            ['Waits', ['policy.ci_cooldown_minutes', 'review.settle_minutes']],
         ])
         const [capacity] = groupedKeys([WORKERS, PER_REPO])
         expect(byPart(capacity?.keys ?? []).map((p) => p.part)).toEqual([undefined])
@@ -315,6 +315,14 @@ describe('the save bar', () => {
             { name: 'trust.trusted_reviewers', old: 'alice, lint-bot', new: 'alice' },
             { name: 'trust.rebase', old: 'on', new: 'off' },
             { name: 'policy.stacking', old: 'auto', new: 'never' },
+        ])
+    })
+
+    it("take a repository's old count from the slots per repository when it has none of its own", () => {
+        const keys = [SLOTS, { ...PER_REPO, value: 2 }]
+        expect(changeList(keys, { 'capacity.repo_slots': { web: 5, api: 3 } })).toEqual([
+            { name: 'capacity.repo_slots.web', old: '4', new: '5' },
+            { name: 'capacity.repo_slots.api', old: '2', new: '3' },
         ])
     })
 
