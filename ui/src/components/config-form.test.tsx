@@ -196,6 +196,9 @@ describe('ConfigForm', () => {
         expect(screen.getByText("no setting's label or key holds “nothing like it”")).toBeTruthy()
         fireEvent.keyDown(screen.getByRole('searchbox', { name: 'Filter settings by label or key' }), { key: 'Escape' })
         expect(screen.getByRole('textbox', { name: 'capacity.max_workers' })).toBeTruthy()
+        expect(screen.getByRole<HTMLInputElement>('searchbox', { name: 'Filter settings by label or key' }).value).toBe(
+            '',
+        )
     })
 
     it('shows a key at its strictest as its value beside a lock, not as a control', async () => {
