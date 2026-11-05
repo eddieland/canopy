@@ -248,6 +248,9 @@ ticket it returned into the journal (§11); a query no source read fresh does no
 ticket it would have found waits for the read that finds it.
 `tracker.query_every_minutes` spaces it out, delaying only how soon a new ticket is found; a ticket the operator starts
 is in the block already.
+An open ticket the tracker shows with no queue label, not started, that the query's newest read did not return and no
+worker runs for, is left out of the block: one whose label was removed is owed no `skip` every tick. The source still
+reads it, so labeled again it is a candidate again.
 
 "Closed" means whatever the tracker calls finished; the provider skill says which. A closed ticket is not a candidate
 and has no phase: the overseer marks it done, whatever its labels, branch, or PR, unless a worker is running for it,

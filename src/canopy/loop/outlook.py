@@ -50,7 +50,8 @@ def read(ctx: Context, now: datetime) -> frozenset[Fact]:
     states = chore_view.states(ctx.conn, ctx.config, ctx.workspace)
     facts.update(("chore", c["name"]) for c in chore_view.state_section(states, now) if c["due"] and not c["running"])
     stopped = set(conversation.stopped(ctx.conn))
-    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in decided]
+    left = decided | phases.let_go(ctx.conn, derived)
+    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped and t.key not in left]
     reader = observations.Reader.read(ctx, derived, now, tickets)
     for key in reader.keys:
         if key not in decided:
