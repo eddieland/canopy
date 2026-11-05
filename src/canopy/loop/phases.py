@@ -187,7 +187,8 @@ def let_go(conn: sqlite3.Connection, derived: Iterable[Derived]) -> frozenset[st
     Each is a ticket whose own row in `derived` was read fresh as open and no candidate (§17), with no worker running,
     that the tracker query's newest read did not return: one whose label was removed, or one never labeled that came
     into the journal another way. The state block leaves it out, so no tick is owed a `skip` for it, ever again; the
-    `tracker` source still reads it, so labeled again, it is a candidate again.
+    `tracker` source still reads it, so labeled again, it is a candidate again. One the operator started since it was
+    derived is a candidate now, and stays.
 
     Returns:
         Their keys.
@@ -202,6 +203,7 @@ def let_go(conn: sqlite3.Connection, derived: Iterable[Derived]) -> frozenset[st
         and d.closed is False
         and Phase.RUNNING not in d.phases
         and d.ticket_key not in queried
+        and not conversation.is_started(conversation.start_of(conn, d.ticket_key))
     )
 
 

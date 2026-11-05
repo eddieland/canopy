@@ -8,7 +8,7 @@ import pytest
 
 from canopy.core import db
 from canopy.core.vocab import Phase, TickStatus
-from canopy.loop import attention, duties
+from canopy.loop import attention, duties, phases
 from tests.canopy.helpers import LABEL, calls, chore_toml, chore_waits, decides, in_tick, raises, seen, waits
 from tests.canopy.scenario_helpers import Scenario, sets_phase
 from tests.conftest import TRACKER_SOURCE, CanopyEnv
@@ -176,6 +176,15 @@ def test_a_ticket_whose_label_was_removed_is_owed_nothing_until_labeled_again(
     connector_state.write_text(json.dumps({TRACKER_SOURCE: {"query": []}}))
     failed = scenario.tick(*waits("PROJ-2"), code=1)
     assert failed.tick.summary == "overseer left duties undone: no decision for PROJ-1"
+
+
+def test_an_unlabeled_ticket_started_since_its_derivation_is_listed(scenario: Scenario) -> None:
+    """Started between the tick's derivation and its block, it is a candidate, though derived none (DESIGN §22)."""
+    scenario.seen("PROJ-1")
+    derived = [phases.Derived("PROJ-1", None, (), candidate=False, closed=False)]
+    assert phases.let_go(scenario.conn, derived) == {"PROJ-1"}
+    scenario.operator("start", "PROJ-1")
+    assert phases.let_go(scenario.conn, derived) == set()
 
 
 def test_an_unlabeled_ticket_the_query_still_returns_is_owed_a_skip(scenario: Scenario, connector_state: Path) -> None:
