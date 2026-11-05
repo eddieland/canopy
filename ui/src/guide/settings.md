@@ -1,7 +1,7 @@
 # Settings
 
-A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your limits and
-trust settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and the
+A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, your loop
+settings, reloading your config, and the fun. It also shows, read only, which model each agent runs on and the
 skills the runtime finds. It opens from the rail's foot, beside the guide. The theme, the clock, a plan's text size,
 the send key, whether attention lists chore findings, your review personas, and the fun are kept in this browser;
 everything else canopy reads from its config files, as it always did.
@@ -115,13 +115,15 @@ for up to a week, for outages with ambitions.
 
 ## Loop settings
 
-**Open** takes you to a page of its own for the numbers you change most, in five bands. **Capacity** is how many
-workers, chores, reviews, and tasks run at once, each pool's slots, and how much you may attach to a ticket.
-**Attempts** is how many tries a ticket, a plan, or a review's draft gets, and how many tickets an epic holds.
-**Timing** comes in three parts, since every one of them is in minutes and you shouldn't have to guess which: **Pace**,
-how often the loop ticks and asks the tracker and the connectors what's new; **Waits**, how long it holds off after a
-red build, for feedback to go quiet or its checks to finish, and for a PR's head to settle before its review; and
-**Timeouts**, how long a run or a slot's setup may take before canopy stops it.
+**Open** takes you to a page of its own for the numbers you change most. The line under its title is the state of
+things: how many settings there are, how many this workspace sets, and how many come from your user config. Hover the
+title for the page's rules, and copy the path under it when you'd rather edit the file by hand. The settings come in
+five bands. **Capacity** is how many workers, chores, reviews, and tasks run at once, each pool's slots, and how much
+you may attach to a ticket. **Attempts** is how many tries a ticket, a plan, or a review's draft gets, and how many
+tickets an epic holds. **Timing** comes in three parts, since every one of them is in minutes and you shouldn't have to
+guess which: **Pace**, how often the loop ticks and asks the tracker and the connectors what's new; **Waits**, how long
+it holds off after a red build, for feedback to go quiet or its checks to finish, and for a PR's head to settle before
+its review; and **Timeouts**, how long a run or a slot's setup may take before canopy stops it.
 
 **Retention & budget** says how many days canopy keeps a run's files, a tick's, the journal's old rows, and a retired
 note's text before a tick removes them. Lengthen them as you like, or set 0 to keep that kind forever; shortening stops

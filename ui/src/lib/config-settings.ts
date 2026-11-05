@@ -37,6 +37,32 @@ export const SOURCES_HELP = `Each row's chip says where its value comes from: ${
     (source) => `${SOURCE_WORD[source]}, ${SOURCE_MEANING[source]}`,
 ).join('; ')}.`
 
+/**
+ * What Loop settings shows the same on every visit, for its title's help: where a save goes and what it keeps, how far
+ * each kind of key moves, and what each row's chip means.
+ */
+export const LIMITS_HELP =
+    "What the loop runs, spends, polls, and keeps, and whose words it acts on. A save writes this workspace's own " +
+    'config, keeping its comments, with the old file beside it as config.toml.bak, then reloads the loop; your user ' +
+    'config is never changed. Limits and retentions move within their bounds; trust settings only get stricter; ' +
+    `anything else is an edit to the file. ${SOURCES_HELP}`
+
+/**
+ * Loop settings' description, one line of its state: how many settings it shows, how many this workspace sets, and how
+ * many come from the user config, each left out at none.
+ */
+export function settingsLine(keys: ConfigKey[]): string {
+    const set = keys.filter((k) => k.source === 'private').length
+    const user = keys.filter((k) => k.source === 'user').length
+    return [
+        `${keys.length} ${keys.length === 1 ? 'setting' : 'settings'}`,
+        set > 0 ? `${set} set in this workspace` : null,
+        user > 0 ? `${user} from your user config` : null,
+    ]
+        .filter(Boolean)
+        .join(' · ')
+}
+
 /** How far the page may take a limit, or that a trust setting only gets stricter. */
 export function boundText(key: ConfigKey): string {
     if (key.kind === 'stricter') {
