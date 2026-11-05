@@ -155,7 +155,8 @@ def add_member(epic_id: EpicId, body: EpicMemberAdd, backend: BackendDep) -> Epi
     it. Membership authorizes no work: a member is worked once it is labeled or started. Refused as the CLI's is:
     `inside_run`, `unknown_epic`, `bad_key`, `other_epic` for a ticket another epic holds, `epic_full` past
     `policy.max_epic_tickets`, `no_plan` for an entry named before a plan is approved, `unknown_entry` for one the
-    approved plan does not hold, and `approved_changed` when its approved copy is not what the operator approved.
+    approved plan does not hold, and `approved_changed` when it names entries and the approved copy is not what the
+    operator approved.
     """
     with backend.open() as ctx:
         try:

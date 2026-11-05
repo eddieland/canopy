@@ -82,14 +82,14 @@ describe("an epic's members, from its board", () => {
         // The key field has the focus, and what adding does and does not is said where it is done.
         const key = within(form).getByRole('textbox', { name: 'Ticket key' })
         expect(document.activeElement).toBe(key)
-        expect(within(form).getByTestId('member-form-note').textContent).toBe(
+        expect(within(form).getByText(/authorizes no work/u).textContent).toBe(
             'Adding a ticket authorizes no work: a member is worked once you label it or start it. Registering a ' +
                 'member again replaces its entries; check none for a ticket the breakdown did not foresee.',
         )
         fireEvent.change(key, { target: { value: ' ABC-105 ' } })
         fireEvent.click(within(form).getByRole('button', { name: 'Add and register' }))
         await waitFor(() => {
-            expect(within(shown).getByTestId('members-foot').textContent).toContain(
+            expect(within(shown).getByRole('status').textContent).toContain(
                 'Added ABC-105 to epic:1. Registered ABC-105 against B3.',
             )
         })
@@ -120,7 +120,7 @@ describe("an epic's members, from its board", () => {
         expect(again.title).toBe('canopy epic add epic:1 ABC-103 --entry B1 --entry B4')
         fireEvent.click(again)
         await waitFor(() => {
-            expect(within(shown).getByTestId('members-foot').textContent).toContain(
+            expect(within(shown).getByRole('status').textContent).toContain(
                 'Already a member: ABC-103. Registered ABC-103 against B1, B4.',
             )
         })
@@ -165,7 +165,7 @@ describe("an epic's members, from its board", () => {
         fireEvent.click(within(shown).getByRole('button', { name: 'Add a ticket' }))
         const form = screen.getByRole('form', { name: 'Add a ticket' })
         expect(within(form).queryAllByRole('checkbox')).toEqual([])
-        expect(within(form).getByTestId('member-form-note').textContent).toBe(
+        expect(within(form).getByText(/authorizes no work/u).textContent).toBe(
             'No plan of it is approved yet, so a ticket joins as a member of no entry. Adding a ticket authorizes ' +
                 'no work: a member is worked once you label it or start it. Registering a member again replaces its ' +
                 'entries.',
@@ -173,7 +173,7 @@ describe("an epic's members, from its board", () => {
         fireEvent.change(within(form).getByRole('textbox', { name: 'Ticket key' }), { target: { value: 'ABC-140' } })
         fireEvent.click(within(form).getByRole('button', { name: 'Add' }))
         await waitFor(() => {
-            expect(within(shown).getByTestId('members-foot').textContent).toContain(
+            expect(within(shown).getByRole('status').textContent).toContain(
                 'Added ABC-140 to epic:2. Registered ABC-140 against no entry.',
             )
         })
@@ -188,16 +188,16 @@ describe("an epic's members, from its board", () => {
         fireEvent.click(within(screen.getByTestId('entry-B2')).getByRole('button', { name: 'Remove ABC-104' }))
         // Asked first: nothing is sent until the operator says so.
         expect(writes()).toEqual([])
-        const asked = within(screen.getByTestId('entry-B2-open')).getByTestId('remove-question')
-        expect(asked.textContent).toContain('It stops being a member; the ticket and its work stay as they are.')
-        fireEvent.click(within(asked).getByRole('button', { name: 'Keep it' }))
-        expect(screen.queryByTestId('remove-question')).toBeNull()
+        const under = within(screen.getByTestId('entry-B2-open'))
+        expect(under.getByText('It stops being a member; the ticket and its work stay as they are.')).toBeTruthy()
+        fireEvent.click(under.getByRole('button', { name: 'Keep it' }))
+        expect(screen.queryByRole('button', { name: 'Remove ABC-104 from epic:1' })).toBeNull()
         expect(writes()).toEqual([])
 
         fireEvent.click(within(screen.getByTestId('entry-B2')).getByRole('button', { name: 'Remove ABC-104' }))
         fireEvent.click(screen.getByRole('button', { name: 'Remove ABC-104 from epic:1' }))
         await waitFor(() => {
-            expect(within(shown).getByTestId('members-foot').textContent).toContain('Removed ABC-104 from epic:1.')
+            expect(within(shown).getByRole('status').textContent).toContain('Removed ABC-104 from epic:1.')
         })
         expect(writes()).toEqual([{ method: 'DELETE', path: '/api/epics/1/members/ABC-104', body: undefined }])
     })
@@ -207,9 +207,8 @@ describe("an epic's members, from its board", () => {
         await board(1)
         const none = screen.getByTestId('members-of-no-entry')
         fireEvent.click(within(none).getByRole('button', { name: 'Remove ABC-100' }))
-        const asked = within(none).getByTestId('remove-question')
-        fireEvent.click(within(asked).getByRole('button', { name: 'Remove ABC-100 from epic:1' }))
-        expect((await within(asked).findByRole('alert')).textContent).toBe(
+        fireEvent.click(within(none).getByRole('button', { name: 'Remove ABC-100 from epic:1' }))
+        expect((await within(none).findByRole('alert')).textContent).toBe(
             'refused (inside_run): canopy refuses this inside a run',
         )
         expect(writes()).toEqual([{ method: 'DELETE', path: '/api/epics/1/members/ABC-100', body: undefined }])
