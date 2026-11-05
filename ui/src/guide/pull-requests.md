@@ -236,7 +236,7 @@ already open, as it is the moment yours goes through. Or skip the key: paste a P
 form opens with it filled in, the focus waiting in the notes. Pasting anything else does nothing, so a stray paste of
 your shopping list stays between you and your clipboard. Escape or a click outside closes the form without losing what
 you wrote or pasted; it's still there when you open it again in the same tab, and it clears once the request goes
-through. A URL the PR's page filled in stays on that page: leave it untouched and the form opens empty elsewhere. A
+through. A URL the PR's page filled in stays on that page: leave the form untouched and it opens empty elsewhere. A
 refusal, such as one of the loop's own PRs (`loop_pr`), keeps it open and says why, in place of the line at its foot
 reminding you that nothing posts until you publish the draft.
 

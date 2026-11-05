@@ -1369,12 +1369,13 @@ reader, so no table repeats them.
 - **The review dialog** (`ReviewDialog`, `src/components/shell/review-dialog.tsx`) asks for a review from anywhere:
   `R`, with no modifier, from anywhere but a text field or the plan editor (the rule `/` follows), or a GitHub PR's URL
   pasted outside a field, which it fills in, opens it; on a PR's page, `R` fills in that PR's while no request of it is
-  open, as one is once the dialog's own goes through. It never opens over
-  another dialog. It is a `Dialog` placed as the jump palette is, holding the reviews page's form (`ReviewRequestForm`),
-  one component for both so they cannot drift. A request that goes through closes it and opens the PR's page; a
+  open, as one is once the dialog's own goes through. It never opens over another dialog. It is a `Dialog` placed as
+  the jump palette is, holding the reviews page's form (`ReviewRequestForm`), one component for both so they cannot
+  drift. A request that goes through closes it and opens the PR's page; a
   refusal keeps it open, its `Notice` naming the guard. What is written or pasted outlives closing it, kept in the tab's
-  `sessionStorage` (`src/lib/review-request-draft.ts`) until a request goes through or the operator signs out; a URL
-  the page filled in is not kept until edited, so it never follows the operator off that page.
+  `sessionStorage` (`src/lib/review-request-draft.ts`) until a request goes through or the operator signs out. A URL
+  the page filled in is kept only once something in the form is written or picked, with the draft it belongs to, so an
+  untouched one never follows the operator off that page.
 - **The ticket dialog** (`TicketDialog`, `src/components/shell/ticket-dialog.tsx`) starts a ticket from anywhere: `T`,
   with no modifier, under the rule `R` follows, never over another dialog. It is a `Dialog` placed as the review
   dialog is, holding the tickets page's form (`StartTicket`), so they cannot drift. A ticket that starts closes it and

@@ -173,6 +173,11 @@ describe('ReviewDialog', () => {
             expect(dialog()).toBeNull()
         })
         expect(readReviewRequestDraft().url).toBe('')
+
+        // Notes written for it belong to that PR, so its URL is kept with them.
+        press('r')
+        fireEvent.change(notesField(), { target: { value: 'Mind the migration' } })
+        expect(readReviewRequestDraft()).toMatchObject({ url: PR, notes: 'Mind the migration' })
     })
 
     it("opens empty on a PR's page once its review request is open, as one just sent through it is", async () => {

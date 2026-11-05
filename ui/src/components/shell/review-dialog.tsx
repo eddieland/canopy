@@ -18,8 +18,8 @@ import { cn } from '@/lib/utils'
  * URL, or a link into one, anywhere outside a field, with that URL filled in. Pasting anything else does nothing.
  * Neither opens it over another dialog, the jump palette's or 2048's. What is written or pasted in it is kept in this
  * tab (`src/lib/review-request-draft.ts`) across closing and opening it again, until a request goes through, when it
- * closes and the form opens the PR's page; a URL the page filled in is not kept, so it never follows the operator off
- * that page.
+ * closes and the form opens the PR's page. A URL the page filled in is kept only with something written or picked
+ * beside it, so an untouched one never follows the operator off that page.
  */
 export function ReviewDialog() {
     // What the form opened with, while it is open.
@@ -32,8 +32,8 @@ export function ReviewDialog() {
     const { data: shown } = useQuery({ ...pullRequestQuery(onPage ?? ''), enabled: onPage !== undefined })
     const here = shown?.pull_request.review_request?.ended_at === null ? undefined : onPage
 
-    // A URL pasted replaces the one kept, and is kept in its place; one the page fills in shows only while it is open,
-    // until it is edited. The notes, personas, and model stay as written.
+    // A URL pasted replaces the one kept, and is kept in its place. One the page fills in is kept only with the draft
+    // it belongs to, once anything in the form changes (`onDraft`). The notes, personas, and model stay as written.
     function open(url: string | undefined, keep: boolean) {
         const kept = readReviewRequestDraft()
         const draft = url === undefined ? kept : { ...kept, url }
