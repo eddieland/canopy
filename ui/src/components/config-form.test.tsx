@@ -116,6 +116,15 @@ describe('ConfigForm', () => {
         expect(screen.getByText('Time between ticks')).toBeTruthy()
     })
 
+    it("counts each repository's own count as a change of its own, as the bar lists them", async () => {
+        const slots: ConfigKey = { ...WORKERS, name: 'capacity.repo_slots', value: { api: 2, web: 4 } }
+        await renderForm({ ...SETTINGS, keys: [slots] })
+        type('capacity.repo_slots.api', '3')
+        type('capacity.repo_slots.web', '5')
+        expect(screen.getByTestId('config-pending').textContent).toBe('2 unsaved changes')
+        expect(changes()).toEqual(['capacity.repo_slots.api: 2 → 3', 'capacity.repo_slots.web: 4 → 5'])
+    })
+
     it('warns that only the file undoes a stricter change', async () => {
         await renderForm()
         type('trust.max_flaky_kicks', '1')
