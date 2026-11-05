@@ -93,7 +93,8 @@ test("a proposed epic's mark opens its plan, read only, and Back returns to the 
     await page.getByRole('link', { name: 'Open the proposed plan' }).click()
     await expect(page).toHaveURL(/\/epics\/2\/plan$/u)
     await settled(page)
-    const plan = page.getByRole('textbox', { name: 'Plan' })
+    // Exactly: while the plan waits on you, its foot's note on the whole plan is a textbox too.
+    const plan = page.getByRole('textbox', { name: 'Plan', exact: true })
     await expect(plan).toContainText('the copy goes when its customer does')
     await expect(plan).toHaveAttribute('contenteditable', 'false')
     await expect(page.getByRole('heading', { name: 'Comments' })).toHaveCount(0)
@@ -107,6 +108,73 @@ test("a proposed epic's mark opens its plan, read only, and Back returns to the 
     await page.goBack()
     await expect(page).toHaveURL(/\/epics\/2$/u)
     await expect(page.getByTestId('epic-board')).toBeVisible()
+})
+
+test("a proposed epic's plan is approved from its page, and the board then shows the approved breakdown", async ({
+    page,
+}) => {
+    // The root server's journal never changes: the approval is answered here, as canopy plan epic:2 --approve would,
+    // and the epic reads as approved once it is made.
+    const approvals: unknown[] = []
+    await page.route('**/api/epics/2/plan/approval', async (route) => {
+        approvals.push(route.request().postDataJSON())
+        await route.fulfill({ json: { plan: 3, run_id: 3, change: null } })
+    })
+    await page.route('**/api/epics/2', async (route) => {
+        const detail = (await (await route.fetch()).json()) as {
+            epic: { standing: string }
+            plan: { status: string }
+            outline: { source: string }
+        }
+        if (approvals.length > 0) {
+            detail.epic.standing = 'approved'
+            detail.plan.status = 'approved'
+            detail.outline.source = 'approved'
+        }
+        await route.fulfill({ json: detail })
+    })
+    await page.route('**/api/epics/2/plans', async (route) => {
+        const plans = (await (await route.fetch()).json()) as { plans: { sha256: string; plan: { status: string } }[] }
+        const newest = plans.plans.at(-1)
+        if (approvals.length > 0 && newest !== undefined) {
+            newest.plan.status = 'approved'
+        }
+        await route.fulfill({ json: plans })
+    })
+    await page.goto('epics/2/plan')
+    await settled(page)
+    const bar = page.getByTestId('plan-bar')
+    await expect(bar.getByRole('button', { name: 'Ask for changes' })).toBeVisible()
+    await bar.getByRole('button', { name: 'Approve' }).click()
+    await expect(page.getByTestId('plan-approved').getByRole('status')).toHaveText(
+        "Approved epic:2's plan, written by run 3.",
+    )
+    expect(approvals).toEqual([{ read_sha256: expect.stringMatching(/^[0-9a-f]{64}$/u) as unknown }])
+    await expect(bar.getByRole('button', { name: 'Approve' })).toHaveCount(0)
+    await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'epic:2' }).click()
+    await expect(page).toHaveURL(/\/epics\/2$/u)
+    await expect(page.getByRole('link', { name: 'Open the approved plan' })).toBeVisible()
+    await expect(page.getByTestId('breakdown')).toContainText('Clear the local copy at sign-out')
+})
+
+test("asking for changes to an epic's plan is a reply, and says what it starts", async ({ page }) => {
+    const replies: unknown[] = []
+    await page.route('**/api/epics/2/replies', async (route) => {
+        replies.push(route.request().postDataJSON())
+        await route.fulfill({
+            json: { message_id: 21, new: true, running_run: null, plan_runs: 2, max_plan_attempts: 3 },
+        })
+    })
+    await page.goto('epics/2/plan')
+    await settled(page)
+    const bar = page.getByTestId('plan-bar')
+    await bar.getByRole('textbox', { name: 'On the whole plan' }).fill('Say how the copy clears offline.')
+    await expect(bar.getByRole('button', { name: 'Approve' })).toBeDisabled()
+    await bar.getByRole('button', { name: 'Ask for changes' }).click()
+    await expect(bar).toContainText(
+        'Recorded message 21 on epic:2. The next tick starts its next plan run, which reads your reply.',
+    )
+    expect(replies).toEqual([{ body: 'Say how the copy clears offline.', submission: expect.any(String) as unknown }])
 })
 
 test("an approved epic's header opens its plan", async ({ page }) => {

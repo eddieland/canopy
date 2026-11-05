@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Check, FileText, MessageSquareReply } from 'lucide-react'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { decidePlan, refreshTicket } from '@/api/mutations'
 import type { PlanChanged, TicketPlans } from '@/api/types'
@@ -156,6 +157,29 @@ export function ChangesAsked({ plans, className }: { plans: TicketPlans; classNa
         return null
     }
     return (
+        <ChangesAskedBand at={plans.changes_asked} className={className}>
+            the next tick asks the planner for a new plan.
+        </ChangesAskedBand>
+    )
+}
+
+/**
+ * Changes the operator asked `at`, which the loop acts on next, as a band in the running tone, and what it does with
+ * them (`children`): a ticket's plan's (`ChangesAsked`), or an epic's.
+ */
+export function ChangesAskedBand({
+    at,
+    className,
+    children,
+}: {
+    /** When the operator asked. */
+    at: string
+    /** Where it sits, beside the band's own look. */
+    className?: string | undefined
+    /** What the loop does with the request next, after the colon. */
+    children: ReactNode
+}) {
+    return (
         <section
             aria-label="Changes asked"
             data-testid="changes-asked"
@@ -168,10 +192,9 @@ export function ChangesAsked({ plans, className }: { plans: TicketPlans; classNa
             <MessageSquareReply aria-hidden className="mt-0.5 size-4 shrink-0 text-status-running" />
             <p className="text-sm break-words">
                 <span className="font-medium text-status-running">
-                    You asked for changes{' '}
-                    <Age at={plans.changes_asked} variant="ago" className="text-sm text-status-running" />:
+                    You asked for changes <Age at={at} variant="ago" className="text-sm text-status-running" />:
                 </span>{' '}
-                the next tick asks the planner for a new plan.
+                {children}
             </p>
         </section>
     )

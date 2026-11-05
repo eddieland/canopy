@@ -14,6 +14,8 @@ import {
     draftsStagedText,
     draftsStagedToast,
     editedText,
+    epicApprovedText,
+    epicRepliedText,
     failedText,
     forgotText,
     grantedText,
@@ -350,6 +352,35 @@ describe('outcomes', () => {
         )
         expect(repliedText('A-1', { message_id: 9, answers: null, new: false })).toBe(
             'Message 9 on A-1 already says this; nothing new recorded.',
+        )
+    })
+
+    it("says what approving an epic's plan did, as `canopy plan epic:N --approve` does", () => {
+        expect(epicApprovedText(2, { plan: 3, run_id: 3, change: null })).toBe(
+            "Approved epic:2's plan, written by run 3.",
+        )
+        const change = { added: ['B5', 'R4'], removed: ['B2'], changed: [] }
+        expect(epicApprovedText(1, { plan: 5, run_id: 6, change })).toBe(
+            "Approved epic:1's plan, written by run 6. added: B5, R4; removed: B2.",
+        )
+        // A re-approval that changed no id says only that it approved.
+        expect(epicApprovedText(1, { plan: 5, run_id: 6, change: { added: [], removed: [], changed: [] } })).toBe(
+            "Approved epic:1's plan, written by run 6.",
+        )
+    })
+
+    it('says what a reply to an epic starts, as `canopy reply epic:N` does', () => {
+        const replied = { message_id: 21, new: true, running_run: null, plan_runs: 2, max_plan_attempts: 3 }
+        expect(epicRepliedText(2, replied)).toBe(
+            'Recorded message 21 on epic:2. The next tick starts its next plan run, which reads your reply.',
+        )
+        expect(epicRepliedText(2, { ...replied, running_run: 5, new: false })).toBe(
+            'Message 21 on epic:2 already says this; nothing new recorded. Its plan run is still working; the first ' +
+                'tick after it ends starts the next, with your reply.',
+        )
+        expect(epicRepliedText(2, { ...replied, plan_runs: 3 })).toBe(
+            'Recorded message 21 on epic:2. It has had 3 plan runs, policy.max_plan_attempts; none starts again for ' +
+                'this reply.',
         )
     })
 

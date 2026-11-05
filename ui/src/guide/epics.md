@@ -36,8 +36,8 @@ uses, its repositories, and what it comes after; its decisions; and what is out 
 no ticket's steps, which each ticket's own plan writes just before it is built.
 
 The ids are the one part of the plan canopy reads, and they never change meaning, so a later plan can say what it
-changed by id. You approve the plan with `canopy plan epic:N --approve`, or ask for changes with
-`canopy reply epic:N "TEXT"`, and the next tick plans again with your reply. Its plan runs count against
+changed by id. You approve the plan from its page, or ask for changes there (`canopy plan epic:N --approve` and
+`canopy reply epic:N "TEXT"` in a terminal), and the next tick plans again with your reply. Its plan runs count against
 `policy.max_plan_attempts` and are never reset, so a planner that can't land one stops rather than burning the budget
 on its fortieth try.
 
@@ -111,17 +111,32 @@ which takes you back to the breakdown.
 
 The newest plan opens in the plan editor, read only, as its file stands now. An epic's plan takes no comments, so it
 has no margin: what you want changed goes in a reply, which reads the whole plan anyway. Its header has its status,
-`waiting on you` while it is proposed and no plan run is working, and how long ago it was written, then the plan's
+`waiting on you` while it is proposed and no plan run is working, or `changes asked` once you asked and the next tick
+has yet to act on it, and how long ago it was written, then the plan's
 modes: **Markdown** shows the file as written, and **Outline** jumps to a heading. A plan that replaced another opens
 with **Changes since plan N** pressed while it waits on you, so you read what your reply changed rather than the whole
 thing again.
 
 Under the title, a line says which plan run wrote it (`epic:N#M`), when you approved it and how, and whether its file
-was edited since the planner wrote it or since you approved it. While a plan waits on you, it names the commands too:
-`canopy plan epic:N --approve` approves it, `canopy reply epic:N "TEXT"` asks for changes. Under that is the file's
+was edited since the planner wrote it or since you approved it. Under that is the file's
 `sha256` as it stands, the start of it shown, the whole on hover and copied by the button beside it. canopy approves a
 plan by that hash and keeps a copy, so an edit after approval doesn't sneak in: canopy goes on reading the copy you
 approved, and a change you want goes in a reply, which asks for a new plan.
+
+While the plan waits on you, its foot, stuck to the bottom of the window as you read, has your two ways out:
+
+- **Approve** approves it as its file stands, by the hash the page read. If the file changed after the page loaded,
+  say in your own editor, canopy refuses (`stale`) and the page reads it again, so you approve what you read and
+  nothing else. It also refuses a plan whose ids won't read (`bad_outline`) or that brings back an id an earlier
+  approval dropped (`reused_id`). Approved, it says what changed since the plan you approved before, by id: added,
+  removed, changed. Then the epic's board leads with the approved breakdown.
+- **Ask for changes** sends the note you write beside it as a reply, which the next plan run reads. It says what that
+  starts: the next tick's plan run, the next one after the run at work, or none at all once the epic has had
+  `policy.max_plan_attempts`. Until a run picks it up, a band under the title says you asked. Approving in the
+  meantime still works, and is your later word. Approve stays off while a note is written, since an approval carries
+  none, and a note you meant to send shouldn't vanish into a plan you approved instead.
+
+Both refuse inside a tick or a run, as the commands do.
 
 **Earlier plans** lists the plans this one replaced, the newest first, each folded. Open one to read it as it was, in
 the same editor.

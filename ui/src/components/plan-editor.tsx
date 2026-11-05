@@ -115,7 +115,8 @@ const SOURCE = [
  * it is typed, and turning Markdown off reads it back into the document, where the comments find their passages again.
  * With `marks`, the Outline lets the operator mark each section read or a concern, and counts those left to read
  * (`src/lib/plan-marks.ts`). Without `comments`, the plan has no Comments panel and no margin kept for one: for a plan
- * read only that takes no comments, as an epic's is.
+ * read only that takes no comments, as an epic's is. Its foot offers the caller's actions while it may be edited, or,
+ * with `decides`, while it is read only too: an epic's plan is approved as its file stands, never edited here.
  */
 export function PlanEditor({
     markdown,
@@ -135,6 +136,7 @@ export function PlanEditor({
     previous,
     marks,
     comments = true,
+    decides = editable,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -189,6 +191,11 @@ export function PlanEditor({
      * for one.
      */
     comments?: boolean
+    /**
+     * Whether its foot offers `actions` and Ask for changes: by default while the plan may be edited, and given for a
+     * plan read only that still waits on the operator's word.
+     */
+    decides?: boolean
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -629,13 +636,13 @@ export function PlanEditor({
                             </Button>
                         </BubbleMenu>
                     )}
-                    {((editable &&
+                    {((decides &&
                         (actions !== undefined || renderActions !== undefined || onAskForChanges !== undefined)) ||
                         outcome !== undefined) && (
                         // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so
                         // a long plan is approved or sent back from where it is read, not from under its last line.
                         <PanelFooter ref={bar} sticky data-testid="plan-bar">
-                            {editable && (
+                            {decides && (
                                 <div className="flex flex-wrap items-center gap-2">
                                     {renderActions === undefined ? actions : renderActions(notes)}
                                     {onAskForChanges !== undefined && (

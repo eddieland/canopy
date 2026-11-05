@@ -1,25 +1,38 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { Check } from 'lucide-react'
 import { useState } from 'react'
 
+import { approveEpicPlan, newSubmission, replyEpic } from '@/api/mutations'
+import { keys } from '@/api/queries'
 import type { EpicPlanFile, EpicPlans } from '@/api/types'
 import { Age } from '@/components/age'
-import { Code } from '@/components/code'
+import { ApprovedBand } from '@/components/approved-band'
 import { Copyable } from '@/components/copy-button'
 import { Disclosure } from '@/components/disclosure'
+import { Notice } from '@/components/notice'
 import { Empty, Panel, PanelHeader } from '@/components/panel'
+import { ChangesAskedBand } from '@/components/plan-card'
 import { PlanEditor } from '@/components/plan-editor'
 import { Chip } from '@/components/status'
 import { Tip } from '@/components/tip'
+import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
-import { epicRef, epicRunRef } from '@/lib/refs'
+import { epicApprovedText, epicRepliedText } from '@/lib/outcomes'
+import { epicRunRef } from '@/lib/refs'
 
 // How much of a plan's hash its page shows: enough to tell two apart at a glance, the whole on hover and copied whole.
 const HASH_SHOWN = 12
+// What Approve does, on its hover.
+const APPROVE_TITLE =
+    "Approving takes the plan as its file stands, by the hash under the title; its members' planners plan " +
+    'against it.'
 
 /**
  * An epic's plans (DESIGN §43), on their page: the newest in the plan editor, read only and with no margin, since an
- * epic's plan takes no comments, what changed since the plan it replaces marked on it while it waits on the operator;
- * then its earlier plans, newest first, each folded until opened, read only too. Every plan is the planner's text,
- * which the editor's schema keeps as text. `epic` is the epic's id; `plans` hold at least one plan.
+ * epic's plan takes no comments, what changed since the plan it replaces marked on it while it waits on the operator,
+ * with Approve and Ask for changes then; then its earlier plans, newest first, each folded until opened, read only too.
+ * Every plan is the planner's text, which the editor's schema keeps as text. `epic` is the epic's id; `plans` hold at
+ * least one plan.
  */
 export function EpicPlan({ epic, plans }: { epic: number; plans: EpicPlans }) {
     const newest = plans.plans.at(-1)
@@ -27,9 +40,6 @@ export function EpicPlan({ epic, plans }: { epic: number; plans: EpicPlans }) {
         return null
     }
     const earlier = plans.plans.slice(0, -1).toReversed()
-    // The plan this one replaces, for what changed since, while its file reads.
-    const before = earlier[0]
-    const waits = planWaits(plans, newest)
     return (
         <section aria-label="Plan" className="flex flex-col gap-3" data-testid="epic-plan">
             {newest.text === null ? (
@@ -39,29 +49,119 @@ export function EpicPlan({ epic, plans }: { epic: number; plans: EpicPlans }) {
                     </Empty>
                 </Panel>
             ) : (
-                <PlanEditor
-                    // A new plan is a new editor: the editor reads its Markdown once.
-                    key={newest.plan.id}
-                    markdown={newest.text}
-                    threads={[]}
-                    onThreadsChange={ignore}
-                    editable={false}
-                    comments={false}
-                    previous={
-                        before?.text === null || before?.text === undefined
-                            ? undefined
-                            : { label: `plan ${before.plan.id}`, markdown: before.text, shown: waits }
-                    }
-                    status={
-                        <>
-                            <EpicPlanChip file={newest} waits={waits} />
-                            <Age at={newest.plan.created_at} variant="ago" />
-                        </>
-                    }
-                />
+                // Its own plan's: what the operator's word on one plan did is never said on the next.
+                <NewestPlan key={newest.plan.id} epic={epic} plans={plans} newest={newest} text={newest.text} />
             )}
             {earlier.length > 0 && <EarlierPlans epic={epic} plans={earlier} />}
         </section>
+    )
+}
+
+/**
+ * The newest plan in the editor, with the operator's word on it while it waits on them: Approve, by the file's hash as
+ * the page read it, which canopy refuses (`stale`) once the file changed since; and Ask for changes, a reply its next
+ * plan run reads. Each says what it did in the CLI's words, or names the guard that refused it, at the plan's foot.
+ */
+function NewestPlan({
+    epic,
+    plans,
+    newest,
+    text,
+}: {
+    epic: number
+    plans: EpicPlans
+    newest: EpicPlanFile
+    text: string
+}) {
+    const client = useQueryClient()
+    const [said, setSaid] = useState<string | null>(null)
+    const [failure, setFailure] = useState<unknown>(null)
+    const [busy, setBusy] = useState(false)
+    // How many times the operator approved the plan here, the last thing they did: each plays its moment once.
+    const [approvals, setApprovals] = useState(0)
+    const [approved, setApproved] = useState(false)
+    const before = plans.plans.at(-2)
+    const waits = planWaits(plans, newest)
+
+    // `work` says what it did; the epic and its plans are read again once it ends, done or refused.
+    async function act(work: () => Promise<string>, approving: boolean): Promise<void> {
+        setFailure(null)
+        setSaid(null)
+        setApproved(false)
+        setBusy(true)
+        try {
+            setSaid(await work())
+            // Only once the journal holds it: the moment never shows for an approval that was refused.
+            if (approving) {
+                setApproved(true)
+                setApprovals((n) => n + 1)
+            }
+        } catch (error: unknown) {
+            setFailure(error)
+        } finally {
+            setBusy(false)
+            // No stream event carries an epic: its page and the list read it again.
+            void client.invalidateQueries({ queryKey: keys.epic(epic) })
+            void client.invalidateQueries({ queryKey: keys.epics })
+        }
+    }
+
+    function approve() {
+        const read = newest.sha256 ?? ''
+        void act(async () => epicApprovedText(epic, await approveEpicPlan(epic, read)), true)
+    }
+
+    function askForChanges(message: string) {
+        void act(async () => epicRepliedText(epic, await replyEpic(epic, message, newSubmission())), false)
+    }
+
+    return (
+        <PlanEditor
+            // A new file is a new editor, so what Approve takes is always what the page shows: the editor reads its
+            // Markdown once, and an approval names the hash it was read by.
+            key={newest.sha256}
+            markdown={text}
+            threads={[]}
+            onThreadsChange={ignore}
+            editable={false}
+            comments={false}
+            decides={waits}
+            previous={
+                before?.text === null || before?.text === undefined
+                    ? undefined
+                    : { label: `plan ${before.plan.id}`, markdown: before.text, shown: waits }
+            }
+            status={
+                <>
+                    <EpicPlanChip file={newest} waits={waits} asked={plans.changes_asked !== null} />
+                    <Age at={newest.plan.created_at} variant="ago" />
+                </>
+            }
+            onAskForChanges={waits ? askForChanges : undefined}
+            asked={plans.changes_asked !== null}
+            renderActions={(notes) => (
+                // `contents`, so its items are the foot's line's, with Ask for changes after them.
+                <div className="contents" data-testid="plan-actions">
+                    <Button
+                        onClick={approve}
+                        // A note on the whole plan goes only with Ask for changes: approving would leave it unsent.
+                        disabled={busy || notes !== ''}
+                        title={notes === '' ? APPROVE_TITLE : 'An approval sends no note: ask for changes with it.'}
+                    >
+                        <Check />
+                        Approve
+                    </Button>
+                </div>
+            )}
+            // Kept once the plan no longer waits, so the approval that ended its waiting still says what it did.
+            outcome={
+                approved && said !== null && failure === null ? (
+                    <ApprovedBand key={approvals} text={said} />
+                ) : said !== null || failure !== null ? (
+                    <Notice error={failure}>{said}</Notice>
+                ) : undefined
+            }
+        />
     )
 }
 
@@ -93,13 +193,9 @@ export function EpicPlanState({ epic, plans }: { epic: number; plans: EpicPlans 
                     <span className="readout text-xs">{epicRunRef(epic, plans.planning)}</span> is writing a new plan.
                 </>
             )}
-            {planWaits(plans, newest) && (
-                <>
-                    {' '}
-                    It waits on you: <Code>canopy plan {epicRef(epic)} --approve</Code> approves it, and{' '}
-                    <Code>canopy reply {epicRef(epic)}</Code> asks for changes.
-                </>
-            )}
+            {planWaits(plans, newest) &&
+                plans.changes_asked === null &&
+                ' It waits on you: approve it, or ask for changes.'}
         </>
     )
 }
@@ -111,10 +207,29 @@ function planWaits(plans: EpicPlans, newest: EpicPlanFile): boolean {
 
 /**
  * Where a plan stands, as a chip: `waiting on you` in the blocked tone while it waits on the operator, as everything
- * that waits on them reads; else its status.
+ * that waits on them reads, or `changes asked` in the running tone once they asked and the loop acts next, as a
+ * ticket's plan says it; else its status.
  */
-function EpicPlanChip({ file, waits }: { file: EpicPlanFile; waits: boolean }) {
-    return waits ? <Chip tone="blocked">waiting on you</Chip> : <Chip>{file.plan.status}</Chip>
+function EpicPlanChip({ file, waits, asked }: { file: EpicPlanFile; waits: boolean; asked: boolean }) {
+    if (!waits) {
+        return <Chip>{file.plan.status}</Chip>
+    }
+    return asked ? <Chip tone="running">changes asked</Chip> : <Chip tone="blocked">waiting on you</Chip>
+}
+
+/**
+ * The band under an epic's plan page's header while the operator's request for changes waits on the next tick's plan
+ * run, as a ticket's plan page has (`ChangesAsked`). Nothing otherwise, a plan run at work on it included.
+ */
+export function EpicChangesAsked({ plans }: { plans: EpicPlans }) {
+    if (plans.changes_asked === null || plans.planning !== null) {
+        return null
+    }
+    return (
+        <ChangesAskedBand at={plans.changes_asked}>
+            the next tick starts its next plan run, which reads your reply.
+        </ChangesAskedBand>
+    )
 }
 
 /**
