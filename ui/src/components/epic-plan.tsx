@@ -7,21 +7,18 @@ import { keys } from '@/api/queries'
 import type { EpicPlanFile, EpicPlans } from '@/api/types'
 import { Age } from '@/components/age'
 import { ApprovedBand } from '@/components/approved-band'
-import { Copyable } from '@/components/copy-button'
 import { Disclosure } from '@/components/disclosure'
+import { EpicPlanSha } from '@/components/epic-plan-sha'
 import { Notice } from '@/components/notice'
 import { Empty, Panel, PanelHeader } from '@/components/panel'
 import { ChangesAskedBand } from '@/components/plan-card'
 import { PlanEditor } from '@/components/plan-editor'
 import { Chip } from '@/components/status'
-import { Tip } from '@/components/tip'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { epicApprovedText, epicRepliedText } from '@/lib/outcomes'
 import { epicRunRef } from '@/lib/refs'
 
-// How much of a plan's hash its page shows: enough to tell two apart at a glance, the whole on hover and copied whole.
-const HASH_SHOWN = 12
 // What Approve does, on its hover.
 const APPROVE_TITLE =
     "Approving takes the plan as its file stands, by the hash under the title; its members' planners plan " +
@@ -244,11 +241,7 @@ export function EpicPlanHash({ plans }: { plans: EpicPlans }) {
     return (
         <p className="mt-1 flex items-center gap-2 text-xs text-muted-foreground" data-testid="plan-hash">
             <span className="panel-label">sha256</span>
-            <Copyable text={sha256} label="plan hash">
-                <Tip fact={sha256} mono>
-                    <span className="readout">{sha256.slice(0, HASH_SHOWN)}</span>
-                </Tip>
-            </Copyable>
+            <EpicPlanSha sha256={sha256} />
         </p>
     )
 }

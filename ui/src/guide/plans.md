@@ -64,7 +64,10 @@ approves it as its file stands, for when you've already read it; **Open plan** o
 happens: comments, edits, asking for changes, skipping.
 
 There, the plan opens in an editor. The page's title names the plan and its ticket, and the line under it says which
-run wrote it, when you approved it and how, whether its file was edited since, and its effort. The **Plan** panel's
+run wrote it, when you approved it and how, whether its file was edited since, and its effort. A member of an epic
+gets one more line: `follows epic:2's plan`, the start of that plan's hash, and when you approved it, since its planner
+read the epic's approved plan beside the ticket. When you've approved a newer plan of the epic since, the line says so
+and when, and leaves what changed for you to read on [the epic's plan page](epics#an-epics-plan). The **Plan** panel's
 header says where it stands and how old it is. Under the plan, **Persona** names the persona its planner wrote in,
 with the start of its text's digest, and **Show instructions** opens exactly what that persona told it: canopy keeps
 each persona's text once per digest, so editing the file later doesn't rewrite history. See

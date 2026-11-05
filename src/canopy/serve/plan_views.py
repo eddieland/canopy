@@ -9,12 +9,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import db, personas, plan_threads, plans, records
+from canopy.core import db, epics, personas, plan_threads, plans, records
 from canopy.core.vocab import PlanStatus, RunKind
 from canopy.serve.schema.persona import RunPersona
-from canopy.serve.schema.plan import PlanFile, PlanReplyView, PlanSummary, PlanThreadView, TicketPlans
+from canopy.serve.schema.plan import (
+    FollowedEpicPlan,
+    PlanFile,
+    PlanReplyView,
+    PlanSummary,
+    PlanThreadView,
+    TicketPlans,
+)
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from canopy.core.context import Context
 
 
@@ -39,7 +48,7 @@ def ticket_plans(ctx: Context, key: str) -> TicketPlans | None:
         planning=planning,
         changes_asked=db.parse_time(asked) if asked is not None else None,
         newest=plan_file(ctx, found[-1]) if found else None,
-        plans=[plan_summary(p) for p in found],
+        plans=[plan_summary(ctx.conn, p) for p in found],
         threads=[thread_view(t) for t in plan_threads.threads(ctx.conn, key)],
     )
 
@@ -54,7 +63,7 @@ def plan_file(ctx: Context, plan: records.Plan) -> PlanFile:
     path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
     reading = plans.read(path)
     return PlanFile(
-        plan=plan_summary(plan),
+        plan=plan_summary(ctx.conn, plan),
         persona=run_persona(ctx, plan.run_id),
         path=str(path),
         text=reading.text,
@@ -95,8 +104,8 @@ def run_persona(ctx: Context, run_id: int) -> RunPersona | None:
     return RunPersona(name=run.persona, digest=run.persona_digest, text=now.text)
 
 
-def plan_summary(plan: records.Plan) -> PlanSummary:
-    """A plan's status and approval, never its text.
+def plan_summary(conn: sqlite3.Connection, plan: records.Plan) -> PlanSummary:
+    """A plan's status and approval, and the epic plan it was written against, never its text.
 
     Returns:
         The plan, as the API sends it.
@@ -110,6 +119,28 @@ def plan_summary(plan: records.Plan) -> PlanSummary:
         approved_channel=plan.approved_channel,
         approved_reason=plan.approved_reason,
         effort=plan.effort.value if plan.effort is not None else None,
+        epic_plan=followed(conn, plan.epic_plan_id) if plan.epic_plan_id is not None else None,
+    )
+
+
+def followed(conn: sqlite3.Connection, epic_plan_id: int) -> FollowedEpicPlan | None:
+    """The approved epic plan a member's plan was written against, and when a newer one was approved, if one was.
+
+    Returns:
+        The epic plan, or None should the journal hold no such plan.
+    """
+    found = records.select(records.EpicPlan).where("id = ?", epic_plan_id).one(conn)
+    if found is None:
+        return None
+    latest = epics.approved_plan(conn, found.epic_id)
+    # Approval moves only forward, to a plan written later: the latest, when it is another, is a newer one.
+    since = latest.approved_at if latest is not None and latest.id != found.id else None
+    return FollowedEpicPlan(
+        epic_id=found.epic_id,
+        plan_id=found.id,
+        sha256=found.approved_sha256,
+        approved_at=db.parse_time(found.approved_at) if found.approved_at is not None else None,
+        newer_approved_at=db.parse_time(since) if since is not None else None,
     )
 
 

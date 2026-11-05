@@ -233,7 +233,8 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
     assert [(t["key"], t["runs"], t["reviews"], t["cost_usd"]) for t in found["tickets"]][:2] == [
         # ABC-099's two feedback plan runs among its four, which recorded no cost.
         ("ABC-099", 4, 2, pytest.approx(3.5)),
-        ("ABC-103", 1, 1, pytest.approx(1.86)),
+        # ABC-103's implement and its plan run, which recorded no cost.
+        ("ABC-103", 2, 1, pytest.approx(1.86)),
     ]
     assert (found["done"], found["per_done"], found["tickets"][0]["done"]) == (0, None, None)
     assert [(p["url"], p["ticket_key"], p["phase"]) for p in found["pull_requests"]] == [

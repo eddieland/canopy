@@ -4,12 +4,13 @@ Three epics across the workspace's repositories, one in each place an epic's pla
 mobile, was planned before its tickets existed: its plan run's plan, approved, breaks it into four entries, of which
 B4 is marked trivial. The operator filed tickets for two and registered each after the approval: ABC-103 fulfils B1,
 its PR 91 open, and ABC-104 fulfils B2, its resume running; ABC-100, a ticket the breakdown did not foresee, is a member
-of no entry. Epic 2, over mobile and web, had a plan the operator replied to, asking for changes; its second plan run
-wrote the plan that now waits on them. Epic 3, over api and web, was just submitted, and its first plan run works.
+of no entry. ABC-103 was planned first: its planner read the approved plan, so its own plan, approved, follows it.
+Epic 2, over mobile and web, had a plan the operator replied to, asking for changes; its second plan run wrote the plan
+that now waits on them. Epic 3, over api and web, was just submitted, and its first plan run works.
 
-The plan runs report no cost, so the spend page's totals are what they were without them. The running one holds no
-slot in the mock's pools, which show no lease for it. Every row and message here takes its id after every other
-fixture's: `seed` runs last.
+The plan runs, ABC-103's too, report no cost, so the spend page's totals are what they were without them. The running
+one holds no slot in the mock's pools, which show no lease for it. Every row and message here takes its id after every
+other fixture's: `seed` runs last.
 """
 
 from __future__ import annotations
@@ -17,8 +18,8 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, epics, plans, records
-from canopy.core.vocab import PlanStatus, RunStatus
+from canopy.core import conversation, db, epics, plans, records
+from canopy.core.vocab import PlanEffort, PlannerApproval, PlanStatus, RunKind, RunStatus
 from canopy.runs import desks, epic_runs
 
 if TYPE_CHECKING:
@@ -216,6 +217,21 @@ The mobile app's order history reads from a local copy when it is offline, and t
 - Placing an order offline.
 """
 
+# ABC-103's plan, for B1, written against epic 1's approved plan.
+_MEMBER_PLAN = """\
+# A v2 billing client in web
+
+## What changes
+
+In **web**, a `BillingClient` for the v2 endpoint, as the epic's contract C1 names it: `listInvoices`, `charge`, and
+`refund`, each returning v2's types unchanged. Every billing call in web moves to it, and the v1 client goes.
+
+## Tests
+
+- [ ] each method calls its v2 endpoint and returns its type unchanged
+- [ ] nothing in web imports the v1 client
+"""
+
 _EPICS = (
     # id, text, repositories, project, channel, submitted
     (APPROVED, _BILLING, ("api", "web", "mobile"), "ABC", "cli", -720),
@@ -293,6 +309,7 @@ def seed(conn: sqlite3.Connection, state_dir: Path, root: Path, at: Callable[[in
     if approved is not None:
         _approve(conn, state_dir, approved.sha256, at(-600))
     _members(conn, at)
+    _member_plan(conn, state_dir, at)
 
 
 def _plan(conn: sqlite3.Connection, state_dir: Path, ran: tuple[int, int], text: str, at: str) -> plans.Written:
@@ -340,6 +357,50 @@ def _members(conn: sqlite3.Connection, at: Callable[[int], str]) -> None:
         )
         member_id = int(member.run(conn).lastrowid or 0)
         _register(conn, member_id, entries)
+
+
+def _member_plan(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) -> None:
+    """Plan ABC-103 against epic 1's approved plan, as its planner's run records it, approve it via web, and follow it.
+
+    Its run takes an id after every other fixture's, and reports no cost, so the spend page's totals stay as they were.
+    """
+    run = records.insert(
+        records.Run,
+        tick_id=1,
+        ticket_key="ABC-103",
+        kind=RunKind.PLAN,
+        branch="",
+        started_at=at(-250),
+        ended_at=at(-238),
+        status=RunStatus.DONE,
+        result_json=json.dumps({"status": "done", "summary": "A v2 billing client in web, as the epic's C1."}),
+        log_path="",
+        private=0,
+        # Before ABC-105's, so at the level its plans were offered too, before the operator turned the key off.
+        plan_review=PlannerApproval.STRICT,
+    )
+    run_id = db.rowid(run.run(conn))
+    log = state_dir / "runs" / f"{run_id}.log"
+    records.update(records.Run).set(log_path=str(log)).where("id = ?", run_id).run(conn)
+    written = plans.write(state_dir, "ABC-103", run_id, _MEMBER_PLAN)
+    followed = records.select(records.EpicPlan).where("run_id = ?", _APPROVED_RUN).one(conn)
+    plan = records.insert(
+        records.Plan,
+        ticket_key="ABC-103",
+        run_id=run_id,
+        created_at=at(-238),
+        status=PlanStatus.APPROVED,
+        sha256=written.sha256,
+        size=written.size,
+        approved_sha256=written.sha256,
+        approved_at=at(-200),
+        approved_channel="web",
+        effort=PlanEffort.SMALL,
+        epic_plan_id=followed.id if followed is not None else None,
+    )
+    plan_id = db.rowid(plan.run(conn))
+    # Its implement, run 38, followed the plan.
+    records.update(records.Run).set(plan_id=plan_id).where("id = ?", 38).run(conn)
 
 
 def _register(conn: sqlite3.Connection, member_id: int, entries: Sequence[str]) -> None:
