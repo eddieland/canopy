@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { createRef, useState } from 'react'
+import { createRef, StrictMode, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -253,6 +253,20 @@ describe('MarkdownField dictation', () => {
             'The box was full: the last 6 characters of what was heard were left out.',
         )
         expect(field().value).toBe('Note: shard by ')
+    })
+
+    it('records under StrictMode, which mounts the field, cleans it up, and mounts it again', async () => {
+        vi.mocked(dictate).mockResolvedValue({ text: 'shard by tenant', seconds: 2 })
+        render(
+            <StrictMode>
+                <DictationContext value>
+                    <Holder initial="" />
+                </DictationContext>
+            </StrictMode>,
+        )
+        await speak()
+        await screen.findByRole('button', { name: 'Dictate' })
+        expect(field().value).toBe('shard by tenant')
     })
 
     it('lets go of a microphone the browser grants after the field has gone', async () => {

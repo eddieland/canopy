@@ -64,9 +64,11 @@ export function useDictation(onText: (text: string) => number): Dictation {
         heard.current = onText
     })
 
-    // A field that leaves the page while it records stops recording, and lets go of the microphone.
-    useEffect(
-        () => () => {
+    // A field that leaves the page while it records stops recording, and lets go of the microphone. Mounted again, as
+    // StrictMode mounts every field twice in development, it is there again.
+    useEffect(() => {
+        gone.current = false
+        return () => {
             gone.current = true
             clearInterval(clock.current)
             const going = recorder.current
@@ -75,9 +77,8 @@ export function useDictation(onText: (text: string) => number): Dictation {
                 going.stop()
                 release(going.stream)
             }
-        },
-        [],
-    )
+        }
+    }, [])
 
     function stop() {
         clearInterval(clock.current)
