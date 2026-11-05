@@ -64,6 +64,11 @@ describe('EpicRow', () => {
         expect(within(shown).getByText('unplanned')).toBeTruthy()
     })
 
+    it('says a proposed plan whose breakdown canopy cannot read is unreadable, not missing', async () => {
+        const shown = await row({ ...epic(2), entries: null })
+        expect(within(shown).getByText('breakdown unreadable')).toBeTruthy()
+    })
+
     it("links nothing in the goal: it is the operator's words, as text", async () => {
         const said = 'Plan https://example.com/spec <b>bold</b>'
         const shown = await row({ ...epic(3), text: said })

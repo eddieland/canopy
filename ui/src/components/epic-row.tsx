@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 /**
  * An epic in the epics list: where it stands, in its run state's dot and color (`EPIC_LOOK`), with the CLI's word and
  * what it means on hover; `epic:N`; its repositories; its goal's first line, the operator's words, as text; how many
- * of its breakdown's entries are filed, or `no breakdown` before it has one; and when it was submitted.
+ * of its breakdown's entries are filed (`entriesFiled`); and when it was submitted.
  */
 export function EpicRow({ epic }: { epic: EpicSummary }) {
     const look = EPIC_LOOK[epic.standing]
@@ -27,7 +27,7 @@ export function EpicRow({ epic }: { epic: EpicSummary }) {
             <span className="readout text-xs">{epicRef(epic.id)}</span>
             <Clipped text={repos} mono className="text-xs text-muted-foreground" />
             <TicketTitle title={epicTitle(epic.text)} />
-            <span className="readout text-right text-xs text-muted-foreground">{filed ?? 'no breakdown'}</span>
+            <span className="readout text-right text-xs text-muted-foreground">{filed}</span>
             <Age at={epic.submitted_at} variant="ago" className="text-right" />
         </ListRow>
     )

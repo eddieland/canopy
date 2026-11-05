@@ -29,10 +29,20 @@ describe('epicTitle', () => {
 describe('entriesFiled', () => {
     it("counts the breakdown's entries with a member, and nothing before there is a breakdown", () => {
         expect(mockEpics.map((epic) => entriesFiled(epic))).toEqual([
-            null,
+            'no breakdown',
             '0 of 3 entries filed',
             '2 of 4 entries filed',
         ])
-        expect(entriesFiled({ entries: 1, entries_with_members: 1 })).toBe('1 of 1 entry filed')
+        expect(entriesFiled({ entries: 1, entries_with_members: 1, standing: 'approved' })).toBe('1 of 1 entry filed')
+    })
+
+    it('tells a plan whose breakdown cannot be read from no plan at all', () => {
+        expect(entriesFiled({ entries: null, entries_with_members: 0, standing: 'proposed' })).toBe(
+            'breakdown unreadable',
+        )
+        expect(entriesFiled({ entries: null, entries_with_members: 0, standing: 'approved' })).toBe(
+            'breakdown unreadable',
+        )
+        expect(entriesFiled({ entries: null, entries_with_members: 0, standing: 'unplanned' })).toBe('no breakdown')
     })
 })

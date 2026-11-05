@@ -64,11 +64,11 @@ color a run in that state wears:
 - `waiting on you`: its plan is proposed. Approve it, or reply with what to change.
 - `approved`: you approved its plan, and its breakdown is what's left to file.
 - `unplanned`, in the failure color: its plan runs ended without a plan, and none starts again until you reply. Once
-  `policy.max_plan_attempts` is used up, none starts at all.
+  `policy.max_plan_attempts` is used up, a reply starts none either.
 
 Hover the word for its spelling in the CLI and what it means. Then come `epic:N`, its repositories, your goal's first
-line, how many of its breakdown's entries have a member (`2 of 4 entries filed`, or `no breakdown` before it has a
-plan), and how long ago you submitted it.
+line, how many of its breakdown's entries have a member (`2 of 4 entries filed`; `no breakdown` before it has a plan,
+and `breakdown unreadable` for a plan whose ids repeat or won't parse), and how long ago you submitted it.
 
 From the shell, `canopy epic list` lists them and `canopy show epic:N` prints one, its breakdown with each entry's
 members.

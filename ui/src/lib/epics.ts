@@ -33,7 +33,7 @@ export const EPIC_LOOK: Record<EpicStanding, EpicLook> = {
     unplanned: {
         state: 'failed',
         word: 'unplanned',
-        meaning: 'Its plan runs ended without a plan: none starts again until you reply.',
+        meaning: 'Its plan runs ended without a plan: a reply starts another, until policy.max_plan_attempts is used.',
     },
 }
 
@@ -48,12 +48,13 @@ export function epicTitle(text: string): string {
 }
 
 /**
- * How much of an epic's breakdown has members, as its row reads it: `2 of 4 entries filed`, or null while it has no
- * breakdown to count, before its first plan or when its outline cannot be read.
+ * How much of an epic's breakdown has members, as its row reads it: `2 of 4 entries filed`. With no breakdown to count,
+ * an epic whose plan is proposed or approved has one canopy cannot read (its ids repeat or will not parse), and says
+ * `breakdown unreadable`; any other has no plan yet, `no breakdown`.
  */
-export function entriesFiled(epic: Pick<EpicSummary, 'entries' | 'entries_with_members'>): string | null {
+export function entriesFiled(epic: Pick<EpicSummary, 'entries' | 'entries_with_members' | 'standing'>): string {
     if (epic.entries === null) {
-        return null
+        return epic.standing === 'proposed' || epic.standing === 'approved' ? 'breakdown unreadable' : 'no breakdown'
     }
     const noun = epic.entries === 1 ? 'entry' : 'entries'
     return `${String(epic.entries_with_members)} of ${String(epic.entries)} ${noun} filed`
