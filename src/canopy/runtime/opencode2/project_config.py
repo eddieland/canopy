@@ -4,9 +4,10 @@ OpenCode 2 reads config from the directory it starts in and from every directory
 root and not only the repository's: in each, `opencode.json`, `opencode.jsonc`, and `.opencode/`, with its own JSON
 files and its agent and mode files. All of it ranks above canopy's definitions directory, and a definition of an agent
 there merges into canopy's: its body replaces canopy's prompt, and its permission rules come after canopy's, where the
-last matching rule wins. So a run refuses to start where any of those files defines one of canopy's agents, or names an
-MCP server `canopy`, which canopy gives the overseer in its inline config and whose keys a merge could reach, such as
-the environment of canopy's own interpreter (DESIGN §27, TRUST_MODEL T7): `shadowing` finds them. A private run also
+last matching rule wins. So a run refuses to start where any of those files defines one of canopy's agents, or names
+one of canopy's MCP servers, `canopy` or any `canopy_*`, which canopy gives each agent in its inline config and whose
+keys a merge could reach, such as the environment of canopy's own interpreter, or which could answer a tool an agent is
+allowed by exact name (DESIGN §27, TRUST_MODEL T7): `shadowing` finds them. A private run also
 refuses one whose config names the tracker server's tools (`naming_tools`): a rule merged after canopy's could reopen a
 write tool (DESIGN §22).
 
@@ -30,16 +31,18 @@ if TYPE_CHECKING:
 CONFIG_DIR = ".opencode"
 _AGENT_PATTERNS = ("agent/**/*.md", "agents/**/*.md", "mode/*.md", "modes/*.md")
 _CONFIG_FILES = ("opencode.json", "opencode.jsonc")
-#: A key named `canopy` in a JSON config file, which is how one names an MCP server `canopy`, canopy's own (DESIGN §27).
-_CANOPY_KEY_RE = re.compile(r'"canopy"\s*:')
+#: A key named `canopy`, or `canopy_` and more, in a JSON config file: how one names an MCP server of canopy's, `canopy`
+#: for the overseer's or `canopy_run`, `canopy_git`, and the rest for the other agents' (DESIGN §27). OpenCode joins a
+#: server's name and a tool's with `_`, so a server named `canopy_run` would answer a worker's `canopy_run_status`.
+_CANOPY_KEY_RE = re.compile(r'"canopy(?:_[^"]*)?"\s*:')
 
 
 def shadowing(root: Path, names: Collection[str] | None = None) -> list[Path]:
     """Return the files OpenCode reads starting in `root` that define, or may define, canopy's agents or its server.
 
     That is, in `root` and each directory above it, an agent or mode file with a canopy agent's name under
-    `.opencode/`, and an `opencode.json` or `opencode.jsonc` that mentions one, or has a key named `canopy`, as an MCP
-    server of that name does.
+    `.opencode/`, and an `opencode.json` or `opencode.jsonc` that mentions one, or has a key named `canopy` or
+    `canopy_*`, as an MCP server of canopy's does.
     """
     names = definitions.agent_names() if names is None else names
     found: list[Path] = []
@@ -63,9 +66,10 @@ def shadowing_message(found: Iterable[Path]) -> str:
     """
     files = ", ".join(str(p) for p in found)
     return (
-        f"OpenCode config here or above defines one of canopy's agents or its MCP server `canopy` ({files}). canopy's "
-        "agents come from its own definitions directory (D040), and a definition here could loosen their permissions "
-        "(D044); the server is canopy's own, which config here could change (DESIGN §27). Remove it, or rename it."
+        f"OpenCode config here or above defines one of canopy's agents or one of its MCP servers, `canopy` or "
+        f"`canopy_*` ({files}). canopy's agents come from its own definitions directory (D040), and a definition here "
+        "could loosen their permissions (D044); the servers are canopy's own, which config here could change or stand "
+        "in for (DESIGN §27). Remove it, or rename it."
     )
 
 

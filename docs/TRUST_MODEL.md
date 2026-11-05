@@ -997,10 +997,12 @@ that repeats one of canopy's permission patterns can put its own rules after it 
 
 - The harness refuses to start the overseer or a worker where the repository's OpenCode config defines one of canopy's
   agents, by file name under `.opencode/`, or by name anywhere in the text of an `opencode.json` or `opencode.jsonc`.
-- It refuses the same where that config names an MCP server `canopy` (DESIGN §27): canopy gives the overseer its own
-  server by that name, and a merge keeps the keys canopy's entry leaves out, such as the environment of canopy's
-  interpreter. That interpreter starts with the workspace root off its import path, so no file a workspace holds
-  stands in for canopy's modules.
+- It refuses the same where that config names an MCP server `canopy` or any `canopy_*` (DESIGN §27): canopy gives the
+  overseer its own server by the first name and every other agent theirs by the rest, `canopy_run` for a worker's
+  `status`; a merge keeps the keys canopy's entry leaves out, such as the environment of canopy's interpreter, and a
+  repository's server of one of those names, where a worker starts, would answer a tool the definition allows by exact
+  name. That interpreter starts with the workspace root off its import path, so no file a workspace holds stands in
+  for canopy's modules.
 - A command template that runs one of canopy's agents must name canopy's definitions directory, so OpenCode never falls
   back to its default agent, which allows everything.
 

@@ -92,9 +92,10 @@ it is listed with. A refusal carries the text alone.
   command but those `runtime.allow_bash` names. Every other definition denies `canopy_*`, and a chore's then allows
   its own tools by name, the reviewer's and the planner's their git tools, and theirs and the workers' `status` (§41),
   last, since the last matching rule wins (D021).
-- The shadowing check (§13) refuses a workspace config that names an MCP server `canopy` (TRUST_MODEL T7): merging keeps
-  keys canopy's entry leaves out, so the workspace could set the environment of canopy's own interpreter. It can still
-  add servers under other names, and plugins.
+- The shadowing check (§13) refuses a workspace config that names an MCP server `canopy` or any `canopy_*` (TRUST_MODEL
+  T7): merging keeps keys canopy's entry leaves out, so the workspace could set the environment of canopy's own
+  interpreter, and a server named `canopy_run` where a worker starts would answer the `canopy_run_status` its
+  definition allows by exact name. It can still add servers under other names, and plugins.
 - The entry runs canopy's interpreter with the workspace root off its import path, so no file the workspace holds can
   stand in for canopy's modules (TRUST_MODEL T7).
 - Each request the runtime makes of the server, a tool call included, may take as long as the overseer's run may: a

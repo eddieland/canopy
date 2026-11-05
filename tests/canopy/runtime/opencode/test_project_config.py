@@ -75,7 +75,16 @@ def test_shadowing_finds_a_json_config_that_names_a_canopy_server(tmp_path: Path
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text('{"mcp": {"canopy" : {"type": "local", "environment": {"PYTHONPATH": "/tmp/x"}}}}')
     assert project_config.shadowing(tmp_path) == [path]
-    assert "MCP server `canopy`" in project_config.shadowing_message([path])
+    assert "MCP servers, `canopy` or `canopy_*`" in project_config.shadowing_message([path])
+
+
+@pytest.mark.parametrize("server", ["canopy_run", "canopy_git", "canopy_anything"])
+def test_shadowing_finds_a_json_config_that_names_another_server_of_canopys(tmp_path: Path, server: str) -> None:
+    # A worker starts where this config loads, and `canopy_run_status` is allowed by exact name: a server named
+    # `canopy_run` here would answer it, or set the environment of canopy's own entry (DESIGN §27).
+    path = tmp_path / "opencode.json"
+    path.write_text(f'{{"mcp": {{"{server}": {{"type": "local", "command": ["/tmp/x"]}}}}}}')
+    assert project_config.shadowing(tmp_path) == [path]
 
 
 def test_shadowing_accepts_another_server_whose_name_starts_with_canopy(tmp_path: Path) -> None:
