@@ -4,7 +4,7 @@ import re
 import sqlite3
 import typing
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from importlib.metadata import version
 from pathlib import Path
@@ -12,9 +12,11 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import db
+from canopy.core import db, recorded_runs, sql
 from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import resources
+from canopy.reviews import review_requests
+from canopy.runs import policy
 from canopy.runtime.report import ToolUse, Usage
 from canopy.serve import pr_list
 from tests.canopy.helpers import DEAD_PID, journal_at, old_ticket, present, shipped_through
@@ -445,6 +447,54 @@ def test_a_tickets_decisions_are_found_by_index(tmp_path: Path, journals: Journa
         plan = [str(r["detail"]) for r in conn.execute(f"EXPLAIN QUERY PLAN {statement}")]
         assert any("USING INDEX decisions_ticket" in step for step in plan), plan
         assert not any(step.startswith("SCAN d") for step in plan), plan
+
+
+def test_the_loops_reads_at_each_wait_step_and_tick_are_found_by_index(tmp_path: Path, journals: Journals) -> None:
+    """The wait's probes, and a tick's reads of every ticket, read no table of the journal's history whole.
+
+    A probe that finds nothing, as an idle wait's do twice a second, would otherwise read to the end of its table. A
+    read of every ticket's attempts may read an index whole, which holds the two columns it needs and not the rows.
+    Each statement is explained as canopy prepares it, its values bound to its `?`s, since a partial index on a literal
+    serves a bound value only once SQLite sees what is bound.
+    """
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    since = "2026-01-01T00:00:00.000Z"
+    reads: dict[str, Callable[[], object]] = {
+        "newest operator message": lambda: db.latest_message_id(conn, source="operator", subject_kind="ticket"),
+        "runs moved": lambda: db.runs_moved_after(conn, since),
+        "runs ended": lambda: db.runs_ended_after(conn, since),
+        "starts moved": lambda: db.starts_moved_after(conn, since),
+        "review requested": lambda: review_requests.made_after(conn, since),
+        "open tickets": lambda: db.open_tickets(conn),
+        "recently done": lambda: db.recently_done(conn, since),
+        "abandoned ticks": lambda: db.abandon_unfinished_ticks(conn),
+        "attempts": lambda: policy.ticket_attempts(conn, "resume"),
+        "waiting runs": lambda: recorded_runs.holding(conn),
+        "unstarted runs": lambda: recorded_runs.close_unstarted(conn, tick_id=1),
+    }
+    # A read that finds its rows by an index still reads every row under its key, so one whose key is most of a table
+    # names the index that narrows it: every message to a ticket shares `subject_kind`.
+    narrowed = {"newest operator message": "messages_operator"}
+    run = sql.execute
+
+    def explained(c: sqlite3.Connection, statement: sql.Composable) -> sqlite3.Cursor:
+        built = statement.fragment()
+        statements.append((built.text, built.params))
+        return run(c, statement)
+
+    for name, read in reads.items():
+        statements: list[tuple[str, Sequence[sql.Bound]]] = []
+        with mock.patch.object(sql, "execute", autospec=True, side_effect=explained):
+            read()
+        assert statements, f"{name} ran no statement"
+        for statement, params in statements:
+            plan = [str(r["detail"]) for r in conn.execute(f"EXPLAIN QUERY PLAN {statement}", params)]
+            # A plan names a table by its alias where the query gives one, so every scan counts, whatever it names.
+            scans = [step for step in plan if step.startswith("SCAN ") and "COVERING INDEX" not in step]
+            assert scans == [], (name, statement, plan)
+            if name in narrowed:
+                assert any(f"INDEX {narrowed[name]} " in step for step in plan), (name, statement, plan)
 
 
 def test_an_unknown_journal_waits_for_runs_an_earlier_canopy_started(tmp_path: Path, journals: Journals) -> None:
