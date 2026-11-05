@@ -258,9 +258,9 @@ describe('config groups', () => {
             ['policy.ci_cooldown_minutes', 'Waits'],
             ['review.settle_minutes', 'Waits'],
         ])
-        expect(byPart(timing?.keys ?? []).map((p) => [p.part, p.keys.length])).toEqual([
-            ['Pace', 1],
-            ['Waits', 2],
+        expect(byPart(timing?.keys ?? []).map((p) => [p.part, p.keys.map((k) => k.setting.name)])).toEqual([
+            ['Pace', ['loop.idle_max_minutes']],
+            ['Waits', ['policy.ci_cooldown_minutes', 'review.settle_minutes']],
         ])
         const [capacity] = groupedKeys([WORKERS, PER_REPO])
         expect(byPart(capacity?.keys ?? []).map((p) => p.part)).toEqual([undefined])

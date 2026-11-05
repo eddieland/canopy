@@ -418,7 +418,7 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
     },
 ]
 
-/** A key the server listed, with its label from `CONFIG_GROUPS`, or its name when no panel names it. */
+/** A key the server listed, with its label from `CONFIG_GROUPS`, or its name when no band names it. */
 export interface LabelledKey {
     /** The key as the server sent it. */
     setting: ConfigKey
