@@ -69,7 +69,7 @@ describe('TicketDesk', () => {
     it('opens a desk over every repository with the branch, and says what the CLI says', async () => {
         answers = [opened()]
         renderDesk({ repos: ['web'], open: null })
-        expect(screen.queryByRole('button', { name: /Repositories at the desk/ })).toBeNull()
+        expect(screen.queryByRole('button', { name: /Repositories at the desk/u })).toBeNull()
         fireEvent.click(screen.getByRole('button', { name: 'Open desk' }))
         expect(await screen.findByText("ABC-1's desk is open.")).toBeDefined()
         expect(sent).toEqual([{ path: '/api/tickets/ABC-1/desk', body: { repos: [] } }])

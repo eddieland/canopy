@@ -74,7 +74,8 @@ Below:
   runs on. See [Choosing a persona](#choosing-a-persona) and [Choosing a model](#choosing-a-model). Once more than
   one model has served the ticket, a line under its total cost splits it by model, then `unread` for runs whose
   sessions canopy hasn't read yet and `none` for runs it read that named no model: the override's bill, itemized.
-  At its foot, once the ticket has a branch, its **desk**: see [Editing the branch yourself](#editing-the-branch-yourself).
+  At its foot, once the ticket has a branch, its **desk**: see
+  [Editing the branch yourself](#editing-the-branch-yourself).
 - **Conversation**: every message, the box to reply in, and under it the ticket's actions.
   [Attention](attention#replying) covers how a reply works. When one of the ticket's attention items clears while
   you're here, a leaf drifts off the panel, the same one the attention list drops.
