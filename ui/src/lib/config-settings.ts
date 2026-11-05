@@ -249,11 +249,14 @@ export interface ConfigChange {
 }
 
 /**
- * Each change a save would make, in the order the server lists the keys, for the save bar to list as `key: old → new`.
- * `capacity.repo_slots` lists each repository whose count changed on its own.
+ * Each change a save would make, in the order the server lists the keys, for the save bar to list as `key: old → new`
+ * and count. `capacity.repo_slots` lists each repository whose count changed on its own, from the count it has now: its
+ * own, else the slots per repository.
  */
 export function changeList(keys: ConfigKey[], changes: Record<string, ConfigValue>): ConfigChange[] {
     const found: ConfigChange[] = []
+    // A repository with no count of its own has the slots per repository, as the server reads it.
+    const perRepo = keys.find((k) => k.name === 'capacity.slots_per_repo')?.value
     for (const key of keys) {
         const now = changes[key.name]
         if (now === undefined) {
@@ -265,7 +268,7 @@ export function changeList(keys: ConfigKey[], changes: Record<string, ConfigValu
             for (const [repo, count] of Object.entries(now)) {
                 found.push({
                     name: `${key.name}.${repo}`,
-                    old: valueText(was[repo] ?? null, key.name),
+                    old: valueText(was[repo] ?? (typeof perRepo === 'number' ? perRepo : null), key.name),
                     new: String(count),
                 })
             }

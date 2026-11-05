@@ -107,7 +107,9 @@ function Form({
 }) {
     const [drafts, setDrafts] = useState<ConfigDrafts>({})
     const form = configForm(settings.keys, drafts)
-    const pending = Object.keys(form.changes).length
+    // Counted as the bar lists them: each repository's own count is a change of its own.
+    const changed = changeList(settings.keys, form.changes)
+    const pending = changed.length
     const errors = Object.keys(form.errors).length
     const touched = (name: string) =>
         name in form.changes || Object.keys(form.errors).some((n) => n === name || n.startsWith(`${name}.`))
@@ -189,7 +191,7 @@ function Form({
                             <p className="text-sm text-foreground" data-testid="config-pending">
                                 {pendingText(pending, errors)}
                             </p>
-                            <ChangeList changes={changeList(settings.keys, form.changes)} />
+                            <ChangeList changes={changed} />
                             {stricter.length > 0 && (
                                 <p
                                     className="flex items-center gap-1.5 text-xs text-status-blocked"

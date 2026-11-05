@@ -315,6 +315,14 @@ describe('the save bar', () => {
         ])
     })
 
+    it("take a repository's old count from the slots per repository when it has none of its own", () => {
+        const keys = [SLOTS, { ...PER_REPO, value: 2 }]
+        expect(changeList(keys, { 'capacity.repo_slots': { web: 5, api: 3 } })).toEqual([
+            { name: 'capacity.repo_slots.web', old: '4', new: '5' },
+            { name: 'capacity.repo_slots.api', old: '2', new: '3' },
+        ])
+    })
+
     it('name the stricter keys a save changes, which only the file undoes, and nothing else', () => {
         expect(oneWay(KEYS, { 'capacity.max_workers': 5 })).toEqual([])
         expect(oneWay(KEYS, { 'capacity.max_workers': 5, 'trust.rebase': false })).toEqual(['trust.rebase'])
