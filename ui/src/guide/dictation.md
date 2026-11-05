@@ -15,6 +15,7 @@ confident about a word you never said, and the box is where you catch it.
 
 - A recording runs for up to 4 minutes 50 seconds, then stops by itself and is transcribed. Longer thoughts take two
   presses.
+- A box keeps its own limit: what doesn't fit is left out, and a note under the box says how much.
 - One recording is transcribed at a time. A second, while the first is still with the model, is refused as `busy`.
 - canopy gives the model a hint of the words it should expect: your repositories' names, then the keys and titles of
   the tickets canopy is working on, the most recently changed first. That's the difference between `PROJ-142` and

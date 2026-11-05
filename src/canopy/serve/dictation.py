@@ -80,6 +80,9 @@ def transcribe(runner: procs.Runner, template: str, audio: bytes, vocabulary: st
             raise conversation.Refused("failed", f"{argv[0]} is not on the loop's PATH") from None
         except procs.ProcError as e:
             raise conversation.Refused("failed", f"{argv[0]} did not start: {e}") from None
+        except OSError as e:
+            # The machine would not start it, such as out of processes or memory: the command's failure, not ours.
+            raise conversation.Refused("failed", f"{argv[0]} did not start: {e.strerror or e}") from None
     if result.timed_out:
         raise conversation.Refused("timed_out", f"{argv[0]} took longer than {TIMEOUT_SECONDS} seconds")
     if not result.ok:
@@ -97,7 +100,8 @@ def vocabulary(conn: sqlite3.Connection, repos: Iterable[str]) -> str:
     """
     tickets = (
         records.select(records.Ticket)
-        .where("done = 0 AND forgotten_at IS NULL")
+        # A forgotten ticket counts again once it changes after the forget, as the rest of the journal reads it.
+        .where("done = 0 AND (forgotten_at IS NULL OR changed_at > forgotten_at)")
         .order_by("changed_at DESC, key")
         .limit(VOCABULARY_TICKETS)
         .all(conn)
@@ -122,6 +126,8 @@ def _checked(audio: bytes) -> float:
         with wave.open(io.BytesIO(audio)) as found:
             shape = (found.getnchannels(), found.getsampwidth(), found.getframerate(), found.getcomptype())
             frames = found.getnframes()
+            # The header says how much audio follows; a body cut short holds less, which no command should guess at.
+            held = len(found.readframes(frames)) // max(1, found.getsampwidth() * found.getnchannels())
     except (wave.Error, EOFError) as e:
         raise conversation.Refused("bad_audio", f"not a PCM WAV recording: {e}") from None
     if shape != (1, 2, SAMPLE_RATE, "NONE"):
@@ -129,6 +135,8 @@ def _checked(audio: bytes) -> float:
     seconds = frames / SAMPLE_RATE
     if frames == 0:
         raise conversation.Refused("bad_audio", "the recording is empty")
+    if held < frames:
+        raise conversation.Refused("bad_audio", f"the recording is cut short: {held} of its {frames} frames are there")
     if seconds > MAX_SECONDS:
         raise conversation.Refused("bad_audio", f"the recording is {seconds:.0f} seconds; at most {MAX_SECONDS}")
     return seconds

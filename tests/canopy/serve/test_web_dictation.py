@@ -5,6 +5,7 @@ hear, and gives back what the command printed, keeping nothing.
 """
 
 import dataclasses
+import errno
 import io
 import wave
 from pathlib import Path
@@ -14,6 +15,7 @@ import pytest
 
 from canopy.core import db, records
 from canopy.core.context import Context
+from canopy.infra import procs
 from canopy.loop import reread, tick_now, web
 from canopy.serve import dictation, guard
 from tests.canopy.web_helpers import refused, signed_in_client, signed_in_to
@@ -76,7 +78,9 @@ def test_without_a_command_no_field_offers_dictation(ctx: Context) -> None:
         (recording(rate=44_100), "must be 16-bit mono PCM at 16000 Hz"),
         (recording(0), "the recording is empty"),
         (recording(3), "the recording is 3 seconds; at most 2"),
+        (recording(1)[:-1000], "the recording is cut short: 15500 of its 16000 frames are there"),
     ],
+    ids=["not-wav", "stereo", "44.1khz", "empty", "too-long", "cut-short"],
 )
 def test_a_body_that_is_not_the_page_s_recording_is_refused_before_the_command_runs(
     ctx: Context,
@@ -118,6 +122,23 @@ def test_a_command_that_fails_is_refused_with_what_it_said_which_the_log_leaves_
     assert missing == "failed: no-such-stt is not on the loop's PATH"
 
 
+def test_a_command_the_machine_will_not_start_is_refused_as_failed(ctx: Context, tmp_path: Path) -> None:
+    c, headers = signed_in_client(dictating(ctx, f"{stt(tmp_path)} -f {{audio}}"))
+    full = OSError(errno.EAGAIN, "Resource temporarily unavailable")
+    with mock.patch.object(procs.SubprocessRunner, "run", autospec=True, side_effect=full):
+        said = refused(c.post("/api/dictation", content=recording(), headers=headers))
+    assert said == f"failed: {tmp_path / 'stt'} did not start: Resource temporarily unavailable"
+
+
+def test_no_command_runs_for_a_page_that_is_not_signed_in_or_lacks_the_token(ctx: Context, tmp_path: Path) -> None:
+    c, headers = signed_in_client(dictating(ctx, f"{stt(tmp_path)} -f {{audio}}"))
+    tokenless = {"origin": headers["origin"]}
+    assert c.post("/api/dictation", content=recording(), headers=tokenless).status_code == 403
+    c.cookies.clear()
+    assert c.post("/api/dictation", content=recording(), headers=headers).status_code == 401
+    assert not (tmp_path / "args").exists()
+
+
 def test_a_command_that_runs_too_long_is_killed(ctx: Context, tmp_path: Path) -> None:
     c, headers = signed_in_client(dictating(ctx, f"{stt(tmp_path, 'sleep 30')} -f {{audio}}"))
     with mock.patch.object(dictation, "TIMEOUT_SECONDS", 0.5):
@@ -153,3 +174,13 @@ def test_the_vocabulary_never_starts_with_a_hyphen_whatever_leads_it(ctx: Contex
     words = dictation.vocabulary(ctx.conn, [])
     assert not words.startswith(("-", " ")), words
     assert words.endswith("Odd key")
+
+
+def test_a_forgotten_ticket_is_left_out_of_the_vocabulary_until_it_changes_again(ctx: Context) -> None:
+    db.set_ticket(ctx.conn, "PROJ-5", ctx.repo, title="Old work")
+    db.forget_ticket(ctx.conn, "PROJ-5", channel="cli", branch=None, prs=())
+    assert dictation.vocabulary(ctx.conn, []) == ""
+    db.set_ticket(ctx.conn, "PROJ-5", ctx.repo, title="Old work, again")
+    later = "2999-01-01T00:00:00Z"
+    records.update(records.Ticket).set(changed_at=later).where("key = ?", "PROJ-5").run(ctx.conn)
+    assert dictation.vocabulary(ctx.conn, []) == "PROJ-5 Old work, again"

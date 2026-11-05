@@ -15,8 +15,11 @@ export const DictationContext = createContext(false)
  */
 export const MAX_DICTATION_SECONDS = 290
 
-/** Where a field's dictation is: waiting, recording the operator, or waiting on the server's text. */
-export type DictationState = 'idle' | 'recording' | 'transcribing'
+/**
+ * Where a field's dictation is: waiting; asking the browser for the microphone, which may be asking the operator;
+ * recording them; or waiting on the server's text.
+ */
+export type DictationState = 'idle' | 'starting' | 'recording' | 'transcribing'
 
 /** A field's dictation, from `useDictation`. */
 export interface Dictation {
@@ -38,11 +41,12 @@ export interface Dictation {
 
 /**
  * Dictation for one field: records the operator through the browser's microphone, makes the recording the WAV the
- * server takes, and gives `onText` what the operator's command heard, for the field to put where its cursor is. A
- * recording stops by itself at `MAX_DICTATION_SECONDS`, and the microphone is let go once it stops, or when the field
- * leaves the page.
+ * server takes, and gives `onText` what the operator's command heard, for the field to put where its cursor is;
+ * `onText` returns how many of its characters did not fit, which a note then says. A recording stops by itself at
+ * `MAX_DICTATION_SECONDS`, and the microphone is let go once it stops, or when the field leaves the page, even while
+ * the browser is still asking for it.
  */
-export function useDictation(onText: (text: string) => void): Dictation {
+export function useDictation(onText: (text: string) => number): Dictation {
     const offered = use(DictationContext)
     const [state, setState] = useState<DictationState>('idle')
     const [seconds, setSeconds] = useState(0)
@@ -51,6 +55,10 @@ export function useDictation(onText: (text: string) => void): Dictation {
     const recorder = useRef<MediaRecorder | null>(null)
     const clock = useRef<ReturnType<typeof setInterval> | undefined>(undefined)
     const heard = useRef(onText)
+    // Set the moment a start begins and cleared when it ends, so a second press while the browser asks is no second
+    // start; and set for good when the field leaves, so a microphone granted after that is let go at once.
+    const starting = useRef(false)
+    const gone = useRef(false)
 
     useEffect(() => {
         heard.current = onText
@@ -59,6 +67,7 @@ export function useDictation(onText: (text: string) => void): Dictation {
     // A field that leaves the page while it records stops recording, and lets go of the microphone.
     useEffect(
         () => () => {
+            gone.current = true
             clearInterval(clock.current)
             const going = recorder.current
             if (going !== null) {
@@ -86,7 +95,10 @@ export function useDictation(onText: (text: string) => void): Dictation {
             if (found.text === '') {
                 setNote('Nothing was heard in that recording.')
             } else {
-                heard.current(found.text)
+                const left = heard.current(found.text)
+                if (left > 0) {
+                    setNote(`The box was full: the last ${left} characters of what was heard were left out.`)
+                }
             }
         } catch (error_) {
             setError(error_)
@@ -96,8 +108,13 @@ export function useDictation(onText: (text: string) => void): Dictation {
     }
 
     async function start() {
+        if (starting.current) {
+            return
+        }
+        starting.current = true
         setError(null)
         setNote(null)
+        setState('starting')
         let stream: MediaStream
         try {
             stream = await navigator.mediaDevices.getUserMedia({
@@ -105,6 +122,13 @@ export function useDictation(onText: (text: string) => void): Dictation {
             })
         } catch (error_) {
             setError(new Error(microphoneTrouble(error_)))
+            setState('idle')
+            return
+        } finally {
+            starting.current = false
+        }
+        if (gone.current) {
+            release(stream)
             return
         }
         const made = new MediaRecorder(stream)

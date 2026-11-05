@@ -145,22 +145,33 @@ export function MarkdownField({
         onValueChange(applyEdit(field.value, edit))
     }
 
-    // What dictation heard goes in where the cursor is, a space before it where it would run into a word. A field
-    // hidden behind its preview, or disabled while a form sends, takes it as text: the browser would type it elsewhere.
-    function insertHeard(heard: string) {
+    // What dictation heard goes in where the cursor is, with a space where it would run into a word on either side,
+    // and no more of it than the field's `maxLength` leaves room for. Returns how many characters were left out. A
+    // field hidden behind its preview, or disabled while a form sends, takes it as text: the browser would type it
+    // elsewhere.
+    function insertHeard(heard: string): number {
         const field = area.current
         if (field === null) {
-            return
+            return 0
         }
         const { selectionStart: from, selectionEnd: to } = field
         const before = field.value.slice(0, from)
-        const insert = before === '' || /\s$/u.test(before) ? heard : ` ${heard}`
+        const after = field.value.slice(to)
+        const lead = before === '' || /\s$/u.test(before) ? '' : ' '
+        const trail = /^[\p{L}\p{N}]/u.test(after) ? ' ' : ''
+        const room = field.maxLength < 0 ? Infinity : field.maxLength - before.length - after.length
+        const words = heard.slice(0, Math.max(0, room - lead.length - trail.length))
+        if (words === '') {
+            return heard.length
+        }
+        const insert = `${lead}${words}${trail}`
         const edit = { from, to, insert, selection: { start: from + insert.length, end: from + insert.length } }
         if (field.hidden !== false || field.disabled) {
             onValueChange(applyEdit(field.value, edit))
         } else {
             apply(edit)
         }
+        return heard.length - words.length
     }
 
     function format(tool: Tool) {
@@ -330,25 +341,20 @@ export function MarkdownField({
 function Dictate({ dictation, disabled }: { dictation: Dictation; disabled: boolean }) {
     const { state, seconds, blocked } = dictation
     const recording = state === 'recording'
+    const busy = state === 'starting' || state === 'transcribing'
     const label = recording ? 'Stop dictating' : state === 'transcribing' ? 'Transcribing' : 'Dictate'
     return (
         <>
             <ToolbarButton
                 aria-label={label}
                 title={blocked ?? (recording ? 'Stop, and put what you said in the field' : 'Dictate into the field')}
-                disabled={blocked !== null || state === 'transcribing' || (disabled && !recording)}
+                disabled={blocked !== null || busy || (disabled && !recording)}
                 // The text keeps the focus and its cursor, where what is heard goes in.
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={dictation.toggle}
                 className={cn(recording && 'text-status-failed')}
             >
-                {recording ? (
-                    <Square />
-                ) : state === 'transcribing' ? (
-                    <LoaderCircle className="animate-spin" />
-                ) : (
-                    <Mic />
-                )}
+                {recording ? <Square /> : busy ? <LoaderCircle className="animate-spin" /> : <Mic />}
             </ToolbarButton>
             {recording && (
                 <span role="timer" aria-label="Recorded" className="px-1 font-mono text-xs text-muted-foreground">

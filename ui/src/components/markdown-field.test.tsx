@@ -27,10 +27,12 @@ afterEach(cleanup)
 function Holder({
     initial,
     preview,
+    maxLength,
     onKeyDown,
 }: {
     initial: string
     preview?: MarkdownPreview
+    maxLength?: number
     onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void
 }) {
     const [value, setValue] = useState(initial)
@@ -40,6 +42,7 @@ function Holder({
             value={value}
             onValueChange={setValue}
             preview={preview}
+            maxLength={maxLength}
             onKeyDown={onKeyDown}
         />
     )
@@ -171,11 +174,11 @@ class FakeRecorder {
     }
 }
 
-// The field where the server offers dictation, starting from `initial`.
-function offered(initial: string) {
-    render(
+// The field where the server offers dictation, starting from `initial`, holding at most `maxLength` characters.
+function offered(initial: string, maxLength?: number) {
+    return render(
         <DictationContext value>
-            <Holder initial={initial} />
+            <Holder initial={initial} maxLength={maxLength} />
         </DictationContext>,
     )
 }
@@ -222,14 +225,56 @@ describe('MarkdownField dictation', () => {
     it('puts what was heard where the cursor is, and lets go of the microphone', async () => {
         vi.mocked(dictate).mockResolvedValue({ text: 'shard by tenant', seconds: 2 })
         offered('Ship it, then')
-        select(13)
+        select(4)
         await speak()
         expect(await screen.findByRole('button', { name: 'Dictate' })).toBeDefined()
-        expect(field().value).toBe('Ship it, then shard by tenant')
+        expect(field().value).toBe('Ship shard by tenant it, then')
         expect(vi.mocked(speechWav).mock.calls[0]?.[0]).toBeInstanceOf(Blob)
         expect(vi.mocked(dictate)).toHaveBeenCalledWith(wav)
         expect(track.stop).toHaveBeenCalled()
         expect(getUserMedia.mock.calls[0]?.[0].audio).toMatchObject({ channelCount: 1, noiseSuppression: true })
+    })
+
+    it('keeps a space between what was heard and a word right after the cursor', async () => {
+        vi.mocked(dictate).mockResolvedValue({ text: 'first,', seconds: 1 })
+        offered('then ship it')
+        select(0)
+        await speak()
+        await screen.findByRole('button', { name: 'Dictate' })
+        expect(field().value).toBe('first, then ship it')
+    })
+
+    it('puts no more in than the box holds, and says how much was left out', async () => {
+        vi.mocked(dictate).mockResolvedValue({ text: 'shard by tenant', seconds: 2 })
+        offered('Note: ', 15)
+        select(6)
+        await speak()
+        expect((await screen.findByText(/^The box was full/u)).textContent).toBe(
+            'The box was full: the last 6 characters of what was heard were left out.',
+        )
+        expect(field().value).toBe('Note: shard by ')
+    })
+
+    it('lets go of a microphone the browser grants after the field has gone', async () => {
+        let grant: ((stream: MediaStream) => void) | undefined
+        getUserMedia.mockReturnValue(
+            new Promise((resolve) => {
+                grant = resolve
+            }),
+        )
+        const { unmount } = offered('')
+        fireEvent.click(screen.getByRole('button', { name: 'Dictate' }))
+        const asking = screen.getByRole<HTMLButtonElement>('button', { name: 'Dictate' })
+        expect(asking.disabled).toBe(true)
+        fireEvent.click(asking)
+        expect(getUserMedia).toHaveBeenCalledTimes(1)
+        unmount()
+        await act(async () => {
+            grant?.({ getTracks: () => [track] } as unknown as MediaStream)
+            await Promise.resolve()
+        })
+        expect(track.stop).toHaveBeenCalled()
+        expect(FakeRecorder.made).toEqual([])
     })
 
     it('says the server refused, naming its guard, and leaves the text as it was', async () => {
