@@ -249,6 +249,7 @@ describe('RailSpend', () => {
 describe('RailFooter', () => {
     const META: Meta = {
         branch_urls: {},
+        dictation: false,
         build: 'abc123',
         mock: false,
         ticket_url: null,

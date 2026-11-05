@@ -22,6 +22,9 @@ if TYPE_CHECKING:
 WORKSPACE_MAP = "workspace map"
 # Keys whose change takes effect only when the loop restarts: the web UI's listener is started once, with the loop.
 RESTART_PREFIX = "serve."
+#: The `serve.` keys a reload does apply: dictation's command is read by each recording from the config the server
+#: serves, which a reload replaces.
+RELOADED_SERVE_KEYS = frozenset({"serve.dictation_cmd"})
 
 
 @dataclass
@@ -53,7 +56,7 @@ class Reread:
     @property
     def restart(self) -> tuple[str, ...]:
         """The changed keys a reload cannot apply: they take effect when the loop restarts."""
-        return tuple(k for k in self.changed if k.startswith(RESTART_PREFIX))
+        return tuple(k for k in self.changed if k.startswith(RESTART_PREFIX) and k not in RELOADED_SERVE_KEYS)
 
 
 def load(ctx: Context) -> Reread:

@@ -13,6 +13,7 @@ import { LiveReadouts, StreamReadout } from './live-readouts'
 
 const META: Meta = {
     branch_urls: {},
+    dictation: false,
     build: null,
     mock: false,
     ticket_url: null,

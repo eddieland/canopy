@@ -3,7 +3,7 @@ import { Outlet } from '@tanstack/react-router'
 import { Menu } from 'lucide-react'
 import { useEffect, useState, ViewTransition } from 'react'
 
-import { sessionQuery, tickQuery } from '@/api/queries'
+import { metaQuery, sessionQuery, tickQuery } from '@/api/queries'
 import { Mark, Wordmark } from '@/components/mark'
 import { LogoDecoration } from '@/components/season-logo'
 import { SignIn } from '@/components/sign-in'
@@ -11,6 +11,7 @@ import { TickNow } from '@/components/tick-now'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { useAwayNote } from '@/hooks/use-away-note'
+import { DictationContext } from '@/hooks/use-dictation'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLiveUpdates } from '@/hooks/use-live-updates'
 import { StreamContext } from '@/hooks/use-loop-down'
@@ -78,6 +79,8 @@ export function AppShell() {
     usePalettes()
     const session = useQuery(sessionQuery)
     const signedIn = session.data?.signed_in === true
+    // Whether a field may offer dictation: the server says so once it has a command to run (`serve.dictation_cmd`).
+    const dictation = useQuery({ ...metaQuery, enabled: signedIn }).data?.dictation === true
     const stream = useLiveUpdates(signedIn)
     useAwayNote(signedIn)
     const buddy = useBuddy()
@@ -121,110 +124,112 @@ export function AppShell() {
     return (
         // What the stream says, for whatever under the shell reads it: the readout, the band, the loop's actions.
         <StreamContext value={stream}>
-            <Favicon />
-            <Sheet open={sheet && railOpen} onOpenChange={setRailOpen}>
-                <div className="grid h-dvh grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
-                    <header
-                        data-testid="app-header"
-                        className={cn(
-                            'relative z-10 flex items-center justify-between gap-4 border-b border-edge bg-surface/85',
-                            'px-4',
-                        )}
-                    >
-                        {/* The aurora: a hairline through the nav's colors, in its order, along the header's foot,
+            <DictationContext value={dictation}>
+                <Favicon />
+                <Sheet open={sheet && railOpen} onOpenChange={setRailOpen}>
+                    <div className="grid h-dvh grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
+                        <header
+                            data-testid="app-header"
+                            className={cn(
+                                'relative z-10 flex items-center justify-between gap-4 border-b border-edge',
+                                'bg-surface/85 px-4',
+                            )}
+                        >
+                            {/* The aurora: a hairline through the nav's colors, in its order, along the header's foot,
                         over its border. */}
-                        <span
-                            aria-hidden
-                            className="aurora pointer-events-none absolute inset-x-0 -bottom-px opacity-90"
-                        />
-                        <div className="flex items-center gap-2.5">
-                            <LiveMark stream={stream.status} />
-                            <StreamReadout stream={stream.status} />
-                        </div>
-                        <Ticker />
-                        {/* Three groups, the actions, the readouts, and the theme, a rule between each. */}
-                        <div className="flex items-center gap-2">
-                            <NewerBuild />
-                            <LoopPause />
-                            <TickNow />
-                            <Rule />
-                            <LiveReadouts />
-                            <Rule />
-                            <ThemeToggle />
-                        </div>
-                    </header>
-                    <div
-                        ref={takeKeys}
-                        tabIndex={-1}
-                        data-scroll-restoration-id={PAGE_SCROLLER}
-                        className={cn('page-scroll grid outline-none', COLUMNS[mode])}
-                    >
-                        <SkipToContent />
-                        {/* The rail spans the whole row, so its border and fill reach the page's foot. What it holds
-                        sticks, a column as tall as the window under the header (its 3rem row above), so its foot, the
-                        spend and the footer, stays at the window's foot however long the page; the part above it
-                        scrolls on its own in a window too short. The room left between them is Sprig's, when it is
-                        on. */}
-                        {mode === 'full' && (
-                            <aside className="border-r border-edge bg-surface/60">
-                                <div
-                                    className={cn(
-                                        'sticky top-0 flex h-[calc(100dvh-3rem)] flex-col',
-                                        'print:static print:h-auto',
-                                    )}
-                                >
-                                    <RailColumn buddy={buddy === 'on'} onJump={() => jump(true)} />
-                                </div>
-                            </aside>
-                        )}
-                        {mode === 'strip' && (
-                            <aside className="border-r border-edge bg-surface/60" data-testid="rail-strip">
-                                <div className="sticky top-0 flex flex-col items-center pt-2 print:static">
-                                    <RailButton />
-                                    <div className="w-full">
-                                        <Nav compact />
+                            <span
+                                aria-hidden
+                                className="aurora pointer-events-none absolute inset-x-0 -bottom-px opacity-90"
+                            />
+                            <div className="flex items-center gap-2.5">
+                                <LiveMark stream={stream.status} />
+                                <StreamReadout stream={stream.status} />
+                            </div>
+                            <Ticker />
+                            {/* Three groups, the actions, the readouts, and the theme, a rule between each. */}
+                            <div className="flex items-center gap-2">
+                                <NewerBuild />
+                                <LoopPause />
+                                <TickNow />
+                                <Rule />
+                                <LiveReadouts />
+                                <Rule />
+                                <ThemeToggle />
+                            </div>
+                        </header>
+                        <div
+                            ref={takeKeys}
+                            tabIndex={-1}
+                            data-scroll-restoration-id={PAGE_SCROLLER}
+                            className={cn('page-scroll grid outline-none', COLUMNS[mode])}
+                        >
+                            <SkipToContent />
+                            {/* The rail spans the whole row, so its border and fill reach the page's foot. What
+                            it holds sticks, a column as tall as the window under the header (its 3rem row above), so
+                            its foot, the spend and the footer, stays at the window's foot however long the page; the
+                            part above it scrolls on its own in a window too short. The room left between them is
+                            Sprig's, when it is on. */}
+                            {mode === 'full' && (
+                                <aside className="border-r border-edge bg-surface/60">
+                                    <div
+                                        className={cn(
+                                            'sticky top-0 flex h-[calc(100dvh-3rem)] flex-col',
+                                            'print:static print:h-auto',
+                                        )}
+                                    >
+                                        <RailColumn buddy={buddy === 'on'} onJump={() => jump(true)} />
                                     </div>
-                                </div>
-                            </aside>
-                        )}
-                        <main id={MAIN} tabIndex={-1} className="min-w-0 p-6 outline-none">
-                            <LoopDownBand />
-                            <NoticeBanner />
-                            <ViewTransition update={{ [IN_PAGE]: 'none', default: 'auto' }}>
-                                <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
-                                    <Outlet />
-                                </div>
-                            </ViewTransition>
-                        </main>
+                                </aside>
+                            )}
+                            {mode === 'strip' && (
+                                <aside className="border-r border-edge bg-surface/60" data-testid="rail-strip">
+                                    <div className="sticky top-0 flex flex-col items-center pt-2 print:static">
+                                        <RailButton />
+                                        <div className="w-full">
+                                            <Nav compact />
+                                        </div>
+                                    </div>
+                                </aside>
+                            )}
+                            <main id={MAIN} tabIndex={-1} className="min-w-0 p-6 outline-none">
+                                <LoopDownBand />
+                                <NoticeBanner />
+                                <ViewTransition update={{ [IN_PAGE]: 'none', default: 'auto' }}>
+                                    <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
+                                        <Outlet />
+                                    </div>
+                                </ViewTransition>
+                            </main>
+                        </div>
                     </div>
-                </div>
-                {sheet && (
-                    <SheetContent
-                        data-testid="rail-sheet"
-                        className="w-52"
-                        // A link followed or a search sent leaves for another page: the sheet would cover it.
-                        onClick={(event) => {
-                            if (event.target instanceof Element && event.target.closest('a') !== null) {
+                    {sheet && (
+                        <SheetContent
+                            data-testid="rail-sheet"
+                            className="w-52"
+                            // A link followed or a search sent leaves for another page: the sheet would cover it.
+                            onClick={(event) => {
+                                if (event.target instanceof Element && event.target.closest('a') !== null) {
+                                    setRailOpen(false)
+                                }
+                            }}
+                            onSubmit={() => {
                                 setRailOpen(false)
-                            }
-                        }}
-                        onSubmit={() => {
-                            setRailOpen(false)
-                        }}
-                    >
-                        <SheetTitle className="sr-only">Rail</SheetTitle>
-                        <SheetDescription className="sr-only">
-                            Search, the pages, what is working now, and the spend
-                        </SheetDescription>
-                        <RailColumn buddy={buddy === 'on'} onJump={() => jump(true)} />
-                    </SheetContent>
-                )}
-                <JumpPalette open={jumpOpen} onOpenChange={jump} />
-                <ReviewDialog />
-                <TicketDialog />
-                <Rave />
-                <Game2048 />
-            </Sheet>
+                            }}
+                        >
+                            <SheetTitle className="sr-only">Rail</SheetTitle>
+                            <SheetDescription className="sr-only">
+                                Search, the pages, what is working now, and the spend
+                            </SheetDescription>
+                            <RailColumn buddy={buddy === 'on'} onJump={() => jump(true)} />
+                        </SheetContent>
+                    )}
+                    <JumpPalette open={jumpOpen} onOpenChange={jump} />
+                    <ReviewDialog />
+                    <TicketDialog />
+                    <Rave />
+                    <Game2048 />
+                </Sheet>
+            </DictationContext>
         </StreamContext>
     )
 }

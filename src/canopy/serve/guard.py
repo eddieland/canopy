@@ -7,8 +7,9 @@ SSH forward to another local port (`ssh -L 9000:127.0.0.1:8765`) still works. A 
 browsers omit it on same-origin GETs, and non-browser clients never send one.
 
 FastAPI reads and parses a route's body before any dependency runs, the session check included, so the size is checked
-here, where a client that has not signed in reaches too. uvicorn frames an HTTP/1.1 body by its Content-Length, so the
-header bounds what the app can read; a chunked body has none, and is refused, as no page of canopy's sends one.
+here, where a client that has not signed in reaches too; a recording to transcribe may be larger than any other body.
+uvicorn frames an HTTP/1.1 body by its Content-Length, so the header bounds what the app can read; a chunked body has
+none, and is refused, as no page of canopy's sends one.
 """
 
 from __future__ import annotations
@@ -19,6 +20,8 @@ from urllib.parse import urlsplit
 
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
+
+from canopy.serve.dictation import MAX_AUDIO_BYTES
 
 if TYPE_CHECKING:
     from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -33,6 +36,8 @@ SECURITY_HEADERS: tuple[tuple[bytes, bytes], ...] = (
 # at most 1,200,000 bytes of JSON when every one is outside the BMP and escaped as a surrogate pair, `\ud83d\ude00`, 12
 # bytes each.
 MAX_BODY_BYTES = 1280 * 1024
+#: The path under the API's prefix that takes a recording, and so a larger body than any other (`dictation.py`).
+DICTATION_PATH = "/dictation"
 
 
 def host_name(host: str) -> str:
@@ -92,6 +97,7 @@ class Guard:
             return 411, "a request body needs a Content-Length"
         # uvicorn refuses a Content-Length that is not a number before the app sees the request.
         length = headers.get("content-length", "0")
-        if length.isascii() and length.isdigit() and int(length) > MAX_BODY_BYTES:
-            return 413, f"a request body may be at most {MAX_BODY_BYTES} bytes"
+        most = MAX_AUDIO_BYTES if path == self.api_prefix + DICTATION_PATH else MAX_BODY_BYTES
+        if length.isascii() and length.isdigit() and int(length) > most:
+            return 413, f"a request body may be at most {most} bytes"
         return None

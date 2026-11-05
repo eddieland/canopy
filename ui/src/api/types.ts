@@ -5,6 +5,8 @@ type Schemas = components['schemas']
 
 /** The server itself: what it runs and whether its data is real. */
 export type Meta = Schemas['Meta']
+/** What the operator's dictation command heard in a recording, for the field they recorded into (DESIGN §22). */
+export type Dictated = Schemas['Dictated']
 /** Whether this browser is signed in, and if so the token its writes must carry. */
 export type Session = Schemas['Session']
 /** One item on the attention list (DESIGN §14): what needs the operator, and since when. */

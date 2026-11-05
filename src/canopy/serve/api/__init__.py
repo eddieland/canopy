@@ -21,6 +21,7 @@ from canopy.serve.api import (
     checklists,
     chores,
     deps,
+    dictation,
     docs,
     drafts,
     events,
@@ -77,6 +78,7 @@ _RESOURCES = (
     memory,
     checklists,
     reports,
+    dictation,
 )
 
 # Each resource's tag, described by its module's docstring, in the order the schema lists them.
