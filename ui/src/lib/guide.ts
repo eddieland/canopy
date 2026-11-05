@@ -145,6 +145,7 @@ export const PAGE_GUIDES = {
     '/tasks/$id': 'tasks#a-tasks-page',
     '/tasks/$id_/runs/$run': 'tasks#a-tasks-run',
     '/epics/': 'epics',
+    '/epics/$id': 'epics#an-epics-page',
     '/pull-requests/': 'pull-requests',
     '/pull-requests/pr': 'pull-requests#the-pull-requests-page',
     '/pull-requests/reviews/': 'pull-requests#the-reviews-page',

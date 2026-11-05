@@ -73,6 +73,16 @@ describe('EpicRow', () => {
         const said = 'Plan https://example.com/spec <b>bold</b>'
         const shown = await row({ ...epic(3), text: said })
         expect(within(shown).getByText(said)).toBeTruthy()
-        expect(within(shown).queryAllByRole('link')).toEqual([])
+        // Its one link is its id, to its page.
+        expect(
+            within(shown)
+                .getAllByRole('link')
+                .map((link) => link.textContent),
+        ).toEqual(['epic:3'])
+    })
+
+    it("opens the epic's page from its id", async () => {
+        const shown = await row(epic(1))
+        expect(within(shown).getByRole('link', { name: 'epic:1' }).getAttribute('href')).toBe('/epics/1')
     })
 })

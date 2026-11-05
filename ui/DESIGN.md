@@ -699,6 +699,15 @@ reader, so no table repeats them.
   color by what it means: a proposed plan `waiting on you` in blocked's, one stuck without a plan in failed's),
   `epic:N`, its repositories, its goal's first line in the free column, how many of its breakdown's entries are filed,
   and the age, newest first.
+- **An epic** (`/epics/$id`) leads with its breakdown, since what is left to file is what the page answers: the board
+  (`EpicBoard`), at the page's width, a table with a row per entry in the plan's order and a column for each part of it,
+  headed, so an id reads by its column; the members fulfilling it, each its run's dot, key, and phase, or `none yet`,
+  muted. A narrow window wraps a row's cells and never stacks an entry into a card. Its mark says which plan it is read
+  from, `proposed` in `status-blocked`; with no plan it is one line, and a plan that does not read is a `Notice`. Under
+  it, the members it has no row for. Then the story (`EpicStory`, a task's story's bubbles) beside the requirements and
+  contracts, and the plan runs. Pointing at an `R`, `C`, or `B` id anywhere on the page (`OutlineId`) lights it in the
+  accent and the rows that cite it in the accent's tint, with no delay: fun that only adds, never dimming the rest, and
+  whose facts each id's tip says in words.
 - **A task** (`/tasks/$id`) is one story: its title `task:N` and its text's first line, its description where it
   stands, then the detail skeleton, with the story as its thread: a Conversation panel (`TaskStory`) whose oldest end
   is the operator's instruction, whole, as their own bubble, then its messages, each naming its run as `task:4#5`, which
@@ -1065,13 +1074,13 @@ reader, so no table repeats them.
   trails, titles, and the tab alike: `run:41`, `review:4`, `chore:deps`, and in the same grammar `tick:2` and
   `memory:3`, which the CLI takes no reference for, so a list never shows a bare number that reads as a row's. A chore
   run has no reference of its own, so it is its chore's and its number, `chore:deps#2`, as GitHub writes an issue's,
-  and a task's run the same, `task:4#5`. Each has a link component that opens its page (`RunLink`, `TickLink`,
-  `ReviewLink`, `ChoreLink`, `ChoreRunLink`, `TaskLink`, `TaskRunLink`), used wherever it is named; a page's title
-  calls the same function. A message is `#5`, as its conversation numbers it, and a worktree slot `#3`, as treehouse
-  does. Nothing builds a reference in place. A PR is named as GitHub writes a reference, `org/repo#123`
-  (`pullRequestLabel`; any other host's URL as written without `https://`), and only through `PullRequestLink`. A link
-  into a GitHub PR, such as to one of its threads, is the PR all the same: its name goes in to the PR's page and its
-  icon out to the thread.
+  and a task's run the same, `task:4#5`, and an epic's plan run, `epic:2#3`. Each with a page has a link component
+  that opens it (`RunLink`, `TickLink`, `ReviewLink`, `ChoreLink`, `ChoreRunLink`, `TaskLink`, `TaskRunLink`,
+  `EpicLink`), used wherever it is named; a page's title calls the same function. A message is `#5`, as its
+  conversation numbers it, and a worktree slot `#3`, as treehouse does. Nothing builds a reference in place. A PR is
+  named as GitHub writes a reference, `org/repo#123` (`pullRequestLabel`; any other host's URL as written without
+  `https://`), and only through `PullRequestLink`. A link into a GitHub PR, such as to one of its threads, is the PR
+  all the same: its name goes in to the PR's page and its icon out to the thread.
 - **The label goes in, the icon goes out.** A PR or a ticket named anywhere is its name linking to its page in canopy,
   then a small icon (`LinkOut`) opening the same thing outside canopy in a new tab, named for a screen reader and on
   hover (`acme/web#88 on GitHub`, `ABC-102 in the tracker`): `PullRequestLink`, and `TicketLink` when

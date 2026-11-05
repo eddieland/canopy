@@ -1,4 +1,4 @@
-import type { EpicStanding, EpicSummary, RunState } from '@/api/types'
+import type { EpicEntry, EpicMember, EpicStanding, EpicSummary, RunState } from '@/api/types'
 
 /** Where an epic stands as the epics list shows it: the run state it is colored as, its word, and what it means. */
 export interface EpicLook {
@@ -58,4 +58,68 @@ export function entriesFiled(epic: Pick<EpicSummary, 'entries' | 'entries_with_m
     }
     const noun = epic.entries === 1 ? 'entry' : 'entries'
     return `${String(epic.entries_with_members)} of ${String(epic.entries)} ${noun} filed`
+}
+
+// An epic's id as its page's path holds it: a whole number, as `canopy show epic:N` reads one.
+const EPIC_ID = /^[1-9]\d{0,15}$/u
+
+/** The epic a page's path names, or undefined for anything that is not a whole number, which names no epic. */
+export function epicId(text: string): number | undefined {
+    return EPIC_ID.test(text) ? Number(text) : undefined
+}
+
+/** Whether `entry` cites `id`: covers it (an `R`), provides or uses it (a `C`), or is it or comes after it (a `B`). */
+export function cites(entry: Pick<EpicEntry, 'id' | 'covers' | 'provides' | 'uses' | 'after'>, id: string): boolean {
+    return (
+        entry.id === id ||
+        entry.covers.includes(id) ||
+        entry.provides.includes(id) ||
+        entry.uses.includes(id) ||
+        entry.after.includes(id)
+    )
+}
+
+/**
+ * Who in the breakdown cites an id, in words, read the other way from the board: the entries that cover a requirement,
+ * that provide and use a contract, or that come after an entry. An id no entry cites says so, since a requirement no
+ * entry covers is a gap in the plan.
+ */
+export function citedBy(entries: readonly EpicEntry[], id: string): string {
+    const ids = (pick: (entry: EpicEntry) => readonly string[]) =>
+        entries.filter((entry) => pick(entry).includes(id)).map((entry) => entry.id)
+    if (id.startsWith('R')) {
+        return `covered by ${named(ids((entry) => entry.covers))}`
+    }
+    if (id.startsWith('C')) {
+        return `provided by ${named(ids((entry) => entry.provides))} · used by ${named(ids((entry) => entry.uses))}`
+    }
+    const after = ids((entry) => entry.after)
+    if (after.length === 0) {
+        return 'nothing comes after it'
+    }
+    return `${after.join(', ')} ${after.length === 1 ? 'comes' : 'come'} after it`
+}
+
+/** Entries' ids as a list in words, or `no entry`. */
+function named(ids: readonly string[]): string {
+    return ids.length === 0 ? 'no entry' : ids.join(', ')
+}
+
+/** The members the board has no row for: those of no entry, and those registered against entries since dropped. */
+export interface Unplaced {
+    /** The members registered against no entry: tickets the breakdown did not foresee. */
+    none: EpicMember[]
+    /** The members registered against an entry the approved plan no longer holds, whatever else they fulfil. */
+    dropped: EpicMember[]
+}
+
+/**
+ * The members the breakdown does not place, as the board lists them under it: a member of no entry is one with neither
+ * an entry nor a dropped one; a member with a dropped entry is listed for it, whether or not it fulfils others.
+ */
+export function unplaced(members: readonly EpicMember[]): Unplaced {
+    return {
+        none: members.filter((member) => member.entries.length === 0 && member.dropped.length === 0),
+        dropped: members.filter((member) => member.dropped.length > 0),
+    }
 }

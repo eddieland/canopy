@@ -66,10 +66,38 @@ color a run in that state wears:
 - `unplanned`, in the failure color: its plan runs ended without a plan, and none starts again until you reply. Once
   `policy.max_plan_attempts` is used up, a reply starts none either.
 
-Hover the word for its spelling in the CLI and what it means. Then come `epic:N`, its repositories, your goal's first
+Hover the word for its spelling in the CLI and what it means. Then come `epic:N`, which opens its page, its
+repositories, your goal's first
 line, how many of its breakdown's entries have a member (`2 of 4 entries filed`; `no breakdown` before it has a plan,
 and `breakdown unreadable` for a plan canopy can't read: its file is gone, or its ids repeat or won't parse), and how
 long ago you submitted it.
 
 From the shell, `canopy epic list` lists them and `canopy show epic:N` prints one, its breakdown with each entry's
 members.
+
+## An epic's page
+
+An epic's page answers what is left to file, and how far along each part is. Its title is `epic:N` and your goal's
+first line; under it, where the epic stands, how many of its breakdown's entries are filed, how many members it has
+against `policy.max_epic_tickets`, and when you submitted it.
+
+**Breakdown** leads, at the page's width: a row per entry, in the plan's order. Each row has the entry's `B` id and
+title, `trivial` when the plan marks it so (hover it for why), the requirements it covers, the contracts it provides
+and uses, its repositories, the entries it comes after, and its members: each ticket's key, opening its page, with
+the dot of its latest run and its phase. An entry with no member says `none yet`: that is what's left to file. Before
+you approve a plan, the board is the proposed plan's, marked `proposed`, and every entry is still to file. With no
+plan yet, the board is one line: the plan run writing it, or what starts the next. A plan canopy can't read says why
+in place of the rows. Under the board come the members it has no row for: those of no entry, with their titles, and
+those registered against an entry the approved plan has since dropped.
+
+Point at any `R`, `C`, or `B` id on the page, with the mouse or by tabbing to it, and it lights up wherever it shows,
+with every entry that cites it: a requirement lights the entries that cover it, a contract the ones that provide and
+use it, an entry itself and the ones that come after it. Its hover says the same in words: a requirement's text on the
+board, who covers it under **Requirements and contracts**, so a requirement no entry covers stands out.
+
+**Conversation** starts with your goal, whole and in your own words, then what each plan run said and your replies, in
+order. A plan run is named `epic:N#M`, the epic's plan run number M, counted across every epic's plan runs. A question
+a plan run asked wears `waiting on you` until you reply.
+
+**Requirements and contracts** lists each `R` and `C` with what the plan says of it. **Plan runs** lists every run of
+the planner, the first first: how it ended, `epic:N#M`, cost, how long it took, and what it said.
