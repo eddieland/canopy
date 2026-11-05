@@ -808,9 +808,11 @@ test("R opens Review a PR from any page, which requests a review and lands on th
     const request = page.getByTestId('review-request')
     await expect(request.getByTestId('review-request-notes')).toContainText('The retry loop')
 
-    // On the PR's page, R fills in its URL. One of the loop's own PRs is refused, and the dialog stays open.
+    // The request just sent is open, so R on its page opens empty, as the dialog does once a request goes through.
+    // One of the loop's own PRs is refused, and the dialog stays open.
+    await expect(request).toContainText('canopy reviews its head once')
     await page.keyboard.press('r')
-    await expect(dialog.getByLabel('PR URL')).toHaveValue(pr)
+    await expect(dialog.getByLabel('PR URL')).toHaveValue('')
     await dialog.getByLabel('PR URL').fill('https://github.com/acme/web/pull/88')
     await dialog.getByTestId('review-request-submit').click()
     await expect(dialog.getByRole('alert')).toContainText('refused (loop_pr)')

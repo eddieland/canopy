@@ -231,12 +231,14 @@ or `cli`. Once the request ends, the page says when and why: `reviewed`, `stoppe
 review got to it, or `unknown_repo` when none of your repositories holds the PR.
 
 You needn't go to the reviews page for it. Press `R` on any page, anywhere but a text field, and the same form opens
-over whatever you were reading; on a PR's page it comes with that PR's URL already in it. Or skip the key: paste a PR's
-URL anywhere outside a field and the form opens with it filled in, the focus waiting in the notes. Pasting anything
-else does nothing, so a stray paste of your shopping list stays between you and your clipboard. Escape or a click
-outside closes the form without losing what you wrote; it's still there when you open it again in the same tab, and
-it clears once the request goes through. A refusal, such as one of the loop's own PRs (`loop_pr`), keeps it open and
-says why, in place of the line at its foot reminding you that nothing posts until you publish the draft.
+over whatever you were reading; on a PR's page it comes with that PR's URL already in it, unless a request for it is
+already open, as it is the moment yours goes through. Or skip the key: paste a PR's URL anywhere outside a field and the
+form opens with it filled in, the focus waiting in the notes. Pasting anything else does nothing, so a stray paste of
+your shopping list stays between you and your clipboard. Escape or a click outside closes the form without losing what
+you wrote or pasted; it's still there when you open it again in the same tab, and it clears once the request goes
+through. A URL the PR's page filled in stays on that page: leave the form untouched and it opens empty elsewhere. A
+refusal, such as one of the loop's own PRs (`loop_pr`), keeps it open and says why, in place of the line at its foot
+reminding you that nothing posts until you publish the draft.
 
 Already on the PR's page? Its **Pull request** panel asks for you: **Review this PR** on one canopy has never
 reviewed, and **Review again** once it has, or once your request has ended, say after the author pushed a fix. It's the
