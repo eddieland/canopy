@@ -106,6 +106,7 @@ and each check still unrun goes to `docs/SCENARIOS.md`, the live checks worth ru
 - [M67. Epic plans, shared by many tickets](M67-epic-plans.md): in progress.
 - [M68. Messages to running workers](M68-messages-to-running-workers.md): not started.
 - [M69. What each run changed, kept and shown](M69-what-each-run-changed.md): not started.
+- [M70. A code outline for agents](M70-a-code-outline-for-agents.md): not started.
 
 ## Deferred, with the trigger that would unblock each
 
