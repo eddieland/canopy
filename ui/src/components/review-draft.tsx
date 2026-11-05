@@ -25,7 +25,7 @@ import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { ReviewLink } from '@/components/review-link'
 import { RichText } from '@/components/rich-text'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { SendKeycap } from '@/components/send-keycap'
 import { Chip } from '@/components/status'
 import { Tip } from '@/components/tip'
@@ -276,7 +276,7 @@ function CommentList({
                 </span>
             </span>
             {hasDiff ? (
-                <ol className="divide-y">
+                <RowList kind="draft-comment" as="ol" className="divide-y">
                     {draft.comments.map((c) => (
                         <ListRow key={c.number} kind="draft-comment" className="py-2 text-sm">
                             <span className="readout text-xs text-muted-foreground">{c.number}</span>
@@ -302,7 +302,7 @@ function CommentList({
                             </span>
                         </ListRow>
                     ))}
-                </ol>
+                </RowList>
             ) : (
                 <div className="flex flex-col gap-2 p-3">
                     {draft.comments.map((c) => (

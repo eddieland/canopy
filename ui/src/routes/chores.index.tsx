@@ -6,7 +6,7 @@ import type { ChoreSummary } from '@/api/types'
 import { ChoreLink } from '@/components/chore-link'
 import { Code } from '@/components/code'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
-import { ListRow, RowLine } from '@/components/rows'
+import { ListRow, RowLine, RowList } from '@/components/rows'
 import { RunDot } from '@/components/status'
 import { cadenceText, choreLine, findingsText, windowText } from '@/lib/chores'
 import { costText } from '@/lib/cost-total'
@@ -41,11 +41,11 @@ function ChoresPage() {
                         <Code>capacity.max_chores</Code> above 0
                     </Empty>
                 ) : (
-                    <ul className="divide-y" data-testid="chores">
+                    <RowList kind="chore" className="divide-y" data-testid="chores">
                         {data.map((chore) => (
                             <Row key={chore.name} chore={chore} />
                         ))}
-                    </ul>
+                    </RowList>
                 )}
             </Panel>
         </>

@@ -16,7 +16,7 @@ import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PoolCounters } from '@/components/pool-counters'
 import { PullRequestLink } from '@/components/pull-request-link'
-import { ListRow, RowGrid, RowLine } from '@/components/rows'
+import { ListRow, RowGrid, RowLine, RowList } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import { TaskLink, TaskRunLink } from '@/components/task-link'
@@ -27,6 +27,7 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useWholePath } from '@/hooks/use-whole-path'
 import { slotRef } from '@/lib/refs'
+import { ROW_SUBGRID } from '@/lib/rows'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 import { runKind } from '@/lib/words'
@@ -127,11 +128,11 @@ function WorktreesPage() {
                         no pools yet: <Code>canopy workspace sync</Code> makes one for each repository
                     </Empty>
                 ) : (
-                    <div className="divide-y">
+                    <RowList kind="worktree" as="div" className="divide-y">
                         {shown.map((pool) => (
                             <PoolSection key={pool.repo} pool={pool} state={state} />
                         ))}
-                    </div>
+                    </RowList>
                 )}
             </Panel>
         </>
@@ -167,7 +168,11 @@ function PoolSection({ pool, state }: { pool: Pool; state: WorktreeState | undef
     const overText = over === 1 ? '1 slot' : `${over} slots`
     const root = slotsRoot(pool.worktrees)
     return (
-        <section aria-label={pool.repo} data-testid={`pool-${pool.repo}`}>
+        <section
+            className={cn(ROW_SUBGRID, '*:col-span-full')}
+            aria-label={pool.repo}
+            data-testid={`pool-${pool.repo}`}
+        >
             <PoolHeader repo={pool.repo}>
                 <span className="mr-auto ml-3 flex min-w-0 items-center gap-3">
                     <SlotStrip worktrees={pool.worktrees} />
@@ -209,7 +214,7 @@ function PoolSection({ pool, state }: { pool: Pool; state: WorktreeState | undef
                 pool.worktrees.length === 0 ? (
                     <Empty>no worktrees yet: the pool makes one when a run or review leases a slot</Empty>
                 ) : (
-                    <ul className="divide-y" data-testid="worktrees">
+                    <RowList kind="worktree" sub className="divide-y" data-testid="worktrees">
                         {slotGroups(pool.worktrees, state).map((group) =>
                             group.kind === 'slot' ? (
                                 <WorktreeRow
@@ -227,7 +232,7 @@ function PoolSection({ pool, state }: { pool: Pool; state: WorktreeState | undef
                                 />
                             ),
                         )}
-                    </ul>
+                    </RowList>
                 )
             ) : (
                 <Notice error={pool.error} className="px-3 py-2.5" />
@@ -278,7 +283,7 @@ function IdleSlots({ worktrees, repo, shared }: { worktrees: Worktree[]; repo: s
     const last = worktrees.at(-1)?.name
     return (
         <Collapsible asChild open={open} onOpenChange={setOpen}>
-            <li data-testid={`idle-slots-${first}`} data-state="idle">
+            <li className={ROW_SUBGRID} data-testid={`idle-slots-${first}`} data-state="idle">
                 <RowGrid kind="worktree" className="items-center py-2">
                     <span className={cn('flex h-5 items-center gap-1.5 font-mono text-xs', WORKTREE_TEXT.idle)}>
                         <WorktreeDot state="idle" />
@@ -294,7 +299,7 @@ function IdleSlots({ worktrees, repo, shared }: { worktrees: Worktree[]; repo: s
                     </RowLine>
                 </RowGrid>
                 <CollapsibleContent asChild>
-                    <ul className="divide-y border-t">
+                    <ul className={cn(ROW_SUBGRID, 'divide-y border-t')}>
                         {worktrees.map((w) => (
                             <WorktreeRow key={w.path} worktree={w} repo={repo} shared={shared} />
                         ))}

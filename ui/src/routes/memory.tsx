@@ -23,7 +23,7 @@ import { LessonActions, MemorySaid, NoteActions, ProposalActions } from '@/compo
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { RepoFilter } from '@/components/repo-picker'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
@@ -506,7 +506,7 @@ function TicketNotesPanel({
                 <Empty>no notes in force now: a ticket&apos;s runs write them as they end</Empty>
             ) : (
                 <PanelScroll label="Ticket notes">
-                    <ul className="divide-y">
+                    <RowList kind="memory-ticket" className="divide-y">
                         {ordered('memory-tickets', order, tickets).map((t) => (
                             <TicketNotesRow
                                 key={t.ticket_key}
@@ -516,7 +516,7 @@ function TicketNotesPanel({
                                 modes={modes}
                             />
                         ))}
-                    </ul>
+                    </RowList>
                 </PanelScroll>
             )}
             {notesFound && (

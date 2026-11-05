@@ -25,7 +25,7 @@ import type { ReadoutTile } from '@/components/readout-tiles'
 import { ReportTable } from '@/components/report-table'
 import type { ReportColumn } from '@/components/report-table'
 import { ReviewLink } from '@/components/review-link'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TaskLink, TaskRunLink } from '@/components/task-link'
@@ -350,7 +350,7 @@ function Failures({ failures, span }: { failures: HealthFailure[]; span: string 
     }
     return (
         <PanelScroll label="Newest failures" className="max-h-[32rem]">
-            <ul className="divide-y" data-testid="health-failure-list">
+            <RowList kind="failure" className="divide-y" data-testid="health-failure-list">
                 {failures.map((f) => (
                     <ListRow key={`${f.kind}:${f.id}`} kind="failure" data-testid={`health-failure-${f.kind}-${f.id}`}>
                         <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-status-failed">
@@ -373,7 +373,7 @@ function Failures({ failures, span }: { failures: HealthFailure[]; span: string 
                         <Age at={f.started_at} variant="ago" className="text-right" />
                     </ListRow>
                 ))}
-            </ul>
+            </RowList>
         </PanelScroll>
     )
 }

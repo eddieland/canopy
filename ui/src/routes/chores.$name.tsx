@@ -18,7 +18,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from
 import { ReportTable } from '@/components/report-table'
 import type { ReportColumn } from '@/components/report-table'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
-import { ListRow, RowLine } from '@/components/rows'
+import { ListRow, RowLine, RowList } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
 import { TryChore } from '@/components/try-chore'
 import {
@@ -142,11 +142,11 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                             </Empty>
                         ) : (
                             <PanelScroll label="Open findings">
-                                <ul className="divide-y">
+                                <RowList kind="finding" className="divide-y">
                                     {chore.findings.map((finding) => (
                                         <ChoreFindingRow key={finding.id} finding={finding} chore={chore.name} />
                                     ))}
-                                </ul>
+                                </RowList>
                             </PanelScroll>
                         )}
                     </Panel>
@@ -161,11 +161,11 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                             <Empty>no runs yet: the overseer starts one when it is due</Empty>
                         ) : (
                             <PanelScroll label="Runs">
-                                <ul className="divide-y" data-testid="chore-runs">
+                                <RowList kind="own-run" className="divide-y" data-testid="chore-runs">
                                     {ordered('chore-runs', runsOrder, runs).map((run) => (
                                         <RunRow key={run.id} name={chore.name} run={run} />
                                     ))}
-                                </ul>
+                                </RowList>
                             </PanelScroll>
                         )}
                     </Panel>

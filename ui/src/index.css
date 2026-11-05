@@ -8,8 +8,9 @@
 @import './styles/tokens.css';
 
 /*
- * The classes a list's row picks its columns with by its list's width, built at run time from its kind's columns
- * (`rowLayout` in src/lib/rows.ts), so Tailwind finds them here: a template per tier, and a cell hidden by its place.
+ * The classes a list and its rows pick their columns with by the list's width, built at run time from its kind's
+ * columns (`rowLayout` and `rowHidden` in src/lib/rows.ts), so Tailwind finds them here: a template per tier, and a
+ * cell hidden by its place.
  * The tiers are `ROW_TIERS`; eight places are the most columns a kind has. Each head line's cells are held to their
  * columns by their places too (`rowCells`).
  */

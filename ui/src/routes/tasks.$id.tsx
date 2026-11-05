@@ -9,6 +9,7 @@ import { Attachments } from '@/components/attachments'
 import { ListPanel } from '@/components/list-panel'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelLoading, PanelScroll } from '@/components/panel'
+import { RowList } from '@/components/rows'
 import { TaskLeft } from '@/components/task-left'
 import { TaskReportPanel } from '@/components/task-report'
 import { TaskRunRow } from '@/components/task-row'
@@ -123,11 +124,11 @@ function Task({ detail }: { detail: TaskDetail }) {
                     data-testid="task-runs"
                 >
                     <PanelScroll label="Runs">
-                        <ul className="divide-y">
+                        <RowList kind="own-run" className="divide-y">
                             {ordered('task-runs', runsOrder, runs).map((run) => (
                                 <TaskRunRow key={run.id} task={task.id} run={run} />
                             ))}
-                        </ul>
+                        </RowList>
                     </PanelScroll>
                 </ListPanel>
             </div>

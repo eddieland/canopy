@@ -8,6 +8,7 @@ import { Code } from '@/components/code'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PoolCounters } from '@/components/pool-counters'
+import { RowList } from '@/components/rows'
 import { SubjectRunsTable } from '@/components/runs-table'
 import { TickNow } from '@/components/tick-now'
 import { TickRow } from '@/components/tick-row'
@@ -97,11 +98,11 @@ function WorkspacePage() {
                         <TickNow inline />
                     </Empty>
                 ) : (
-                    <ul className="divide-y" data-testid="workspace-ticks">
+                    <RowList kind="tick" className="divide-y" data-testid="workspace-ticks">
                         {ticks.slice(0, TICKS_SHOWN).map((tick) => (
                             <TickRow key={tick.id} tick={tick} />
                         ))}
-                    </ul>
+                    </RowList>
                 )}
             </Panel>
         </>

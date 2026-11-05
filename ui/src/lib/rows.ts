@@ -3,14 +3,8 @@ import type { CSSProperties } from 'react'
 /** The narrowest the free column gets, in rem: it holds a row's name, which never vanishes. */
 const FLOOR_REM = 8
 
-/** The free column: whatever width the fixed ones leave, never under the floor, and its text cut to fit. */
+/** The free column: whatever width the others leave, never under the floor, and its text cut to fit. */
 const FREE = free(FLOOR_REM)
-
-/**
- * The PR list's `pr` column at its widest, in rem: `org/repo#123` and its icon for a name of 20 characters or so. A
- * list sets it narrower, to its longest PR's name (`fitColumn`); a longer one is cut to fit.
- */
-const PR_REM = 11
 
 /**
  * The container sizes a column can show from (Tailwind's, in rem), narrowest first. A list's width picks one, so a row
@@ -29,48 +23,51 @@ export const ROW_TIERS = [
 /** A container size a column shows from. */
 export type RowTier = (typeof ROW_TIERS)[number][0]
 
-/** Every list's age column: room for the longest an age reads, `ended 12h ago`, so ages line up from list to list. */
+/**
+ * Every list's age column, fixed rather than fitted, so ages line up from list to list: `ended 12h ago`, the longest
+ * an age reads, fits it.
+ */
 const AGE = '6rem'
 
-/** Every list's cost column: room for `$12.34`, so costs line up from list to list. */
+/** Every list's cost column, fixed rather than fitted, so costs line up from list to list. */
 const COST = '4rem'
 
 /** The room a column needs, in rem, to show at any width, under the first tier as well. */
 const BASE_REM = 22
 
-// A row's own room beside its columns: the gap between two (`gap-x-3`) and its padding (`px-3`).
+// A row's own room beside its columns: the gap between two (`gap-x-3`) and its padding (`px-3`), each side's half.
 const GAP_REM = 0.75
 const PADDING_REM = 1.5
 
-/** A column whose width its list sets (`fitColumn`). */
-type FittedColumn = 'pr'
-
-/** Each fitted column's most, in rem: what it takes when its list sets nothing, and what a column's tier counts. */
-const FITTED_MOST: Record<FittedColumn, number> = { pr: PR_REM }
-
-/** How wide a character of IBM Plex Mono is at `text-xs`, in rem: 0.6em, as in any monospace face, at 0.75rem. */
-const MONO_XS_REM = 0.45
+/**
+ * A row's padding on each side, in rem, which a subgrid lays inside the list's first and last columns: the list's
+ * template widens those two by it, so a fixed column there keeps its width.
+ */
+const INSET_REM = PADDING_REM / 2
 
 /**
  * The free column with a floor of its own, `floor` rem, for a kind whose name needs more than the usual floor to be
- * read: whatever width the fixed ones leave, and its text cut to fit.
+ * read: whatever width the others leave, and its text cut to fit.
  */
 function free(floor: number): string {
     return `minmax(${floor}rem,1fr)`
 }
 
 /**
- * A column as wide as its list's longest cell, which the list sets (`fitColumn`), at most `most` rem: every row of the
- * list shares the width, so they line up, and what it leaves goes to the free column.
+ * A column as wide as the widest of its cells in its list, up to `most` rem, past which a cell is cut: every row of the
+ * list shares it, so they line up, and what it leaves goes to the free column. A column's tier counts it at `least`,
+ * its most unless it says less: on a list just wide enough for that, its cells are cut to it rather than the free
+ * column under its floor. The least is the first length of a `max()` the browser reads as the most.
  */
-function fitted(column: FittedColumn, most: number): string {
-    return `var(--${column}-width,${most}rem)`
+function fit(most: number, least = most): string {
+    return least === most ? `fit-content(${most}rem)` : `fit-content(max(${least}rem,${most}rem))`
 }
 
 /**
- * Every list's columns, by kind, each a named grid line and a width. Every column but one is fixed, or fitted to its
- * list (`fitted`), so each row of a list lines up with the others whatever its cells hold; the free one takes the
- * rest, and never less than its floor.
+ * Every list's columns, by kind, each a named grid line and a width. The list sets them, and its rows share them as
+ * subgrids (`ListRow`), so each column is as wide as its widest cell in that list, up to its most (`fit`), and every
+ * row lines up whatever its cells hold; the free one takes the rest, and never less than its floor. The age and the
+ * cost are fixed, so they line up from list to list too, and so are a kind's whose lists must line up with each other.
  * What goes under a row's head line starts at a named column (`RowLine`), never at a hand-computed indent.
  *
  * A row reads in one order in every kind (`ui/DESIGN.md`, "Lists are rows in a panel"): its state, where it has one,
@@ -78,7 +75,7 @@ function fitted(column: FittedColumn, most: number): string {
  * free column; then only readouts, right-aligned, age last.
  *
  * A column with a third entry gives way on a narrow list, in that order: 1 goes first. It shows only where the list
- * has room for it, every column that gives way after it, and the ones that never do (`rowTiers`).
+ * has room for it, every column that gives way after it, and the ones that never do, each at its least (`rowTiers`).
  */
 export const ROW_COLUMNS = {
     /**
@@ -86,12 +83,12 @@ export const ROW_COLUMNS = {
      * chips, then its ticket's title, or a review's PR and what it found.
      */
     run: [
-        ['state', '5rem'],
-        // Room for `review:123`, the longest id a run of any kind has.
-        ['run', '5rem', 4],
-        ['key', '6rem'],
+        ['state', fit(5)],
+        ['run', fit(8, 5), 4],
+        // A chore's name is longer than a ticket's key: the list widens to it when it holds one.
+        ['key', fit(14, 6)],
         // Its chips go before its age: they describe the run, where the age says whether it is current.
-        ['kind', '10rem', 2],
+        ['kind', fit(16, 10), 2],
         ['title', FREE],
         ['cost', COST, 1],
         ['age', AGE, 3],
@@ -101,7 +98,7 @@ export const ROW_COLUMNS = {
      * chips, the order a run's row has on the runs page.
      */
     'own-run': [
-        ['state', '5rem'],
+        ['state', fit(5)],
         ['facts', FREE],
         ['cost', COST, 1],
         ['age', AGE, 2],
@@ -111,14 +108,14 @@ export const ROW_COLUMNS = {
      * and when. The token counts give way before the cost, which says the same in dollars.
      */
     tick: [
-        // A long status (`overseer failed`) is cut to fit: a wider column would leave the free one under its floor.
-        ['state', '6rem'],
-        ['id', '5rem'],
+        // A long status (`overseer failed`) wraps: a wider column would leave the free one under its floor.
+        ['state', fit(6)],
+        ['id', fit(5)],
         ['facts', FREE],
-        ['decisions', '6rem', 4],
+        ['decisions', fit(6), 4],
         ['cost', COST, 3],
-        ['tokens', '6rem', 1],
-        ['peak', '5rem', 2],
+        ['tokens', fit(6), 1],
+        ['peak', fit(5), 2],
         ['age', AGE, 5],
     ],
     /**
@@ -126,41 +123,39 @@ export const ROW_COLUMNS = {
      * review, a task's run), what it was about, its sort, its note, its cost, and when it started.
      */
     failure: [
-        // A long status (`overseer failed`) is cut to fit, as a tick's is.
-        ['state', '6rem'],
-        // Room for `chore:deps#12`; a chore's longer name is cut to fit.
-        ['id', '7rem'],
-        ['subject', '9rem', 3],
-        ['kind', '7rem', 2],
+        // A long status (`overseer failed`) wraps, as a tick's does.
+        ['state', fit(6)],
+        ['id', fit(7)],
+        ['subject', fit(9), 3],
+        ['kind', fit(7), 2],
         ['title', FREE],
         ['cost', COST, 1],
         ['age', AGE, 4],
     ],
     /**
-     * A chore: its name, its line in `canopy status`'s words, and its open findings, whose column holds
-     * `12 open findings · 10 dismissed` on one line.
+     * A chore: its name, its line in `canopy status`'s words, and its open findings, on one line however many.
      */
     chore: [
-        ['name', '10rem'],
+        ['name', fit(20, 10)],
         ['state', FREE],
-        ['findings', '14rem', 1],
+        ['findings', fit(14), 1],
     ],
     /** A review run on the reviews page: its verdict, id, ticket, impact, PR, commit, and persona, cost, and when. */
     review: [
-        // `3 findings, 1 major` on one line, with its dot and its draft's chip, which a longer verdict is cut beside.
-        ['verdict', '14rem', 5],
-        ['id', '5rem'],
-        ['key', '6rem', 3],
-        ['impact', '7rem', 2],
+        // A verdict on one line, with its dot and its draft's chip, which a longer verdict is cut beside.
+        ['verdict', fit(14), 5],
+        ['id', fit(5)],
+        ['key', fit(6), 3],
+        ['impact', fit(7), 2],
         ['pr', FREE],
         ['cost', COST, 1],
         ['age', AGE, 4],
     ],
     /** A review run on its PR's page: as on the reviews page, without the ticket and the PR. */
     'own-review': [
-        ['verdict', '14rem', 4],
-        ['id', '5rem'],
-        ['impact', '7rem', 2],
+        ['verdict', fit(14), 4],
+        ['id', fit(6)],
+        ['impact', fit(7), 2],
         ['commit', FREE],
         ['cost', COST, 1],
         ['age', AGE, 3],
@@ -171,13 +166,12 @@ export const ROW_COLUMNS = {
      * a list in a 1280px window.
      */
     'pull-request': [
-        // `review:4 3 findings, 1 blocking` on one line, with its dot. Beside a draft's chip the verdict is cut, its
-        // whole on hover: any wider and the title is cut to a word in a narrow window.
-        ['state', '16rem', 3],
-        // As wide as the list's longest PR's name, so what is left goes to the title (`fitColumn`).
-        ['pr', fitted('pr', PR_REM)],
-        // Room for the longest phase's chip, `changes requested`. It goes first, before the title is cut to a word.
-        ['phase', '9rem', 1],
+        // A verdict on one line, with its dot. Beside a draft's chip it is cut, its whole on hover: any wider and the
+        // title is cut to a word in a narrow window.
+        ['state', fit(14), 3],
+        ['pr', fit(11)],
+        // It goes first, before the title is cut to a word.
+        ['phase', fit(9), 1],
         ['title', FREE],
         ['age', AGE, 2],
     ],
@@ -186,10 +180,10 @@ export const ROW_COLUMNS = {
      * its title, and its age.
      */
     ticket: [
-        ['run', '8rem', 4],
-        ['key', '6rem'],
-        ['phase', '10rem', 2],
-        ['access', '9rem', 1],
+        ['run', fit(8), 4],
+        ['key', fit(6)],
+        ['phase', fit(10), 2],
+        ['access', fit(9), 1],
         ['title', FREE],
         ['age', AGE, 3],
     ],
@@ -198,33 +192,31 @@ export const ROW_COLUMNS = {
      * repository, the first line of its text, and when it was submitted. Its latest run's summary goes under its text.
      */
     task: [
-        ['state', '8rem', 3],
-        // Room for `task:1234`.
-        ['id', '5.5rem'],
-        ['repo', '6rem', 1],
+        ['state', fit(8), 3],
+        ['id', fit(5.5)],
+        ['repo', fit(6), 1],
         ['title', FREE],
         ['age', AGE, 2],
     ],
     /**
      * A worktree slot: its state, its number, what holds it, its branch and processes, and for how long. The branch
-     * names the slot, so it never gets under room for one whole (`agent/ABC-104-retry-queue`), and what holds it goes
-     * first: the branch names its ticket too.
+     * names the slot, so it never gets under its floor, and what holds it goes first: the branch names its ticket too.
      */
     worktree: [
-        ['state', '5rem'],
-        ['slot', '3.5rem'],
-        ['holder', '13rem', 1],
+        ['state', fit(5)],
+        ['slot', fit(3.5)],
+        ['holder', fit(24, 13), 1],
         ['branch', free(12)],
         ['age', AGE, 2],
     ],
     /** A decision in a tick: its subject, then its action and PR. */
     decision: [
-        ['subject', '9rem'],
+        ['subject', fit(9)],
         ['action', FREE],
     ],
     /** A decision on its subject's page: the tick that made it, its action and PR, and its age. */
     'own-decision': [
-        ['id', '4rem'],
+        ['id', fit(4)],
         ['action', FREE],
         ['age', AGE],
     ],
@@ -233,38 +225,35 @@ export const ROW_COLUMNS = {
      * takes its own width, and a long one (up to 200 characters) wraps rather than squeeze the title to its floor.
      */
     finding: [
-        ['id', 'fit-content(12rem)'],
+        ['id', fit(12)],
         ['title', FREE],
         ['facts', 'auto'],
     ],
     /** A review's finding in its list: its number and its box to send it, its severity, its title, and where it is. */
     'review-finding': [
-        ['id', '2.5rem'],
-        ['severity', '4rem'],
+        ['id', fit(2.5)],
+        ['severity', fit(4)],
         ['title', FREE],
         ['facts', 'auto'],
     ],
-    /**
-     * A comment in a review's draft: its number, what it came from (`yours` or `finding N`), its first line, and where
-     * it is. The chip's column has room for `finding 99` on one line, wider than a finding's severity.
-     */
+    /** A comment in a review's draft: its number, what it came from (`yours` or `finding N`), its line, and where. */
     'draft-comment': [
-        ['id', '2.5rem'],
-        ['from', '5.5rem'],
+        ['id', fit(2.5)],
+        ['from', fit(5.5)],
         ['title', FREE],
         ['facts', 'auto'],
     ],
     /** A PR's draft in its threads' head: where it stands, its run and number, its text, and where its card is. */
     'thread-draft': [
-        ['state', '6rem'],
-        ['id', '5rem'],
+        ['state', fit(6)],
+        ['id', fit(5)],
         ['title', FREE],
         ['facts', 'auto'],
     ],
     /** A search hit: where it opens, its label, the snippet, and its age. */
     'search-hit': [
-        ['subject', '9rem'],
-        ['label', '8rem', 2],
+        ['subject', fit(9)],
+        ['label', fit(8), 2],
         ['text', FREE],
         ['age', AGE, 1],
     ],
@@ -273,14 +262,18 @@ export const ROW_COLUMNS = {
      * on it, and when it was written. What it says goes under its key.
      */
     memory: [
-        ['state', '6rem'],
-        ['id', '6rem'],
-        ['repo', '5rem', 3],
+        ['state', fit(6)],
+        ['id', fit(7)],
+        ['repo', fit(5), 3],
         ['key', FREE],
-        ['use', '8rem', 1],
+        ['use', fit(8), 1],
         ['age', AGE, 2],
     ],
-    /** Memories across tickets, the proposals: a memory's columns, with its ticket after its id. */
+    /**
+     * Memories across tickets, the proposals, the lessons, and a ticket's notes on the memory page: a memory's columns,
+     * with its ticket after its id. They are fixed rather than fitted, as the age is, since each panel of that page is
+     * a list of its own, and its keys and text line up down the page, a ticket's opened notes with the lessons.
+     */
     'memory-across': [
         ['state', '6rem'],
         ['id', '6rem'],
@@ -295,37 +288,40 @@ export const ROW_COLUMNS = {
      * runs used them, and when the newest was written.
      */
     'memory-ticket': [
-        ['key', '6rem'],
-        ['notes', '7rem'],
+        ['key', fit(6)],
+        ['notes', fit(7)],
         ['title', FREE],
-        ['use', '9rem', 1],
+        ['use', fit(9), 1],
         ['age', AGE, 2],
     ],
     /**
-     * An item of a run's checklist, on the run's page: what the run answered, as a chip with room for `unanswered`,
-     * then the item's id. A held item's reason goes under its id.
+     * An item of a run's checklist, on the run's page: what the run answered, as a chip, then the item's id. A held
+     * item's reason goes under its id.
      */
     'checklist-answer': [
-        ['state', '5.5rem'],
+        ['state', fit(5.5)],
         ['item', FREE],
     ],
     /**
      * A comment on a ticket's PR its review cursors passed with no worker: why it was left first, as a state leads a
      * row, so the left edge says whether any of it is risky; who wrote it and its first line, in the free column;
-     * where it is, linking out to it; the tick that left it; and its button to send it to a worker. The reason's
-     * column has room for the longest reason's chip, `would reset approval`. Beside a ticket's thread in a 1720px
-     * window the list is about 36rem wide, too narrow for the author in a column of its own, so it leads the free
-     * one; the tick goes first, then where it is, which the button's name still says.
+     * where it is, linking out to it; the tick that left it; and its button to send it to a worker. Beside a ticket's
+     * thread in a 1720px window the list is about 36rem wide, too narrow for the author in a column of its own, so it
+     * leads the free one; the tick goes first, then where it is, which the button's name still says.
      */
     'left-feedback': [
-        ['reason', '9.5rem'],
+        ['reason', fit(9.5)],
         ['title', FREE],
-        // A file's name and line, `client.ts:42`, and its icon; its whole path is on hover.
-        ['where', '7rem', 2],
-        ['tick', '4rem', 1],
-        ['send', '1.5rem'],
+        // A file's name and line, and its icon; its whole path is on hover.
+        ['where', fit(7), 2],
+        ['tick', fit(4), 1],
+        ['send', fit(1.5)],
     ],
-    /** A transcript's row: its time, its mark, and its text, under which a tool call's body opens. */
+    /**
+     * A transcript's row: its time, its mark, and its text, under which a tool call's body opens. Its head line is not
+     * cells in these columns but a line of its own, its time and mark at these widths, so they stay fixed: a call's
+     * body lines up with it as a grid of its own (`RowGrid`'s `alone`).
+     */
     transcript: [
         ['time', '3.5rem'],
         ['mark', '0.5rem'],
@@ -342,19 +338,25 @@ export type RowColumn = (typeof ROW_COLUMNS)[RowKind][number][0]
 /**
  * A kind's `grid-template-columns` on a list at least `tier` wide, or under the first tier when there is none: each
  * column it shows, its name before its width, and `end` after the last. A column it leaves out lends its name to the
- * next one shown, so a line under the row that starts there still has a place.
+ * next one shown, so a line under the row that starts there still has a place. The first and last columns shown are
+ * `inset` rem wider, the room a row's padding takes inside them as its list's subgrid (`ListRow`); a grid of its own
+ * (`RowGrid`'s `alone`) pads outside its columns, so it passes 0.
  */
-export function rowTemplate(kind: RowKind, tier?: RowTier): string {
+export function rowTemplate(kind: RowKind, tier?: RowTier, inset = INSET_REM): string {
     const tiers = rowTiers(kind)
-    const parts: string[] = []
+    const shown: [string[], string][] = []
     let names: string[] = []
     for (const [name, width] of ROW_COLUMNS[kind]) {
         names.push(name)
         if (shownAt(tiers.get(name), tier)) {
-            parts.push(`[${names.join(' ')}] ${width}`)
+            shown.push([names, width])
             names = []
         }
     }
+    const last = shown.length - 1
+    const parts = shown.map(
+        ([lines, width], i) => `[${lines.join(' ')}] ${i === 0 || i === last ? widen(width, inset) : width}`,
+    )
     parts.push(`[${[...names, 'end'].join(' ')}]`)
     return parts.join(' ')
 }
@@ -388,27 +390,41 @@ export function rowTiers(kind: RowKind): Map<string, RowTier> {
 }
 
 /**
- * What lays a row of `kind` out: its columns' template at each tier, as custom properties, and the classes that pick
- * one by the width of the list it is in (the nearest `@container`, a `Panel`) and hide the cells of the columns it
- * leaves out. The classes are built here, so `index.css` lists them for Tailwind (`@source inline`).
+ * What lays a list of rows of `kind` out: its columns' template at each tier, as custom properties, and the classes
+ * that pick one by the list's width (the nearest `@container`, a `Panel`). Its rows share the columns as subgrids
+ * (`ListRow`), so the browser sizes each to its widest cell in the list. `inset` is as `rowTemplate` takes it. The
+ * classes are built here, so `index.css` lists them for Tailwind (`@source inline`).
  */
-export function rowLayout(kind: RowKind): { className: string; style: CSSProperties } {
+export function rowLayout(kind: RowKind, inset = INSET_REM): { className: string; style: CSSProperties } {
     const tiers = rowTiers(kind)
     const used = ROW_TIERS.filter(([tier]) => [...tiers.values()].includes(tier)).map(([tier]) => tier)
-    const style: Record<string, string> = { '--row': rowTemplate(kind) }
+    const style: Record<string, string> = { '--row': rowTemplate(kind, undefined, inset) }
     const classes = ['grid-cols-(--row)']
     for (const tier of used) {
-        style[`--row-${tier}`] = rowTemplate(kind, tier)
+        style[`--row-${tier}`] = rowTemplate(kind, tier, inset)
         classes.push(`@${tier}:grid-cols-(--row-${tier})`)
     }
-    // A cell fills the column of its place among the row's children: the head line's come first.
-    ROW_COLUMNS[kind].forEach(([name], i) => {
-        const tier = tiers.get(name)
-        if (tier !== undefined) {
-            classes.push(`@max-${tier}:[&>:nth-child(${i + 1})]:hidden`)
-        }
-    })
     return { className: classes.join(' '), style }
+}
+
+/**
+ * What makes an element a subgrid of the list of rows it is in, across all of its columns: a row, and anything between
+ * the list and a row, such as the earlier runs a row opens under it, so their cells still line up with the list's.
+ */
+export const ROW_SUBGRID = 'col-span-full grid grid-cols-subgrid'
+
+/**
+ * The classes that hide a row's cells in the columns its list leaves out at its width, by their place among the row's
+ * children, where the head line's come first. Built here, so `index.css` lists them for Tailwind (`@source inline`).
+ */
+export function rowHidden(kind: RowKind): string {
+    const tiers = rowTiers(kind)
+    return ROW_COLUMNS[kind]
+        .flatMap(([name], i) => {
+            const tier = tiers.get(name)
+            return tier === undefined ? [] : [`@max-${tier}:[&>:nth-child(${i + 1})]:hidden`]
+        })
+        .join(' ')
 }
 
 /**
@@ -423,21 +439,6 @@ export function rowCells(kind: RowKind): string {
     return `${head}:min-w-0 ${head}:overflow-x-clip ${head}:text-ellipsis`
 }
 
-/**
- * The style that sets a fitted column's width on a list (`fitted`), for the rows in it: room for the longest of
- * `names`, set in IBM Plex Mono at `text-xs`, and `besideRem` beside it (an icon), rounded up to a quarter rem and
- * never over the column's most. The rows of the list share it, so they still line up.
- */
-export function fitColumn(column: FittedColumn, names: Iterable<string>, besideRem = 0): CSSProperties {
-    let longest = 0
-    for (const name of names) {
-        longest = Math.max(longest, name.length)
-    }
-    const rem = Math.min(FITTED_MOST[column], Math.ceil((longest * MONO_XS_REM + besideRem) * 4) / 4)
-    const style: Record<string, string> = { [`--${column}-width`]: `${rem}rem` }
-    return style
-}
-
 /** Whether a column that shows from `from` (any width when undefined) shows on a list at least `tier` wide. */
 function shownAt(from: RowTier | undefined, tier: RowTier | undefined): boolean {
     if (from === undefined) {
@@ -450,14 +451,22 @@ function tierIndex(tier: RowTier): number {
     return ROW_TIERS.findIndex(([name]) => name === tier)
 }
 
+/** A column's width `inset` rem wider: its first length in rem, a fixed width, a most, or a floor; `auto` as it is. */
+function widen(width: string, inset: number): string {
+    if (inset === 0) {
+        return width
+    }
+    return width.replaceAll(/([\d.]+)rem/gu, (_, rem: string) => `${Number(rem) + inset}rem`)
+}
+
 /**
- * The least a column's width can be, in rem: a fixed width, a fitted column's most (it may be any width to it), or the
- * free column's floor.
+ * The least a column's width can be, in rem, for its tier: a fixed width, a fitted column's most (it may be any width
+ * to it), or the free column's floor.
  *
  * @throws {Error} When the width is not in rem, as `auto` is not: a kind whose columns give way cannot have one.
  */
 function leastRem(width: string): number {
-    const match = /^(?:minmax\(|var\(--[\w-]+,)?([\d.]+)rem\b/u.exec(width)
+    const match = /^(?:minmax\(|fit-content\((?:max\()?)?([\d.]+)rem\b/u.exec(width)
     if (match?.[1] === undefined) {
         throw new Error(`no least width in rem for ${width}`)
     }

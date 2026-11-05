@@ -18,7 +18,7 @@ import { Notice } from '@/components/notice'
 import { Panel, PanelFooter, PanelHeader, PanelLoading } from '@/components/panel'
 import { DiffPanels } from '@/components/review-diff'
 import type { Wanted } from '@/components/review-diff'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, Word } from '@/components/status'
 import { Button } from '@/components/ui/button'
@@ -323,7 +323,7 @@ function DraftList({
             <span className="panel-label block px-3 pt-3">
                 Drafts <span className="readout text-muted-foreground">{listed.length}</span>
             </span>
-            <ol className="divide-y">
+            <RowList kind="thread-draft" as="ol" className="divide-y">
                 {listed.map(({ draft, where, file }) => (
                     <ListRow key={draftAnchor(draft)} kind="thread-draft" className="py-2 text-sm">
                         <Chip tone={DRAFT_TONE[draft.status]} word={draft.status} className="justify-center" />
@@ -352,7 +352,7 @@ function DraftList({
                         </span>
                     </ListRow>
                 ))}
-            </ol>
+            </RowList>
         </div>
     )
 }

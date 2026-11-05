@@ -4,6 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { tasksQuery } from '@/api/queries'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RepoFilter } from '@/components/repo-picker'
+import { RowList } from '@/components/rows'
 import { TaskRow } from '@/components/task-row'
 import { TaskSubmitForm } from '@/components/task-submit'
 import { countText, reposOf } from '@/lib/pull-request-filter'
@@ -56,11 +57,11 @@ function TasksPage() {
                 ) : shown.length === 0 ? (
                     <Empty size="panel">{`no tasks in ${reposWords(repo ?? '')}`}</Empty>
                 ) : (
-                    <ul className="divide-y" data-testid="tasks">
+                    <RowList kind="task" className="divide-y" data-testid="tasks">
                         {shown.map((task) => (
                             <TaskRow key={task.id} task={task} />
                         ))}
-                    </ul>
+                    </RowList>
                 )}
             </Panel>
         </>
