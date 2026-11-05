@@ -21,7 +21,7 @@ router = APIRouter(tags=[TAG])
 def meta(backend: BackendDep, spa: SpaDep) -> Meta:
     """The server's version and UI build, whether its data is mock, its link templates, and the workspace.
 
-    The workspace is its root and the names of its repositories.
+    The workspace is its root and the names of its repositories. It also says whether a field may offer dictation.
     """
     return Meta(
         version=version("canopy"),
@@ -31,6 +31,7 @@ def meta(backend: BackendDep, spa: SpaDep) -> Meta:
         branch_urls={r.name: r.branch_url for r in backend.workspace.repos if r.branch_url},
         workspace_root=str(backend.workspace.root),
         repos=[r.name for r in backend.workspace.repos],
+        dictation=bool(backend.config.serve.dictation_cmd),
     )
 
 

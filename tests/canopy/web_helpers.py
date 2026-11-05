@@ -64,11 +64,16 @@ def signed_in_client(
     `every` is `canopy loop --every`'s minutes, as the loop hands them to the server; `now`, when given, is the
     server's clock, stopped there.
     """
-    options = ServeOptions(port=8765)
-    sessions = Sessions(SECRET, port=options.port, base_path="", hosts=options.hosts)
     backend = web.backend(ctx, reload or reread.Reload(), asked or tick_now.TickNow(), every)
     if now is not None:
         backend = dataclasses.replace(backend, clock=lambda: now)
+    return signed_in_to(backend)
+
+
+def signed_in_to(backend: Backend) -> tuple[TestClient, dict[str, str]]:
+    """A browser signed in to a server over `backend`, as the loop serves it, and the headers a write needs."""
+    options = ServeOptions(port=8765)
+    sessions = Sessions(SECRET, port=options.port, base_path="", hosts=options.hosts)
     c = TestClient(create_app(options, backend, sessions), base_url=ORIGIN)
     return c, signed_in(c)
 

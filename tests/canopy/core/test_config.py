@@ -465,6 +465,39 @@ def test_command_template_is_checked(canopy_env: CanopyEnv, replacement: str, me
         load(canopy_env.root, canopy_env.user_file)
 
 
+def test_dictation_is_off_until_a_command_places_the_recording(canopy_env: CanopyEnv) -> None:
+    assert load(canopy_env.root, canopy_env.user_file).serve.dictation_cmd == ""
+    canopy_env.append_user('\n[serve]\ndictation_cmd = "whisper-cli -f {audio} --prompt {vocabulary}"\n')
+    assert load(canopy_env.root, canopy_env.user_file).serve.dictation_cmd.startswith("whisper-cli")
+
+
+@pytest.mark.parametrize(
+    ("template", "message"),
+    [
+        ("whisper-cli -f recording.wav", r"must contain \{audio\} exactly once"),
+        ("whisper-cli -f {audio} {audio}", r"must contain \{audio\} exactly once"),
+        ("whisper-cli -f {audio} {vocabulary} {vocabulary}", r"must contain \{vocabulary\} at most once"),
+        ("whisper-cli -f {audio} {prompt}", r"must not contain \{prompt\}"),
+    ],
+)
+def test_a_dictation_command_must_place_the_recording_once(canopy_env: CanopyEnv, template: str, message: str) -> None:
+    canopy_env.append_user(f'\n[serve]\ndictation_cmd = "{template}"\n')
+    with pytest.raises(ConfigError, match=rf"serve\.dictation_cmd: Value error, {message}"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_the_workspace_file_cannot_set_a_dictation_command(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_shared('\n[serve]\ndictation_cmd = "evil -f {audio}"\n')
+    with pytest.raises(ConfigError, match=r"serve\.dictation_cmd"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_render_dictation_keeps_the_vocabulary_in_one_argument() -> None:
+    vocabulary = "api, web. PROJ-1 it's {audio}; rm -rf /"
+    argv = config.render_dictation("stt -f {audio} --prompt={vocabulary}", Path("/held/r.wav"), vocabulary)
+    assert argv == ["stt", "-f", "/held/r.wav", f"--prompt={vocabulary}"]
+
+
 def test_ticket_url_is_a_shared_template_with_the_key_once(canopy_env: CanopyEnv) -> None:
     assert load(canopy_env.root, canopy_env.user_file).tracker.ticket_url == ""
     template = "https://acme.atlassian.net/browse/{key}?focusedCommentId=1"

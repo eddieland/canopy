@@ -205,6 +205,9 @@ class Backend:
     processes: Callable[[], HostProcesses] = field(default_factory=lambda: ProcessWatch().read)
     #: Seconds on a clock that only moves forward, for how long a model list read from the runtime is served.
     monotonic: Callable[[], float] = field(default=time.monotonic)
+    #: Held while a recording is transcribed (dictation.py), so a second is refused rather than started beside it: a
+    #: speech model is the heaviest thing the server runs, and the operator records one field at a time.
+    dictating: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
     # Held while `config` and `workspace` are read or replaced, so a request never gets one of each.
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
     #: Held while the model list is looked up or read, so requests that find none kept start one runtime, not one each.

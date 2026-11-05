@@ -870,9 +870,12 @@ def test_a_web_reload_reads_the_config_and_asks_the_loop_to_read_it_again(ctx: C
     assert reload.requested
 
     reload.requested, reload.ticking = False, True
-    canopy_env.write_user(user_toml() + "\n[capacity]\nmax_workers = 7\n\n[serve]\nport = 8766\n")
+    dictation = 'dictation_cmd = "stt -f {audio}"\n'
+    canopy_env.write_user(user_toml() + "\n[capacity]\nmax_workers = 7\n\n[serve]\nport = 8766\n" + dictation)
     found = c.post("/api/loop/reload", headers=headers).json()
-    assert found == {"changed": ["capacity.max_workers", "serve.port"], "restart": ["serve.port"], "after_tick": True}
+    changed = ["capacity.max_workers", "serve.port", "serve.dictation_cmd"]
+    # The server reads dictation's command from the config a reload gives it: only the listener's keys wait.
+    assert found == {"changed": changed, "restart": ["serve.port"], "after_tick": True}
     assert reload.requested
 
     reload.requested = False

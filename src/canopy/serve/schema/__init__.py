@@ -83,6 +83,8 @@ class Meta(Model):
     """The workspace's root, absolute: a path a page shows from it is joined to it to copy it whole."""
     repos: list[str]
     """The workspace's repositories, by name, in its file's order: the ones a task may be submitted to run in."""
+    dictation: bool = False
+    """Whether `serve.dictation_cmd` is set, so a field offers to record the operator and fill in what it heard."""
 
 
 class Session(Model):

@@ -1,7 +1,8 @@
-import { Bold, Code, Heading2, List, ListOrdered, SquareCode } from 'lucide-react'
+import { Bold, Code, Heading2, List, ListOrdered, LoaderCircle, Mic, Square, SquareCode } from 'lucide-react'
 import { useId, useLayoutEffect, useRef, useState } from 'react'
 import type { ComponentProps, KeyboardEvent, ReactNode } from 'react'
 
+import { Notice } from '@/components/notice'
 import { RichText } from '@/components/rich-text'
 import {
     Toolbar,
@@ -10,6 +11,8 @@ import {
     ToolbarToggleGroup,
     ToolbarToggleItem,
 } from '@/components/ui/toolbar'
+import { useDictation } from '@/hooks/use-dictation'
+import type { Dictation } from '@/hooks/use-dictation'
 import { applyEdit, continueList, toggleCodeBlock, toggleLinePrefix, toggleMark } from '@/lib/markdown-edit'
 import type { Edit, Selection } from '@/lib/markdown-edit'
 import { isApple } from '@/lib/send-key'
@@ -72,6 +75,10 @@ const BLOCKS: Tool[] = [
  * keys it handles, so a send key (`useSendKeys`) sends before Enter continues a list. Name it with a `<label htmlFor>`
  * on `id`, or `aria-label`: not a `<label>` around it, which would name the toolbar's first button. The toolbar sits
  * under the text, as a chat's does, so Tab reaches the text first and the toolbar, one stop, after it.
+ *
+ * Where the server offers dictation, the toolbar also holds a microphone: a press records the operator, another stops,
+ * and what the operator's command heard goes in where the cursor is, as one edit ⌘Z undoes, for them to read before
+ * anything is sent.
  */
 export function MarkdownField({
     value,
@@ -113,6 +120,7 @@ export function MarkdownField({
     const sized = SIZE[size]
     const showsText = preview !== 'tab' || !previewing
     const showsPreview = preview === 'live' || (preview === 'tab' && previewing)
+    const dictation = useDictation(insertHeard)
 
     useLayoutEffect(() => {
         const selection = pending.current
@@ -135,6 +143,35 @@ export function MarkdownField({
         }
         pending.current = edit.selection
         onValueChange(applyEdit(field.value, edit))
+    }
+
+    // What dictation heard goes in where the cursor is, with a space where it would run into a word on either side,
+    // and no more of it than the field's `maxLength` leaves room for. Returns how many characters were left out. A
+    // field hidden behind its preview, or disabled while a form sends, takes it as text: the browser would type it
+    // elsewhere.
+    function insertHeard(heard: string): number {
+        const field = area.current
+        if (field === null) {
+            return 0
+        }
+        const { selectionStart: from, selectionEnd: to } = field
+        const before = field.value.slice(0, from)
+        const after = field.value.slice(to)
+        const lead = before === '' || /\s$/u.test(before) ? '' : ' '
+        const trail = /^[\p{L}\p{N}]/u.test(after) ? ' ' : ''
+        const room = field.maxLength < 0 ? Infinity : field.maxLength - before.length - after.length
+        const words = heard.slice(0, Math.max(0, room - lead.length - trail.length))
+        if (words === '') {
+            return heard.length
+        }
+        const insert = `${lead}${words}${trail}`
+        const edit = { from, to, insert, selection: { start: from + insert.length, end: from + insert.length } }
+        if (field.hidden !== false || field.disabled) {
+            onValueChange(applyEdit(field.value, edit))
+        } else {
+            apply(edit)
+        }
+        return heard.length - words.length
     }
 
     function format(tool: Tool) {
@@ -250,6 +287,12 @@ export function MarkdownField({
                             <Tools tools={MARKS} disabled={!showsText || props.disabled === true} onTool={format} />
                             <ToolbarSeparator />
                             <Tools tools={BLOCKS} disabled={!showsText || props.disabled === true} onTool={format} />
+                            {dictation.offered && (
+                                <>
+                                    <ToolbarSeparator />
+                                    <Dictate dictation={dictation} disabled={props.disabled === true} />
+                                </>
+                            )}
                         </>
                     )}
                     {preview === 'tab' && (
@@ -285,7 +328,40 @@ export function MarkdownField({
                     )}
                 </Toolbar>
             )}
+            {(dictation.error !== null || dictation.note !== null) && (
+                <Notice error={dictation.error} className="border-t px-2.5 py-1">
+                    {dictation.note}
+                </Notice>
+            )}
         </div>
+    )
+}
+
+// The microphone: a toggle while it records, with the time so far; a spinner while the server transcribes.
+function Dictate({ dictation, disabled }: { dictation: Dictation; disabled: boolean }) {
+    const { state, seconds, blocked } = dictation
+    const recording = state === 'recording'
+    const busy = state === 'starting' || state === 'transcribing'
+    const label = recording ? 'Stop dictating' : state === 'transcribing' ? 'Transcribing' : 'Dictate'
+    return (
+        <>
+            <ToolbarButton
+                aria-label={label}
+                title={blocked ?? (recording ? 'Stop, and put what you said in the field' : 'Dictate into the field')}
+                disabled={blocked !== null || busy || (disabled && !recording)}
+                // The text keeps the focus and its cursor, where what is heard goes in.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={dictation.toggle}
+                className={cn(recording && 'text-status-failed')}
+            >
+                {recording ? <Square /> : busy ? <LoaderCircle className="animate-spin" /> : <Mic />}
+            </ToolbarButton>
+            {recording && (
+                <span role="timer" aria-label="Recorded" className="px-1 font-mono text-xs text-muted-foreground">
+                    {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, '0')}
+                </span>
+            )}
+        </>
     )
 }
 
