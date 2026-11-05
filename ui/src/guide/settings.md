@@ -138,7 +138,9 @@ button to find out the hard way.
 
 Each row says where its value comes from and how far the page will take it. Counts stop at a ceiling (32 workers, 10
 attempts, a $10,000 budget) and paces and retentions at a floor (a tick every 2 minutes, a week of run files); the
-file can still set anything, so the page is for the changes you actually make, not for setting a record.
+file can still set anything, so the page is for the changes you actually make, not for setting a record. Type past one,
+or something that isn't a whole number, and the field turns red and says why under it as you type, and **Save** waits
+until you fix it.
 Repositories get a count of their own only when you pick one, so a workspace of fifty repositories shows the two that
 differ.
 

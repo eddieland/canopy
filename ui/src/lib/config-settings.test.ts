@@ -74,7 +74,7 @@ const SAVED: ConfigSaved = {
 
 function changes(drafts: Parameters<typeof configForm>[1]): ReturnType<typeof configForm>['changes'] {
     const form = configForm(KEYS, drafts)
-    expect(form.invalid).toEqual([])
+    expect(form.errors).toEqual({})
     return form.changes
 }
 
@@ -95,13 +95,62 @@ describe('config settings', () => {
     it('send a stricter count as a whole number, and name one that is not', () => {
         expect(configForm([KICKS], { 'trust.max_flaky_kicks': '2' }).changes).toEqual({})
         expect(configForm([KICKS], { 'trust.max_flaky_kicks': '1' }).changes).toEqual({ 'trust.max_flaky_kicks': 1 })
-        expect(configForm([KICKS], { 'trust.max_flaky_kicks': 'once' }).invalid).toEqual(['trust.max_flaky_kicks'])
+        expect(configForm([KICKS], { 'trust.max_flaky_kicks': 'once' }).errors).toEqual({
+            'trust.max_flaky_kicks': 'not a whole number',
+        })
     })
 
     it('name a count that is not a whole number, and send nothing for it', () => {
         expect(configForm(KEYS, { 'capacity.max_workers': 'many', 'capacity.repo_slots': { web: '2.5' } })).toEqual({
             changes: {},
-            invalid: ['capacity.max_workers', 'capacity.repo_slots.web'],
+            errors: { 'capacity.max_workers': 'not a whole number', 'capacity.repo_slots.web': 'not a whole number' },
+        })
+    })
+
+    it("check a limit's bound as the server does: refused only past it and looser than the value read", () => {
+        expect(configForm(KEYS, { 'capacity.max_workers': '9' })).toEqual({
+            changes: {},
+            errors: { 'capacity.max_workers': 'at most 8 from here; set more in the file' },
+        })
+        expect(configForm(KEYS, { 'capacity.max_workers': '-3' }).errors).toEqual({
+            'capacity.max_workers': 'not a whole number',
+        })
+        expect(configForm(KEYS, { 'capacity.max_workers': '8' })).toEqual({
+            changes: { 'capacity.max_workers': 8 },
+            errors: {},
+        })
+        // A count the file set past the bound may come down, though still past it.
+        expect(configForm([{ ...WORKERS, value: 12 }], { 'capacity.max_workers': '10' }).errors).toEqual({})
+        expect(configForm([PACE], { 'loop.interval_minutes': '4' }).errors).toEqual({
+            'loop.interval_minutes': 'at least 5 from here; set less in the file',
+        })
+        expect(configForm([RUN_FILES], { 'retention.run_files_days': '3' }).errors).toEqual({
+            'retention.run_files_days': 'at least 7, or 0 for forever, from here; set less in the file',
+        })
+        expect(configForm([RUN_FILES], { 'retention.run_files_days': '0' }).changes).toEqual({
+            'retention.run_files_days': 0,
+        })
+    })
+
+    it("check a repository's own count against the bound, from the slots per repository it has now", () => {
+        const perRepo = { ...PER_REPO, value: 2 }
+        expect(configForm([SLOTS, perRepo], { 'capacity.repo_slots': { web: '9', api: '8' } })).toEqual({
+            changes: { 'capacity.repo_slots': { api: 8 } },
+            errors: { 'capacity.repo_slots.web': 'at most 8 from here; set more in the file' },
+        })
+    })
+
+    it('let a stricter count only fall', () => {
+        expect(configForm([KICKS], { 'trust.max_flaky_kicks': '3' })).toEqual({
+            changes: {},
+            errors: { 'trust.max_flaky_kicks': 'only fewer from here: at most 2; set more in the file' },
+        })
+        expect(configForm([KICKS], { 'trust.max_flaky_kicks': 'x' }).errors).toEqual({
+            'trust.max_flaky_kicks': 'not a whole number',
+        })
+        expect(configForm([KICKS], { 'trust.max_flaky_kicks': '0' })).toEqual({
+            changes: { 'trust.max_flaky_kicks': 0 },
+            errors: {},
         })
     })
 
@@ -163,7 +212,10 @@ describe('budget alerts', () => {
     })
 
     it('name a list with something other than a whole number in it, and send nothing for it', () => {
-        expect(configForm([ALERTS], { [ALERTS.name]: '50, most' })).toEqual({ changes: {}, invalid: [ALERTS.name] })
+        expect(configForm([ALERTS], { [ALERTS.name]: '50, most' })).toEqual({
+            changes: {},
+            errors: { [ALERTS.name]: 'whole percentages, comma separated' },
+        })
         expect(boundText(ALERTS)).toBe('percentages, comma separated; 100% is always sent')
     })
 })
@@ -187,5 +239,8 @@ describe('config groups', () => {
         expect(pendingText(0)).toBe('No unsaved changes')
         expect(pendingText(1)).toBe('1 unsaved change')
         expect(pendingText(3)).toBe('3 unsaved changes')
+        // A field in error is a change too, so the bar never says there is none beside an enabled Discard.
+        expect(pendingText(0, 1)).toBe('1 unsaved change, 1 to fix before saving')
+        expect(pendingText(2, 1)).toBe('3 unsaved changes, 1 to fix before saving')
     })
 })

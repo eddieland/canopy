@@ -175,7 +175,7 @@ test('the settings page asks the loop to read its config again and says what it 
     )
 })
 
-test('the settings page saves a limit and drops a trusted reviewer, but raises nothing past its ceiling', async ({
+test('the settings page saves a limit and drops a trusted reviewer, but offers nothing past its ceiling', async ({
     page,
 }) => {
     await page.goto('settings')
@@ -201,12 +201,17 @@ test('the settings page saves a limit and drops a trusted reviewer, but raises n
     await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
     await form.getByTestId('policy.plan-off').click()
     await expect(form.getByTestId('config-pending')).toHaveText('No unsaved changes')
+    // A field the server would refuse says why on its own row, and keeps Save off.
     await workers.fill('many')
-    await expect(form.getByRole('alert')).toHaveText('capacity.max_workers: a whole number')
+    await expect(workers).toHaveAttribute('aria-invalid', 'true')
+    await expect(form.getByTestId('capacity.max_workers-error')).toHaveText('not a whole number')
     await expect(form.getByTestId('config-save')).toBeDisabled()
     await workers.fill('33')
-    await form.getByTestId('config-save').click()
-    await expect(form.getByRole('alert')).toContainText('refused (past_bound): capacity.max_workers may be at most 32')
+    await expect(form.getByTestId('capacity.max_workers-error')).toHaveText(
+        'at most 32 from here; set more in the file',
+    )
+    await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change, 1 to fix before saving')
+    await expect(form.getByTestId('config-save')).toBeDisabled()
 
     await workers.fill(after)
     await form.getByTestId('trust.trusted_reviewers-lint-bot').click()
@@ -233,10 +238,10 @@ test('the settings page saves a limit and drops a trusted reviewer, but raises n
     // A retention shortens only to its floor, but keeping it forever is always allowed.
     const runFiles = form.getByTestId('retention.run_files_days')
     await runFiles.fill('3')
-    await form.getByTestId('config-save').click()
-    await expect(form.getByRole('alert')).toContainText(
-        'refused (past_bound): retention.run_files_days may be at least 7, or 0 to keep forever',
+    await expect(form.getByTestId('retention.run_files_days-error')).toHaveText(
+        'at least 7, or 0 for forever, from here; set less in the file',
     )
+    await expect(form.getByTestId('config-save')).toBeDisabled()
     await runFiles.fill('0')
     await form.getByTestId('config-save').click()
     await expect(form.getByRole('status')).toContainText("Saved retention.run_files_days to this workspace's config.")
