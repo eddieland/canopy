@@ -339,6 +339,28 @@ export type TaskSubmitted = Schemas['TaskSubmitted']
 export type TaskReplied = Schemas['TaskReplied']
 /** What a stop of a task did: already stopped, or dropped while queued, and the run still working it. */
 export type TaskStopped = Schemas['TaskStopped']
+/** An epic as the epics list shows it: its goal, where its plan stands, and how much of its breakdown has members. */
+export type EpicSummary = Schemas['EpicSummary']
+/** Where an epic stands: queued, its plan run working, its plan proposed or approved, or unplanned (DESIGN §43). */
+export type EpicStanding = EpicSummary['standing']
+/** One epic, as `canopy show epic:N` prints it, its outline read as data beside its members. */
+export type EpicDetail = Schemas['EpicDetail']
+/** A ticket the operator made a member of an epic, with the entries it fulfils and where its work stands. */
+export type EpicMember = Schemas['EpicMember']
+/** What canopy reads of an epic's plan, its ids and breakdown: all of it, or why none of it reads. */
+export type EpicOutline = Schemas['EpicOutline']
+/** One entry of an epic plan's breakdown, with the members registered against it. */
+export type EpicEntry = Schemas['EpicEntry']
+/** A requirement or a contract of an epic plan's outline, with its text. */
+export type EpicId = Schemas['EpicId']
+/** One run of an epic's planner: how it ended, what it said, and the plan it recorded. */
+export type EpicPlanRun = Schemas['EpicPlanRun']
+/** One of an epic's plans: its status and approval, never its text. */
+export type EpicPlanSummary = Schemas['EpicPlanSummary']
+/** One of an epic's plans as its file stands now. */
+export type EpicPlanFile = Schemas['EpicPlanFile']
+/** An epic's plans, each as its file stands, and the plan run writing the next, if one is. */
+export type EpicPlans = Schemas['EpicPlans']
 /** A text file the operator attached to a ticket or a task, for its runs to read as data (DESIGN §22). */
 export type Attachment = Schemas['Attachment']
 /** A ticket's or a task's attachments, and the limits `policy` holds them to. */
