@@ -6,6 +6,7 @@ import { idleTicksQuery, ticksQuery } from '@/api/queries'
 import { Code } from '@/components/code'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { RowList } from '@/components/rows'
 import { TickNow } from '@/components/tick-now'
 import { TickRow } from '@/components/tick-row'
 import { ordered, useListOrder } from '@/lib/list-order'
@@ -63,11 +64,11 @@ function TicksPage() {
                         <TickNow inline />
                     </Empty>
                 ) : (
-                    <ul className="divide-y" data-testid="ticks">
+                    <RowList kind="tick" className="divide-y" data-testid="ticks">
                         {ordered('ticks', order, data).map((tick) => (
                             <TickRow key={tick.id} tick={tick} />
                         ))}
-                    </ul>
+                    </RowList>
                 )}
             </Panel>
         </>

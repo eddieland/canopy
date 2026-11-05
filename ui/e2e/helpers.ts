@@ -708,3 +708,52 @@ export async function expectSpendAxisWhole(page: Page, minimum: number): Promise
         }
     }
 }
+
+/**
+ * Serves every read under `/api` with its figures grown to what a long-lived journal holds, for a test that the pages
+ * lay them out: the mock's are a few runs and a few dollars, so a column sized to them looks right. A count becomes
+ * `n × 12 + 3`, a cost 137 times itself, an id 12000 more; what is a time, a share, a limit, or a version stays.
+ * `reads` are the reads it grows, every one under `/api` but the stream, the session, and the host's by default. Like
+ * `padDecisions`, a test that grows ends with
+ * `page.unrouteAll({ behavior: 'ignoreErrors' })`.
+ */
+export async function growFigures(page: Page, reads = /\/api\/(?!session|events|host)/u): Promise<void> {
+    await page.route(reads, async (route) => {
+        // A read the page gave up on (a window switched, a page left) is disposed of before it is grown: let it go.
+        try {
+            const response = await route.fetch()
+            if (!(response.headers()['content-type'] ?? '').includes('json')) {
+                await route.fulfill({ response })
+                return
+            }
+            await route.fulfill({ response, json: grown(await response.json()) })
+        } catch {
+            // Nothing waits on it.
+        }
+    })
+}
+
+// A key whose number growFigures leaves as it is: a time, a share, a limit, a version, a calendar's.
+const KEPT_FIGURE = /year|month|day|week|version|limit|^max|percent|rate|share|seconds|ms$|_at$|time|port|tier/iu
+
+function grown(value: unknown, key = ''): unknown {
+    if (Array.isArray(value)) {
+        return value.map((item) => grown(item, key))
+    }
+    if (value !== null && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, grown(v, k)]))
+    }
+    if (typeof value !== 'number' || KEPT_FIGURE.test(key)) {
+        return value
+    }
+    if (/(?:^|_)(?:id|number|pid)$/iu.test(key)) {
+        return Number.isInteger(value) ? value + 12000 : value
+    }
+    if (/cost|usd/iu.test(key)) {
+        return value * 137
+    }
+    if (Number.isInteger(value)) {
+        return value === 0 ? 0 : value * 12 + 3
+    }
+    return value > 1 ? value * 37.3 : value
+}

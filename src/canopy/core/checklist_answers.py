@@ -10,14 +10,19 @@ run's note; a result with no `checklist` is never refused, since its push is alr
 text, which read the PR: it is shown as data, made printable, and authorizes nothing. `canopy checklist` counts the
 answers per repository and item over a window (`counts`), so an item earns its place or is dropped; the web UI's
 checklist page also groups them by the runs behind each `held` and `fixed` answer, and by week (`details`).
+
+What the run changed after being shown a list is recorded beside its answers (`Pushed`): the commit the hook noted
+when it showed the list, the commit of the push after, and the diff between them, kept beside the run's log
+(`diff_path`), since the commit it was shown at may never reach origin.
 """
 
 from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal, assert_never, cast
 
 from pydantic import BaseModel, ConfigDict
@@ -59,11 +64,28 @@ class Answer:
 
 
 @dataclass(frozen=True)
+class Pushed:
+    """What a run pushed after canopy showed it a repository's list: the commit it was shown at, and the one after."""
+
+    repo: str
+    #: The commit the branch was at when the hook showed the list.
+    shown: str
+    #: The commit of the next push the hook let through, or the one the run left on origin.
+    pushed: str
+
+
+@dataclass(frozen=True)
 class Checked:
     """A run's `checklist`, checked: an answer for every item of every list it was given, and what was dropped."""
 
     answers: Sequence[Answer] = ()
     dropped: Sequence[str] = ()
+    #: Each push the run made after being shown a list, in the order it was shown them.
+    pushes: Sequence[Pushed] = ()
+
+    def pushing(self, pushes: Iterable[Pushed]) -> Checked:
+        """Return the answers, with `pushes` as what the run pushed after its lists."""
+        return replace(self, pushes=tuple(pushes))
 
     def note(self) -> str:
         """The run's harness note about what was dropped, or "" when nothing was.
@@ -286,13 +308,19 @@ def check(lists: Iterable[Checklist], reported: object) -> Checked:
 
 def record(conn: sqlite3.Connection, run_id: int, checked: Checked | None, *, table: RunTable = "runs") -> None:
     """Record the answers of run `run_id` of `table`, in the transaction that closes it; none for one given no list."""
-    if checked is None or not checked.answers:
+    if checked is None:
         return
     column = _column(table)
-    records.insert_rows(records.ChecklistAnswer, [column, "repo", "item", "answer", "reason"]).many(
-        conn,
-        [(run_id, a.repo, a.item, a.answer, a.reason) for a in checked.answers],
-    )
+    if checked.answers:
+        records.insert_rows(records.ChecklistAnswer, [column, "repo", "item", "answer", "reason"]).many(
+            conn,
+            [(run_id, a.repo, a.item, a.answer, a.reason) for a in checked.answers],
+        )
+    if checked.pushes:
+        records.insert_rows(records.ChecklistPush, [column, "repo", "shown_sha", "pushed_sha"]).many(
+            conn,
+            [(run_id, p.repo, p.shown, p.pushed) for p in checked.pushes],
+        )
 
 
 def of_run(conn: sqlite3.Connection, run_id: int, *, table: RunTable = "runs") -> list[records.ChecklistAnswer]:
@@ -310,6 +338,33 @@ def of_run(conn: sqlite3.Connection, run_id: int, *, table: RunTable = "runs") -
         case _:
             assert_never(table)
     return query.order_by("repo, rowid").all(conn)
+
+
+def pushes_of(conn: sqlite3.Connection, run_id: int, *, table: RunTable = "runs") -> list[records.ChecklistPush]:
+    """Return what run `run_id` of `table` pushed after being shown its lists, in the order it was shown them.
+
+    Returns:
+        A row per time a list was shown and a push followed; none for a run never shown one.
+    """
+    query = records.select(records.ChecklistPush)
+    match table:
+        case "runs":
+            query = query.where("run_id = ?", run_id)
+        case "task_runs":
+            query = query.where("task_run_id = ?", run_id)
+        case _:
+            assert_never(table)
+    return query.order_by("rowid").all(conn)
+
+
+def diff_path(log_path: str | Path, repo: str, shown: str) -> Path:
+    """Where a run keeps the diff of what it pushed to `repo` after being shown its list at commit `shown`.
+
+    Returns:
+        `<id>.<repo>.checklist-<commit>.diff` beside `log_path`, the commit cut to 12; the file may not exist.
+    """
+    log = Path(log_path)
+    return log.with_name(f"{log.stem}.{repo}.checklist-{shown[:12]}.diff")
 
 
 def counts(conn: sqlite3.Connection, now: datetime, days: int, *, repo: str | None = None) -> Counts:
@@ -434,10 +489,12 @@ def contract_text(lists: Sequence[Checklist]) -> str:
             "",
             (
                 f'That JSON object also carries `"checklist":{{"<repository>":{entry}}}`: under each repository above, '
-                "each item of its list by its id. `pass` when the diff holds to it, `fixed` when this run committed "
-                "the fix, `held` when you left it failing, with a `reason` saying why in a sentence or two, at most "
-                f"{MAX_REASON} characters, and `n/a` when it is about nothing the diff changes. An item you leave out "
-                "is recorded unanswered."
+                "every item of its list by its id, none left out, whether or not your push was held. `pass` when you "
+                "held the diff to the rule and it holds, `fixed` when this run committed the fix, `held` when you left "
+                f"it failing, with a `reason` saying why in a sentence or two, at most {MAX_REASON} characters, and "
+                "`n/a` only when the diff touches none of the paths the item is about, or nothing its rule speaks of, "
+                "so there was nothing to hold it to. An item you checked is `pass`, `fixed`, or `held`, never `n/a`. "
+                "An item you leave out is not `n/a` either: canopy records it unanswered, which says you never looked."
             ),
         ],
     )

@@ -635,16 +635,24 @@ def test_a_tasks_first_push_is_held_for_its_checklist_and_the_next_goes_through(
     (checklists_dir(canopy_env) / "repo.md").write_text(CHECKLIST)
     submit()
     [started] = start(checking)
-    commit, push = commit_and_push(BRANCH, "task 1: the fix")
-    with private_worker_does(commit, push, push, result=DONE):
+    commit, push = commit_and_push(BRANCH, "task 1: the change")
+    fix = ["sh", "-c", "echo fixed >fix.txt && git add fix.txt && git commit -q -m 'task 1: the fix'"]
+    with private_worker_does(commit, push, fix, push, result=DONE):
         run = run_task(checking, started.run_id)
     [worker] = agent_runs(agent_log)
-    _, held, sent = worker["commands"]
+    _, held, _, sent = worker["commands"]
     assert held["returncode"] != 0
     assert str(held["stderr"]).startswith("[canopy] Push held, not rejected: nothing was sent.")
     assert f"\n\n{CHECKLIST}" in str(held["stderr"])
     assert sent["returncode"] == 0
     assert (run.status, run.head) == (RunStatus.DONE, git_pool.remote_head(BRANCH))
+    assert run.head is not None
+    # What it pushed after the list was shown, kept as a worker's run keeps it.
+    shown = git("rev-parse", f"{run.head}^", cwd=git_pool.origin)
+    assert checklist_answers.pushes_of(checking.conn, run.id, table="task_runs") == [
+        records.ChecklistPush(None, run.id, "repo", shown, run.head),
+    ]
+    assert "+fixed\n" in checklist_answers.diff_path(run.log_path, "repo", shown).read_text()
     # A result that answers nothing is never refused: its push is made, and each item counted unanswered.
     assert [(a.item, a.answer) for a in checklist_answers.of_run(checking.conn, run.id, table="task_runs")] == [
         ("general-types", ItemAnswer.UNANSWERED),

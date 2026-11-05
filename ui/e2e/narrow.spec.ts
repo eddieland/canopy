@@ -259,7 +259,7 @@ test("the worktrees counters stand four across or two by two, by the pane's widt
     }
 })
 
-test("a slot's ticket and run stay whole beside a long run kind, which is cut instead", async ({ page }) => {
+test("a slot's ticket, run, and long run kind stay whole, its column fitted to them", async ({ page }) => {
     await page.goto('workspace/worktrees')
     await settled(page)
     const row = page.getByTestId('pool-web').getByTestId('worktree-2')
@@ -267,7 +267,7 @@ test("a slot's ticket and run stay whole beside a long run kind, which is cut in
     await expect(ticket).toBeInViewport({ ratio: 1 })
     expect(await cut(ticket)).toBe(false)
     expect(await cut(row.getByRole('link', { name: 'run:43' }))).toBe(false)
-    expect(await cut(row.getByText('resume (ci, review)'))).toBe(true)
+    expect(await cut(row.getByText('resume (ci, review)'))).toBe(false)
 })
 
 /** Whether the text in `target`, cut to fit (`truncate`), is cut. */

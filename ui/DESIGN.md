@@ -468,19 +468,22 @@ just past it. A step comes in once the pane has room for it and what it sits bes
 the window widens. The wide screens' second column (Shape and space) stays the window's, at `2xl`, where the rail is
 whole either side.
 
-- **`ListRow`** (`src/components/rows.tsx`): a list's row, a CSS grid in its kind's columns (`ROW_COLUMNS` in
-  `src/lib/rows.ts`). Every column is fixed but one free column, which takes the rest and cuts its text to fit, so every
-  row of a list lines up whatever its cells hold. The free column never gets under 8rem: it holds the row's name, which
-  never vanishes; a kind whose name needs more sets a floor of its own. A column may be fitted instead of fixed: its
-  list sets its width to the longest of its cells, all in monospace, so its rows still share it. **A narrow list lets
+- **`ListRow`** (`src/components/rows.tsx`): a list's row, in a **`RowList`** that sets its kind's columns
+  (`ROW_COLUMNS` in `src/lib/rows.ts`), which every row shares as a subgrid. **Columns fit their list**: each is as wide
+  as its widest cell in that list, up to a most, rather than a width guessed from sample data, so a list of short ids
+  leaves the room to its title, and the rows still line up whatever their cells hold. One free column takes the rest
+  and cuts its text to fit; it never gets under 8rem, since it holds the row's name, which never vanishes, and a kind
+  whose name needs more sets a floor of its own. Lists stacked in one panel share one grid. A cell never draws over the
+  next column: what will not fit its column, an id with nowhere to break, is cut there by the row, so no cell has to
+  remember to, and an id cut so is whole on hover. **A narrow list lets
   columns go**, in the order its kind gives them, so it fits its panel wherever the panel sits: a column shows from the
   narrowest container size with room for it, the columns that go after it, and those that never do. The `Panel` is the
   container, so a list goes by its own width, not the window's; every column shows at `@4xl`, which a list in a 1280px
   window reaches. What goes under the head line, a summary, its links, an earlier run, is a **`RowLine`** that spans
   from a named column to the row's end, never a hand-computed indent: no `pl-[…]` in `src/routes` or `src/components`.
   What sits under a row outside it, a tool call's body, is a **`RowGrid`** of the same kind with a `RowLine` in it. A
-  new list is a new kind in `ROW_COLUMNS`, its columns written out there; an age column and a cost column are one
-  width in every kind, so they line up from one list to the next.
+  new list is a new kind in `ROW_COLUMNS`, its columns written out there; an age column and a cost column are fixed,
+  one width in every kind, so they line up from one list to the next.
 - **`Fields`** and **`Field`** (`src/components/fields.tsx`): a detail page's field list, a label column in
   `panel-label` type and the values beside it, in prose or, with `mono`, in monospace data. The rows sit on their first
   baseline, so a label stays level with the first line of a value that wraps.
@@ -551,13 +554,16 @@ whole either side.
   it waits on the operator, a header of its `panel-label` and what names it, its text, then its verbs in a row under
   it, `sm` buttons with the CLI's command on hover, `Edit` outline and `Drop` ghost. `Edit` opens a `Textarea` with its
   count against the bound, `Save` disabled past it, and `Cancel`.
-- **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel where its rows name
-  something that wants the room; one with a short name and a few figures sizes to its content at the panel's left, so
-  a row reads in one glance. Its column heads are in `panel-label` type, its figures right-aligned readouts. A row head
-  that names something is its name in medium weight, as `TicketTitle` sets a ticket's title, after its reference in its
-  monospace link. Its panel's header repeats none of its rows. Rows in groups stay one table, so their columns line up:
-  a `tbody` per group, headed by a row whose `rowgroup` cell names it, with the group's own figures in its columns where
-  it has them.
+- **A table of figures** (a chore's spend, the Spend page's) is as wide as its content and never wider than its panel,
+  so a row's figures sit by what it names and the row reads in one glance; a column of text grows to its text, using the
+  panel's room, and is cut only where the panel runs out, never stretched past its text. Its column heads are in
+  `panel-label` type, its figures right-aligned readouts. A row head that names something is its name in medium weight,
+  as `TicketTitle` sets a ticket's title, after its reference in its monospace link. Its panel's header repeats none of
+  its rows. A report's table is a `ReportTable` (`src/components/report-table.tsx`, on `ui/table`), its columns each of
+  a kind, which sets how its head and cells sit: the row's `name`, `free` text, cut only past the panel, a `figure`, a
+  `bar` (`CellBar`), or a `word`; a table is not written by hand, so the rule holds in one place. Rows in groups stay
+  one table, so their columns line up: a `tbody` per group, headed by a row whose `rowgroup` cell names it, with the
+  group's own figures in its columns where it has them.
 - **Readout tiles** (`ReadoutTiles`, `src/components/readout-tiles.tsx`) are a report window's headline figures: its
   sums, not a count of what is now, so they are not `Counter`s. Each is a `panel-label` name over a `readout text-xl`
   figure, what it counts in the name's tip, and, when the page has the window before's figure, a muted line under it
@@ -566,8 +572,9 @@ whole either side.
   the tiles hold what was spent. A figure still being read holds its place. A `Counter` stays a page's count of the
   present, with its state's color.
 - **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest,
-  where comparing the rows is the point: the figure, at a fixed width so the bars start at one edge, then a rounded
-  bar, long enough that a narrow column's still compares, filled in `muted-foreground` or the series' own fill; never a
+  where comparing the rows is the point: the figure in a cell of its own, which the table sizes to the column's widest
+  so the bars start at one edge and no figure wraps, whatever the journal holds, then a rounded bar in the next cell,
+  long enough that a narrow column's still compares, filled in `muted-foreground` or the series' own fill; never a
   state's color, but for a failure rate, in `status-failed`, a share of the whole rather than of the column's largest:
   it says what is broken. It is the eye's, `aria-hidden`. Where a table's rows sum to a whole, a bar is its row's share
   of the whole too, the percent on the cell's hover.
@@ -749,7 +756,9 @@ reader, so no table repeats them.
 - **The answer bar** (the checklist page's By item) is an item's answers as one rounded bar, each answer its share of
   the runs reminded in its answer fill, in `canopy checklist`'s order. Every bar is the same length, since the share is
   the point, not the count; the counts stay in the row's columns, and in words in the bar's tip and for a screen reader.
-  A held or fixed count opens a `Popover` of the runs behind it.
+  A held or fixed count opens a `Popover` of the runs behind it, on a mouse's hover after half a second as a tip does,
+  staying while the pointer moves onto it, and on a click, a tap, or the keyboard, which keep it until a click outside
+  or Escape. A hover leaves the focus where it was.
 - **A table of PRs** (`PullRequestTable`, `src/components/pull-request-table.tsx`) is a report's per-PR table: the PR
   with its unit's phase, its ticket, then the page's own figures.
 - **The first-call chart** (the spend page's First calls by week) follows Charts but where a rate needs otherwise: a

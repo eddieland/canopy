@@ -1,5 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useEffect, useRef, useState } from 'react'
+import type { PointerEvent } from 'react'
 
 import { checklistCountsQuery } from '@/api/queries'
 import type { ChecklistCounts, ChecklistItemCounts, ChecklistRun, ChecklistWeek } from '@/api/types'
@@ -8,10 +10,12 @@ import { ChartTable } from '@/components/chart-table'
 import { Code } from '@/components/code'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
 import { LinkedText } from '@/components/linked-text'
-import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { ReadoutTiles } from '@/components/readout-tiles'
 import type { ReadoutTile } from '@/components/readout-tiles'
 import { RepoFilter } from '@/components/repo-picker'
+import { ReportTable } from '@/components/report-table'
+import type { ReportColumn } from '@/components/report-table'
 import { RunLink } from '@/components/run-link'
 import { TaskRunLink } from '@/components/task-link'
 import { Clipped, Hinted, Tip } from '@/components/tip'
@@ -62,11 +66,6 @@ const HELP =
 const REMINDED_HINT =
     'The runs given the item, by when they started: each answered it, or is counted unanswered. A run still ' +
     'running has answered nothing yet'
-
-// The column names of a table in a padded scrolling region, as the spend page's: the region's top padding is the
-// head's cells', so the rows scrolling under the sticky head never show above it.
-const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
-const HEAD = 'panel-label pb-1.5 pl-3 font-normal whitespace-nowrap'
 
 // What the verdict column says, in its name's tip.
 const VERDICT_HINT =
@@ -278,46 +277,27 @@ function Items({ groups, repo, span }: { groups: RepoItems[]; repo: string | und
     }
     return (
         <div className="flex flex-col">
-            <PanelScroll label="Checklist answers by item" className="px-3 pb-3">
-                <table className="border-collapse text-sm" data-testid="checklist-table">
-                    <thead className={PADDED_HEAD}>
-                        <tr className="text-right">
-                            <th className="panel-label pb-1.5 text-left font-normal">item</th>
-                            <th className={HEAD}>
-                                <Hinted hint={REMINDED_HINT}>reminded</Hinted>
-                            </th>
-                            <th className={cn(HEAD, 'text-left')}>answers</th>
-                            {ANSWER_COLUMNS.map((c) => (
-                                <th key={c.key} className={HEAD}>
-                                    <Hinted hint={c.hint}>{c.label}</Hinted>
-                                </th>
-                            ))}
-                            <th className={cn(HEAD, 'text-left')}>
-                                <Hinted hint={VERDICT_HINT}>verdict</Hinted>
-                            </th>
-                        </tr>
-                    </thead>
-                    {groups.map((group, i) => (
-                        <tbody key={group.repo} className="font-mono text-xs" data-testid="checklist-repo">
-                            <tr>
-                                <th
-                                    scope="rowgroup"
-                                    colSpan={ANSWER_COLUMNS.length + 4}
-                                    className={cn('pb-1 text-left font-medium text-foreground', i > 0 && 'pt-4')}
-                                >
-                                    {group.repo}
-                                    <span className="ml-2 font-normal text-muted-foreground">
-                                        {counted(group.items.length, 'item')}
-                                    </span>
-                                </th>
-                            </tr>
-                            {group.items.map((item) => (
-                                <ItemRow key={item.item} item={item} />
-                            ))}
-                        </tbody>
-                    ))}
-                </table>
-            </PanelScroll>
+            <ReportTable
+                groups={groups.map((group) => ({
+                    key: group.repo,
+                    head: (
+                        <span className="font-mono">
+                            {group.repo}
+                            <span className="ml-2 font-normal text-muted-foreground">
+                                {counted(group.items.length, 'item')}
+                            </span>
+                        </span>
+                    ),
+                    rows: group.items,
+                    testId: 'checklist-repo',
+                }))}
+                columns={ITEM_COLUMNS}
+                rowKey={(item) => item.item}
+                label="Checklist answers by item"
+                className="px-3 pb-3"
+                testId="checklist-table"
+                rowTestId="checklist-item"
+            />
             <div className="px-3 pb-3">
                 <DayChartLegend series={ANSWER_COLUMNS} testId="checklist" />
             </div>
@@ -325,40 +305,52 @@ function Items({ groups, repo, span }: { groups: RepoItems[]; repo: string | und
     )
 }
 
-/** An item's row: its name, which picks it, the runs reminded, its answer bar, each answer's count, its verdict. */
-function ItemRow({ item }: { item: ChecklistItemCounts }) {
+/**
+ * The By item table's columns: the item, which picks it, the runs reminded, its answer bar, each answer's count, a
+ * count of none muted, and the guide's verdict.
+ */
+const ITEM_COLUMNS: ReportColumn<ChecklistItemCounts>[] = [
+    { key: 'item', kind: 'free', label: 'item', cell: (item) => <ItemLink item={item} /> },
+    { key: 'reminded', kind: 'figure', label: 'reminded', hint: REMINDED_HINT, cell: (item) => item.reminded },
+    { key: 'answers', kind: 'word', label: 'answers', cell: (item) => <AnswerBar item={item} /> },
+    ...ANSWER_COLUMNS.map((c): ReportColumn<ChecklistItemCounts> => ({
+        key: c.key,
+        kind: 'figure',
+        label: c.label,
+        hint: c.hint,
+        cell: (item) => <AnswerCount item={item} column={c} />,
+        tone: (item) => item[c.key] === 0 && 'text-muted-foreground',
+    })),
+    { key: 'verdict', kind: 'word', label: 'verdict', hint: VERDICT_HINT, cell: (item) => <Verdict item={item} /> },
+]
+
+/** An item's name, which picks it for By week. */
+function ItemLink({ item }: { item: ChecklistItemCounts }) {
+    return (
+        // The router marks the picked one's link `aria-current="page"`: its search is the page's own.
+        <Link
+            to="/reports/checklist"
+            search={(prev) => ({ ...prev, item: itemKey(item) })}
+            replace
+            resetScroll={false}
+            className={cn(
+                'block rounded-sm px-1 text-accent underline-offset-4 hover:underline',
+                'aria-[current=page]:bg-accent/16 aria-[current=page]:text-foreground',
+            )}
+        >
+            {/* The row's name, as the spend page's tools read: medium weight, cut to fit. */}
+            <Clipped text={item.item} className="block font-sans font-medium" />
+        </Link>
+    )
+}
+
+/** The guide's verdict on an item, why on its hover; nothing for an item it has no word for. */
+function Verdict({ item }: { item: ChecklistItemCounts }) {
     const verdict = checklistVerdict(item)
     return (
-        <tr className="text-right" data-testid="checklist-item">
-            <th scope="row" className="py-0.5 text-left font-normal">
-                {/* The router marks the picked one's link `aria-current="page"`: its search is the page's own. */}
-                <Link
-                    to="/reports/checklist"
-                    search={(prev) => ({ ...prev, item: itemKey(item) })}
-                    replace
-                    resetScroll={false}
-                    className={cn(
-                        'block max-w-lg rounded-sm px-1 text-accent underline-offset-4 hover:underline',
-                        'aria-[current=page]:bg-accent/16 aria-[current=page]:text-foreground',
-                    )}
-                >
-                    {/* The row's name, as the spend page's tools read: medium weight, cut to fit. */}
-                    <Clipped text={item.item} className="block font-sans font-medium" />
-                </Link>
-            </th>
-            <td className="readout pl-3">{item.reminded}</td>
-            <td className="pl-3">
-                <AnswerBar item={item} />
-            </td>
-            {ANSWER_COLUMNS.map((c) => (
-                <td key={c.key} className={cn('readout pl-3', item[c.key] === 0 && 'text-muted-foreground')}>
-                    <AnswerCount item={item} column={c} />
-                </td>
-            ))}
-            <td className="pl-3 text-left font-sans text-muted-foreground" data-testid="checklist-verdict">
-                {verdict !== null && <Hinted hint={verdict.why}>{verdict.word}</Hinted>}
-            </td>
-        </tr>
+        <span className="text-muted-foreground" data-testid="checklist-verdict">
+            {verdict !== null && <Hinted hint={verdict.why}>{verdict.word}</Hinted>}
+        </span>
     )
 }
 
@@ -388,26 +380,99 @@ function AnswerBar({ item }: { item: ChecklistItemCounts }) {
     )
 }
 
+// How long a pointer rests on a count before its runs open, as long as a tip waits (tip.tsx), so a pointer crossing
+// the table opens nothing on its way.
+const HOVER_OPEN_MS = 500
+// How long the runs stay once the pointer leaves the count, long enough to move it onto them.
+const HOVER_CLOSE_MS = 150
+
 /**
  * An answer's count. A held or fixed count of some opens the runs that gave it, the newest first, a held one's reason
- * under its run: why it held is the worker's word, and the run has it whole. The rest are figures alone.
+ * under its run: why it held is the worker's word, and the run has it whole. The rest are figures alone. The runs open
+ * when a mouse rests on the count, and close when it leaves both the count and them; a click keeps them open until a
+ * click outside or Escape, and a tap or the keyboard opens them as a click does.
  */
 function AnswerCount({ item, column }: { item: ChecklistItemCounts; column: AnswerColumn }) {
+    // Open from a hover, which leaving closes and which keeps the focus where it was, or from a click, which only a
+    // click outside or Escape closes.
+    const [open, setOpen] = useState<'hover' | 'click' | null>(null)
+    // What opened them last, read as they close, when `open` is already null.
+    const openedBy = useRef<'hover' | 'click'>('click')
+    const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+    useEffect(() => () => clearTimeout(timer.current), [])
     const count = item[column.key]
     const runs = column.key === 'held' ? item.held_runs : column.key === 'fixed' ? item.fixed_runs : []
     if (count === 0 || runs.length === 0) {
         return count
     }
+    const openAs = (how: 'hover' | 'click') => {
+        openedBy.current = how
+        setOpen(how)
+    }
+    // A touch's pointer enters as it taps: only a mouse hovers, so a tap opens them as a click does.
+    const enter = (event: PointerEvent) => {
+        if (event.pointerType !== 'mouse') {
+            return
+        }
+        clearTimeout(timer.current)
+        if (open === null) {
+            timer.current = setTimeout(() => openAs('hover'), HOVER_OPEN_MS)
+        }
+    }
+    const leave = (event: PointerEvent) => {
+        if (event.pointerType !== 'mouse') {
+            return
+        }
+        clearTimeout(timer.current)
+        timer.current = setTimeout(() => setOpen((was) => (was === 'hover' ? null : was)), HOVER_CLOSE_MS)
+    }
     return (
-        <Popover>
+        <Popover
+            open={open !== null}
+            onOpenChange={(next) => {
+                clearTimeout(timer.current)
+                if (next) {
+                    openAs('click')
+                } else {
+                    setOpen(null)
+                }
+            }}
+        >
             <PopoverTrigger
                 className="rounded-sm text-accent underline-offset-4 hover:underline"
                 aria-label={`${count} ${column.label}: the runs`}
                 data-testid={`checklist-${column.key}-runs`}
+                onPointerEnter={enter}
+                onPointerLeave={leave}
+                onClick={(event) => {
+                    // A click on runs a hover opened keeps them open, rather than closing them under the pointer.
+                    if (open === 'hover') {
+                        event.preventDefault()
+                        clearTimeout(timer.current)
+                        openAs('click')
+                    }
+                }}
             >
                 {count}
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-96 p-3 text-left font-sans">
+            <PopoverContent
+                align="end"
+                className="w-96 p-3 text-left font-sans"
+                onPointerEnter={enter}
+                onPointerLeave={leave}
+                // Runs a hover opened leave the focus where it was, as they open and as they close: a passing pointer
+                // takes nothing from the keyboard. Radix would move it into them, and back to the count after.
+                onOpenAutoFocus={(event) => {
+                    if (openedBy.current === 'hover') {
+                        event.preventDefault()
+                    }
+                }}
+                onCloseAutoFocus={(event) => {
+                    if (openedBy.current === 'hover') {
+                        event.preventDefault()
+                    }
+                }}
+            >
                 <p className="panel-label pb-2">
                     {column.label} · {item.item}
                     {count > runs.length && ` · the newest ${runs.length} of ${count}`}
@@ -488,43 +553,29 @@ function ByWeek({
                     label="Checklist answers by week"
                     className="max-h-60 overflow-x-auto"
                 >
-                    <WeekTable weeks={found} />
+                    <ReportTable
+                        rows={found}
+                        columns={WEEK_COLUMNS}
+                        rowKey={(w) => w.week}
+                        label="Checklist answers by week"
+                        scroll={false}
+                        testId="checklist-week-table"
+                    />
                 </ChartTable>
             </div>
         </Panel>
     )
 }
 
-/** The chart by week's numbers: each week, the items given, and each answer's count. */
-function WeekTable({ weeks }: { weeks: WeekAnswers[] }) {
-    return (
-        <table className="border-collapse text-sm" data-testid="checklist-week-table">
-            <thead className="sticky top-0 bg-surface">
-                <tr className="text-right">
-                    <th className="panel-label pb-1.5 text-left font-normal">week</th>
-                    <th className={HEAD}>given</th>
-                    {ANSWER_COLUMNS.map((c) => (
-                        <th key={c.key} className={HEAD}>
-                            {c.label}
-                        </th>
-                    ))}
-                </tr>
-            </thead>
-            <tbody className="font-mono text-xs">
-                {weeks.map((w) => (
-                    <tr key={w.week} className="text-right">
-                        <th scope="row" className="py-0.5 text-left font-normal">
-                            {weekLabel(w.week)}
-                        </th>
-                        <td className="readout pl-3">{w.reminded}</td>
-                        {ANSWER_COLUMNS.map((c) => (
-                            <td key={c.key} className={cn('readout pl-3', w[c.key] === 0 && 'text-muted-foreground')}>
-                                {w[c.key]}
-                            </td>
-                        ))}
-                    </tr>
-                ))}
-            </tbody>
-        </table>
-    )
-}
+/** The chart by week's numbers: each week, the items given, and each answer's count, a count of none muted. */
+const WEEK_COLUMNS: ReportColumn<WeekAnswers>[] = [
+    { key: 'week', kind: 'name', label: 'week', cell: (w) => <span className="font-mono">{weekLabel(w.week)}</span> },
+    { key: 'given', kind: 'figure', label: 'given', cell: (w) => w.reminded },
+    ...ANSWER_COLUMNS.map((c): ReportColumn<WeekAnswers> => ({
+        key: c.key,
+        kind: 'figure',
+        label: c.label,
+        cell: (w) => w[c.key],
+        tone: (w) => w[c.key] === 0 && 'text-muted-foreground',
+    })),
+]

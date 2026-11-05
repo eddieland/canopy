@@ -102,6 +102,8 @@ MIB = 1024 * 1024
 RECENTLY_DONE_DAYS = 30
 #: What the summary of a tick that ran no overseer starts with, after a dry run's prefix (DESIGN §39).
 NO_OVERSEER = "no overseer, nothing left to judge"
+#: What a guard's refusal is recorded as, which decides nothing about its ticket (`loop.tools`).
+REFUSED_PREFIX = "refused:"
 #: How many of the runtime's errors a failed overseer's summary names; past it, the first and last, the rest counted.
 MAX_ERRORS_NAMED = 3
 # How a tick ended: the status it closed its row with, or, with no row, `lock_busy` when another tick held the lock and
@@ -255,6 +257,7 @@ def _render(
         *(t.comment_cursor for t in tickets),
         *(c for us in units.values() for u in us for c in (u.review_cursor, u.ci_cursor)),
     ]
+    observed = observations.section(ctx, tick_id, now, tickets, decided=decided)
     block = state.state_block(
         ctx.config,
         ctx.repo_root,
@@ -286,7 +289,7 @@ def _render(
         feedback_planned=_feedback_plans(ctx, tickets, now),
         attention=attention.for_overseer(ctx.conn, decided=decided),
         operator_sent=drafts.sent_by_pr(ctx.conn),
-        observations=observations.section(ctx, tick_id, now, tickets, decided=decided),
+        observations=observed,
         numbered=item_numbers.named(ctx.conn, [c for c in cursors if c is not None]),
     )
     owed = duties.owed(
@@ -305,7 +308,8 @@ def _render(
         running=len(running),
         open_items=len(attention.current(ctx.conn)),
     )
-    return _Rendered(block, owed, _left(ctx.conn, tick_id, owed, reviews), title)
+    left = _left(ctx.conn, tick_id, owed, reviews)
+    return _Rendered(block, owed, left, title, observations.shown_bodies(observed))
 
 
 @dataclass(frozen=True)
@@ -320,6 +324,10 @@ class _Rendered:
     left: Sequence[str]
     #: The overseer's session title.
     title: str
+    #: The review items whose text the block shows, each its ticket's key and its journal number: a live tick that
+    #: closes `ok` marks those of each ticket the overseer decided, so the next block lists them without their text
+    #: (DESIGN §30).
+    shown_bodies: Sequence[tuple[str, int]]
 
 
 def _left(
@@ -524,9 +532,12 @@ def _steps(
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
     # Closing `ok` acknowledges the operator's messages the tick read, so each ticket's conversation says what the tick
     # did about them, in the same transaction: a tick that dies between the two leaves neither (DESIGN §22, Messages).
+    # The review items whose text the block showed are marked so with them (DESIGN §30).
     with db.transaction(ctx.conn):
         if not dry_run:
             acknowledge.note(ctx.conn, tick_id)
+            if overseer:
+                _mark_shown(ctx, tick_id, rendered.shown_bodies)
         return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
 
 
@@ -702,6 +713,23 @@ def _spawn(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
         log.exception("starting the runs after the overseer raised", extra={"error": str(e)})
 
 
+def _mark_shown(ctx: Context, tick_id: int, shown: Iterable[tuple[str, int]]) -> None:
+    """Mark the review items whose text the block showed of each ticket the overseer decided, as tick `tick_id` closes.
+
+    `shown` is each such item, its ticket's key and its journal number. Only a tick that closes `ok` marks: what the
+    overseer kept of a failed tick, an attention item it recorded, is not held (DESIGN §14), so its items are shown
+    again. A ticket whose only decision is a guard's refusal is decided again next tick, with its text. A dry run marks
+    nothing (D036).
+    """
+    decisions = db.decisions_for_tick(ctx.conn, tick_id)
+    decided = {
+        d.ticket_key
+        for d in decisions
+        if d.ticket_key is not None and d.decider is not Decider.HARNESS and not d.action.startswith(REFUSED_PREFIX)
+    }
+    item_numbers.mark_shown(ctx.conn, tick_id, [number for key, number in shown if key in decided])
+
+
 def _record_overseer(ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
     """Record the phases the overseer left each derived subject at, as the tick closes (DESIGN §30)."""
     try:
@@ -751,7 +779,7 @@ def _record_harness_items(ctx: Context, tick_id: int, archive_unpushed: str | No
     # A private ticket's question reaches the operator here: it is on no tracker (DESIGN §22). So does a planner's on a
     # public ticket, since the planner writes nothing to the ticket (DESIGN §25).
     for waiting in [*conversation.awaiting(ctx.conn), *plans.awaiting(ctx.conn)]:
-        _harness_item(ctx, tick_id, waiting.key, "awaiting_reply", attention.awaiting_detail(waiting))
+        _harness_item(ctx, tick_id, waiting.key, attention.AWAITING_REPLY, attention.awaiting_detail(waiting))
     # The tickets runs reported that the journal could not record (§18). Those it recorded the sinks heard of once.
     for item in follow_ups.unrecorded(ctx.conn):
         _harness_item(ctx, tick_id, item.ticket_key, item.reason, item.detail)

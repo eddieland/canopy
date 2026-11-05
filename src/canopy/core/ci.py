@@ -19,6 +19,10 @@ Red is `failure`, `error`, `timed_out`, or `startup_failure`; green is `success`
 PRs canopy observed are here: each check run (`observed_check_runs`, from M36 on), and each run of a commit status
 (`observed_status_runs`), which has no run id, as canopy told it apart from what it saw of the status at its head. A
 status rerun that ended as its last run did, with no read seeing it running, is not told apart, so is not counted.
+
+A check its PR's repository gives a role other than CI in the map (§30), a sign-off, a merge queue's status, a rollup
+job, or one ignored, counts no run here, as it holds no PR in the loop; its PR's repository is that of the ticket's unit
+whose PR it is, so a PR no unit has keeps every check.
 """
 
 from __future__ import annotations
@@ -32,10 +36,11 @@ from typing import TYPE_CHECKING, Literal, cast
 
 from canopy.core import contract, db, records, spend, sql, tracked_prs
 from canopy.core.vocab import CheckConclusion, ResumeReason, RunKind
+from canopy.core.workspace import CheckRole
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Iterable, Mapping, Sequence
+    from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
     from collections.abc import Set as AbstractSet
     from datetime import datetime
 
@@ -52,6 +57,8 @@ TOP_CHECKS = 4
 type Verdict = Literal["green", "red", "neither"]
 #: A PR's spell of red: when it began, and when it ended, None while it lasts; journal times.
 type Spell = tuple[str, str | None]
+#: The roles a repository gives its checks, by the repository's name in the map: `Workspace.check_roles`.
+type CheckRoles = Callable[[str | None], Mapping[str, CheckRole]]
 
 
 @dataclass(frozen=True)
@@ -235,28 +242,36 @@ class Ci:
         return timedelta(seconds=statistics.median(s.total_seconds() for s in spans)) if spans else None
 
 
-def report(conn: sqlite3.Connection, now: datetime, days: int) -> Ci:
+def report(conn: sqlite3.Connection, now: datetime, days: int, roles: CheckRoles) -> Ci:
     """What CI did over the last `days` local days, today's so far included, on the PRs canopy observed.
+
+    Args:
+        conn: The journal.
+        now: The clock.
+        days: How many local days the window holds.
+        roles: The roles each repository gives its checks, by the repository's name; a check given one other than CI
+            counts no run.
 
     Returns:
         The report; a window with no check run in it has no heads, checks, or series, and each day at nothing.
     """
-    return between(conn, *spend.window(now, days))
+    return between(conn, *spend.window(now, days), roles)
 
 
-def between(conn: sqlite3.Connection, start: datetime, end: datetime) -> Ci:
+def between(conn: sqlite3.Connection, start: datetime, end: datetime, roles: CheckRoles) -> Ci:
     """What CI did from one local midnight, `start`, to another, `end`, on the PRs canopy observed.
 
     Returns:
         The report, as `report` gives it for any such window: a calendar month's, or the one before a page's.
     """
-    return windows(conn, [(start, end)])[0]
+    return windows(conn, [(start, end)], roles)[0]
 
 
-def windows(conn: sqlite3.Connection, spans: Sequence[tuple[datetime, datetime]]) -> list[Ci]:
+def windows(conn: sqlite3.Connection, spans: Sequence[tuple[datetime, datetime]], roles: CheckRoles) -> list[Ci]:
     """What CI did in each of `spans`, each from one local midnight to another, read once for them all.
 
     Each is the report `between` gives for it; reading them together reads the journal once, not once a window.
+    `roles` is as `report` takes it.
 
     Returns:
         Each window's report, in the order of `spans`.
@@ -280,15 +295,15 @@ def windows(conn: sqlite3.Connection, spans: Sequence[tuple[datetime, datetime]]
             {r.id: _prs_of(r, found) for r in fixes if since <= r.started_at < until}
             for (since, until), found in zip(bounds, tracked, strict=True)
         ]
-        runs = _CheckRuns.of(
-            _check_runs(
-                conn,
-                first,
-                last,
-                prs={url for found in fix_prs for urls in found.values() for url in urls},
-                heads={h for k in kicks for h in (k.from_head, k.to_head)},
-            ),
+        found = _check_runs(
+            conn,
+            first,
+            last,
+            prs={url for found in fix_prs for urls in found.values() for url in urls},
+            heads={h for k in kicks for h in (k.from_head, k.to_head)},
         )
+        skip = not_ci(conn, roles, {r.pr_url for r in found})
+        runs = _CheckRuns.of([r for r in found if r.name not in skip.get(r.pr_url, ())])
     return [
         _window(
             since,
@@ -303,6 +318,24 @@ def windows(conn: sqlite3.Connection, spans: Sequence[tuple[datetime, datetime]]
         )
         for i, (since, until) in enumerate(bounds)
     ]
+
+
+def not_ci(conn: sqlite3.Connection, roles: CheckRoles, prs: Iterable[str]) -> dict[str, frozenset[str]]:
+    """Return the checks each of `prs`'s repository gives a role other than CI, by PR (DESIGN §30).
+
+    None of them counts here, is a feedback plan's item (`feedback_items.raised`), or is part of what a plan saw
+    (`take`, `changes`): a check that waits on a person, gates the merge, fans the others in, or is ignored makes no
+    plan stale when it moves. A PR's repository is that of the ticket's unit whose PR it is.
+
+    Returns:
+        Their names, by PR URL; none for a PR no unit has, or whose repository the map does not have.
+    """
+    rows = sql.execute(conn, sql.select("pr_url, repo").from_("ticket_units").where_in("pr_url", tuple(prs)))
+    found: dict[str, frozenset[str]] = {}
+    for row in rows:
+        repo = None if row[1] is None else str(row[1])
+        found[str(row[0])] = frozenset(name for name, role in roles(repo).items() if role is not CheckRole.CI)
+    return found
 
 
 def _window(

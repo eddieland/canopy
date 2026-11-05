@@ -1,11 +1,15 @@
 """What CI did on the PRs canopy observed (DESIGN §11): the CI page's report, over a journal of check runs by hand."""
 
 import sqlite3
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from canopy.core import ci, db, records, spend
 from canopy.core.vocab import CheckConclusion, ResumeReason, RunKind, RunStatus
+from canopy.core.workspace import CheckRole
 from tests.canopy.helpers import check_ran, earlier, in_zone, kicked, worker_ran
 from tests.conftest import Journals
 
@@ -25,6 +29,11 @@ S, F, E, T, X, C, K, N = (
     CheckConclusion.SKIPPED,
     CheckConclusion.NEUTRAL,
 )
+
+
+def no_roles(repo: str | None) -> Mapping[str, CheckRole]:
+    """A map that gives no check a role, so every check is CI."""
+    return {}
 
 
 def journal_of_checks(conn: sqlite3.Connection) -> None:
@@ -54,7 +63,7 @@ def test_checks_are_the_worst_first_with_how_often_a_new_head_fixed_them(tmp_pat
     """Each check counts its red and green runs, and how often the next run on a new head of its PR passed."""
     conn = journals.open(tmp_path / "canopy.db")
     journal_of_checks(conn)
-    found = ci.report(conn, NOW, 7)
+    found = ci.report(conn, NOW, 7, no_roles)
     assert [(c.name, c.runs, c.red, c.green, c.followed, c.passed) for c in found.checks] == [
         # The most red runs first, then the highest share of red among red and green.
         ("e2e", 2, 2, 0, 1, 0),
@@ -73,7 +82,7 @@ def test_a_head_is_green_first_time_when_no_checks_first_run_was_red(tmp_path: P
     """A head counts by the first run of each check on it, and a head of nothing but neither counts not at all."""
     conn = journals.open(tmp_path / "canopy.db")
     journal_of_checks(conn)
-    found = ci.report(conn, NOW, 7)
+    found = ci.report(conn, NOW, 7, no_roles)
     # a1 red first (its rerun passed), a2 green, b1 and b2 red, b3 neither; a0 before the window.
     assert (found.heads, found.green_first) == (4, 1)
 
@@ -93,8 +102,33 @@ def test_a_rerun_on_a_head_its_check_was_red_on_is_counted_with_whether_it_passe
     # Red before the window, rerun green in it: the rerun counts, the red run before it does not.
     check_ran(conn, PR_2, "b1", "unit", F, earlier(NOW, 9))
     check_ran(conn, PR_2, "b1", "unit", S, earlier(NOW, 1))
-    found = ci.report(conn, NOW, 7)
+    found = ci.report(conn, NOW, 7, no_roles)
     assert [(c.name, c.runs, c.reruns, c.reruns_green) for c in found.checks] == [("e2e", 4, 2, 1), ("unit", 3, 1, 1)]
+
+
+@pytest.mark.parametrize("role", [CheckRole.HUMAN, CheckRole.MERGE, CheckRole.IGNORE, CheckRole.ROLLUP])
+def test_a_check_its_repository_says_is_not_ci_counts_no_run(
+    role: CheckRole,
+    tmp_path: Path,
+    journals: Journals,
+) -> None:
+    """PR 2's `deploy`, given a role in its unit's repository's map, is in no count; PR 1, with no unit, keeps its."""
+    conn = journals.open(tmp_path / "canopy.db")
+    journal_of_checks(conn)
+    db.touch_ticket(conn, "PROJ-2", "/ws")
+    records.insert(records.TicketUnit, ticket_key="PROJ-2", repo="web", pr_url=PR_2).run(conn)
+    roles = {"web": {"deploy": role, "unit": CheckRole.IGNORE}}
+    found = ci.report(conn, NOW, 7, lambda repo: roles.get(repo or "", {}))
+    assert [(c.name, c.red) for c in found.checks] == [
+        ("e2e", 2),
+        ("docs", 1),
+        ("build", 1),
+        ("unit", 1),
+        ("lint", 0),
+        ("preview", 0),
+    ]
+    assert found.series == ["e2e", "build", "docs", "unit"]
+    assert [list(d.red) for d in found.per_day[-3:]] == [[0, 0, 0, 0], [1, 1, 1, 0], [1, 0, 0, 0]]
 
 
 def test_a_commit_status_counts_as_its_runs_and_one_still_running_not_at_all(
@@ -118,7 +152,7 @@ def test_a_commit_status_counts_as_its_runs_and_one_still_running_not_at_all(
             conclusion=conclusion,
             observed_at=at,
         ).run(conn)
-    found = ci.report(conn, NOW, 7)
+    found = ci.report(conn, NOW, 7, no_roles)
     assert [(c.name, c.runs, c.red, c.green, c.reruns, c.reruns_green) for c in found.checks] == [
         ("jenkins", 3, 2, 1, 1, 1),
         ("lint", 1, 0, 1, 0, 0),
@@ -130,7 +164,7 @@ def test_each_day_counts_the_heads_first_checked_on_it(tmp_path: Path, journals:
     """A head counts on the day its first check run was observed, green first time or not, as the window counts it."""
     conn = journals.open(tmp_path / "canopy.db")
     journal_of_checks(conn)
-    found = ci.report(conn, NOW, 7)
+    found = ci.report(conn, NOW, 7, no_roles)
     assert [(d.day, d.heads, d.green_first) for d in found.per_day] == [
         ("2026-10-02", 0, 0),
         ("2026-10-03", 0, 0),
@@ -173,7 +207,7 @@ def test_a_prs_time_to_green_runs_from_its_first_red_run_to_its_first_green_head
         prs={"web": PR_3},
         reasons=(ResumeReason.CI,),
     )
-    found = ci.report(conn, NOW, 7)
+    found = ci.report(conn, NOW, 7, no_roles)
     assert [(p.url, p.ticket, p.red_at, p.green_at, p.to_green) for p in found.pull_requests] == [
         (PR_3, "PROJ-3", earlier(NOW, 1), None, None),
         (PR_1, "PROJ-1", earlier(NOW, 3), earlier(NOW, 1, -2), timedelta(days=2, hours=2)),
@@ -195,7 +229,7 @@ def test_a_pr_red_again_after_green_is_in_a_new_spell_of_red(tmp_path: Path, jou
     second = worker_ran(conn, RunKind.RESUME, earlier(NOW, 2, -1), prs={"web": PR_1}, reasons=(ResumeReason.CI,))
     # A rerun at the old green head is no new spell: it is behind the head that ended the first.
     check_ran(conn, PR_1, "h1", "e2e", F, earlier(NOW, 1))
-    found = ci.report(conn, NOW, 7)
+    found = ci.report(conn, NOW, 7, no_roles)
     assert [(p.red_at, p.green_at) for p in found.pull_requests] == [(earlier(NOW, 2), None)]
     assert found.median_to_green is None
     assert {f.run_id: f.to_green for f in found.fixes} == {first: timedelta(days=1), second: None}
@@ -208,7 +242,7 @@ def test_a_red_head_rerun_green_is_its_prs_green_head(tmp_path: Path, journals: 
     check_ran(conn, PR_1, "h1", "e2e", S, earlier(NOW, 1, -3))
     check_ran(conn, PR_2, "b1", "e2e", F, earlier(NOW, 2))
     check_ran(conn, PR_2, "b2", "e2e", S, earlier(NOW, 2, -5))
-    found = ci.report(conn, NOW, 7)
+    found = ci.report(conn, NOW, 7, no_roles)
     assert [(p.url, p.to_green) for p in found.pull_requests] == [
         (PR_2, timedelta(hours=5)),
         (PR_1, timedelta(hours=3)),
@@ -220,7 +254,7 @@ def test_red_runs_by_day_name_the_top_checks_and_sum_the_rest(tmp_path: Path, jo
     """The chart's series are the most often red checks, then the rest as one; each day counts its red runs."""
     conn = journals.open(tmp_path / "canopy.db")
     journal_of_checks(conn)
-    found = ci.report(conn, NOW, 7)
+    found = ci.report(conn, NOW, 7, no_roles)
     assert found.series == ["e2e", "build", "deploy", "docs", None]
     assert [(d.day, list(d.red)) for d in found.per_day] == [
         ("2026-10-02", [0, 0, 0, 0, 0]),
@@ -238,7 +272,7 @@ def test_a_check_is_red_on_the_local_day_it_was_observed(tmp_path: Path, journal
     conn = journals.open(tmp_path / "canopy.db")
     check_ran(conn, PR_1, "a1", "unit", F, "2026-10-08T02:00:00.000Z")
     with in_zone("America/New_York"):
-        found = ci.report(conn, NOW, 2)
+        found = ci.report(conn, NOW, 2, no_roles)
     assert [(d.day, list(d.red)) for d in found.per_day] == [("2026-10-07", [1]), ("2026-10-08", [0])]
 
 
@@ -267,7 +301,7 @@ def test_a_fix_says_whether_each_check_it_found_red_passed_on_the_next_head(tmp_
     # A `resume` for review alone fixes no CI, and one before the window is outside it.
     worker_ran(conn, RunKind.RESUME, earlier(NOW, 1, 1), prs={"web": PR_1}, reasons=(ResumeReason.REVIEW,))
     worker_ran(conn, RunKind.RESUME, earlier(NOW, 9), prs={"web": PR_1}, reasons=(ResumeReason.CI,))
-    found = ci.report(conn, NOW, 7)
+    found = ci.report(conn, NOW, 7, no_roles)
     assert [(f.run_id, f.kind, f.status, f.cost_usd) for f in found.fixes] == [
         (old, RunKind.FIX_CI, RunStatus.FAILED, 0.25),
         (fix, RunKind.RESUME, RunStatus.DONE, 0.5),
@@ -295,7 +329,7 @@ def test_a_kick_says_whether_its_check_came_back_red(tmp_path: Path, journals: J
     check_ran(conn, PR_1, "w1", "unit", F, earlier(NOW, 1))
     last = worker_ran(conn, RunKind.RESUME, earlier(NOW, 1, -1), prs={"web": PR_1}, reasons=(ResumeReason.CI,))
     kicked(conn, last, "w1", "w2", earlier(NOW, 1, -2))
-    found = ci.report(conn, NOW, 7)
+    found = ci.report(conn, NOW, 7, no_roles)
     assert [(k.run_id, k.pr_url, k.kick, list(k.red_before), list(k.still_red), k.checked) for k in found.kicks] == [
         (last, PR_1, 1, ["unit"], [], False),
         (again, PR_1, 2, ["e2e"], ["e2e"], True),
@@ -306,7 +340,7 @@ def test_a_kick_says_whether_its_check_came_back_red(tmp_path: Path, journals: J
 def test_an_empty_window_lists_each_day_at_nothing(tmp_path: Path, journals: Journals) -> None:
     """A window with no check run has no heads, checks, or series, and each of its days."""
     conn = journals.open(tmp_path / "canopy.db")
-    found = ci.report(conn, NOW, 3)
+    found = ci.report(conn, NOW, 3, no_roles)
     assert (found.heads, found.green_first, list(found.checks), list(found.series)) == (0, 0, [], [])
     assert [(d.day, list(d.red)) for d in found.per_day] == [
         ("2026-10-06", []),
@@ -330,8 +364,8 @@ def test_windows_read_together_are_each_as_read_alone(tmp_path: Path, journals: 
     worker_ran(conn, RunKind.FIX_CI, earlier(NOW, 1), prs={"web": PR_3})
     check_ran(conn, PR_3, "c3", "unit", S, earlier(NOW, 0, 3))
     # Each of the last ten days, the fix-ci's among them, on which PR 3 had no check run but the fix's; then weeks.
-    found = ci.report(conn, NOW, 10)
+    found = ci.report(conn, NOW, 10, no_roles)
     spans = [(db.parse_time(d.start), db.parse_time(d.start) + timedelta(days=1)) for d in found.per_day]
     spans += [spend.window(NOW, n) for n in (10, 7, 3)]
-    assert ci.windows(conn, spans) == [ci.between(conn, *span) for span in spans]
-    assert ci.windows(conn, []) == []
+    assert ci.windows(conn, spans, no_roles) == [ci.between(conn, *span, no_roles) for span in spans]
+    assert ci.windows(conn, [], no_roles) == []

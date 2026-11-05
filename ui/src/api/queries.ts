@@ -318,7 +318,7 @@ export const loopQuery = queryOptions({
 })
 
 /**
- * The limits and trust settings the settings page edits, as the config files say now, and the user file's hash a save
+ * The loop settings the settings page edits, as the config files say now, and the user file's hash a save
  * carries. Not on the stream: read when the page opens, and again after a save.
  */
 export const configQuery = queryOptions({

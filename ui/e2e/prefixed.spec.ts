@@ -229,6 +229,18 @@ test('the settings page saves a limit and drops a trusted reviewer, but raises n
     await expect(form.getByTestId('trust.trusted_reviewers-canopy:review')).toBeChecked()
     await expect(form.getByTestId('trust.rebase')).toBeDisabled()
     await expect(form.getByTestId('trust.commit_trailer')).toBeDisabled()
+
+    // A retention shortens only to its floor, but keeping it forever is always allowed.
+    const runFiles = form.getByTestId('retention.run_files_days')
+    await runFiles.fill('3')
+    await form.getByTestId('config-save').click()
+    await expect(form.getByRole('alert')).toContainText(
+        'refused (past_bound): retention.run_files_days may be at least 7, or 0 to keep forever',
+    )
+    await runFiles.fill('0')
+    await form.getByTestId('config-save').click()
+    await expect(form.getByRole('status')).toContainText("Saved retention.run_files_days to this workspace's config.")
+    await expect(runFiles).toHaveValue('0')
 })
 
 test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ page }) => {

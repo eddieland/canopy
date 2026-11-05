@@ -8,7 +8,7 @@ import { Age } from '@/components/age'
 import { FilterField } from '@/components/filter-field'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, RunDot } from '@/components/status'
 import { TicketBoard } from '@/components/ticket-board'
@@ -122,11 +122,11 @@ function TicketsPage() {
                 ) : view === 'board' ? (
                     <TicketBoard tickets={ordered('tickets', order, shown)} />
                 ) : (
-                    <ul className="divide-y" data-testid="tickets">
+                    <RowList kind="ticket" className="divide-y" data-testid="tickets">
                         {ordered('tickets', order, shown).map((ticket) => (
                             <Row key={ticket.key} ticket={ticket} />
                         ))}
-                    </ul>
+                    </RowList>
                 )}
             </Panel>
         </>

@@ -113,13 +113,20 @@ setting another replaces it. While it's in force, a banner above every page show
 A run already going keeps the prompt it started with, so a notice reaches only the runs after it. The CLI can set one
 for up to a week, for outages with ambitions.
 
-## Limits and trust
+## Loop settings
 
 **Open** takes you to a page of its own for the numbers you change most: how many workers, chores, reviews, and tasks
-run at once, each pool's slots, how many tries a ticket, a plan, or a review's draft gets, how much you may attach to
-one, how often the loop ticks, how long a run may take before canopy stops it, and the monthly budget the
-[spend page](reports#the-spend-page) tracks, with any alerts short of or past it. You can add and drop alerts freely
-here: the 100% one isn't in the list, so dropping everything still leaves it.
+run at once, each pool's slots, how many tries a ticket, a plan, or a review's draft gets, how many tickets an epic
+holds, how much you may attach to one, how often the loop ticks and asks the tracker and the connectors what's new, how
+long feedback waits on a red build or a pending one and a PR's head settles before its review, how long a run or a
+slot's setup may take before canopy stops it, and the monthly budget the [spend page](reports#the-spend-page) tracks,
+with any alerts short of or past it. You can add and drop alerts freely here: the 100% one isn't in the list, so
+dropping everything still leaves it.
+
+**Retention** says how many days canopy keeps a run's files, a tick's, the journal's old rows, and a retired note's
+text before a tick removes them. Lengthen them as you like, or set 0 to keep that kind forever; shortening stops at a
+floor (a week of run files, a month of journal), since the transcript a shorter one would delete is the one that shows
+what a run did. If you want last Tuesday gone, the file still takes 1.
 
 It also holds the settings that only get stricter from here. **Plans** says which work waits on a plan you approve,
 and how readily a planner may wave its own plan through: you can make tickets wait, or take the planner's say away,
@@ -130,9 +137,10 @@ changed the secret, so adding one stays an edit to the file. A choice that would
 button to find out the hard way.
 
 Each row says where its value comes from and how far the page will take it. Counts stop at a ceiling (32 workers, 10
-attempts, a $10,000 budget) and paces at a floor (a tick every 2 minutes); the file can still set anything, so the page
-is for the changes you actually make, not for setting a record. Repositories get a count of their own only when you
-pick one, so a workspace of fifty repositories shows the two that differ.
+attempts, a $10,000 budget) and paces and retentions at a floor (a tick every 2 minutes, a week of run files); the
+file can still set anything, so the page is for the changes you actually make, not for setting a record.
+Repositories get a count of their own only when you pick one, so a workspace of fifty repositories shows the two that
+differ.
 
 **Save** writes `.canopy/config.toml`, this workspace's own file, editing it in place so your comments and layout stay,
 then reloads the loop as **Reload** below does. It never touches `canopy-workspace.toml` or

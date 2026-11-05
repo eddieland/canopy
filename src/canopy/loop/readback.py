@@ -142,7 +142,8 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
         lines.append(f"  harness: {said}")
     session = f"session {run['session_id']}" if run["session_id"] else "no session reported"
     lines.extend([f"  {session}{spent(run)}", f"  log {run['log_path']}"])
-    answered = checklist_lines(checklist_answers.of_run(ctx.conn, run_id))
+    pushed = checklist_answers.pushes_of(ctx.conn, run_id)
+    answered = checklist_lines(checklist_answers.of_run(ctx.conn, run_id), pushed, log_path=str(run["log_path"]))
     if answered:
         lines.extend(["\nChecklist:", *(f"  {line}" for line in answered)])
     # Its agent's progress, while it runs and its last once it ends (DESIGN §41).
@@ -166,19 +167,28 @@ def read_run(ctx: Context, request: ShowRun, *, card: bool = False) -> str:
     return "\n".join(lines)
 
 
-def checklist_lines(answers: Sequence[records.ChecklistAnswer]) -> list[str]:
+def checklist_lines(
+    answers: Sequence[records.ChecklistAnswer],
+    pushes: Sequence[records.ChecklistPush] = (),
+    *,
+    log_path: str = "",
+) -> list[str]:
     """What a run answered of its repositories' checklists (DESIGN §42), an item a line; none for a run given no list.
 
     `canopy show run:ID` prints them under a heading, and `canopy show task:N` under each of its runs. A `held` item's
-    reason is the worker's text, printed under it, indented, and made printable as a message is.
+    reason is the worker's text, printed under it, indented, and made printable as a message is. Then each push the run
+    made after being shown a list, with where its diff is kept beside the run's log, `log_path`.
 
     Returns:
-        The lines, unindented, each item's repository, id, and answer.
+        The lines, unindented, each item's repository, id, and answer, then each push's repository and commits.
     """
     lines: list[str] = []
     for a in answers:
         lines.append(f"{a.repo}  {a.item}  {a.answer}")
         lines.extend(f"  {line}" for line in conversation.printable(a.reason or "").splitlines())
+    for p in pushes:
+        diff = checklist_answers.diff_path(log_path, p.repo, p.shown_sha)
+        lines.append(f"{p.repo}  pushed {p.shown_sha[:12]}..{p.pushed_sha[:12]} after the list, diff {diff}")
     return lines
 
 

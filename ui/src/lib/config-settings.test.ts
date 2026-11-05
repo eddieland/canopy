@@ -19,6 +19,7 @@ const WORKERS: ConfigKey = {
     kind: 'limit',
     bound: 8,
     looser: 'higher',
+    forever_at_zero: false,
     choices: [],
 }
 const SLOTS: ConfigKey = {
@@ -28,10 +29,13 @@ const SLOTS: ConfigKey = {
     kind: 'limit',
     bound: 8,
     looser: 'higher',
+    forever_at_zero: false,
     choices: [],
 }
 const PER_REPO: ConfigKey = { ...WORKERS, name: 'capacity.slots_per_repo', value: null }
 const PACE: ConfigKey = { ...WORKERS, name: 'loop.interval_minutes', value: 15, bound: 5, looser: 'lower' }
+const QUERY: ConfigKey = { ...PACE, name: 'tracker.query_every_minutes', value: 0, bound: 0 }
+const RUN_FILES: ConfigKey = { ...PACE, name: 'retention.run_files_days', value: 30, bound: 7, forever_at_zero: true }
 const REVIEWERS: ConfigKey = {
     name: 'trust.trusted_reviewers',
     value: ['alice', 'lint-bot'],
@@ -39,6 +43,7 @@ const REVIEWERS: ConfigKey = {
     kind: 'stricter',
     bound: null,
     looser: null,
+    forever_at_zero: false,
     choices: [],
 }
 const REBASE: ConfigKey = { ...REVIEWERS, name: 'trust.rebase', value: true, source: 'default' }
@@ -124,6 +129,8 @@ describe('config settings', () => {
         expect(sourceText(REBASE)).toBe('default')
         expect(boundText(WORKERS)).toBe('at most 8 from here')
         expect(boundText(PACE)).toBe('at least 5 from here')
+        expect(boundText(QUERY)).toBe('')
+        expect(boundText(RUN_FILES)).toBe('at least 7, or 0 for forever, from here')
         expect(boundText(REVIEWERS)).toBe('stricter only')
         expect(boundText(KICKS)).toBe('only fewer from here')
     })
@@ -173,7 +180,7 @@ describe('config groups', () => {
     it('name every key the server edits in some panel', () => {
         const named = CONFIG_GROUPS.flatMap((g) => g.keys.map((k) => k.name))
         expect(new Set(named).size).toBe(named.length)
-        expect(named).toHaveLength(38)
+        expect(named).toHaveLength(49)
     })
 
     it('count the unsaved changes', () => {

@@ -849,6 +849,11 @@ def ticket_sets(*keys: str, **fields: object) -> Called:
     return calls("canopy_ticket-set", tickets=[{"key": key, **fields} for key in keys])
 
 
+def reads_items(key: str, *numbers: int, repo: str = "repo") -> Called:
+    """The overseer's call for the text of `numbers`, review items of `key`'s unit in `repo` (`canopy_review-items`)."""
+    return calls("canopy_review-items", key=key, repo=repo, numbers=list(numbers))
+
+
 def chore_runs(name: str, context: str | None = None) -> Called:
     """The overseer starts a run of chore `name`, with `context` for it if given."""
     return calls("canopy_chore-run", name=name, **({"context": context} if context is not None else {}))
@@ -1057,6 +1062,13 @@ def comment(n: int, thread: str = "PRRT_1", author: str = "alice", body: str = "
 def github_has(state: Path, *reviews: dict[str, Any], **more: object) -> None:
     """Make the fake GitHub hold `DRAFTS_PR` with `reviews`, and the other state keys given."""
     state.write_text(json.dumps({"prs": {DRAFTS_PR: {"reviews": list(reviews)}}, **more}))
+
+
+def review_comment(ident: int, author: str, body: str) -> dict[str, object]:
+    """A person's review comment on a thread of its own, as the fake GitHub holds it."""
+    where = {"id": f"PRRT_{ident}", "path": "src/app.py", "line": 3, "side": "right"}
+    return {"item": "comment", "id": ident, "author": author, "time": "2026-10-18T11:00:00Z", "body": body,
+            "thread": where}  # fmt: skip
 
 
 def thread(n: int, did: str = "changed", text: str = "Renamed.") -> dict[str, object]:

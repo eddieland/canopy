@@ -95,7 +95,11 @@ Controls:
   not in code from its observed labels and state, a non-candidate by key and why with none of its text, and a
   candidate's comments and its PRs' review items each marked in code by who wrote them (an authorized replier, a trusted
   reviewer, a worker). By prompt, the overseer decides from them alone, and a subject no source can read gets its
-  `wait`. The text stays data, cut and marked. The `dispatch` tool checks the overseer's claims against them in code
+  `wait`. The text stays data, cut and marked. A review item's text is shown once, and not while the ticket can only
+  wait (DESIGN §30); one tool of canopy's, `canopy_review-items`, reads the text of a unit's observed review items
+  again, of a candidate the block listed to the overseer this tick alone, cut and marked as the block shows them, and
+  records nothing; it refuses a ticket the harness decided, one the block lists no text of, and a key the journal
+  lacks. The `dispatch` tool checks the overseer's claims against them in code
   (DESIGN §7), before its other guards: the label must be one observed on the ticket, a `resume` for `reply` must cover
   a new comment by an authorized replier that is not a worker's or a new operator message, a `resume` for `review` must
   cover a trusted reviewer's item, or anyone else's only with an operator message after it (`unauthorized`), and each
@@ -613,7 +617,11 @@ Controls now:
 - canopy's git hooks, from the same snapshot, run in every worker's git (T5). Their `pre-push` holds a worker's first
   push of a stretch for its repository's checklist (DESIGN §42): it reads one more file, the slot's list in the run's
   answers directory, which the run cannot write, and writes one marker, the run's id and the time, in the slot's own
-  git directory, which a sandboxed run may write and nothing on the host reads. The push it holds is only delayed: the
+  git directory, which a sandboxed run may write and nothing on the host reads. Beside it, it notes the commit each
+  time it shows the list and each push it lets through after a hold, which the harness reads as the run ends, to keep
+  the diff of what the run changed after the list: untrusted, bounded, read through no link, a line not the run's or
+  naming no commit skipped, and each commit diffed by the harness's git with no driver or textconv, so a forged note
+  can only misrecord that diff, never run anything or reach past the slot. The push it holds is only delayed: the
   next of the same run goes through, the repository's own `pre-push` with it, and none is held in the run's last
   stretch (§33). What it cannot read or write lets the push through. It is a reminder, not a guard: `--no-verify`
   skips it, as it skips the repository's own hooks.
@@ -650,7 +658,7 @@ Controls now:
   run whose repositories disagree. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
   files: not `~/.ssh`, other repositories, `~/.config/canopy`, the workspace's `.canopy/`, or the operator's OpenCode
-  data. It writes only its worktrees, its slot's own HEAD, index, reflog, and checklist marker, a per-run object
+  data. It writes only its worktrees, its slot's own HEAD, index, reflog, and checklist marker and notes, a per-run object
   directory and temp directory, and its role's own cache and data directories: no ref another slot shares, no hook,
   git config, `.git` link, or `commondir` that git on the host later reads, and none of the operator's caches or
   OpenCode data, which the host's OpenCode, the overseer's included, acts on. Its OpenCode starts with a copy of the
@@ -1149,25 +1157,29 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   refuses it.
 - Its config writes (DESIGN §12, §22, D128) are an allowlist in code, by key name, never a section's wildcard, so a key
   added later is not writable until it is named. Limits may be raised or lowered, but not past a bound in code (a
-  count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt
-  and follow-up limits, the attachment limits under their own ceilings, and the CI cooldown and feedback quiet time
-  in `policy`, the paces and free-disk floor in `loop`, the worker's, reviewer's, and overseer's run timeouts in
-  `runtime`, and `spend.monthly_budget_usd`, which spends nothing but would silence the sink that hears the month
-  reached it. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100% alert. Trust
+  count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt,
+  follow-up, and epic limits, the attachment limits under their own ceilings, and the CI cooldown, feedback quiet time,
+  and feedback's wait on pending checks in `policy`, the paces and free-disk floor in `loop`, the tracker query's
+  spacing, the connectors' poll and stale age, a review's settle time, the worker's, reviewer's, overseer's, and
+  setup's timeouts in `runtime`, and `spend.monthly_budget_usd`, which spends nothing but would silence the sink that
+  hears the month reached it. The day counts in `retention` may be lengthened, set to 0 (forever), or shortened to a
+  floor, never past it: a shorter one removes the transcripts that show what a run did, and a removal outlives a new
+  secret. `spend.budget_alerts` is set whole, to any list the loader takes: none silences the 100% alert. Trust
   settings move only toward stricter: `policy.stacking` to `"never"`, `policy.plan` and `policy.feedback_plan` to
   `"approve"`, `policy.planner_may_approve` toward `"off"`, an entry removed from `trust.authorized_repliers` or
   `trust.trusted_reviewers` (never added), `trust.review_replies` to `"approve"`, `trust.rebase` to false,
   `trust.max_flaky_kicks` lowered, and `trust.commit_trailer` to true. Nothing that runs a command, chooses a prompt,
-  is read as words, or moves the listener: no other `runtime.*`, no `notify.*`, `chores`, `paths.*`, `review.*`,
-  `serve.*`, or `tracker.*`, and no comment mark or trailer name. A config write outlives the
-  secret, which is why trust only tightens: a replier added through a stolen session would go on steering workers after
-  a new secret ended it. It writes the workspace's private file alone (M49), never the workspace file (T7) nor the user
-  file, which serves every workspace: a key from the user file is written to the private file, where it shadows the user
-  file's for this workspace alone. It keeps the file as it was as `config.toml.bak`; refuses a private file that is a
-  symlink or not the operator's (D053's check), one tomlkit would not write back byte for byte, and one that changed
-  since the page read it; validates the result as any `canopy` command would load it; and refuses inside a tick or run
-  (`inside_run`). Each change is logged with its old and new values. A running run keeps the prompt and permissions it
-  started with, so a stricter setting reaches only runs started after it.
+  is read as words, or moves the listener: no other `runtime.*`, `review.*`, `tracker.*`, `connect.*`, or
+  `retention.*`, no `notify.*`, `chores`, `paths.*`, `memory.*`, or `serve.*`, and no comment mark or trailer name.
+  A config write outlives the secret, which is why trust only tightens: a replier added through a stolen session would
+  go on steering workers after a new secret ended it. It writes the workspace's private file alone (M49), never the
+  workspace file (T7) nor the user file, which serves every workspace: a key from the user file is written to the
+  private file, where it shadows the user file's for this workspace alone. It keeps the file as it was as
+  `config.toml.bak`; refuses a private file that is a symlink or not the operator's (D053's check), one tomlkit would
+  not write back byte for byte, and one that changed since the page read it; validates the result as any `canopy`
+  command would load it; and refuses inside a tick or run (`inside_run`). Each change is logged with its old and new
+  values. A running run keeps the prompt and permissions it started with, so a stricter setting reaches only runs
+  started after it.
 
 The mock server is not such a listener: it serves a journal seeded from fixtures, on loopback for development, or
 under public host names as the web UI's demo on a host such as Vercel (D122). It holds nothing of the operator's, so it
@@ -1198,7 +1210,8 @@ on it, so a local service on another port that the operator's browser visits rec
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
 cannot be ended alone before its 30 days: a new secret ends them all. Whoever holds a session can raise the limits up
 to their ceilings for that workspace, and that outlives a new secret until the operator reads the private file or the
-log: the residual is spend, bounded by the ceilings, never authority. Plain HTTP on a private address can be read on
+log: the residual is spend, bounded by the ceilings, never authority. It can also shorten a retention to its floor, so a
+tick removes history older than that, the floor's worth always kept. Plain HTTP on a private address can be read on
 the network (D076), transcripts included: a secret a worker's tool printed into its log is then on the network too.
 Tick now, asked again and again, runs the overseer back to back, past `loop.min_gap_minutes`, as `t` held down at the
 loop's terminal would.

@@ -22,7 +22,7 @@ import type { Wanted } from '@/components/review-diff'
 import { ReviewDraftPanel, ReviewDraftState, ReviewPointCard } from '@/components/review-draft'
 import { ReviewLink, ReviewsCrumb } from '@/components/review-link'
 import { RichText } from '@/components/rich-text'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { ProgressPanel } from '@/components/run-progress'
 import { Chip } from '@/components/status'
 import { TicketField } from '@/components/ticket-field'
@@ -429,7 +429,7 @@ function FindingRows({
     onFollow: (file: number) => void
 }) {
     return (
-        <ol className="divide-y">
+        <RowList kind="review-finding" as="ol" className="divide-y">
             {detail.findings.map((f, i) => (
                 <ListRow key={i} kind="review-finding" className="py-2 text-sm">
                     <span className="flex items-center gap-1.5">
@@ -462,6 +462,6 @@ function FindingRows({
                     </span>
                 </ListRow>
             ))}
-        </ol>
+        </RowList>
     )
 }

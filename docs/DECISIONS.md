@@ -150,8 +150,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - Its verbs are MCP tools canopy serves its run alone (D124, DESIGN §27); it has no shell but the commands the
   operator names in `runtime.allow_bash`, never canopy's own: `dispatch`, `decide`, `attention`, `ticket-set`,
-  `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and `chore-wait`, and no command of the CLI
-  does what one does. They refuse without a running tick, so the journal holds only what the loop did.
+  `review-run`, `review-wait`, `review-end`, `review-revise`, `chore-run`, and `chore-wait`, and its one read,
+  `review-items`; no command of the CLI does what one does. They refuse without a running tick, so the journal holds
+  only what the loop did.
 - Attention items are decisions with action `attention:<reason>`; the list is the latest `ok` tick's, with the
   overseer's items held through a tick that did not give it their subject, and the three it keeps held from the one
   that recorded them until what they name ends them (`decisions.kept`, DESIGN §14, §37). No own table.

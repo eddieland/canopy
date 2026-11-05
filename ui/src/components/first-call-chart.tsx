@@ -1,5 +1,7 @@
 import type { SpendFirstCallWeek } from '@/api/types'
-import { Hinted, Tipped } from '@/components/tip'
+import { ReportTable } from '@/components/report-table'
+import type { ReportColumn } from '@/components/report-table'
+import { Tipped } from '@/components/tip'
 import { HEADROOM } from '@/lib/chart'
 import { snapshotsOf, weekChanges, weekHint, weekLabel } from '@/lib/first-calls'
 import { shareText } from '@/lib/spend'
@@ -60,39 +62,53 @@ export function FirstCallChart({ weeks, fill }: { weeks: SpendFirstCallWeek[]; f
                     ))}
                 </ul>
             )}
-            <table className="w-full border-collapse text-sm" data-testid="first-call-table">
-                <thead>
-                    <tr className="text-right">
-                        <th className="panel-label pb-1.5 text-left font-normal">week of</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
-                            <Hinted hint={FIRST_CALL_HINT}>first call</Hinted>
-                        </th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">
-                            <Hinted hint={FROM_CACHE_HINT}>from cache</Hinted>
-                        </th>
-                    </tr>
-                </thead>
-                <tbody className="font-mono text-xs">
-                    {weeks.toReversed().map((week) => (
-                        <tr key={week.week} className="text-right" data-testid={`first-call-week-${week.week}`}>
-                            <th scope="row" className="readout py-0.5 text-left font-normal whitespace-nowrap">
-                                <Tipped fact={week.week} mono>
-                                    {weekLabel(week.week)}
-                                </Tipped>
-                            </th>
-                            <td className="readout pl-3">{week.runs}</td>
-                            <td className="readout pl-3">{tokenCount(week.first_call)}</td>
-                            <td className={cn('readout pl-3', week.hit_rate === null && 'text-muted-foreground')}>
-                                {shareText(week.hit_rate)}
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
+            {/* A block of its own, so the column's flex never stretches the table past its content. */}
+            <div>
+                <ReportTable
+                    rows={weeks.toReversed()}
+                    columns={WEEK_COLUMNS}
+                    rowKey={(week) => week.week}
+                    label="First calls by week"
+                    scroll={false}
+                    testId="first-call-table"
+                    rowTestId={(week) => `first-call-week-${week.week}`}
+                />
+            </div>
         </div>
     )
 }
+
+// The table's columns: the week, its runs, its median first call, and the share the cache served.
+const WEEK_COLUMNS: ReportColumn<SpendFirstCallWeek>[] = [
+    {
+        key: 'week',
+        kind: 'name',
+        label: 'week of',
+        cell: (week) => (
+            <span className="readout">
+                <Tipped fact={week.week} mono>
+                    {weekLabel(week.week)}
+                </Tipped>
+            </span>
+        ),
+    },
+    { key: 'runs', kind: 'figure', label: 'runs', cell: (week) => week.runs },
+    {
+        key: 'first-call',
+        kind: 'figure',
+        label: 'first call',
+        hint: FIRST_CALL_HINT,
+        cell: (week) => tokenCount(week.first_call),
+    },
+    {
+        key: 'from-cache',
+        kind: 'figure',
+        label: 'from cache',
+        hint: FROM_CACHE_HINT,
+        cell: (week) => shareText(week.hit_rate),
+        tone: (week) => week.hit_rate === null && 'text-muted-foreground',
+    },
+]
 
 /**
  * One week's bar: its hit rate's share of the plot, whose top is the whole and `HEADROOM` over it, so the rate written

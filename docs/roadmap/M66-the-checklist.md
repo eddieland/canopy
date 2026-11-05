@@ -120,4 +120,8 @@ repository's list too, 2026-10-31, as a worker's does: its prompt says a push ma
 answers directory of the run's own, beside its log, which a sandboxed run may read, and canopy's `pre-push` holds its
 push; its answers are kept with the worker runs', a row naming the task run, so `canopy checklist` and Reports'
 Checklist page count them together, and `canopy show task:N` prints them under each run and the task run's page shows
-them in the same panel. Stage 1's live checks are next, then stage 2's two weeks.
+them in the same panel. What a run pushed after being shown a list is kept too, 2026-11-04, at the operator's ask, so
+the diff a list brought about can be read: canopy's `pre-push` notes the commit it showed the list at and the next push
+it let through, in the slot's own git directory, and `_run` or `_task` keeps the diff between them beside the run's
+log, recorded in `checklist_pushes` and named by `canopy show`; no page shows it yet. Stage 1's live checks are next,
+then stage 2's two weeks.

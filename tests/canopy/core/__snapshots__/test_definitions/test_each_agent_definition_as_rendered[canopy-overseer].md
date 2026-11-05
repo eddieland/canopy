@@ -70,6 +70,7 @@ permission:
   "canopy_decide": allow
   "canopy_attention": allow
   "canopy_ticket-set": allow
+  "canopy_review-items": allow
   "canopy_review-run": allow
   "canopy_review-wait": allow
   "canopy_review-end": allow
@@ -109,6 +110,7 @@ is due now, or a clean review's `findings`. The block's times are UTC, to the mi
 | `canopy_decide` | `decisions`, each `key`, `action` (`wait`, `skip`, `done`), `rationale` |
 | `canopy_attention` | an attention item: `key`, `reason`, `detail`, `repo` for a unit's, and `item` (see "The attention list") |
 | `canopy_ticket-set` | `tickets`, each `key`, and any of `phase`, `done`, `cursors`, `title`; with `repo`, a unit's phase and cursors, and `passed` (see "Cursors") |
+| `canopy_review-items` | nothing: it reads, a unit's review items' text again, by `key`, `repo`, `numbers` (see "Observations") |
 | `canopy_chore-run`, `canopy_chore-wait` | see "Chores" |
 | `canopy_review-run`, `canopy_review-wait`, `canopy_review-end`, `canopy_review-revise` | see "Reviews" |
 
@@ -219,7 +221,14 @@ it. A fresh candidate carries:
   checks that wait on a person, which are not CI and never make a unit `ci_running` or `ci_red`; `verdicts`, each
   person's latest approval, change request, or dismissal, whenever it came; and `reviews`, the reviews and review
   comments past the unit's `review` cursor, oldest first, each with its `number` and marked `trusted` and `worker` by
-  canopy. A unit without a PR has `branch`, the ticket's branch seen on origin, or null;
+  canopy. An item's `body` is shown once, to the first overseer that decides the ticket with it listed and ends its
+  tick well; after that it carries `seen: true` instead, and while the ticket or the unit can only wait (`running`,
+  `ci_running`, `needs_human` with no reply, `awaiting_reply`, `attempt_limit`, `plan_review`, or, for the untrusted
+  items alone, untrusted feedback the operator has not answered) it carries `held: true`, since the hold decides and
+  not the feedback. `canopy_review-items` reads the text of a listed candidate's items again, by
+  `number`, as JSON, for a judgment that needs it, such as `needs_author` or a `passed` reason; a `wait` needs none.
+  An item's link is the PR's URL with `#pullrequestreview-<id>` for a review, or `#discussion_r<id>` for a comment. A
+  unit without a PR has `branch`, the ticket's branch seen on origin, or null;
 - `derived`, on the ticket and each fresh unit: the rows of the phase table canopy's own reading found holding. It is a
   reading, not a ruling: where the table, applied to the observations, says otherwise, follow the table.
 

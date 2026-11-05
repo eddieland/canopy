@@ -216,6 +216,14 @@ that. Only the version in force reaches a run or its search. The new version com
 run's report that the lesson was wrong is cleared, since an edit is usually your answer to one. An edit that changes
 nothing is refused `unchanged`; Edit stays disabled until you change something.
 
+A lesson whose words outgrew its key gets a new one from the CLI: `canopy memory edit ID --key NEW-KEY`, alone or with
+`--text`. The rename is a new version too, and `canopy memory history` lists every key the lesson has had, so the old
+one is still on record. A rename that keeps the words keeps everything else as well: review date, pin, a run's report
+that it's wrong, and the reads and citations, since a run that read the old version read these exact words. Add
+`--text` and it's an edit like any other. A key another lesson in force holds is refused `key_taken`; the old key is
+free, so a later lesson can take it, and a search for it finds the renamed lesson's earlier version, which names the
+lesson in force it leads to.
+
 A note's versions work the same way, except that you don't write them: a run that learns more about something reuses
 its note's key, and the newer note supersedes the older. **Show versions** on either, or `canopy memory history ID`,
 lists the whole chain. Forgetting a lesson, or a run dropping a note, ends the chain; one written under the key after

@@ -433,7 +433,7 @@ def test_a_check_the_repository_names_human_is_not_ci(canopy_env: CanopyEnv, obs
     assert derived(canopy_env)[1].phases == (phases.Phase.GREEN_UNREVIEWED,)
 
 
-@pytest.mark.parametrize("role", ["human", "merge", "ignore"])
+@pytest.mark.parametrize("role", ["human", "merge", "ignore", "rollup"])
 @pytest.mark.parametrize(("status", "conclusion"), [("queued", None), ("completed", "failure")])
 def test_a_check_the_repository_gives_a_role_but_ci_is_not_ci(
     canopy_env: CanopyEnv,

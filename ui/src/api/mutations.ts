@@ -552,6 +552,18 @@ export async function reloadConfig(): Promise<ConfigReload> {
 }
 
 /**
+ * After the loop reads its config again, by Reload or a save: read the config's queries again, the agents' models among
+ * them, and the runtime's model list, whose `hidden` is `runtime.hide_models` as the loop reads it, so a menu leaves
+ * out what the file hides now rather than what it hid a minute ago.
+ */
+export async function refreshReloaded(client: QueryClient): Promise<void> {
+    await Promise.all([
+        client.invalidateQueries({ queryKey: keys.config }),
+        client.invalidateQueries({ queryKey: keys.models }),
+    ])
+}
+
+/**
  * Ask the loop for a tick now, as `t` at its terminal does (DESIGN §6): its wait ends at once, paused or not, and a
  * pause stays. Asked for during a tick, it starts when that one ends.
  */
@@ -620,7 +632,7 @@ export function refreshMemory(client: QueryClient): Promise<void> {
 }
 
 /**
- * Writes the changed limits and trust settings to the user config, then asks the loop to read it again. Refused,
+ * Writes the changed loop settings to the user config, then asks the loop to read it again. Refused,
  * writing nothing, past a limit's bound (`past_bound`), for a trust setting loosened (`not_stricter`), or when the
  * file changed since `hash` was read (`stale`).
  */

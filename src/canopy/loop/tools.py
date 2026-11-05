@@ -807,7 +807,7 @@ def attend(ctx: Context, request: Attention) -> Outcome[AttentionRecorded]:
     """
     current = running_tick(ctx)
     key, pr, detail = request.key, request.pr, request.detail
-    unit = _unit(ctx, request.repo)
+    unit = mapped_repo(ctx, request.repo)
     if key is not None:
         _refuse_unknown(ctx, current.id, [key], "attention")
         _refuse_decided(ctx, current.id, key, "attention")
@@ -1015,7 +1015,7 @@ def _check_setting(ctx: Context, current: records.Tick, setting: TicketSet) -> _
     cursors: dict[str, str] = dict(setting.cursors.items())
     unit_cursor = next((name for name in cursors if name in db.UNIT_CURSORS), None)
     unit_phase = phase if phase in vocab.UNIT_PHASES else None
-    unit = _unit(ctx, setting.repo)
+    unit = mapped_repo(ctx, setting.repo)
     if unit is None and (unit_cursor is not None or unit_phase is not None):
         unit = _only_unit(ctx, key, f"a {unit_cursor} cursor" if unit_cursor else f"the {unit_phase} phase")
     _refuse_decided(ctx, current.id, key, "ticket-set")
@@ -1261,7 +1261,7 @@ def _only_unit(ctx: Context, key: str, what: str) -> str:
     raise Refused(f"repo is required: {what} belongs to one unit, and {has}")
 
 
-def _unit(ctx: Context, repo: str | None) -> str | None:
+def mapped_repo(ctx: Context, repo: str | None) -> str | None:
     """Return the repository `repo` names, checked against the map, or None if it names none.
 
     Raises:

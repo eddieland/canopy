@@ -2,8 +2,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Save } from 'lucide-react'
 import { useState } from 'react'
 
-import { saveConfig } from '@/api/mutations'
-import { configQuery, keys } from '@/api/queries'
+import { refreshReloaded, saveConfig } from '@/api/mutations'
+import { configQuery } from '@/api/queries'
 import type { ConfigKey, ConfigSaved, ConfigSettings, ConfigValue } from '@/api/types'
 import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
@@ -29,11 +29,11 @@ const STRICTER_ON: Record<string, boolean> = { 'trust.rebase': false, 'trust.com
 const UNSET: Record<string, string> = { 'spend.monthly_budget_usd': 'none' }
 
 /**
- * The limits and trust settings the loop reads from the user config, edited in place (DESIGN §22, M41): counts and
- * paces within the bounds the server sets, and trust settings only toward stricter. The keys come in panels by what
- * they govern (`CONFIG_GROUPS`), each in words over its name in the file, and one save bar, kept in view at the page's
- * foot, writes every change at once. A save writes the user file alone, keeping its comments, then asks the loop to
- * read it again as Reload does.
+ * The Loop settings form: the keys the loop reads that the web UI may change, edited in place (DESIGN §22, M41):
+ * counts, paces, and retentions within the bounds the server sets, and trust settings only toward stricter. The keys
+ * come in panels by what they govern (`CONFIG_GROUPS`), each in words over its name in the file, and one save bar,
+ * kept in view at the page's foot, writes every change at once. A save writes the workspace's private file alone,
+ * keeping its comments, then asks the loop to read it again as Reload does.
  */
 export function ConfigForm() {
     const client = useQueryClient()
@@ -42,7 +42,7 @@ export function ConfigForm() {
     const mutation = useMutation({
         mutationFn: ({ hash, changes }: { hash: string; changes: Record<string, ConfigValue> }) =>
             saveConfig(hash, changes),
-        onSuccess: () => client.invalidateQueries({ queryKey: keys.config }),
+        onSuccess: () => refreshReloaded(client),
     })
     if (data === undefined) {
         return (
@@ -98,7 +98,7 @@ function Form({
     return (
         <form
             className="flex flex-col gap-6"
-            aria-label="Limits and trust"
+            aria-label="Loop settings"
             data-testid="config-form"
             onSubmit={(event) => {
                 event.preventDefault()

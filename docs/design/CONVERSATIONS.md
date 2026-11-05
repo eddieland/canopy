@@ -125,7 +125,7 @@ and its controls TRUST_MODEL T8's.
   of its own, may skip signing in.
 - It writes only through core's functions, with their guards: the ones the CLI's verbs use, and, for what no command
   would do, one of its own that TRUST_MODEL T8 names, such as the operator's own words on a plan (§25), what they have
-  seen, and the limits and trust settings §12 lists, which Settings' Limits and trust page writes to the workspace's
+  seen, and the loop settings §12 lists, which Settings' Loop settings page writes to the workspace's
   private file and then reloads (`serve.config_edit`, D128). It never takes the tick lock. A page needs no CLI verb for
   what nobody would type. The server, not the page, refuses a forget not typed out.
 - It records each write it lets through, and each sign-in, in the journal, so the operator can see what a holder of

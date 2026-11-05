@@ -1,7 +1,7 @@
 import type { ChecklistAnswer } from '@/api/types'
 import { Panel, PanelHeader } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
-import { ListRow } from '@/components/rows'
+import { ListRow, RowList } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { Clipped } from '@/components/tip'
 import { ANSWER_MEANING, answersByRepo, answersLine } from '@/lib/checklist'
@@ -30,7 +30,7 @@ export function ChecklistPanel({ answers }: { answers: readonly ChecklistAnswer[
             {groups.map((group, i) => (
                 <section key={group.repo} aria-label={`${group.repo}'s checklist`} className={cn(i > 0 && 'border-t')}>
                     {several && <h3 className="px-3 pt-2 panel-label">{group.repo}</h3>}
-                    <ul className="divide-y">
+                    <RowList kind="checklist-answer" className="divide-y">
                         {group.answers.map((a) => (
                             <ListRow key={a.item} kind="checklist-answer" data-testid="checklist-answer">
                                 <Chip
@@ -43,7 +43,7 @@ export function ChecklistPanel({ answers }: { answers: readonly ChecklistAnswer[
                                 {a.reason !== null && <RichText text={a.reason} className={rowLineFrom('item')} />}
                             </ListRow>
                         ))}
-                    </ul>
+                    </RowList>
                 </section>
             ))}
         </Panel>

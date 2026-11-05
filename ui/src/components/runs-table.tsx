@@ -13,7 +13,7 @@ import { None } from '@/components/none'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
-import { ListRow, RowLine } from '@/components/rows'
+import { ListRow, RowLine, RowList } from '@/components/rows'
 import { RunDoing } from '@/components/run-doing'
 import { RunLink } from '@/components/run-link'
 import { RunProgressLine } from '@/components/run-progress'
@@ -27,7 +27,7 @@ import { costText } from '@/lib/cost-total'
 import { isUnread, modelNames, runModelIds, sameModel, UNREAD, unservedReason } from '@/lib/models'
 import { choreRunRef } from '@/lib/refs'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
-import { rowLineFrom } from '@/lib/rows'
+import { ROW_SUBGRID, rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
 import type { SubjectRuns } from '@/lib/run-state'
 import { taskTitle } from '@/lib/tasks'
@@ -46,11 +46,11 @@ const WORKTREES_SHOWN = 3
 export function RunsTable({ runs, ticket = true, ownPr }: { runs: Run[]; ticket?: boolean; ownPr?: string }) {
     const names = modelNames(runModelIds(runs))
     return (
-        <ul className="divide-y" data-testid="runs">
+        <RowList kind={ticket ? 'run' : 'own-run'} className="divide-y" data-testid="runs">
             {runs.map((run) => (
                 <RunRow key={run.id} run={run} ticket={ticket} ownPr={ownPr} names={names} />
             ))}
-        </ul>
+        </RowList>
     )
 }
 
@@ -62,11 +62,11 @@ export function RunsTable({ runs, ticket = true, ownPr }: { runs: Run[]; ticket?
 export function SubjectRunsTable({ groups }: { groups: SubjectRuns[] }) {
     const names = modelNames(runModelIds(groups.flatMap((g) => (g.of === 'worker' ? [g.latest, ...g.earlier] : []))))
     return (
-        <ul className="divide-y" data-testid="runs">
+        <RowList kind="run" className="divide-y" data-testid="runs">
             {groups.map((group) => (
                 <SubjectRow key={subjectKey(group)} group={group} names={names} />
             ))}
-        </ul>
+        </RowList>
     )
 }
 
@@ -188,7 +188,8 @@ function Folding({
                         </RowLine>
                         <CollapsibleContent asChild>
                             <ul
-                                className={cn('flex flex-col gap-1.5 pt-1', rowLineFrom('state'))}
+                                // Its rows share the list's columns: a subgrid of it, as their row is.
+                                className={cn(ROW_SUBGRID, 'gap-y-1.5 pt-1')}
                                 data-testid={earlierTestId}
                             >
                                 {earlier}
@@ -400,7 +401,7 @@ function RunBody({
             ) : (
                 // On its subject's page the id leads the free column at a fixed width, so the chips still line up.
                 <span className="flex items-center gap-3">
-                    <RunLink id={run.id} className="w-14" />
+                    <RunLink id={run.id} className="w-14 shrink-0 truncate" />
                     <RunChips run={run} />
                 </span>
             )}

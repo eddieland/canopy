@@ -1,27 +1,57 @@
 import { describe, expect, it } from 'vitest'
 
-import { fitColumn, ROW_COLUMNS, ROW_TIERS, rowLayout, rowLineFrom, rowTemplate, rowTiers } from './rows'
+import { ROW_COLUMNS, ROW_TIERS, rowCells, rowHidden, rowLayout, rowLineFrom, rowTemplate, rowTiers } from './rows'
 import type { RowKind, RowTier } from './rows'
 
 const FREE = 'minmax(8rem,1fr)'
 // The free column, at the usual floor or one of its kind's own.
 const ANY_FREE = /^minmax\([\d.]+rem,1fr\)$/u
+// A column fitted to its list, up to its most.
+const FITTED = /^fit-content\((?:max\([\d.]+rem,)?[\d.]+rem\)?\)$/u
 const KINDS = Object.keys(ROW_COLUMNS) as RowKind[]
 
 describe('rowTemplate', () => {
     it('names each column before its width, and the end after the last', () => {
-        expect(rowTemplate('chore', 'xl')).toBe(`[name] 10rem [state] ${FREE} [findings] 14rem [end]`)
+        expect(rowTemplate('chore', 'xl', 0)).toBe(
+            `[name] fit-content(max(10rem,20rem)) [state] ${FREE} [findings] fit-content(14rem) [end]`,
+        )
     })
 
     it('lends a column it leaves out its name to the next one shown, or to the end', () => {
-        expect(rowTemplate('chore')).toBe(`[name] 10rem [state] ${FREE} [findings end]`)
-        expect(rowTemplate('ticket', 'lg')).toBe(`[run] 8rem [key] 6rem [phase access title] ${FREE} [age] 6rem [end]`)
+        expect(rowTemplate('chore', undefined, 0)).toBe(
+            `[name] fit-content(max(10rem,20rem)) [state] ${FREE} [findings end]`,
+        )
+        expect(rowTemplate('ticket', 'lg', 0)).toBe(
+            `[run] fit-content(8rem) [key] fit-content(6rem) [phase access title] ${FREE} [age] 6rem [end]`,
+        )
     })
 
-    it('gives every kind exactly one free column, so its fixed ones line up row to row', () => {
+    it("widens the first and last column shown by a row's padding, which a subgrid lays inside them", () => {
+        expect(rowTemplate('ticket', 'lg')).toBe(
+            `[run] fit-content(8.75rem) [key] fit-content(6rem) [phase access title] ${FREE} [age] 6.75rem [end]`,
+        )
+        expect(rowTemplate('chore')).toBe(
+            `[name] fit-content(max(10.75rem,20.75rem)) [state] minmax(8.75rem,1fr) [findings end]`,
+        )
+    })
+
+    it('gives every kind exactly one free column, which takes what the others leave', () => {
         for (const columns of Object.values(ROW_COLUMNS)) {
             expect(columns.filter(([, width]) => ANY_FREE.test(width))).toHaveLength(1)
         }
+    })
+
+    it('fits every other column to its list, up to its most, but the age and the cost', () => {
+        // A transcript's and the memory page's lists say why theirs are fixed.
+        const kinds = KINDS.filter((kind) => kind !== 'transcript' && kind !== 'memory-across')
+        const unfitted = kinds.flatMap((kind) =>
+            ROW_COLUMNS[kind].flatMap(([name, width]) =>
+                ANY_FREE.test(width) || FITTED.test(width) || width === 'auto' || ['age', 'cost'].includes(name)
+                    ? []
+                    : [`${kind}.${name}`],
+            ),
+        )
+        expect(unfitted).toEqual([])
     })
 
     it('gives the age and the cost one width in every kind, so they line up from list to list', () => {
@@ -87,7 +117,7 @@ describe('rowTiers', () => {
         const pr = rowTiers('pull-request')
         expect(pr.get('phase')).toBe('4xl')
         expect(pr.has('title')).toBe(false)
-        expect(rowTemplate('pull-request', '4xl')).toContain('[pr] var(--pr-width,11rem) [phase]')
+        expect(rowTemplate('pull-request', '4xl')).toContain('[pr] fit-content(11rem) [phase]')
     })
 
     it("lets what holds a slot go before its branch is cut, and keeps the slot's age", () => {
@@ -95,8 +125,8 @@ describe('rowTiers', () => {
         expect(worktree.get('holder')).toBe('3xl')
         expect(worktree.has('branch')).toBe(false)
         expect(['sm', 'md', 'lg', 'xl', '2xl']).toContain(worktree.get('age'))
-        expect(rowTemplate('worktree', '2xl')).toBe(
-            '[state] 5rem [slot] 3.5rem [holder branch] minmax(12rem,1fr) [age] 6rem [end]',
+        expect(rowTemplate('worktree', '2xl', 0)).toBe(
+            '[state] fit-content(5rem) [slot] fit-content(3.5rem) [holder branch] minmax(12rem,1fr) [age] 6rem [end]',
         )
     })
 
@@ -107,7 +137,7 @@ describe('rowTiers', () => {
         expect(['reason', 'title', 'send'].filter((name) => left.has(name))).toEqual([])
     })
 
-    it('fits every column a list shows at a tier in that tier, the free one at its floor', () => {
+    it('fits every column a list shows at a tier in that tier, each at its most and the free one at its floor', () => {
         // A kind with an `auto` column cannot be summed, so none of its columns may give way.
         const giving = KINDS.filter((kind) => rowTiers(kind).size > 0)
         expect(giving.filter((kind) => Number.isNaN(least(kind, '4xl')))).toEqual([])
@@ -134,34 +164,39 @@ describe('rowTiers', () => {
     })
 })
 
-describe('fitColumn', () => {
-    it("sets a column as wide as the list's longest name in monospace, and what sits beside it", () => {
-        // `acme/web#95`, 11 characters at 0.45rem, and a 1.25rem icon: 6.2rem, up to the next quarter.
-        expect(fitColumn('pr', ['acme/api#7', 'acme/web#95'], 1.25)).toEqual({ '--pr-width': '6.25rem' })
-    })
-
-    it('never sets it wider than the column at its most, which a longer name is cut to', () => {
-        expect(fitColumn('pr', ['a-long-organization/a-long-repository#12345'], 1.25)).toEqual({
-            '--pr-width': '11rem',
-        })
-    })
-})
-
 describe('rowLayout', () => {
-    it("sets a template per tier the kind's columns change at, and hides each left-out column's cell", () => {
+    it("sets the list's template per tier the kind's columns change at, which its rows share", () => {
         const { className, style } = rowLayout('chore')
         expect(style).toEqual({ '--row': rowTemplate('chore'), '--row-xl': rowTemplate('chore', 'xl') })
-        expect(className.split(' ')).toEqual([
-            'grid-cols-(--row)',
-            '@xl:grid-cols-(--row-xl)',
-            '@max-xl:[&>:nth-child(3)]:hidden',
-        ])
+        expect(className.split(' ')).toEqual(['grid-cols-(--row)', '@xl:grid-cols-(--row-xl)'])
+    })
+
+    it('pads outside the columns of a grid of its own, so it widens none of them', () => {
+        expect(rowLayout('transcript', 0).style).toEqual({ '--row': rowTemplate('transcript', undefined, 0) })
+        expect(rowTemplate('transcript', undefined, 0)).toBe(`[time] 3.5rem [mark] 0.5rem [text] ${FREE} [end]`)
     })
 
     it('needs no more places than index.css lists for Tailwind', () => {
         for (const columns of Object.values(ROW_COLUMNS)) {
             expect(columns.length).toBeLessThanOrEqual(8)
         }
+    })
+})
+
+describe('rowHidden', () => {
+    it("hides each left-out column's cell by its place in the row", () => {
+        expect(rowHidden('chore')).toBe('@max-xl:[&>:nth-child(3)]:hidden')
+        expect(rowHidden('decision')).toBe('')
+    })
+})
+
+describe('rowCells', () => {
+    it("holds each of the head line's cells to its column, and none of what goes under it", () => {
+        expect(rowCells('chore').split(' ')).toEqual([
+            '[&>:nth-child(-n+3)]:min-w-0',
+            '[&>:nth-child(-n+3)]:overflow-x-clip',
+            '[&>:nth-child(-n+3)]:text-ellipsis',
+        ])
     })
 })
 
@@ -172,11 +207,11 @@ describe('rowLineFrom', () => {
 })
 
 /**
- * The least room in rem a row of `kind` takes at `tier`: its columns' least widths, its gaps, and its padding. Not a
- * number when a column is `auto`.
+ * The least room in rem a row of `kind` takes at `tier`: its columns' least widths (a fitted one's most), its gaps,
+ * and its padding. Not a number when a column is `auto`.
  */
 function least(kind: RowKind, tier: RowTier): number {
-    const shown = [...rowTemplate(kind, tier).matchAll(/\] (\S+)/gu)].map((match) => match[1] ?? '')
+    const shown = [...rowTemplate(kind, tier, 0).matchAll(/\] (\S+)/gu)].map((match) => match[1] ?? '')
     const widths = shown.map((width) => Number(/([\d.]+)rem/u.exec(width)?.[1] ?? Number.NaN))
     return widths.reduce((sum, width) => sum + width, 1.5 + 0.75 * (widths.length - 1))
 }

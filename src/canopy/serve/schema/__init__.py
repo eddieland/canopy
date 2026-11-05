@@ -884,6 +884,9 @@ class ConfigKey(Model):
     """A limit's loosest value from the page: a count's ceiling, or a pace's floor. The file can set any."""
     looser: Literal["higher", "lower"] | None
     """Which way loosens a limit: a count's higher, a pace's lower. None for a `stricter` key."""
+    forever_at_zero: bool
+    """Whether 0 keeps that kind forever, as a `retention.*` key's does: the page may always set 0, and from 0 any
+    count of days is looser."""
     choices: list[str]
     """A `stricter` choice's values, loosest first: the page may move it only later in the list. Empty for any other
     key."""

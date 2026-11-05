@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, cast
 
 import pytest
 
-from canopy.core import cards, checklists, commit_hooks
+from canopy.core import cards, checklist_answers, checklists, commit_hooks, records
 from tests.canopy.helpers import WORKER_DONE, agent_runs, checklists_dir, trailers_on, worker_does
 from tests.canopy.scenario_helpers import dispatches
 from tests.conftest import executable, git
@@ -31,6 +31,8 @@ BRANCH = "agent/PROJ-1-work"
 LIST = "## general-types\npaths: src/\n\nA parameter takes the most general type its body needs.\n"
 COMMIT = ["git", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: the change"]
 PUSH = ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{BRANCH}"]
+#: The fix a worker commits once the list is shown.
+FIX = ["sh", "-c", "echo 'def f(xs: Iterable[str]): ...' >fix.py && git add fix.py && git commit -q -m 'PROJ-1: fix'"]
 #: The first line of what a held push prints.
 HELD = "[canopy] Push held, not rejected: nothing was sent."
 #: The first line of what a push in the run's last stretch prints.
@@ -74,7 +76,10 @@ def test_the_first_push_is_held_with_the_list_and_the_next_goes_through(
     printed = str(held["stderr"])
     assert printed.startswith(HELD)
     assert named_list(scenario.agent_log) in printed.splitlines()[0]
-    assert "`checklist`, under repo: pass, fixed, held with the reason, or n/a." in printed
+    assert (
+        "`checklist`, under repo, none left out: pass, fixed, held with the reason, or n/a only for an item whose "
+        "paths the diff does not touch." in printed
+    )
     assert f"\n\n{LIST}" in printed
     assert sent["returncode"] == 0
     assert "[canopy]" not in str(sent["stderr"])
@@ -89,6 +94,48 @@ def test_the_first_push_is_held_with_the_list_and_the_next_goes_through(
     [marker] = marked
     assert marker.parent.parent == primary / ".git" / "worktrees"
     assert marker.read_text().split()[0] == str(run.id)
+
+
+def test_what_a_run_pushes_after_its_list_is_shown_is_kept_with_its_diff(
+    scenario: Scenario,
+    worktree_pool: tuple[Path, list[Path]],
+    git_pool: GitPool,
+) -> None:
+    """The commit a push was held at and the one the next push sent: the diff between them is what the list changed."""
+    (checklists_dir(scenario.env) / "repo.md").write_text(LIST)
+    run = scenario.run(worker=worker_does(COMMIT, PUSH, FIX, PUSH))
+    head = git_pool.remote_head(BRANCH)
+    assert head is not None
+    shown = git("rev-parse", f"{head}^", cwd=git_pool.origin)
+    [pushed] = checklist_answers.pushes_of(scenario.conn, run.id)
+    assert pushed == records.ChecklistPush(run.id, None, "repo", shown, head)
+    diff = checklist_answers.diff_path(run.row["log_path"], "repo", shown).read_text()
+    assert diff.startswith("diff --git a/fix.py b/fix.py\n")
+    assert "+def f(xs: Iterable[str]): ...\n" in diff
+    # The notes are taken: the slot outlives the run, and the next run in it starts with none.
+    assert not [d for d in own_git_dirs(worktree_pool[1]) if (d / commit_hooks.PUSHES_LOG).exists()]
+    shown_run = scenario.operator("show", f"run:{run.id}").out
+    assert f"  repo  pushed {shown[:12]}..{head[:12]} after the list, diff " in shown_run
+
+
+def test_a_run_that_never_pushes_after_its_list_is_kept_to_what_it_left_on_origin(
+    scenario: Scenario,
+    git_pool: GitPool,
+) -> None:
+    """What the worker left, canopy pushes through no hook of the worker's: the stretch ends at the branch on origin."""
+    (checklists_dir(scenario.env) / "repo.md").write_text(LIST)
+    run = scenario.run(worker=worker_does(COMMIT, PUSH, FIX))
+    head = git_pool.remote_head(BRANCH)
+    assert head is not None
+    [pushed] = checklist_answers.pushes_of(scenario.conn, run.id)
+    assert (pushed.shown_sha, pushed.pushed_sha) == (git("rev-parse", f"{head}^", cwd=git_pool.origin), head)
+    assert "fix.py" in checklist_answers.diff_path(run.row["log_path"], "repo", pushed.shown_sha).read_text()
+
+
+def test_a_run_never_shown_its_list_keeps_no_push(scenario: Scenario, git_pool: GitPool) -> None:
+    (checklists_dir(scenario.env) / "other.md").write_text(LIST)
+    run = scenario.run(worker=worker_does(COMMIT, PUSH))
+    assert checklist_answers.pushes_of(scenario.conn, run.id) == []
 
 
 @pytest.mark.parametrize("who", ["another run", "this run, long ago"])
@@ -168,6 +215,17 @@ def test_near_the_deadline_the_list_is_printed_and_the_push_goes_through(
     assert git_pool.remote_head(BRANCH) is not None
 
 
+def test_near_the_deadline_what_follows_the_first_list_shown_is_kept(scenario: Scenario, git_pool: GitPool) -> None:
+    """Every push of the last stretch shows the list and goes through: the stretch runs from the first to the end."""
+    (checklists_dir(scenario.env) / "repo.md").write_text(LIST)
+    scenario.configures(runtime={"worker_timeout_minutes": commit_hooks.LAST_STRETCH_SECONDS // 60 - 1})
+    run = scenario.run(worker=worker_does(COMMIT, PUSH, FIX, PUSH))
+    head = git_pool.remote_head(BRANCH)
+    assert head is not None
+    [pushed] = checklist_answers.pushes_of(scenario.conn, run.id)
+    assert (pushed.shown_sha, pushed.pushed_sha) == (git("rev-parse", f"{head}^", cwd=git_pool.origin), head)
+
+
 #: The run's list, as the hook reads it.
 IN_ANSWERS = f'"${cards.ANSWERS_ENV}/{checklists.DIR}/repo{checklists.SUFFIX}"'
 
@@ -200,12 +258,20 @@ def test_a_joint_runs_slots_are_each_held_with_their_own_list(ws_scenario: Scena
     _, api_held, api_sent, _, web_held, web_sent = ran(ws_scenario.agent_log)
     api, web = str(api_held["stderr"]), str(web_held["stderr"])
     assert (api.startswith(HELD), web.startswith(HELD)) == (True, True)
-    assert "under api:" in api
+    assert "under api, none" in api
     assert "\n\n## api-rule\nThe api's rule.\n" in api
     assert "web-rule" not in api
-    assert "under web:" in web
+    assert "under web, none" in web
     assert "\n\n## web-rule\nThe web's rule.\n" in web
     assert "api-rule" not in web
     assert (api_sent["returncode"], web_sent["returncode"]) == (0, 0)
-    assert ws.remote_head("api", BRANCH) is not None
-    assert ws.remote_head("web", BRANCH) is not None
+    api_head, web_head = ws.remote_head("api", BRANCH), ws.remote_head("web", BRANCH)
+    assert api_head is not None
+    assert web_head is not None
+    # Each slot's push after its list is its own, pushed as it was held, with nothing changed between.
+    [run_id] = [r[0] for r in ws_scenario.conn.execute("SELECT id FROM runs")]
+    pushed = checklist_answers.pushes_of(ws_scenario.conn, run_id)
+    assert [(p.repo, p.shown_sha, p.pushed_sha) for p in pushed] == [
+        ("api", api_head, api_head),
+        ("web", web_head, web_head),
+    ]

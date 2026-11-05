@@ -228,9 +228,9 @@ describe('the Plans page', () => {
         ])
         expect(cells(screen.getByTestId('plans-plan-2')).slice(2, 3)).toEqual(['sent back: 2 comments'])
         // Nothing implemented it: no resumes to count.
-        expect(tipOf(within(screen.getByTestId('plans-plan-5')).getByText('–', { selector: 'td span' }))).toBe(
-            'No implement followed it',
-        )
+        expect(
+            tipOf(within(screen.getByTestId('plans-plan-5')).getByText('–', { selector: 'td span[tabindex]' })),
+        ).toBe('No implement followed it')
     })
 
     it('says so when no plan was written', async () => {

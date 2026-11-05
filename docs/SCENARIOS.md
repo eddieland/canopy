@@ -150,7 +150,7 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   no dispatch. A reply from the web UI resumes it, with the reply as the worker's instruction. A comment from someone in
   `trust.trusted_reviewers` resumes it without a reply.
 - **S65. Limits and trust from the web UI** (M41). While `canopy loop` runs, change `capacity.slots_per_repo` and remove
-  a trusted reviewer on the web UI's Settings, Limits and trust page. Expect the next tick to lease under the new size
+  a trusted reviewer on the web UI's Settings, Loop settings page. Expect the next tick to lease under the new size
   and its overseer's state block to carry the shorter list, and the workspace's private file, `.canopy/config.toml`, to
   keep its comments, with only those two values changed, and `~/.config/canopy/config.toml` untouched. Then try a
   count past its ceiling and adding a reviewer back by hand-crafting the request: expect each refused, naming its
@@ -309,6 +309,15 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
   `canopy_chore_history`. With MEASUREMENTS' prompt (Re-measuring), record tool-result tokens per tick against
   2026-10-13's median, the only one on record from the overseer's shell: about 8k a tick from tick 100 on. Record the
   numbers in `MEASUREMENTS.md`.
+- **S74. A review item's text shown once** (#2062). After a day of `canopy loop` against the real queue, measure
+  `observations.tickets[].units[].reviews[]` in `.canopy/ticks/*.prompt` against the 2026-11-04 numbers in the issue.
+  Expect a `body` only on an item no earlier `ok` tick listed, `seen` on each listed before, and `held` on every item
+  of a ticket that can only wait (its worker or a unit's checks running, `needs_human`, `awaiting_reply`,
+  `attempt_limit`, or `plan_review`) and on the untrusted items of a unit with `untrusted_review`; the key's size down
+  by about 4 to 5 KB a tick on average. Expect
+  the rate of `needs_author` items, and of dispatches refused `stale`, unchanged against the week before, and a
+  `canopy_review-items` call only on a tick that judged an item, never on one that waited. Record the numbers in
+  `MEASUREMENTS.md`.
 
 ## Retired
 

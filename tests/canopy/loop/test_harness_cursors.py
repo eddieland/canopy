@@ -17,7 +17,7 @@ import pytest
 from canopy.core import db
 from canopy.core.vocab import Decider, ReviewRunStatus, TickStatus
 from canopy.loop import harness, harness_cursors, phases
-from tests.canopy.helpers import KEY, context, in_tick, operator, waits
+from tests.canopy.helpers import KEY, context, in_tick, operator, review_comment, waits
 from tests.canopy.observation_helpers import (
     FRESH,
     NOW,
@@ -281,13 +281,6 @@ def worked_pr(scenario: Scenario, github_state: Path) -> None:
     db.set_unit(scenario.conn, KEY, str(scenario.env.root), "repo", pr_url=PR)
     scenario.conn.commit()
     github_state.write_text(json.dumps({"prs": {PR: {"reviews": WORKED}}}))
-
-
-def review_comment(ident: int, author: str, body: str) -> dict[str, object]:
-    """A person's review comment on a thread of its own, as the fake GitHub holds it."""
-    where = {"id": f"PRRT_{ident}", "path": "src/app.py", "line": 3, "side": "right"}
-    return {"item": "comment", "id": ident, "author": author, "time": "2026-10-18T11:00:00Z", "body": body,
-            "thread": where}  # fmt: skip
 
 
 def units(scenario: Scenario) -> list[dict[str, Any]]:

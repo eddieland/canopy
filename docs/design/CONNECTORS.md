@@ -65,8 +65,7 @@ In §6 step 3, after the reconciles, the tick runs each source once, the `vcs` s
 a tick whose reconcile failed runs none, and a dry run observes as a live tick does. A source that fails, or reads less
 than it was asked, keeps its previous observations and raises the harness's `connector_failed` (§14), naming what was
 not read, each tick until a run reads everything; the overseer's view of the list leaves it out. The tick goes on: what
-was not read ages until it is stale (below), when the harness waits on it and no dispatch rests on it (§7, §37). The
-loop's polls between ticks run the same sources the same way and raise nothing (§6).
+was not read ages until it is stale (below), when the harness waits on it and no dispatch rests on it (§7, §37).
 
 ### What the overseer is shown
 
@@ -80,15 +79,17 @@ loop's polls between ticks run the same sources the same way and raise nothing (
 - A candidate shows what the overseer decides from, its body only until its first unit and its items only past their
   cursors (§7). The harness marks in code whether each comment's author is an authorized replier and whether it is a
   worker's (D069), and whether each review item's author is trusted (D089).
+- A review item's text is shown once, on the first live tick, closed `ok`, whose overseer decided the ticket with it
+  listed, and not while the ticket or the unit can only wait, on a person, a run, or a read, since then the hold
+  decides, not the feedback; after that the item is listed by its number and marks, and one tool (§27) reads a listed
+  candidate's unit's items again, by number. Rejected: moving the cursor on a wait, which loses feedback.
 - Each subject shows the rows of §7 the derivation found holding (below), which the overseer may overrule, and each
   query its result as its source last read it whole (§7, §21).
-- Source and author are labeled in code, never by a model. A subject shows a fixed number of new items, oldest first,
-  and counts the rest, which stay new (§35).
+- A subject shows a fixed number of new items, oldest first, and counts the rest, which stay new (§35).
 
 ### The derivation
 
-D008 moves a rule from the prompt into code one at a time, on a measurement against the `decisions` corpus (§37):
-applied by hand, §7's table disagreed with the overseer on `ci_red` (MEASUREMENTS 2026-10-15).
+D008 moves a rule from the prompt into code one at a time, on a measurement against the `decisions` corpus (§37).
 
 - Each tick the harness derives, from the observations and the journal, what §7 and §14 derive: the candidates (§17),
   each ticket's and unit's phase, its next action and the actions a choice allows, and the attention reasons. A ticket
@@ -101,11 +102,12 @@ applied by hand, §7's table disagreed with the overseer on `ci_red` (MEASUREMEN
 
 Some contexts are not CI: a deploy approval or an ownership sign-off stays pending until a person acts, and a merge
 queue's status is never green on an open PR. Counted as CI, one holds a green PR at `ci_running` and never raises
-`needs_reviewer`. So each repository gives such a check, by exact name, a role in the map (§18): `human`, `merge`, or
-`ignore`; every other is `ci`. A non-CI check never holds a unit at `ci_running`, makes it `ci_red`, has to pass,
-becomes a feedback plan's item, or makes a waiting one stale; the overseer is shown a `human` one, as waiting on a
-person, and not the others. One left unnamed that stalls a PR long after its other checks finished raises
-`check_stuck` (§14), naming it and its key in the map: it only asks, and the role stays the operator's.
+`needs_reviewer`. So each repository gives such a check, by exact name, a role in the map (§18): `human`, `merge`,
+`rollup` for a job that only fans the others in, or `ignore`; every other is `ci`. A non-CI check never holds a unit at
+`ci_running`, makes it `ci_red`, has to pass, becomes a feedback plan's item, makes a waiting one stale, or counts a run
+on the CI report (§11); the overseer is shown a `human` one, as waiting on a person, and not the others. One left
+unnamed that stalls a PR long after its other checks finished raises `check_stuck` (§14), naming it and its key in the
+map: it only asks, and the role stays the operator's.
 
 - The map names the exceptions, not the CI: a job left off a list of CI would hide a red build, while a check left
   off this one holds a PR where the operator sees it waiting.

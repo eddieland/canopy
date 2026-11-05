@@ -168,7 +168,7 @@ export const PAGE_GUIDES = {
     '/search': 'overview#search',
     '/system': 'overview#system-resources',
     '/settings': 'settings',
-    '/settings_/limits': 'settings#limits-and-trust',
+    '/settings_/limits': 'settings#loop-settings',
     '/settings_/skills': 'settings#skills',
 } as const satisfies Record<
     Exclude<

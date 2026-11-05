@@ -44,8 +44,9 @@ and the work didn't: a changed prompt or a new tool list can turn every run cold
 failing more and going green first less often may have been bought, not earned.
 
 **Delivery** is what the months got done, as medians: four per landed ticket, then the first reviews'. Each median is
-drawn across the months over the table, the latest month's figure beside its name, so a review wait creeping up reads
-as a line going the wrong way rather than a column of numbers you have to remember. Hover a point for its month:
+drawn across the months over its own column, the latest month the line's right end and the table's first row, so a
+review wait creeping up reads as a line going the wrong way rather than a column of numbers you have to remember. Hover
+a point for its month:
 
 - **iterations**: the worker runs, implement and resume, a ticket took before it landed. One means the first attempt
   shipped; five means somebody had opinions.
@@ -93,7 +94,7 @@ cost, as the runtime reported it, over the last **24 hours**, **7 days**, or **3
 the window at a glance, `$10.51 over 7 days · 2 tickets done`; hover the title for what the page holds.
 
 **This month** sits on top whatever the window, and tracks the calendar month so far against the monthly budget you set
-under [Limits and trust](settings#limits-and-trust): what it spent of the budget, and what the month will cost if the
+under [Loop settings](settings#loop-settings): what it spent of the budget, and what the month will cost if the
 rest of it spends like the start did. Spent means every agent session on this machine, not just canopy's: the line under
 it splits the month into canopy's runs and the sessions outside canopy, the ones you ran by hand, as of when `canopy
 loop` last read the runtime's record. It reads it between ticks, so with the loop stopped your own sessions wait to be
@@ -222,10 +223,12 @@ may just not have met the diff that fails it. The rest say nothing. A lot of **u
 never pushed, so were never asked: canopy counts every item of a run it gave a list to, pushed or not, and errs toward
 too many.
 
-A **held** count is a link: it opens the runs that held the item, newest first, each with the reason its worker gave,
-cut to a line. The [run's page](runs#a-runs-page) has the reason whole, and `canopy show run:ID` prints it, or
-`task:N` for a task's. **fixed** opens its runs the same way, which is the list earning its keep. Up to twenty runs
-each; the count says how many there were in all.
+A **held** count is a link: hover it and it shows the runs that held the item, newest first, each with the reason its
+worker gave, cut to a line. They stay while the pointer moves onto them, so you can follow one; click the count to keep
+them open until you click elsewhere, which is also how a tap or the keyboard opens them. The
+[run's page](runs#a-runs-page) has the reason whole, and `canopy show run:ID` prints it, or `task:N` for a task's.
+**fixed** opens its runs the same way, which is the list earning its keep. Up to twenty runs each; the count says how
+many there were in all.
 
 The order buttons in **By item**'s header sort each repository's items: **list order**, the order of your file, or the
 most **held**, the largest **n/a share**, or the most **unanswered** first. With lists in more than one repository,
@@ -274,7 +277,7 @@ so did one you stopped yourself. Neither counts, however much the question annoy
   refused, the latest tick to open, and in how many ticks. Under each, what it refused most often: the ticket, chore,
   or PR the ask named, the kind of run it wanted, how often, and the latest tick that asked. A guard refusing the same
   ticket tick after tick is the overseer stuck on it, asking for something your limits don't allow;
-  [Limits and trust](settings#limits-and-trust) is where that argument is settled.
+  [Loop settings](settings#loop-settings) is where that argument is settled.
 - **How long runs take**: each sort of run, grouped by kind, against the timeout it's held to: its runs, the median,
   the length nine in ten came in under (`p90`), the longest, the timeout, and how many ended `timeout`. The spread is a
   bar of its runs by their share of the timeout, the quickest lightest and the ones at the limit in red; hover it for
@@ -293,6 +296,9 @@ and the median time to green.
 
 Red means `failure`, `error`, `timed_out`, or `startup_failure`; green means `success`. `cancelled`, `skipped`,
 `neutral`, `stale`, and `action_required` count as neither, so a check you cancelled never passes for one that broke.
+A check your workspace map gives a role other than CI under `[repos.<repo>.checks]` is in no count here, as it holds no
+PR in the loop: a sign-off (`human`), a merge queue's status (`merge`), a job that only waits on the others and goes
+red when one of them does (`rollup`), or one you ignore. So a rollup's red counts once, in the job that failed.
 
 - **Checks by name**: each check, the worst first, with its failure rate (red out of red and green) as a red bar, its
   red runs and its runs, and how often the next run on a new head of the same PR passed after a red one. **Same-head
