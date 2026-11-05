@@ -499,7 +499,7 @@ function Budget({ month }: { month: SpendMonth | null }) {
             <p className="p-3 text-sm text-muted-foreground" data-testid="spend-budget-none">
                 No monthly budget set. Set one under{' '}
                 <Link to="/settings/limits" className="text-accent hover:underline">
-                    Limits and trust
+                    Loop settings
                 </Link>{' '}
                 to track the month against it here, and to have a sink that takes loop events hear once the month
                 reaches it.

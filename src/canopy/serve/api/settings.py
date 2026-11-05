@@ -51,6 +51,7 @@ def read_config(backend: BackendDep) -> ConfigSettings:
                 kind=s.key.kind,
                 bound=s.key.bound,
                 looser=s.key.looser,
+                forever_at_zero=s.key.forever_at_zero,
                 choices=list(s.key.choices),
             )
             for s in found.settings

@@ -94,7 +94,7 @@ cost, as the runtime reported it, over the last **24 hours**, **7 days**, or **3
 the window at a glance, `$10.51 over 7 days · 2 tickets done`; hover the title for what the page holds.
 
 **This month** sits on top whatever the window, and tracks the calendar month so far against the monthly budget you set
-under [Limits and trust](settings#limits-and-trust): what it spent of the budget, and what the month will cost if the
+under [Loop settings](settings#loop-settings): what it spent of the budget, and what the month will cost if the
 rest of it spends like the start did. Spent means every agent session on this machine, not just canopy's: the line under
 it splits the month into canopy's runs and the sessions outside canopy, the ones you ran by hand, as of when `canopy
 loop` last read the runtime's record. It reads it between ticks, so with the loop stopped your own sessions wait to be
@@ -275,7 +275,7 @@ so did one you stopped yourself. Neither counts, however much the question annoy
   refused, the latest tick to open, and in how many ticks. Under each, what it refused most often: the ticket, chore,
   or PR the ask named, the kind of run it wanted, how often, and the latest tick that asked. A guard refusing the same
   ticket tick after tick is the overseer stuck on it, asking for something your limits don't allow;
-  [Limits and trust](settings#limits-and-trust) is where that argument is settled.
+  [Loop settings](settings#loop-settings) is where that argument is settled.
 - **How long runs take**: each sort of run, grouped by kind, against the timeout it's held to: its runs, the median,
   the length nine in ten came in under (`p90`), the longest, the timeout, and how many ended `timeout`. The spread is a
   bar of its runs by their share of the timeout, the quickest lightest and the ones at the limit in red; hover it for

@@ -631,7 +631,7 @@ export function refreshMemory(client: QueryClient): Promise<void> {
 }
 
 /**
- * Writes the changed limits and trust settings to the user config, then asks the loop to read it again. Refused,
+ * Writes the changed loop settings to the user config, then asks the loop to read it again. Refused,
  * writing nothing, past a limit's bound (`past_bound`), for a trust setting loosened (`not_stricter`), or when the
  * file changed since `hash` was read (`stale`).
  */

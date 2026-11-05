@@ -220,7 +220,7 @@ friction: a pool's slots, how many workers run at once, an attempt limit, how of
 able to change those from the web UI's settings page and have the loop take them up, as a reload does. Trust
 settings may be changed from the page only toward stricter: removing an authorized replier or a trusted reviewer,
 turning `trust.rebase` off, turning the commit trailer on. Loosening one, or changing any key that runs a command,
-chooses a prompt, or moves the listener, stays an edit to the file. The Limits and trust page under Settings does
+chooses a prompt, or moves the listener, stays an edit to the file. The Loop settings page under Settings does
 this, writing the workspace's private file within ceilings in code (§12, TRUST_MODEL T8, D128).
 
 ### R17. Review a coworker's PR on request, once or for as long as it is open

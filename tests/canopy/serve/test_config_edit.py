@@ -86,6 +86,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "kind": "limit",
         "bound": 32,
         "looser": "higher",
+        "forever_at_zero": False,
         "choices": [],
     }
     assert key(found, "policy.max_resume_attempts")["source"] == "workspace"
@@ -97,6 +98,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "kind": "limit",
         "bound": 2,
         "looser": "lower",
+        "forever_at_zero": False,
         "choices": [],
     }
     assert key(found, "capacity.repo_slots")["value"] == {"repo": 3}
@@ -107,6 +109,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "kind": "stricter",
         "bound": None,
         "looser": None,
+        "forever_at_zero": False,
         "choices": [],
     }
     assert key(found, "policy.planner_may_approve") == {
@@ -116,6 +119,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "kind": "stricter",
         "bound": None,
         "looser": None,
+        "forever_at_zero": False,
         "choices": ["lenient", "normal", "strict", "off"],
     }
     assert found["private_file"] == str(canopy_env.private_file)
@@ -398,6 +402,7 @@ def test_a_monthly_budget_may_be_set_raised_to_its_ceiling_and_lowered(ctx: Cont
         "kind": "limit",
         "bound": 10000,
         "looser": "higher",
+        "forever_at_zero": False,
         "choices": [],
     }
 
@@ -407,6 +412,81 @@ def test_a_monthly_budget_may_be_set_raised_to_its_ceiling_and_lowered(ctx: Cont
     assert save(c, headers, {"spend.monthly_budget_usd": 50}).status_code == 200
     assert key(settings(c), "spend.monthly_budget_usd")["value"] == 50
     assert canopy_env.private_file.read_text().startswith(COMMENTED)
+
+
+def test_a_retention_may_be_lengthened_shortened_to_its_floor_or_kept_forever(
+    ctx: Context,
+    canopy_env: CanopyEnv,
+) -> None:
+    """A retention shortens to its floor and no further, 0 keeps forever, and from forever only to days within it."""
+    canopy_env.write_private(COMMENTED + "\n[retention]\njournal_days = 10\n")
+    c, headers = signed_in_client(ctx)
+    assert key(settings(c), "retention.run_files_days") == {
+        "name": "retention.run_files_days",
+        "value": 30,
+        "source": "default",
+        "kind": "limit",
+        "bound": 7,
+        "looser": "lower",
+        "forever_at_zero": True,
+        "choices": [],
+    }
+
+    assert save(c, headers, {"retention.run_files_days": 7}).status_code == 200
+    assert refused(save(c, headers, {"retention.run_files_days": 6})).startswith("past_bound: ")
+    assert save(c, headers, {"retention.run_files_days": 0}).status_code == 200
+    # From forever, any count of days is shorter: only one within the floor.
+    assert refused(save(c, headers, {"retention.run_files_days": 3})).startswith("past_bound: ")
+    assert save(c, headers, {"retention.run_files_days": 60}).status_code == 200
+    # The file set the journal's below its floor: the page may lengthen it, or keep it forever, but not shorten it.
+    assert refused(save(c, headers, {"retention.journal_days": 9})).startswith("past_bound: ")
+    assert save(c, headers, {"retention.journal_days": 12}).status_code == 200
+    assert save(c, headers, {"retention.journal_days": 0}).status_code == 200
+    text = canopy_env.private_file.read_text()
+    assert text.startswith(COMMENTED)
+    assert "journal_days = 0" in text
+    assert "run_files_days = 60" in text
+
+
+def test_the_paces_of_the_tracker_the_connectors_and_reviews_are_saved_in_their_own_tables(
+    ctx: Context,
+    canopy_env: CanopyEnv,
+) -> None:
+    """A key outside `capacity`, `policy`, `loop`, and `trust` is written to its own table, and bounded as the rest."""
+    canopy_env.write_private(COMMENTED)
+    c, headers = signed_in_client(ctx)
+
+    saved = save(
+        c,
+        headers,
+        {
+            "tracker.query_every_minutes": 30,
+            "connect.every_minutes": 5,
+            "connect.max_age_minutes": 60,
+            "review.settle_minutes": 15,
+            "policy.feedback_ci_wait_minutes": 10,
+            "policy.max_epic_tickets": 12,
+            "runtime.setup_timeout_minutes": 45,
+        },
+    )
+
+    assert saved.status_code == 200, saved.text
+    found = settings(c)
+    assert key(found, "tracker.query_every_minutes")["value"] == 30
+    assert key(found, "connect.max_age_minutes")["value"] == 60
+    assert key(found, "review.settle_minutes")["source"] == "private"
+    assert canopy_env.private_file.read_text().startswith(COMMENTED)
+    assert save(c, headers, {"tracker.query_every_minutes": 0, "review.settle_minutes": 0}).status_code == 200
+    for changes in (
+        {"connect.every_minutes": 0},
+        {"connect.max_age_minutes": 241},
+        {"policy.feedback_ci_wait_minutes": 4},
+        {"policy.max_epic_tickets": 51},
+        {"runtime.setup_timeout_minutes": 121},
+    ):
+        assert refused(save(c, headers, changes)).split(":")[0] in {"past_bound", "config_invalid"}, changes
+    # The loader's own rule between two keys holds: an observation is stale no sooner than the connectors poll.
+    assert refused(save(c, headers, {"connect.every_minutes": 90})).startswith("config_invalid: ")
 
 
 def test_the_budget_s_alerts_are_set_whole_to_anything_the_loader_takes(ctx: Context, canopy_env: CanopyEnv) -> None:
@@ -419,6 +499,7 @@ def test_the_budget_s_alerts_are_set_whole_to_anything_the_loader_takes(ctx: Con
         "kind": "free",
         "bound": None,
         "looser": None,
+        "forever_at_zero": False,
         "choices": [],
     }
 

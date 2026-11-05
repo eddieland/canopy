@@ -1,7 +1,7 @@
 import type { ConfigKey, ConfigSaved, ConfigValue } from '@/api/types'
 
 /**
- * What the settings page's limits and trust form holds before a save, by key: a count's or a pace's text as typed,
+ * What the Loop settings form holds before a save, by key: a count's or a pace's text as typed,
  * `capacity.repo_slots`'s text by repository, a switch or choice as picked, and a list's entries kept. A key the
  * operator has not touched is absent.
  */
@@ -42,7 +42,14 @@ export function boundText(key: ConfigKey): string {
     if (key.bound === null) {
         return ''
     }
-    return key.looser === 'lower' ? `at least ${key.bound} from here` : `at most ${key.bound} from here`
+    if (key.forever_at_zero) {
+        return `at least ${key.bound}, or 0 for forever, from here`
+    }
+    if (key.looser === 'lower') {
+        // A floor of 0 bounds nothing the loader does not.
+        return key.bound === 0 ? '' : `at least ${key.bound} from here`
+    }
+    return `at most ${key.bound} from here`
 }
 
 /** What a save would send, and the fields whose text is not a whole number, which keep it from being sent. */
@@ -163,7 +170,7 @@ export function savedText(saved: ConfigSaved): string {
     return parts.join(' ')
 }
 
-/** One of the limits page's panels: what its keys are about, and each key's name in words. */
+/** One of the Loop settings page's panels: what its keys are about, and each key's name in words. */
 export interface ConfigGroup {
     /** The panel's label. */
     title: string
@@ -174,8 +181,8 @@ export interface ConfigGroup {
 }
 
 /**
- * The limits page's panels, in order. A key the server lists that no panel names lands in `Other`, so a key added to
- * the server's allowlist shows before a label is written for it.
+ * The Loop settings page's panels, in order. A key the server lists that no panel names lands in `Other`, so a key
+ * added to the server's allowlist shows before a label is written for it.
  */
 export const CONFIG_GROUPS: ConfigGroup[] = [
     {
@@ -202,7 +209,7 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
         title: 'Attempts',
         blurb:
             'How many runs a ticket, PR, or draft gets before it waits for you, the follow-ups one run may file, ' +
-            'and the pauses before a resume for red CI and before a feedback plan.',
+            'and the tickets one epic holds.',
         keys: [
             { name: 'policy.max_implement_attempts', label: 'Implement runs per unit' },
             { name: 'policy.max_resume_attempts', label: 'Resume runs per unit' },
@@ -211,8 +218,17 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'policy.max_reviews_per_pr', label: 'Review runs per PR' },
             { name: 'policy.max_revisions_per_draft', label: "Revisions of a review's draft" },
             { name: 'policy.max_follow_ups', label: 'Follow-up tickets from one run' },
+            { name: 'policy.max_epic_tickets', label: 'Tickets in one epic' },
+        ],
+    },
+    {
+        title: 'Waits',
+        blurb: 'How long the loop holds off before acting again, so one burst of comments or red CI is one run.',
+        keys: [
             { name: 'policy.ci_cooldown_minutes', label: 'Minutes before a resume for red CI' },
             { name: 'policy.feedback_quiet_minutes', label: 'Quiet minutes before a feedback plan' },
+            { name: 'policy.feedback_ci_wait_minutes', label: 'Minutes feedback waits on pending checks' },
+            { name: 'review.settle_minutes', label: "Minutes a PR's head settles before its review" },
         ],
     },
     {
@@ -226,11 +242,14 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
     },
     {
         title: 'Pace',
-        blurb: "How often the loop ticks, which is most of the overseer's spend.",
+        blurb: "How often the loop ticks, which is most of the overseer's spend, and how often it looks around.",
         keys: [
             { name: 'loop.interval_minutes', label: 'Minutes between ticks' },
             { name: 'loop.idle_max_minutes', label: 'Longest wait when idle, in minutes' },
             { name: 'loop.min_gap_minutes', label: 'Least minutes from one tick to the next' },
+            { name: 'tracker.query_every_minutes', label: "Least minutes between the tracker's queries" },
+            { name: 'connect.every_minutes', label: 'Minutes between connector polls' },
+            { name: 'connect.max_age_minutes', label: 'Minutes before an observation is stale' },
         ],
     },
     {
@@ -240,6 +259,19 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'runtime.worker_timeout_minutes', label: 'Worker run, in minutes' },
             { name: 'runtime.review_timeout_minutes', label: 'Review run, in minutes' },
             { name: 'runtime.overseer_timeout_minutes', label: 'Overseer tick, in minutes' },
+            { name: 'runtime.setup_timeout_minutes', label: "A slot's setup command, in minutes" },
+        ],
+    },
+    {
+        title: 'Retention',
+        blurb:
+            'How long canopy keeps its own history before a tick removes it. 0 keeps it forever; shorter than the ' +
+            'floor is an edit to the file.',
+        keys: [
+            { name: 'retention.run_files_days', label: "Days to keep a run's log, prompt, and diff" },
+            { name: 'retention.tick_files_days', label: "Days to keep a tick's log and prompt" },
+            { name: 'retention.journal_days', label: "Days to keep the journal's old rows" },
+            { name: 'retention.memory_days', label: 'Days to keep a retired note or proposal' },
         ],
     },
     {
