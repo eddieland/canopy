@@ -283,24 +283,27 @@ export function valueText(value: ConfigValue, name: string): string {
     return String(value)
 }
 
-/** One of the Loop settings page's panels: what its keys are about, and each key's name in words. */
+/** One of the Loop settings page's bands: what its keys are about, and each key's name in words. */
 export interface ConfigGroup {
-    /** The panel's label. */
+    /** The band's label. */
     title: string
     /** One line under the label on what the keys in it govern. */
     blurb: string
-    /** The keys it shows, in order, by name, each with its label in words. */
-    keys: { name: string; label: string }[]
+    /**
+     * The keys it shows, in order, by name, each with its label in words, and the part of the band it heads, if the
+     * band is in labelled parts: a key with a `part` starts that part, and the keys after it are in it.
+     */
+    keys: { name: string; label: string; part?: string }[]
 }
 
 /**
- * The Loop settings page's panels, in order. A key the server lists that no panel names lands in `Other`, so a key
+ * The Loop settings page's bands, in order. A key the server lists that no band names lands in `Other`, so a key
  * added to the server's allowlist shows before a label is written for it.
  */
 export const CONFIG_GROUPS: ConfigGroup[] = [
     {
         title: 'Capacity',
-        blurb: 'How much runs at once on this machine, how many reviews a day, and the free disk a tick needs.',
+        blurb: "What runs at once on this machine, each pool's worktree slots, and what one ticket may attach.",
         keys: [
             { name: 'capacity.max_workers', label: 'Workers at once' },
             { name: 'capacity.max_chores', label: 'Chore runs at once' },
@@ -308,21 +311,16 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
             { name: 'capacity.max_tasks', label: 'Task runs at once' },
             { name: 'capacity.max_reviews_per_day', label: 'Reviews a day' },
             { name: 'loop.min_free_disk_mib', label: 'Free disk a tick needs to dispatch, in MiB' },
-        ],
-    },
-    {
-        title: 'Pools',
-        blurb: "Each repository's worktree slots. canopy workspace sync makes or removes them; leases follow at once.",
-        keys: [
             { name: 'capacity.slots_per_repo', label: 'Slots per repository' },
             { name: REPO_SLOTS, label: 'Repositories with a count of their own' },
+            { name: 'policy.max_attachments', label: 'Files attached per ticket or task' },
+            { name: 'policy.max_attachment_kib', label: 'KiB per attached file' },
+            { name: 'policy.max_attachments_total_kib', label: 'KiB attached per ticket or task' },
         ],
     },
     {
         title: 'Attempts',
-        blurb:
-            'How many runs a ticket, PR, or draft gets before it waits for you, the follow-ups one run may file, ' +
-            'and the tickets one epic holds.',
+        blurb: 'How many runs a ticket, PR, or draft gets before it waits for you, and what one run or epic may hold.',
         keys: [
             { name: 'policy.max_implement_attempts', label: 'Implement runs per unit' },
             { name: 'policy.max_resume_attempts', label: 'Resume runs per unit' },
@@ -335,81 +333,48 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
         ],
     },
     {
-        title: 'Waits',
-        blurb: 'How long the loop holds off before acting again, so one burst of comments or red CI is one run.',
+        title: 'Timing',
+        blurb: 'How often the loop ticks and looks around, how long it holds off, and how long a run may take.',
         keys: [
-            { name: 'policy.ci_cooldown_minutes', label: 'Minutes before a resume for red CI' },
-            { name: 'policy.feedback_quiet_minutes', label: 'Quiet minutes before a feedback plan' },
-            { name: 'policy.feedback_ci_wait_minutes', label: 'Minutes feedback waits on pending checks' },
-            { name: 'review.settle_minutes', label: "Minutes a PR's head settles before its review" },
-        ],
-    },
-    {
-        title: 'Attachments',
-        blurb: 'How much text you may attach to one ticket or task. Each of its runs gets every file.',
-        keys: [
-            { name: 'policy.max_attachments', label: 'Files per ticket or task' },
-            { name: 'policy.max_attachment_kib', label: 'KiB per file' },
-            { name: 'policy.max_attachments_total_kib', label: 'KiB per ticket or task' },
-        ],
-    },
-    {
-        title: 'Pace',
-        blurb: "How often the loop ticks, which is most of the overseer's spend, and how often it looks around.",
-        keys: [
-            { name: 'loop.interval_minutes', label: 'Minutes between ticks' },
+            { name: 'loop.interval_minutes', label: 'Minutes between ticks', part: 'Pace' },
             { name: 'loop.idle_max_minutes', label: 'Longest wait when idle, in minutes' },
-            { name: 'loop.min_gap_minutes', label: 'Least minutes from one tick to the next' },
-            { name: 'tracker.query_every_minutes', label: "Least minutes between the tracker's queries" },
+            { name: 'loop.min_gap_minutes', label: 'Shortest gap between two ticks, in minutes' },
+            { name: 'tracker.query_every_minutes', label: 'Shortest gap between tracker queries, in minutes' },
             { name: 'connect.every_minutes', label: 'Minutes between connector polls' },
             { name: 'connect.max_age_minutes', label: 'Minutes before an observation is stale' },
-        ],
-    },
-    {
-        title: 'Timeouts',
-        blurb: 'How long one run may take before canopy stops it. A longer run may spend more.',
-        keys: [
-            { name: 'runtime.worker_timeout_minutes', label: 'Worker run, in minutes' },
+            {
+                name: 'policy.ci_cooldown_minutes',
+                label: 'Wait after red CI before a resume, in minutes',
+                part: 'Waits',
+            },
+            { name: 'policy.feedback_quiet_minutes', label: 'Wait for quiet before a feedback plan, in minutes' },
+            { name: 'policy.feedback_ci_wait_minutes', label: 'Wait on pending checks before feedback, in minutes' },
+            { name: 'review.settle_minutes', label: "Wait for a PR's head to settle before its review, in minutes" },
+            { name: 'runtime.worker_timeout_minutes', label: 'Worker run, in minutes', part: 'Timeouts' },
             { name: 'runtime.review_timeout_minutes', label: 'Review run, in minutes' },
             { name: 'runtime.overseer_timeout_minutes', label: 'Overseer tick, in minutes' },
             { name: 'runtime.setup_timeout_minutes', label: "A slot's setup command, in minutes" },
         ],
     },
     {
-        title: 'Retention',
-        blurb:
-            'How long canopy keeps its own history before a tick removes it. 0 keeps it forever; shorter than the ' +
-            'floor is an edit to the file.',
+        title: 'Retention & budget',
+        blurb: 'How long canopy keeps its own history, 0 for forever, and what a month of agent runs should cost.',
         keys: [
             { name: 'retention.run_files_days', label: "Days to keep a run's log, prompt, and diff" },
             { name: 'retention.tick_files_days', label: "Days to keep a tick's log and prompt" },
             { name: 'retention.journal_days', label: "Days to keep the journal's old rows" },
             { name: 'retention.memory_days', label: 'Days to keep a retired note or proposal' },
-        ],
-    },
-    {
-        title: 'Budget',
-        blurb:
-            'What a month of agent runs should cost. Nothing stops at it: the spend page tracks it, and a sink ' +
-            'that takes loop events hears once the month reaches it, and each alert you add.',
-        keys: [
             { name: 'spend.monthly_budget_usd', label: 'Monthly budget, in US dollars' },
             { name: 'spend.budget_alerts', label: 'Also alert at, in percent of the budget' },
         ],
     },
     {
-        title: 'Plans',
-        blurb: 'Which work waits on a plan you approve. Only stricter from here: easing one is an edit to the file.',
+        title: 'Guardrails',
+        blurb: 'Which work waits on a plan you approve, and whose words workers act on. Only stricter from here.',
         keys: [
             { name: 'policy.plan', label: 'Before a ticket is implemented' },
             { name: 'policy.feedback_plan', label: 'Before a resume acts on review feedback' },
             { name: 'policy.planner_may_approve', label: 'How readily a planner may approve its own plan' },
-        ],
-    },
-    {
-        title: 'Trust',
-        blurb: 'Only stricter from here: loosening one, adding a name, or raising a count is an edit to the file.',
-        keys: [
             { name: 'policy.stacking', label: 'Stack a branch on its blocker' },
             { name: 'trust.authorized_repliers', label: 'Who may answer a worker' },
             { name: 'trust.trusted_reviewers', label: 'Whose review a worker acts on unasked' },
@@ -427,11 +392,13 @@ export interface LabelledKey {
     setting: ConfigKey
     /** Its name in words. */
     label: string
+    /** The labelled part of its band it is in, if its band is in parts. */
+    part?: string
 }
 
 /**
- * The server's keys, by `CONFIG_GROUPS`'s panels: each panel with the keys it names that the server sent, then
- * `Other` with any it sent that no panel names. A panel left with no key is dropped.
+ * The server's keys, by `CONFIG_GROUPS`'s bands: each band with the keys it names that the server sent, each in its
+ * part, then `Other` with any it sent that no band names. A band left with no key is dropped.
  */
 export function groupedKeys(keys: ConfigKey[]): { group: ConfigGroup; keys: LabelledKey[] }[] {
     const byName = new Map(keys.map((k) => [k.name, k]))
@@ -439,11 +406,14 @@ export function groupedKeys(keys: ConfigKey[]): { group: ConfigGroup; keys: Labe
     const found: { group: ConfigGroup; keys: LabelledKey[] }[] = []
     for (const group of CONFIG_GROUPS) {
         const shown: LabelledKey[] = []
-        for (const { name, label } of group.keys) {
-            const setting = byName.get(name)
+        // A part runs from the key that names it to the next that names one, so it survives its first key going.
+        let part: string | undefined
+        for (const key of group.keys) {
+            part = key.part ?? part
+            const setting = byName.get(key.name)
             if (setting !== undefined) {
-                shown.push({ setting, label })
-                placed.add(name)
+                shown.push(part === undefined ? { setting, label: key.label } : { setting, label: key.label, part })
+                placed.add(key.name)
             }
         }
         if (shown.length > 0) {
@@ -455,6 +425,25 @@ export function groupedKeys(keys: ConfigKey[]): { group: ConfigGroup; keys: Labe
         found.push({ group: { title: 'Other', blurb: 'Keys this page has no words for yet.', keys: [] }, keys: rest })
     }
     return found
+}
+
+/** A band's keys, cut into its labelled parts in order: one run with no `part` for a band in no parts. */
+export function byPart(keys: LabelledKey[]): { part: string | undefined; keys: LabelledKey[] }[] {
+    const parts: { part: string | undefined; keys: LabelledKey[] }[] = []
+    for (const key of keys) {
+        const last = parts.at(-1)
+        if (last !== undefined && last.part === key.part) {
+            last.keys.push(key)
+        } else {
+            parts.push({ part: key.part, keys: [key] })
+        }
+    }
+    return parts
+}
+
+/** A band's title as a page's id and test id: `Retention & budget` is `retention-budget`. */
+export function groupSlug(title: string): string {
+    return title.toLowerCase().replaceAll(/[^a-z0-9]+/gu, '-')
 }
 
 /**

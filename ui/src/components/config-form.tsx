@@ -16,9 +16,11 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
     boundText,
+    byPart,
     changeList,
     configForm,
     groupedKeys,
+    groupSlug,
     oneWay,
     oneWayText,
     pendingText,
@@ -28,7 +30,7 @@ import {
     unsetText,
     valueText,
 } from '@/lib/config-settings'
-import type { ConfigChange, ConfigDrafts } from '@/lib/config-settings'
+import type { ConfigChange, ConfigDrafts, LabelledKey } from '@/lib/config-settings'
 import { cn } from '@/lib/utils'
 
 // The trust switches, and the side the page may move each to: the stricter one (TRUST_MODEL T8).
@@ -43,10 +45,10 @@ const CHANGED_ROW = 'relative before:absolute before:inset-y-0 before:left-0 bef
 /**
  * The Loop settings form: the keys the loop reads that the web UI may change, edited in place (DESIGN §22, M41):
  * counts, paces, and retentions within the bounds the server sets, and trust settings only toward stricter. The keys
- * come in panels by what they govern (`CONFIG_GROUPS`), each in words over its name in the file. A changed row is
- * marked, and a save bar, kept in view at the page's foot once something changed, lists the changes and writes them at
- * once. A save writes the workspace's private file alone,
- * keeping its comments, then asks the loop to read it again as Reload does.
+ * come in bands by what they govern (`CONFIG_GROUPS`), a band of several kinds in labelled parts, each key in words
+ * over its name in the file. A changed row is marked, and a save bar, kept in view at the page's foot once something
+ * changed, lists the changes and writes them at once. A save writes the workspace's private file alone, keeping its
+ * comments, then asks the loop to read it again as Reload does.
  */
 export function ConfigForm() {
     const client = useQueryClient()
@@ -114,6 +116,37 @@ function Form({
     const stricter = oneWay(settings.keys, form.changes)
     const draft = (name: string, value: ConfigDrafts[string]) => setDrafts({ ...drafts, [name]: value })
     const perRepo = settings.keys.find((k) => k.name === 'capacity.slots_per_repo')?.value
+    const row = ({ setting, label }: LabelledKey) =>
+        setting.name === REPO_SLOTS ? (
+            <RepoSlots
+                key={setting.name}
+                setting={setting}
+                label={label}
+                repos={settings.repos}
+                perRepo={typeof perRepo === 'number' ? perRepo : null}
+                draft={drafts[setting.name]}
+                changed={touched(setting.name)}
+                errors={form.errors}
+                onDraft={(value) => draft(setting.name, value)}
+            />
+        ) : (
+            <li
+                key={setting.name}
+                className={cn('flex flex-col gap-1 p-3', touched(setting.name) && CHANGED_ROW)}
+                data-changed={touched(setting.name) || undefined}
+            >
+                <div className="flex items-center justify-between gap-4">
+                    <KeyLabel setting={setting} label={label} every={settings.every} changed={touched(setting.name)} />
+                    <Control
+                        setting={setting}
+                        draft={drafts[setting.name]}
+                        error={form.errors[setting.name]}
+                        onDraft={(value) => draft(setting.name, value)}
+                    />
+                </div>
+                <FieldError name={setting.name} error={form.errors[setting.name]} />
+            </li>
+        )
     return (
         <form
             className="flex flex-col gap-6"
@@ -128,51 +161,22 @@ function Form({
                 {groupedKeys(settings.keys).map(({ group, keys: shown }) => (
                     <Panel
                         key={group.title}
-                        // Trust's lists of names want the width; the counts sit two panels to a row.
-                        className={group.title === 'Trust' ? 'xl:col-span-2' : undefined}
-                        data-testid={`config-group-${group.title.toLowerCase()}`}
+                        // Guardrails' lists of names want the width; the counts sit two bands to a row.
+                        className={group.title === 'Guardrails' ? 'xl:col-span-2' : undefined}
+                        data-testid={`config-group-${groupSlug(group.title)}`}
                     >
                         <PanelHeader label={group.title} />
                         <p className="border-b px-3 py-2 text-xs text-muted-foreground">{group.blurb}</p>
-                        <ul className="divide-y">
-                            {shown.map(({ setting, label }) =>
-                                setting.name === REPO_SLOTS ? (
-                                    <RepoSlots
-                                        key={setting.name}
-                                        setting={setting}
-                                        label={label}
-                                        repos={settings.repos}
-                                        perRepo={typeof perRepo === 'number' ? perRepo : null}
-                                        draft={drafts[setting.name]}
-                                        changed={touched(setting.name)}
-                                        errors={form.errors}
-                                        onDraft={(value) => draft(setting.name, value)}
-                                    />
-                                ) : (
-                                    <li
-                                        key={setting.name}
-                                        className={cn('flex flex-col gap-1 p-3', touched(setting.name) && CHANGED_ROW)}
-                                        data-changed={touched(setting.name) || undefined}
-                                    >
-                                        <div className="flex items-center justify-between gap-4">
-                                            <KeyLabel
-                                                setting={setting}
-                                                label={label}
-                                                every={settings.every}
-                                                changed={touched(setting.name)}
-                                            />
-                                            <Control
-                                                setting={setting}
-                                                draft={drafts[setting.name]}
-                                                error={form.errors[setting.name]}
-                                                onDraft={(value) => draft(setting.name, value)}
-                                            />
-                                        </div>
-                                        <FieldError name={setting.name} error={form.errors[setting.name]} />
-                                    </li>
-                                ),
-                            )}
-                        </ul>
+                        {byPart(shown).map(({ part, keys: inPart }) => (
+                            <section key={part ?? ''} className="border-b last:border-b-0" aria-label={part}>
+                                {part !== undefined && (
+                                    <h3 className="border-b px-3 pt-3 pb-1.5 panel-label text-muted-foreground">
+                                        {part}
+                                    </h3>
+                                )}
+                                <ul className="divide-y">{inPart.map((k) => row(k))}</ul>
+                            </section>
+                        ))}
                     </Panel>
                 ))}
             </div>

@@ -1157,8 +1157,9 @@ reader, so no table repeats them.
   same picker of one, each id whole, as a gateway can list dozens; the button, list, and item are
   `src/components/picker.tsx`, which both build on.
 - **A config page** (`ConfigForm`, `/settings/limits`, which Settings links to from a one-line panel so Settings stays
-  short): the keys in panels by what they govern (`CONFIG_GROUPS` in `src/lib/config-settings.ts`), a key no panel names
-  in an `Other` panel. A row is the key in words over its name in the file in monospace, where its value comes from,
+  short): the keys in a few bands by what they govern (`CONFIG_GROUPS` in `src/lib/config-settings.ts`), a band whose
+  keys share a unit cut into labelled parts (`h3`) so the unit never decides where a key lives, and a key no band names
+  in an `Other` band. A row is the key in words over its name in the file in monospace, where its value comes from,
   and how far the page may take it, and its control at the row's end. A switch already on its stricter side is
   disabled, not hidden, so the page still says what it is. A list keyed by repository lists only the repositories with
   a value of their own and a repository picker to give another one, so a workspace of many repositories does not get a

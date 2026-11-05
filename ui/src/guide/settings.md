@@ -115,26 +115,27 @@ for up to a week, for outages with ambitions.
 
 ## Loop settings
 
-**Open** takes you to a page of its own for the numbers you change most: how many workers, chores, reviews, and tasks
-run at once, each pool's slots, how many tries a ticket, a plan, or a review's draft gets, how many tickets an epic
-holds, how much you may attach to one, how often the loop ticks and asks the tracker and the connectors what's new, how
-long feedback waits on a red build or a pending one and a PR's head settles before its review, how long a run or a
-slot's setup may take before canopy stops it, and the monthly budget the [spend page](reports#the-spend-page) tracks,
-with any alerts short of or past it. You can add and drop alerts freely here: the 100% one isn't in the list, so
-dropping everything still leaves it.
+**Open** takes you to a page of its own for the numbers you change most, in five bands. **Capacity** is how many
+workers, chores, reviews, and tasks run at once, each pool's slots, and how much you may attach to a ticket.
+**Attempts** is how many tries a ticket, a plan, or a review's draft gets, and how many tickets an epic holds.
+**Timing** comes in three parts, since every one of them is in minutes and you shouldn't have to guess which: **Pace**,
+how often the loop ticks and asks the tracker and the connectors what's new; **Waits**, how long it holds off after a
+red build, for feedback to go quiet or its checks to finish, and for a PR's head to settle before its review; and
+**Timeouts**, how long a run or a slot's setup may take before canopy stops it.
 
-**Retention** says how many days canopy keeps a run's files, a tick's, the journal's old rows, and a retired note's
-text before a tick removes them. Lengthen them as you like, or set 0 to keep that kind forever; shortening stops at a
-floor (a week of run files, a month of journal), since the transcript a shorter one would delete is the one that shows
-what a run did. If you want last Tuesday gone, the file still takes 1.
+**Retention & budget** says how many days canopy keeps a run's files, a tick's, the journal's old rows, and a retired
+note's text before a tick removes them. Lengthen them as you like, or set 0 to keep that kind forever; shortening stops
+at a floor (a week of run files, a month of journal), since the transcript a shorter one would delete is the one that
+shows what a run did. If you want last Tuesday gone, the file still takes 1. Below them sits the monthly budget the
+[spend page](reports#the-spend-page) tracks, with any alerts short of or past it. You can add and drop alerts freely:
+the 100% one isn't in the list, so dropping everything still leaves it.
 
-It also holds the settings that only get stricter from here. **Plans** says which work waits on a plan you approve,
-and how readily a planner may wave its own plan through: you can make tickets wait, or take the planner's say away,
-but not the reverse. **Trust** lets you drop a trusted reviewer or an authorized replier, never add one, have workers
-draft their review replies for you instead of posting them, turn `trust.rebase` off but not on, and cut the reruns of
-flaky checks but not raise them. A stolen session that could add a replier would keep steering your workers after you
-changed the secret, so adding one stays an edit to the file. A choice that would loosen is greyed out, so there's no
-button to find out the hard way.
+**Guardrails** holds the settings that only get stricter from here. You can make tickets wait on a plan you approve,
+or take a planner's say over its own plan away, but not the reverse. You can drop a trusted reviewer or an authorized
+replier, never add one, have workers draft their review replies for you instead of posting them, turn `trust.rebase`
+off but not on, and cut the reruns of flaky checks but not raise them. A stolen session that could add a replier would
+keep steering your workers after you changed the secret, so adding one stays an edit to the file. A choice that would
+loosen is greyed out, so there's no button to find out the hard way.
 
 Each row says where its value comes from and how far the page will take it. Counts stop at a ceiling (32 workers, 10
 attempts, a $10,000 budget) and paces and retentions at a floor (a tick every 2 minutes, a week of run files); the
