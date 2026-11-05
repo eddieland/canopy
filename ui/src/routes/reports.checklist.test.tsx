@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from '@tanstack/react-router'
 import type { AnyRouter } from '@tanstack/react-router'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { keys } from '@/api/queries'
@@ -178,20 +178,38 @@ describe('the checklist page', () => {
         expect(screen.queryByRole('button', { name: '4 fixed: the runs' })).toBeNull()
     })
 
-    it('opens the runs on a mouse resting on the count, and closes them once it leaves', async () => {
+    it('opens the runs on a mouse resting on the count and closes them as it leaves, the focus untouched', async () => {
         await renderPage()
         const count = await screen.findByRole('button', { name: '3 held: the runs' })
-        fireEvent.pointerEnter(count, { pointerType: 'mouse' })
-        const runs = await screen.findByTestId('checklist-runs')
-        expect(
-            within(runs)
-                .getAllByRole('link')
-                .map((a) => a.textContent),
-        ).toEqual(['run:42', 'task:6#2'])
-        // Opened by a hover, it leaves the focus where it was.
-        expect(runs.contains(document.activeElement)).toBe(false)
-        fireEvent.pointerLeave(count, { pointerType: 'mouse' })
-        await waitFor(() => expect(screen.queryByTestId('checklist-runs')).toBeNull())
+        // The keyboard is elsewhere on the page when the pointer passes over the count.
+        const elsewhere = screen.getByRole('radio', { name: 'list order' })
+        elsewhere.focus()
+        vi.useFakeTimers()
+        try {
+            fireEvent.pointerEnter(count, { pointerType: 'mouse' })
+            act(() => {
+                vi.advanceTimersByTime(600)
+            })
+            const runs = screen.getByTestId('checklist-runs')
+            expect(
+                within(runs)
+                    .getAllByRole('link')
+                    .map((a) => a.textContent),
+            ).toEqual(['run:42', 'task:6#2'])
+            expect(document.activeElement).toBe(elsewhere)
+            fireEvent.pointerLeave(count, { pointerType: 'mouse' })
+            act(() => {
+                vi.advanceTimersByTime(300)
+            })
+            expect(screen.queryByTestId('checklist-runs')).toBeNull()
+            // Radix gives the focus back a moment after they close.
+            act(() => {
+                vi.advanceTimersByTime(50)
+            })
+            expect(document.activeElement).toBe(elsewhere)
+        } finally {
+            vi.useRealTimers()
+        }
     })
 
     it('keeps the runs a hover opened open on a click, past the pointer leaving', async () => {

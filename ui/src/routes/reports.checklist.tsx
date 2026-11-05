@@ -396,12 +396,18 @@ function AnswerCount({ item, column }: { item: ChecklistItemCounts; column: Answ
     // Open from a hover, which leaving closes and which keeps the focus where it was, or from a click, which only a
     // click outside or Escape closes.
     const [open, setOpen] = useState<'hover' | 'click' | null>(null)
+    // What opened them last, read as they close, when `open` is already null.
+    const openedBy = useRef<'hover' | 'click'>('click')
     const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
     useEffect(() => () => clearTimeout(timer.current), [])
     const count = item[column.key]
     const runs = column.key === 'held' ? item.held_runs : column.key === 'fixed' ? item.fixed_runs : []
     if (count === 0 || runs.length === 0) {
         return count
+    }
+    const openAs = (how: 'hover' | 'click') => {
+        openedBy.current = how
+        setOpen(how)
     }
     // A touch's pointer enters as it taps: only a mouse hovers, so a tap opens them as a click does.
     const enter = (event: PointerEvent) => {
@@ -410,7 +416,7 @@ function AnswerCount({ item, column }: { item: ChecklistItemCounts; column: Answ
         }
         clearTimeout(timer.current)
         if (open === null) {
-            timer.current = setTimeout(() => setOpen('hover'), HOVER_OPEN_MS)
+            timer.current = setTimeout(() => openAs('hover'), HOVER_OPEN_MS)
         }
     }
     const leave = (event: PointerEvent) => {
@@ -425,7 +431,11 @@ function AnswerCount({ item, column }: { item: ChecklistItemCounts; column: Answ
             open={open !== null}
             onOpenChange={(next) => {
                 clearTimeout(timer.current)
-                setOpen(next ? 'click' : null)
+                if (next) {
+                    openAs('click')
+                } else {
+                    setOpen(null)
+                }
             }}
         >
             <PopoverTrigger
@@ -439,7 +449,7 @@ function AnswerCount({ item, column }: { item: ChecklistItemCounts; column: Answ
                     if (open === 'hover') {
                         event.preventDefault()
                         clearTimeout(timer.current)
-                        setOpen('click')
+                        openAs('click')
                     }
                 }}
             >
@@ -450,9 +460,15 @@ function AnswerCount({ item, column }: { item: ChecklistItemCounts; column: Answ
                 className="w-96 p-3 text-left font-sans"
                 onPointerEnter={enter}
                 onPointerLeave={leave}
-                // Runs a hover opened leave the focus where it was: a passing pointer takes nothing from the keyboard.
+                // Runs a hover opened leave the focus where it was, as they open and as they close: a passing pointer
+                // takes nothing from the keyboard. Radix would move it into them, and back to the count after.
                 onOpenAutoFocus={(event) => {
-                    if (open === 'hover') {
+                    if (openedBy.current === 'hover') {
+                        event.preventDefault()
+                    }
+                }}
+                onCloseAutoFocus={(event) => {
+                    if (openedBy.current === 'hover') {
                         event.preventDefault()
                     }
                 }}
