@@ -165,8 +165,11 @@ describe('config settings', () => {
             'capacity.max_workers': 'empty: type a count, or Discard to keep 2',
             'capacity.repo_slots.web': 'empty: type a count, or Discard to keep 4',
         })
-        // A repository given no count of its own yet, or a pool left unmanaged, holds nothing to keep.
-        expect(changes({ 'capacity.repo_slots': { api: '' }, 'capacity.slots_per_repo': '' })).toEqual({})
+        // A pool left unmanaged holds nothing to keep; a repository just picked holds a draft to type or discard.
+        expect(changes({ 'capacity.slots_per_repo': '' })).toEqual({})
+        expect(configForm(KEYS, { 'capacity.repo_slots': { api: '' } }).errors).toEqual({
+            'capacity.repo_slots.api': 'empty: type a count, or Discard',
+        })
     })
 
     it('give an unmanaged pool a count only when one is typed', () => {
@@ -175,7 +178,7 @@ describe('config settings', () => {
     })
 
     it('send only the repositories whose count changed', () => {
-        expect(changes({ 'capacity.repo_slots': { web: '4', api: '' } })).toEqual({})
+        expect(changes({ 'capacity.repo_slots': { web: '4' } })).toEqual({})
         expect(changes({ 'capacity.repo_slots': { web: '5', api: '2' } })).toEqual({
             'capacity.repo_slots': { web: 5, api: 2 },
         })
