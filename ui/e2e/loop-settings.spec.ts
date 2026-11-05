@@ -24,3 +24,18 @@ test('the index takes you to a band, and marks the one in view', async ({ page }
     await expect(index.getByRole('link', { name: /^Guardrails/u })).toHaveAttribute('data-current', 'true')
     await expect(index.getByRole('link', { name: /^Capacity/u })).not.toHaveAttribute('data-current')
 })
+
+test('?q= filters the rows to those whose label or key holds it, and Escape shows them all again', async ({ page }) => {
+    await page.goto('settings/limits?q=flaky')
+    await settled(page)
+    const form = page.getByRole('form', { name: 'Loop settings' })
+    await expect(form.getByRole('listitem')).toHaveCount(1)
+    await expect(form.getByRole('textbox', { name: 'trust.max_flaky_kicks' })).toBeVisible()
+    await expect(
+        page.getByRole('navigation', { name: 'Bands' }).getByRole('link', { name: 'Capacity' }),
+    ).toHaveAttribute('data-hidden', 'true')
+    const filter = page.getByRole('searchbox', { name: 'Filter settings by label or key' })
+    await filter.press('Escape')
+    await expect(page).not.toHaveURL(/q=/u)
+    await expect(form.getByRole('textbox', { name: 'capacity.max_workers' })).toBeVisible()
+})

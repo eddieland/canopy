@@ -2,15 +2,22 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { ConfigFile, ConfigForm } from '@/components/config-form'
 import { PageHeader } from '@/components/panel'
-import { SOURCES_HELP } from '@/lib/config-settings'
+import { configQueryOf, SOURCES_HELP } from '@/lib/config-settings'
+
+interface LimitsSearch {
+    q?: string | undefined
+}
 
 /** The loop settings of the workspace's private config, a page of Settings' own: its panels and one save
  * bar (M41). */
 export const Route = createFileRoute('/settings_/limits')({
+    validateSearch: (search: Record<string, unknown>): LimitsSearch => ({ q: configQueryOf(search['q']) }),
     component: LimitsPage,
 })
 
 function LimitsPage() {
+    const { q } = Route.useSearch()
+    const navigate = Route.useNavigate()
     return (
         <>
             <PageHeader title="Loop settings" help={SOURCES_HELP}>
@@ -19,7 +26,7 @@ function LimitsPage() {
                 user config is never changed. Limits and retentions move within their bounds; trust settings only get
                 stricter; anything else is an edit to the file.
             </PageHeader>
-            <ConfigForm />
+            <ConfigForm q={q} onFilter={(text) => void navigate({ search: { q: text }, replace: true })} />
         </>
     )
 }

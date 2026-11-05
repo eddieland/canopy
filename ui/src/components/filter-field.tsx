@@ -1,11 +1,13 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { SearchField } from '@/components/input'
 
 /**
  * A list's text filter, kept in its page's `?q=` (`q`): the list narrows as the operator types, `onFilter` taking the
- * text as `queryOf` keeps it, and Escape leaves the field. The page replaces the history entry on each keystroke, so
- * Back leaves the page rather than stepping through each one; Back or a link changing `?q=` shows the new text here.
+ * text as `queryOf` keeps it, and Escape leaves the field, or with `clearOnEscape` empties it first. The page replaces
+ * the history entry on each keystroke, so Back leaves the page rather than stepping through each one; Back or a link
+ * changing `?q=` shows the new text here.
  */
 export function FilterField({
     q,
@@ -14,6 +16,8 @@ export function FilterField({
     label,
     placeholder,
     maxLength,
+    end,
+    clearOnEscape = false,
     className,
 }: {
     /** The page's validated `?q=`. */
@@ -28,6 +32,10 @@ export function FilterField({
     placeholder: string
     /** The longest text the page keeps. */
     maxLength: number
+    /** What sits at the field's end, such as how many rows match. */
+    end?: ReactNode
+    /** Whether Escape empties the field before it leaves it, for a page filtered on the way to one row. */
+    clearOnEscape?: boolean
     /** Classes for the field's box, such as its width. */
     className?: string
 }) {
@@ -54,12 +62,18 @@ export function FilterField({
             value={value}
             onChange={(event) => filter(event.target.value)}
             onKeyDown={(event) => {
-                if (event.key === 'Escape') {
+                if (event.key !== 'Escape') {
+                    return
+                }
+                if (clearOnEscape && value !== '') {
+                    filter('')
+                } else {
                     event.currentTarget.blur()
                 }
             }}
             onClear={() => filter('')}
             clearLabel="Clear the filter"
+            end={end}
             className={className}
         />
     )

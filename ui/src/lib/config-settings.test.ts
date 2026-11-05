@@ -4,11 +4,13 @@ import type { ConfigKey, ConfigSaved } from '@/api/types'
 
 import {
     bandCounts,
+    bandsMatching,
     boundText,
     byPart,
     changeList,
     CONFIG_GROUPS,
     configForm,
+    configQueryOf,
     groupedKeys,
     groupSlug,
     oneWay,
@@ -341,5 +343,40 @@ describe('the band index', () => {
         expect(bandCounts(keys, () => false)).toEqual({ set: 2, changed: 0 })
         expect(bandCounts(keys, (name) => name !== 'capacity.max_workers')).toEqual({ set: 2, changed: 2 })
         expect(bandCounts([], () => true)).toEqual({ set: 0, changed: 0 })
+    })
+})
+
+describe('the filter', () => {
+    const bands = groupedKeys([WORKERS, PACE, KICKS, ALERTS])
+    const rows = (q: string | undefined, changed: (name: string) => boolean = () => false) =>
+        bandsMatching(bands, q, changed).map(({ group, keys }) => [group.title, keys.map((k) => k.setting.name)])
+
+    it("match a row by its label, its key, or its band's blurb, ignoring case", () => {
+        expect(rows('WORKERS AT')).toEqual([
+            ['Capacity', ['capacity.max_workers']],
+            ['Timing', []],
+            ['Retention & budget', []],
+            ['Guardrails', []],
+        ])
+        expect(rows('flaky_kicks').flatMap(([, keys]) => keys)).toEqual(['trust.max_flaky_kicks'])
+        // Timing's blurb: every row in the band.
+        expect(rows('looks around').flatMap(([, keys]) => keys)).toEqual(['loop.interval_minutes'])
+    })
+
+    it('match nothing, leaving every band empty, and everything when there is no filter', () => {
+        expect(rows('zzz').flatMap(([, keys]) => keys)).toEqual([])
+        expect(rows(undefined).flatMap(([, keys]) => keys)).toHaveLength(4)
+    })
+
+    it('keep a row with an unsaved change, whatever the filter', () => {
+        expect(rows('zzz', (name) => name === 'spend.budget_alerts').flatMap(([, keys]) => keys)).toEqual([
+            'spend.budget_alerts',
+        ])
+    })
+
+    it('keep a query of some word, cut to its longest', () => {
+        expect(configQueryOf('  ')).toBeUndefined()
+        expect(configQueryOf(3)).toBeUndefined()
+        expect(configQueryOf('x'.repeat(150))).toHaveLength(100)
     })
 })

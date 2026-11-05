@@ -8,9 +8,10 @@ import { refreshReloaded, saveConfig } from '@/api/mutations'
 import { configQuery } from '@/api/queries'
 import type { ConfigKey, ConfigSaved, ConfigSettings, ConfigValue } from '@/api/types'
 import { Disclosure } from '@/components/disclosure'
+import { FilterField } from '@/components/filter-field'
 import { Input } from '@/components/input'
 import { Notice } from '@/components/notice'
-import { Panel, PanelSkeleton } from '@/components/panel'
+import { Empty, Panel, PanelSkeleton } from '@/components/panel'
 import { RepoSelect } from '@/components/repo-picker'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
@@ -19,10 +20,13 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
     bandCounts,
+    bandsMatching,
     boundText,
     byPart,
     changeList,
+    CONFIG_QUERY_MAX,
     configForm,
+    configQueryOf,
     groupedKeys,
     groupSlug,
     oneWay,
@@ -62,7 +66,15 @@ const CHANGED_ROW = 'relative before:absolute before:inset-y-0 before:left-0 bef
  * comments, then asks the loop to read it again as Reload does. An index of the bands sits beside the form, sticking as
  * it scrolls, or in a line over it in a narrower pane; each row is its key's anchor, `#policy.max_resume_attempts`.
  */
-export function ConfigForm() {
+export function ConfigForm({
+    q,
+    onFilter,
+}: {
+    /** The page's `?q=`: only the rows whose label, key, or band's blurb holds it show, and every unsaved one. */
+    q: string | undefined
+    /** Sets the page's `?q=`. */
+    onFilter: (query: string | undefined) => void
+}) {
     const client = useQueryClient()
     const { data, error } = useQuery(configQuery)
     // Here, not in the form: a save reads the file again, and the form over the new read keeps what the save said.
@@ -86,6 +98,8 @@ export function ConfigForm() {
             saved={mutation.data}
             refused={mutation.error}
             onSave={(changes) => mutation.mutate({ hash: data.hash, changes })}
+            q={q}
+            onFilter={onFilter}
         />
     )
 }
@@ -110,12 +124,16 @@ function Form({
     saved,
     refused,
     onSave,
+    q,
+    onFilter,
 }: {
     settings: ConfigSettings
     saving: boolean
     saved: ConfigSaved | undefined
     refused: Error | null
     onSave: (changes: Record<string, ConfigValue>) => void
+    q: string | undefined
+    onFilter: (query: string | undefined) => void
 }) {
     const [drafts, setDrafts] = useState<ConfigDrafts>({})
     const form = configForm(settings.keys, drafts)
@@ -129,7 +147,11 @@ function Form({
     const draft = (name: string, value: ConfigDrafts[string]) => setDrafts({ ...drafts, [name]: value })
     const perRepo = settings.keys.find((k) => k.name === 'capacity.slots_per_repo')?.value
     const bands = groupedKeys(settings.keys)
-    const inView = useBandInView(bands.map(({ group }) => bandId(group.title)).join(' '))
+    // What the filter leaves: each band's rows that match, and every unsaved one; a band with none is not drawn.
+    const matched = bandsMatching(bands, q, touched)
+    const drawn = matched.filter(({ keys }) => keys.length > 0)
+    const matching = drawn.reduce((count, { keys }) => count + keys.length, 0)
+    const inView = useBandInView(drawn.map(({ group }) => bandId(group.title)).join(' '))
     // The row the page was opened at (`#capacity.max_workers`): scrolled to, and lit once, until its light has played.
     const hash = useLocation({ select: (location) => location.hash })
     const [lit, setLit] = useState<string>()
@@ -194,98 +216,129 @@ function Form({
                     )}
                     data-testid="config-index"
                 >
-                    {bands.map(({ group, keys: shown }) => (
+                    {bands.map(({ group, keys: shown }, i) => (
                         <BandLink
                             key={group.title}
                             title={group.title}
                             current={inView === bandId(group.title)}
+                            hidden={matched[i]?.keys.length === 0}
                             {...bandCounts(shown, touched)}
                         />
                     ))}
                 </nav>
-                <form
-                    className="flex max-w-4xl min-w-0 flex-col gap-8"
-                    aria-label="Loop settings"
-                    data-testid="config-form"
-                    onSubmit={(event) => {
-                        event.preventDefault()
-                        onSave(form.changes)
-                    }}
-                >
-                    {bands.map(({ group, keys: shown }) => (
-                        <section
-                            key={group.title}
-                            id={bandId(group.title)}
-                            aria-labelledby={`${bandId(group.title)}-heading`}
-                            className="flex scroll-mt-4 flex-col gap-2"
-                            data-testid={`config-group-${groupSlug(group.title)}`}
-                        >
-                            {/* A band's heading stands over its panel, a step above the rows' labels, in Settings'
-                                color. */}
-                            <div className="flex flex-col gap-0.5">
-                                <h2
-                                    id={`${bandId(group.title)}-heading`}
-                                    className={cn('text-base font-semibold', SECTION_TEXT['/settings'])}
-                                >
-                                    {group.title}
-                                </h2>
-                                <p className="text-xs text-muted-foreground">{group.blurb}</p>
-                            </div>
+                <div className="flex max-w-4xl min-w-0 flex-col gap-6">
+                    {/* Outside the form, so Enter in it filters and never saves. */}
+                    <search>
+                        <FilterField
+                            q={q}
+                            queryOf={configQueryOf}
+                            onFilter={onFilter}
+                            label="Filter settings by label or key"
+                            placeholder="Filter by label or key"
+                            maxLength={CONFIG_QUERY_MAX}
+                            clearOnEscape
+                            end={
+                                q === undefined ? undefined : (
+                                    <span className="readout shrink-0 text-xs text-muted-foreground">
+                                        {matching} of {settings.keys.length}
+                                    </span>
+                                )
+                            }
+                        />
+                    </search>
+                    <form
+                        className="flex min-w-0 flex-col gap-8"
+                        aria-label="Loop settings"
+                        data-testid="config-form"
+                        onSubmit={(event) => {
+                            event.preventDefault()
+                            onSave(form.changes)
+                        }}
+                    >
+                        {drawn.length === 0 && (
                             <Panel>
-                                {byPart(shown).map(({ part, keys: inPart }) => (
-                                    <section key={part ?? ''} className="border-b last:border-b-0" aria-label={part}>
-                                        {part !== undefined && (
-                                            <h3
-                                                className={cn(
-                                                    'border-b bg-surface-raised/50 px-3 py-2',
-                                                    'panel-label text-foreground',
-                                                )}
-                                            >
-                                                {part}
-                                            </h3>
-                                        )}
-                                        <ul className="divide-y">{inPart.map((k) => row(k))}</ul>
-                                    </section>
-                                ))}
+                                <Empty>no setting&apos;s label or key holds “{q}”</Empty>
                             </Panel>
-                        </section>
-                    ))}
-                    {/* Kept in view at the page's foot once something changed, so a change made far down the
+                        )}
+                        {drawn.map(({ group, keys: shown }) => (
+                            <section
+                                key={group.title}
+                                id={bandId(group.title)}
+                                aria-labelledby={`${bandId(group.title)}-heading`}
+                                className="flex scroll-mt-4 flex-col gap-2"
+                                data-testid={`config-group-${groupSlug(group.title)}`}
+                            >
+                                {/* A band's heading stands over its panel, a step above the rows' labels, in Settings'
+                                color. */}
+                                <div className="flex flex-col gap-0.5">
+                                    <h2
+                                        id={`${bandId(group.title)}-heading`}
+                                        className={cn('text-base font-semibold', SECTION_TEXT['/settings'])}
+                                    >
+                                        {group.title}
+                                    </h2>
+                                    <p className="text-xs text-muted-foreground">{group.blurb}</p>
+                                </div>
+                                <Panel>
+                                    {byPart(shown).map(({ part, keys: inPart }) => (
+                                        <section
+                                            key={part ?? ''}
+                                            className="border-b last:border-b-0"
+                                            aria-label={part}
+                                        >
+                                            {part !== undefined && (
+                                                <h3
+                                                    className={cn(
+                                                        'border-b bg-surface-raised/50 px-3 py-2',
+                                                        'panel-label text-foreground',
+                                                    )}
+                                                >
+                                                    {part}
+                                                </h3>
+                                            )}
+                                            <ul className="divide-y">{inPart.map((k) => row(k))}</ul>
+                                        </section>
+                                    ))}
+                                </Panel>
+                            </section>
+                        ))}
+                        {/* Kept in view at the page's foot once something changed, so a change made far down the
                         page is never left unsaved unseen. Until then its height is held at the page's end, so its
                         coming moves nothing. */}
-                    {barShown ? (
-                        <Panel className="sticky bottom-4 z-10 min-h-16 shadow-float" data-testid="config-save-bar">
-                            <div className="flex items-start justify-between gap-4 p-3">
-                                <div className="flex min-w-0 flex-col gap-1">
-                                    <p className="text-sm text-foreground" data-testid="config-pending">
-                                        {pendingText(pending, errors)}
-                                    </p>
-                                    <ChangeList changes={changeList(settings.keys, form.changes)} />
-                                    {stricter.length > 0 && (
-                                        <p
-                                            className="flex items-center gap-1.5 text-xs text-status-blocked"
-                                            data-testid="config-one-way"
-                                        >
-                                            <LockKeyhole aria-hidden className="size-3 shrink-0" />
-                                            {oneWayText(stricter)}
+                        {barShown ? (
+                            <Panel className="sticky bottom-4 z-10 min-h-16 shadow-float" data-testid="config-save-bar">
+                                <div className="flex items-start justify-between gap-4 p-3">
+                                    <div className="flex min-w-0 flex-col gap-1">
+                                        <p className="text-sm text-foreground" data-testid="config-pending">
+                                            {pendingText(pending, errors)}
                                         </p>
-                                    )}
-                                    {/* A field in error says why on its own row; this is what the server said of a
+                                        <ChangeList changes={changeList(settings.keys, form.changes)} />
+                                        {stricter.length > 0 && (
+                                            <p
+                                                className="flex items-center gap-1.5 text-xs text-status-blocked"
+                                                data-testid="config-one-way"
+                                            >
+                                                <LockKeyhole aria-hidden className="size-3 shrink-0" />
+                                                {oneWayText(stricter)}
+                                            </p>
+                                        )}
+                                        {/* A field in error says why on its own row; this is what the server said of a
                                         save. */}
-                                    <Notice error={refused}>{saved ? savedText(saved) : null}</Notice>
+                                        <Notice error={refused}>{saved ? savedText(saved) : null}</Notice>
+                                    </div>
+                                    <SaveActions
+                                        pending={pending}
+                                        errors={errors}
+                                        saving={saving}
+                                        onDiscard={() => setDrafts({})}
+                                    />
                                 </div>
-                                <SaveActions
-                                    pending={pending}
-                                    errors={errors}
-                                    saving={saving}
-                                    onDiscard={() => setDrafts({})}
-                                />
-                            </div>
-                        </Panel>
-                    ) : (
-                        <div aria-hidden className="min-h-16" />
-                    )}
-                </form>
+                            </Panel>
+                        ) : (
+                            <div aria-hidden className="min-h-16" />
+                        )}
+                    </form>
+                </div>
             </div>
         </div>
     )
@@ -323,7 +376,7 @@ function useBandInView(ids: string): string | undefined {
             // The top half of the scroll: a band counts once it reaches there, and until it leaves the top.
             { rootMargin: '0px 0px -50% 0px' },
         )
-        for (const id of ids.split(' ')) {
+        for (const id of ids.split(' ').filter((one) => one !== '')) {
             const band = document.querySelector(`#${CSS.escape(id)}`)
             if (band !== null) {
                 observer.observe(band)
@@ -336,19 +389,36 @@ function useBandInView(ids: string): string | undefined {
 
 /**
  * A band's entry in the page's index: its title, linking to it, then how many of its keys this workspace sets and how
- * many of its rows wait unsaved, each left out at none. The band most in view is marked current, in the foreground.
+ * many of its rows wait unsaved, each left out at none. The band most in view is marked current, in the foreground,
+ * and one the filter left empty is dimmed.
  */
-function BandLink({ title, current, set, changed }: { title: string; current: boolean; set: number; changed: number }) {
+function BandLink({
+    title,
+    current,
+    hidden,
+    set,
+    changed,
+}: {
+    title: string
+    current: boolean
+    /** Whether the filter left the band no row to show: it stays, dimmed, so the index keeps its shape. */
+    hidden: boolean
+    set: number
+    changed: number
+}) {
     return (
         <Link
             to="/settings/limits"
+            // The filter stays as it is: a band link moves the page, not what it shows.
+            search
             hash={bandId(title)}
             // Only the band the address names is the link to where you are, not all five: they share a path.
             activeOptions={{ includeHash: true }}
             data-current={current || undefined}
+            data-hidden={hidden || undefined}
             className={cn(
                 'flex items-baseline gap-2 py-0.5 text-sm text-muted-foreground hover:text-foreground',
-                'data-current:text-foreground',
+                'data-current:text-foreground data-hidden:opacity-50',
             )}
             data-testid={`config-index-${groupSlug(title)}`}
         >

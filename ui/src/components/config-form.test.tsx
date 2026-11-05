@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query'
 import { cleanup, fireEvent, screen, within } from '@testing-library/react'
+import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { configQuery } from '@/api/queries'
@@ -40,11 +41,20 @@ const SETTINGS: ConfigSettings = {
 
 afterEach(cleanup)
 
-/** The form over `settings`, read already and kept fresh, so it draws at once and asks the server nothing. */
-function renderForm(settings: ConfigSettings = SETTINGS): ReturnType<typeof renderRouted> {
+/**
+ * The form over `settings`, read already and kept fresh, so it draws at once and asks the server nothing, filtered by
+ * `q` as the page's `?q=` would, which its filter field sets.
+ */
+function renderForm(settings: ConfigSettings = SETTINGS, q?: string): ReturnType<typeof renderRouted> {
     const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
     client.setQueryData(configQuery.queryKey, settings)
-    return renderRouted(<ConfigForm />, { at: '/settings/limits', client })
+    return renderRouted(<Filtered q={q} />, { at: '/settings/limits', client })
+}
+
+/** The form with its `?q=` kept here, as the route keeps it in the address. */
+function Filtered({ q: initial }: { q: string | undefined }) {
+    const [q, setQ] = useState(initial)
+    return <ConfigForm q={q} onFilter={setQ} />
 }
 
 /** The form's button named `name`. */
@@ -151,6 +161,32 @@ describe('ConfigForm', () => {
         await renderForm()
         const row = document.querySelector<HTMLElement>('[id="capacity.max_workers"]')
         expect(row && within(row).getByRole('textbox', { name: 'capacity.max_workers' })).toBeTruthy()
+    })
+
+    it('shows only the rows the filter matches, and says how many', async () => {
+        await renderForm(SETTINGS, 'flaky')
+        expect(screen.queryByRole('textbox', { name: 'capacity.max_workers' })).toBeNull()
+        expect(screen.getByRole('textbox', { name: 'trust.max_flaky_kicks' })).toBeTruthy()
+        expect(screen.getByText('1 of 2')).toBeTruthy()
+        const index = screen.getByRole('navigation', { name: 'Bands' })
+        expect(within(index).getByRole('link', { name: 'Capacity' }).dataset['hidden']).toBe('true')
+    })
+
+    it('keeps a row with an unsaved change in view whatever the filter says', async () => {
+        await renderForm()
+        type('capacity.max_workers', '5')
+        fireEvent.change(screen.getByRole('searchbox', { name: 'Filter settings by label or key' }), {
+            target: { value: 'flaky' },
+        })
+        expect(screen.getByRole('textbox', { name: 'capacity.max_workers' })).toBeTruthy()
+        expect(screen.getByText('2 of 2')).toBeTruthy()
+    })
+
+    it('says so when nothing matches, and Escape empties the filter', async () => {
+        await renderForm(SETTINGS, 'nothing like it')
+        expect(screen.getByText("no setting's label or key holds “nothing like it”")).toBeTruthy()
+        fireEvent.keyDown(screen.getByRole('searchbox', { name: 'Filter settings by label or key' }), { key: 'Escape' })
+        expect(screen.getByRole('textbox', { name: 'capacity.max_workers' })).toBeTruthy()
     })
 })
 

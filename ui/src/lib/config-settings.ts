@@ -485,6 +485,47 @@ export function byPart(keys: LabelledKey[]): { part: string | undefined; keys: L
     return parts
 }
 
+/** The longest `?q=` Loop settings keeps. */
+export const CONFIG_QUERY_MAX = 100
+
+/** A `?q=` as Loop settings filters by it: a string cut to `CONFIG_QUERY_MAX`, or undefined when it holds no word. */
+export function configQueryOf(raw: unknown): string | undefined {
+    if (typeof raw !== 'string') {
+        return undefined
+    }
+    const text = raw.slice(0, CONFIG_QUERY_MAX)
+    return text.trim() === '' ? undefined : text
+}
+
+/**
+ * The bands as `q` filters them, ignoring case: each band with the rows whose label, key, or band's blurb holds it, and
+ * every row `changed` says holds an unsaved change, whatever `q` says, so a change is never hidden. A band left with no
+ * row stays, empty, so the index can say so. Every row when `q` is undefined.
+ */
+export function bandsMatching(
+    bands: { group: ConfigGroup; keys: LabelledKey[] }[],
+    q: string | undefined,
+    changed: (name: string) => boolean,
+): { group: ConfigGroup; keys: LabelledKey[] }[] {
+    if (q === undefined) {
+        return bands
+    }
+    const needle = q.trim().toLowerCase()
+    return bands.map(({ group, keys }) => {
+        const blurb = group.blurb.toLowerCase().includes(needle)
+        return {
+            group,
+            keys: keys.filter(
+                (k) =>
+                    blurb ||
+                    changed(k.setting.name) ||
+                    k.label.toLowerCase().includes(needle) ||
+                    k.setting.name.toLowerCase().includes(needle),
+            ),
+        }
+    })
+}
+
 /** What a band's entry in the page's index counts: its keys set in this workspace, and its rows changed and unsaved. */
 export interface BandCounts {
     /** Keys whose value this workspace's own config sets (source `private`). */
