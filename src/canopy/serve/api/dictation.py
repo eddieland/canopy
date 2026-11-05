@@ -73,7 +73,8 @@ def _dictate(backend: Backend, audio: bytes) -> Dictated:
             runner = ctx.runner
         found = dictation.transcribe(runner, template, audio, vocabulary)
     except conversation.Refused as r:
-        _log.warning("dictation refused", extra={"guard": r.guard, "reason": r.reason})
+        # The guard alone: a failure's reason quotes the command's stderr, where a speech tool may echo what it heard.
+        _log.warning("dictation refused", extra={"guard": r.guard})
         raise RefusedError(r) from None
     finally:
         backend.dictating.release()

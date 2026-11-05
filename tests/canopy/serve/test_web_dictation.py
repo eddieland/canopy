@@ -100,11 +100,19 @@ def test_a_recording_may_be_larger_than_any_other_body_within_its_own_bound(ctx:
     assert c.post("/api/dictation", content=past, headers=headers).status_code == 413
 
 
-def test_a_command_that_fails_is_refused_with_what_it_said(ctx: Context, tmp_path: Path) -> None:
-    command = stt(tmp_path, "echo 'error: model file not found' >&2; exit 3")
+def test_a_command_that_fails_is_refused_with_what_it_said_which_the_log_leaves_out(
+    ctx: Context,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # A speech tool may echo what it heard on stderr: the operator's page shows it, the log never keeps it.
+    command = stt(tmp_path, "echo 'heard: ship the importer' >&2; exit 3")
     c, headers = signed_in_client(dictating(ctx, f"{command} -f {{audio}}"))
     said = refused(c.post("/api/dictation", content=recording(), headers=headers))
-    assert said == f"failed: {command} exited 3: error: model file not found"
+    assert said == f"failed: {command} exited 3: heard: ship the importer"
+    [logged] = [r for r in caplog.records if r.getMessage() == "dictation refused"]
+    assert vars(logged)["guard"] == "failed"
+    assert not any("ship the importer" in str(value) for r in caplog.records for value in vars(r).values())
     c, headers = signed_in_client(dictating(ctx, "no-such-stt -f {audio}"))
     missing = refused(c.post("/api/dictation", content=recording(), headers=headers))
     assert missing == "failed: no-such-stt is not on the loop's PATH"
