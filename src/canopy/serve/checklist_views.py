@@ -69,6 +69,7 @@ def checklist_counts(backend: Backend, ctx: Context, days: int, *, repo: str | N
         grouped = checklist_answers.details(ctx.conn, now, days, repo=repo)
         before = checklist_answers.between(ctx.conn, *spend.window_before(found.since, days), repo=repo)
     runs = {(r.repo, r.item): r for r in grouped.items}
+    paths = _paths(ctx, {c.repo for c in found.items})
     return ChecklistCounts(
         since=db.parse_time(found.since),
         until=db.parse_time(found.until),
@@ -84,6 +85,8 @@ def checklist_counts(backend: Backend, ctx: Context, days: int, *, repo: str | N
                 held=c.held,
                 not_applicable=c.not_applicable,
                 unanswered=c.unanswered,
+                held_by=c.held_by,
+                paths=paths.get((c.repo, c.item)),
                 held_runs=_runs(runs[c.repo, c.item].held),
                 fixed_runs=_runs(runs[c.repo, c.item].fixed),
             )
@@ -133,6 +136,21 @@ def run_answers(conn: sqlite3.Connection, run_id: int, *, table: RunTable = "run
 def _item(item: checklists.Item) -> ChecklistItem:
     # One item as the operator wrote it: their own text, which the parser has already held to a list's bounds.
     return ChecklistItem(id=item.id, paths=list(item.paths), severity=item.severity, rule=item.rule)
+
+
+def _paths(ctx: Context, repos: Iterable[str]) -> dict[tuple[str, str], list[str]]:
+    # The paths each item of `repos`' lists names now, by repository and id: none for a list canopy cannot read, whose
+    # items the page then cannot say are scoped or not, nor for a repository the workspace no longer maps, whose name
+    # is the journal's and never names a file.
+    found: dict[tuple[str, str], list[str]] = {}
+    mapped = {r.name for r in ctx.ws.repos}
+    for repo in sorted(mapped.intersection(repos)):
+        try:
+            loaded = checklists.load(ctx.config, repo)
+        except checklists.ChecklistError:
+            continue
+        found.update({(repo, item.id): list(item.paths) for item in loaded.items} if loaded is not None else {})
+    return found
 
 
 def _runs(found: Iterable[AnsweredBy]) -> list[ChecklistRun]:

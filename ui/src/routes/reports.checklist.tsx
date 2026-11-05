@@ -58,8 +58,8 @@ interface ChecklistSearch {
 // What the page shows on every visit, on its title's hover: its description is the window's state.
 const HELP =
     "How worker runs answered each repository's checklist, item by item: the runs reminded of it, then how many " +
-    'answered pass, fixed, held, or n/a, and how many said nothing, as a bar and as counts. An item mostly n/a or ' +
-    'never failing is one to reword or drop; one often held is one to argue. Pick an item for its answers by week. ' +
+    'answered pass, fixed, held, or n/a, and how many said nothing, as a bar and as counts. An item that never fails ' +
+    'where it applies is one to drop; one often held is one to argue. Pick an item for its answers by week. ' +
     'As canopy checklist --days N prints it.'
 
 // What the runs reminded count, in its name's tip.
@@ -69,8 +69,9 @@ const REMINDED_HINT =
 
 // What the verdict column says, in its name's tip.
 const VERDICT_HINT =
-    'What the guide would say: drop? for an item given ten times or more that is mostly n/a or never failed, argue ' +
-    'for one held twice or more'
+    'What the guide would say, of the answers where the item applied: argue for one held often, by two tickets or ' +
+    'more; earning for one fixed often; narrow for one without paths that is mostly n/a; drop? for one that never ' +
+    'failed in thirty; too few while the answers cannot tell'
 
 /**
  * How worker runs answered each repository's checklist (DESIGN §42), as `canopy checklist` counts them: per repository

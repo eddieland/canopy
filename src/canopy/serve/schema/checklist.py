@@ -57,6 +57,12 @@ class ChecklistItemCounts(Model):
     """How many answered `n/a`: the item is about nothing the diff changes."""
     unanswered: int
     """How many said nothing of it in their result."""
+    held_by: int
+    """How many tickets the runs that answered `held` were of, a task's runs counting as one: a ticket's runs hold an
+    item over the same diff, so they make one disagreement."""
+    paths: list[str] | None
+    """The paths the item is about, as its repository's list names them now; empty for every path, and None when the
+    list no longer holds the item or cannot be read."""
     held_runs: list[ChecklistRun]
     """The runs that answered `held`, the newest first, at most twenty: `held` counts them all."""
     fixed_runs: list[ChecklistRun]

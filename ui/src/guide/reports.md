@@ -215,13 +215,21 @@ the answers that happened stand out. Hover a column's name for what it counts, o
 You read the bars before the numbers: an item that's one grey bar is about diffs your workers don't make, one solid
 green bar is a rule they keep without being asked, and a red band is a rule they keep declining.
 
-**verdict** does the judging the bars invite, by the advice in [Tuning the list](checklists#tuning-the-list). An item
-held twice or more says `argue`: take it up with whoever wrote the rule. An item given ten times or more that's mostly
-**n/a**, or never anything but a pass, says `drop?`: reword it or drop it, because a rule that never fails is a rule
-the workers are paying tokens to agree with. Under ten runs the page keeps quiet, since a rule that hasn't failed yet
-may just not have met the diff that fails it. The rest say nothing. A lot of **unanswered** usually means runs that
-never pushed, so were never asked: canopy counts every item of a run it gave a list to, pushed or not, and errs toward
-too many.
+**verdict** does the judging the bars invite, by the advice in [Tuning the list](checklists#tuning-the-list). It
+reads shares, not counts, of the answers where the item applied (pass, fixed, and held), so a month says no more than a
+week of the same answers, and a few out of many say little:
+
+- `argue`: held often, by runs of two tickets or more. Take it up with whoever wrote the rule.
+- `earning`: fixed often. Each fix is a review comment nobody had to write.
+- `narrow`: no `paths:`, and mostly **n/a** over ten answers or more. Give it the paths it's about.
+- `drop?`: never failed in thirty answers or more where it applied. Reword it or drop it, because a rule that never
+  fails is a rule the workers are paying tokens to agree with.
+- `too few`: no failure yet, in too few answers to tell a rule kept from one not yet met, or most of its runs said
+  nothing of it.
+
+The rest fail now and then, and say nothing. Hover a verdict for the answers behind it. A lot of **unanswered**
+usually means runs that never pushed, so were never asked: canopy counts every item of a run it gave a list to,
+pushed or not, and errs toward too many.
 
 A **held** count is a link: hover it and it shows the runs that held the item, newest first, each with the reason its
 worker gave, cut to a line. They stay while the pointer moves onto them, so you can follow one; click the count to keep

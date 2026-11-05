@@ -372,11 +372,11 @@ def earlier(now: datetime, days: float, hours: float = 0) -> str:
     return db.format_time(now - timedelta(days=days, hours=hours))
 
 
-def answered(conn: sqlite3.Connection, started: str, repo: str, **answers: ItemAnswer) -> int:
-    """A worker run that started at `started` and answered `repo`'s items as `answers` says, `_` in an id for `-`."""
-    db.touch_ticket(conn, "PROJ-1", "/ws")
+def answered(conn: sqlite3.Connection, started: str, repo: str, *, key: str = "PROJ-1", **answers: ItemAnswer) -> int:
+    """A worker run of `key` that started at `started` and answered `repo`'s items as `answers` says, `_` for `-`."""
+    db.touch_ticket(conn, key, "/ws")
     tick_id = db.start_tick(conn, dry_run=False)
-    run_id = db.insert_run(conn, tick_id=tick_id, key="PROJ-1", kind="implement", branch="", slots=[], runs_dir=Path())
+    run_id = db.insert_run(conn, tick_id=tick_id, key=key, kind="implement", branch="", slots=[], runs_dir=Path())
     records.update(records.Run).set(started_at=started).where("id = ?", run_id).run(conn)
     given = [
         Answer(repo, item.replace("_", "-"), a, "Its reason." if a is ItemAnswer.HELD else None)

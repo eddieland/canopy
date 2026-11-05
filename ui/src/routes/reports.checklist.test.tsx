@@ -23,6 +23,8 @@ function item(id: string, extra: Partial<ChecklistItemCounts>): ChecklistItemCou
         held: 0,
         not_applicable: 0,
         unanswered: 0,
+        held_by: 0,
+        paths: [],
         held_runs: [],
         fixed_runs: [],
         ...extra,
@@ -30,7 +32,7 @@ function item(id: string, extra: Partial<ChecklistItemCounts>): ChecklistItemCou
 }
 
 // Two weeks of one list, in its order: an item held three times, by a worker's run and a task's among them; one that
-// never failed in twelve runs; one mostly n/a; and one the runs fixed now and then.
+// never failed in twelve runs, too few to call; one mostly n/a, with no paths; and one the runs fixed often.
 const COUNTS: ChecklistCounts = {
     since: '2026-09-25T00:00:00Z',
     until: '2026-10-09T00:00:00Z',
@@ -40,6 +42,7 @@ const COUNTS: ChecklistCounts = {
         item('newspaper', {
             passed: 9,
             held: 3,
+            held_by: 2,
             held_runs: [
                 {
                     kind: 'run',
@@ -142,9 +145,9 @@ describe('the checklist page', () => {
         expect(await screen.findByText('4 items in 1 repository over 14 days · 3 held')).toBeTruthy()
         expect(await rows()).toEqual([
             ['newspaper', '12', '9 pass · 3 held', '9', '0', '3', '0', '0', 'argue'],
-            ['doc-comments', '12', '12 pass', '12', '0', '0', '0', '0', 'drop?'],
-            ['migration', '12', '2 pass · 9 n/a · 1 unanswered', '2', '0', '0', '9', '1', 'drop?'],
-            ['general-types', '12', '6 pass · 4 fixed · 2 unanswered', '6', '4', '0', '0', '2', ''],
+            ['doc-comments', '12', '12 pass', '12', '0', '0', '0', '0', 'too few'],
+            ['migration', '12', '2 pass · 9 n/a · 1 unanswered', '2', '0', '0', '9', '1', 'narrow'],
+            ['general-types', '12', '6 pass · 4 fixed · 2 unanswered', '6', '4', '0', '0', '2', 'earning'],
         ])
         // The bar draws each answer given, and nothing for the rest.
         const bar = within(screen.getAllByTestId('checklist-bar')[0] ?? document.body)

@@ -17,7 +17,7 @@ from canopy.cli.main import main
 from canopy.core import checklist_answers, checklists
 from canopy.core.checklist_answers import Answer
 from canopy.core.vocab import ItemAnswer
-from tests.canopy.helpers import in_zone, journal_of_answers
+from tests.canopy.helpers import answered, earlier, in_zone, journal_of_answers
 
 if TYPE_CHECKING:
     import pytest
@@ -137,6 +137,23 @@ def test_answers_are_counted_per_repository_and_item_over_the_window(tmp_path: P
     assert checklist_answers.counts(conn, NOW, 7, repo="docs").items == ()
 
 
+def test_an_item_held_by_one_tickets_runs_is_held_by_one_ticket(tmp_path: Path, journals: Journals) -> None:
+    """A ticket's runs hold an item over the same diff: one disagreement, however many runs, in a window or a week."""
+    conn = journals.open(tmp_path / "canopy.db")
+    a = ItemAnswer
+    answered(conn, earlier(NOW, 3), "api", newspaper=a.HELD)
+    answered(conn, earlier(NOW, 2), "api", newspaper=a.HELD)
+    answered(conn, earlier(NOW, 1), "api", newspaper=a.PASSED, key="PROJ-2")
+    [one] = checklist_answers.counts(conn, NOW, 7).items
+    assert (one.held, one.held_by) == (2, 1)
+    answered(conn, earlier(NOW, 0), "api", newspaper=a.HELD, key="PROJ-2")
+    [two] = checklist_answers.counts(conn, NOW, 7).items
+    assert (two.held, two.held_by) == (3, 2)
+    with in_zone("UTC"):
+        weeks = checklist_answers.details(conn, NOW, 7).weeks
+    assert [(w.week, w.counts.held, w.counts.held_by) for w in weeks] == [("2026-W40", 0, 0), ("2026-W41", 3, 2)]
+
+
 def test_the_counts_are_printed_as_a_table(tmp_path: Path, journals: Journals, snapshot: SnapshotAssertion) -> None:
     """The item ids are the operator's, printed as they are; a held item's reason is its run's, not printed here."""
     conn = journals.open(tmp_path / "canopy.db")
@@ -163,7 +180,17 @@ def test_canopy_checklist_counts_the_last_days(canopy_env: CanopyEnv, capsys: py
     found = json.loads(capsys.readouterr().out)
     assert (found["days"], found["repo"]) == (1, "web")
     assert found["items"] == [
-        {"repo": "web", "item": "no-any", "reminded": 1, "pass": 0, "fixed": 0, "held": 1, "n/a": 0, "unanswered": 0},
+        {
+            "repo": "web",
+            "item": "no-any",
+            "reminded": 1,
+            "pass": 0,
+            "fixed": 0,
+            "held": 1,
+            "n/a": 0,
+            "unanswered": 0,
+            "held_by": 1,
+        },
     ]
     # A held item's reason is the worker's text: never in the counts.
     assert main(["checklist", "--json"]) == 0

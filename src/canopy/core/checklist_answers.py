@@ -119,6 +119,9 @@ class ItemCounts(records.View):
     held: int
     not_applicable: int
     unanswered: int
+    #: The tickets whose runs answered `held`, a task's runs counted as one ticket: the runs of one ticket hold an
+    #: item over the same diff, so they are one disagreement, not several.
+    held_by: int
 
     def of(self, answer: ItemAnswer) -> int:
         """Return how many of the runs answered the item `answer`."""
@@ -168,8 +171,9 @@ class Counts:
         """Return the counts as one JSON object.
 
         Returns:
-            `since`, `until`, `days`, `repo`, and `items`, each with its `repo`, `item`, `reminded`, and a count under
-            each answer's word: `pass`, `fixed`, `held`, `n/a`, and `unanswered`.
+            `since`, `until`, `days`, `repo`, and `items`, each with its `repo`, `item`, `reminded`, a count under
+            each answer's word: `pass`, `fixed`, `held`, `n/a`, and `unanswered`, and `held_by`, the tickets that
+            held it.
         """
         return {
             "since": self.since,
@@ -177,7 +181,13 @@ class Counts:
             "days": self.days,
             "repo": self.repo,
             "items": [
-                {"repo": c.repo, "item": c.item, "reminded": c.reminded, **{str(a): c.of(a) for a in ItemAnswer}}
+                {
+                    "repo": c.repo,
+                    "item": c.item,
+                    "reminded": c.reminded,
+                    **{str(a): c.of(a) for a in ItemAnswer},
+                    "held_by": c.held_by,
+                }
                 for c in self.items
             ],
         }
@@ -239,6 +249,8 @@ class _Answered(records.View):
     id: int
     task_id: int | None
     started_at: str
+    #: The ticket the run was of, or `task N` for a task's: whose disagreement a `held` answer is.
+    who: str
 
     def kind(self) -> RunKindOf:
         """Return the table the run is of: a task's when it names one."""
@@ -390,12 +402,15 @@ def between(conn: sqlite3.Connection, start: datetime, end: datetime, *, repo: s
     query = _in_window(
         sql.select(
             "a.repo, a.item, count(*) AS reminded, sum(a.answer = ?) AS passed, sum(a.answer = ?) AS fixed, "
-            "sum(a.answer = ?) AS held, sum(a.answer = ?) AS not_applicable, sum(a.answer = ?) AS unanswered",
+            "sum(a.answer = ?) AS held, sum(a.answer = ?) AS not_applicable, sum(a.answer = ?) AS unanswered, "
+            # A ticket's runs, or a task's, by the key no ticket's can take: a task has no ticket.
+            "count(DISTINCT CASE WHEN a.answer = ? THEN coalesce(r.ticket_key, 'task ' || t.task_id) END) AS held_by",
             ItemAnswer.PASSED,
             ItemAnswer.FIXED,
             ItemAnswer.HELD,
             ItemAnswer.NOT_APPLICABLE,
             ItemAnswer.UNANSWERED,
+            ItemAnswer.HELD,
         ),
         since,
         until,
@@ -427,7 +442,7 @@ def details(
     query = _in_window(
         sql.select(
             "a.repo, a.item, a.answer, a.reason, coalesce(a.run_id, a.task_run_id) AS id, t.task_id, "
-            "coalesce(r.started_at, t.started_at) AS started_at",
+            "coalesce(r.started_at, t.started_at) AS started_at, coalesce(r.ticket_key, 'task ' || t.task_id) AS who",
         ),
         db.format_time(start),
         db.format_time(end),
@@ -439,15 +454,22 @@ def details(
     shown = {ItemAnswer.HELD, ItemAnswer.FIXED}
     runs: dict[tuple[str, str, ItemAnswer], list[_Answered]] = {}
     tally: dict[tuple[str, str, str], Counter[ItemAnswer]] = {}
+    held_by: dict[tuple[str, str, str], set[str]] = {}
     for row in rows:
         if row.answer in shown:
             runs.setdefault((row.repo, row.item, row.answer), []).append(row)
         week = _week_of(db.parse_time(row.started_at).astimezone().date())
         tally.setdefault((row.repo, row.item, week), Counter())[row.answer] += 1
+        if row.answer is ItemAnswer.HELD:
+            held_by.setdefault((row.repo, row.item, week), set()).add(row.who)
 
     def newest(repo: str, item: str, answer: ItemAnswer) -> tuple[AnsweredBy, ...]:
         found = sorted(runs.get((repo, item, answer), ()), key=lambda r: (r.started_at, r.id), reverse=True)
         return tuple(AnsweredBy(r.kind(), r.id, r.task_id, r.started_at, r.reason) for r in found[:limit])
+
+    def in_week(repo: str, item: str, week: str) -> ItemCounts:
+        key = (repo, item, week)
+        return _counted(repo, item, tally.get(key, Counter()), len(held_by.get(key, ())))
 
     weeks = _weeks(start, end)
     return Details(
@@ -455,11 +477,7 @@ def details(
             ItemRuns(repo, item, held=newest(repo, item, ItemAnswer.HELD), fixed=newest(repo, item, ItemAnswer.FIXED))
             for repo, item in order
         ),
-        weeks=tuple(
-            WeekCounts(week, _counted(repo, item, tally.get((repo, item, week), Counter())))
-            for repo, item in order
-            for week in weeks
-        ),
+        weeks=tuple(WeekCounts(week, in_week(repo, item, week)) for repo, item in order for week in weeks),
     )
 
 
@@ -536,8 +554,8 @@ def _in_window(query: sql.Select, since: str, until: str, repo: str | None) -> s
     return query if repo is None else query.where("a.repo = ?", repo)
 
 
-def _counted(repo: str, item: str, answers: Mapping[ItemAnswer, int]) -> ItemCounts:
-    # An item's counts, from how many runs gave each answer.
+def _counted(repo: str, item: str, answers: Mapping[ItemAnswer, int], held_by: int) -> ItemCounts:
+    # An item's counts, from how many runs gave each answer and how many tickets held it.
     return ItemCounts(
         repo=repo,
         item=item,
@@ -547,6 +565,7 @@ def _counted(repo: str, item: str, answers: Mapping[ItemAnswer, int]) -> ItemCou
         held=answers.get(ItemAnswer.HELD, 0),
         not_applicable=answers.get(ItemAnswer.NOT_APPLICABLE, 0),
         unanswered=answers.get(ItemAnswer.UNANSWERED, 0),
+        held_by=held_by,
     )
 
 

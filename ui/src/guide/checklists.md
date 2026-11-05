@@ -122,15 +122,22 @@ prints them.
 ## Tuning the list
 
 The [checklist page](reports#the-checklist-page) under Reports counts the answers per repository and item, over 7, 14,
-or 30 days, and applies the advice below for you: an item it would drop says `drop?`, one to argue about says `argue`.
-`canopy checklist --days 14` prints the same counts, `--repo NAME` keeps one repository's list, and `--json` gives you
-the numbers to do your own arithmetic.
+or 30 days, and applies the advice below for you, in its **verdict** column. `canopy checklist --days 14` prints the
+same counts, `--repo NAME` keeps one repository's list, and `--json` gives you the numbers to do your own arithmetic,
+`held_by` among them: how many tickets the held answers came from.
 
-- An item that's mostly **n/a** is about too little, or its `paths:` are too wide. Narrow it, or drop it.
-- An item that's never anything but **pass** is a rule your workers keep without being asked, and every reminded run
-  pays tokens to agree with it. Drop it, and keep it in `AGENTS.md`.
+Read an item by the answers where it applied: **pass**, **fixed**, and **held**. An **n/a** is the item's `paths:` doing
+their job, not a rule kept, so a migrations item that's n/a on most diffs is fine.
+
+- An item without `paths:` that's mostly **n/a** is about less than every diff. Give it the paths it's about, so runs
+  that never touch them stop paying to read it.
+- An item that's never anything but **pass** where it applied is a rule your workers keep without being asked, and
+  every reminded run pays tokens to agree with it. Drop it, and keep it in `AGENTS.md`. But wait for enough answers:
+  a rule that fails one diff in ten shows no failure in ten answers a third of the time. And check that its nit isn't
+  still reaching your reviewers first, because a pass is the worker's own word.
 - An item that's often **held** is a disagreement. Read the reasons (the page's **held** count lists the runs and what
-  each said), then take it up with whoever wrote the rule: one of you is wrong, and the list should say which.
+  each said), then take it up with whoever wrote the rule: one of you is wrong, and the list should say which. Runs of
+  one ticket hold it over the same diff, so they count as one disagreement, not several.
 - A lot of **unanswered** is mostly runs that never pushed, so were never held. canopy counts every item of a run it
   gave a list to, pushed or not, and errs toward too many. On a run that pushed, it is a worker that skipped the list:
   n/a would have said it looked and found nothing to check.
