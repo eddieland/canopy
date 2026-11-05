@@ -152,6 +152,7 @@ def test_canopy_checklist_counts_what_the_runs_answered(scenario: Scenario, git_
             "held": 0,
             "n/a": 0,
             "unanswered": 1,
+            "held_by": 0,
         },
         {
             "repo": "repo",
@@ -162,6 +163,7 @@ def test_canopy_checklist_counts_what_the_runs_answered(scenario: Scenario, git_
             "held": 1,
             "n/a": 0,
             "unanswered": 1,
+            "held_by": 1,
         },
     ]
     assert scenario.operator("checklist", "--repo", "other").out.endswith(
