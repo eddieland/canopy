@@ -4,7 +4,8 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
-import type { ConfigModels, PersonaList } from '@/api/types'
+import { pullRequestQuery } from '@/api/queries'
+import type { ConfigModels, PersonaList, ReviewRequest } from '@/api/types'
 import { setReviewPersonas } from '@/lib/review-personas'
 import { readReviewRequestDraft } from '@/lib/review-request-draft'
 import { renderRouted } from '@/test-utils'
@@ -22,9 +23,21 @@ const CONFIG: ConfigModels = {
     private_file: '/home/me/.config/canopy/private.toml',
 }
 
+const OPEN: ReviewRequest = {
+    channel: 'web',
+    created_at: '2026-10-08T11:00:00Z',
+    ended_at: null,
+    end_reason: null,
+    notes: null,
+    model: null,
+    personas: [],
+}
+
 // Every review requested, by the PR it names, and what the server stand-in answers it.
 let sent: (string | null)[] = []
 let answer: Response | undefined
+// The review request the PR's page shows, as `/api/pull-request` reads it.
+let shown: ReviewRequest | null = null
 
 const server: Middleware = {
     onRequest({ request }) {
@@ -36,20 +49,16 @@ const server: Middleware = {
         if (url.pathname === '/api/config/models') {
             return Response.json(CONFIG)
         }
+        // The PR's page's read, of which the dialog needs only its review request.
+        if (url.pathname === '/api/pull-request') {
+            return Response.json({ pull_request: { url: url.searchParams.get('url'), review_request: shown } })
+        }
         sent.push(url.searchParams.get('url'))
         return (
             answer ??
             Response.json({
                 already: false,
-                request: {
-                    channel: 'web',
-                    created_at: '2026-10-08T11:00:00Z',
-                    ended_at: null,
-                    end_reason: null,
-                    notes: null,
-                    model: null,
-                    personas: [],
-                },
+                request: OPEN,
                 running_review: null,
             })
         )
@@ -59,6 +68,7 @@ const server: Middleware = {
 beforeEach(() => {
     sent = []
     answer = undefined
+    shown = null
     sessionStorage.clear()
     setReviewPersonas([])
     api.use(server)
@@ -152,6 +162,28 @@ describe('ReviewDialog', () => {
         press('r')
         expect(urlField().value).toBe(PR)
         expect(document.activeElement).toBe(notesField())
+    })
+
+    it("does not keep a PR's URL its page filled in, so it does not follow the operator off the page", async () => {
+        await renderDialog(`/pull-requests/pr?url=${encodeURIComponent(PR)}`)
+        press('r')
+        expect(urlField().value).toBe(PR)
+        fireEvent.keyDown(notesField(), { key: 'Escape' })
+        await waitFor(() => {
+            expect(dialog()).toBeNull()
+        })
+        expect(readReviewRequestDraft().url).toBe('')
+    })
+
+    it("opens empty on a PR's page once its review request is open, as one just sent through it is", async () => {
+        shown = OPEN
+        // The page has read the PR by the time the operator presses R.
+        const client = new QueryClient()
+        await client.query(pullRequestQuery(PR))
+        await renderRouted(<ReviewDialog />, { at: `/pull-requests/pr?url=${encodeURIComponent(PR)}`, client })
+        press('r')
+        expect(urlField().value).toBe('')
+        expect(document.activeElement).toBe(urlField())
     })
 
     it("opens on a PR's URL pasted outside a field, with it filled in, and ignores any other paste", async () => {
