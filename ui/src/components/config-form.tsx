@@ -45,8 +45,8 @@ const CHANGED_ROW = 'relative before:absolute before:inset-y-0 before:left-0 bef
  * counts, paces, and retentions within the bounds the server sets, and trust settings only toward stricter. The keys
  * come in panels by what they govern (`CONFIG_GROUPS`), each in words over its name in the file. A changed row is
  * marked, and a save bar, kept in view at the page's foot once something changed, lists the changes and writes them at
- * once. A save writes the workspace's private file alone,
- * keeping its comments, then asks the loop to read it again as Reload does.
+ * once. A save writes the workspace's private file alone, keeping its comments, then asks the loop to read it again as
+ * Reload does.
  */
 export function ConfigForm() {
     const client = useQueryClient()
