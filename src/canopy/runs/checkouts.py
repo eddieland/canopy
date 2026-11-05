@@ -318,7 +318,7 @@ def _remove(desk: Path) -> None:
 class _Marker(BaseModel):
     """What the marker file holds: the branch, and each repository's slot."""
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
 
     branch: StrictStr
     slots: dict[StrictStr, StrictStr]
