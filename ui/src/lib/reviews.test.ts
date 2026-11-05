@@ -27,6 +27,7 @@ const REVIEW: ReviewSummary = {
     ticket_key: 'ABC-099',
     title: null,
     repo: 'web',
+    author: null,
     status: 'done',
     state: 'done',
     verdict: 'findings',

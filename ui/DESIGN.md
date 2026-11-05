@@ -742,7 +742,8 @@ reader, so no table repeats them.
   filter left nothing. Both filter the list the server sends, not the whole journal.
 - **The PR and review filters** narrow the pull requests and reviews lists the same way (`PullRequestFilterBar`): a
   search field over the PR, repository, and ticket, and a repository picker (`RepoFilter`) of the repositories the
-  list's rows are in, shown while there is more than one.
+  list's rows are in, shown while there is more than one. The reviews list adds a picker of one of its PRs' authors
+  (`ChoiceFilter`, `?author=`), shown on the same terms.
 - **Chips** (`Chip`) label a row with a fixed word: a kind, `private`, a reason. Never with journal text. A word the
   journal stores goes in as `word` and reads as words: underscores become spaces (`worker failed`), while the CLI's
   spelling stays in its tip, so it can still be found in `attention.md` or typed into the CLI (`src/lib/words.ts`). A
@@ -1187,9 +1188,9 @@ reader, so no table repeats them.
   takes several, picking one keeps the list open, and what was chosen as it opened is listed first, so nothing moves
   under the pointer; it is kept in `?repo=`, replacing the history entry as a filter field does. In a form
   (`RepoSelect`) it takes one, and picking it closes the list; an epic's form (`ReposChoice`) takes several, as a
-  filter does, with no `every repository`, since none chosen names none. The runs page's filter by model
-  (`ModelFilter`) is the same picker of one, each id whole, as a gateway can list dozens; the button, list, and item
-  are `src/components/picker.tsx`, which both build on.
+  filter does, with no `every repository`, since none chosen names none. The runs page's filter by model and the
+  reviews page's by author (`ChoiceFilter`) are the same picker of one, each name whole, as a gateway can list dozens
+  of models; the button, list, and item are `src/components/picker.tsx`, which all of them build on.
 - **A config page** (`ConfigForm`, `/settings/limits`, which Settings links to from a one-line panel so Settings stays
   short): the keys in a few bands by what they govern (`CONFIG_GROUPS` in `src/lib/config-settings.ts`), a band whose
   keys share a unit cut into labelled parts (`h3`) so the unit never decides where a key lives, and a key no band names

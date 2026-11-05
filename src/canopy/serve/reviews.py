@@ -189,7 +189,8 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
     # A PR's title as its pages give it: its own, as a worker or a review reported it, else as canopy's reader last
     # read it, which is all a coworker's PR may have, else its ticket's.
     own = db.pr_titles(conn, {row.pr_url for row in rows})
-    read = {url: pr.title for url, pr in review_draft_views.observed_prs(conn, {row.pr_url for row in rows}).items()}
+    observed = review_draft_views.observed_prs(conn, {row.pr_url for row in rows})
+    read = {url: pr.title for url, pr in observed.items()}
     tickets = db.ticket_titles(conn, {row.ticket_key for row in rows if row.ticket_key})
     drafts = review_drafts.of_reviews(conn, [row.id for row in rows])
     asked = review_requests.answered_by(conn, rows)
@@ -201,6 +202,7 @@ def summaries(conn: sqlite3.Connection, rows: Sequence[records.ReviewRun]) -> li
             title=ticket_title(own.get(row.pr_url))
             or ticket_title(read.get(row.pr_url))
             or ticket_title(tickets.get(row.ticket_key or "")),
+            author=observed[row.pr_url].author if row.pr_url in observed else None,
             draft=drafts.get(row.id),
             request=asked.get(row.id),
             served=served[row.id],
@@ -217,8 +219,11 @@ def summary(
     draft: records.ReviewDraft | None,
     request: int | None,
     served: Sequence[str] = (),
+    author: str | None = None,
 ) -> ReviewSummary:
     """One review run's row, as the reviews list shows it, `seen` when the operator has seen it, its PR's `title`.
+
+    `author` is the PR's author as canopy's reader last read it, None until it has.
 
     `request` is the id of the operator's request it answers, which groups it with its reviews in other personas, and
     `served` the models its session named.
@@ -235,6 +240,7 @@ def summary(
         ticket_key=row.ticket_key or None,
         title=title,
         repo=row.repo or None,
+        author=author,
         status=row.status,
         state=review_state(row.status),
         verdict=stored.verdict if stored is not None else None,

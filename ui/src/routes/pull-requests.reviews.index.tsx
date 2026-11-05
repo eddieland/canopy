@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { CheckCheck } from 'lucide-react'
 
 import { reviewRequestsQuery, reviewsQuery } from '@/api/queries'
+import { ChoiceFilter } from '@/components/choice-filter'
 import { Code } from '@/components/code'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
@@ -12,22 +13,33 @@ import { ReviewRequestForm } from '@/components/review-request'
 import { ReviewsTable } from '@/components/reviews-table'
 import { Button } from '@/components/ui/button'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { countText, filterWords, prQueryOf, reposOf, requestShown, reviewShown } from '@/lib/pull-request-filter'
-import type { PullRequestFilter } from '@/lib/pull-request-filter'
+import {
+    authorOf,
+    authorsOf,
+    countText,
+    filterWords,
+    prQueryOf,
+    reposOf,
+    requestShown,
+    reviewShown,
+} from '@/lib/pull-request-filter'
+import type { ReviewFilter } from '@/lib/pull-request-filter'
 import { repoListOf } from '@/lib/repo-filter'
 import { unseenOf, useMarkSeen } from '@/lib/seen-reviews'
 
 /**
  * canopy's latest review runs, newest first: the shadow PR reviews it keeps, each on a PR the loop does not own also a
  * draft the operator may publish. A PR the operator asked to have reviewed is a row from the moment they ask, waiting
- * on a tick, until its review starts. `?repo=` keeps the reviews of PRs in its repositories, and `?q=` those whose PR,
- * ticket, or commit holds every word. A result new to the operator is marked so, as the nav counts it, until its page
- * shows it or the header's button marks every one seen.
+ * on a tick, until its review starts. `?repo=` keeps the reviews of PRs in its repositories, `?author=` those of PRs
+ * its author opened, as canopy last read them, and `?q=` those whose PR, ticket, commit, or author holds every word. A
+ * result new to the operator is marked so, as the nav counts it, until its page shows it or the header's button marks
+ * every one seen.
  */
 export const Route = createFileRoute('/pull-requests/reviews/')({
     // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
-    validateSearch: (search: Record<string, unknown>): PullRequestFilter => ({
+    validateSearch: (search: Record<string, unknown>): ReviewFilter => ({
         repo: repoListOf(search['repo']),
+        author: authorOf(search['author']),
         q: prQueryOf(search['q']),
     }),
     component: ReviewsPage,
@@ -35,6 +47,7 @@ export const Route = createFileRoute('/pull-requests/reviews/')({
 
 function ReviewsPage() {
     const filter = Route.useSearch()
+    const navigate = Route.useNavigate()
     const { data: runs } = useQuery(reviewsQuery)
     const { data: requested } = useQuery(reviewRequestsQuery)
     const order = useListOrder('reviews')
@@ -50,7 +63,9 @@ function ReviewsPage() {
             ? undefined
             : { runs: shownRuns, requested: shownRequested }
     const shownCount = shown === undefined ? undefined : shown.runs.length + shown.requested.length
-    const filtered = filter.repo !== undefined || filter.q !== undefined
+    const filtered = filter.repo !== undefined || filter.author !== undefined || filter.q !== undefined
+    // Every author the list names, a request's too, and the one chosen, which may be no row's.
+    const authors = data === undefined ? [] : authorsOf([...data.runs, ...data.requested], filter.author)
     return (
         <>
             <PageHeader title="Reviews">
@@ -88,9 +103,21 @@ function ReviewsPage() {
                     to="/pull-requests/reviews"
                     filter={filter}
                     repos={reposOf(data?.runs ?? [], filter.repo)}
-                    label="Filter reviews by PR, ticket, or commit"
-                    placeholder="Filter by PR, ticket, or commit"
-                />
+                    label="Filter reviews by PR, ticket, commit, or author"
+                    placeholder="Filter by PR, ticket, commit, or author"
+                >
+                    {/* Shown while it could narrow the list, as the repository picker is. */}
+                    {(authors.length > 1 || filter.author !== undefined) && (
+                        <ChoiceFilter
+                            noun="author"
+                            find="Find an author"
+                            label="Authors"
+                            choices={authors}
+                            chosen={filter.author}
+                            onChoose={(author) => void navigate({ search: { ...filter, author }, replace: true })}
+                        />
+                    )}
+                </PullRequestFilterBar>
                 {data === undefined || shown === undefined ? (
                     <PanelSkeleton className="min-h-72" />
                 ) : count === 0 ? (
