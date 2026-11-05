@@ -8,7 +8,8 @@ The overseer never reads an epic.
 The operator approves its plan, or asks for changes, through the functions `canopy plan epic:N --approve` and `canopy
 reply epic:N` call, with channel `web`, so with their guards: both are refused inside a tick or a run (`inside_run`,
 T1), and an approval names the file's hash as the page read it, so a file changed since is refused, not approved
-unseen.
+unseen. They add and remove its members through the functions `canopy epic add` and `remove` call, with the same
+guards: the bound, a ticket another epic holds, an entry the approved plan does not hold, and `inside_run`.
 """
 
 from __future__ import annotations
@@ -23,10 +24,13 @@ from canopy.infra import logs
 from canopy.runs import epic_runs
 from canopy.serve import epic_views
 from canopy.serve.api.deps import BackendDep
-from canopy.serve.api.refs import REFUSED, WEB, EpicId, RefusedError, not_found
+from canopy.serve.api.refs import REFUSED, WEB, EpicId, RefusedError, TicketKey, not_found
 from canopy.serve.schema import ReplyRequest
 from canopy.serve.schema.epic import (
     EpicDetail,
+    EpicMemberAdd,
+    EpicMemberAdded,
+    EpicMemberRemoved,
     EpicPlanApproval,
     EpicPlanApproved,
     EpicPlanChange,
@@ -136,6 +140,58 @@ def reply(epic_id: EpicId, body: ReplyRequest, backend: BackendDep) -> EpicRepli
         plan_runs=len(runs),
         max_plan_attempts=limit,
     )
+
+
+@router.post(
+    "/epics/{epic_id}/members",
+    operation_id="addEpicMember",
+    summary="Add a member to an epic",
+    responses=REFUSED,
+)
+def add_member(epic_id: EpicId, body: EpicMemberAdd, backend: BackendDep) -> EpicMemberAdded:
+    """`canopy epic add epic:N KEY --entry B<n>`: make the ticket a member, registered against the entries named.
+
+    A member is registered again, its entries replaced. With none, it is a member of no entry, as `--no-entry` makes
+    it. Membership authorizes no work: a member is worked once it is labeled or started. Refused as the CLI's is:
+    `inside_run`, `unknown_epic`, `bad_key`, `other_epic` for a ticket another epic holds, `epic_full` past
+    `policy.max_epic_tickets`, `no_plan` for an entry named before a plan is approved, `unknown_entry` for one the
+    approved plan does not hold, and `approved_changed` when its approved copy is not what the operator approved.
+    """
+    with backend.open() as ctx:
+        try:
+            done = epics.add(
+                ctx.conn,
+                epic_id,
+                [body.key],
+                bound=ctx.config.policy.max_epic_tickets,
+                channel=WEB,
+                entries=body.entries,
+                state_dir=ctx.state_dir,
+            )
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info("epic members added", extra={"epic": epic_id, "keys": list(done.added), "channel": WEB})
+    return EpicMemberAdded(key=body.key, added=bool(done.added), entries=_ids(done.entries or ()))
+
+
+@router.delete(
+    "/epics/{epic_id}/members/{key}",
+    operation_id="removeEpicMember",
+    summary="Remove a member from an epic",
+    responses=REFUSED,
+)
+def remove_member(epic_id: EpicId, key: TicketKey, backend: BackendDep) -> EpicMemberRemoved:
+    """`canopy epic remove epic:N KEY`: end the ticket's membership, leaving the ticket and its work as they are.
+
+    Refused as the CLI's is: `inside_run`, `unknown_epic`, `bad_key`, and `not_member` for a ticket that is not one.
+    """
+    with backend.open() as ctx:
+        try:
+            epics.remove(ctx.conn, epic_id, [key], channel=WEB)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info("epic members removed", extra={"epic": epic_id, "keys": [key], "channel": WEB})
+    return EpicMemberRemoved(key=key)
 
 
 def _change(change: epic_outline.Change | None) -> EpicPlanChange | None:

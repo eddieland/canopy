@@ -1185,6 +1185,8 @@ def test_openapi_names_the_stream_event_and_every_route() -> None:
         "/api/epics/{epic_id}/plans",
         "/api/epics/{epic_id}/plan/approval",
         "/api/epics/{epic_id}/replies",
+        "/api/epics/{epic_id}/members",
+        "/api/epics/{epic_id}/members/{key}",
         "/api/tickets/{key}/attachments/{name}",
         "/api/tasks/{task_id}/attachments/{name}",
         "/api/dictation",
