@@ -65,9 +65,9 @@ export interface ConfigForm {
 
 /**
  * The changes a save sends: each touched key whose value differs from the one read. `capacity.repo_slots` sends only
- * the repositories whose count changed, and a list the entries kept. A count left empty changes nothing. A count that
- * is not a whole number, or that the server would refuse as past its bound, is named in `errors` with why, as the
- * server checks it: a limit past its bound and looser than the value read, or a stricter count raised. The server
+ * the repositories whose count changed, and a list the entries kept. A count left empty changes nothing when the file
+ * sets none, and is named in `errors` when it does. A count that is not a whole number, or that the server would
+ * refuse as past its bound, is named in `errors` with why, as the server checks it: a limit past its bound and looser than the value read, or a stricter count raised. The server
  * checks again on save, and checks what the loader refuses.
  */
 export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm {
@@ -102,10 +102,10 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
                 // A repository with no count of its own has the slots per repository, as the server reads it.
                 const before = was[repo] ?? (typeof perRepo === 'number' ? perRepo : null)
                 const count = wholeNumber(text, was[repo] ?? null)
-                const error = count === 'invalid' ? NOT_WHOLE : count === null ? null : pastText(key, before, count)
+                const error = countError(key, text, was[repo] ?? null, before, count)
                 if (error !== null) {
                     errors[`${key.name}.${repo}`] = error
-                } else if (count !== null && count !== 'invalid') {
+                } else if (typeof count === 'number') {
                     slots[repo] = count
                 }
             }
@@ -115,10 +115,10 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
         } else if (typeof draft === 'string') {
             const was = typeof key.value === 'number' ? key.value : null
             const count = wholeNumber(draft, was)
-            const error = count === 'invalid' ? NOT_WHOLE : count === null ? null : pastText(key, was, count)
+            const error = countError(key, draft, was, was, count)
             if (error !== null) {
                 errors[key.name] = error
-            } else if (count !== null && count !== 'invalid') {
+            } else if (typeof count === 'number') {
                 changes[key.name] = count
             }
         } else if (Array.isArray(draft)) {
@@ -131,8 +131,27 @@ export function configForm(keys: ConfigKey[], drafts: ConfigDrafts): ConfigForm 
     return { changes, errors }
 }
 
-// Why a count's field holds something the page would not send.
-const NOT_WHOLE = 'not a whole number'
+/**
+ * Why a count's field, typed as `text` and read as `count`, holds what the page would not send: not a whole number,
+ * emptied of a value the file sets (which the page cannot unset, and which would otherwise leave a blank field with
+ * nothing to save or discard), or past how far the page may take it from `before`, the value the server checks from.
+ * Null when the server would take it, or when nothing changed.
+ */
+function countError(
+    key: ConfigKey,
+    text: string,
+    was: number | null,
+    before: number | null,
+    count: number | 'invalid' | null,
+): string | null {
+    if (count === 'invalid') {
+        return 'not a whole number'
+    }
+    if (count === null) {
+        return text.trim() === '' && was !== null ? `empty: type a count, or Discard to keep ${was}` : null
+    }
+    return pastText(key, before, count)
+}
 
 /**
  * Why the page would not send `now` for `key`, whose value read was `was`, as the server's own check (`_past` and

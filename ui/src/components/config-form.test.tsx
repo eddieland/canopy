@@ -66,6 +66,7 @@ describe('ConfigForm', () => {
         ['capacity.max_workers', 'abc', 'not a whole number'],
         ['trust.max_flaky_kicks', '3', 'only fewer from here: at most 2; set more in the file'],
         ['trust.max_flaky_kicks', '1.5', 'not a whole number'],
+        ['capacity.max_workers', '', 'empty: type a count, or Discard to keep 3'],
     ])('marks %s holding %s invalid, says why under it, and keeps Save off', (name, text, why) => {
         renderForm()
         type(name, text)
