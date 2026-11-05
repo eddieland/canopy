@@ -13,7 +13,7 @@ import type {
     CiReport,
 } from '@/api/types'
 import { Age } from '@/components/age'
-import { CellBar } from '@/components/cell-bar'
+import { CellBar, CellBarHead } from '@/components/cell-bar'
 import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
@@ -277,17 +277,18 @@ function Checks({ checks, span }: { checks: CiCheck[]; span: string }) {
                         <thead className="sticky top-0 bg-surface [&_th]:pt-3">
                             <tr className="text-right">
                                 <th className="panel-label pb-1.5 text-left font-normal">check</th>
-                                <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                                <CellBarHead>
                                     <Hinted hint={RATE_HINT}>failure rate</Hinted>
-                                </th>
+                                </CellBarHead>
                                 <th className="panel-label pb-1.5 pl-3 font-normal">red</th>
                                 <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
-                                <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                                <CellBarHead>
                                     <Hinted hint={NEXT_HEAD_HINT}>next head green</Hinted>
-                                </th>
-                                <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                                </CellBarHead>
+                                <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
                                     <Hinted hint={RERUNS_HINT}>same-head reruns</Hinted>
                                 </th>
+                                <td aria-hidden />
                             </tr>
                         </thead>
                         <tbody className="font-mono text-xs">
@@ -296,33 +297,25 @@ function Checks({ checks, span }: { checks: CiCheck[]; span: string }) {
                                     <th scope="row" className="py-0.5 text-left font-normal">
                                         <Clipped text={c.name} className="block max-w-64" />
                                     </th>
-                                    <td className="pl-3 text-left">
-                                        <CellBar
-                                            percent={(failureShare(c) ?? 0) * 100}
-                                            fill="bg-status-failed"
-                                            valueClassName="readout w-10 text-right"
-                                        >
-                                            {failureRate(c)}
-                                        </CellBar>
-                                    </td>
+                                    <CellBar
+                                        percent={(failureShare(c) ?? 0) * 100}
+                                        fill="bg-status-failed"
+                                        className="readout"
+                                    >
+                                        {failureRate(c)}
+                                    </CellBar>
                                     <td className={cn('readout pl-3', c.red > 0 && 'text-status-failed')}>{c.red}</td>
                                     <td className="readout pl-3 text-muted-foreground">{c.runs}</td>
-                                    <td className="pl-3 text-left text-muted-foreground">
-                                        <CellBar
-                                            percent={(nextHeadShare(c) ?? 0) * 100}
-                                            valueClassName="readout w-12 text-right"
-                                        >
-                                            {nextHeadText(c)}
-                                        </CellBar>
+                                    <CellBar
+                                        percent={(nextHeadShare(c) ?? 0) * 100}
+                                        className="readout text-muted-foreground"
+                                    >
+                                        {nextHeadText(c)}
+                                    </CellBar>
+                                    <td className="readout pl-3 whitespace-nowrap text-muted-foreground">
+                                        {rerunsText(c)}
                                     </td>
-                                    <td className="pl-3 text-left">
-                                        <span className="flex items-center gap-2">
-                                            <span className="readout w-12 text-right text-muted-foreground">
-                                                {rerunsText(c)}
-                                            </span>
-                                            {isFlaky(c) && <Chip tone="blocked">flaky</Chip>}
-                                        </span>
-                                    </td>
+                                    <td className="pl-2">{isFlaky(c) && <Chip tone="blocked">flaky</Chip>}</td>
                                 </tr>
                             ))}
                         </tbody>

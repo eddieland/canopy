@@ -11,7 +11,7 @@ import type {
     ReviewsRound,
 } from '@/api/types'
 import { Age } from '@/components/age'
-import { CellBar } from '@/components/cell-bar'
+import { CellBar, CellBarHead } from '@/components/cell-bar'
 import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
@@ -335,16 +335,16 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
                 <thead className={PADDED_HEAD}>
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">reviewer</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                        <CellBarHead>
                             <Hinted hint={REVIEWS_HINT}>reviews</Hinted>
-                        </th>
+                        </CellBarHead>
                         <th className="panel-label pb-1.5 pl-3 font-normal">changes</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">approved</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">comments</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">PRs</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                        <CellBarHead>
                             <Hinted hint={REVIEWER_WAIT_HINT}>median wait</Hinted>
-                        </th>
+                        </CellBarHead>
                     </tr>
                 </thead>
                 <tbody className="text-xs">
@@ -362,34 +362,30 @@ function Reviewers({ reviewers, span }: { reviewers: ReviewsReviewer[]; span: st
                                     )}
                                 </span>
                             </th>
-                            <td className="readout pl-3 text-left">
-                                <CellBar
-                                    percent={barPercent(
-                                        r.reviews,
-                                        reviewers.map((x) => x.reviews),
-                                    )}
-                                    valueClassName="w-6 text-right"
-                                >
-                                    {r.reviews}
-                                </CellBar>
-                            </td>
+                            <CellBar
+                                percent={barPercent(
+                                    r.reviews,
+                                    reviewers.map((x) => x.reviews),
+                                )}
+                                className="readout"
+                            >
+                                {r.reviews}
+                            </CellBar>
                             <td className={cn('readout pl-3', r.changes_requested > 0 && 'text-status-blocked')}>
                                 {r.changes_requested}
                             </td>
                             <td className={cn('readout pl-3', r.approved > 0 && 'text-status-done')}>{r.approved}</td>
                             <td className="readout pl-3 text-muted-foreground">{r.comments}</td>
                             <td className="readout pl-3 text-muted-foreground">{r.pull_requests}</td>
-                            <td className="readout pl-3 text-left">
-                                <CellBar
-                                    percent={barPercent(
-                                        r.median_wait_hours,
-                                        reviewers.map((x) => x.median_wait_hours),
-                                    )}
-                                    valueClassName="w-12 text-right"
-                                >
-                                    {hoursText(r.median_wait_hours)}
-                                </CellBar>
-                            </td>
+                            <CellBar
+                                percent={barPercent(
+                                    r.median_wait_hours,
+                                    reviewers.map((x) => x.median_wait_hours),
+                                )}
+                                className="readout"
+                            >
+                                {hoursText(r.median_wait_hours)}
+                            </CellBar>
                         </tr>
                     ))}
                 </tbody>
@@ -479,9 +475,9 @@ function Efforts({ efforts, span }: { efforts: ReviewsEffort[]; span: string }) 
                         <th className="panel-label pb-1.5 text-left font-normal">planner&apos;s estimate</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">plans</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">resumes</th>
-                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">
+                        <CellBarHead>
                             <Hinted hint={PER_PLAN_HINT}>per plan</Hinted>
-                        </th>
+                        </CellBarHead>
                         <th className="panel-label pb-1.5 pl-3 font-normal">resumes cost</th>
                     </tr>
                 </thead>
@@ -493,17 +489,15 @@ function Efforts({ efforts, span }: { efforts: ReviewsEffort[]; span: string }) 
                             </th>
                             <td className="readout pl-3">{e.plans}</td>
                             <td className="readout pl-3">{e.resumes}</td>
-                            <td className="readout pl-3 text-left">
-                                <CellBar
-                                    percent={barPercent(
-                                        resumesPerPlan(e),
-                                        efforts.map((x) => resumesPerPlan(x)),
-                                    )}
-                                    valueClassName="w-8 text-right"
-                                >
-                                    {resumesPerPlan(e).toFixed(1)}
-                                </CellBar>
-                            </td>
+                            <CellBar
+                                percent={barPercent(
+                                    resumesPerPlan(e),
+                                    efforts.map((x) => resumesPerPlan(x)),
+                                )}
+                                className="readout"
+                            >
+                                {resumesPerPlan(e).toFixed(1)}
+                            </CellBar>
                             <td className="readout pl-3 text-muted-foreground">
                                 <Cost usd={e.resume_cost_usd} />
                             </td>
@@ -576,7 +570,7 @@ function CanopyReviewer({ found, span }: { found: ReviewsReport; span: string })
                     <thead>
                         <tr>
                             <th className="panel-label pb-1.5 text-left font-normal">dismissed as</th>
-                            <th className="panel-label pb-1.5 pl-3 text-left font-normal">findings</th>
+                            <CellBarHead>findings</CellBarHead>
                         </tr>
                     </thead>
                     <tbody className="text-xs">
@@ -585,17 +579,16 @@ function CanopyReviewer({ found, span }: { found: ReviewsReport; span: string })
                                 <th scope="row" className="py-0.5 text-left font-normal text-muted-foreground">
                                     {dismissalText(d.reason)}
                                 </th>
-                                <td className="readout w-40 pl-3">
-                                    <CellBar
-                                        percent={barPercent(
-                                            d.findings,
-                                            found.dismissals.map((x) => x.findings),
-                                        )}
-                                        valueClassName="w-6 text-right"
-                                    >
-                                        {d.findings}
-                                    </CellBar>
-                                </td>
+                                <CellBar
+                                    percent={barPercent(
+                                        d.findings,
+                                        found.dismissals.map((x) => x.findings),
+                                    )}
+                                    className="readout"
+                                    barClassName="w-36"
+                                >
+                                    {d.findings}
+                                </CellBar>
                             </tr>
                         ))}
                     </tbody>
@@ -620,11 +613,8 @@ function prColumns(rows: readonly ReviewsPullRequest[]): PullRequestColumn<Revie
             key: 'first',
             label: 'first review',
             hint: `${PR_FIRST_HINT}; the bar against the slowest PR's`,
-            cell: (pr) => (
-                <CellBar percent={barPercent(pr.first_review_hours, waits)} valueClassName="w-12 text-right">
-                    {hoursText(pr.first_review_hours)}
-                </CellBar>
-            ),
+            cell: (pr) => hoursText(pr.first_review_hours),
+            bar: (pr) => barPercent(pr.first_review_hours, waits),
             title: (pr) =>
                 pr.waiting_since === null ? 'No ready time from GitHub: read before canopy kept them, or a draft' : '',
         },

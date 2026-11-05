@@ -17,7 +17,7 @@ import type {
     SpendShare,
     SpendTicket,
 } from '@/api/types'
-import { CellBar } from '@/components/cell-bar'
+import { CellBar, CellBarHead } from '@/components/cell-bar'
 import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
@@ -724,7 +724,7 @@ function Tickets({ tickets, span }: { tickets: SpendTicket[]; span: string }) {
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">ticket</th>
                         <th className="panel-label pb-1.5 font-normal">runs</th>
-                        <th className="panel-label pb-1.5 font-normal">spent</th>
+                        <CellBarHead>spent</CellBarHead>
                         <th className="panel-label pb-1.5 pl-3 text-left font-normal">done</th>
                     </tr>
                 </thead>
@@ -742,17 +742,14 @@ function Tickets({ tickets, span }: { tickets: SpendTicket[]; span: string }) {
                                     {ticket.runs + ticket.reviews}
                                 </Tipped>
                             </td>
-                            <td className="pl-3">
-                                <CellBar
-                                    percent={barPercent(
-                                        ticket.cost_usd,
-                                        tickets.map((t) => t.cost_usd),
-                                    )}
-                                    valueClassName="w-16 text-right"
-                                >
-                                    <Cost usd={ticket.cost_usd} />
-                                </CellBar>
-                            </td>
+                            <CellBar
+                                percent={barPercent(
+                                    ticket.cost_usd,
+                                    tickets.map((t) => t.cost_usd),
+                                )}
+                            >
+                                <Cost usd={ticket.cost_usd} />
+                            </CellBar>
                             <td className="readout pl-3 text-left whitespace-nowrap text-muted-foreground">
                                 {doneText(ticket)}
                             </td>
@@ -795,11 +792,8 @@ function pullRequestColumns(rows: readonly SpendPullRequest[]): PullRequestColum
         {
             key: 'spent',
             label: 'spent',
-            cell: (pr) => (
-                <CellBar percent={barPercent(pr.cost_usd, spent)} valueClassName="w-16 text-right">
-                    <Cost usd={pr.cost_usd} />
-                </CellBar>
-            ),
+            cell: (pr) => <Cost usd={pr.cost_usd} />,
+            bar: (pr) => barPercent(pr.cost_usd, spent),
         },
     ]
 }
@@ -1026,7 +1020,7 @@ function Models({
                             <Hinted hint={MODEL_RUNS_HINT}>runs</Hinted>
                         </th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">replies</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">spent</th>
+                        <CellBarHead>spent</CellBarHead>
                         <th className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
                             <Hinted hint={PER_RUN_HINT}>per run</Hinted>
                         </th>
@@ -1067,17 +1061,14 @@ function Models({
                             <td className={cn('readout pl-3', m.model === null && 'text-muted-foreground')}>
                                 {m.model === null ? '–' : m.replies}
                             </td>
-                            <td className="pl-3">
-                                <CellBar
-                                    percent={barPercent(
-                                        m.cost_usd,
-                                        models.map((n) => n.cost_usd),
-                                    )}
-                                    valueClassName="w-16 text-right"
-                                >
-                                    <Cost usd={m.cost_usd} />
-                                </CellBar>
-                            </td>
+                            <CellBar
+                                percent={barPercent(
+                                    m.cost_usd,
+                                    models.map((n) => n.cost_usd),
+                                )}
+                            >
+                                <Cost usd={m.cost_usd} />
+                            </CellBar>
                             <td className="readout pl-3">
                                 <Cost usd={perRun(m)} />
                             </td>
@@ -1138,9 +1129,9 @@ function Tools({ tools, kind, span }: { tools: ToolRow[]; kind: SpendKind | unde
                         <th className="panel-label pb-1.5 text-left font-normal">tool</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">calls</th>
                         <th className="panel-label pb-1.5 pl-3 font-normal">errors</th>
-                        <th className="panel-label pb-1.5 pl-3 font-normal">
+                        <CellBarHead>
                             <Hinted hint={RETURNED_HINT}>returned</Hinted>
-                        </th>
+                        </CellBarHead>
                         <th className="panel-label pb-1.5 pl-3 font-normal">
                             <Hinted hint={EST_TOKENS_HINT}>~tokens</Hinted>
                         </th>
@@ -1159,17 +1150,15 @@ function Tools({ tools, kind, span }: { tools: ToolRow[]; kind: SpendKind | unde
                             <td className={cn('readout pl-3', tool.errors === 0 && 'text-muted-foreground')}>
                                 {tool.errors}
                             </td>
-                            <td className="pl-3">
-                                <CellBar
-                                    percent={barPercent(
-                                        tool.result_chars,
-                                        tools.map((t) => t.result_chars),
-                                    )}
-                                    valueClassName="readout w-12 text-right"
-                                >
-                                    {tokenCount(tool.result_chars)}
-                                </CellBar>
-                            </td>
+                            <CellBar
+                                percent={barPercent(
+                                    tool.result_chars,
+                                    tools.map((t) => t.result_chars),
+                                )}
+                                className="readout"
+                            >
+                                {tokenCount(tool.result_chars)}
+                            </CellBar>
                             <td className="readout pl-3">{tokenCount(tool.est_tokens)}</td>
                         </tr>
                     ))}
@@ -1294,7 +1283,7 @@ function Sessions({ sessions, span }: { sessions: SpendSessions | null; span: st
                         <tr className="text-right">
                             <th className="panel-label pb-1.5 text-left font-normal">outside canopy, by directory</th>
                             <th className="panel-label pb-1.5 pl-3 font-normal">sessions</th>
-                            <th className="panel-label pb-1.5 pl-3 font-normal">spent</th>
+                            <CellBarHead>spent</CellBarHead>
                         </tr>
                     </thead>
                     <tbody className="font-mono text-xs">
@@ -1304,11 +1293,9 @@ function Sessions({ sessions, span }: { sessions: SpendSessions | null; span: st
                                     <Clipped text={d.directory} mono className="block" />
                                 </th>
                                 <td className="readout pl-3">{d.sessions}</td>
-                                <td className="pl-3">
-                                    <CellBar percent={barPercent(d.cost_usd, spent)} valueClassName="w-16 text-right">
-                                        <Cost usd={d.cost_usd} />
-                                    </CellBar>
-                                </td>
+                                <CellBar percent={barPercent(d.cost_usd, spent)}>
+                                    <Cost usd={d.cost_usd} />
+                                </CellBar>
                             </tr>
                         ))}
                     </tbody>

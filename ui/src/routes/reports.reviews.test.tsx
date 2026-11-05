@@ -223,8 +223,8 @@ describe('the Reviews page', () => {
         await renderPage(REPORT)
         const rows = within(await screen.findByTestId('reviews-reviewer-table')).getAllByTestId('reviews-reviewer')
         expect(rows.map((row) => [...row.children].slice(1).map((cell) => cell.textContent))).toEqual([
-            ['2', '1', '1', '0', '1', '3.0h'],
-            ['1', '0', '0', '2', '1', '–'],
+            ['2', '', '1', '1', '0', '1', '3.0h', ''],
+            ['1', '', '0', '0', '2', '1', '–', ''],
         ])
         expect(rows.map((row) => within(row).queryByText('dana') !== null)).toEqual([true, false])
         expect(rows.map((row) => within(row).queryByText('trusted') !== null)).toEqual([true, false])
@@ -239,8 +239,8 @@ describe('the Reviews page', () => {
         expect(within(estimates).getByRole('heading', { level: 2 }).textContent).toBe('Estimates')
         const efforts = within(estimates).getAllByTestId('reviews-effort')
         expect(efforts.map((row) => [...row.children].map((cell) => cell.textContent))).toEqual([
-            ['small', '1', '2', '2.0', '$2.00'],
-            ['medium', '1', '0', '0.0', '–'],
+            ['small', '1', '2', '2.0', '', '$2.00'],
+            ['medium', '1', '0', '0.0', '', '–'],
         ])
         const rounds = screen.getByTestId('reviews-round-panel')
         expect(within(rounds).getByRole('heading', { level: 2 }).textContent).toBe('Feedback rounds')
@@ -274,7 +274,7 @@ describe('the Reviews page', () => {
         ).toEqual(['3', '$0.50', '1', '1'])
         expect(screen.getAllByTestId('reviews-run')).toHaveLength(2)
         const dismissals = screen.getAllByTestId('reviews-dismissal')
-        expect(dismissals.map((row) => [...row.children].map((cell) => cell.textContent))).toEqual([['wrong', '1']])
+        expect(dismissals.map((row) => [...row.children].map((cell) => cell.textContent))).toEqual([['wrong', '1', '']])
         expect(screen.getByTestId('reviews-canopy-trust').textContent).toContain('without asking you')
     })
 
@@ -286,6 +286,7 @@ describe('the Reviews page', () => {
         expect([...(row?.children ?? [])].slice(1).map((cell) => cell.textContent)).toEqual([
             'PROJ-1',
             '3.0h',
+            '',
             '3',
             '1',
             '1',

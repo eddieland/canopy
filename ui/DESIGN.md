@@ -566,8 +566,9 @@ whole either side.
   the tiles hold what was spent. A figure still being read holds its place. A `Counter` stays a page's count of the
   present, with its state's color.
 - **A bar in a cell** (`CellBar`, `src/components/cell-bar.tsx`) draws a column's figure as a share of its largest,
-  where comparing the rows is the point: the figure, at a fixed width so the bars start at one edge, then a rounded
-  bar, long enough that a narrow column's still compares, filled in `muted-foreground` or the series' own fill; never a
+  where comparing the rows is the point: the figure in a cell of its own, which the table sizes to the column's widest
+  so the bars start at one edge and no figure wraps, whatever the journal holds, then a rounded bar in the next cell,
+  long enough that a narrow column's still compares, filled in `muted-foreground` or the series' own fill; never a
   state's color, but for a failure rate, in `status-failed`, a share of the whole rather than of the column's largest:
   it says what is broken. It is the eye's, `aria-hidden`. Where a table's rows sum to a whole, a bar is its row's share
   of the whole too, the percent on the cell's hover.

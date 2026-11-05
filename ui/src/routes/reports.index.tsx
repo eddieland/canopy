@@ -13,7 +13,7 @@ import {
     spendBreakdownQuery,
 } from '@/api/queries'
 import type { ReportKind, ReportModel, ReportMonth, ReportTicket } from '@/api/types'
-import { CellBar } from '@/components/cell-bar'
+import { CellBar, CellBarHead } from '@/components/cell-bar'
 import { ChartTable } from '@/components/chart-table'
 import { Cost } from '@/components/cost'
 import { DayChart, DayChartLegend } from '@/components/day-chart'
@@ -614,7 +614,7 @@ function Kinds({ month, readAt }: { month: ReportMonth; readAt: string | null })
                     <tr className="text-right">
                         <th className="panel-label w-full pb-1.5 text-left font-normal">kind</th>
                         <th className={HEAD}>runs</th>
-                        <th className={HEAD}>spent</th>
+                        <CellBarHead>spent</CellBarHead>
                         <th className={HEAD}>
                             <Hinted hint={SENT_HINT}>sent</Hinted>
                         </th>
@@ -683,7 +683,7 @@ function Models({ month }: { month: ReportMonth }) {
                         <th className="panel-label pb-1.5 text-left font-normal">model</th>
                         <th className={HEAD}>runs</th>
                         <th className={HEAD}>replies</th>
-                        <th className={HEAD}>spent</th>
+                        <CellBarHead>spent</CellBarHead>
                     </tr>
                 </thead>
                 <tbody className="font-mono text-xs">
@@ -730,17 +730,12 @@ function ShareCell({
     fill?: string | undefined
 }) {
     const share = monthShare(cost, whole)
-    const bar = (
-        <CellBar percent={share} fill={fill} valueClassName="readout w-16 text-right">
-            <Cost usd={cost} />
-        </CellBar>
-    )
     return (
-        <td className="pl-3">
+        <CellBar percent={share} fill={fill} className="readout">
             <Tipped fact={cost === null ? undefined : `${Math.round(share)}% of ${monthLabel(month.month, 'long')}`}>
-                {bar}
+                <Cost usd={cost} />
             </Tipped>
-        </td>
+        </CellBar>
     )
 }
 
@@ -770,7 +765,7 @@ function Landed({ month }: { month: ReportMonth }) {
                         <th className={HEAD}>
                             <Hinted hint={WAIT_HINT}>review wait</Hinted>
                         </th>
-                        <th className={HEAD}>spent</th>
+                        <CellBarHead>spent</CellBarHead>
                         <th className={cn(HEAD, 'text-left')}>pull requests</th>
                     </tr>
                 </thead>
@@ -793,17 +788,15 @@ function Landed({ month }: { month: ReportMonth }) {
                             </Readout>
                             <Readout hint={toLandHint(t)}>{hoursText(t.hours_to_land ?? null)}</Readout>
                             <Readout hint={reviewWaitHint(t)}>{hoursText(t.review_wait_hours ?? null)}</Readout>
-                            <td className="pl-3">
-                                <CellBar
-                                    percent={barPercent(
-                                        t.cost_usd,
-                                        month.landed.map((l) => l.cost_usd),
-                                    )}
-                                    valueClassName="readout w-16 text-right"
-                                >
-                                    <Cost usd={t.cost_usd} />
-                                </CellBar>
-                            </td>
+                            <CellBar
+                                percent={barPercent(
+                                    t.cost_usd,
+                                    month.landed.map((l) => l.cost_usd),
+                                )}
+                                className="readout"
+                            >
+                                <Cost usd={t.cost_usd} />
+                            </CellBar>
                             <td className="pl-3 text-left">
                                 <span className="flex flex-col items-start">
                                     {t.pull_requests.map((url) => (

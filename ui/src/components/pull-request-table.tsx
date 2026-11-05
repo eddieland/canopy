@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { CellBar, CellBarHead } from '@/components/cell-bar'
 import { None } from '@/components/none'
 import { PanelScroll } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -38,6 +39,8 @@ export interface PullRequestColumn<T> {
     title?: (row: T) => string
     /** Whether the cell is muted, as a secondary figure is. */
     muted?: boolean
+    /** A row's figure as a share of the column's largest, 0 to 100, drawn as a bar after it (`CellBar`). */
+    bar?: (row: T) => number
 }
 
 /**
@@ -64,11 +67,17 @@ export function PullRequestTable<T extends PullRequestRow>({
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">pull request</th>
                         <th className="panel-label pb-1.5 pl-3 text-left font-normal">ticket</th>
-                        {columns.map((column) => (
-                            <th key={column.key} className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
-                                <Hinted hint={column.hint}>{column.label}</Hinted>
-                            </th>
-                        ))}
+                        {columns.map((column) =>
+                            column.bar === undefined ? (
+                                <th key={column.key} className="panel-label pb-1.5 pl-3 font-normal whitespace-nowrap">
+                                    <Hinted hint={column.hint}>{column.label}</Hinted>
+                                </th>
+                            ) : (
+                                <CellBarHead key={column.key}>
+                                    <Hinted hint={column.hint}>{column.label}</Hinted>
+                                </CellBarHead>
+                            ),
+                        )}
                     </tr>
                 </thead>
                 <tbody className="text-xs">
@@ -93,14 +102,22 @@ export function PullRequestTable<T extends PullRequestRow>({
                                     <TicketLink ticketKey={pr.ticket_key} />
                                 )}
                             </td>
-                            {columns.map((column) => (
-                                <td
-                                    key={column.key}
-                                    className={cn('readout pl-3', column.muted === true && 'text-muted-foreground')}
-                                >
-                                    <Tipped fact={column.title?.(pr)}>{column.cell(pr)}</Tipped>
-                                </td>
-                            ))}
+                            {columns.map((column) => {
+                                const className = cn(
+                                    'readout pl-3 whitespace-nowrap',
+                                    column.muted === true && 'text-muted-foreground',
+                                )
+                                const figure = <Tipped fact={column.title?.(pr)}>{column.cell(pr)}</Tipped>
+                                return column.bar === undefined ? (
+                                    <td key={column.key} className={className}>
+                                        {figure}
+                                    </td>
+                                ) : (
+                                    <CellBar key={column.key} percent={column.bar(pr)} className={className}>
+                                        {figure}
+                                    </CellBar>
+                                )
+                            })}
                         </tr>
                     ))}
                 </tbody>
