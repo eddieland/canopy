@@ -107,10 +107,11 @@ def test_shadowing_finds_a_json_config_that_names_a_canopy_server(tmp_path: Path
     assert "MCP servers, `canopy` or `canopy_*`" in project_config.shadowing_message([path])
 
 
-@pytest.mark.parametrize("server", ["canopy_run", "canopy_git", "canopy_anything"])
+@pytest.mark.parametrize("server", ["canopy_run", "canopy_git", "canopy_anything", "canopy.run", "canopy run"])
 def test_shadowing_finds_a_json_config_that_names_another_server_of_canopys(tmp_path: Path, server: str) -> None:
     # A worker starts where this config loads, and `canopy_run_status` is allowed by exact name: a server named
-    # `canopy_run` here would answer it, or set the environment of canopy's own entry (DESIGN §27).
+    # `canopy_run` here would answer it, or set the environment of canopy's own entry (DESIGN §27); so would one named
+    # `canopy.run`, since OpenCode sanitizes a tool's name to `[A-Za-z0-9_-]` (`servers.tool_name`).
     path = tmp_path / "opencode.json"
     path.write_text(f'{{"mcp": {{"servers": {{"{server}": {{"type": "local", "command": ["/tmp/x"]}}}}}}}}')
     assert project_config.shadowing(tmp_path) == [path]
