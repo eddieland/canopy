@@ -103,7 +103,7 @@ def vocabulary(conn: sqlite3.Connection, repos: Iterable[str]) -> str:
         .all(conn)
     )
     pieces = [", ".join(repos), *(f"{t.key} {t.title}" if t.title else t.key for t in tickets)]
-    words = _flat(". ".join(p for p in pieces if p)).lstrip("-").strip()
+    words = _flat(". ".join(p for p in pieces if p)).lstrip("- ")
     if len(words) <= MAX_VOCABULARY:
         return words
     return words[:MAX_VOCABULARY].rsplit(" ", 1)[0]

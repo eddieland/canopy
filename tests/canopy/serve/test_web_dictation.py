@@ -137,3 +137,11 @@ def test_the_vocabulary_names_the_repositories_and_the_tickets_at_work_most_rece
     bounded = dictation.vocabulary(ctx.conn, ["api"])
     assert len(bounded) <= dictation.MAX_VOCABULARY
     assert bounded.endswith("word")
+
+
+@pytest.mark.parametrize("key", ["-x", "- -x", "-- - -rf"])
+def test_the_vocabulary_never_starts_with_a_hyphen_whatever_leads_it(ctx: Context, key: str) -> None:
+    db.set_ticket(ctx.conn, key, ctx.repo, title="Odd key")
+    words = dictation.vocabulary(ctx.conn, [])
+    assert not words.startswith(("-", " ")), words
+    assert words.endswith("Odd key")
