@@ -112,17 +112,20 @@ export function ConfigForm({
 
 /**
  * The path of the workspace's private config, the file a save writes, as the page read it, for the page's header, with
- * a button that copies it; just its name while the first read is on its way.
+ * a button that copies it. Nothing until the read names it, so the page never points at a file it has not read.
  */
 export function ConfigFile() {
     const path = useQuery(configQuery).data?.private_file
+    if (path === undefined) {
+        return null
+    }
     return (
         <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
             saves to
             <code className="truncate font-mono" data-testid="config-private-file" title={path}>
-                {path ?? 'config.toml'}
+                {path}
             </code>
-            {path !== undefined && <CopyButton text={path} label="config path" />}
+            <CopyButton text={path} label="config path" />
         </span>
     )
 }
