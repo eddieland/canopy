@@ -225,6 +225,52 @@ test("a ticket registered on an entry's none yet fills it, and a member is remov
     await expect(b2).toContainText('none yet')
 })
 
+test('an epic submitted from its form opens its page, which says its plan run is to come', async ({ page }) => {
+    // The root server's journal never changes: the submission is answered here, as canopy epic submit would, and the
+    // list and the new epic's page read as it left them, the new epic built from epic 3's page with no run yet.
+    const sent: unknown[] = []
+    const goal = 'Let customers export their invoices as CSV.'
+    await page.route('**/api/epics', async (route) => {
+        if (route.request().method() === 'POST') {
+            sent.push(route.request().postDataJSON())
+            await route.fulfill({ json: { id: 4, repos: ['api', 'web'] } })
+            return
+        }
+        const list = (await (await route.fetch()).json()) as Record<string, unknown>[]
+        const [newest] = list
+        await route.fulfill({
+            json: sent.length === 0 ? list : [{ ...newest, id: 4, text: goal, standing: 'queued' }, ...list],
+        })
+    })
+    await page.route('**/api/epics/4', async (route) => {
+        const detail = (await (await route.fetch({ url: route.request().url().replace(/4$/u, '3') })).json()) as {
+            epic: Record<string, unknown>
+        }
+        const epic = { ...detail.epic, id: 4, text: goal, repos: ['api', 'web'], standing: 'queued' }
+        await route.fulfill({ json: { ...detail, epic, runs: [], members: [], plan: null, outline: null } })
+    })
+    await page.goto('epics')
+    await settled(page)
+    const form = page.getByRole('form', { name: 'Submit an epic' })
+    await form.getByRole('textbox', { name: 'Goal' }).fill(goal)
+    // A workspace of several repositories: nothing is sent until the operator names those its plan reads.
+    await expect(form.getByRole('button', { name: /^Submit/u })).toBeDisabled()
+    await form.getByRole('button', { name: 'Its plan reads: repositories it reads' }).click()
+    const list = page.getByRole('listbox')
+    await list.getByRole('option', { name: 'api' }).click()
+    await list.getByRole('option', { name: 'web' }).click()
+    await page.keyboard.press('Escape')
+    await form.getByRole('textbox', { name: 'Tracker project' }).fill('ABC')
+    await form.getByRole('button', { name: /^Submit/u }).click()
+
+    await expect(page).toHaveURL(/\/epics\/4$/u)
+    await settled(page)
+    await expect(page.getByText('no plan yet: the next tick starts its plan run')).toBeVisible()
+    expect(sent).toEqual([{ text: goal, repos: ['api', 'web'], project: 'ABC', tracker_epic: null }])
+    await page.goBack()
+    await expect(page.getByTestId('epics').getByRole('listitem').first()).toContainText('epic:4')
+})
+
 test("an approved epic's header opens its plan", async ({ page }) => {
     await page.goto('epics/1')
     await settled(page)

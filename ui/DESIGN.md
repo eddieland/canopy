@@ -698,7 +698,9 @@ reader, so no table repeats them.
 - **The epics list**: where the epic stands (`EPIC_LOOK` in `src/lib/epics.ts`, each standing a run state's dot and
   color by what it means: a proposed plan `waiting on you` in blocked's, one stuck without a plan in failed's),
   `epic:N`, its repositories, its goal's first line in the free column, how many of its breakdown's entries are filed,
-  and the age, newest first.
+  and the age, newest first. Above it, a `New epic` panel (`EpicSubmitForm`), the tasks page's form with the goal in a
+  `MarkdownField` with its toolbar, since a goal runs to a paragraph: on success a toast says what the CLI says and the
+  form opens the epic's page; with no stream event for epics, the page reads the list again.
 - **An epic** (`/epics/$id`) leads with its breakdown, since what is left to file is what the page answers: the board
   (`EpicBoard`), at the page's width, a table with a row per entry in the plan's order and a column for each part of it,
   headed, so an id reads by its column; the members fulfilling it, each its run's dot, key, and phase, or `none yet`,
@@ -1178,9 +1180,10 @@ reader, so no table repeats them.
   keeps the names holding what is typed (cmdk, through `src/components/ui/command.tsx` alone). A filter (`RepoFilter`)
   takes several, picking one keeps the list open, and what was chosen as it opened is listed first, so nothing moves
   under the pointer; it is kept in `?repo=`, replacing the history entry as a filter field does. In a form
-  (`RepoSelect`) it takes one, and picking it closes the list. The runs page's filter by model (`ModelFilter`) is the
-  same picker of one, each id whole, as a gateway can list dozens; the button, list, and item are
-  `src/components/picker.tsx`, which both build on.
+  (`RepoSelect`) it takes one, and picking it closes the list; an epic's form (`ReposChoice`) takes several, as a
+  filter does, with no `every repository`, since none chosen names none. The runs page's filter by model
+  (`ModelFilter`) is the same picker of one, each id whole, as a gateway can list dozens; the button, list, and item
+  are `src/components/picker.tsx`, which both build on.
 - **A config page** (`ConfigForm`, `/settings/limits`, which Settings links to from a one-line panel so Settings stays
   short): the keys in a few bands by what they govern (`CONFIG_GROUPS` in `src/lib/config-settings.ts`), a band whose
   keys share a unit cut into labelled parts (`h3`) so the unit never decides where a key lives, and a key no band names

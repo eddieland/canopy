@@ -35,6 +35,7 @@ export const GHOST_TIPS = {
         'Field report: four entries in the breakdown, two filed. The other two are hiding. Like Hunters.',
         'Dear Traveler, the plan named its contracts. Even the Vex keep fewer.',
         'Scanning... one plan for the whole fireteam. Each ticket still plans its own loadout.',
+        'New orders logged, Guardian. The planner drops in at the next tick. Name the worlds it scouts.',
     ],
     '/epics/$id': [
         'Eyes up, Guardian. The breakdown is the raid map. "none yet" means nobody has called that encounter.',

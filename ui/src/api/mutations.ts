@@ -7,6 +7,7 @@ import type {
     EpicMemberRemoved,
     EpicPlanApproved,
     EpicReplied,
+    EpicSubmitted,
     LeftSent,
     AgentModel,
     Answered,
@@ -214,6 +215,22 @@ export async function approveEpicPlan(id: number, readSha256: string): Promise<E
             params: { path: { epic_id: id } },
             body: { read_sha256: readSha256 },
         }),
+    )
+}
+
+/**
+ * `canopy epic submit TEXT --repo NAME --project KEY --tracker-epic KEY`: the text is recorded as an epic whose plan
+ * reads `repos` (none only in a workspace of one), filing its tickets only in `project`, or none without one, and
+ * putting `trackerEpic`'s tickets to the operator as suggestions; the next tick starts its plan run.
+ */
+export async function submitEpic(
+    text: string,
+    repos: readonly string[],
+    project: string | null,
+    trackerEpic: string | null,
+): Promise<EpicSubmitted> {
+    return unwrap(
+        await api.POST('/api/epics', { body: { text, repos: [...repos], project, tracker_epic: trackerEpic } }),
     )
 }
 

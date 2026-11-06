@@ -319,3 +319,26 @@ class EpicMemberRemoved(Model):
 
     key: str
     """The ticket whose membership ended."""
+
+
+class EpicSubmitRequest(Model):
+    """An epic's goal, in the operator's words, and where its plan reads, as `canopy epic submit` takes them."""
+
+    text: Annotated[str, Field(max_length=20_000)]
+    """The epic's goal. Bounded again in code at 4000 characters, after stripping (DESIGN §43)."""
+    repos: Annotated[list[Annotated[str, Field(max_length=200)]], Field(max_length=200)]
+    """The repositories its plan reads, as each `--repo` names one. None only in a workspace of one repository."""
+    project: Annotated[str, Field(max_length=200)] | None = None
+    """The tracker project its tickets are filed in, as `--project` names it. None: it files no tickets."""
+    tracker_epic: Annotated[str, Field(max_length=200)] | None = None
+    """A tracker epic whose tickets are put to the operator as suggestions, as `--tracker-epic` names it; none is a
+    member until the operator adds it."""
+
+
+class EpicSubmitted(Model):
+    """What a submission recorded: the epic, whose plan run the next tick starts, and the repositories it reads."""
+
+    id: int
+    """The epic's id, as `epic:N` names it."""
+    repos: list[str]
+    """The repositories its plan reads, as the map names them."""

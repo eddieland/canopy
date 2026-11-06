@@ -12,6 +12,7 @@ import type {
     EpicMemberRemoved,
     EpicPlanApproved,
     EpicReplied,
+    EpicSubmitted,
     Draft,
     DraftsSent,
     FeedbackPlanApproved,
@@ -612,6 +613,18 @@ export function epicApprovedText(id: number, approved: EpicPlanApproved): string
         .filter(([, ids]) => ids.length > 0)
         .map(([word, ids]) => `${word}: ${ids.join(', ')}`)
     return listed.length === 0 ? head : `${head} ${listed.join('; ')}.`
+}
+
+/**
+ * The toast a submission shows as its form opens the epic's page, in the words `canopy epic submit` says it: the epic,
+ * whose plan run the next tick starts, as its title; the repositories its plan reads under it.
+ */
+export function epicSubmittedToast(submitted: EpicSubmitted): NewToast {
+    return {
+        title: `Submitted ${epicRef(submitted.id)}; the next tick starts its plan run.`,
+        detail: `over ${submitted.repos.join(', ')}`,
+        tone: 'done',
+    }
 }
 
 /**

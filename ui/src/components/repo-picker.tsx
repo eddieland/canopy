@@ -29,46 +29,44 @@ export function RepoFilter({
     /** Hears the repositories chosen once one is picked. */
     onChoose: (chosen: string[]) => void
 }) {
-    const [open, setOpen] = useState(false)
-    const [first, setFirst] = useState<readonly string[]>([])
     const summary = reposSummary(chosen)
-    const rest = repos.filter((r) => !first.includes(r))
-
-    function toggle(repo: string) {
-        onChoose(chosen.includes(repo) ? chosen.filter((r) => r !== repo) : [...chosen, repo].toSorted())
-    }
-
     return (
-        <Popover
-            open={open}
-            onOpenChange={(next) => {
-                if (next) {
-                    setFirst(chosen.filter((r) => repos.includes(r)))
-                }
-                setOpen(next)
-            }}
-        >
-            <PickerButton label={`Filter by repository: ${summary}`} quiet={chosen.length === 0}>
-                {summary}
-            </PickerButton>
-            <PickerList {...REPOSITORIES}>
-                <PickerItem value={EVERY} checked={chosen.length === 0} onSelect={() => onChoose([])}>
-                    {EVERY}
-                </PickerItem>
-                <CommandSeparator />
-                {first.map((r) => (
-                    <PickerItem key={r} value={r} checked={chosen.includes(r)} onSelect={() => toggle(r)}>
-                        {r}
-                    </PickerItem>
-                ))}
-                {first.length > 0 && rest.length > 0 && <CommandSeparator />}
-                {rest.map((r) => (
-                    <PickerItem key={r} value={r} checked={chosen.includes(r)} onSelect={() => toggle(r)}>
-                        {r}
-                    </PickerItem>
-                ))}
-            </PickerList>
-        </Popover>
+        <Several
+            repos={repos}
+            chosen={chosen}
+            onChoose={onChoose}
+            label={`Filter by repository: ${summary}`}
+            summary={summary}
+            every
+        />
+    )
+}
+
+/**
+ * Several repositories of `repos`, in a form (an epic's): the same button and list as `RepoFilter`, without `every
+ * repository`, since the form sends the names chosen and none means none. The button says `none` while none is.
+ */
+export function ReposChoice({
+    repos,
+    chosen,
+    onChoose,
+    label,
+    none,
+}: {
+    /** The repositories to offer, sorted. */
+    repos: readonly string[]
+    /** The repositories chosen, sorted. */
+    chosen: readonly string[]
+    /** Hears the repositories chosen once one is picked. */
+    onChoose: (chosen: string[]) => void
+    /** What the choice is, for a screen reader, which hears the button as it and then what is chosen. */
+    label: string
+    /** What the button says, muted, while none is chosen. */
+    none: string
+}) {
+    const summary = chosen.length === 0 ? none : reposSummary(chosen)
+    return (
+        <Several repos={repos} chosen={chosen} onChoose={onChoose} label={`${label}: ${summary}`} summary={summary} />
     )
 }
 
@@ -113,6 +111,70 @@ export function RepoSelect({
                         }}
                     >
                         {name ?? EVERY}
+                    </PickerItem>
+                ))}
+            </PickerList>
+        </Popover>
+    )
+}
+
+// A picker of several repositories: picking one adds or takes it away and keeps the list open, and what was chosen as
+// it opened is listed first, so nothing moves under the pointer. With `every`, `every repository` heads the list and
+// clears the choice.
+function Several({
+    repos,
+    chosen,
+    onChoose,
+    label,
+    summary,
+    every = false,
+}: {
+    repos: readonly string[]
+    chosen: readonly string[]
+    onChoose: (chosen: string[]) => void
+    label: string
+    summary: string
+    every?: boolean
+}) {
+    const [open, setOpen] = useState(false)
+    const [first, setFirst] = useState<readonly string[]>([])
+    const rest = repos.filter((r) => !first.includes(r))
+
+    function toggle(repo: string) {
+        onChoose(chosen.includes(repo) ? chosen.filter((r) => r !== repo) : [...chosen, repo].toSorted())
+    }
+
+    return (
+        <Popover
+            open={open}
+            onOpenChange={(next) => {
+                if (next) {
+                    setFirst(chosen.filter((r) => repos.includes(r)))
+                }
+                setOpen(next)
+            }}
+        >
+            <PickerButton label={label} quiet={chosen.length === 0}>
+                {summary}
+            </PickerButton>
+            <PickerList {...REPOSITORIES}>
+                {every && (
+                    <>
+                        <PickerItem value={EVERY} checked={chosen.length === 0} onSelect={() => onChoose([])}>
+                            {EVERY}
+                        </PickerItem>
+                        <CommandSeparator />
+                    </>
+                )}
+                {first.map((r) => (
+                    <PickerItem key={r} value={r} checked={chosen.includes(r)} onSelect={() => toggle(r)}>
+                        {r}
+                    </PickerItem>
+                ))}
+                {first.length > 0 && rest.length > 0 && <CommandSeparator />}
+                {rest.map((r) => (
+                    <PickerItem key={r} value={r} checked={chosen.includes(r)} onSelect={() => toggle(r)}>
+                        {r}
                     </PickerItem>
                 ))}
             </PickerList>
