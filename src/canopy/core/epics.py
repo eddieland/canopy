@@ -93,33 +93,44 @@ def submit(
     project: str | None,
     tracker_epic: str | None,
     channel: str,
+    submission: str | None = None,
 ) -> records.Epic:
     """Record the operator's epic, its goal `text`, whose plan reads repositories `repos` (DESIGN §43).
 
     `repos` may be empty only in a workspace of one repository, which it then reads. `project` names the tracker
     project its breakdown's tickets are filed in, and `tracker_epic` a tracker key whose children are put to the
-    operator as suggestions; None for either is none.
+    operator as suggestions; None for either is none. `submission` is the id a channel's form drew when it was
+    rendered, as a reply's is (DESIGN §22): the same id from the same channel again records nothing new, and returns
+    the epic it recorded without checking its text, repositories, or keys again, so a retry whose first try was
+    recorded files no second epic.
 
     Returns:
-        The epic, as recorded.
+        The epic, as recorded, now or by the earlier submission with the same id.
 
     Raises:
-        Refused: `inside_run` inside a tick or a run, `bad_body` for an empty text or one over `MAX_TEXT` characters,
+        Refused: `inside_run` inside a tick or a run, `bad_submission` for a submission id that is not
+            `conversation.SUBMISSION_RE`, `bad_body` for an empty text or one over `MAX_TEXT` characters,
             `unknown_repo` for a repository the map does not name, or none named in a workspace of several, and
             `bad_key` for a project or a tracker epic that is not a plain key.
         DatabaseError: the row was not recorded, which nothing but a broken journal does.
     """
     conversation.check_operator()
-    body = text.strip()
-    if not body:
-        raise Refused("bad_body", "the epic's text is empty")
-    if len(body) > MAX_TEXT:
-        raise Refused("bad_body", f"the epic's text is {len(body)} characters; the most is {MAX_TEXT}")
-    names = _repositories(workspace, repos)
-    for option, value in (("--project", project), ("--tracker-epic", tracker_epic)):
-        if value is not None:
-            _check_key(value, option)
+    if submission is not None and not conversation.SUBMISSION_RE.fullmatch(submission):
+        raise Refused("bad_submission", f"a submission id is {conversation.SUBMISSION_RE.pattern}")
     with db.transaction(conn):
+        # Read in the transaction that records it, so two tries at once record one epic.
+        recorded = None if submission is None else _submitted(conn, channel, submission)
+        if recorded is not None:
+            return recorded
+        body = text.strip()
+        if not body:
+            raise Refused("bad_body", "the epic's text is empty")
+        if len(body) > MAX_TEXT:
+            raise Refused("bad_body", f"the epic's text is {len(body)} characters; the most is {MAX_TEXT}")
+        names = _repositories(workspace, repos)
+        for option, value in (("--project", project), ("--tracker-epic", tracker_epic)):
+            if value is not None:
+                _check_key(value, option)
         insert = records.insert(
             records.Epic,
             text=body,
@@ -127,6 +138,7 @@ def submit(
             tracker_epic=tracker_epic,
             channel=channel,
             submitted_at=db.now(),
+            submission=submission,
         )
         epic_id = int(insert.run(conn).lastrowid or 0)
         rows = records.insert_rows(records.EpicRepo, ("epic_id", "repo"))
@@ -614,6 +626,11 @@ def _register(conn: sqlite3.Connection, member: records.EpicMember, entries: Abs
     if entries:
         rows = records.insert_rows(records.EpicMemberEntry, ("member_id", "entry"))
         rows.many(conn, [(member.id, entry) for entry in sorted(entries)])
+
+
+def _submitted(conn: sqlite3.Connection, channel: str, submission: str) -> records.Epic | None:
+    """Return the epic `channel` recorded under submission id `submission`, or None if it recorded none."""
+    return records.select(records.Epic).where("channel = ? AND submission = ?", channel, submission).one(conn)
 
 
 def _repositories(workspace: Workspace, repos: Sequence[str]) -> list[str]:

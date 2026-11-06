@@ -222,16 +222,20 @@ export async function approveEpicPlan(id: number, readSha256: string): Promise<E
 /**
  * `canopy epic submit TEXT --repo NAME --project KEY --tracker-epic KEY`: the text is recorded as an epic whose plan
  * reads `repos` (none only in a workspace of one), filing its tickets only in `project`, or none without one, and
- * putting `trackerEpic`'s tickets to the operator as suggestions; the next tick starts its plan run.
+ * putting `trackerEpic`'s tickets to the operator as suggestions; the next tick starts its plan run. `submission`
+ * makes a resend a no-op, answered with the epic the first send recorded.
  */
 export async function submitEpic(
     text: string,
     repos: readonly string[],
     project: string | null,
     trackerEpic: string | null,
+    submission: string,
 ): Promise<EpicSubmitted> {
     return unwrap(
-        await api.POST('/api/epics', { body: { text, repos: [...repos], project, tracker_epic: trackerEpic } }),
+        await api.POST('/api/epics', {
+            body: { text, repos: [...repos], project, tracker_epic: trackerEpic, submission },
+        }),
     )
 }
 
@@ -873,7 +877,7 @@ export function refreshSubject(client: QueryClient, subject: AttachmentSubject):
     return subject.kind === 'ticket' ? refreshTicket(client, subject.key) : refreshTask(client, subject.id)
 }
 
-/** A submission id for a reply form, drawn when the form is rendered and kept until the reply is recorded. */
+/** A submission id for a form, drawn when the form is rendered and kept until what it sends is recorded. */
 export function newSubmission(): string {
     return crypto.randomUUID()
 }

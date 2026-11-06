@@ -347,6 +347,8 @@ class EpicSubmitRequest(Model):
     tracker_epic: Annotated[str, Field(max_length=200)] | None = None
     """A tracker epic whose tickets are put to the operator as suggestions, as `--tracker-epic` names it; none is a
     member until the operator adds it."""
+    submission: Annotated[str, Field(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")]
+    """The id the form drew when it was rendered, sent again unchanged on a retry, so a retry records no second epic."""
 
 
 class EpicSubmitted(Model):

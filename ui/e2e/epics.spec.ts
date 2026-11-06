@@ -311,7 +311,15 @@ test('an epic submitted from its form opens its page, which says its plan run is
     await expect(page).toHaveURL(/\/epics\/5$/u)
     await settled(page)
     await expect(page.getByText('no plan yet: the next tick starts its plan run')).toBeVisible()
-    expect(sent).toEqual([{ text: goal, repos: ['api', 'web'], project: 'ABC', tracker_epic: null }])
+    expect(sent).toEqual([
+        {
+            text: goal,
+            repos: ['api', 'web'],
+            project: 'ABC',
+            tracker_epic: null,
+            submission: expect.any(String) as unknown,
+        },
+    ])
     await page.goBack()
     await expect(page.getByTestId('epics').getByRole('listitem').first()).toContainText('epic:5')
 })

@@ -70,7 +70,8 @@ def submit(body: EpicSubmitRequest, backend: BackendDep) -> EpicSubmitted:
 
     Refused as the CLI's is: `inside_run`, `bad_body` for an empty text or one too long, `unknown_repo` for a
     repository the workspace has not, or none named in a workspace of several, and `bad_key` for a project or a
-    tracker epic that is not a plain key.
+    tracker epic that is not a plain key. Idempotent on the submission id: a retried submission records nothing new,
+    and is answered with the epic the first recorded.
     """
     with backend.open() as ctx:
         try:
@@ -82,6 +83,7 @@ def submit(body: EpicSubmitRequest, backend: BackendDep) -> EpicSubmitted:
                 project=body.project,
                 tracker_epic=body.tracker_epic,
                 channel=WEB,
+                submission=body.submission,
             )
         except conversation.Refused as r:
             raise RefusedError(r) from None

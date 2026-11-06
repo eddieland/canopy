@@ -91,6 +91,29 @@ def test_a_workspace_of_several_repositories_names_each_its_plan_reads(
     assert epics.repos_of(ws.journal(), 1) == ["web", "api"]
 
 
+def test_a_submission_id_records_one_epic_for_its_channel(ctx: Context) -> None:
+    """The same submission id from the same channel finds its epic; from another, or with none, it is a new one."""
+
+    def submitted(channel: str, submission: str | None) -> int:
+        found = epics.submit(
+            ctx.conn,
+            ctx.workspace,
+            TEXT,
+            repos=(),
+            project=None,
+            tracker_epic=None,
+            channel=channel,
+            submission=submission,
+        )
+        return found.id
+
+    assert [submitted("web", "form-0001"), submitted("web", "form-0001")] == [1, 1]
+    assert [submitted("cli", "form-0001"), submitted("cli", None), submitted("cli", None)] == [2, 3, 4]
+    with pytest.raises(conversation.Refused, match="bad_submission"):
+        submitted("web", "no spaces")
+    assert len(epics.every(ctx.conn)) == 4
+
+
 @pytest.mark.parametrize("variable", ["CANOPY_RUN_ID", "CANOPY_TICK_ID"])
 def test_a_submission_or_a_change_of_members_inside_a_run_or_a_tick_is_refused(
     capsys: pytest.CaptureFixture[str],
