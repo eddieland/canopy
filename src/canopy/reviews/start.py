@@ -27,6 +27,7 @@ from canopy.core import (
     notice,
     outbox,
     personas,
+    plans,
     pools,
     prompts,
     recorded_runs,
@@ -96,6 +97,15 @@ class Started:
     run_id: int
     pid: int
     slot: Path
+
+
+@dataclass(frozen=True)
+class Planned:
+    """The ticket's approved plan, which a review of the ticket's own PR checks the change against (DESIGN §21, §25)."""
+
+    plan: records.Plan
+    #: The plan's text, or None when its file is no longer the text approved: the review then goes without it.
+    text: str | None
 
 
 def reviews_dir(ctx: Context) -> Path:
@@ -491,6 +501,7 @@ def _prompt(
             notes=_notes(ctx.conn, run),
             previous=findings.for_reviewer(ctx.conn, request.pr, before=run_id),
             persona=persona,
+            plan=_plan_note(ctx, run),
         )
     except (OSError, prompts.PromptError) as e:
         # Nothing started, so it costs the PR none of its reviews; the caller returns the slot.
@@ -537,6 +548,24 @@ def prompt_values(
     }
 
 
+def planned(ctx: Context, run: records.ReviewRun) -> Planned | None:
+    """Return the approved plan review run `run` is given, read now and checked against its approval (DESIGN §21).
+
+    A review of the ticket's own PR is given the ticket's approved plan, the one its worker follows. A revision and a
+    review of a PR with no ticket are given none, and nor is a review of a ticket whose plan waits on the operator or
+    was superseded, or was approved, or approved again, since the review started: its prompt names no such plan.
+
+    Returns:
+        The plan and its text, or its row alone when its file is no longer the text approved; None when it has none.
+    """
+    if run.ticket_key is None or run.revises is not None:
+        return None
+    plan = plans.approved_of(ctx.conn, run.ticket_key)
+    if plan is None or str(plan.approved_at) > run.started_at:
+        return None
+    return Planned(plan, plans.approved_text(ctx.state_dir, plan))
+
+
 def spawn(ctx: Context, run_id: int, lease: pools.Lease, prompt: str) -> Started:
     """Write review run `run_id`'s prompt and start its detached `canopy _review`, which may do a revision.
 
@@ -568,6 +597,20 @@ def spawn(ctx: Context, run_id: int, lease: pools.Lease, prompt: str) -> Started
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "review_runs", run_id, pid)
     return Started(run_id, pid, lease.path)
+
+
+def _plan_note(ctx: Context, run: records.ReviewRun) -> str | None:
+    """The reviewer's `{{PLAN}}`: where `_review` writes its copy of the ticket's approved plan, and its outline.
+
+    Returns:
+        The note, one saying the plan is left out when its file is no longer the text approved, or None for no plan.
+    """
+    found = planned(ctx, run)
+    if found is None:
+        return None
+    copy = run_dir(ctx, run.id) / plans.COPY
+    outline = plans.outline(found.text) if found.text is not None else None
+    return prompts.review_plan_note(copy, outline, by_planner=found.plan.approved_channel == plans.PLANNER)
 
 
 def _notes(conn: sqlite3.Connection, run: records.ReviewRun) -> str | None:
