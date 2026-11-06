@@ -25,6 +25,7 @@ from canopy.core import (
     checklists,
     conversation,
     db,
+    epic_changes,
     epics,
     memory,
     notice,
@@ -1150,6 +1151,8 @@ def _spawn(
         }
     # A joint run's worker learns its repositories only from these, so an override without them fails closed.
     required: tuple[str, ...] = prompts.REQUIRED_JOINT if plan.joint and not planning else ()
+    # What of a member's epic's plan changing its prompt tells it, which its insert takes out of the member's notice.
+    told: tuple[str, ...] = ()
     if planning:
         # One prompt for public and private tickets: a private one's conversation holds the operator's messages, and
         # its start record, not a label, authorizes it (DESIGN §25).
@@ -1157,7 +1160,16 @@ def _spawn(
         # A member of an epic with an approved plan plans within it, from a copy its run puts in its desk (DESIGN §43).
         member = epics.member_epic(ctx.conn, ctx.state_dir, key) if kind == policy.PLAN else None
         if member is not None:
-            values["EPIC"] = prompts.epic_note(member.epic_id, member.entries, epics.EPIC_COPY, dropped=member.dropped)
+            # The ids changes of the epic's plan reached it by since its last plan, told once, as data (DESIGN §43).
+            pending = epic_changes.pending(ctx.conn, key)
+            told = tuple(pending.ids) if pending is not None else ()
+            values["EPIC"] = prompts.epic_note(
+                member.epic_id,
+                member.entries,
+                epics.EPIC_COPY,
+                dropped=member.dropped,
+                changed=told,
+            )
             required = (*required, *prompts.REQUIRED_EPIC)
         values["OPERATOR_MESSAGES"] = (
             conversation.prompt_conversation(ctx.conn, key)
@@ -1223,6 +1235,7 @@ def _spawn(
             replied=replied,
             feedback_plan_id=followed.feedback_plan_id if followed is not None else None,
             rendered_in=(key, kind, persona),
+            epic_told=told,
         ),
         feedback_plan_id=followed.feedback_plan_id if followed is not None else None,
         persona=persona.name if persona is not None else None,
@@ -1388,12 +1401,14 @@ def _record_rendered(
     replied: replies.Rendered | None,
     feedback_plan_id: int | None,
     rendered_in: tuple[str, str, personas.Persona | None],
+    epic_told: Collection[str] = (),
 ) -> None:
     """Record what run `run_id`'s prompt was rendered under, inside the transaction that inserts it.
 
     A `resume` that follows a feedback plan spends its approval here, so one approval goes ahead once (DESIGN §32).
     `rendered_in` is the run's ticket, kind, and persona: a persona chosen for its agent's next run alone is spent
-    here, so it reaches that run alone (§31).
+    here, so it reaches that run alone (§31). `epic_told` are the ids of its epic's plan's changes the prompt told a
+    member's run, which leave the member's notice here, so a run is told them once (§43).
 
     Raises:
         Refusal: (`unplanned`) the feedback plan is no longer approved and unspent; the run is not inserted.
@@ -1403,6 +1418,8 @@ def _record_rendered(
     if replied is not None:
         replies.record_rendered(ctx.conn, run_id, replied)
     key, kind, persona = rendered_in
+    if epic_told:
+        epic_changes.told(ctx.conn, key, epic_told)
     agent = personas.agent_of(kind)
     if agent is not None and persona is not None:
         personas.spend_next(ctx.conn, key, agent, persona.name)

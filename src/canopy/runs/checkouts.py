@@ -208,7 +208,7 @@ def _units(ctx: Context, key: str, repos: Collection[str]) -> tuple[str, list[st
         The branch, and the repositories in the map's order.
 
     Raises:
-        CheckoutError: No unit has a branch yet, or one of `repos` is not a unit with one.
+        CheckoutError: No unit has a branch yet, none with one is in the map, or one of `repos` is not a unit with one.
     """
     with_branch = {str(u.repo): str(u.branch) for u in db.units(ctx.conn, key) if u.repo and u.branch}
     if not with_branch:
@@ -217,6 +217,8 @@ def _units(ctx: Context, key: str, repos: Collection[str]) -> tuple[str, list[st
     if missing:
         raise CheckoutError(f"{key} has no branch in {', '.join(missing)}; it has one in {', '.join(with_branch)}")
     chosen = [r.name for r in ctx.workspace.repos if r.name in with_branch and (not repos or r.name in repos)]
+    if not chosen:
+        raise CheckoutError(f"{key} has a branch only in {', '.join(with_branch)}, which the map no longer lists")
     # One branch per ticket (D058): every unit carries the same name.
     return with_branch[chosen[0]], chosen
 

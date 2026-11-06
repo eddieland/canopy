@@ -15,7 +15,7 @@ import click
 
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
-from canopy.core import conversation, epics, plans
+from canopy.core import conversation, epic_outline, epics, outbox, plans
 from canopy.core.items import age
 from canopy.core.vocab import PlanStatus, RunStatus
 from canopy.infra import logs
@@ -23,7 +23,7 @@ from canopy.infra.text import one_line, printable
 from canopy.runs import ending, epic_runs
 
 if TYPE_CHECKING:
-    from canopy.core import records
+    from canopy.core import epic_changes, records
     from canopy.core.context import Context
 
 CLI = "cli"
@@ -212,7 +212,11 @@ def show(ctx: Context, epic_id: int) -> None:
     click.echo(f"\nMembers ({len(members)} of at most {bound}):")
     for member in members:
         fulfils = ", ".join(epics.entries_of(ctx.conn, member.id)) or "no entry"
-        click.echo(f"  {member.ticket_key}  {fulfils}  added {age(member.added_at)} ago via {member.added_channel}")
+        # The ids changes of the plan reached it by, which its work has not taken in yet (DESIGN §43).
+        changed = f"  changed since: {', '.join(member.changed_ids.split())}" if member.changed_ids else ""
+        click.echo(
+            f"  {member.ticket_key}  {fulfils}  added {age(member.added_at)} ago via {member.added_channel}{changed}",
+        )
     if not members:
         click.echo(f"  none yet: `canopy epic add epic:{found.id} KEY` adds one")
     _show_plan(ctx, found)
@@ -332,7 +336,15 @@ def approve(ctx: Context, epic_id: int) -> None:
         raise CliError(f"canopy has no epic:{epic_id}")
     repos = frozenset(epics.repos_of(ctx.conn, epic_id))
     try:
-        done = epics.approve(ctx.conn, ctx.state_dir, epic_id, repos=repos, channel=CLI)
+        done = epics.approve(
+            ctx.conn,
+            ctx.state_dir,
+            epic_id,
+            repos=repos,
+            channel=CLI,
+            dispatch_lock=ctx.dispatch_lock_path,
+            event=outbox.epic_changed(ctx.config),
+        )
     except conversation.Refused as r:
         raise CliError(f"plan refused ({r.guard}): {r.reason}") from None
     except plans.PlanFileError as e:
@@ -346,7 +358,19 @@ def approve(ctx: Context, epic_id: int) -> None:
             ("changed", done.change.changed),
         ):
             if ids:
-                click.echo(f"  {word}: {', '.join(sorted(ids, key=lambda i: (i[0], int(i[1:]))))}")
+                click.echo(f"  {word}: {', '.join(epic_outline.ordered(ids))}")
+    _show_reached(done.reached)
+
+
+def _show_reached(reached: epic_changes.Reached) -> None:
+    """Print the members a change of the epic's plan reached, each way (DESIGN §43, When its plan changes)."""
+    for what, keys in (
+        ("Plans superseded as stale, to be planned again", reached.stale),
+        ("Implements held until you approve the plan again or ask for a new one (epic_changed)", reached.held),
+        ("Left as they are, each told at its next plan", reached.told),
+    ):
+        if keys:
+            click.echo(f"{what}: {', '.join(keys)}")
 
 
 def _epic(ref: str, verb: str) -> int:

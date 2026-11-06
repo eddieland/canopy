@@ -153,13 +153,13 @@ its siblings and says which to merge first.
 
 ### The operator's desk
 
-`canopy desk KEY` is the operator's own checkout of a ticket's branch: a slot of each unit's pool, leased to the
-operator rather than to canopy, each on the branch as a local branch tracking origin's, linked from one directory,
-`checkouts/KEY/`, with a workspace file an editor opens whole. No tick returns the slots, and a run of the ticket works
-in slots of its own and pushes to the same branch; `--close` returns them, refusing while one has work origin lacks.
-It is not a hold on the loop: `canopy stop` and the queue label are. Rejected: the run's own desk under `desks/`,
-which a joint run makes and removes; a detached checkout, as a run's is (D109), since the operator's editor and push
-want a branch.
+`canopy desk KEY`, or Open desk on the ticket's page, is the operator's own checkout of a ticket's branch: a slot of
+each unit's pool, leased to the operator rather than to canopy, each on the branch as a local branch tracking origin's,
+linked from one directory, `checkouts/KEY/`, with a workspace file an editor opens whole. No tick returns the slots, and
+a run of the ticket works in slots of its own and pushes to the same branch; `--close` returns them, refusing while one
+has work origin lacks. It is not a hold on the loop: `canopy stop` and the queue label are. Rejected: the run's own desk
+under `desks/`, which a joint run makes and removes; a detached checkout, as a run's is (D109), since the operator's
+editor and push want a branch.
 
 ### Follow-up tickets
 

@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException
 
-from canopy.core import conversation, epics, plans
+from canopy.core import conversation, epics, outbox, plans
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
 from canopy.runs import epic_runs
@@ -142,7 +142,9 @@ def approve(epic_id: EpicId, body: EpicPlanApproval, backend: BackendDep) -> Epi
                 epic_id,
                 repos=frozenset(epics.repos_of(ctx.conn, epic_id)),
                 channel=WEB,
+                dispatch_lock=ctx.dispatch_lock_path,
                 read_sha256=body.read_sha256,
+                event=outbox.epic_changed(ctx.config),
             )
         except conversation.Refused as r:
             raise RefusedError(r) from None

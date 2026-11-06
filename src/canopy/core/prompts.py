@@ -449,23 +449,37 @@ def plan_review(level: PlannerApproval, *, feedback: bool) -> str:
     return f"\n\n## Whether the operator reviews this plan\n\n{body}"
 
 
-def epic_note(epic_id: int, entries: Sequence[str], copy: str, *, dropped: Sequence[str] = ()) -> str:
+def epic_note(
+    epic_id: int,
+    entries: Sequence[str],
+    copy: str,
+    *,
+    dropped: Sequence[str] = (),
+    changed: Sequence[str] = (),
+) -> str:
     """Return a member's planner's `{{EPIC}}`: its epic, the entries it fulfils, and the epic's plan to plan within.
 
     The epic's plan is the operator's, approved once for all its tickets; the planner reads its copy, `copy`, rather
     than settling its questions again, and says in its own plan's `## Epic` section how this ticket fits it (§43).
-    `dropped` are entries the member was registered against that the approved plan no longer holds.
+    `dropped` are entries the member was registered against that the approved plan no longer holds, and `changed` the
+    ids by which approvals of it reached the member since its last plan, which the harness read from the plans approved.
 
     Returns:
         The section's text.
     """
     fulfils = _fulfils(entries, dropped)
+    since = (
+        f" The operator approved the epic's plan again since this ticket was last planned, adding, removing, or "
+        f"changing {_ids(changed)}: the copy is the plan as approved now, and this ticket's plan is written against it."
+        if changed
+        else ""
+    )
     return (
         f"This ticket is a member of epic:{epic_id}, work that spans several tickets. The operator approved the "
         f"epic's plan once for all of them; your directory holds a copy of it as approved, `{copy}`. Its outline: "
         "`Goal`; `Requirements`, each `R<n>`; `Contracts` between the tickets, each `C<n>` with who provides and "
         "who uses it; `Breakdown`, each entry `B<n>` with what it covers, provides, and uses; `Decisions`; and "
-        f"`Out of scope`. {fulfils}\n\n"
+        f"`Out of scope`. {fulfils}{since}\n\n"
         "Read the epic's plan before the code. Its requirements, contracts, and decisions are settled: plan this "
         "ticket's part within them, and do not settle them again. Add a section `## Epic` to your plan, after "
         "`## Goal`: the requirements this ticket covers and the contracts it provides and uses, each by its id, "

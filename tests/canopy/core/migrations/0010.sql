@@ -1,3 +1,3 @@
--- sha256 of 0010_stop_asks.sql: a9aac876f77c439604414f90aeb586f1598a9621de3b602b4b92238375381f6f
+-- sha256 of 0010_epic_changes.sql: 8a312ebc13f97d9a82b75c82ecb4c4a4440c71a74fecc24fa715c9aea0edf32c
 
 -- Creates no table, so seeds no row.
