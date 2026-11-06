@@ -17,8 +17,8 @@ call on each one's row (§8). Every run on T0's day that ended reported its firs
 and the runtime's version the history's last week used, so the spend page's weekly hit rate goes on from it (§13).
 Each feature's fixtures are in a module of their own in this package, named for the feature, which `seed` calls: plans,
 memory, chore runs, review runs, review replies, feedback plans in each state, personas, one-off tasks, the worker
-runs' answers to the checklists, the PRs' check runs, GitHub's times on the PRs, the runs' transcripts, the months
-before T0, whose landed tickets the reports page shows, and the machine (a fixed reading).
+runs' answers to the checklists, the PRs' check runs, GitHub's times on the PRs, the runs' transcripts, epics, the
+months before T0, whose landed tickets the reports page shows, and the machine (a fixed reading).
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -55,6 +55,7 @@ from canopy.serve.mock import (
     chores,
     ci,
     drafts,
+    epics,
     feedback_plans,
     history,
     host,
@@ -387,6 +388,8 @@ def seed(directory: Path) -> Backend:
             _left_feedback(ctx.conn)
             # Last, so its runs take ids after every other fixture's.
             plan_approvals.seed(ctx.conn, ws.state_dir, root)
+            # After every other fixture, so the reply it writes takes a message id after theirs.
+            epics.seed(ctx.conn, ws.state_dir, root, at)
         reviews.drafts(ctx.conn, at)
     transcripts.write(ws.state_dir, T0, lambda repo, n: slot_path(root, repo, n))
     return backend
