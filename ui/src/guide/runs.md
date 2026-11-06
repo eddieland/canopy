@@ -119,6 +119,17 @@ run across several repositories lists each one's under its name, and counts the 
 arrive with the run's result, so a running run shows none yet, and a run given no list, or in a repository you keep
 none for, has no panel at all. It's what `canopy show run:ID` prints under `Checklist:`.
 
+When the list held the worker's push, what it pushed after reading the list sits right under the answers. A **Pushed
+after the list** panel names the repository and the two commits, `web · 5b1e0c4..c9d24f8`: the one the branch was at
+when canopy showed the list, and the next push. Then comes the diff between them, a panel per file, drawn as [a
+review's](pull-requests#a-reviews-page) is. This is where a `fixed` answer shows its work: the answer says the worker
+fixed it, the diff shows what it called a fix. It's everything the run changed in that stretch, not only the fix, so a
+worker that also tidied three files on the way gets the credit, or the blame, for those too. A run held more than once,
+or in several repositories, has a panel for each stretch, each naming its repository. A diff canopy couldn't keep as
+the run ended, or that [garbage collection](running-the-loop#garbage-collection) has since removed, says so in its
+panel rather than quietly leaving the stretch out. Past five stretches, which takes some doing, the page shows the
+first five and `canopy show run:ID` names the rest.
+
 The **Transcript** is the run's session, from its log, oldest first:
 
 - its text, with its reasoning set in italics and marked `thinking`. Long thinking shows its first four lines and

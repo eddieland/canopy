@@ -125,14 +125,38 @@ test("a run's page lists what it answered of its list, a held item's reason unde
         /^heldno-any.*typing them by hand is ABC-112\.$/u,
         /^n\/ai18n-strings$/u,
     ])
-    // Under the run's facts, over its transcript.
+    // Under the run's facts, then what it pushed after the list (below).
     const panels = await page.locator('main h2').allTextContents()
-    expect(panels.slice(panels.indexOf('Run'), panels.indexOf('Run') + 3)).toEqual(['Run', 'Checklist', 'Transcript'])
+    expect(panels.slice(panels.indexOf('Run'), panels.indexOf('Run') + 3)).toEqual([
+        'Run',
+        'Checklist',
+        'Pushed after the list',
+    ])
 
     // A run given no list has no panel.
     await page.goto('workspace/runs/41')
     await settled(page)
     await expect(page.getByTestId('run-checklist')).toHaveCount(0)
+})
+
+test('a run held by its list shows what it pushed after it under its answers, in the diff panels', async ({ page }) => {
+    await page.goto('workspace/runs/38')
+    await settled(page)
+    const stretch = page.getByRole('region', { name: /^Pushed after the list: web · 5b1e0c4\.\.c9d24f8$/u })
+    await expect(stretch.getByTestId('checklist-stretch-range')).toHaveText('web · 5b1e0c4..c9d24f8')
+    await expect(stretch.getByTestId('diff-file')).toHaveCount(2)
+    await expect(stretch.getByTestId('diff-file').last()).toContainText('useQuery(invoiceLinesQuery(id))')
+    // Right under the answers, which name the fix, and over the transcript.
+    const panels = await page.locator('main h2').allTextContents()
+    const at = panels.indexOf('Checklist')
+    expect(panels.slice(at, at + 4)).toEqual(['Checklist', 'Pushed after the list', 'File', 'File'])
+    expect(panels[at + 4]).toBe('Transcript')
+
+    // A run whose push was never held has none.
+    await page.goto('workspace/runs/39')
+    await settled(page)
+    await expect(page.getByTestId('run-checklist')).toBeVisible()
+    await expect(page.getByTestId('checklist-stretch')).toHaveCount(0)
 })
 
 test('the window and the repository filter narrow the counts, and keep each other', async ({ page }) => {

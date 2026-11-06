@@ -88,6 +88,8 @@ export const mockRuns: Run[] = [
         models: { status: 'running', models: [], error: null },
         feedback_plan: null,
         checklist: [],
+        checklist_stretches: [],
+        checklist_stretches_left_out: 0,
     },
     {
         id: 42,
@@ -122,6 +124,8 @@ export const mockRuns: Run[] = [
         },
         feedback_plan: null,
         checklist: [],
+        checklist_stretches: [],
+        checklist_stretches_left_out: 0,
     },
 ]
 

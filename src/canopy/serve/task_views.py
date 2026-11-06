@@ -123,13 +123,20 @@ def task_run_detail(ctx: Context, task_id: int, run_id: int) -> TaskRunDetail | 
 
     Returns:
         The run, its whole summary and question, the harness's note, the tickets recorded from it, its models, and
-        what it answered of its repository's checklist (DESIGN §42).
+        what it answered of its repository's checklist (DESIGN §42), with what it pushed after being shown it.
     """
     row = _run_of(ctx.conn, task_id, run_id)
     if row is None:
         return None
     stored = contract.stored_object(row.result_json)
     question = lines(str(stored.get("question") or "")) if row.status is RunStatus.BLOCKED else ""
+    stretches, left_out = checklist_views.run_stretches(
+        ctx.conn,
+        run_id,
+        log_path=row.log_path,
+        ended_at=row.ended_at,
+        table="task_runs",
+    )
     return TaskRunDetail(
         task_id=task_id,
         run=task_run(
@@ -151,6 +158,8 @@ def task_run_detail(ctx: Context, task_id: int, run_id: int) -> TaskRunDetail | 
         ),
         model=row.model,
         checklist=checklist_views.run_answers(ctx.conn, run_id, table="task_runs"),
+        checklist_stretches=stretches,
+        checklist_stretches_left_out=left_out,
     )
 
 

@@ -119,6 +119,10 @@ case made in advance, on the run for that person to read. Each run's answers are
 [its page](runs#a-runs-page), or [a task's run's](tasks#a-tasks-run), and `canopy show run:ID` or `canopy show task:N`
 prints them.
 
+A held push leaves a record of what came after it, too. canopy keeps the diff from the commit the list was shown at to
+the worker's next push, and the run's page shows it under the answers, so you can read a `fixed` next to the fix
+rather than taking the worker's word for it. `canopy show` names where each diff is kept.
+
 ## Tuning the list
 
 The [checklist page](reports#the-checklist-page) under Reports counts the answers per repository and item, over 7, 14,
