@@ -994,7 +994,7 @@ def hup_me() -> list[str]:
 
 def paced(env: CanopyEnv, minutes: int) -> None:
     """Write the user config with `loop.interval_minutes` at `minutes`, and idle pacing off."""
-    env.write_user(user_toml() + f"\n[loop]\ninterval_minutes = {minutes}\nidle_max_minutes = {minutes}\n")
+    env.write_user(user_toml(env.runtime) + f"\n[loop]\ninterval_minutes = {minutes}\nidle_max_minutes = {minutes}\n")
 
 
 def polled(env: CanopyEnv, *, interval: int, every: int) -> None:
@@ -1003,7 +1003,7 @@ def polled(env: CanopyEnv, *, interval: int, every: int) -> None:
     It has one `vcs` connector beside the tests' `tracker` source, polled every `every` minutes.
     """
     env.write_user(
-        user_toml()
+        user_toml(env.runtime)
         + f"\n[loop]\ninterval_minutes = {interval}\nidle_max_minutes = {interval}\n"
         + f"\n[connect]\nevery_minutes = {every}\n"
         + '\n[connect.sources.github]\nkind = "vcs"\ncmd = "connector github"\ntimeout_minutes = 1\n',

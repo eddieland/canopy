@@ -20,6 +20,7 @@ from canopy.core import commit_hooks, config, db, definitions, plans, records
 from canopy.core.vocab import Phase, RunKind, TickStatus
 from canopy.infra import lock, logs, procs
 from canopy.loop import attention, duties, mcp, tick
+from canopy.runtime.implementation import Version
 from tests.canopy.helpers import (
     KEY,
     LABEL,
@@ -31,6 +32,7 @@ from tests.canopy.helpers import (
     in_tick,
     listed,
     minute,
+    model_list,
     only_tick,
     overseer_titles,
     present,
@@ -88,13 +90,11 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
     # Its deadline, the moment its timeout fires, for the clock in the snapshot (DESIGN §33).
     assert has_deadline(run, 15, before=before, after=after)
     # Its tools: canopy's own server, in the inline config of its process alone, and code mode, which hides them, off.
-    server = {"type": "local", "command": list(mcp.COMMAND), "cwd": str(env.root), "enabled": True, "timeout": 900_000}
     assert run["env"] == {
         "CANOPY_TICK_ID": "1",
         "CANOPY_DEADLINE": run["env"]["CANOPY_DEADLINE"],
         "OPENCODE_CONFIG_DIR": str(snapshot),
-        "OPENCODE_CONFIG_CONTENT": json.dumps({"mcp": {"canopy": server}}),
-        "OPENCODE_EXPERIMENTAL_CODE_MODE": "false",
+        **_overseers_server(env),
     }
     assert "\n# canopy overseer\n" in (snapshot / "agents" / "canopy-overseer.md").read_text()
 
@@ -127,6 +127,20 @@ def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_st
     assert kept.read_text() == prompt
     assert kept.stat().st_mode & 0o077 == 0
     assert env.state_dir.stat().st_mode & 0o077 == 0
+
+
+# The variables that give the overseer canopy's server, as the runtime `env` runs takes them, outside code mode.
+def _overseers_server(env: CanopyEnv) -> dict[str, str]:
+    given: dict[str, object] = {"type": "local", "command": list(mcp.COMMAND), "cwd": str(env.root)}
+    if env.runtime == Version.ONE:
+        server = {**given, "enabled": True, "timeout": 900_000}
+        return {
+            "OPENCODE_CONFIG_CONTENT": json.dumps({"mcp": {"canopy": server}}),
+            "OPENCODE_EXPERIMENTAL_CODE_MODE": "false",
+        }
+    # OpenCode 2's shape: each server's code mode off in its own entry, and the bound on each tool call alone.
+    server = {**given, "codemode": False, "timeout": {"execution": 900_000}}
+    return {"OPENCODE_CONFIG_CONTENT": json.dumps({"mcp": {"servers": {"canopy": server}}})}
 
 
 def _acted_through_its_tools(run: Mapping[str, object]) -> None:
@@ -334,6 +348,17 @@ def test_the_done_token_in_an_earlier_message_fails_the_tick(scenario: Scenario)
     )
 
 
+#: An `error` event's `error` as each runtime prints one, and how a failure names it: OpenCode 1's with its name, its
+#: message in `data`, and where its own log has the detail; OpenCode 2's with its type and message.
+RUNTIME_ERRORS = {
+    Version.ONE: (
+        {"name": "UnknownError", "data": {"message": "Unexpected server error.", "ref": "err_ccf1"}},
+        "UnknownError: Unexpected server error. (err_ccf1)",
+    ),
+    Version.TWO: ({"type": "provider.auth", "message": "Invalid API key."}, "provider.auth: Invalid API key."),
+}
+
+
 @pytest.mark.parametrize(
     ("exit_code", "failure"),
     [(1, "overseer exited 1"), (0, "overseer's final message has no CANOPY_TICK_DONE line")],
@@ -344,19 +369,16 @@ def test_an_overseer_failure_names_the_error_the_runtime_reported(
     failure: str,
 ) -> None:
     with_events(scenario.env, "canopy-overseer")
-    server = {"name": "UnknownError", "data": {"message": "Unexpected server error.", "ref": "err_ccf1"}}
+    error, said = RUNTIME_ERRORS[scenario.env.runtime]
     failed = scenario.tick(
         *waits(KEY),
         result="",
         exit_code=exit_code,
-        errors=json.dumps([server]),
+        errors=json.dumps([error]),
         dry_run=True,
         code=1,
     )
-    assert (failed.tick.status, failed.tick.summary) == (
-        "overseer_failed",
-        f"{failure}; the runtime reported UnknownError: Unexpected server error. (err_ccf1)",
-    )
+    assert (failed.tick.status, failed.tick.summary) == ("overseer_failed", f"{failure}; the runtime reported {said}")
 
 
 @pytest.mark.parametrize(
@@ -370,7 +392,8 @@ def test_an_overseer_failure_names_each_distinct_error_the_first_and_last_past_t
 ) -> None:
     """The first error may be the cause, and the last ended the run (OpenCode goes on after a context overflow)."""
     with_events(scenario.env, "canopy-overseer")
-    errors = json.dumps([{"name": name} for name in names])
+    # Each kind of error as both runtimes name one: OpenCode 1 by its `name`, 2 by its `type`.
+    errors = json.dumps([{"name": name, "type": name} for name in names])
     failed = scenario.tick(*waits(KEY), result="", exit_code=1, errors=errors, dry_run=True, code=1)
     assert failed.tick.summary == f"overseer exited 1; the runtime reported {reported}"
 
@@ -677,8 +700,8 @@ def test_an_overseers_model_the_runtime_does_not_list_closes_the_tick_without_it
     failed = scenario.tick(*waits(KEY), dry_run=True, code=1)
     assert failed.tick.status == TickStatus.MODEL_LIST_FAILED
     assert failed.tick.summary == (
-        f"could not look up the model {model} chosen in runtime.models: `opencode models` exited 1. Nothing ran on "
-        "another model; the work resumes once the list can be read"
+        f"could not look up the model {model} chosen in runtime.models: `{model_list(scenario.env.runtime)[1]}` "
+        "exited 1. Nothing ran on another model; the work resumes once the list can be read"
     )
     assert scenario.attention() == [(None, "model_list_failed")]
 

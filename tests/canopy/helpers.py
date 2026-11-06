@@ -56,6 +56,7 @@ from canopy.core.vocab import (
 from canopy.infra import logs, procs, resources
 from canopy.loop import connectors, mcp, spawns
 from canopy.runs import drafted, epic_starts
+from canopy.runtime.implementation import Version
 from tests.conftest import FAKES_DIR, TRACKER_CMD, TRACKER_SOURCE, CanopyEnv, Journals, git
 
 KEY = "PROJ-1"
@@ -652,6 +653,18 @@ def pool(treehouse_state: Path) -> list[dict[str, object]]:
 def listed(state: Path, *lines: str, variants: Mapping[str, Sequence[str]] | None = None) -> None:
     """Have the fake `opencode models`, whose state file is `state`, print `lines`, and with `--verbose` `variants`."""
     state.write_text(json.dumps({"models": list(lines), "variants": dict(variants or {})}))
+
+
+def model_list(runtime: Version, *, variants: bool = False) -> tuple[list[str], str]:
+    """How canopy asks runtime `runtime` for its models: the fake `opencode`'s argv, and the command a failure names.
+
+    OpenCode 1 lists a model's variants only with `--verbose`, which canopy asks for when a run is at one; OpenCode 2's
+    one list holds them.
+    """
+    if runtime == Version.TWO:
+        return ["api", "--standalone", "model.list"], "opencode api model.list"
+    argv = ["models", "--verbose"] if variants else ["models"]
+    return argv, f"opencode {' '.join(argv)}"
 
 
 def pool_statuses(treehouse_state: Path) -> list[str]:
@@ -1437,8 +1450,35 @@ def answered_lines(stdout: str) -> list[Said]:
 
 def inline_servers(run: Mapping[str, Any]) -> dict[str, list[str]]:
     """The servers of canopy's that a fake agent run's inline config (FAKE_AGENT_LOG's `env`) gave it, with commands."""
+    return {name: entry["command"] for name, entry in _inline_entries(run).items()}
+
+
+def given_server(run: Mapping[str, Any], server: str, runtime: Version) -> dict[str, Any]:
+    """The entry canopy gave a fake agent's `run` for its MCP server `server`, in its inline config, outside code mode.
+
+    The config is in the shape of the runtime `runtime`, and code mode off as it turns it off: OpenCode 1's servers by
+    name under `mcp`, code mode off for the whole run; OpenCode 2's under `mcp.servers`, each with it off in its entry.
+    """
+    inline: dict[str, Any] = json.loads(run["env"]["OPENCODE_CONFIG_CONTENT"])["mcp"]
+    if runtime == Version.TWO:
+        entry: dict[str, Any] = inline["servers"][server]
+        assert entry["codemode"] is False, entry
+        assert "OPENCODE_EXPERIMENTAL_CODE_MODE" not in run["env"]
+        return entry
+    assert "servers" not in inline, inline
+    assert "codemode" not in inline[server], inline
+    assert run["env"]["OPENCODE_EXPERIMENTAL_CODE_MODE"] == "false"
+    found: dict[str, Any] = inline[server]
+    return found
+
+
+# The servers a run's inline config names, by name, in either runtime's shape: OpenCode 1's under `mcp`, OpenCode 2's
+# under `mcp.servers`.
+def _inline_entries(run: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
     inline: dict[str, Any] = json.loads(run["env"].get("OPENCODE_CONFIG_CONTENT", "{}")).get("mcp", {})
-    return {name: entry["command"] for name, entry in inline.items()}
+    servers = inline.get("servers")
+    found: dict[str, dict[str, Any]] = servers if isinstance(servers, dict) else inline
+    return found
 
 
 def ancestors(pid: int) -> list[int]:

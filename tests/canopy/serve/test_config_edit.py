@@ -72,7 +72,7 @@ def save(
 
 def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: Context, canopy_env: CanopyEnv) -> None:
     canopy_env.write_private(COMMENTED)
-    canopy_env.write_user(user_toml().replace("[paths]", "[loop]\ninterval_minutes = 20\n\n[paths]"))
+    canopy_env.write_user(user_toml(canopy_env.runtime).replace("[paths]", "[loop]\ninterval_minutes = 20\n\n[paths]"))
     canopy_env.write_shared(canopy_env.shared_file.read_text() + "\n[policy]\nmax_resume_attempts = 1\n")
     c, _ = signed_in_client(ctx)
 
@@ -205,7 +205,7 @@ def test_a_save_writes_the_private_file_keeping_its_comments_and_asks_for_a_relo
         + "\n[policy]\nmax_implement_attempts = 3\n"
     )
     assert canopy_env.shared_file.read_text() == shared  # a shared policy key goes to the private file, which wins
-    assert canopy_env.user_file.read_text() == user_toml()
+    assert canopy_env.user_file.read_text() == user_toml(canopy_env.runtime)
     log = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
     assert {"key": "capacity.max_workers", "old": 2, "new": 4, "channel": "web"}.items() <= next(
         r for r in log if r.get("key") == "capacity.max_workers"
@@ -214,7 +214,7 @@ def test_a_save_writes_the_private_file_keeping_its_comments_and_asks_for_a_relo
 
 def test_a_key_from_the_user_file_is_written_to_the_private_file_whole(ctx: Context, canopy_env: CanopyEnv) -> None:
     # The user file is the operator's for every workspace: the change shadows it here, and leaves it as it was.
-    user = user_toml().replace(
+    user = user_toml(canopy_env.runtime).replace(
         "[paths]",
         "[capacity]\nmax_workers = 2\nrepo_slots = { repo = 3, other = 4 }\n\n"
         '[trust]\ntrusted_reviewers = ["alice", "bob", "lint-bot"]\n\n[paths]',
@@ -310,7 +310,7 @@ def test_each_refusal_leaves_the_files_as_they_were(ctx: Context, canopy_env: Ca
     for changes, guard in cases:
         assert refused(save(c, headers, changes)).startswith(f"{guard}: "), changes
         assert canopy_env.private_file.read_text() == COMMENTED
-        assert canopy_env.user_file.read_text() == user_toml()
+        assert canopy_env.user_file.read_text() == user_toml(canopy_env.runtime)
     assert f"set more in {canopy_env.private_file}" in refused(save(c, headers, {"capacity.max_workers": 33}))
     assert not reload.requested
     assert [p.name for p in canopy_env.state_dir.iterdir() if p.name.endswith(".tmp")] == []
@@ -405,7 +405,7 @@ def test_a_choice_moves_only_later_and_a_count_only_down(ctx: Context, canopy_en
 
 
 def test_a_limit_the_file_set_past_its_bound_may_still_be_lowered(ctx: Context, canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(user_toml().replace("[paths]", "[capacity]\nmax_workers = 40\n\n[paths]"))
+    canopy_env.write_user(user_toml(canopy_env.runtime).replace("[paths]", "[capacity]\nmax_workers = 40\n\n[paths]"))
     c, headers = signed_in_client(ctx)
 
     assert save(c, headers, {"capacity.max_workers": 35}).status_code == 200

@@ -34,7 +34,7 @@ SETUP = (
 
 def configure(canopy_env: CanopyEnv, *, runtime: str = "", paths: str = "") -> None:
     """Rewrite the user file with `runtime` lines in its `[runtime]` table and `paths` lines in its `[paths]` one."""
-    text = user_toml()
+    text = user_toml(canopy_env.runtime)
     text = text.replace("[runtime]\n", f"[runtime]\n{runtime}\n").replace("[paths]\n", f"[paths]\n{paths}\n")
     canopy_env.write_user(text)
 
