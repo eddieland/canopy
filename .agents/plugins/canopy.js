@@ -8,15 +8,14 @@
 //
 // The agent runtime loads it from canopy's snapshot of its definitions, inside every agent process, sandboxed or not
 // (TRUST_MODEL T4). So it is plain JavaScript that imports nothing but the runtime's own `node:fs`, and that only when
-// the answer reads its file, so it loads with no network; and each job does as little as it can: it reads only what it
-// is handed for that job (the clock, CANOPY_DEADLINE and the time; the split, the system prompt; the nudge,
+// a job reads a file canopy wrote, so it loads with no network; and each job does as little as it can: it reads only
+// what it is handed for that job (the clock, CANOPY_DEADLINE and the time; the split, the system prompt; the nudge,
 // CANOPY_RUN_ID and each call's tool and session, and in a run that follows a plan, CANOPY_PLAN and the steps of each
-// `status` call; the answer and the wrap-up, CANOPY_RUN_ID and each its one file canopy writes in the directory
-// CANOPY_ANSWERS names; the directory, a shell call's command and working directory; under OpenCode 2, the refusal, a
-// refused call's permission and resources), changes only what its
-// hook is handed, writes no file, refuses no call, and grants no tool. Each job's hooks run in its own try, in the
-// order of `JOBS`, so a job that throws neither fails a call that has already run nor keeps the jobs after it from
-// theirs.
+// `status` call; the answer, the wrap-up, and the message, CANOPY_RUN_ID and each its one file canopy writes in the
+// directory CANOPY_ANSWERS names; the directory, a shell call's command and working directory; under OpenCode 2, the
+// refusal, a refused call's permission and resources), changes only what its hook is handed, writes no file, refuses
+// no call, and grants no tool. Each job's hooks run in its own try, in the order of `JOBS`, so a job that throws
+// neither fails a call that has already run nor keeps the jobs after it from theirs.
 //
 // Its third is the nudge (DESIGN §41): in a worker's, planner's, reviewer's, or one-off task's run, after a number of
 // tool calls with no call of canopy's `status` tool, one line on the next tool call's result asks the agent to post an
@@ -32,6 +31,10 @@
 //
 // Its sixth is the wrap-up (DESIGN §22): in a run that keeps its progress, once the operator stops its ticket and asks
 // it to wrap up, one line on the next tool call's result asks the agent to keep its work and print its result line.
+//
+// Its seventh is the message (DESIGN §44): in a worker's, planner's, or one-off task's run, once the operator sends it
+// a message, one line on the next tool call's result says a message waits and names canopy's tool that returns it,
+// once per message; the line carries none of the message's words, which come only from that tool.
 //
 // Under OpenCode 2 it has two jobs more, its own. A session's first prompt waits until the tools of its MCP servers are
 // registered, which 2 does only after the server connects, so that the first model call is sent them (`mcpTools`).
@@ -93,6 +96,17 @@ const MOST_TITLE = 200;
 const ANSWER_FILE = "answer.json";
 /** The file in it that asks the agent to wrap up. */
 const WRAP_UP_FILE = "wrap_up.json";
+/** The file in it that marks the newest message the operator sent the run, by its id alone, never its text. */
+const MESSAGE_FILE = "message.json";
+/** A run that takes the operator's messages, as CANOPY_RUN_ID names it: a worker's or a planner's id, or a task's,
+ * `task-3`. A review's takes none (DESIGN §44). */
+const MESSAGE_RUN = /^(?:task-)?[0-9]{1,18}$/;
+/** canopy's tool that returns the operator's messages to the run, as the runtime names it. */
+const MESSAGES_TOOL = "canopy_run_messages";
+/** The message's line, which the mark asks for: it names the tool, and says nothing of what the message says. */
+const MESSAGE_WAITS =
+    `${MARK} The operator sent you a message while you work: call ${MESSAGES_TOOL} to read it, then go on as it` +
+    " says.";
 /** The most of a file in it that is read: one longer is not canopy's. */
 const FILE_BYTES = 4096;
 /** The wrap-up's line, which the file asks for. */
@@ -145,7 +159,7 @@ const ENVIRONMENT = new RegExp(
  *
  * @type {Array<() => Hooks>}
  */
-const JOBS = [clock, split, nudge, answer, workdir, wrapUp];
+const JOBS = [clock, split, nudge, answer, workdir, wrapUp, message];
 
 /**
  * The plugin, as each major version of OpenCode reads it: its id, and its entry point for each.
@@ -913,4 +927,66 @@ function askedAt(text) {
         return null;
     }
     return found.asked;
+}
+
+/**
+ * The message's hooks: the one that tells the agent a message from the operator waits, once per message per session.
+ *
+ * The operator may send a running worker, planner, or task's worker a message in their own words (DESIGN §44). canopy
+ * writes the messages to the run's answers directory, which CANOPY_ANSWERS names and a sandboxed run may read but not
+ * write, and beside them a mark, the newest message's id and nothing of its text. After each tool call, the job reads
+ * the mark and, for a message this session has not been told of, adds one line to the call's result, the way the clock
+ * adds its line, saying a message waits and which of canopy's tools returns it. It never reads the messages: their
+ * words reach the agent only through that tool, over canopy's own server, so a forged line can only make the agent
+ * spend a call to learn that nothing is new. It keeps the newest message it told each session of, and nothing else;
+ * without the variable, or in a run that takes no message, as CANOPY_RUN_ID names it, it has no hook. A file it cannot
+ * read, or that is not canopy's mark, tells nothing.
+ *
+ * @returns {Hooks} The message's hooks.
+ */
+function message() {
+    const dir = process.env.CANOPY_ANSWERS;
+    const run = process.env.CANOPY_RUN_ID;
+    if (typeof dir !== "string" || !dir.startsWith("/") || typeof run !== "string" || !MESSAGE_RUN.test(run)) {
+        return {};
+    }
+    const file = `${dir.replace(/\/+$/, "")}/${MESSAGE_FILE}`;
+    /** @type {Map<string | undefined, number>} */
+    const told = new Map();
+    return {
+        /**
+         * @param {AfterInput | undefined} input
+         * @param {BuiltinResult | McpResult | null | undefined} output
+         */
+        "tool.execute.after": async (input, output) => {
+            const newest = newestOf(await readOwn(file));
+            const session = input?.sessionID;
+            if (newest !== null && told.get(session) !== newest && tell(output, MESSAGE_WAITS)) {
+                told.set(session, newest);
+            }
+        },
+    };
+}
+
+/**
+ * The id of the newest message the mark in `text` names, as canopy writes it, or null when `text` is no mark of
+ * canopy's.
+ *
+ * @param {string | null} text
+ * @returns {number | null}
+ */
+function newestOf(text) {
+    if (text === null) {
+        return null;
+    }
+    let found;
+    try {
+        found = JSON.parse(text);
+    } catch {
+        return null;
+    }
+    if (found === null || typeof found !== "object" || !Number.isSafeInteger(found.newest) || found.newest < 1) {
+        return null;
+    }
+    return found.newest;
 }

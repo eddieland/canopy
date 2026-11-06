@@ -16,6 +16,9 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
                         config names (OPENCODE_CONFIG_CONTENT), as OpenCode starts it: its command, in its cwd, with
                         the agent's whole environment. Stands in for an overseer calling `canopy_decide`, or a chore
                         `canopy_chore_history`. Default none. A call no server named answers fails as OpenCode's would.
+    FAKE_AGENT_THEN_TOOLS
+                        the same, called after the commands, so after a held run's gate (tests/canopy/scenario_helpers):
+                        stands in for a worker that calls `canopy_run_messages` once the operator sent it one.
     FAKE_AGENT_LOG      if set, a JSON object of "argv", "stdin", "cwd", "env", "tools", and "commands", on one line,
                         is appended to this file per run. `stdin` is what was piped to it, None from a terminal or
                         /dev/null, as `opencode run` takes a piped prompt. `env` holds the CANOPY_* and OPENCODE_*
@@ -30,11 +33,13 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
 
 With `--format json` it prints what `opencode run --format json` does: one JSON event per line, its text as `text`
 events, each command it ran as a `bash` `tool_use` event once it ends, each tool it called as a `tool_use` event of its
-name, and two model calls as `step_finish` events, their replies `msg_1` and `msg_2`.
+name, with when the call started and ended, and two model calls as `step_finish` events, their replies `msg_1` and
+`msg_2`.
 Otherwise it prints its text as plain lines.
 
 A run started with `--agent canopy-worker` reads FAKE_WORKER_RESULT, FAKE_WORKER_SAYS, FAKE_WORKER_EXIT,
-FAKE_WORKER_SLEEP, FAKE_WORKER_COMMANDS, FAKE_WORKER_SESSION, FAKE_WORKER_STEP_COST, and FAKE_WORKER_ERRORS first,
+FAKE_WORKER_SLEEP, FAKE_WORKER_COMMANDS, FAKE_WORKER_THEN_TOOLS, FAKE_WORKER_SESSION, FAKE_WORKER_STEP_COST, and
+FAKE_WORKER_ERRORS first,
 falling back to the FAKE_AGENT_* ones, so one test can script an overseer and the workers it dispatches.
 `--agent canopy-overseer` reads FAKE_OVERSEER_* the same way, `--agent canopy-planner` FAKE_PLANNER_*, and
 `--agent canopy-worker-private` FAKE_WORKER_PRIVATE_*.
@@ -113,12 +118,12 @@ def calls_tools(argv: list[str]) -> bool:
     return bool(json.loads(setting(argv, "TOOLS", "[]")))
 
 
-def call_tools(argv: list[str]) -> list[dict[str, object]]:
-    """Call each tool the script names, through the server the inline config names for it.
+def call_tools(argv: list[str], name: str = "TOOLS") -> list[dict[str, object]]:
+    """Call each tool the script's `name` setting names, through the server the inline config names for it.
 
     One session for each run of calls to the same server, as OpenCode keeps one open for the whole run.
     """
-    calls: list[list[Any]] = json.loads(setting(argv, "TOOLS", "[]"))
+    calls: list[list[Any]] = json.loads(setting(argv, name, "[]"))
     mcp: dict[str, Any] = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}").get("mcp", {})
     # OpenCode 2's shape, `mcp.servers`, or 1's, the servers by name under `mcp`.
     servers: dict[str, dict[str, Any]] = mcp["servers"] if isinstance(mcp.get("servers"), dict) else mcp
@@ -131,22 +136,24 @@ def call_tools(argv: list[str]) -> list[dict[str, object]]:
     for server, run in itertools.groupby(calls, key=owner):
         group = list(run)
         if server is None:
-            answers = [(f"no MCP server serves {name}", True) for name, _ in group]
+            now = int(time.time() * 1000)
+            answers = [(f"no MCP server serves {tool}", True, now, now) for tool, _ in group]
         else:
-            answers = served(servers[server], [[name.removeprefix(f"{server}_"), args] for name, args in group])
-        for (name, arguments), (text, error) in zip(group, answers, strict=True):
-            made.append({"name": name, "arguments": arguments, "text": text, "error": error})
+            answers = served(servers[server], [[tool.removeprefix(f"{server}_"), args] for tool, args in group])
+        for (tool, arguments), (text, error, start, end) in zip(group, answers, strict=True):
+            made.append({"name": tool, "arguments": arguments, "text": text, "error": error})
             if events(argv):
                 outcome = {"status": "error", "error": text} if error else {"status": "completed", "output": text}
-                emit(argv, "tool_use", {"type": "tool", "tool": name, "state": {**outcome, "input": arguments}})
+                state = {**outcome, "input": arguments, "time": {"start": start, "end": end}}
+                emit(argv, "tool_use", {"type": "tool", "tool": tool, "state": state})
     return made
 
 
-def served(entry: dict[str, Any], calls: list[list[Any]]) -> list[tuple[str, bool]]:
+def served(entry: dict[str, Any], calls: list[list[Any]]) -> list[tuple[str, bool, int, int]]:
     """Open a session with the local server `entry` names, call each of `calls` in it, and close it.
 
-    It gives back each call's text and whether it was a tool error. A server that does not answer fails every call
-    left.
+    It gives back each call's text, whether it was a tool error, and when it started and ended, in milliseconds since
+    the epoch, as OpenCode prints them. A server that does not answer fails every call left.
     """
     proc = subprocess.Popen(  # noqa: S603  (the command canopy's inline config names)
         entry["command"],
@@ -159,7 +166,7 @@ def served(entry: dict[str, Any], calls: list[list[Any]]) -> list[tuple[str, boo
     stdin, stdout = proc.stdin, proc.stdout
     assert stdin is not None
     assert stdout is not None
-    answers: list[tuple[str, bool]] = []
+    answers: list[tuple[str, bool, int, int]] = []
 
     def ask(request_id: int, method: str, params: dict[str, Any]) -> dict[str, Any] | None:
         stdin.write(json.dumps({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params}) + "\n")
@@ -176,20 +183,24 @@ def served(entry: dict[str, Any], calls: list[list[Any]]) -> list[tuple[str, boo
         if ask(0, "initialize", hello) is not None:
             stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n")
             for n, (name, arguments) in enumerate(calls, 1):
+                start = int(time.time() * 1000)
                 answer = ask(n, "tools/call", {"name": name, "arguments": arguments})
+                end = int(time.time() * 1000)
                 if answer is None:
                     break
                 if "result" not in answer:
-                    answers.append((str(answer.get("error")), True))
+                    answers.append((str(answer.get("error")), True, start, end))
                     continue
                 result = answer["result"]
-                answers.append(("".join(c["text"] for c in result["content"]), bool(result["isError"])))
+                text = "".join(c["text"] for c in result["content"])
+                answers.append((text, bool(result["isError"]), start, end))
     finally:
         stdin.close()
         proc.wait(SERVER_TIMEOUT)
         stdout.close()
     left = len(calls) - len(answers)
-    return [*answers, *[("the MCP server did not answer", True)] * left]
+    now = int(time.time() * 1000)
+    return [*answers, *[("the MCP server did not answer", True, now, now)] * left]
 
 
 @functools.cache
@@ -233,6 +244,7 @@ def main(argv: list[str]) -> int:
     step(argv, 1)
     tools = call_tools(argv)
     commands = run_commands(argv)
+    tools += call_tools(argv, "THEN_TOOLS")
 
     log = os.environ.get("FAKE_AGENT_LOG")
     if log:

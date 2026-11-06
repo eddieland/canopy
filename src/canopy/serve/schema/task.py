@@ -218,6 +218,8 @@ class TaskReplied(Model):
     """Whether it was recorded now, rather than by an earlier submission with the same id."""
     running_run: int | None = None
     """A run of the task still working: the first tick after it ends starts the next. None: the next tick does."""
+    told: bool = False
+    """Whether that run's agent hears that the reply waits: one it reads and then reports on starts no next run."""
 
 
 class TaskStopped(Model):

@@ -15,6 +15,7 @@ import shlex
 from collections.abc import Iterable, Mapping, Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import Field, StrictInt
@@ -298,6 +299,8 @@ class Called:
     completed: bool
     #: What the agent called it with, unvalidated: the reader holds it to the tool's own input.
     input: Mapping[str, object]
+    #: When the runtime started it, as it printed it; None when it did not (DESIGN §44).
+    started_at: datetime | None = None
 
 
 #: What a tool call did to the repository's files, as the outline's measurement counts it (ROADMAP M70): read a file,

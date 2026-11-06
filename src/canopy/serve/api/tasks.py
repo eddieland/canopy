@@ -146,7 +146,13 @@ def reply(task_id: TaskId, body: ReplyRequest, backend: BackendDep) -> TaskRepli
             raise RefusedError(r) from None
         running = next((r.id for r in task_rows.runs_of(ctx.conn, task_id) if r.status is RunStatus.RUNNING), None)
     _log.info("operator replied", extra={"subject": str(ref), "message_id": replied.message_id, "channel": WEB})
-    return TaskReplied(message_id=replied.message_id, answers=replied.answers, new=replied.new, running_run=running)
+    return TaskReplied(
+        message_id=replied.message_id,
+        answers=replied.answers,
+        new=replied.new,
+        running_run=running,
+        told=replied.told,
+    )
 
 
 @router.post("/tasks/{task_id}/stop", operation_id="stopTask", summary="Stop a task", responses=REFUSED)

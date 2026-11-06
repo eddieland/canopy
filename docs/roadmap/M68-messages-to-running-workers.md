@@ -72,4 +72,38 @@ narrower scope; the same message sent as its run ends reaches the next run's pro
 for it. Over a week of real use, `canopy show` of the runs sent a message says how many were fetched before the run
 ended, and the count goes to `MEASUREMENTS.md`.
 
-Status: not started.
+Status: in progress. Stage 0 read 2026-11-06, from OpenCode's tagged source (`v1.19.3` and `v2.1.4`, the 2.x
+release canopy needs) and checked against the builds npm ships (`opencode-linux-x64` 1.19.3 and
+`@opencode/cli-linux-x64` 2.1.4), and leaves stage 1's shape as it is. Neither version refuses a user turn sent to a
+busy session. In 1, `SessionPrompt.prompt` (`packages/opencode/src/session/prompt.ts`) writes the user message at once
+and calls `loop`, whose `SessionRunState.ensureRunning` joins the loop already running rather than starting one
+(`effect/runner.ts`); `runLoop` reads the session's messages again before each model call and ends only once the last
+assistant message has finished and answers the last user message, so the turn is merged into the next model call,
+after the current call's tools. The rest of the run is on the agent and model the new turn names, or OpenCode's
+default agent when it names none, not canopy's. A turn that lands after the loop's last check, as it ends, is stored
+and never answered. Under `opencode run` the plugin's `client` is the server in its own process, no listener; its
+`session.prompt` (`POST /session/:id/message`, as `opencode serve` takes it too) returns only when the whole loop
+ends, so a hook that awaits it waits on itself, where `session.promptAsync` (`/prompt_async`) returns at once.
+`opencode run` (`cli/cmd/run.ts`) awaits its own prompt and then the session's `idle` status, which the runner sets
+only as the loop ends, so it waits for the second turn's answer too. In 2, a prompt, from the plugin's
+`ctx.session.prompt` or `opencode serve`'s `POST /api/session/:id/prompt`, is admitted to the session's inbox and
+returns (`Session.prompt`, `packages/core/src/session/session.ts`), with a `delivery`: `steer`, the default, promoted
+at the next step boundary into the next model call, or `queue`, held until the turn would end and then started as a
+turn of its own (`SessionInbox.promote` and `nextPromotable` in `session/inbox.ts`, `advanceToStep` in
+`session/runner/llm.ts`). A prompt names no agent or model; the session's stay. The run coordinator's doorbell
+(`session/run-coordinator.ts`) closes 1's gap: input admitted as an execution ends is drained by it or by one that
+follows. `opencode run` (`cli/src/run/noninteractive.ts`) sends its own prompt as a `steer`, then waits on
+`session.wait`, which returns only once no execution is active, so it ends after every turn admitted before the
+session went idle. So a turn queued from the plugin is clean in 2, and in 1 only with care: it must name the run's
+agent and model, be sent without waiting, and can be lost as the loop ends. Neither plugin path opens a listener, so
+it is T4 that bars it, and `opencode serve` stays T8's; it stays a candidate for a later stage, never stage 1.
+Stage 1 built 2026-11-06 against the fakes, with the bullets after it but the web UI's channel, left for a follow-up PR:
+`canopy reply run:ID` with words, not a lone letter, is a message to a running worker or planner, and a reply to
+`task:N` while its run runs reaches that run, through `conversation.reply`; canopy writes the messages and a mark, the
+newest id alone, to the run's answers directory, which a task's run now always has; the plugin's seventh job reads the
+mark; the `messages` tool reads the messages' file, not the journal, which a sandboxed run's servers cannot read (DESIGN
+§44 says so now); a fetch is a message canopy wrote before the call started, by the call's start time in the runtime's
+events; the loop reads past one fetched by a run that ended `done` or `blocked` (`run_inbox.HEARD`); `canopy show
+run:ID` lists them. Chosen conservatively, for the operator to change: a run takes at most 20 messages; a message to a
+run answers no earlier question; a message sent before the run's directory exists is written there as the run starts;
+one sent as it ends is told to nothing and waits for the next run.

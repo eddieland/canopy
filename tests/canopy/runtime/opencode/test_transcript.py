@@ -1,6 +1,7 @@
 """A session's transcript read from OpenCode's JSON events: what a running run's row says a tool call did."""
 
 import json
+from datetime import UTC, datetime
 
 from canopy.runtime.opencode import events, transcript
 from canopy.runtime.report import Called, Touch
@@ -59,6 +60,11 @@ def test_a_tool_call_as_the_agent_made_it_is_its_exact_name_how_it_ended_and_its
     assert refused == Called("canopy_run_status", completed=False, input={})
     assert called(tool("bash", {"status": "running"})) is None  # printed only once it ends
     assert called(event("text", {"type": "text", "text": "hi"})) is None
+    # When it started, as the runtime printed it, which says what a `messages` call fetched (DESIGN §44).
+    timed: dict[str, object] = {"status": "completed", "input": {}, "time": {"start": 1_762_423_200_500, "end": 1}}
+    found = called(tool("canopy_run_messages", timed))
+    assert found is not None
+    assert found.started_at == datetime(2025, 11, 6, 10, 0, 0, 500_000, UTC)
 
 
 def test_what_a_tool_call_did_to_files_is_its_act_and_the_files_it_named() -> None:
