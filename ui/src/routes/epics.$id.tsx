@@ -8,6 +8,7 @@ import type { EpicDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { EpicActions } from '@/components/epic-actions'
 import { EpicBoard } from '@/components/epic-board'
+import { EntriesFiled } from '@/components/epic-filed'
 import { OutlineLights } from '@/components/epic-ids'
 import { OutlinePanel } from '@/components/epic-outline'
 import { EpicRunRow } from '@/components/epic-row'
@@ -18,7 +19,7 @@ import { Empty, PageHeader, Panel, PanelLoading, PanelScroll } from '@/component
 import { RowList } from '@/components/rows'
 import { Word } from '@/components/status'
 import { Button } from '@/components/ui/button'
-import { EPIC_LOOK, entriesFiled, epicId, epicTitle } from '@/lib/epics'
+import { EPIC_LOOK, epicId, epicTitle } from '@/lib/epics'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { epicRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
@@ -101,8 +102,9 @@ function Epic({ detail }: { detail: EpicDetail }) {
                         <Age at={epic.stopped_at} variant="ago" />
                     </>
                 )}
-                {` · ${entriesFiled(epic)} · members ${String(detail.members.length)} of at most ` +
-                    `${String(detail.bound)} · submitted `}
+                {' · '}
+                <EntriesFiled epic={epic} />
+                {` · members ${String(detail.members.length)} of at most ${String(detail.bound)} · submitted `}
                 <Age at={epic.submitted_at} variant="ago" />
                 {epic.stopped_at !== null && epic.standing !== 'stopped' && (
                     <>

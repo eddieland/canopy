@@ -225,6 +225,48 @@ test("a ticket registered on an entry's none yet fills it, and a member is remov
     await expect(b2).toContainText('none yet')
 })
 
+test("registering the last entry's ticket fills the breakdown, which lights and drops a leaf, once", async ({
+    page,
+}) => {
+    // Epic 1 as it reads with B4 filed already, then with B3 too once ABC-105 is registered against it.
+    let registered = false
+    await page.route('**/api/epics/1/members', async (route) => {
+        registered = true
+        await route.fulfill({ json: { key: 'ABC-105', added: true, entries: ['B3'] } })
+    })
+    await page.route('**/api/epics/1', async (route) => {
+        const detail = (await (await route.fetch()).json()) as {
+            epic: { entries_with_members: number }
+            outline: { entries: { id: string; members: string[] }[] }
+        }
+        for (const entry of detail.outline.entries) {
+            if (entry.id === 'B4' || (entry.id === 'B3' && registered)) {
+                entry.members = [entry.id === 'B4' ? 'ABC-106' : 'ABC-105']
+            }
+        }
+        detail.epic.entries_with_members = registered ? 4 : 3
+        await route.fulfill({ json: detail })
+    })
+    await page.goto('epics/1')
+    await settled(page)
+    const filed = page.getByTestId('entries-filed')
+    await expect(filed).toHaveText('3 of 4 entries filed')
+    await expect(filed.getByTestId('leaf')).toHaveCount(0)
+
+    await page.getByTestId('entry-B3').getByRole('button', { name: 'Register a ticket' }).click()
+    const form = page.getByRole('form', { name: 'Register a ticket against B3' })
+    await form.getByRole('textbox', { name: 'Ticket key' }).fill('ABC-105')
+    await form.getByRole('button', { name: 'Add and register' }).click()
+    await expect(filed).toHaveText('4 of 4 entries filed')
+    await expect(filed.getByTestId('leaf')).toHaveCount(1)
+
+    // This browser has had the moment: the page opened again reads it full, and plays nothing.
+    await page.reload()
+    await settled(page)
+    await expect(filed).toHaveText('4 of 4 entries filed')
+    await expect(filed.getByTestId('leaf')).toHaveCount(0)
+})
+
 test('an epic submitted from its form opens its page, which says its plan run is to come', async ({ page }) => {
     // The root server's journal never changes: the submission is answered here, as canopy epic submit would, and the
     // list and the new epic's page read as it left them, epic 5 built from epic 3's page with no run yet.

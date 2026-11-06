@@ -102,9 +102,10 @@ members.
 
 An epic's page answers what is left to file, and how far along each part is. Its title is `epic:N` and your goal's
 first line; under it, where the epic stands, how many of its breakdown's entries are filed, how many members it has
-against `policy.max_epic_tickets`, and when you submitted it; once you stopped it, it says so, and when. Once it has a
-plan, **Open plan** at the title's right opens [its plan's page](#an-epics-plan), and **Stop** beside it
-[stops the epic](#stopping-one).
+against `policy.max_epic_tickets`, and when you submitted it; once you stopped it, it says so, and when. The first time
+you see every entry filed, as you register the last one or on your next visit, the count lights up and drops a leaf,
+once. Once it has a plan, **Open plan** at the title's right opens [its plan's page](#an-epics-plan), and **Stop**
+beside it [stops the epic](#stopping-one).
 
 **Breakdown** leads, at the page's width: a row per entry, in the plan's order. Each row has the entry's `B` id and
 title, `trivial` when the plan marks it so (hover it for why), the requirements it covers, the contracts it provides
