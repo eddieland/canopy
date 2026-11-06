@@ -292,7 +292,8 @@ Controls:
   epic:N`, so no tick plans it again, each refused as `inside_run`. Stopping one leaves its members as they are.
   A member's planner reads its epic's approved plan from a copy checked against the hash the operator approved, and
   is not run when it no longer matches; the epic's plan describes the work, as the ticket does, and widens nothing a
-  planner or a worker may do.
+  planner or a worker may do. A re-approval's ids are compared, as data, with the plan approved before it; a member
+  the change reaches is told the changed ids as data, never an instruction, and no run in flight is paused.
 - Attachments (DESIGN §22, ROADMAP M63) are written and removed only through `runs/attachments.py` by a channel that
   authenticated the operator: `canopy attach` and `canopy detach` in the operator's shell, or the web UI behind the
   listener secret (T8), each refused as `inside_run`, on a ticket canopy knows or a task not stopped. An attachment's
@@ -565,7 +566,9 @@ Controls in code, not prompts:
   live tick, in code, and only after the submission or an operator's reply newer than its latest run, and never once
   the operator stopped the epic, so a run that fails is never retried on its own; at most `policy.max_plan_attempts`
   of them, never reset; within `capacity.max_workers`, which counts plan runs with every other run holding a slot;
-  each with the worker's timeout.
+  each with the worker's timeout. A member's `implement` on a ticket with no branch, whose approved plan a change of
+  its epic's plan reached, is refused (`epic_changed`), whatever the overseer asks for, until the operator approves
+  the plan again or asks for a new one.
 - Attachments (DESIGN §22): only UTF-8 text with no NUL, at most `policy.max_attachments` files on one ticket or task
   (5 by default), each at most `policy.max_attachment_kib` (512) and all together at most
   `policy.max_attachments_total_kib` (1024), each under a ceiling in code (20 files, 1024 and 4096 KiB), and the

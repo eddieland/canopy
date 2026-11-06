@@ -53,6 +53,9 @@ class Plan(Row):
     approved_body_sha256: str | None
     #: The approved epic plan its planner read, when its ticket is a member of an epic with one (DESIGN §43).
     epic_plan_id: int | None
+    #: The ids, space-separated, whose change an approval of its epic's plan superseded it for, stale, while it still
+    #: waited on the operator; None for a plan superseded otherwise, or not superseded (DESIGN §43).
+    epic_changed_ids: str | None
 
 
 @dataclass(frozen=True)

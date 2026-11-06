@@ -146,7 +146,7 @@ def test_the_mock_is_a_workspace_with_a_joint_run_and_a_pool_past_its_size(tmp_p
     assert (api["repo"], api["size"], api["worktrees"]) == ("api", 2, [])
     assert "no clone" in api["error"]
     assert (mobile["repo"], mobile["size"], len(mobile["worktrees"])) == ("mobile", 2, 2)
-    assert (web["repo"], web["size"], len(web["worktrees"])) == ("web", 4, 5)
+    assert (web["repo"], web["size"], len(web["worktrees"])) == ("web", 4, 6)
     joint = [w for pool in (mobile, web) for w in pool["worktrees"] if w["run"] and w["run"]["id"] == 43]
     assert [w["path"] for w in joint] == [".treehouse/mobile-8e41d0c7/1/mobile", ".treehouse/web-3f9c2a1b/2/web"]
     [running] = [r for r in c.get("/api/runs").json() if r["id"] == 43]
@@ -172,4 +172,4 @@ def test_a_workspace_s_pools_are_read_at_once(tmp_path: Path) -> None:
         return backend.slots(ctx, repo)
 
     c = client(None, dataclasses.replace(backend, slots=slots))
-    assert [len(p["worktrees"]) for p in c.get("/api/worktrees").json()] == [0, 2, 5]
+    assert [len(p["worktrees"]) for p in c.get("/api/worktrees").json()] == [0, 2, 6]
