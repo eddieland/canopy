@@ -220,10 +220,9 @@ def test_paths_are_the_same_file_when_one_ends_as_the_other_does_at_a_directory(
 
 
 def test_a_plans_paths_are_the_words_with_a_directory_or_an_extension() -> None:
-    text = (
-        "Change `src/parse.py` and ./lib/util, see README.md. Not e.g. this, nor .hidden, 1.5 hours, or `src/parse.py`."
-    )
-    assert orientation.plan_paths(text) == ["src/parse.py", "lib/util", "README.md"]
+    """`a.py` is a path, as an abbreviation of a letter and a letter, `e.g`, is not."""
+    text = "Change `src/parse.py`, ./lib/util, and a.py; see README.md. Not e.g. this, .hidden, 1.5, or `src/parse.py`."
+    assert orientation.plan_paths(text) == ["src/parse.py", "lib/util", "a.py", "README.md"]
 
 
 def test_runs_are_measured_per_role_and_repository_with_the_gate(tmp_path: Path, journals: Journals) -> None:
