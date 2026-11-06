@@ -8,10 +8,11 @@ import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
  * once. Kept in localStorage, never in the journal: what this browser has celebrated is its own business.
  */
 
-/** Where localStorage keeps the epics, by id, newest first. */
+/**
+ * Where localStorage keeps the epics, by id, newest first. Every one is kept, so none plays twice: an id is a few
+ * bytes, and an epic is a large piece of work, so a lifetime's of them stays small.
+ */
 export const STORAGE_KEY = 'canopy-epics-filled'
-/** How many epics it keeps: an epic past them that fills again, long after, has its moment again. */
-export const FILLED_MAX = 200
 
 /** The epics as stored, or none for anything that is not a list: each entry that is not an epic's id is dropped. */
 export function parseFilled(raw: string | null): number[] {
@@ -25,7 +26,7 @@ export function parseFilled(raw: string | null): number[] {
         return []
     }
     return Array.isArray(value)
-        ? value.filter((id): id is number => Number.isSafeInteger(id) && (id as number) > 0).slice(0, FILLED_MAX)
+        ? value.filter((id): id is number => Number.isSafeInteger(id) && (id as number) > 0)
         : []
 }
 
@@ -46,7 +47,7 @@ export function useFilledMoment(id: number, full: boolean): boolean {
     useEffect(() => {
         const stored = setting.get()
         if (playing && !stored.includes(id)) {
-            setting.set([id, ...stored].slice(0, FILLED_MAX))
+            setting.set([id, ...stored])
         }
     }, [playing, id])
     return playing

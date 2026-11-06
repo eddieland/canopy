@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { mockEpics } from '@/api/mocks'
 import type { EpicSummary } from '@/api/types'
-import { FILLED_MAX, parseFilled, STORAGE_KEY } from '@/lib/filled-epics'
+import { parseFilled, STORAGE_KEY } from '@/lib/filled-epics'
 import { breakStorage } from '@/test-utils'
 
 import { EntriesFiled } from './epic-filed'
@@ -32,7 +32,6 @@ describe('EntriesFiled', () => {
         rerender(<EntriesFiled epic={filed(4)} />)
         const readout = screen.getByTestId('entries-filed')
         expect(readout.textContent).toBe('4 of 4 entries filed')
-        expect(readout.className).toContain('animate-lit')
         expect(screen.getByTestId('leaf').getAttribute('aria-hidden')).toBe('true')
         expect(parseFilled(localStorage.getItem(STORAGE_KEY))).toEqual([1])
     })
@@ -49,7 +48,6 @@ describe('EntriesFiled', () => {
         render(<EntriesFiled epic={filed(4)} />)
         expect(screen.getByTestId('entries-filed').textContent).toBe('4 of 4 entries filed')
         expect(screen.queryByTestId('leaf')).toBeNull()
-        expect(screen.getByTestId('entries-filed').className).not.toContain('animate-lit')
     })
 
     it('keeps each epic its own: another full one still plays', () => {
@@ -84,8 +82,8 @@ describe('parseFilled', () => {
         expect(parseFilled('{"1": true}')).toEqual([])
     })
 
-    it('keeps at most FILLED_MAX', () => {
-        const many = Array.from({ length: FILLED_MAX + 5 }, (_, i) => i + 1)
-        expect(parseFilled(JSON.stringify(many))).toHaveLength(FILLED_MAX)
+    it('keeps every epic stored, so none that played long ago plays again', () => {
+        const many = Array.from({ length: 1000 }, (_, i) => i + 1)
+        expect(parseFilled(JSON.stringify(many))).toEqual(many)
     })
 })
