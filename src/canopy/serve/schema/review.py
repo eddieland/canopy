@@ -70,6 +70,8 @@ class ReviewSummary(Model):
     """The PR's title as the PR pages give it: its own, else its ticket's; None when neither is known."""
     repo: str | None = None
     """The PR's repository, as the workspace names it."""
+    author: str | None = None
+    """The PR's author, as canopy's reader last read the PR: untrusted text; None until it has."""
     status: str
     """The journal's status: running, done, failed, unknown, timeout, crashed."""
     state: RunState

@@ -16,6 +16,7 @@ const REVIEW: ReviewSummary = {
     id: 4,
     pr_url: 'https://github.com/acme/web/pull/88',
     repo: 'web',
+    author: null,
     sha: '3f9c2a1b7d0e',
     ticket_key: 'ABC-101',
     title: null,
@@ -166,6 +167,18 @@ describe('ReviewsTable', () => {
     it('says why a PR canopy only reviews has no ticket', async () => {
         await renderReviews([{ ...REVIEW, ticket_key: null }])
         expect(screen.getByText('none').title).toBe('none: canopy only reviews it')
+    })
+
+    it('names the author of a PR canopy only reviews where its ticket would be, a ticket over it', async () => {
+        await renderReviews([
+            { ...REVIEW, ticket_key: null, author: 'carol' },
+            { ...REVIEW, id: 5, author: 'op' },
+        ])
+        const carol = within(screen.getByTestId('review-4')).getByText('carol')
+        expect(tipOf(carol)).toBe("The PR's author: canopy only reviews it, so it has no ticket")
+        expect(within(screen.getByTestId('review-4')).queryByText('none')).toBeNull()
+        expect(within(screen.getByTestId('review-5')).getByRole('link', { name: 'ABC-101' })).toBeDefined()
+        expect(within(screen.getByTestId('review-5')).queryByText('op')).toBeNull()
     })
 
     it('leaves out the ticket and the PR on the PR’s own page, and says the commit it read was at', async () => {

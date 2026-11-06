@@ -175,6 +175,7 @@ export const mockReviews: ReviewSummary[] = [
         ticket_key: 'ABC-103',
         title: 'ABC-103: move billing to v2 and drop the v1 client',
         repo: 'web',
+        author: 'op',
         status: 'running',
         state: 'running',
         verdict: null,

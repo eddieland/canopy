@@ -46,6 +46,8 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
     # Where each one's draft stands (DESIGN §34): Carol's wait, the clean one's was published, and the loop's own
     # PRs' reviews have none.
     assert [r["draft"] for r in listed] == ["waiting", "waiting", None, None, "published", None]
+    # Each PR's author, as canopy's reader last read the PR, which the page filters by: none for a PR it has not read.
+    assert [r["author"] for r in listed] == ["carol", "carol", "op", None, None, "op"]
     # The request each answers (DESIGN §21): Carol's two share one, asked in two personas; the loop's own have none.
     asked = [r["request_id"] for r in listed]
     assert asked[0] == asked[1] is not None

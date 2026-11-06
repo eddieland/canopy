@@ -300,13 +300,17 @@ and to `review.agent_prs` and `review.query`, which have the loop review PRs on 
 
 A PR you asked for that no review has started on yet leads the list as `requested`, with a hollow ring: it has no
 verdict, commit, or cost because nothing has read it yet. Where a ticket would be, it names the PR's author once canopy
-has read the PR, which it does at the next tick; until then it says `none`. Once a tick starts its review, the review's
-own row takes its place. If that review fails, the request is still open, so the `requested` row comes back and the
+has read the PR, which it does at the next tick; until then it says `none`. A review of a PR with no ticket does the
+same, so a coworker's PR says whose it is at a glance. Once a tick starts its review, the review's own row takes its
+place. If that review fails, the request is still open, so the `requested` row comes back and the
 next tick tries again.
 
-The reviews list filters as the PRs do: a field for words in the PR, its ticket, or the commit (the first few characters
-of a sha will do), and the same repository picker. A `requested` row drops out once you pick a repository, because
-which one holds its PR is the next tick's to work out, not the page's to guess.
+The reviews list filters as the PRs do: a field for words in the PR, its ticket, the commit (the first few characters
+of a sha will do), or its author, and the same repository picker. A `requested` row drops out once you pick a
+repository, because which one holds its PR is the next tick's to work out, not the page's to guess. Beside it, an
+author picker keeps the reviews of one person's PRs, a `requested` row's included, for the afternoon you owe a
+colleague every review at once. It goes by the author canopy last read on each PR, so a review of a PR it hasn't read
+yet has no author to match and drops out.
 
 A review that has finished since you last looked is new, if it has something to say: one that found anything, or
 any review you requested, clean or not. A clean review the loop started on its own stays quiet; it is in the list,

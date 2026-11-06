@@ -1,4 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
+import type { ReactNode } from 'react'
 
 import { FilterField } from '@/components/filter-field'
 import { RepoFilter } from '@/components/repo-picker'
@@ -12,7 +13,8 @@ type FilteredPage = '/pull-requests' | '/pull-requests/reviews'
 /**
  * A PR list's filter, the pull requests page's and the reviews page's: a field for words, kept in `?q=`
  * (`FilterField`), and a picker of the repositories the list's rows are in, kept in `?repo=`, while there is more than
- * one (`RepoFilter`). Each keeps the other's key, and replaces the history entry, so Back leaves the page.
+ * one (`RepoFilter`), then any filter of the page's own (`children`). Each keeps the others' keys, and replaces the
+ * history entry, so Back leaves the page.
  */
 export function PullRequestFilterBar({
     to,
@@ -20,6 +22,7 @@ export function PullRequestFilterBar({
     repos,
     label,
     placeholder,
+    children,
 }: {
     /** The page it filters. */
     to: FilteredPage
@@ -31,6 +34,8 @@ export function PullRequestFilterBar({
     label: string
     /** What the empty field says. */
     placeholder: string
+    /** The page's own filters, after the repository picker: the reviews page's by author. */
+    children?: ReactNode
 }) {
     const navigate = useNavigate()
     return (
@@ -53,6 +58,7 @@ export function PullRequestFilterBar({
                     }
                 />
             )}
+            {children}
         </search>
     )
 }
