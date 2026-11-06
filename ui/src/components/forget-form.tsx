@@ -1,4 +1,5 @@
 import { Eraser } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { ReactNode, SubmitEvent } from 'react'
 
@@ -9,7 +10,8 @@ import { Button } from '@/components/ui/button'
  * What a Forget that cannot be undone asks first: what forgetting does, in `children`, then a field that `confirm`, a
  * ticket's key or a memory's ref, must be typed into before the button that forgets is enabled, and a ghost `Keep it`.
  * A ticket's Forget and a memory's share it, so the two read and behave alike. `name` names the form; `after` goes at
- * its foot, such as the refusal of a forget that failed.
+ * its foot, such as the refusal of a forget that failed. `action` and `icon` name its button for something else lost
+ * for good, such as a desk's work.
  */
 export function ForgetForm({
     confirm,
@@ -18,6 +20,8 @@ export function ForgetForm({
     onForget,
     onCancel,
     after,
+    action,
+    icon: Icon = Eraser,
     children,
 }: {
     /** What must be typed, exactly: a ticket's key, or a memory's ref. */
@@ -32,6 +36,10 @@ export function ForgetForm({
     onCancel: () => void
     /** What goes at the form's foot. */
     after?: ReactNode
+    /** What its button says, `Forget KEY` unless given. */
+    action?: string
+    /** Its button's icon, the eraser unless given. */
+    icon?: LucideIcon
     /** What forgetting does, in a sentence or two. */
     children: ReactNode
 }) {
@@ -67,8 +75,8 @@ export function ForgetForm({
                     className="max-w-56 font-mono"
                 />
                 <Button type="submit" variant="destructive" disabled={pending || !matches}>
-                    <Eraser />
-                    Forget {confirm}
+                    <Icon />
+                    {action ?? `Forget ${confirm}`}
                 </Button>
                 <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
                     Keep it

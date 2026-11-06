@@ -27,6 +27,7 @@ import { StartTicket } from '@/components/start-ticket'
 import { Chip, Word } from '@/components/status'
 import { TicketAgents } from '@/components/ticket-agents'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
+import { TicketDesk } from '@/components/ticket-desk'
 import { TicketDrafts } from '@/components/ticket-drafts'
 import { MembershipField } from '@/components/ticket-epic'
 import { TicketLinks } from '@/components/ticket-links'
@@ -198,6 +199,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         models={detail.models}
                         className="px-3 pb-3"
                     />
+                    {/* Your own checkout of its branch, `canopy desk KEY`, at the panel's foot as an action is. */}
+                    <TicketDesk ticketKey={ticket.key} desk={detail.desk} className="border-t" />
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
                     reply before Stop or Forget, as on its attention item. */}

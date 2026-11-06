@@ -21,6 +21,7 @@ export function RepoFilter({
     repos,
     chosen,
     onChoose,
+    label = 'Filter by repository',
 }: {
     /** The repositories to offer, sorted; those chosen among them. */
     repos: readonly string[]
@@ -28,6 +29,8 @@ export function RepoFilter({
     chosen: readonly string[]
     /** Hears the repositories chosen once one is picked. */
     onChoose: (chosen: string[]) => void
+    /** What the choice is, for a screen reader, which hears it and then what is chosen: a filter's, unless given. */
+    label?: string
 }) {
     const summary = reposSummary(chosen)
     return (
@@ -35,7 +38,7 @@ export function RepoFilter({
             repos={repos}
             chosen={chosen}
             onChoose={onChoose}
-            label={`Filter by repository: ${summary}`}
+            label={`${label}: ${summary}`}
             summary={summary}
             every
         />
