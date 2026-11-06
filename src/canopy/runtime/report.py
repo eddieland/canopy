@@ -304,8 +304,8 @@ type Act = Literal["read", "edit", "search", "other"]
 
 #: The programs a shell command searches files with, by name or by text, when one starts a stage of its pipeline.
 _SEARCH_PROGRAMS = frozenset({"ack", "ag", "fd", "find", "grep", "egrep", "fgrep", "rg"})
-#: The git subcommands that do the same.
-_GIT_SEARCHES = frozenset({"grep", "ls-files", "ls-tree"})
+#: The commands of two words that do the same, git's searches.
+_TWO_WORD_SEARCHES = frozenset({"git grep", "git ls-files", "git ls-tree"})
 #: Where a shell command's pipeline, or its list of commands, starts a new stage.
 _STAGES_RE = re.compile(r"\|\||&&|[|;&\n]")
 #: A variable set for the command a stage runs, before its program: `LC_ALL=C grep`.
@@ -337,7 +337,7 @@ def shell_searches(command: str) -> bool:
         if not words:
             continue
         program = words[0].rsplit("/", 1)[-1]
-        if program in _SEARCH_PROGRAMS or (program == "git" and len(words) > 1 and words[1] in _GIT_SEARCHES):
+        if program in _SEARCH_PROGRAMS or " ".join([program, *words[1:2]]) in _TWO_WORD_SEARCHES:
             return True
     return False
 
