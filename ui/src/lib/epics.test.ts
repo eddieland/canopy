@@ -34,6 +34,7 @@ describe('entriesFiled', () => {
     it("counts the breakdown's entries with a member, and nothing before there is a breakdown", () => {
         expect(mockEpics.map((epic) => entriesFiled(epic))).toEqual([
             'no breakdown',
+            'no breakdown',
             '0 of 3 entries filed',
             '2 of 4 entries filed',
         ])

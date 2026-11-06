@@ -84,15 +84,15 @@ color a run in that state wears:
 - `approved`: you approved its plan, and its breakdown is what's left to file.
 - `unplanned`, in the failure color: its plan runs ended without a plan, and none starts again until you reply. Once
   `policy.max_plan_attempts` is used up, a reply starts none either.
-- `stopped`, muted as `queued` is: you stopped it with `canopy stop epic:N`. No plan run of it starts again, a reply
-  to it is refused, and its members are left as they are. A plan run working when you stopped it finishes, unless
-  `--now` ends it.
+- `stopped`, muted as `queued` is: you stopped it, from [its page](#stopping-one) or with `canopy stop epic:N`. No plan
+  run of it starts again, a reply to it is refused, and its members are left as they are. A plan run working when you
+  stopped it finishes, unless you end it now, and until then the epic still reads `planning`.
 
 Hover the word for its spelling in the CLI and what it means. Then come `epic:N`, which opens its page, its
 repositories, your goal's first
 line, how many of its breakdown's entries have a member (`2 of 4 entries filed`; `no breakdown` before it has a plan,
 and `breakdown unreadable` for a plan canopy can't read: its file is gone, or its ids repeat or won't parse), and how
-long ago you submitted it.
+long ago you submitted it. A stopped epic says under its goal how long ago you stopped it.
 
 From the shell, `canopy epic list` lists them and `canopy show epic:N` prints one, its breakdown with each entry's
 members.
@@ -101,8 +101,9 @@ members.
 
 An epic's page answers what is left to file, and how far along each part is. Its title is `epic:N` and your goal's
 first line; under it, where the epic stands, how many of its breakdown's entries are filed, how many members it has
-against `policy.max_epic_tickets`, and when you submitted it. Once it has a plan, **Open plan** at the title's right
-opens [its plan's page](#an-epics-plan).
+against `policy.max_epic_tickets`, and when you submitted it; once you stopped it, it says so, and when. Once it has a
+plan, **Open plan** at the title's right opens [its plan's page](#an-epics-plan), and **Stop** beside it
+[stops the epic](#stopping-one).
 
 **Breakdown** leads, at the page's width: a row per entry, in the plan's order. Each row has the entry's `B` id and
 title, `trivial` when the plan marks it so (hover it for why), the requirements it covers, the contracts it provides
@@ -134,6 +135,21 @@ a plan run asked wears `waiting on you` until you reply.
 
 **Requirements and contracts** lists each `R` and `C` with what the plan says of it. **Plan runs** lists every run of
 the planner, the first first: how it ended, `epic:N#M`, cost, how long it took, and what it said.
+
+### Stopping one
+
+**Stop**, at the title's right, ends the epic's planning: no plan run of it starts again, and it takes no more
+replies. It asks once more first, since nothing undoes a stop, and says that its members and their work are left as
+they are: a stop ends no member's run and removes no member. Its waiting plan may still be approved, and its members
+still added and removed. While a plan run of it works, that run finishes its work unless you also press **Stop now**,
+which asks once more too, then ends the run and returns its slots. Stopped with its run still working, the epic keeps
+**Stop now** alone. What the stop did is said under the buttons, in the command's words; it refuses inside a tick or a
+run, as the command does:
+
+```sh
+canopy stop epic:3        # its plan run at work finishes
+canopy stop epic:3 --now  # and ends it now
+```
 
 ## An epic's plan
 
@@ -167,7 +183,8 @@ While the plan waits on you, its foot, stuck to the bottom of the window as you 
   meantime still works, and is your later word. Approve stays off while a note is written, since an approval carries
   none, and a note you meant to send shouldn't vanish into a plan you approved instead.
 
-Both refuse inside a tick or a run, as the commands do.
+Both refuse inside a tick or a run, as the commands do. Once you've [stopped the epic](#stopping-one), its plan offers
+**Approve** alone: a stopped epic takes no reply, so nothing would plan it again.
 
 **Earlier plans** lists the plans this one replaced, the newest first, each folded. Open one to read it as it was, in
 the same editor.

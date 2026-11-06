@@ -33,6 +33,8 @@ function EpicPlanPage() {
     const detail = useQuery({ ...epicQuery(number ?? 0), enabled }).data
     const query = useQuery({ ...epicPlansQuery(number ?? 0), enabled })
     const { data, error } = query
+    // A stopped epic takes no reply: its plan may still be approved, but nothing asks for the next.
+    const stopped = detail !== undefined && detail.epic.stopped_at !== null
     const header = (
         <PageHeader
             parents={<EpicCrumb id={id} />}
@@ -42,7 +44,7 @@ function EpicPlanPage() {
             tab={`${epicRef(id)} plan`}
             links={data !== undefined && <EpicPlanHash plans={data} />}
         >
-            {data !== undefined && <EpicPlanState epic={data.epic_id} plans={data} />}
+            {data !== undefined && <EpicPlanState epic={data.epic_id} plans={data} stopped={stopped} />}
         </PageHeader>
     )
     if (number === undefined || (error instanceof ApiError && (error.status === 404 || error.status === 409))) {
@@ -76,7 +78,7 @@ function EpicPlanPage() {
             <EpicChangesAsked plans={data} />
             {data.plans.length > 0 ? (
                 // Each epic its own plans, so an earlier plan opened on one is never open on another.
-                <EpicPlan key={data.epic_id} epic={data.epic_id} plans={data} />
+                <EpicPlan key={data.epic_id} epic={data.epic_id} plans={data} stopped={stopped} />
             ) : (
                 <Panel className="max-w-[51rem]" data-testid="epic-plan">
                     {detail === undefined ? <PanelSkeleton rows={1} /> : <NoPlan detail={detail} />}

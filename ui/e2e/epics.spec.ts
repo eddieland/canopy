@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test'
 import { settled, signIn } from './helpers.ts'
 
 // An epic's page (ui/DESIGN.md, "An epic"), over the mock journal's epics: epic 1 approved, with members; epic 2
-// proposed, after a reply; epic 3 just submitted, its plan run at work.
+// proposed, after a reply; epic 3 just submitted, its plan run at work; epic 4 stopped before any plan run started.
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -227,26 +227,29 @@ test("a ticket registered on an entry's none yet fills it, and a member is remov
 
 test('an epic submitted from its form opens its page, which says its plan run is to come', async ({ page }) => {
     // The root server's journal never changes: the submission is answered here, as canopy epic submit would, and the
-    // list and the new epic's page read as it left them, the new epic built from epic 3's page with no run yet.
+    // list and the new epic's page read as it left them, epic 5 built from epic 3's page with no run yet.
     const sent: unknown[] = []
     const goal = 'Let customers export their invoices as CSV.'
     await page.route('**/api/epics', async (route) => {
         if (route.request().method() === 'POST') {
             sent.push(route.request().postDataJSON())
-            await route.fulfill({ json: { id: 4, repos: ['api', 'web'] } })
+            await route.fulfill({ json: { id: 5, repos: ['api', 'web'] } })
             return
         }
         const list = (await (await route.fetch()).json()) as Record<string, unknown>[]
         const [newest] = list
         await route.fulfill({
-            json: sent.length === 0 ? list : [{ ...newest, id: 4, text: goal, standing: 'queued' }, ...list],
+            json:
+                sent.length === 0
+                    ? list
+                    : [{ ...newest, id: 5, text: goal, standing: 'queued', stopped_at: null }, ...list],
         })
     })
-    await page.route('**/api/epics/4', async (route) => {
-        const detail = (await (await route.fetch({ url: route.request().url().replace(/4$/u, '3') })).json()) as {
+    await page.route('**/api/epics/5', async (route) => {
+        const detail = (await (await route.fetch({ url: route.request().url().replace(/5$/u, '3') })).json()) as {
             epic: Record<string, unknown>
         }
-        const epic = { ...detail.epic, id: 4, text: goal, repos: ['api', 'web'], standing: 'queued' }
+        const epic = { ...detail.epic, id: 5, text: goal, repos: ['api', 'web'], standing: 'queued' }
         await route.fulfill({ json: { ...detail, epic, runs: [], members: [], plan: null, outline: null } })
     })
     await page.goto('epics')
@@ -263,12 +266,60 @@ test('an epic submitted from its form opens its page, which says its plan run is
     await form.getByRole('textbox', { name: 'Tracker project' }).fill('ABC')
     await form.getByRole('button', { name: /^Submit/u }).click()
 
-    await expect(page).toHaveURL(/\/epics\/4$/u)
+    await expect(page).toHaveURL(/\/epics\/5$/u)
     await settled(page)
     await expect(page.getByText('no plan yet: the next tick starts its plan run')).toBeVisible()
     expect(sent).toEqual([{ text: goal, repos: ['api', 'web'], project: 'ABC', tracker_epic: null }])
     await page.goBack()
-    await expect(page.getByTestId('epics').getByRole('listitem').first()).toContainText('epic:4')
+    await expect(page.getByTestId('epics').getByRole('listitem').first()).toContainText('epic:5')
+})
+
+test('an epic is stopped from its header once asked, and then says so, and when, there and in its row', async ({
+    page,
+}) => {
+    // The root server's journal never changes: the stop is answered here, as canopy stop epic:3 would, and the epic and
+    // the list read as it left them: stopped, its plan run still working.
+    const stops: unknown[] = []
+    const stoppedAt = '2026-10-08T12:20:00Z'
+    await page.route('**/api/epics/3/stop', async (route) => {
+        stops.push(route.request().postDataJSON())
+        await route.fulfill({ json: { already: false, running_run: 4, ended: false } })
+    })
+    await page.route('**/api/epics/3', async (route) => {
+        const detail = (await (await route.fetch()).json()) as { epic: Record<string, unknown> }
+        const epic = stops.length === 0 ? detail.epic : { ...detail.epic, stopped_at: stoppedAt }
+        await route.fulfill({ json: { ...detail, epic } })
+    })
+    await page.route('**/api/epics', async (route) => {
+        const list = (await (await route.fetch()).json()) as Record<string, unknown>[]
+        for (const epic of list) {
+            if (epic.id === 3 && stops.length > 0) {
+                epic.stopped_at = stoppedAt
+            }
+        }
+        await route.fulfill({ json: list })
+    })
+    await page.goto('epics/3')
+    await settled(page)
+    const actions = page.getByTestId('epic-actions')
+    await actions.getByRole('button', { name: 'Stop', exact: true }).click()
+    await expect(actions).toContainText('Its members and their work are left as they are.')
+    expect(stops).toEqual([])
+    await actions.getByRole('button', { name: 'Stop epic:3' }).click()
+    await expect(actions).toContainText(
+        'epic:3 is stopped; no plan run of it starts again. Its members are left as they are. Its plan run 4 is ' +
+            'still working and will finish; Stop now ends it.',
+    )
+    expect(stops).toEqual([{ now: false }])
+    // Its plan run still works: it plans, stopped since, and keeps Stop now alone.
+    await expect(page.getByRole('main').locator('header p').first()).toContainText(/ · stopped \d+\w+ ago$/u)
+    await expect(actions.getByRole('button')).toHaveText(['Stop now'])
+
+    await page.goto('epics')
+    await settled(page)
+    await expect(page.getByTestId('epic-3').getByTestId('epic-stopped')).toHaveText(/^stopped \d+\w+ ago$/u)
+    await expect(page.getByTestId('epic-4')).toContainText('stopped')
+    await expect(page.getByTestId('epic-4').getByTestId('epic-stopped')).toHaveText(/^stopped \d+\w+ ago$/u)
 })
 
 test("an approved epic's header opens its plan", async ({ page }) => {

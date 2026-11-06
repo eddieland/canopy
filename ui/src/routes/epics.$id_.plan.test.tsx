@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '@/api/client'
 import { mockEpicDetails, mockEpicPlans } from '@/api/mocks'
 import { keys } from '@/api/queries'
-import type { EpicPlans } from '@/api/types'
+import type { EpicDetail, EpicPlans } from '@/api/types'
 
 import { Route } from './epics.$id_.plan'
 
@@ -78,12 +78,16 @@ function plansOf(id: number, fields: Partial<EpicPlans> = {}): EpicPlans {
  * Nothing is stale, so only a query the page starts that has no data reads the server, which answers that it has no
  * such epic; what the shell's parts read is read already.
  */
-async function renderPage(id: string, plans: EpicPlans[] = mockEpicPlans): Promise<void> {
+async function renderPage(
+    id: string,
+    plans: EpicPlans[] = mockEpicPlans,
+    details: EpicDetail[] = mockEpicDetails,
+): Promise<void> {
     const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } })
     client.setQueryData(keys.attention, [])
     client.setQueryData(keys.tick, { tick: null, acknowledged: null })
     client.setQueryData(keys.meta, {})
-    for (const detail of mockEpicDetails) {
+    for (const detail of details) {
         client.setQueryData(keys.epic(detail.epic.id), detail)
     }
     for (const shown of plans) {
@@ -145,6 +149,22 @@ describe("an epic's plan page", () => {
         expect(description()).toBe('Written by epic:2#3. It waits on you: approve it, or ask for changes.')
         const changes = screen.getByRole('button', { name: 'Changes since plan 2' })
         expect(changes.getAttribute('aria-pressed')).toBe('true')
+    })
+
+    it("offers a stopped epic's waiting plan for approval, and no reply, which it takes none of", async () => {
+        const proposed = mockEpicDetails.find((detail) => detail.epic.id === 2)
+        if (proposed === undefined) {
+            throw new Error('no mock epic:2')
+        }
+        const epic = { ...proposed.epic, standing: 'stopped' as const, stopped_at: NOW.toISOString() }
+        const stopped = [...mockEpicDetails.filter((detail) => detail !== proposed), { ...proposed, epic }]
+        await renderPage('2', mockEpicPlans, stopped)
+        await screen.findByRole('textbox', { name: 'Plan' })
+        expect(screen.getByRole('button', { name: 'Approve' })).toBeTruthy()
+        expect(screen.queryByRole('button', { name: 'Ask for changes' })).toBeNull()
+        expect(description()).toBe(
+            'Written by epic:2#3. You stopped the epic: you may still approve it, but no plan run starts for changes.',
+        )
     })
 
     it('approves a plan that waits by the hash the page read, and marks the moment in the CLI words', async () => {
